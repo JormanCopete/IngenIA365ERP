@@ -1735,6 +1735,33 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     como relacionada); lo que queda por acreditar es cantidad = original − `ReturnOf` vivos y valor = neto original − `NoteOf` vivos; los
     reintegros por defecto van por los medios de la venta en proporción (residuo al mayor); las reglas de venta las llaman las
     estrategias, así rigen igual en oficina y en el cobro del POS.
+- **I3, caja (T617–T620, prueba T555) (nuevo)**: en `Application/Inventory/Cash`: `SesionesDeCaja.{VeTodasAsync, UsuarioAsync,
+    VisibleAsync, VisiblesAsync, EfectivoAsync, EsperadoAsync, MovimientosAsync, EsperadoDtoAsync, DtoAsync, DtosAsync, Referencia,
+    ClasesDeVenta, PermisoVerTodas}`; `OpenCashSessionCommand`, `ListCashSessionsQuery`, `GetCashSessionQuery`, `MovimientosDelSistema.{CrearAsync,
+    DenominacionesAsync}`; `GetCashSessionExpectedQuery`, `CloseCashSessionCommand`, `RecountCashSessionCommand`, `CashCountInputValidator`,
+    `ArqueoDeLaSesion.{EvaluarAsync, EscribirAsync, DiferenciaAsync, ReemplazarDiferenciaAsync, Lineas}` con `ConteoPreparado`;
+    `CashMovementInput.ComoBorrador(tipoPorDefecto)`, `DatosDeMovimientoDeCaja` (viaja en `SaveInventoryDraftRequest.CashMovement`, sólo
+    lo admite el grupo `Cash`), `TiposDeCaja.PorDefectoAsync`, `ReglasDeMovimientoDeCaja.{EsRetiro, Campos, DestinoAsync, ExcesoAsync}`,
+    `BorradorDeMovimientoDeCaja : IBorradorDeGrupo`, las estrategias `EfectoMovimientoDeCaja` y `EfectoDiferenciaDeArqueo`,
+    `ListCashMovementsQuery`, `GetCashMovementQuery`, `VistaDeMovimientosDeCaja`; `ExecuteDayCloseCommand`, `ReopenDayCloseCommand`,
+    `ListDayClosesQuery`, `GetDayCloseQuery`, `VistaDeCierresDelDia`; `ErroresDeCaja`; DTO `DenominationCountInput`, `TerminalBatchInput`,
+    `ReferenceCheckInput`, `CashCountInput`, `ClosingWithdrawalInput`, `CashSessionCashierDto`, `CashDocumentRefDto`, `CashSessionDto`,
+    `OpenCashSessionResultDto`, `CashCountLineDto`, `CashSessionDetailDto`, `CashExpectedMeansDto`, `CashExpectedTerminalDto`,
+    `CashExpectedReferenceDto`, `CashExpectedLineDto`, `CashSessionExpectedDto`, `CashSessionBatchDto`, `CloseCashSessionResultDto`,
+    `CashMovementDto`, `DayCloseDto`, `DayCloseLineDto`, `DayCloseCardDto`, `DayCloseSessionDto`, `DayCloseDetailDto`,
+    `BorradorAbiertoDto`, `MovimientoPendienteDto`, `SesionAbiertaDto`. En el ciclo común: `IEfectoDeClase.{OmiteAprobacionAsync,
+    ExcluidosDeLaAprobacionAsync}` (con implementación por defecto; la diferencia de arqueo dentro de la tolerancia no pasa por la política y
+    el cajero nunca la aprueba), `ReglasDelDocumento` no exige líneas a las clases de caja; `MensajesDelDocumento.ModoDeEntregaAsync` sella
+    `BatchScopeKey = CashSession:{publicId}` con el disparador `CierreDeTurno`; `ClavesDeCerrojo.PuntoDeVenta` (el candado del punto que
+    serializa abrir sesión y cerrar el día); `IAuditoriaDelPuntoDeVenta.AnotarAsync(…, entidad)` con
+    `AuditoriaDelPuntoDeVenta.{EntidadDocumento, EntidadSesionDeCaja, EntidadCierreDelDia}`. Eventos de auditoría
+    `Inventory.CashSession.{Opened, Closed, Recounted}` e `Inventory.DayClose.{Executed, Reopened}`. Errores nuevos:
+    `Inventory.CashSession.{NotFound, BaseRequired, CashMeansMissing}`, `Inventory.CashMovement.Invalid` (`data.field`),
+    `Inventory.DayClose.{NotFound, NotClosed}`. Decisiones: el fondo fijo de una caja es la base de su sesión anterior (la primera toma lo
+    indicado); el lote `CashSessionClose` lo crea el cierre en su transacción con el molde del lote del cierre de período (no por
+    `OrderIntegrationBatchCommand`, que es manual); el tope de un retiro es lo esperado del medio o, ya contada la sesión, lo contado; el
+    reconteo que cuadra descarta el documento de diferencia; el esperado cuenta los pagos de documentos confirmados (una venta anulada deja
+    de contar).
 
 ### 2.17 Códigos de error principales (familias)
 

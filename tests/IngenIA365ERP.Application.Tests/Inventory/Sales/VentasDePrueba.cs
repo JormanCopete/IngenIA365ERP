@@ -49,6 +49,9 @@ public sealed class VentasDePrueba
     public IToqueDeSesionDeCaja Toque { get; } = Substitute.For<IToqueDeSesionDeCaja>();
     public AlertasDePrueba Alertas { get; } = new();
 
+    /// <summary>Estrategias que una prueba agrega a las de ventas (la caja, I3 T555: movimiento y diferencia de arqueo).</summary>
+    public List<IEfectoDeClase> EfectosAdicionales { get; } = [];
+
     public Person ConsumidorFinal { get; private set; } = null!;
     public Person Ana { get; private set; } = null!;
     public Person Adquirente { get; private set; } = null!;
@@ -196,6 +199,7 @@ public sealed class VentasDePrueba
             new EfectoNotaDeVentaNoElectronica(registro, emision, maestros, reglas, anulacion, Db),
             new EfectoNotaCreditoDeVenta(registro, emision, maestros, reglas, anulacion, Db),
             new EfectoNotaDeAjustePos(registro, emision, maestros, reglas, anulacion, Db),
+            .. EfectosAdicionales,
         ], EntregaDelComercio.I3);
     }
 

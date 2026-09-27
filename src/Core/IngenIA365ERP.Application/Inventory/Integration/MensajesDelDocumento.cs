@@ -148,7 +148,10 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
                     && TimeOnly.TryParse(hora, System.Globalization.CultureInfo.InvariantCulture, out var h) ? h : null;
                 var alcance = disparador == ClavesDeLote.CierreDePeriodo
                     ? ClavesDeLote.Periodo(documento.OperationDate.Year, documento.OperationDate.Month)
-                    : null;
+                    : disparador == ClavesDeLote.CierreDeTurno && documento.CashSessionId is int sesion
+                        // I3 (T618, T12): lo que espera el cierre del turno lleva la clave de su sesión de caja.
+                        ? ClavesDeLote.SesionDeCaja(await db.CashSessions.AsNoTracking().Where(s => s.Id == sesion).Select(s => s.PublicId).FirstAsync(ct))
+                        : null;
                 return new ModoDeEntrega.Sellado(DeliveryMode.Batch, ClavesDeLote.Horario(tipo.Code, disparador, horaDeLote, granularidad), alcance);
             case PostingMode.NotPosted:
                 return new ModoDeEntrega.Sellado(DeliveryMode.NotPosted);

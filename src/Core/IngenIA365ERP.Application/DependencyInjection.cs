@@ -276,6 +276,14 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaCreditoDeVenta>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeAjustePos>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeVentaNoElectronica>();
+        // I3 (T617-T620): la caja. El grupo Cash por el ciclo común (borrador del movimiento, sus dos estrategias) y los servicios que
+        // comparten las sesiones, el arqueo y los movimientos.
+        services.AddScoped<Inventory.Cash.SesionesDeCaja>();
+        services.AddScoped<Inventory.Cash.ReglasDeMovimientoDeCaja>();
+        services.AddScoped<Inventory.Cash.ArqueoDeLaSesion>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Cash.BorradorDeMovimientoDeCaja>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Cash.EfectoMovimientoDeCaja>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Cash.EfectoDiferenciaDeArqueo>();
         // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
         services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();

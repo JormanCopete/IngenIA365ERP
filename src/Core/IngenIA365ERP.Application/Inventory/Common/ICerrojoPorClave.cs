@@ -20,4 +20,7 @@ public static class ClavesDeCerrojo
     public static string AmbitoDeLista(string scopeKey) => $"INV_PriceLists:{scopeKey}";
 
     public static string TopeDelRol(int roleId) => $"INV_DiscountCaps:{roleId}";
+
+    /// <summary>La fila del punto de venta: abrir una sesión y cerrar el día se serializan por punto (I3, T617, T620). (nuevo)</summary>
+    public static string PuntoDeVenta(int pointOfSaleId) => $"INV_PointsOfSale:{pointOfSaleId}";
 }

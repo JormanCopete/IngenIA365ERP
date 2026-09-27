@@ -99,6 +99,19 @@ public interface IEfectoDeClase
     /// </summary>
     Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         contexto.EsAnulacion ? MensajesDeAnulacionAsync(contexto, ct) : MensajesAsync(contexto, ct);
+
+    /// <summary>
+    /// ¿La confirmación se salta la política del tipo? (feature 012, I3, T618; T50). Sólo la diferencia de arqueo con todas sus
+    /// líneas dentro de la tolerancia del medio: se confirma con su motivo y sin aprobación. Por defecto, no. (nuevo)
+    /// </summary>
+    Task<bool> OmiteAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(false);
+
+    /// <summary>
+    /// Los usuarios (<c>SEC_Users.Id</c>) que no pueden aprobar el documento además de quien lo creó (feature 012, I3, T618; T50): el
+    /// cajero de la sesión en una diferencia de arqueo, aunque la cierre un supervisor. Por defecto, ninguno. (nuevo)
+    /// </summary>
+    Task<IReadOnlyCollection<int>> ExcluidosDeLaAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyCollection<int>>([]);
 }
 
 /// <summary>
@@ -140,4 +153,9 @@ public abstract class EfectoDeClaseBase : IEfectoDeClase
 
     public virtual Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         contexto.EsAnulacion ? MensajesDeAnulacionAsync(contexto, ct) : MensajesAsync(contexto, ct);
+
+    public virtual Task<bool> OmiteAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(false);
+
+    public virtual Task<IReadOnlyCollection<int>> ExcluidosDeLaAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyCollection<int>>([]);
 }

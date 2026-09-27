@@ -19,7 +19,7 @@ public interface IAuditoriaDelPuntoDeVenta
     /// es <c>pos</c>. <paramref name="metadata"/> se agrega a la del contexto (p. ej. <c>Format</c>).
     /// </summary>
     Task AnotarAsync(string accion, object operacion, Guid documentoPublicId, object? datos, CancellationToken ct,
-        IReadOnlyDictionary<string, string>? metadata = null);
+        IReadOnlyDictionary<string, string>? metadata = null, string entidad = AuditoriaDelPuntoDeVenta.EntidadDocumento);
 
     /// <summary>¿Hay un evento <paramref name="accion"/> del documento con <c>Format = formato</c>? Sirve para saber si ya hubo primera entrega.</summary>
     Task<bool> ExisteAsync(string accion, Guid documentoPublicId, string formato, CancellationToken ct);
@@ -34,15 +34,20 @@ public sealed class AuditoriaDelPuntoDeVenta(IApplicationDbContext db, IServiceP
 {
     public const string ClaveDeFormato = "Format";
 
+    /// <summary>Las entidades de los eventos: el documento (lo común), la sesión de caja y el cierre del día (I3, T617–T620). (nuevo)</summary>
+    public const string EntidadDocumento = "InventoryDocument";
+    public const string EntidadSesionDeCaja = "CashSession";
+    public const string EntidadCierreDelDia = "DayClose";
+
     public async Task AnotarAsync(string accion, object operacion, Guid documentoPublicId, object? datos, CancellationToken ct,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null, string entidad = EntidadDocumento)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accion);
         var contexto = await AuditoriaEncadenada.ContextoAsync(servicios, servicios.GetService<ICurrentUserService>(), operacion, ct);
         var evento = new AuditLogCommand
         {
             Action = accion,
-            EntityType = "InventoryDocument",
+            EntityType = entidad,
             EntityId = documentoPublicId.ToString(),
             Module = ModuloDeAuditoria.Inventory,
             NewValues = datos,

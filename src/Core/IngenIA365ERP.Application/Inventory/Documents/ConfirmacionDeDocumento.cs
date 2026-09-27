@@ -115,8 +115,10 @@ public sealed class ConfirmacionDeDocumento(
         if (reglas.IsFailure) return Falla(reglas.Error);
 
         // --------------------------------------------------------------------------------------- 2. aprobación --
-        if (!pedido.PorAprobacion)
+        // I3 (T618): la diferencia de arqueo dentro de la tolerancia se confirma sin aprobación y el cajero nunca la aprueba.
+        if (!pedido.PorAprobacion && !await efecto.OmiteAprobacionAsync(contexto, ct))
         {
+            var excluidos = await efecto.ExcluidosDeLaAprobacionAsync(contexto, ct);
             var grupo = VistaDeDocumentos.GrupoDe(documento.Class, original?.Class);
             var permisoLimitado = PermisosDeGrupo.De(grupo).PermisoLimitado;
             var monto = efecto.MontoParaAprobar(contexto);
@@ -136,7 +138,7 @@ public sealed class ConfirmacionDeDocumento(
                     monto,
                     documento.OperationDate,
                     documento.CreatedByUserId,
-                    [documento.CreatedByUserId],
+                    [documento.CreatedByUserId, .. excluidos.Where(u => u != documento.CreatedByUserId)],
                     Huella(documento),
                     permisoLimitado), ct);
                 if (solicitud.IsFailure) return Falla(solicitud.Error);

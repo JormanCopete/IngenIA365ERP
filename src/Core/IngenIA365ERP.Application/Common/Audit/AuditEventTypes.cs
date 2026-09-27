@@ -176,6 +176,14 @@ public static class AuditEventTypes
     public const string InventoryDocumentDelivered = "Inventory.Document.Delivered";
     public const string InventoryDocumentReprinted = "Inventory.Document.Reprinted";
 
+    // Feature 012, I3 (T617-T620): la caja. Abrir y cerrar la sesion, recontar tras un rechazo (con antes y despues), cerrar y
+    // reabrir el dia (con motivo). Dentro de la transaccion del comando (AuditoriaDelPuntoDeVenta).
+    public const string InventoryCashSessionOpened = "Inventory.CashSession.Opened";
+    public const string InventoryCashSessionClosed = "Inventory.CashSession.Closed";
+    public const string InventoryCashSessionRecounted = "Inventory.CashSession.Recounted";
+    public const string InventoryDayCloseExecuted = "Inventory.DayClose.Executed";
+    public const string InventoryDayCloseReopened = "Inventory.DayClose.Reopened";
+
     // Feature 012, I3 (T612): el reintegro de una nota por un medio que no fue de la venta (Inventory.Sales.RefundOtherMeans).
     public const string InventorySalesRefundOtherMeans = "Inventory.Sales.RefundOtherMeans";
 
