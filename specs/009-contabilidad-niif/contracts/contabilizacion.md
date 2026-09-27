@@ -33,7 +33,13 @@ public sealed record PostingRequest(
     string Description,
     AccountingOrigin Origin,
     IReadOnlyList<PostingLine> Lines,
-    DocumentKind Kind = DocumentKind.Regular);
+    DocumentKind Kind = DocumentKind.Regular,
+    UsuarioDeOrigen? RegistradoPor = null);         // enmienda 012 (D-01)
+
+// Enmienda 012: quien registró el documento de origen (un documento de Inventario confirmado por
+// una persona y contabilizado después por el proceso). Llega a AccountingDocument.RegisteredBy;
+// nulo conserva el comportamiento de Nómina y de la digitación (el usuario actual).
+public sealed record UsuarioDeOrigen(Guid? CentralUserId, string Name);
 
 public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService clock,
                                      ICurrentUserService user, IUserBranchScope scope)
@@ -42,7 +48,21 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
     /// contexto SIN guardar. El llamador guarda todo en un solo SaveChangesAsync.
     public Task<Result<AccountingDocument>> PrepareAsync(PostingRequest request, CancellationToken ct);
 
+    /// Las mismas comprobaciones (reglas 1 a 11 de §2), sin agregar nada: errores y avisos por
+    /// línea con su campo (POST /documents/validate). Es ValidarVariosAsync([request])[0].
+    public Task<ValidacionDeComprobante> ValidarAsync(PostingRequest request, CancellationToken ct);
+
+    /// Enmienda 012: el mismo análisis para varios comprobantes, con las referencias cargadas en
+    /// bloque y SIN seguimiento; no numera ni agrega, no deja nada en el ChangeTracker. Un
+    /// resultado por comprobante, en el orden recibido. Lo usan la validación previa de
+    /// Inventario y la vista previa de un lote.
+    public Task<IReadOnlyList<ValidacionDeComprobante>> ValidarVariosAsync(
+        IReadOnlyList<PostingRequest> requests, CancellationToken ct);
+
     /// Documento Reversal del mismo tipo, líneas invertidas, referencia cruzada; sin guardar.
+    /// Enmienda 012: rechaza lo de Inventario —un original de origen INV o una petición de origen
+    /// INV— con Accounting.Document.InventoryCorrectsWithNewVoucher, antes de cualquier otra
+    /// comprobación: lo de Inventario se corrige con un comprobante nuevo de su propio mensaje.
     public Task<Result<AccountingDocument>> PrepareReversalAsync(
         AccountingDocument original, DateOnly date, string reason, AccountingOrigin origin, CancellationToken ct);
 }
@@ -69,6 +89,7 @@ campo con la misma clase a través de `POST /documents/validate`).
 | 10 | base gravable: presente si `RequiresTaxBase`; diferencia `\|importe − base × tarifa\|` > 0 → **aviso**; > `TaxTolerance` → **error** | `Accounting.Line.TaxBaseRequired` · `Accounting.Line.TaxAmountDiffers` (aviso) · `Accounting.Line.TaxAmountMismatch` (error) |
 | 11 | `Σ Debit == Σ Credit` | `Accounting.Document.Unbalanced` (trae la diferencia) |
 | 12 | número: `VoucherType.NextNumber` (incremento en memoria; índice único + reintento, R3) | — |
+| — | *enmienda 012* · `PrepareReversalAsync` sobre algo de Inventario (original de origen `INV` o petición de origen `INV`); va antes de toda otra comprobación de la reversión | `Accounting.Document.InventoryCorrectsWithNewVoucher` |
 
 Cada infracción lleva `Severidad` (Error | Aviso): los avisos se muestran y no impiden contabilizar.
 Cada error de línea lleva `data: { lineNumber, accountCode, rule, severity }` (FR-041). Al preparar,
@@ -88,6 +109,12 @@ await db.SaveChangesAsync(ct);                                  // corrida + com
 El comando del módulo se marca `IReintentableAnteConcurrencia` para que
 `ReintentoPorConcurrenciaBehavior` lo repita entero si la numeración chocó.
 
+> *Enmienda 012 (D-01)*: **Inventario no usa este molde**: no llama al contrato desde sus comandos.
+> Su documento y su mensaje se guardan juntos en Inventario, y Contabilidad lo contabiliza después
+> con su consumidor (`PostInventoryMessagesCommand`), por el mismo `PrepareAsync`, guardando
+> comprobante y recibo (`ACC_InventoryPostings`) juntos. Ver
+> `specs/012-inventario-comercial/contracts/contabilidad.md`.
+
 ## 4. Qué manda cada módulo (parametrización existente → líneas)
 
 | Módulo · operación | Tipo | Líneas (débito / crédito) | Tercero | Documento cruce | Parametrización |
@@ -101,9 +128,7 @@ El comando del módulo se marca `IReintentableAnteConcurrencia` para que
 | Cartera · descuento de nómina | `DN` | CxC nómina / capital-intereses | asociado | `PG` | `CreditLineParameter` |
 | Ahorros · intereses | `AH` | gasto intereses / ahorro (`SavingsParameter.TreasuryAccount` + `InterestExpenseAccount` nueva) | asociado | `CT` + cuenta de ahorro | nueva columna |
 | **CDT** · liquidación de intereses | `CD` | gasto / CDT por pagar (`CdtParameter.TreasuryAccount` + `InterestExpenseAccount` nueva) | titular | `CT` + número CDT | nueva columna |
-| **Inventario** · factura de venta | `FV` | CxC cliente / ventas gravadas-no gravadas, IVA (`ProductAccount`, `VatAccount`) | cliente | `FV` + número | resolver códigos |
-| Inventario · entradas/salidas | `EI` / `SI` | inventario / proveedor o costo | proveedor | `FC` + número | `ProductAccount.NetAccountCode` |
-| Inventario · anular | mismo | `PrepareReversalAsync` por `SourcePublicId` | | | corrige el bug de anular «cualquiera» |
+| **Inventario** · por mensajes *(enmienda 012; reemplaza las filas «factura de venta», «entradas/salidas» y «anular», que decían `FV` con `ProductAccount`/`VatAccount`, `EI`/`SI` con `ProductAccount.NetAccountCode` y anular por `PrepareReversalAsync`)* | `FV`, `EI`, `SI`, `NV`, `CP`, `TR`, `AC`, `CJ` (por operación y tipo de documento, `ACC_InventoryVoucherMappings`) | por la matriz `ACC_InventoryPostingRules` | el del mensaje | según la cuenta | 012 `contracts/contabilidad.md`; anular → comprobante nuevo |
 | **Tesorería** · cheque | `CH` | `TreasuryConcept.DebitAccountId` / banco | beneficiario | `FP` + factura | **`TRS_Concepts` gana cuentas** |
 | Tesorería · factura por pagar / cobrar | `FP` / `CB` | concepto / CxP o CxC | tercero | `FC`/`FV` + número | ídem |
 | Tesorería · anular cheque | `CH` | `PrepareReversalAsync` | | | |
@@ -122,4 +147,5 @@ institucional falta.
 - No abre transacciones ni guarda: la atomicidad es del `SaveChangesAsync` del llamador.
 - No decide cuentas: las trae el módulo desde su parametrización.
 - No escribe saldos: no existen (R4).
-- No permite editar ni borrar un documento contabilizado: sólo `PrepareReversalAsync`.
+- No permite editar ni borrar un documento contabilizado: sólo `PrepareReversalAsync`, salvo lo de
+  Inventario, que no se reversa: se corrige con un comprobante nuevo (enmienda 012, D-01).

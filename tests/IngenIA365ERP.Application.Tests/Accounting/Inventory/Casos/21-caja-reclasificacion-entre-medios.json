@@ -1,0 +1,73 @@
+{
+  "descripcion": "MovimientoDeCajaRegistrado · ReclassificationBetweenMeans: el medio de destino contra el de origen.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "CashMovement",
+      "documentTypeCode": "MCJ",
+      "number": "MC-21",
+      "publicId": "00000079-0000-4000-8000-000000000079",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000080-0000-4000-8000-000000000080",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000082-0000-4000-8000-000000000082",
+      "type": "MovimientoDeCajaRegistrado",
+      "payload": {
+        "operation": "MovimientoDeCaja",
+        "movementKind": "ReclassificationBetweenMeans",
+        "paymentMeansCode": "EFECTIVO",
+        "paymentMeansClass": "Cash",
+        "destinationPaymentMeansCode": "TRANSF",
+        "pointOfSaleCode": "PTO01",
+        "cashRegisterCode": "CAJA03",
+        "cashSessionPublicId": "00000081-0000-4000-8000-000000000081",
+        "destination": null,
+        "destinationPointOfSaleCode": null,
+        "amount": 100000.0,
+        "reason": "Prueba"
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CJ",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "11200501",
+        "debito": 100000.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "11050501",
+        "debito": 0,
+        "credito": 100000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      }
+    ]
+  }
+}

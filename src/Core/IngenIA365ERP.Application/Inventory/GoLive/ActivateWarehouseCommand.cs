@@ -18,7 +18,7 @@ namespace IngenIA365ERP.Application.Inventory.GoLive;
 
 // ------------------------------------------------------------------------------------------------------------ DTOs --
 
-/// <summary>La vista previa de la activación (contracts/api.md §13.3). En I1 <see cref="Sets"/> va vacío. (nuevo)</summary>
+/// <summary>La vista previa de la activación (contracts/api.md §13.3). <see cref="Sets"/> va vacío si Contabilidad no responde. (nuevo)</summary>
 public sealed record ActivationPreviewDto(
     BodegaDeActivacionDto Warehouse,
     DateOnly CutoffDate,
@@ -37,19 +37,39 @@ public sealed record SaldoInicialDeActivacionDto(bool Confirmed, decimal Value, 
 public sealed record DocumentoDeActivacionDto(Guid PublicId, string? DisplayNumber, DocumentStatus Status, decimal Value);
 
 /// <summary>
-/// Un conjunto de cuentas mapeadas (§13.3). Lo llena US7 (I2) con <c>IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync</c>;
-/// en I1 no hay ninguno. (nuevo)
+/// Un conjunto de cuentas mapeadas (§13.3): los grupos contables y las cuentas de rol <c>Inventario</c> y <c>Transito</c> que
+/// Contabilidad une por componentes conexos (<c>IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync</c>), su saldo contable al
+/// corte, el valorizado de todas las bodegas que usan esas cuentas, la diferencia (valorizado − saldo contable) y los mensajes que
+/// la explican. (nuevo; US7, T523, lo llena)
 /// </summary>
 public sealed record ConjuntoDeCuentasDto(
     IReadOnlyList<CodigoYNombreDto> AccountingGroups,
     IReadOnlyList<CuentaDelConjuntoDto> Accounts,
     decimal LedgerBalance,
-    decimal Valuation,
-    decimal Difference);
+    ValorizadoDelConjuntoDto Valuation,
+    decimal Difference,
+    ExplicacionDelConjuntoDto Explanation);
 
 public sealed record CodigoYNombreDto(string Code, string Name);
 
 public sealed record CuentaDelConjuntoDto(string Code, string Name, string Role, decimal LedgerBalance);
+
+/// <summary>
+/// El valorizado del conjunto (§13.3): el de la bodega que se activa, el de las activas y el de las no activas que comparten cuentas
+/// con sus cifras de SOLIDO al corte (suman al conjunto y se muestran aparte), y el total. (nuevo, T523)
+/// </summary>
+public sealed record ValorizadoDelConjuntoDto(
+    decimal ThisWarehouse,
+    IReadOnlyList<BodegaActivaDelConjuntoDto> ActiveWarehouses,
+    IReadOnlyList<BodegaDeSolidoDelConjuntoDto> LegacyWarehouses,
+    decimal Total);
+
+public sealed record BodegaActivaDelConjuntoDto(Guid WarehousePublicId, string Code, decimal Value);
+
+public sealed record BodegaDeSolidoDelConjuntoDto(string WarehouseCode, Guid? WarehousePublicId, decimal Value, DateOnly FiguresAsOf, Guid BatchPublicId);
+
+/// <summary>Los mensajes de Inventario a Contabilidad hasta el corte que explican parte de la diferencia (§13.3). (nuevo, T523)</summary>
+public sealed record ExplicacionDelConjuntoDto(int Pending, int InBatch, int Rejected, int NotPosted);
 
 public sealed record BloqueoDeActivacionDto(string Code, string Message, object? Data);
 
@@ -68,7 +88,8 @@ public sealed record ActivationResultDto(
 
 /// <summary>
 /// <c>GET /api/inventory/warehouses/{id}/activation?cutoffDate=</c> (feature 012, T313; §13.3; <c>Inventory.Warehouses.Activate</c>):
-/// lo que se compararía y lo que hoy impide activar. Si la bodega ya está activa, trae la activación guardada. (nuevo)
+/// lo que se compararía y lo que hoy impide activar. Si la bodega ya está activa, trae la activación guardada. El alcance de bodega
+/// (<c>IAlcanceDeInventario</c>) lo aplica <see cref="ComparacionDeActivacion"/>: fuera de él, 404. (nuevo)
 /// </summary>
 public sealed record GetWarehouseActivationPreviewQuery(Guid WarehousePublicId, DateOnly? CutoffDate = null) : IRequest<Result<ActivationPreviewDto>>;
 
@@ -98,7 +119,8 @@ public sealed class GetWarehouseActivationPreviewQueryHandler(ComparacionDeActiv
 /// primera bodega activa de la sucursal, también su tránsito. El motivo va a la auditoría por <c>AuditBehavior</c>
 /// (<see cref="IConMotivo"/>); un intento rechazado no deja fila y queda en la auditoría como rechazo.</item>
 /// </list>
-/// US7 (I2) llena los conjuntos y el cuadre dentro de <see cref="ComparacionDeActivacion"/>, sin tocar este flujo. (nuevo)
+/// Desde US7 (I2, T523) los conjuntos y el cuadre los calcula <see cref="ComparacionDeActivacion"/> con la consulta de saldos de
+/// Contabilidad; bodegas no activas sin cifras y grupos sin regla son bloqueos duros como los demás. (nuevo)
 /// </summary>
 public sealed record ActivateWarehouseCommand(Guid WarehousePublicId, DateOnly CutoffDate, bool AcceptDifference = false, string Reason = "")
     : IRequest<Result<ActivationResultDto>>, IOperacionIdempotente, IConMotivo
@@ -224,81 +246,3 @@ public sealed class ActivateWarehouseCommandHandler(
     private static Result<ActivationResultDto> Falla(Error error) => Result.Failure<ActivationResultDto>(error);
 }
 
-// ----------------------------------------------------------------------------------------------- la comparación --
-
-/// <summary>
-/// El cálculo común de la vista previa y de la activación (feature 012, T313; §13.3) <b>(nuevo)</b>: la bodega (del alcance, si
-/// no 404), su saldo inicial, los bloqueos y los conjuntos de cuentas. Los conjuntos y su cuadre los pide a Contabilidad por
-/// <c>IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync</c> <b>sólo cuando ese puerto exista</b> (US7, I2); hasta entonces
-/// <see cref="ConjuntosAsync"/> responde «no disponible», los conjuntos van vacíos y el bloqueo
-/// <c>Inventory.Activation.AccountingUnavailable</c> queda como aviso.
-/// </summary>
-public sealed class ComparacionDeActivacion(IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion, IDateTimeService reloj)
-{
-    /// <summary>Lo calculado: la vista, la bodega seguida por el contexto y el primer bloqueo que impide activar (nulo si ninguno).</summary>
-    public sealed record Calculo(ActivationPreviewDto Vista, Warehouse Bodega, Error? BloqueoDuro);
-
-    public async Task<Result<Calculo>> CalcularAsync(Guid bodegaPublicId, DateOnly? corte, CancellationToken ct)
-    {
-        var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
-        var bodega = await db.Warehouses.FirstOrDefaultAsync(w => w.PublicId == bodegaPublicId, ct);
-        if (bodega is null || !alcance.IncluyeBodega(bodega.Id)) return Result.Failure<Calculo>(ErroresDeAlcance.BodegaInexistente());
-
-        var saldos = await db.InventoryDocuments.AsNoTracking()
-            .Where(d => d.Class == DocumentClass.OpeningBalance && d.WarehouseId == bodega.Id
-                && (d.Status == DocumentStatus.Draft || d.Status == DocumentStatus.PendingApproval || d.Status == DocumentStatus.Confirmed))
-            .OrderBy(d => d.Id)
-            .Select(d => new { d.PublicId, d.Prefix, d.Number, d.Status, d.CostTotal, d.OperationDate })
-            .ToListAsync(ct);
-        var confirmados = saldos.Where(s => s.Status == DocumentStatus.Confirmed).ToList();
-        var pendientes = saldos.Where(s => s.Status != DocumentStatus.Confirmed).ToList();
-        var fecha = corte ?? bodega.CutoffDate ?? reloj.HoyLocal.AddDays(-1);
-
-        var bloqueos = new List<Error>();
-        if (bodega.EstaActiva) bloqueos.Add(GoLiveErrors.ActivationAlreadyActive(bodega.Code, bodega.CutoffDate));
-        if (pendientes.Count > 0)
-            bloqueos.Add(GoLiveErrors.ActivationOpeningBalanceNotConfirmed(bodega.Code,
-                pendientes.Select(p => (object)new { publicId = p.PublicId, status = p.Status.ToString() }).ToList()));
-        var fechaDelSaldo = confirmados.Select(c => (DateOnly?)c.OperationDate).FirstOrDefault() ?? bodega.CutoffDate;
-        if (!bodega.EstaActiva && fechaDelSaldo is { } delSaldo && delSaldo != fecha)
-            bloqueos.Add(GoLiveErrors.ActivationCutoffMismatch(bodega.Code, fecha, delSaldo));
-        var setup = await db.InventorySetups.AsNoTracking().OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
-        if (setup?.LastClosedDate is { } cerrado && fecha <= cerrado) bloqueos.Add(InventoryErrors.PeriodClosed(fecha.Year, fecha.Month, cerrado));
-
-        var duro = bloqueos.FirstOrDefault();
-        var conjuntos = await ConjuntosAsync(bodega, fecha, ct);
-        if (conjuntos is null) bloqueos.Add(GoLiveErrors.ActivationAccountingUnavailable());
-        var sets = conjuntos ?? [];
-        var diferencia = sets.Sum(s => s.Difference);
-
-        ActivationResultDto? activacion = null;
-        if (bodega.EstaActiva)
-        {
-            activacion = await db.WarehouseActivations.AsNoTracking().Where(a => a.WarehouseId == bodega.Id)
-                .Select(a => new ActivationResultDto(a.PublicId, bodega.PublicId, a.ActivatedAt, a.ActivatedByUserId, a.CutoffDate, a.TotalDifference,
-                    a.DifferenceAcceptedByUserId != null, a.AcceptanceReason))
-                .FirstOrDefaultAsync(ct);
-        }
-
-        var vista = new ActivationPreviewDto(
-            new BodegaDeActivacionDto(bodega.PublicId, bodega.Code, bodega.Name),
-            fecha,
-            new SaldoInicialDeActivacionDto(confirmados.Count > 0 && pendientes.Count == 0, confirmados.Sum(c => c.CostTotal),
-                saldos.Select(s => new DocumentoDeActivacionDto(s.PublicId, VistaDeDocumentos.NumeroVisible(s.Prefix, s.Number), s.Status, s.CostTotal)).ToList()),
-            sets,
-            diferencia,
-            bloqueos.Select(b => new BloqueoDeActivacionDto(b.Code, b.Message, (b as ErrorConDatos)?.Data)).ToList(),
-            CanActivate: duro is null,
-            RequiresAcceptance: conjuntos is null || diferencia != 0m,
-            activacion);
-        return Result.Success(new Calculo(vista, bodega, duro));
-    }
-
-    /// <summary>
-    /// Los conjuntos de cuentas a la fecha de corte con su saldo contable, el valorizado y la diferencia. Nulo = Contabilidad no
-    /// responde. <b>US7 (I2)</b> lo llena con <c>IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync</c> cuando el puerto esté
-    /// registrado (las bodegas no activas que comparten cuentas suman con sus cifras de SOLIDO, §13.3); en I1 no existe.
-    /// </summary>
-    private static Task<IReadOnlyList<ConjuntoDeCuentasDto>?> ConjuntosAsync(Warehouse bodega, DateOnly corte, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<ConjuntoDeCuentasDto>?>(null);
-}

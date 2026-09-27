@@ -16,6 +16,9 @@ public class PeriodsEndpoints : ICarterModule
     public sealed record AbrirEjercicioRequest(int Year);
     public sealed record MotivoRequest(string Reason);
 
+    /// <summary>El cuerpo opcional de cerrar un mes: reconocer los mensajes de Inventario pendientes (feature 012, contracts/contabilidad.md §8).</summary>
+    public sealed record CerrarPeriodoRequest(bool? AcknowledgeInventoryPending);
+
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/accounting/periods")
@@ -48,8 +51,9 @@ public class PeriodsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Periods.CloseYear");
 
-        group.MapPost("/{year:int}/{month:int}/close", async (int year, int month, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ClosePeriodCommand(year, month), ct))
+        // Feature 012 (T491, contracts/api.md §29): cuerpo opcional { acknowledgeInventoryPending }.
+        group.MapPost("/{year:int}/{month:int}/close", async (int year, int month, CerrarPeriodoRequest? body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ClosePeriodCommand(year, month, body?.AcknowledgeInventoryPending ?? false), ct))
             .WithName("Accounting_Periods_Close")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Periods.Close");

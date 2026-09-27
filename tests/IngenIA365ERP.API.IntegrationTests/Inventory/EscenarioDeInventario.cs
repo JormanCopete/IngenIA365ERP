@@ -42,13 +42,14 @@ public sealed class EscenarioDeInventario
     private static readonly object Cerrojo = new();
 
     /// <summary>El escenario de ese nombre (uno por fixture: las pruebas que piden el mismo nombre lo comparten).</summary>
-    public static Task<EscenarioDeInventario> PrepararAsync(CentralIdentityApiFixture fx, string nombre, bool activar = true, DateOnly? corte = null)
+    public static Task<EscenarioDeInventario> PrepararAsync(CentralIdentityApiFixture fx, string nombre, bool activar = true, DateOnly? corte = null,
+        int? primerEjercicioContable = null)
     {
         lock (Cerrojo)
         {
             if (!Preparados.TryGetValue((fx, nombre), out var tarea))
             {
-                tarea = PrepararDeVerdadAsync(fx, nombre, activar, corte);
+                tarea = PrepararDeVerdadAsync(fx, nombre, activar, corte, primerEjercicioContable);
                 Preparados[(fx, nombre)] = tarea;
             }
             return tarea;
@@ -65,11 +66,16 @@ public sealed class EscenarioDeInventario
         }
     }
 
-    private static async Task<EscenarioDeInventario> PrepararDeVerdadAsync(CentralIdentityApiFixture fx, string nombre, bool activar, DateOnly? corte)
+    private static async Task<EscenarioDeInventario> PrepararDeVerdadAsync(CentralIdentityApiFixture fx, string nombre, bool activar, DateOnly? corte,
+        int? primerEjercicioContable)
     {
-        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, nombre);
+        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, nombre, primerEjercicioContable);
         using var http = fx.CreateClient();
         var t = coop.TokenAdmin;
+
+        // Los escenarios de I1 no inician la contabilidad y no guardan ningún modo de paso: sus documentos confirman en «no pasa»
+        // por el defecto de una cooperativa sin contabilidad (ModoDePasoVigente, decisión del dueño del 2026-09-26). Hasta ese día
+        // guardaban «no pasa» a mano, porque el defecto «en línea» hacía que la validación previa lo rechazara todo.
 
         // Sucursal S2 (la Principal ya existe, sin código).
         var s2 = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/core/branches", new { code = "S2", name = "Sucursal Dos", shortName = "SDOS" });

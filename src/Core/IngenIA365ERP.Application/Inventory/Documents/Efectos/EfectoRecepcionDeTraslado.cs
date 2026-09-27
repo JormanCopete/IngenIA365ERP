@@ -140,6 +140,23 @@ public sealed class EfectoRecepcionDeTraslado(
         return [await emision.TrasladoRecibidoAsync(contexto.Documento, despacho, filas, ct)];
     }
 
+    /// <summary>
+    /// T520: el <c>TrasladoRecibido</c> del borrador para la validación previa: lo que entraría a la bodega que recibe (el destino o,
+    /// en una devolución, el origen) al costo de su línea de despacho.
+    /// </summary>
+    public override async Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        if (await DespachoAsync(contexto.Documento, ct) is not { } vinculo) return [];
+        var (despacho, kind, pares) = vinculo;
+        var hacia = kind == DocumentLinkKind.ReturnOf ? despacho.WarehouseId : despacho.DestinationWarehouseId;
+        if (hacia is not int bodega) return [];
+        var costoDelDespacho = despacho.Lines.ToDictionary(l => l.Id, l => l.UnitCost);
+        var origenDe = pares.GroupBy(p => p.TargetLineId).ToDictionary(g => g.Key, g => g.First().SourceLineId);
+        var filas = await registro.FilasProvisionalesAsync(contexto.Documento, bodega, KardexEntryKind.Entry,
+            l => origenDe.TryGetValue(l.Id, out var fuente) ? costoDelDespacho.GetValueOrDefault(fuente) : null, ct);
+        return filas.Count == 0 ? [] : [await emision.TrasladoRecibidoAsync(contexto.Documento, despacho, filas, ct)];
+    }
+
     public override Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         Task.FromResult(Result.Failure(ErroresDeTraslados.UseReverseTransfer()));
 

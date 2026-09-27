@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Tests.Accounting.Common;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using Microsoft.EntityFrameworkCore;
 
@@ -229,5 +230,61 @@ public class DocumentCommandsTests
         (await e.D.Db.JournalEntries.ToListAsync()).Should().OnlyContain(l => l.IsDeleted);
         var contabilizado = await e.Contabilizador().Handle(new PostDocumentCommand(borrador.Value.PublicId), CancellationToken.None);
         contabilizado.Error.Code.Should().Be("Accounting.Document.NotFound");
+    }
+
+    // ---- feature 012, I2 (T460; contracts/contabilidad.md §6): lo de Inventario se corrige en Inventario ----
+
+    private static async Task<AccountingDocument> ComprobanteDeInventarioAsync(Escenario e, string sourceType, Guid sourcePublicId)
+    {
+        if (!await e.D.Db.VoucherTypes.AnyAsync(v => v.Code == "AC"))
+        {
+            e.D.Db.VoucherTypes.Add(new VoucherType { Code = "AC", Name = "Ajustes de costo", Usage = VoucherUsage.Module, ModuleCode = "INV", IsSeeded = true, CreatedBy = "test" });
+            await e.D.Db.SaveChangesAsync();
+        }
+        var inventario = e.D.Cuenta("143505", modulos: AccountingModules.Inventory);
+        var costo = e.D.Cuenta("613505", modulos: AccountingModules.Inventory);
+        var r = await e.D.Poster.PrepareAsync(ContabilidadTestData.Comprobante(inventario, costo, origen: new AccountingOrigin("INV", sourceType, sourcePublicId), tipo: "AC"), CancellationToken.None);
+        r.IsSuccess.Should().BeTrue(r.Error?.Message);
+        await e.D.Db.SaveChangesAsync();
+        return r.Value;
+    }
+
+    [Fact]
+    public async Task Un_comprobante_de_inventario_se_corrige_en_inventario_con_comprobante_nuevo()
+    {
+        var e = new Escenario();
+        var ajuste = await ComprobanteDeInventarioAsync(e, "InventoryDocument", Guid.NewGuid());
+
+        var r = await e.Reversador().Handle(new ReverseDocumentCommand(ajuste.PublicId, "no debería"), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Accounting.Document.ModuleOwned");
+        r.Error.Message.Should().Contain("anulando el documento o con su nota en Inventario").And.Contain("comprobante nuevo");
+        r.Error.Should().BeOfType<ErrorConDatos>();
+        (await e.D.Db.AccountingDocuments.SingleAsync(d => d.PublicId == ajuste.PublicId)).Status.Should().Be(DocumentStatus.Posted);
+    }
+
+    [Fact]
+    public async Task Un_resumido_de_inventario_dice_cuantos_documentos_reune()
+    {
+        var e = new Escenario();
+        var lote = Guid.NewGuid();
+        var resumido = await ComprobanteDeInventarioAsync(e, "InventoryPostingBatch", lote);
+        foreach (var documento in new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() })
+        {
+            // Dos mensajes del mismo documento cuentan una vez.
+            for (var i = 0; i < 2; i++)
+                e.D.Db.InventoryPostings.Add(new InventoryPosting
+                {
+                    MessagePublicId = Guid.NewGuid(), MessageType = "AjusteRegistrado", SourceModule = "INV", SourcePublicId = documento,
+                    OperationDate = ContabilidadTestData.Marzo15, AccountingDocumentId = resumido.Id, BatchPublicId = lote,
+                    OriginUserName = "bodega@demo", ActorName = "Proceso de integración", ProcessedAt = ContabilidadTestData.Ahora, CreatedBy = "test",
+                });
+        }
+        await e.D.Db.SaveChangesAsync();
+
+        var r = await e.Reversador().Handle(new ReverseDocumentCommand(resumido.PublicId, "no debería"), CancellationToken.None);
+
+        r.Error.Code.Should().Be("Accounting.Document.ModuleOwned");
+        r.Error.Message.Should().Contain("reúne 3 documentos");
     }
 }

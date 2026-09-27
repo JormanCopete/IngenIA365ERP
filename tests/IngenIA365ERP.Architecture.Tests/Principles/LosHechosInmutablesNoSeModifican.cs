@@ -34,6 +34,9 @@ public class LosHechosInmutablesNoSeModifican
         "ProductAccountingGroupChange",
         // US11 (T389): las capturas de un conteo físico sólo se agregan (una corrección es otra captura negativa).
         "CountCapture",
+        // US7, entrega I2 (T476, T479): el intento de entrega y el recibo contable de un mensaje de Inventario.
+        "IntegrationDeliveryAttempt",
+        "InventoryPosting",
     ];
 
     /// <summary>

@@ -82,7 +82,7 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         (await appDb.AccountCatalogs.CountAsync()).Should().Be(2, "PUC solidario y PUC comercial");
         (await appDb.AccountCatalogEntries.CountAsync()).Should().BeGreaterThan(2_000);
         (await appDb.FinancialStatementItems.CountAsync()).Should().BeGreaterThan(100);
-        (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(18);
+        (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(23, "los 18 de la 009 y NV, CP, TR, AC y CJ de Inventario (feature 012, T484)");
         (await appDb.CrossDocumentTypes.CountAsync(t => t.IsSeeded)).Should().Be(8);
 
         // RunTestSeed=false en la fixture ⇒ cero datos demo (FR-017/SC-005).

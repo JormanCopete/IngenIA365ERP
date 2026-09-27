@@ -1,0 +1,76 @@
+{
+  "descripcion": "GrupoContableReclasificado: del grupo anterior al nuevo por bodega; el origen del comprobante es el producto.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Reclassification",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "Reclasificacion P-100",
+      "publicId": "00000063-0000-4000-8000-000000000063",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000064-0000-4000-8000-000000000064",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000066-0000-4000-8000-000000000066",
+      "type": "GrupoContableReclasificado",
+      "payload": {
+        "operation": "Reclasificacion",
+        "productPublicId": "00000065-0000-4000-8000-000000000065",
+        "productCode": "P-100",
+        "fromAccountingGroupCode": "ABARROTES",
+        "toAccountingGroupCode": "ASEO",
+        "reason": "Estaba mal clasificado",
+        "lines": [
+          {
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "quantityBase": 10,
+            "value": 700.0
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "AC",
+    "fecha": "2026-03-14",
+    "origen": "InventoryProduct",
+    "lineas": [
+      {
+        "cuenta": "14350502",
+        "debito": 700.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 0,
+        "credito": 700.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      }
+    ]
+  }
+}

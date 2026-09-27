@@ -43,8 +43,10 @@ public sealed class ReintentoPorConcurrenciaBehavior<TRequest, TResponse>(
     /// Índices únicos de un consecutivo. EF puede mandar el INSERT del documento antes que el UPDATE del
     /// contador; entonces la carrera no llega como conflicto de <c>RowVersion</c> sino como choque contra
     /// el número repetido, y es la misma carrera (feature 012, T186: salía 500 bajo carga).
+    /// El número de lote de integración (<c>COR_IntegrationBatchCounters</c>) es otro consecutivo: dos pasadas del despachador que
+    /// programan a la vez chocan contra él antes que contra la franja (feature 012, T473).
     /// </summary>
-    public static readonly IReadOnlyList<string> IndicesDeConsecutivo = ["UK_ACC_Documents_Type_Number"];
+    public static readonly IReadOnlyList<string> IndicesDeConsecutivo = ["UK_ACC_Documents_Type_Number", "UK_COR_IntegrationBatches_Number"];
 
     private static readonly bool EsReintentable = typeof(IReintentableAnteConcurrencia).IsAssignableFrom(typeof(TRequest));
 

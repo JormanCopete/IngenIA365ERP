@@ -113,6 +113,20 @@ public abstract class EfectoDeAjuste(
         return [await emision.AjusteAprobadoAsync(contexto.Documento, contexto.Tipo, filas, ct), .. retroactivos];
     }
 
+    /// <summary>
+    /// T520: el <c>AjusteInventarioAprobado</c> del borrador con costos provisionales (la entrada al costo digitado si lo trae,
+    /// la salida al promedio vigente), para la validación previa contable antes del cerrojo.
+    /// </summary>
+    public override async Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        if (contexto.EsAnulacion) return await MensajesDeAnulacionAsync(contexto, ct);
+        if (contexto.Documento.WarehouseId is not int bodega) return [];
+        var entrada = Signo > 0m;
+        var filas = await registro.FilasProvisionalesAsync(contexto.Documento, bodega,
+            entrada ? KardexEntryKind.Entry : KardexEntryKind.Exit, entrada ? l => l.UnitCost : null, ct);
+        return filas.Count == 0 ? [] : [await emision.AjusteAprobadoAsync(contexto.Documento, contexto.Tipo, filas, ct)];
+    }
+
     public override async Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
         var revertido = await reversion.RevertirAsync(contexto.Documento, contexto.Original!, ct);

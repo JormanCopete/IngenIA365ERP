@@ -58,6 +58,12 @@ public sealed record Actor(
 
     public static string OrigenDeMensaje(long mensajeId) => $"Mensaje:{mensajeId}";
 
+    /// <summary>
+    /// El origen de una unidad que el despachador procesa (feature 012, T527): el <c>PublicId</c> de su primer mensaje. El
+    /// despachador sólo conoce los <c>PublicId</c> (el <c>Id</c> interno no sale del módulo, Principio VI). (nuevo)
+    /// </summary>
+    public static string OrigenDeMensaje(Guid mensajePublicId) => $"Mensaje:{mensajePublicId:D}";
+
     public static string OrigenDeLote(string numero) => $"Lote:{numero}";
 
     public static string OrigenDeTarea(string nombre) => $"Tarea:{nombre}";

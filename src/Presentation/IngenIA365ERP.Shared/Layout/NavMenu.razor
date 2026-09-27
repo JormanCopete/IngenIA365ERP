@@ -50,6 +50,17 @@
             <NavLink href="/contabilidad/informes" class="nav-subitem">Informes</NavLink>
             <NavLink href="/contabilidad/estados-financieros" class="nav-subitem">Estados financieros</NavLink>
             <NavLink href="/contabilidad/terceros" class="nav-subitem">Estado de cuenta del tercero</NavLink>
+            @* Feature 012, US7 (T540): el lado contable de la integración con Inventario (enmienda de la 009). El detalle de un
+               lote (/contabilidad/inventario/lotes/{id}) se abre desde la lista, sin enlace propio. *@
+            <span class="nav-subgroup-title">Inventario</span>
+            <PermissionGate Required="Accounting.InventoryRules.View">
+                <NavLink href="/contabilidad/inventario/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/inventario/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/inventario/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Accounting.InventoryBatches.View">
+                <NavLink href="/contabilidad/inventario/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
@@ -159,6 +170,16 @@
             </PermissionGate>
             <PermissionGate Required="Inventory.Alerts.View">
                 <NavLink href="/inventario/alertas" class="nav-subitem">Alertas</NavLink>
+            </PermissionGate>
+            @* US7 (T540): la integración con Contabilidad —bandeja, conciliación y activación con cuadre—. *@
+            <PermissionGate Required="Inventory.Messages.View">
+                <NavLink href="/inventario/bandeja-de-mensajes" class="nav-subitem">Bandeja de mensajes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reconciliation.View">
+                <NavLink href="/inventario/conciliacion" class="nav-subitem">Conciliación con Contabilidad</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Warehouses.Activate">
+                <NavLink href="/inventario/activacion" class="nav-subitem">Activación de bodegas</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 

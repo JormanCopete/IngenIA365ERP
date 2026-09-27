@@ -233,4 +233,28 @@ public class AccountCommandsTests
         r.Value.Should().Contain(p => p.Where == "Cuentas por concepto" && p.Detail.StartsWith("SALUD_EMPLEADOR") && p.AccountCode == "110505" && p.Problem.Contains("no es de movimiento"));
         r.Value.Should().Contain(p => p.Where == "EPS" && p.Detail == "EPS Sura");
     }
+
+    [Fact]
+    public async Task Las_reglas_vigentes_de_la_matriz_de_inventario_con_cuenta_no_elegible_son_parametrizaciones_invalidas()
+    {
+        // Feature 012, T494 (FR-017 de la 009): la matriz de Inventario entra a la lista.
+        var e = new Escenario();
+        var soloNomina = e.D.Cuenta("14350501", modulos: AccountingModules.Payroll);
+        var buena = e.D.Cuenta("14350502", modulos: AccountingModules.Inventory);
+        var inactiva = e.D.Cuenta("14350503", modulos: AccountingModules.Inventory, activa: false);
+        e.D.Db.InventoryPostingRules.AddRange(
+            new IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryPostingRule("Compra", "Inventario", soloNomina.Id, new DateOnly(2026, 1, 1), accountingGroupCode: "ABARROTES") { CreatedBy = "test" },
+            new IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryPostingRule("Compra", "Inventario", buena.Id, new DateOnly(2026, 1, 1), accountingGroupCode: "ASEO") { CreatedBy = "test" },
+            new IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryPostingRule("Venta", "Ingreso", inactiva.Id, new DateOnly(2026, 1, 1)) { CreatedBy = "test" },
+            // Una versión ya cerrada es historia: no se reporta.
+            new IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryPostingRule("Venta", "Ingreso", soloNomina.Id, new DateOnly(2025, 1, 1), validTo: new DateOnly(2025, 12, 31)) { CreatedBy = "test" });
+        await e.D.Db.SaveChangesAsync();
+
+        var r = await new ListInvalidParameterizationsQueryHandler(e.D.Db).Handle(new ListInvalidParameterizationsQuery(), CancellationToken.None);
+
+        var deInventario = r.Value.Where(p => p.Module == "Inventario").ToList();
+        deInventario.Should().HaveCount(2);
+        deInventario.Should().Contain(p => p.Where == "Matriz de contabilización" && p.AccountCode == "14350501" && p.Detail.Contains("Compra") && p.Detail.Contains("ABARROTES") && p.Problem.Contains("Inventario"));
+        deInventario.Should().Contain(p => p.AccountCode == "14350503" && p.Problem.Contains("inactiva"));
+    }
 }

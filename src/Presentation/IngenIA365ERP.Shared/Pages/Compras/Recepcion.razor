@@ -37,6 +37,8 @@
     </div>
 
     <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @* US7 (T539): lo que dijo Contabilidad antes de confirmar, con quién corrige cada hallazgo. *@
+        <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.Document.PublicId" />
         @if (_doc?.Document is { Status: 1 })
         {
             <p class="aviso aviso-info">En aprobación: queda congelada y sin número; la confirma la última aprobación.</p>
@@ -158,6 +160,7 @@
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new(), _claveMotivo = new();
     private DocumentoDeCompraDto? _doc;
+    private ResultadoDeValidacionPrevia? _validacion;
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
     private List<LineaForm> _lineas = [];
@@ -275,9 +278,15 @@
     {
         if (_doc is null) return;
         if (Editable && !await GuardarAsync(true)) return;
+        if (_validacion is not null && !await _validacion.ValidarAsync()) return;
         using var guardado = _guardado.Iniciar();
         var r = await Compras.ConfirmarAsync(ComprasClient.Rutas.Recepciones, _doc.Document.PublicId, _doc.Document.RowVersion, _claveConfirmar);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la recepción."); return; }
+        if (!r.IsSuccess || r.Value is null)
+        {
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la recepción.");
+            return;
+        }
+        _validacion?.Limpiar();
         if (r.Value.Status == 1) await Notification.InfoAsync("Quedó en aprobación: la confirma la última aprobación.");
         else await Notification.SuccessAsync($"Recepción {r.Value.DisplayNumber} confirmada.");
         await CargarAsync(_doc.Document.PublicId);

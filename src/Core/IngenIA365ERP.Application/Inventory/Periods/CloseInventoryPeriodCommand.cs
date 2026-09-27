@@ -56,8 +56,8 @@ public sealed class GetPeriodCloseCheckQueryHandler(RevisionDeCierre revision) :
 /// <item>pone <c>LastClosedDate</c> en el último día del mes y emite <c>PeriodoInventarioCerrado</c> (informativo,
 /// <c>Close:{closingVersion}</c>) en el mismo guardado.</item>
 /// </list>
-/// El lote contable del disparador <c>CierreDePeriodo</c> es de US7 (I2, <c>OrderIntegrationBatchCommand</c>): en I1 ningún
-/// tipo lo usa y <c>batchPublicId</c> sale nulo. (nuevo)
+/// Desde I2 (T522) crea además, en la misma transacción, el lote <c>PeriodClose</c> con las entregas que esperan el cierre de ese
+/// mes (disparador <c>CierreDePeriodo</c>); sin ninguna, <c>batchPublicId</c> sale nulo. (nuevo)
 /// </summary>
 public sealed record CloseInventoryPeriodCommand(int Year, int Month, bool AcknowledgeWarnings = false, bool AcceptUnbilledShipments = false, string? Reason = null)
     : IRequest<Result<ClosePeriodResultDto>>, IOperacionIdempotente
@@ -190,6 +190,9 @@ public sealed class CloseInventoryPeriodCommandHandler(
 
         await db.SaveChangesAsync(ct);
 
+        // T522 (T12, contracts/contabilidad.md §5.4): el lote PeriodClose con lo que espera este cierre, en la misma transacción.
+        var lote = await LoteDelCierreAsync(request.Year, request.Month, actor, ct);
+
         var conCostos = await permisos.HasPermissionAsync(PermisoDeCostos, ct);
         var valorizadoDto = contenido.Valuation.Select(l =>
             {
@@ -200,10 +203,48 @@ public sealed class CloseInventoryPeriodCommandHandler(
             })
             .ToList();
         return Result.Success(new ClosePeriodResultDto(request.Year, request.Month, ahora, version, valorizadoDto,
-            conCostos ? contenido.Valuation.Sum(l => l.Value) : null, emitidos[0].PublicId, null));
+            conCostos ? contenido.Valuation.Sum(l => l.Value) : null, emitidos[0].PublicId, lote?.PublicId));
     }
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    /// El lote <c>PeriodClose</c> del mes (feature 012, T522; T12; contracts/contabilidad.md §5.4): las entregas a Contabilidad que
+    /// esperan en lote (<c>InBatch</c>, sin lote) con <c>BatchScopeKey = Period:{aaaa-mm}</c> y el disparador
+    /// <c>CierreDePeriodo</c> sellado en su <c>ScheduleKey</c>. Un solo lote por cierre: la granularidad la lee el destino de la
+    /// clave de cada entrega. Lo pide quien cierra (queda como solicitante) y lo corre el despachador. Sin entregas que esperen
+    /// este cierre no se crea (ningún tipo usa el disparador): <c>batchPublicId</c> sale nulo. Un recierre crea otro lote con
+    /// lo que haya llegado después de la reapertura. Necesita el <c>Id</c> del lote, así que guarda dos veces dentro de la
+    /// transacción del cierre. (nuevo)
+    /// </summary>
+    private async Task<Domain.Entities.Integration.IntegrationBatch?> LoteDelCierreAsync(int anio, int mes, IngenIA365ERP.Application.Common.Execution.Actor actor, CancellationToken ct)
+    {
+        var alcance = ClavesDeLote.Periodo(anio, mes);
+        var candidatas = await db.IntegrationMessageDeliveries.Include(d => d.Message)
+            .Where(d => d.Destination == IntegrationDestinations.Accounting && d.Status == DeliveryStatus.InBatch && d.BatchId == null
+                && d.BatchScopeKey == alcance)
+            .OrderBy(d => d.MessageId)
+            .ToListAsync(ct);
+        var entregas = candidatas.Where(d => ClavesDeLote.Leer(d.ScheduleKey)?.Disparador == ClavesDeLote.CierreDePeriodo).ToList();
+        if (entregas.Count == 0) return null;
+
+        var lote = LotesDeIntegracion.Nuevo(await LotesDeIntegracion.TomarNumeroAsync(db, ct), IntegrationDestinations.Accounting,
+            BatchTrigger.PeriodClose, actor, motivo: null, reloj.UtcNow);
+        lote.PeriodYear = (short)anio;
+        lote.PeriodMonth = (byte)mes;
+        var granularidades = entregas.Select(e => ClavesDeLote.Leer(e.ScheduleKey)!.GranularidadDelLote).Distinct().ToList();
+        lote.Granularity = granularidades.Count == 1 ? granularidades[0] : null;
+        lote.CutoffMessageId = entregas[^1].MessageId;
+        lote.MessageCount = entregas.Count;
+        lote.DocumentCount = entregas.Select(e => e.Message!.OriginPublicId).Distinct().Count();
+        lote.DateFrom = entregas.Min(e => e.Message!.OperationDate);
+        lote.DateTo = entregas.Max(e => e.Message!.OperationDate);
+        db.IntegrationBatches.Add(lote);
+        await db.SaveChangesAsync(ct);
+        LotesDeIntegracion.Asignar(lote, entregas);
+        await db.SaveChangesAsync(ct);
+        return lote;
+    }
 
     private async Task<(Dictionary<int, (string Code, string Name)> Grupos, Dictionary<int, (Guid PublicId, string Code, WarehouseBehavior Behavior, Guid Sucursal)> Bodegas)>
         DimensionesAsync(IReadOnlyList<PeriodClosingBalance> filas, CancellationToken ct)

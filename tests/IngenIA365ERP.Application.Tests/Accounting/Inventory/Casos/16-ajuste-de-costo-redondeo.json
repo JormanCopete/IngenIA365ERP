@@ -1,0 +1,82 @@
+{
+  "descripcion": "AjusteDeCostoReconocido con RoundingResidue: la contrapartida es el rol Redondeo; lo vendido en cero no pide regla.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation:0000000000004000800000000000abce",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "CostAdjustment",
+      "documentTypeCode": "ACO",
+      "number": "AC-5",
+      "publicId": "00000060-0000-4000-8000-000000000060",
+      "operationDate": "2026-03-14"
+    },
+    "related": {
+      "publicId": "00000059-0000-4000-8000-000000000059",
+      "documentClass": "PurchaseReceipt",
+      "number": "REC-11"
+    },
+    "chainRootPublicId": "00000061-0000-4000-8000-000000000061",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000062-0000-4000-8000-000000000062",
+      "type": "AjusteDeCostoReconocido",
+      "payload": {
+        "operation": "AjusteDeCosto",
+        "reason": "RoundingResidue",
+        "effectiveDate": "2026-03-14",
+        "affectedDocument": {
+          "publicId": "00000059-0000-4000-8000-000000000059",
+          "documentClass": "PurchaseReceipt",
+          "number": "REC-11"
+        },
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "inventoryAmount": 0.03,
+            "soldAmount": 0.0
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "AC",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "14350501",
+        "debito": 0.03,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "53050501",
+        "debito": 0,
+        "credito": 0.03,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      }
+    ]
+  }
+}

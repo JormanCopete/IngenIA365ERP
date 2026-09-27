@@ -32,6 +32,12 @@ llave):
 | `DivipolaSeeder` | 82 | municipios DANE |
 | `AlertTypesSeeder` | 83 | tipos de alerta |
 
+**Si la contabilidad todavía no está iniciada** en el ERP, no hace falta tocar `Contabilidad.ModoDePaso`:
+sin un modo guardado, los documentos se confirman en «no pasa» (`NotPosted`). Al iniciar la contabilidad el
+defecto vuelve a «en línea» y lo confirmado antes se manda con «Enviar lo que no pasaba» (Inventario ›
+Mensajes). No guardar «en línea» a mano antes de iniciarla: un modo guardado se respeta y cada confirmación
+respondería `Accounting.NotInitialized`.
+
 Los permisos `Inventory.*` los siembra **la API al arrancar** (`InventoryPermissionCatalogSeeder`),
 no el DbMigrator; los perfiles sugeridos (jefe de inventario, bodeguero, comprador…) se aplican desde
 `/admin/roles` con «crear desde plantilla».

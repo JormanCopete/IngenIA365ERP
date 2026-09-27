@@ -125,6 +125,24 @@ public static class DependencyInjection
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
         services.AddScoped<Common.Integration.EmisorDeMensajes>();
+        // Feature 012, I2 (T496-T498): el lado consumidor de la plataforma. Los destinos (IDestinoDeMensajes) los registra cada
+        // modulo; sin ninguno registrado, el selector no devuelve nada y la bandeja los muestra como no disponibles. Los reintentos
+        // llevan los defectos del contrato; la API los reemplaza con Integration:Retries (T527).
+        services.AddScoped<Common.Integration.IMensajesEntrantes, Common.Integration.MensajesEntrantes>();
+        services.AddScoped<Common.Integration.EntregasElegibles>();
+        // Feature 012, I2 (T505-T510): la matriz contable de Inventario. La resolucion (carga en bloque y elige por peso), el
+        // punto unico de sus reglas (alta, version, desactivacion e importacion) y el resolutor del tipo de comprobante de una
+        // unidad. IDimensionesDeInventario lo registra Inventario (T519).
+        services.AddScoped<Accounting.Inventory.Reglas.ResolutorDeReglas>();
+        services.AddScoped<Accounting.Inventory.Reglas.ReglasDeLaMatriz>();
+        services.AddScoped<Accounting.Inventory.Reglas.TiposDeComprobanteDeInventario>();
+        // Feature 012, I2 (T511-T517): el consumidor contable. Contabilidad es un destino de la bandeja (consume por
+        // PostInventoryMessagesCommand y PostInventorySummaryGroupCommand, planea los lotes con AgrupadorDeResumidos) y el
+        // adaptador IContabilidadParaInventario le da a Inventario sus cuatro consultas en proceso.
+        services.AddScoped<Accounting.Inventory.Contabilizacion.ConsumoDeInventario>();
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaInventario, Accounting.Inventory.ContabilidadParaInventario>();
+        services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
         // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
         // de politica de Inventario van vacias hasta que existan sus duenos (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su
         // historia. TryAdd para que el modulo que los implementa los reemplace sin quitar estas lineas.
@@ -162,6 +180,13 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Kardex.VerificacionDeIntegridad>();
         services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
         services.AddScoped<Inventory.Integration.EmisionDeInventario>();
+        // Feature 012, I2 (T519-T521): el lado de Inventario de la integracion contable. Las dimensiones que Contabilidad le pide
+        // a Inventario (lo unico de Inventario que conoce, T31), como se arman y emiten los mensajes de un documento, y la
+        // validacion previa contable: el paso 5 de la confirmacion y la consulta /prevalidate preguntan por el mismo objeto.
+        services.AddScoped<Common.Integration.Accounting.IDimensionesDeInventario, Inventory.Integration.DimensionesDeInventario>();
+        services.AddScoped<Inventory.Integration.MensajesDelDocumento>();
+        services.AddScoped<Inventory.Integration.ValidacionPreviaContable>();
+        services.AddScoped<Inventory.Documents.IPasoDeValidacionPrevia>(sp => sp.GetRequiredService<Inventory.Integration.ValidacionPreviaContable>());
         services.AddScoped<Inventory.Replenishment.PosicionDeReposicion>();
         // Feature 012, US17 (T953, T954): la evaluación de reposición que comparten el aviso al confirmar, la revisión nocturna y
         // la vista reorder-alerts.
@@ -178,8 +203,8 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjusteNegativo>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeConsumoInterno>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeBaja>();
-        // Feature 012 (US4, T309, T313): el saldo inicial por bodega y la activación bodega por bodega. Sin
-        // IContabilidadParaInventario (llega con US7, I2) la activación sólo se ensaya fuera de producción.
+        // Feature 012 (US4, T309, T313; US7, T523): el saldo inicial por bodega y la activación bodega por bodega, con el cuadre
+        // por conjuntos de cuentas que responde IContabilidadParaInventario.
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoSaldoInicial>();
         services.AddScoped<Inventory.GoLive.ComparacionDeActivacion>();
         // Feature 012 (US9, T338-T349): compras. El borrador del grupo Purchases (documento del proveedor, vinculos, impuestos

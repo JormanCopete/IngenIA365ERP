@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
+using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Admin;
 using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
 using IngenIA365ERP.Domain.Entities.Approvals;
@@ -313,6 +314,14 @@ public interface IApplicationDbContext
     DbSet<IntegrationMessage> IntegrationMessages { get; }
     DbSet<IntegrationMessageDependency> IntegrationMessageDependencies { get; }
     DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries { get; }
+    // Feature 012, entrega I2 (T483): intentos, lotes y su consecutivo (plataforma), y el lado contable de la
+    // integración con Inventario (matriz, mapeo de tipos de comprobante y recibos). Migración IntegracionContableDeInventario.
+    DbSet<IntegrationDeliveryAttempt> IntegrationDeliveryAttempts { get; }
+    DbSet<IntegrationBatch> IntegrationBatches { get; }
+    DbSet<IntegrationBatchCounter> IntegrationBatchCounters { get; }
+    DbSet<InventoryPostingRule> InventoryPostingRules { get; }
+    DbSet<InventoryVoucherMapping> InventoryVoucherMappings { get; }
+    DbSet<InventoryPosting> InventoryPostings { get; }
 
     // Feature 012 (T33, T34; T081-T085): aprobaciones de plataforma y montos maximos por permiso. Escriben solo
     // MotorDeAprobaciones (solicitudes y decisiones), SaveApprovalPolicyCommand y SetPermissionAmountLimitCommand;

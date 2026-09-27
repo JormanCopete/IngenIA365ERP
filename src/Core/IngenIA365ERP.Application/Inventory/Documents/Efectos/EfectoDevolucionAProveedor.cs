@@ -163,6 +163,18 @@ public sealed class EfectoDevolucionAProveedor(
         return contenidos;
     }
 
+    /// <summary>
+    /// T520: la <c>DevolucionRegistrada</c> del borrador para la validación previa, al promedio vigente. La diferencia contra el costo
+    /// con que entró (<c>AjusteDeCostoReconocido</c>) sólo se conoce dentro del cerrojo y no se evalúa aquí.
+    /// </summary>
+    public override async Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        if (contexto.EsAnulacion) return await MensajesDeAnulacionAsync(contexto, ct);
+        if (contexto.Documento.WarehouseId is not int bodega) return [];
+        var filas = await registro.FilasProvisionalesAsync(contexto.Documento, bodega, KardexEntryKind.Exit, null, ct);
+        return filas.Count == 0 ? [] : [await emision.DevolucionAProveedorAsync(contexto.Documento, filas, ct)];
+    }
+
     public override async Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
         var revertido = await reversion.RevertirAsync(contexto.Documento, contexto.Original!, ct);

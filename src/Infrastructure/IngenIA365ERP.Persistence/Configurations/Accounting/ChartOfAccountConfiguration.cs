@@ -45,7 +45,7 @@ public class AccountTaxRateConfiguration : IEntityTypeConfiguration<AccountTaxRa
         builder.ToTable("ACC_AccountTaxRates");
         builder.HasKey(e => e.Id);
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_AccountTaxRates_PublicId");
-        builder.Property(e => e.Rate).HasPrecision(9, 4);
+        builder.Property(e => e.Rate).HasPrecision(9, 6); // Feature 012 (T482, C8): seis decimales de fracción, como la tarifa de la matriz.
         builder.HasIndex(e => new { e.AccountId, e.ValidFrom }).IsUnique().HasDatabaseName("UK_ACC_AccountTaxRates_Account_ValidFrom").HasFilter("[IsDeleted] = 0");
     }
 }

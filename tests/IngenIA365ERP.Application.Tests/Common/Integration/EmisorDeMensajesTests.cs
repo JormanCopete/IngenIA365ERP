@@ -550,8 +550,9 @@ public class EmisorDeMensajesTests
         mensaje.FindProperty(nameof(IntegrationMessage.Id))!.ClrType.Should().Be(typeof(long), "el Id bigint es el orden");
 
         var entrega = TipoDelModelo<IntegrationMessageDelivery>(postgres);
+        // La columna nació en I1 sin llave; la FK a COR_IntegrationBatches entró en I2 con esa tabla (T480).
         entrega.FindProperty(nameof(IntegrationMessageDelivery.BatchId))!.GetContainingForeignKeys()
-            .Should().BeEmpty("la FK a COR_IntegrationBatches entra en I2");
+            .Should().ContainSingle(fk => fk.PrincipalEntityType.ClrType == typeof(IntegrationBatch));
         entrega.GetForeignKeys().Should().OnlyContain(fk => fk.DeleteBehavior == DeleteBehavior.Restrict);
         TipoDelModelo<IntegrationMessageDependency>(postgres).GetForeignKeys()
             .Should().HaveCount(2).And.OnlyContain(fk => fk.DeleteBehavior == DeleteBehavior.Restrict);

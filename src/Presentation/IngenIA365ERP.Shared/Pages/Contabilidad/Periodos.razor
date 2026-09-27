@@ -1,7 +1,9 @@
 @page "/contabilidad/periodos"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Http
 @inject ContabilidadClient Contabilidad
+@inject IntegracionContableClient Integracion
 @inject INotificationService Notification
 
 <PageTitle>Períodos contables - IngenIA365ERP</PageTitle>
@@ -10,7 +12,12 @@
    borradores fechados en el mes; reabrir pide motivo, queda auditado y desactualiza las
    conciliaciones cerradas. E2 (US6): con los doce cerrados y el anterior cerrado, «Cerrar el
    ejercicio» genera el comprobante CI contra la cuenta de resultado; reabrirlo lo reversa en su
-   misma fecha y deja los meses como estaban (cada uno se reabre aparte). *@
+   misma fecha y deja los meses como estaban (cada uno se reabre aparte).
+   Feature 012, US7 (T536; contracts/contabilidad.md §8): si Inventario tiene operaciones del mes que Contabilidad aún no recibe
+   (pendientes, en lote o rechazadas), cerrar responde Accounting.Period.InventoryPending y la pantalla lo dice —cuántas hay por estado,
+   la fecha más antigua y los tipos— y ofrece «Procesar ahora» (previsualiza y ordena el lote manual del mes; exige
+   Accounting.InventoryBatches.Run) o «Cerrar de todos modos» (reenvía con AcknowledgeInventoryPending = true y queda auditado: lo que
+   siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes). *@
 <PermissionGate Required="Accounting.Periods.View" MostrarAviso="true">
 <div class="page-header">
     <h3>Períodos contables</h3>
@@ -103,6 +110,40 @@
     </DialogTemplates>
 </SfDialog>
 
+<SfDialog @bind-Visible="_mostrarPendientes" Header="@($"Inventario tiene operaciones de {(_aCerrar is null ? "" : Mes(_aCerrar.Month))} {_aCerrar?.Year} sin contabilizar")" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_procesando.Activa" Texto="Ordenando el lote…">
+                @if (_pendientes is { } pend)
+                {
+                    <p>Contabilidad todavía no recibe @(pend.Pending + pend.InBatch + pend.Rejected) operación(es) de Inventario fechadas en el mes:</p>
+                    <ul>
+                        <li>@pend.Pending pendiente(s)</li>
+                        <li>@pend.InBatch en un lote</li>
+                        <li>@pend.Rejected rechazada(s): se corrigen y se reprocesan desde la <a href="/inventario/bandeja-de-mensajes">bandeja de mensajes</a></li>
+                    </ul>
+                    <p class="texto-tenue">
+                        @if (pend.OldestOperationDate is { } masAntigua) { <span>La más antigua es del @masAntigua.ToString("dd/MM/yyyy"). </span> }
+                        @if (pend.Types.Count > 0) { <span>Tipos: @string.Join(", ", pend.Types.Select(IngenIA365ERP.Shared.Services.Inventario.TextosDeInventario.TipoDeMensaje)).</span> }
+                    </p>
+                    <p>Si cierra de todos modos, lo que siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes. Queda en la auditoría.</p>
+                }
+                @if (_loteOrdenado is { } lote)
+                {
+                    <p class="aviso aviso-ok">Lote @lote.Number ordenado: corre en segundo plano. <a href="@($"/contabilidad/inventario/lotes/{lote.BatchPublicId}")">Ver el lote</a> y, al terminar, vuelva a cerrar el mes.</p>
+                }
+                <div class="toolbar">
+                    <PermissionGate Required="Accounting.InventoryBatches.Run">
+                        <SfButton CssClass="e-primary" Disabled="@(_procesando.Activa || _loteOrdenado is not null)" OnClick="@ProcesarAhoraAsync">Procesar ahora</SfButton>
+                    </PermissionGate>
+                    <SfButton CssClass="e-outline" Disabled="@(_ocupado || _procesando.Activa)" OnClick="@CerrarDeTodosModosAsync">Cerrar de todos modos</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPendientes = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
 <SfDialog @bind-Visible="_mostrarCerrarEjercicio" Header="@($"Cerrar el ejercicio {_ejercicio?.Year}")" Width="520px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
@@ -130,7 +171,12 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _carga = new(), _procesando = new();
+    private bool _mostrarPendientes;
+    private PeriodoContableDto? _aCerrar;
+    private PendientesDeInventarioDelMesDto? _pendientes;
+    private LoteOrdenadoDeIntegracionDto? _loteOrdenado;
+    private ClaveDeOperacion _claveDelLote = new();
     private List<int> _anios = [];
     private int _anio;
     private EjercicioDto? _ejercicio;
@@ -162,9 +208,52 @@
         _ocupado = true;
         try
         {
-            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month);
+            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month, reconocerPendientesDeInventario: false);
+            if (r.ErrorCode == ContabilidadClient.CodigoInventarioPendiente)
+            {
+                _aCerrar = p;
+                _pendientes = r.DatosComo<PendientesDeInventarioDelMesDto>();
+                _loteOrdenado = null;
+                _claveDelLote = new ClaveDeOperacion();
+                _mostrarPendientes = true;
+                return;
+            }
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el período."); return; }
             await Notification.SuccessAsync($"{Mes(p.Month)} {p.Year} cerrado.");
+            await CargarAsync();
+        }
+        finally { _ocupado = false; }
+    }
+
+    /// <summary>Previsualiza el mes y ordena el lote manual hasta el corte de la vista previa (T536, §8).</summary>
+    private async Task ProcesarAhoraAsync()
+    {
+        if (_aCerrar is not { } p) return;
+        using var procesando = _procesando.Iniciar();
+        var previa = await Integracion.VistaPreviaDeLoteAsync(new VistaPreviaDeLoteDeIntegracionRequest(p.StartDate, p.EndDate, null, null, null));
+        if (!previa.IsSuccess) { await Notification.ErrorAsync(previa.ErrorMessage ?? "No se pudo previsualizar el lote del mes."); return; }
+        if (previa.Value?.CutoffMessagePublicId is not { } corte)
+        {
+            await Notification.InfoAsync("No hay nada que contabilizar ahora: los rechazados se corrigen y se reprocesan desde la bandeja de mensajes.");
+            return;
+        }
+        var r = await Integracion.OrdenarLoteAsync(new OrdenDeLoteDeIntegracionRequest(corte, p.StartDate, p.EndDate, null, null, null,
+            $"Procesar lo pendiente antes de cerrar {Mes(p.Month)} {p.Year}"), _claveDelLote);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo ordenar el lote."); return; }
+        _loteOrdenado = r.Value;
+        await Notification.SuccessAsync($"Lote {r.Value.Number} ordenado: se procesa en segundo plano.");
+    }
+
+    private async Task CerrarDeTodosModosAsync()
+    {
+        if (_aCerrar is not { } p) return;
+        _ocupado = true;
+        try
+        {
+            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month, reconocerPendientesDeInventario: true);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el período."); return; }
+            _mostrarPendientes = false;
+            await Notification.SuccessAsync($"{Mes(p.Month)} {p.Year} cerrado con operaciones de Inventario pendientes (quedó en la auditoría).");
             await CargarAsync();
         }
         finally { _ocupado = false; }

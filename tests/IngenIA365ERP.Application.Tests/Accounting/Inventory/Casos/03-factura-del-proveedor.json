@@ -1,0 +1,183 @@
+{
+  "descripcion": "FacturaProveedorRegistrada: la mercancía por facturar por el neto de los bienes; el servicio va a la contrapartida por neto + IVA al costo; IVA descontable y retención con base y tercero; la cuenta por pagar cruza con el número del proveedor (FE1001).",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "SupplierInvoice",
+      "documentTypeCode": "FP",
+      "number": "FP-7",
+      "publicId": "00000011-0000-4000-8000-000000000011",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000012-0000-4000-8000-000000000012",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "11111111-2222-4333-8444-555555555555",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000013-0000-4000-8000-000000000013",
+      "type": "FacturaProveedorRegistrada",
+      "payload": {
+        "operation": "FacturaProveedor",
+        "supplierDocument": {
+          "kind": "Invoice",
+          "prefix": "FE",
+          "number": "1001",
+          "issueDate": "2026-03-14",
+          "paymentForm": "Credit",
+          "isElectronic": true
+        },
+        "derivedFrom": [],
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "lineKind": "Goods",
+            "grossAmount": 10000.0,
+            "discountAmount": 0.0,
+            "netAmount": 10000.0,
+            "taxAddedToCost": 0.0,
+            "documentLines": [
+              1
+            ]
+          },
+          {
+            "accountingGroupCode": "FLETES",
+            "warehouseCode": null,
+            "lineKind": "Service",
+            "grossAmount": 2000.0,
+            "discountAmount": 0.0,
+            "netAmount": 2000.0,
+            "taxAddedToCost": 380.0,
+            "documentLines": [
+              2
+            ]
+          }
+        ],
+        "taxes": [
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA19D",
+            "rate": 0.19,
+            "treatment": "Deductible",
+            "taxableBase": 10000.0,
+            "amount": 1900.0,
+            "documentLines": [
+              1
+            ]
+          },
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA19",
+            "rate": 0.19,
+            "treatment": "AddedToCost",
+            "taxableBase": 2000.0,
+            "amount": 380.0,
+            "documentLines": [
+              2
+            ]
+          },
+          {
+            "taxCode": "RTF",
+            "taxKind": "ReteFuente",
+            "taxRateCode": "RF25",
+            "rate": 0.025,
+            "treatment": "WithholdingApplied",
+            "taxableBase": 10000.0,
+            "amount": 250.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ],
+        "totals": {
+          "subtotal": 12000.0,
+          "discountTotal": 0.0,
+          "taxTotal": 2280.0,
+          "withholdingTotal": 250.0,
+          "total": 14280.0,
+          "amountPayable": 14030.0
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CP",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "22050501",
+        "debito": 10000.0,
+        "credito": 0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "14359901",
+        "debito": 2380.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          2
+        ]
+      },
+      {
+        "cuenta": "24080503",
+        "debito": 1900.0,
+        "credito": 0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": 10000.0,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "23654001",
+        "debito": 0,
+        "credito": 250.0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": 10000.0,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "22050502",
+        "debito": 0,
+        "credito": 14030.0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": "FC FE1001",
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}

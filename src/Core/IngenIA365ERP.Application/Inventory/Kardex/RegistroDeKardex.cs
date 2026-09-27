@@ -121,6 +121,50 @@ public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 /// </summary>
 public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametros parametros, IDateTimeService reloj)
 {
+    // ------------------------------------------------------------------------------ validación previa (I2) --
+
+    /// <summary>
+    /// Filas de kardex <b>provisionales</b> de un borrador, para armar sus mensajes antes del cerrojo (feature 012, T520; T30;
+    /// contracts/contabilidad.md §4.1, §4.2): una por línea viva en <paramref name="bodegaId"/>, en unidad base, con el signo del
+    /// kardex (negativo en las salidas) y al costo que tendría hoy —el que propone <paramref name="costoPropuesto"/> para la línea
+    /// (el digitado, el de compra) si lo da; si no, el promedio vigente del producto leído <b>sin bloqueo</b> (el de la bodega si el costo es por bodega, si
+    /// no el de la cooperativa; sin existencia, el último costo)—. No se agregan al contexto: sólo alimentan los mismos
+    /// constructores de contenido de la confirmación. El costo definitivo lo pone <c>RegistroDeKardex</c> dentro del cerrojo, y
+    /// lo único que depende de él en Contabilidad es la regla de «valor cero». <paramref name="bodegaDeLasFilas"/> pone las filas en
+    /// otra bodega que la del costo (la entrada al tránsito de un despacho, al costo del origen). Vive aquí porque sólo el registro
+    /// crea filas del kardex (<c>NadieEscribeElKardexFueraDelRegistro</c>), aunque éstas nunca se agregan al contexto. (nuevo)
+    /// </summary>
+    public async Task<IReadOnlyList<KardexEntry>> FilasProvisionalesAsync(
+        InventoryDocument documento, int bodegaId, KardexEntryKind sentido, Func<InventoryDocumentLine, decimal?>? costoPropuesto, CancellationToken ct,
+        int? bodegaDeLasFilas = null)
+    {
+        var vivas = documento.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m).OrderBy(l => l.LineNumber).ToList();
+        if (vivas.Count == 0) return [];
+        var productos = vivas.Select(l => l.ProductId).Distinct().ToList();
+        var estados = await db.CostStates.AsNoTracking().Where(c => productos.Contains(c.ProductId)).ToListAsync(ct);
+        var signo = sentido == KardexEntryKind.Exit ? -1m : 1m;
+
+        return vivas.Select(l =>
+        {
+            var estado = estados.FirstOrDefault(e => e.ProductId == l.ProductId && e.ScopeWarehouseId == bodegaId)
+                         ?? estados.FirstOrDefault(e => e.ProductId == l.ProductId && e.ScopeWarehouseId == 0);
+            var vigente = estado is null ? 0m : (estado.Quantity > 0m ? estado.AverageCost : estado.LastUnitCost);
+            var unitario = costoPropuesto?.Invoke(l) is decimal propuesto and > 0m ? propuesto : vigente;
+            return new KardexEntry
+            {
+                DocumentId = documento.Id,
+                DocumentLineId = l.Id,
+                ProductId = l.ProductId,
+                WarehouseId = bodegaDeLasFilas ?? bodegaId,
+                OperationDate = documento.OperationDate,
+                Kind = sentido,
+                QuantityBase = signo * l.QuantityBase,
+                UnitCost = unitario,
+                TotalCost = signo * Math.Round(l.QuantityBase * unitario, 2, MidpointRounding.AwayFromZero),
+            };
+        }).ToList();
+    }
+
     /// <summary>Lo que hay que bloquear y el valor al costo estimado (para la política de aprobación), sin escribir nada.</summary>
     public async Task<Result<PreparacionDelRegistro>> PrepararAsync(InventoryDocument documento, IReadOnlyList<MovimientoDeKardex> movimientos, CancellationToken ct)
     {

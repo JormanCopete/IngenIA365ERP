@@ -12,6 +12,7 @@ using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
+using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Lending;
@@ -70,6 +71,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IntegrationMessage> IntegrationMessages => Set<IntegrationMessage>();
     public DbSet<IntegrationMessageDependency> IntegrationMessageDependencies => Set<IntegrationMessageDependency>();
     public DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries => Set<IntegrationMessageDelivery>();
+    // Feature 012, entrega I2 (T483).
+    public DbSet<IntegrationDeliveryAttempt> IntegrationDeliveryAttempts => Set<IntegrationDeliveryAttempt>();
+    public DbSet<IntegrationBatch> IntegrationBatches => Set<IntegrationBatch>();
+    public DbSet<IntegrationBatchCounter> IntegrationBatchCounters => Set<IntegrationBatchCounter>();
+    public DbSet<InventoryPostingRule> InventoryPostingRules => Set<InventoryPostingRule>();
+    public DbSet<InventoryVoucherMapping> InventoryVoucherMappings => Set<InventoryVoucherMapping>();
+    public DbSet<InventoryPosting> InventoryPostings => Set<InventoryPosting>();
     // Feature 012 (T33, T34): aprobaciones y montos maximos por permiso.
     public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
     public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();
@@ -478,6 +486,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
             b.Ignore("RowVersion");
             b.HasOne(d => d.Message).WithMany().HasForeignKey(d => d.MessageId);
         });
+        // Feature 012, entrega I2 (T483): el lote y su intento, sin RowVersion como el resto.
+        modelBuilder.Entity<IntegrationDeliveryAttempt>(b => { b.Ignore("RowVersion"); b.HasOne(a => a.Delivery).WithMany().HasForeignKey(a => a.DeliveryId); });
+        modelBuilder.Entity<IntegrationBatch>(b => { b.Ignore("RowVersion"); b.Ignore(l => l.EstaCerrado); });
+        modelBuilder.Entity<IntegrationBatchCounter>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<InventoryPostingRule>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<InventoryVoucherMapping>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<InventoryPosting>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IntegrationMessageDependency>(b =>
         {
             b.Ignore("RowVersion");

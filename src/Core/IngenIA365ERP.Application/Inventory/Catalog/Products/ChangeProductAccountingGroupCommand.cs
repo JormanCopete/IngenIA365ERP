@@ -2,6 +2,7 @@ using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -75,7 +76,8 @@ public sealed class ReclasificacionDeGrupo(
     ValorizadoALaFecha valorizado,
     EmisorDeMensajes emisor,
     ILectorDeParametros parametros,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    IContabilidadParaInventario? contabilidad = null)
 {
     /// <summary>Las reglas de la fecha y del grupo, sin bloquear ni escribir (la revisión de la plantilla las usa solas).</summary>
     public async Task<Result<DateOnly>> ValidarAsync(Product producto, AccountingGroup destino, DateOnly? efectiva, CancellationToken ct)
@@ -154,7 +156,7 @@ public sealed class ReclasificacionDeGrupo(
                 new OrigenDeEmision(MessageOriginKind.Operation, cambio.PublicId, null, null, producto.Code, fecha,
                     await OperacionesDeInventario.SucursalPrincipalAsync(db, ct)),
                 ClavesDeEvento.Reclasificacion, [contenido],
-                await OperacionesDeInventario.ModoGeneralAsync(parametros, GrupoContableReclasificadoV1.Type, fecha, ct)), ct);
+                await OperacionesDeInventario.ModoGeneralAsync(parametros, contabilidad, GrupoContableReclasificadoV1.Type, fecha, ct)), ct);
             mensaje = emitidos[0].PublicId;
         }
         return Result.Success(new ReclasificacionHecha(cambio, porBodega, mensaje));

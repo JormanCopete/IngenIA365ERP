@@ -1,0 +1,27 @@
+[
+  // Feature 012, entrega I2 (T485; contracts/contabilidad.md §2.6 y §9; decisiones-transversales T28): el tipo de
+  // comprobante y el documento cruce por defecto de cada operación de la matriz de Inventario. Una fila por operación
+  // (InventoryDocumentTypeCode nulo); las excepciones por tipo de documento las agrega la cooperativa (o la semilla de I6
+  // para la remisión). El cruce sólo se usa en las líneas de cuentas por cobrar y por pagar, y las líneas que saldan
+  // otro documento cruzan contra el original (§3.2). Pendiente de validar por la contadora (A8).
+  { "operation": "Venta", "voucherTypeCode": "FV", "crossDocumentTypeCode": "FV" },
+  { "operation": "CostoDeVenta", "voucherTypeCode": "FV", "crossDocumentTypeCode": "FV" },
+  { "operation": "Compra", "voucherTypeCode": "EI", "crossDocumentTypeCode": null },
+  { "operation": "AjustePositivo", "voucherTypeCode": "EI", "crossDocumentTypeCode": null },
+  { "operation": "Ensamble", "voucherTypeCode": "EI", "crossDocumentTypeCode": null },
+  { "operation": "AjusteNegativo", "voucherTypeCode": "SI", "crossDocumentTypeCode": null },
+  { "operation": "ConsumoInterno", "voucherTypeCode": "SI", "crossDocumentTypeCode": null },
+  { "operation": "RetiroGravado", "voucherTypeCode": "SI", "crossDocumentTypeCode": null },
+  { "operation": "Baja", "voucherTypeCode": "SI", "crossDocumentTypeCode": null },
+  { "operation": "DevolucionAProveedor", "voucherTypeCode": "SI", "crossDocumentTypeCode": "FC" },
+  { "operation": "NotaCredito", "voucherTypeCode": "NV", "crossDocumentTypeCode": "NC" },
+  { "operation": "DevolucionDeCliente", "voucherTypeCode": "NV", "crossDocumentTypeCode": "NC" },
+  { "operation": "NotaDebito", "voucherTypeCode": "NV", "crossDocumentTypeCode": "ND" },
+  { "operation": "FacturaProveedor", "voucherTypeCode": "CP", "crossDocumentTypeCode": "FC" },
+  { "operation": "DespachoTraslado", "voucherTypeCode": "TR", "crossDocumentTypeCode": null },
+  { "operation": "RecepcionTraslado", "voucherTypeCode": "TR", "crossDocumentTypeCode": null },
+  { "operation": "AjusteDeCosto", "voucherTypeCode": "AC", "crossDocumentTypeCode": null },
+  { "operation": "Reclasificacion", "voucherTypeCode": "AC", "crossDocumentTypeCode": null },
+  { "operation": "MovimientoDeCaja", "voucherTypeCode": "CJ", "crossDocumentTypeCode": null },
+  { "operation": "DiferenciaDeArqueo", "voucherTypeCode": "CJ", "crossDocumentTypeCode": null }
+]

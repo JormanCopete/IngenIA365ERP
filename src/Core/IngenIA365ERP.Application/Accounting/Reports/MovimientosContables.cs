@@ -88,6 +88,17 @@ public static class MovimientosContables
     /// </summary>
     public static async Task<Result<Contexto>> PrepararAsync(
         IApplicationDbContext db, IUserBranchScope alcance, IDateTimeService clock, FiltrosDeInforme f, CancellationToken ct,
+        int rangoMaximoEnAnios = RangoMaximoEnAnios) =>
+        await PrepararAsync(db, await alcance.ObtenerAsync(ct), clock, f, ct, rangoMaximoEnAnios);
+
+    /// <summary>
+    /// Lo mismo con el alcance de sucursal ya decidido por quien llama (feature 012, T492, G5): la conciliación de
+    /// Inventario compara su valorizado total contra el saldo de todas las sucursales y pasa
+    /// <see cref="AlcanceDeSucursales.SinRestriccion"/>; el permiso lo pone la ruta que la sirve. El punto único de
+    /// lectura no cambia: los filtros, el rango y el libro son los mismos.
+    /// </summary>
+    public static async Task<Result<Contexto>> PrepararAsync(
+        IApplicationDbContext db, AlcanceDeSucursales alcance, IDateTimeService clock, FiltrosDeInforme f, CancellationToken ct,
         int rangoMaximoEnAnios = RangoMaximoEnAnios)
     {
         var hoy = clock.TodayUtc;
@@ -148,8 +159,7 @@ public static class MovimientosContables
             rubro = resuelto.Value;
         }
 
-        var scope = await alcance.ObtenerAsync(ct);
-        return Result.Success(new Contexto(f, desde, hasta, scope, cuenta, tercero, centroId, centro, sucursalId, sucursal, cruceId, numeroCruce, rubro));
+        return Result.Success(new Contexto(f, desde, hasta, alcance, cuenta, tercero, centroId, centro, sucursalId, sucursal, cruceId, numeroCruce, rubro));
     }
 
     /// <summary>

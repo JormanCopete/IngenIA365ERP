@@ -2,6 +2,7 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Tests.Accounting.Common;
+using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using Microsoft.EntityFrameworkCore;
@@ -322,5 +323,112 @@ public class AccountingPosterTests
         r.Value.Date.Should().Be(new DateOnly(2026, 4, 1));
         r.Value.Description.Should().Contain("2026-04-01").And.Contain("2026-03");
         (await d.Db.AccountingPeriods.SingleAsync(p => p.Id == r.Value.PeriodId)).Month.Should().Be(4);
+    }
+
+    // ---- feature 012, I2: enmienda de la 009 (T458; contracts/contabilidad.md §6, §10, §12.8) ----
+
+    private static AccountingOrigin Inventario() => new(ModuloContable.Inventario, "InventoryDocument", Guid.NewGuid());
+
+    private static void TipoDeInventario(ContabilidadTestData d, string code = "EI") =>
+        d.Db.VoucherTypes.Add(new VoucherType { Code = code, Name = $"Inventario {code}", Usage = VoucherUsage.Module, ModuleCode = "INV", IsSeeded = true, CreatedBy = "test" });
+
+    [Fact]
+    public async Task Nada_de_inventario_se_reversa_por_el_contrato()
+    {
+        var d = new ContabilidadTestData();
+        TipoDeInventario(d);
+        await d.Db.SaveChangesAsync();
+        var inventario = d.Cuenta("143505", modulos: AccountingModules.Inventory);
+        var proveedores = d.Cuenta("220505", AccountNature.Credit, modulos: AccountingModules.Inventory);
+        var origen = Inventario();
+        var entrada = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(inventario, proveedores, origen: origen, tipo: "EI"), CancellationToken.None);
+        entrada.IsSuccess.Should().BeTrue(entrada.Error.Message);
+        await d.Db.SaveChangesAsync();
+
+        var desdeInventario = await d.Poster.PrepareReversalAsync(entrada.Value, Marzo15, "anulado", origen, CancellationToken.None);
+        desdeInventario.Error.Code.Should().Be("Accounting.Document.InventoryCorrectsWithNewVoucher");
+        desdeInventario.Error.Should().BeOfType<ErrorConDatos>();
+
+        // Aunque quien lo pida diga ser Contabilidad: el original es de Inventario.
+        var desdeContabilidad = await d.Poster.PrepareReversalAsync(entrada.Value, Marzo15, "anulado", ContabilidadTestData.Manual(), CancellationToken.None);
+        desdeContabilidad.Error.Code.Should().Be("Accounting.Document.InventoryCorrectsWithNewVoucher");
+
+        // Y un origen INV tampoco reversa lo ajeno.
+        var caja = d.Cuenta("110505");
+        var ingreso = d.Cuenta("413505", AccountNature.Credit);
+        var manual = (await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(caja, ingreso), CancellationToken.None)).Value;
+        await d.Db.SaveChangesAsync();
+        (await d.Poster.PrepareReversalAsync(manual, Marzo15, "x", Inventario(), CancellationToken.None))
+            .Error.Code.Should().Be("Accounting.Document.InventoryCorrectsWithNewVoucher");
+
+        entrada.Value.Status.Should().Be(DocumentStatus.Posted, "el original nunca se toca");
+        d.Db.ChangeTracker.Entries<AccountingDocument>().Should().OnlyContain(x => x.State == EntityState.Unchanged);
+    }
+
+    [Fact]
+    public async Task El_usuario_de_origen_llega_a_registrado_por_y_sin_el_queda_quien_contabiliza()
+    {
+        var d = new ContabilidadTestData();
+        TipoDeInventario(d);
+        await d.Db.SaveChangesAsync();
+        var inventario = d.Cuenta("143505", modulos: AccountingModules.Inventory);
+        var proveedores = d.Cuenta("220505", AccountNature.Credit, modulos: AccountingModules.Inventory);
+
+        var conOrigen = await d.Poster.PrepareAsync(
+            ContabilidadTestData.Comprobante(inventario, proveedores, origen: Inventario(), tipo: "EI") with { RegistradoPor = new UsuarioDeOrigen(Guid.NewGuid(), "bodeguero@coop") },
+            CancellationToken.None);
+        conOrigen.IsSuccess.Should().BeTrue(conOrigen.Error.Message);
+        conOrigen.Value.RegisteredBy.Should().Be("bodeguero@coop");
+        conOrigen.Value.PostedBy.Should().Be("contadora@demo", "quien contabiliza sigue siendo el actor");
+        conOrigen.Value.RegisteredByUserId.Should().Be(9, "el entero no cambia en esta feature (T6)");
+
+        var sinOrigen = await d.Poster.PrepareAsync(ContabilidadTestData.Comprobante(inventario, proveedores, origen: Inventario(), tipo: "EI"), CancellationToken.None);
+        sinOrigen.Value.RegisteredBy.Should().Be("contadora@demo");
+    }
+
+    [Fact]
+    public async Task Validar_varios_da_lo_mismo_que_validar_uno_a_uno_y_no_deja_nada_rastreado()
+    {
+        var d = new ContabilidadTestData();
+        var caja = d.Cuenta("110505");
+        var ingreso = d.Cuenta("413505", AccountNature.Credit);
+        var conTercero = d.Cuenta("130505", tercero: true);
+        var retencion = d.Cuenta("236505", AccountNature.Credit, baseGravable: true, tarifa: 0.04m);
+        var gasto = d.Cuenta("510505", centro: true);
+        var solicitudes = new List<PostingRequest>
+        {
+            ContabilidadTestData.Comprobante(caja, ingreso),
+            ContabilidadTestData.Comprobante(caja, conTercero),
+            new("CG", Marzo15, "Retención", ContabilidadTestData.Manual(),
+                [PostingLine.Debito(gasto.Id, 103m), new PostingLine { AccountId = retencion.Id, Credit = 103m, TaxBase = 2_500m }]),
+            ContabilidadTestData.Comprobante(caja, ingreso, fecha: new DateOnly(2026, 2, 10)),
+            ContabilidadTestData.Comprobante(caja, ingreso, tipo: "XX"),
+            new("CG", Marzo15, "Descuadre", ContabilidadTestData.Manual(), [PostingLine.Debito("110505", 100m), PostingLine.Credito("413505", 90m)]),
+            ContabilidadTestData.Comprobante(caja, ingreso, origen: ContabilidadTestData.Nomina(), tipo: "NM"),
+            new("CG", Marzo15, "Cuenta inexistente", ContabilidadTestData.Manual(), [PostingLine.Debito("999999", 100m), PostingLine.Credito(ingreso.Id, 100m)]),
+        };
+
+        var unoAUno = new List<ValidacionDeComprobante>();
+        foreach (var s in solicitudes) unoAUno.Add(await d.Poster.ValidarAsync(s, CancellationToken.None));
+        d.Db.ChangeTracker.Clear();
+
+        var varios = await d.Poster.ValidarVariosAsync(solicitudes, CancellationToken.None);
+
+        varios.Should().HaveCount(solicitudes.Count);
+        for (var i = 0; i < solicitudes.Count; i++)
+            varios[i].Should().BeEquivalentTo(unoAUno[i], o => o.WithStrictOrdering(), $"el comprobante {i + 1} se analiza igual");
+        varios[0].EsValido.Should().BeTrue();
+        varios[1].Errores.Should().ContainSingle().Which.Code.Should().Be("Accounting.Line.ThirdPartyRequired");
+        varios[2].Avisos.Should().ContainSingle().Which.Code.Should().Be("Accounting.Line.TaxAmountDiffers");
+        varios[3].Errores.Single().Code.Should().Be("Accounting.Period.Closed");
+        varios[4].Errores.Single().Code.Should().Be("Accounting.VoucherType.NotFound");
+        varios[5].Errores.Single().Code.Should().Be("Accounting.Document.Unbalanced");
+        varios[6].EsValido.Should().BeTrue();
+        varios[7].Errores.Single().Code.Should().Be("Accounting.Line.AccountNotFound");
+
+        d.Db.ChangeTracker.Entries().Should().BeEmpty("validar no numera, no agrega y no rastrea nada");
+        (await d.Db.VoucherTypes.SingleAsync(v => v.Code == "CG")).NextNumber.Should().Be(1);
+        (await d.Db.ChartOfAccounts.SingleAsync(a => a.Id == caja.Id)).FirstMovementAt.Should().BeNull();
+        (await d.Poster.ValidarVariosAsync([], CancellationToken.None)).Should().BeEmpty();
     }
 }

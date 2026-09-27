@@ -66,6 +66,12 @@ public class LasConsultasDeInventarioRespetanElAlcance
         // Fase 21, US17 parte I1 (T955, T956): las vistas documents (origen o destino) y reorder-alerts (por bodega).
         "DocumentsReportQueryHandler",
         "ReorderAlertsReportQueryHandler",
+        // Fase 12, US7 (I2; T444–T448, nota de T503/T524): la bandeja de mensajes y su detalle (por la bodega del documento de
+        // origen) y las vistas messages y accounting-batches.
+        "ListIntegrationMessagesQueryHandler",
+        "GetIntegrationMessageQueryHandler",
+        "MessagesReportQueryHandler",
+        "AccountingBatchesReportQueryHandler",
     ];
 
     [Fact]

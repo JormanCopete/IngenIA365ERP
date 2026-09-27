@@ -1,0 +1,187 @@
+@page "/contabilidad/inventario/tipos-de-comprobante"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject IntegracionContableClient Integracion
+@inject ContabilidadClient Contabilidad
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Tipos de comprobante de Inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T534; contracts/api.md §26.2, contracts/contabilidad.md §2.6, §9): con qué tipo de comprobante —y qué documento
+   cruce— contabiliza Contabilidad cada operación de Inventario, en general o para un tipo de documento de Inventario en particular. La
+   semilla deja FV, EI, SI, NV, CP, TR, AC y CJ; cambiar una fila la reemplaza en su sitio con motivo (el cambio queda en la
+   auditoría: el mapeo no tiene vigencia). El tipo de comprobante tiene que ser de uso «Módulo», de Inventario y activo: la lista sólo
+   ofrece ésos y el servidor lo vuelve a exigir (Accounting.VoucherType.NotAllowedForModule). El tipo de la unidad lo da su mensaje
+   principal —el comercial antes que el de costo— y una anulación usa el de su original. *@
+<PermissionGate Required="Accounting.InventoryRules.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tipos de comprobante de Inventario</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/contabilidad/inventario/matriz">Matriz</a>
+            <a class="e-btn e-outline" href="/contabilidad/inventario/completitud">Completitud</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Accounting.InventoryRules.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nuevo mapeo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+    <p class="texto-apoyo">Una fila sin tipo de documento vale para todos los documentos de la operación; una con tipo, sólo para ése (gana la más específica).</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Operación</th><th>Tipo de documento</th><th>Tipo de comprobante</th><th>Documento cruce</th><th>Origen</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _mapeos)
+                    {
+                        var mapeo = m;
+                        <tr>
+                            <td>@mapeo.Operation</td>
+                            <td>@(mapeo.InventoryDocumentTypeCode ?? "Todos")</td>
+                            <td>@mapeo.VoucherType.Code · @mapeo.VoucherType.Name</td>
+                            <td>@(mapeo.CrossDocumentType?.Code ?? "—")</td>
+                            <td>@(mapeo.IsSeeded ? "Semilla" : "De la cooperativa")</td>
+                            <td>
+                                <PermissionGate Required="Accounting.InventoryRules.Manage">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => Abrir(mapeo))">Cambiar…</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                    @if (_mapeos.Count == 0 && !_carga.Activa)
+                    {
+                        <tr><td colspan="6" class="texto-tenue">@(_error ?? "Sin mapeos: la semilla no se aplicó en esta cooperativa.")</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@(_editando is null ? "Nuevo mapeo" : "Cambiar el mapeo")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Operación *
+                        <select class="e-input" disabled="@(_editando is not null)" @bind="_f.Operacion">
+                            <option value="">Elija…</option>
+                            @foreach (var o in _operaciones) { <option value="@o">@o</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Tipo de documento de Inventario
+                        <select class="e-input" disabled="@(_editando is not null)" @bind="_f.TipoDeDocumento">
+                            <option value="">Todos</option>
+                            @foreach (var t in _tiposDeDocumento) { <option value="@t.Code">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Tipo de comprobante *
+                        <select class="e-input" value="@(_f.TipoDeComprobante?.ToString() ?? "")" @onchange="@(e => _f.TipoDeComprobante = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija…</option>
+                            @foreach (var t in _tiposDeComprobante) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Documento cruce
+                        <select class="e-input" value="@(_f.Cruce?.ToString() ?? "")" @onchange="@(e => _f.Cruce = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Sin cruce</option>
+                            @foreach (var c in _cruces) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" maxlength="500" /></label>
+                </div>
+                @if (_tiposDeComprobante.Count == 0)
+                {
+                    <p class="aviso aviso-alerta">No hay tipos de comprobante de uso «Módulo» para Inventario activos. Créelos en Contabilidad › Tipos de comprobante.</p>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeGuardar)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class Formulario
+    {
+        public string? Operacion { get; set; }
+        public string? TipoDeDocumento { get; set; }
+        public Guid? TipoDeComprobante { get; set; }
+        public Guid? Cruce { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<MapeoDeComprobanteDeInventarioDto> _mapeos = [];
+    private List<string> _operaciones = [];
+    private List<TipoDeDocumentoDto> _tiposDeDocumento = [];
+    private List<TipoComprobanteDto> _tiposDeComprobante = [];
+    private List<TipoCruceDto> _cruces = [];
+    private MapeoDeComprobanteDeInventarioDto? _editando;
+    private Formulario _f = new();
+    private bool _mostrar;
+    private string? _error;
+
+    private bool PuedeGuardar => !_guardado.Activa && !string.IsNullOrWhiteSpace(_f.Operacion) && _f.TipoDeComprobante is not null
+                                 && !string.IsNullOrWhiteSpace(_f.Motivo);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var catalogo = Integracion.CatalogoAsync();
+        var tipos = Inventario.ListarTiposAsync();
+        var comprobantes = Contabilidad.ListarTiposDeComprobanteAsync();
+        var cruces = Contabilidad.ListarTiposDeCruceAsync();
+        await Task.WhenAll(catalogo, tipos, comprobantes, cruces);
+        _operaciones = catalogo.Result.IsSuccess ? [.. (catalogo.Result.Value?.Operations ?? []).Select(o => o.Code)] : [];
+        _tiposDeDocumento = tipos.Result.IsSuccess ? [.. (tipos.Result.Value ?? []).Where(t => t.IsActive).OrderBy(t => t.Code)] : [];
+        _tiposDeComprobante = comprobantes.Result.IsSuccess
+            ? [.. (comprobantes.Result.Value ?? []).Where(t => t.IsActive && t.Usage == "Module" && t.ModuleCode == "INV").OrderBy(t => t.Code)]
+            : [];
+        _cruces = cruces.Result.IsSuccess ? [.. (cruces.Result.Value ?? []).Where(c => c.IsActive).OrderBy(c => c.Code)] : [];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.MapeosAsync();
+        _error = r.IsSuccess ? null : r.ErrorMessage;
+        _mapeos = r.IsSuccess ? [.. (r.Value ?? []).OrderBy(m => m.Operation).ThenBy(m => m.InventoryDocumentTypeCode)] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los mapeos.");
+    }
+
+    private void Abrir(MapeoDeComprobanteDeInventarioDto? mapeo)
+    {
+        _editando = mapeo;
+        _f = mapeo is null
+            ? new Formulario()
+            : new Formulario
+            {
+                Operacion = mapeo.Operation, TipoDeDocumento = mapeo.InventoryDocumentTypeCode,
+                TipoDeComprobante = mapeo.VoucherType.PublicId, Cruce = mapeo.CrossDocumentType?.PublicId,
+            };
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!PuedeGuardar) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Integracion.FijarMapeoAsync(new MapeoDeComprobanteDeInventarioRequest(_f.Operacion!,
+            string.IsNullOrWhiteSpace(_f.TipoDeDocumento) ? null : _f.TipoDeDocumento, _f.TipoDeComprobante!.Value, _f.Cruce, _f.Motivo!.Trim()));
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el mapeo.");
+            return;
+        }
+        _mostrar = false;
+        await Notification.SuccessAsync("Mapeo guardado.");
+        await CargarAsync();
+    }
+}

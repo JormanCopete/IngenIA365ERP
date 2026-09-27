@@ -1,0 +1,448 @@
+@page "/inventario/bandeja-de-mensajes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Bandeja de mensajes - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T537; FR-069 a FR-080, SC-010, SC-021; contracts/api.md §25.2): lo que Inventario le mandó a Contabilidad (y a
+   Cartera, cuando exista) y qué pasó con cada mensaje, en orden de emisión. Filtros de §25.2 —incluido «validación previa», también
+   como columna, para medir SC-021 en QA—, contadores por estado, tipos mostrados con tilde, «espera al mensaje X» cuando una
+   dependencia al mismo destino no ha pasado, «Pendiente: el destino aún no está disponible (IC)» para Cartera, detalle con el contenido
+   inmutable del contrato y cada intento, enlace al comprobante por result.route. Reprocesar (sólo rechazados, con motivo; arrastra a
+   los dependientes que esperaban) y el envío posterior de «no aplica» (vista previa con toda la clausura de dependencias y su corte,
+   con motivo) crean un lote que corre en segundo plano con la persona como actor; las dos órdenes llevan su Idempotency-Key. *@
+<PermissionGate Required="Inventory.Messages.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Bandeja de mensajes</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Inventory.Messages.Reprocess">
+                <SfButton CssClass="e-outline" Disabled="@(_elegidos.Count == 0)" OnClick="@AbrirReproceso">Reprocesar (@_elegidos.Count)</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Messages.SendNotApplicable">
+                <SfButton CssClass="e-outline" OnClick="@AbrirEnvioPosterior">Enviar lo que no aplicaba…</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" value="@(_f.Estado?.ToString() ?? "")" @onchange="@(e => _f.Estado = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
+                <option value="">Todos</option>
+                @foreach (var (k, v) in TextosDeInventario.EstadosDeEntrega) { <option value="@k">@v</option> }
+            </select>
+        </label>
+        <label class="campo">Destino
+            <select class="e-input" @bind="_f.Destino">
+                <option value="">Todos</option>
+                <option value="@TextosDeInventario.DestinoContabilidad">Contabilidad</option>
+                <option value="@TextosDeInventario.DestinoCartera">Cartera</option>
+            </select>
+        </label>
+        <label class="campo">Tipo de mensaje <input class="e-input" @bind="_f.Tipo" placeholder="CompraRecibida…" /></label>
+        <label class="campo">Tipo de documento
+            <select class="e-input" @bind="_f.TipoDeDocumento">
+                <option value="">Todos</option>
+                @foreach (var t in _tipos) { <option value="@t.Code">@t.Code · @t.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Número <input class="e-input" @bind="_f.Numero" /></label>
+        <label class="campo">Desde <input type="date" class="e-input" value="@(_f.Desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _f.Desde = LeerFecha(e.Value))" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" value="@(_f.Hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _f.Hasta = LeerFecha(e.Value))" /></label>
+        <label class="campo">Validación previa
+            <select class="e-input" value="@(_f.ValidacionPrevia?.ToString() ?? "")" @onchange="@(e => _f.ValidacionPrevia = int.TryParse(e.Value?.ToString(), out var n) ? n : null)">
+                <option value="">Todas</option>
+                @foreach (var (k, v) in TextosDeInventario.ValidacionesPrevias) { <option value="@k">@v</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+    </div>
+    @if (Lote is { } lote) { <p class="texto-tenue">Sólo los mensajes del lote <a href="@($"/contabilidad/inventario/lotes/{lote}")">@lote</a>.</p> }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_bandeja is { } b)
+        {
+            <div class="kpi-grid">
+                @foreach (var (k, v) in TextosDeInventario.EstadosDeEntrega)
+                {
+                    var estado = k;
+                    <div class="kpi-card" role="button" title="Filtrar por este estado" @onclick="@(() => FiltrarPorEstadoAsync(estado))">
+                        <span class="kpi-value">@b.CountsByStatus.De(estado)</span><span class="kpi-label">@v</span>
+                    </div>
+                }
+            </div>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th></th><th>Emitido</th><th>Tipo</th><th>Documento</th><th>Operación</th><th>Destino</th><th>Modo</th><th>Estado</th><th>Validación previa</th><th class="numero">Intentos</th><th>Resultado</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in b.Messages.Items)
+                        {
+                            var mensaje = m;
+                            <tr class="@(mensaje.MessagePublicId == _detalle?.Message.MessagePublicId || mensaje.DeliveryStatus == TextosDeInventario.EntregaRechazada ? "resaltada" : "")">
+                                <td>
+                                    @if (mensaje.DeliveryStatus == TextosDeInventario.EntregaRechazada)
+                                    {
+                                        <input type="checkbox" checked="@_elegidos.Contains(mensaje.MessagePublicId)" @onchange="@(e => Elegir(mensaje.MessagePublicId, e.Value is true))" title="Elegir para reprocesar" />
+                                    }
+                                </td>
+                                <td>@mensaje.EmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                <td>@TextosDeInventario.TipoDeMensaje(mensaje.Type) <span class="texto-tenue">v@(mensaje.Version)</span></td>
+                                <td>
+                                    @if (mensaje.Origin.Kind == 1)
+                                    {
+                                        <a href="@($"/inventario/documentos/{mensaje.Origin.PublicId}")">@(mensaje.Origin.Number ?? mensaje.Origin.DocumentTypeCode ?? "documento")</a>
+                                    }
+                                    else { <span>@(mensaje.Origin.Number ?? "operación")</span> }
+                                    @if (mensaje.Related is { } rel) { <br /><span class="texto-tenue">sobre @rel.Number</span> }
+                                </td>
+                                <td>@mensaje.Origin.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@TextosDeInventario.Destino(mensaje.Destination)</td>
+                                <td>@TextosDeInventario.Texto(TextosDeInventario.ModosDeEntrega, mensaje.Mode)@(mensaje.ScheduleKey is { } k ? $" · {k}" : "")</td>
+                                <td>
+                                    @if (!mensaje.DestinationAvailable)
+                                    {
+                                        <span>Pendiente: el destino aún no está disponible (IC)</span>
+                                    }
+                                    else
+                                    {
+                                        @TextosDeInventario.EstadoDeEntrega(mensaje.DeliveryStatus)
+                                        @if (mensaje.Batch is { } lote) { <br /><a class="texto-tenue" href="@($"/contabilidad/inventario/lotes/{lote.BatchPublicId}")">lote @lote.Number</a> }
+                                        @foreach (var bloqueo in mensaje.BlockedBy)
+                                        {
+                                            <br /><span class="texto-tenue">espera al mensaje <a href="" @onclick="@(() => VerAsync(bloqueo.MessagePublicId))" @onclick:preventDefault="true">@TextosDeInventario.TipoDeMensaje(bloqueo.Type)</a> (@TextosDeInventario.EstadoDeEntrega(bloqueo.DeliveryStatus).ToLowerInvariant())</span>
+                                        }
+                                        @if (mensaje.LastError is { } error && mensaje.DeliveryStatus != 2) { <br /><span class="texto-tenue" title="@error.Code">@error.Message</span> }
+                                    }
+                                </td>
+                                <td>@(mensaje.PrevalidationOutcome is { } v ? TextosDeInventario.Texto(TextosDeInventario.ValidacionesPrevias, v) : "—")@(mensaje.PendingValidation == true ? " · pendiente" : "")</td>
+                                <td class="numero">@mensaje.Attempts</td>
+                                <td>@if (mensaje.Result?.Route is { } ruta) { <a href="@ruta">@Resultado(mensaje)</a> } else { @Resultado(mensaje) }</td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => VerAsync(mensaje.MessagePublicId))">Ver</SfButton></td>
+                            </tr>
+                        }
+                        @if (b.Messages.Items.Count == 0)
+                        {
+                            <tr><td colspan="12" class="texto-tenue">Sin mensajes con estos filtros.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (b.Messages.TotalCount > TamanoDePagina)
+            {
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                    <span>Página @_pagina de @((b.Messages.TotalCount + TamanoDePagina - 1) / TamanoDePagina)</span>
+                    <SfButton CssClass="e-outline" Disabled="@(_pagina * TamanoDePagina >= b.Messages.TotalCount)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+                </div>
+            }
+        }
+        else if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+    </IndicadorDeCarga>
+
+    @if (_mostrarDetalle)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                @if (_detalle is { } d)
+                {
+                    <h4>@TextosDeInventario.TipoDeMensaje(d.Message.Type) v@(d.Message.Version) · @TextosDeInventario.Destino(d.Message.Destination) · @TextosDeInventario.EstadoDeEntrega(d.Message.DeliveryStatus)</h4>
+                    <p class="texto-tenue">Originó @d.Message.OriginUserName · emitido @d.Message.EmittedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") · SHA-256 @d.PayloadSha256</p>
+                    @if (d.Message.Result is { } res) { <p>Resultado: @if (res.Route is { } ruta) { <a href="@ruta">@Resultado(d.Message)</a> } else { @Resultado(d.Message) }</p> }
+                    @if (d.DependsOn.Count > 0)
+                    {
+                        <p>Depende de:
+                            @foreach (var v in d.DependsOn)
+                            {
+                                <a href="" @onclick="@(() => VerAsync(v.MessagePublicId))" @onclick:preventDefault="true">@TextosDeInventario.TipoDeMensaje(v.Type)</a>
+                                <span class="texto-tenue">(@(v.Status is { } s ? TextosDeInventario.EstadoDeEntrega(s) : "sin entrega a este destino"))</span>
+                                <text> </text>
+                            }
+                        </p>
+                    }
+                    @if (d.Dependents.Count > 0)
+                    {
+                        <p>Lo esperan:
+                            @foreach (var v in d.Dependents)
+                            {
+                                <a href="" @onclick="@(() => VerAsync(v.MessagePublicId))" @onclick:preventDefault="true">@TextosDeInventario.TipoDeMensaje(v.Type)</a>
+                                <span class="texto-tenue">(@(v.Status is { } s ? TextosDeInventario.EstadoDeEntrega(s) : "sin entrega a este destino"))</span>
+                                <text> </text>
+                            }
+                        </p>
+                    }
+                    <h4>Intentos</h4>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Inicio</th><th>Fin</th><th>Resultado</th><th>Código</th><th>Mensaje</th><th>Actor</th><th>Lote</th><th>Instancia</th></tr></thead>
+                            <tbody>
+                                @foreach (var i in d.Attempts)
+                                {
+                                    <tr>
+                                        <td>@i.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td>
+                                        <td>@i.FinishedAt.ToLocalTime().ToString("HH:mm:ss")</td>
+                                        <td>@TextosDeInventario.Texto(TextosDeInventario.ResultadosDeIntento, i.Outcome)</td>
+                                        <td><code>@i.Code</code></td>
+                                        <td>@i.Message</td>
+                                        <td>@i.Actor.Name <span class="texto-tenue">(@TextosDeInventario.Texto(TextosDeInventario.ActoresDeIntegracion, i.Actor.Kind).ToLowerInvariant())</span></td>
+                                        <td>@i.BatchNumber</td>
+                                        <td>@i.Instance</td>
+                                    </tr>
+                                }
+                                @if (d.Attempts.Count == 0) { <tr><td colspan="8" class="texto-tenue">Todavía no se ha intentado entregar.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                    <h4>Contenido</h4>
+                    <pre>@d.Payload</pre>
+                }
+                <SfButton CssClass="e-flat e-small" OnClick="@(() => { _mostrarDetalle = false; _detalle = null; })">Cerrar</SfButton>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarReproceso" Header="Reprocesar mensajes rechazados" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_orden.Activa" Texto="Ordenando…">
+                <p>Se crea un lote de reproceso con @_elegidos.Count mensaje(s); arrastra, en orden, a los que esperaban por ellos. Cada uno se contabiliza con su fecha de operación original. Corrija antes lo que causó el rechazo.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_orden.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReprocesarAsync">Reprocesar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReproceso = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarEnvio" Header="Enviar a Contabilidad lo que no aplicaba" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_orden.Activa || _previa.Activa)" Texto="@(_previa.Activa ? "Armando la vista previa…" : "Ordenando…")">
+                <p class="texto-apoyo">Para los tipos que antes no pasaban a Contabilidad y ahora sí. La vista previa trae toda la clausura de dependencias —anulaciones, notas y ajustes de cualquier fecha— y se envía exactamente lo que ve.</p>
+                <div class="form-grid">
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@(_eDesde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _eDesde = LeerFecha(e.Value); _envio = null; })" /></label>
+                    <label class="campo">Hasta * <input type="date" class="e-input" value="@(_eHasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _eHasta = LeerFecha(e.Value); _envio = null; })" /></label>
+                    <label class="campo">Tipo de documento
+                        <select class="e-input" value="@(_eTipo?.ToString() ?? "")" @onchange="@(e => { _eTipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null; _envio = null; })">
+                            <option value="">Todos</option>
+                            @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                        </select>
+                    </label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-eye" Disabled="@(_eDesde is null || _eHasta is null || _previa.Activa)" OnClick="@PrevisualizarEnvioAsync">Vista previa</SfButton>
+                </div>
+                @if (_envio is { } env)
+                {
+                    <p>@env.Messages.TotalCount mensaje(s) con su clausura.</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Tipo</th><th>Documento</th><th>Operación</th><th>Estado</th></tr></thead>
+                            <tbody>
+                                @foreach (var m in env.Messages.Items)
+                                {
+                                    <tr>
+                                        <td>@TextosDeInventario.TipoDeMensaje(m.Type)</td>
+                                        <td>@(m.Origin.Number ?? m.Origin.DocumentTypeCode)</td>
+                                        <td>@m.Origin.OperationDate.ToString("dd/MM/yyyy")</td>
+                                        <td>@TextosDeInventario.EstadoDeEntrega(m.DeliveryStatus)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (env.Messages.TotalCount > env.Messages.Items.Count) { <p class="texto-tenue">Se muestran los primeros @env.Messages.Items.Count; se envían todos.</p> }
+                    @if (env.CutoffMessagePublicId is not null)
+                    {
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500" /></label>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_orden.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@EnviarAsync">Enviar</SfButton>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="texto-tenue">No hay nada que enviar en ese rango.</p>
+                    }
+                }
+                @if (_tiposQueSiguenSinPasar is { Count: > 0 } siguen)
+                {
+                    <p class="aviso aviso-alerta">Estos tipos siguen en «no pasa» a hoy: cambie primero su modo de paso en Parámetros (@string.Join(", ", siguen)).</p>
+                }
+                <div class="toolbar"><SfButton CssClass="e-outline" OnClick="@(() => _mostrarEnvio = false)">Cerrar</SfButton></div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+    private const string ModoTodaviaNoPasa = "Integration.SendNotApplicable.ModeStillNotPosted";
+
+    private sealed class Filtros
+    {
+        public int? Estado { get; set; }
+        public string? Destino { get; set; }
+        public string? Tipo { get; set; }
+        public string? TipoDeDocumento { get; set; }
+        public string? Numero { get; set; }
+        public DateOnly? Desde { get; set; }
+        public DateOnly? Hasta { get; set; }
+        public int? ValidacionPrevia { get; set; }
+    }
+
+    [SupplyParameterFromQuery(Name = "mensaje")] public Guid? Mensaje { get; set; }
+    [SupplyParameterFromQuery(Name = "lote")] public Guid? Lote { get; set; }
+    [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _orden = new(), _previa = new();
+    private readonly Filtros _f = new();
+    private readonly HashSet<Guid> _elegidos = [];
+    private BandejaDeMensajesDto? _bandeja, _envio;
+    private DetalleDeMensajeDto? _detalle;
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private int _pagina = 1;
+    private bool _mostrarDetalle, _mostrarReproceso, _mostrarEnvio;
+    private string? _motivo, _error;
+    private DateOnly? _eDesde, _eHasta;
+    private Guid? _eTipo;
+    private ClaveDeOperacion _clave = new();
+    private List<string>? _tiposQueSiguenSinPasar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var tipos = await Inventario.ListarTiposAsync();
+        _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive).OrderBy(t => t.Code)] : [];
+        await CargarAsync(1);
+        if (Mensaje is { } mensaje) await VerAsync(mensaje);
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.MensajesAsync(new FiltroDeMensajes(_f.Estado, Vacio(_f.Destino), Vacio(_f.Tipo), Documento, Vacio(_f.Numero),
+            Vacio(_f.TipoDeDocumento), Lote, _f.Desde, _f.Hasta, false, _f.ValidacionPrevia, pagina, TamanoDePagina));
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _bandeja = null;
+            _error = r.ErrorMessage ?? "No se pudo consultar la bandeja.";
+            await Notification.ErrorAsync(_error);
+            return;
+        }
+        _error = null;
+        _pagina = pagina;
+        _bandeja = r.Value;
+        _elegidos.IntersectWith(_bandeja.Messages.Items.Where(m => m.DeliveryStatus == TextosDeInventario.EntregaRechazada).Select(m => m.MessagePublicId));
+    }
+
+    private Task FiltrarPorEstadoAsync(int estado)
+    {
+        _f.Estado = estado;
+        return CargarAsync(1);
+    }
+
+    private void Elegir(Guid mensaje, bool elegido)
+    {
+        if (elegido) _elegidos.Add(mensaje);
+        else _elegidos.Remove(mensaje);
+    }
+
+    private async Task VerAsync(Guid mensaje)
+    {
+        _mostrarDetalle = true;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Inventario.MensajeAsync(mensaje);
+        _detalle = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el mensaje.");
+    }
+
+    private void AbrirReproceso()
+    {
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarReproceso = true;
+    }
+
+    private async Task ReprocesarAsync()
+    {
+        if (_elegidos.Count == 0 || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var orden = _orden.Iniciar();
+        var r = await Inventario.ReprocesarMensajesAsync([.. _elegidos], _motivo.Trim(), _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reprocesar.");
+            return;
+        }
+        _mostrarReproceso = false;
+        _elegidos.Clear();
+        await Notification.SuccessAsync($"Lote de reproceso {r.Value.Number}: {r.Value.Messages} mensaje(s){(r.Value.Dragged is > 0 ? $" y {r.Value.Dragged} que esperaban" : "")}; corre en segundo plano.");
+        await CargarAsync(_pagina);
+    }
+
+    private void AbrirEnvioPosterior()
+    {
+        _envio = null;
+        _motivo = null;
+        _tiposQueSiguenSinPasar = null;
+        _eDesde ??= _f.Desde;
+        _eHasta ??= _f.Hasta;
+        _mostrarEnvio = true;
+    }
+
+    private async Task PrevisualizarEnvioAsync()
+    {
+        if (_eDesde is not { } desde || _eHasta is not { } hasta) return;
+        using var carga = _previa.Iniciar();
+        _tiposQueSiguenSinPasar = null;
+        var codigo = _tipos.FirstOrDefault(t => t.PublicId == _eTipo)?.Code;
+        var r = await Inventario.MensajesAsync(new FiltroDeMensajes(TextosDeInventario.EntregaNoAplica, TextosDeInventario.DestinoContabilidad,
+            TipoDeDocumento: codigo, Desde: desde, Hasta: hasta, Clausura: true, TamanoDePagina: 200));
+        if (!r.IsSuccess)
+        {
+            _envio = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo armar la vista previa.");
+            return;
+        }
+        _envio = r.Value;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_envio?.CutoffMessagePublicId is not { } corte || _eDesde is not { } desde || _eHasta is not { } hasta || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var orden = _orden.Iniciar();
+        var r = await Inventario.EnviarNoAplicaAsync(new EnvioPosteriorRequest(desde, hasta, _eTipo is { } t ? [t] : null, corte, _motivo.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _tiposQueSiguenSinPasar = r.ErrorCode == ModoTodaviaNoPasa ? r.Dato<List<string>>("documentTypeCodes") : null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo ordenar el envío.");
+            return;
+        }
+        _mostrarEnvio = false;
+        await Notification.SuccessAsync($"Lote {r.Value.Number}: {r.Value.Documents ?? 0} documento(s), {r.Value.Messages} mensaje(s); corre en segundo plano.");
+        await CargarAsync(_pagina);
+    }
+
+    private static string Resultado(MensajeDeIntegracionDto m) => m.Result switch
+    {
+        { WithoutVoucher: 1 } => "Registrado sin comprobante (informativo)",
+        { WithoutVoucher: 2 } => "Registrado sin comprobante (valor cero)",
+        { VoucherTypeCode: { } tipo } r => $"{tipo} {r.Number}",
+        _ => "",
+    };
+
+    private static string? Vacio(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

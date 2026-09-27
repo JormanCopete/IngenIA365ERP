@@ -8,8 +8,9 @@ namespace IngenIA365ERP.Persistence.Configurations.Integration;
 /// <c>COR_IntegrationMessageDeliveries</c> (feature 012, T7, T9, T074; data-model §19). Una fila por mensaje y
 /// destino (único <c>(MessageId, Destination)</c>). Los dos índices filtrados son las dos colas: las
 /// elegibles (<c>[Status] = 0</c>, <c>Pending</c>, por destino y hora del próximo intento) y las que esperan
-/// lote (<c>[Status] = 1</c>, <c>InBatch</c>, por clave de horario). <c>BatchId</c> va <b>sin FK</b>: la FK entra
-/// con <c>COR_IntegrationBatches</c> en I2. La tabla llega con la migración <c>PlataformaParaInventario</c>.
+/// lote (<c>[Status] = 1</c>, <c>InBatch</c>, por clave de horario). La tabla llega con la migración
+/// <c>PlataformaParaInventario</c> con <c>BatchId</c> sin llave; la FK <c>Restrict</c> a <c>COR_IntegrationBatches</c> entra con
+/// esa tabla en I2 (T480, migración <c>IntegracionContableDeInventario</c>).
 /// </summary>
 public class IntegrationMessageDeliveryConfiguration : IEntityTypeConfiguration<IntegrationMessageDelivery>
 {
@@ -23,6 +24,7 @@ public class IntegrationMessageDeliveryConfiguration : IEntityTypeConfiguration<
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_IntegrationMessageDeliveries_PublicId");
 
         builder.HasOne(e => e.Message).WithMany().HasForeignKey(e => e.MessageId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<IntegrationBatch>().WithMany().HasForeignKey(e => e.BatchId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(e => e.Destination).HasMaxLength(20).IsRequired();
         builder.Property(e => e.Mode).HasConversion<int>().IsRequired();

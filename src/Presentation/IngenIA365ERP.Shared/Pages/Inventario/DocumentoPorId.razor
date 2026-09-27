@@ -1,0 +1,73 @@
+@page "/inventario/documentos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject NavigationManager Nav
+
+<PageTitle>Documento de inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T493 (contracts/api.md §29): «Ver en Inventario» desde un comprobante contable. El comprobante sólo sabe
+   que su origen es un InventoryDocument, no de qué grupo; esta página de paso lo consulta por la ruta genérica
+   (/api/inventory/documents/{id}, que ya filtra por el permiso de cada grupo y por el alcance) y lleva a la pantalla de
+   su clase. Si la clase no tiene pantalla propia todavía, muestra lo esencial del documento. *@
+<PermissionGate Required="Inventory.Documents.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Documento de inventario</h3>
+    </div>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+        else if (_doc is not null)
+        {
+            <div class="info-card">
+                <p><strong>@(_doc.DisplayNumber ?? "(borrador)")</strong> · @_doc.DocumentType.Name · @_doc.OperationDate.ToString("dd/MM/yyyy")</p>
+                <p>Esta clase de documento no tiene pantalla propia todavía. Su movimiento se consulta en el <a href="/inventario/kardex">kardex</a>.</p>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private DocumentoDeInventarioDto? _doc;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _doc = null;
+        _error = null;
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ObtenerDocumentoAsync(Id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _error = r.ErrorMessage ?? "No se encontró el documento o no tiene permiso para verlo.";
+            return;
+        }
+        if (RutaDeLaClase(r.Value) is { } ruta)
+        {
+            Nav.NavigateTo(ruta, replace: true);
+            return;
+        }
+        _doc = r.Value;
+    }
+
+    /// <summary>La pantalla de cada clase (Domain.Enums.Inventory.DocumentClass, por número: Shared no referencia el dominio).</summary>
+    private static string? RutaDeLaClase(DocumentoDeInventarioDto d) => d.Class switch
+    {
+        3 => $"/compras/recepciones/{d.PublicId}",
+        4 => $"/compras/facturas-proveedor/{d.PublicId}",
+        5 or 7 => "/compras/notas-proveedor",
+        9 => "/compras/devoluciones",
+        >= 10 and <= 13 or 18 => $"/inventario/ajustes/{d.PublicId}",
+        15 => "/inventario/saldo-inicial",
+        16 => $"/inventario/traslados/{d.PublicId}",
+        19 => $"/inventario/conteos/{d.PublicId}",
+        _ => null,
+    };
+}

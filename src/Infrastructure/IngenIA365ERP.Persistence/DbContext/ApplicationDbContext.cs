@@ -4,6 +4,7 @@ using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
+using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -416,6 +417,13 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IntegrationMessage> IntegrationMessages => Set<IntegrationMessage>();
     public DbSet<IntegrationMessageDependency> IntegrationMessageDependencies => Set<IntegrationMessageDependency>();
     public DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries => Set<IntegrationMessageDelivery>();
+    // Feature 012, entrega I2 (T483).
+    public DbSet<IntegrationDeliveryAttempt> IntegrationDeliveryAttempts => Set<IntegrationDeliveryAttempt>();
+    public DbSet<IntegrationBatch> IntegrationBatches => Set<IntegrationBatch>();
+    public DbSet<IntegrationBatchCounter> IntegrationBatchCounters => Set<IntegrationBatchCounter>();
+    public DbSet<InventoryPostingRule> InventoryPostingRules => Set<InventoryPostingRule>();
+    public DbSet<InventoryVoucherMapping> InventoryVoucherMappings => Set<InventoryVoucherMapping>();
+    public DbSet<InventoryPosting> InventoryPostings => Set<InventoryPosting>();
     // Feature 012 (T33, T34; T081): aprobaciones de plataforma y montos maximos por permiso (adelanto de T096).
     public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
     public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();

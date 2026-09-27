@@ -19,8 +19,8 @@ namespace IngenIA365ERP.Domain.Entities.Integration;
 /// </para>
 ///
 /// <para>
-/// <c>[SinDiffDeAuditoria]</c>: cada intento la cambia y no es un hecho de negocio. <see cref="BatchId"/> no
-/// tiene FK todavía: entra con <c>COR_IntegrationBatches</c> en I2.
+/// <c>[SinDiffDeAuditoria]</c>: cada intento la cambia y no es un hecho de negocio. <see cref="BatchId"/> nació en I1
+/// sin FK; la llave a <c>COR_IntegrationBatches</c> entró con esa tabla en I2 (T480).
 /// </para>
 /// </summary>
 [SinDiffDeAuditoria]
@@ -44,7 +44,7 @@ public class IntegrationMessageDelivery : AuditableEntity
     /// <summary><c>CashSession:{publicId}</c> (<c>CierreDeTurno</c>) o <c>Period:{aaaa-mm}</c> (<c>CierreDePeriodo</c>).</summary>
     public string? BatchScopeKey { get; set; }
 
-    /// <summary>El lote que la tomó; nulo hasta que uno la toma. Sin FK hasta I2.</summary>
+    /// <summary>El lote que la tomó (<see cref="IntegrationBatch"/>); nulo hasta que uno la toma.</summary>
     public int? BatchId { get; set; }
 
     public int Attempts { get; set; }

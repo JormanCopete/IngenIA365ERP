@@ -96,6 +96,10 @@ Alternatives.
   contexto sin guardar**; el handler que llama (Nómina, Cartera, digitación…) cambia su propio
   estado y hace **un** `SaveChangesAsync`. Las reglas de línea viven en **una** clase,
   `AccountLineRules`, que usan `AccountingPoster` y la validación de borradores.
+  *Enmienda 012 (D-01)*: Inventario (012) no llama al contrato desde su operación: la unidad
+  atómica de Inventario es documento + mensaje; la de Contabilidad, comprobante + recibo
+  (`ACC_InventoryPostings`) en el consumidor (`PostInventoryMessagesCommand`), con el mismo
+  `PrepareAsync`. La atomicidad queda así de dos lados, unidos por el mensaje.
 - **Rationale**: es exactamente el molde de `PayrollAccountingPoster` (que «deliberadamente no
   guarda») y de las fábricas de la 008 (`PersonFactory`), y da la atomicidad de FR-036 sin
   transacción explícita (`IApplicationDbContext` no la expone). Una sola clase de reglas es lo que
@@ -289,7 +293,9 @@ Alternatives.
   Nómina (`PayrollConceptDefinitionAccount`, ya por FK), Cartera (`CreditLineParameter.*` y
   `SavingsParameter.TreasuryAccount`, por código → se resuelven a `AccountId` y se valida
   elegibilidad al guardar la parametrización), Inventario (`ProductAccount`/`VatAccount` por
-  código, hoy nunca leídos), CDT (`CdtParameter.TreasuryAccount`), Tesorería (**`TreasuryConcept`
+  código, hoy nunca leídos; *enmienda 012*: Inventario pasa por la matriz
+  `ACC_InventoryPostingRules` por mensajes, y `INV_ProductAccounts` e `INV_VatAccounts` se retiran
+  con la migración `RetiroDelInventarioHeredado`), CDT (`CdtParameter.TreasuryAccount`), Tesorería (**`TreasuryConcept`
   gana `DebitAccountId`/`CreditAccountId`**, hoy no tiene cuentas), bancos (`COR_Banks.AccountingAccountCode`
   → `AccountId`). Cuando falta parametrización, la operación falla con
   `Accounting.Parameterization.Missing` nombrando qué configurar (molde
@@ -309,7 +315,8 @@ Alternatives.
 - **Decision**: cuatro entregas, cada una mergeable a `develop` y desplegable a QA:
   **E1 núcleo** (US1, US2, US3, US4-Nómina, US7, migración, permisos, auditoría de accesos);
   **E2 consultas, cierres y apertura** (US5, US6, US13); **E3 módulos restantes** (US4.7:
-  Cartera, Inventario, Tesorería, CDT); **E4 satélites** (US8–US12). `tasks.md` las refleja como
+  Cartera, Tesorería, CDT; *enmienda 012*: sin Inventario, que llega por mensajes con la 012,
+  entrega I2); **E4 satélites** (US8–US12). `tasks.md` las refleja como
   fases; las ramas son `009-contabilidad-niif` (E1) y `009-e2…`, `009-e3…`, `009-e4…` desde
   `develop`.
 - **Rationale**: 13 historias y 88 requisitos no caben en un PR revisable; Nómina necesita

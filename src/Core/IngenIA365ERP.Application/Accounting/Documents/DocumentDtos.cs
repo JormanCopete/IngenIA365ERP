@@ -121,6 +121,11 @@ public static class EnlacesDeOrigen
         "SeveranceRun" => $"/nomina/cesantias-anuales?corrida={sourcePublicId}",
         "VacationRun" => $"/nomina/vacaciones?corrida={sourcePublicId}",
         "SettlementRun" => $"/nomina/liquidacion-definitiva/{sourcePublicId}",
+        // Feature 012 (T493, contracts/api.md §29): el documento de inventario lo resuelve su página de paso, que va a la
+        // de su grupo; el resumido, a su lote en Contabilidad.
+        Posting.OrigenesDeInventario.Documento => $"/inventario/documentos/{sourcePublicId}",
+        Posting.OrigenesDeInventario.LoteResumido => $"/contabilidad/inventario/lotes/{sourcePublicId}",
+        Posting.OrigenesDeInventario.Producto => $"/inventario/productos/{sourcePublicId}",
         _ => null,
     };
 }

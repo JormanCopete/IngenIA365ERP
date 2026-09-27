@@ -219,6 +219,26 @@ public class LosEndpointsProtegidosExigenPermiso
     }
 
     [Fact]
+    public void Las_rutas_de_la_integracion_contable_de_inventario_entran_al_recorrido()
+    {
+        // Feature 012, T447 (US7, I2): el lado contable (/api/accounting/inventory) y la bandeja de Inventario
+        // (/api/inventory/messages) entran por los globs de Accounting e Inventory; esta prueba fija que existan y que el
+        // recorrido los vea, para que un traslado de carpeta no los deje fuera en silencio. Las otras tres guardas de
+        // contracts/contabilidad.md §12.8 —NingunModuloEscribeMovimientosFueraDelContrato, PrincipioXI_ContableImmutable y
+        // LaContabilidadNoTieneCuentasEnCodigo— siguen verdes sin tocarlas.
+        var archivos = Archivos().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var esperado in new[]
+                 {
+                     Path.Combine("Endpoints", "Accounting", "InventoryIntegrationEndpoints.cs"),
+                     Path.Combine("Endpoints", "Inventory", "MessagesEndpoints.cs"),
+                 })
+        {
+            Assert.True(File.Exists(Path.Combine(Api, esperado)), $"No existe {esperado} (T528, T529).");
+            Assert.Contains(esperado, archivos);
+        }
+    }
+
+    [Fact]
     public void Las_rutas_sueltas_exigen_su_permiso()
     {
         foreach (var (archivo, ruta, permiso) in RutasSueltas)

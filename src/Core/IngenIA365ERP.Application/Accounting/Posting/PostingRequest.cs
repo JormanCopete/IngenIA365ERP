@@ -50,14 +50,26 @@ public sealed record PostingLine
         new() { AccountCode = accountCode, Credit = valor, Detail = detalle };
 }
 
-/// <summary>Lo que se pide contabilizar: tipo, fecha, descripción, origen, líneas y clase de documento.</summary>
+/// <summary>
+/// Quien registró la operación en el módulo de origen (feature 012, T6, FR-083; contracts/contabilidad.md §10): viaja
+/// en el mensaje y queda como <b>dato</b> en el <c>RegisteredBy</c> del comprobante. Nunca es el actor ni presta sus
+/// permisos: quien contabiliza es el proceso de integración o la persona que ordenó el lote. (nuevo)
+/// </summary>
+public sealed record UsuarioDeOrigen(Guid? CentralUserId, string Name);
+
+/// <summary>
+/// Lo que se pide contabilizar: tipo, fecha, descripción, origen, líneas y clase de documento.
+/// <paramref name="RegistradoPor"/> (feature 012) lleva al comprobante el usuario de origen de un documento de otro
+/// módulo; nulo conserva lo de siempre (Nómina y la digitación): registra quien contabiliza.
+/// </summary>
 public sealed record PostingRequest(
     string VoucherTypeCode,
     DateOnly Date,
     string Description,
     AccountingOrigin Origin,
     IReadOnlyList<PostingLine> Lines,
-    DocumentKind Kind = DocumentKind.Regular);
+    DocumentKind Kind = DocumentKind.Regular,
+    UsuarioDeOrigen? RegistradoPor = null);
 
 /// <summary>Resultado de validar sin contabilizar (<c>POST /documents/validate</c>): errores, avisos y totales.</summary>
 public sealed record ValidacionDeComprobante(

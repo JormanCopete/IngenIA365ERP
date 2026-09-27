@@ -1,0 +1,90 @@
+{
+  "descripcion": "AjusteDeCostoReconocido por diferencia de precio: fecha del comprobante y de las reglas = effectiveDate; existencia al inventario, lo vendido al costo, y la contrapartida (mercancía por facturar, que exige tercero: el del sobre).",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation:0000000000004000800000000000abcd",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "SupplierInvoice",
+      "documentTypeCode": "FP",
+      "number": "FP-7",
+      "publicId": "00000056-0000-4000-8000-000000000056",
+      "operationDate": "2026-03-14"
+    },
+    "related": {
+      "publicId": "00000055-0000-4000-8000-000000000055",
+      "documentClass": "PurchaseReceipt",
+      "number": "REC-10"
+    },
+    "chainRootPublicId": "00000057-0000-4000-8000-000000000057",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "11111111-2222-4333-8444-555555555555",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000058-0000-4000-8000-000000000058",
+      "type": "AjusteDeCostoReconocido",
+      "payload": {
+        "operation": "AjusteDeCosto",
+        "reason": "PriceDifference",
+        "effectiveDate": "2026-03-12",
+        "affectedDocument": {
+          "publicId": "00000055-0000-4000-8000-000000000055",
+          "documentClass": "PurchaseReceipt",
+          "number": "REC-10"
+        },
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "inventoryAmount": 400.0,
+            "soldAmount": 100.0
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "AC",
+    "fecha": "2026-03-12",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "14350501",
+        "debito": 400.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "61350501",
+        "debito": 100.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "22050501",
+        "debito": 0,
+        "credito": 500.0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": null
+      }
+    ]
+  }
+}

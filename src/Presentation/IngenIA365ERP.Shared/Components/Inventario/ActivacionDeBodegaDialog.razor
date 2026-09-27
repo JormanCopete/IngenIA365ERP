@@ -9,8 +9,8 @@
     calcula el servidor —el saldo inicial (confirmado o no, su valor y sus documentos), los conjuntos de cuentas con su diferencia
     (vacíos en I1: Contabilidad todavía no responde) y los bloqueos—, pide la fecha de corte y, cuando hay diferencia o no hay
     comparación, «Aceptar la diferencia» sólo a quien tiene Inventory.Warehouses.AcceptActivationDifference, con motivo obligatorio.
-    El 422 del servidor (en producción, Inventory.Activation.AccountingUnavailable) se muestra tal como viene. US7 (I2) lo reutiliza
-    en /inventario/activacion.
+    El 422 del servidor (en producción, Inventory.Activation.AccountingUnavailable) se muestra tal como viene. US7 (I2, T538) muestra
+    el detalle por conjunto (cuentas, bodegas de SOLIDO aparte, explicación) en /inventario/activacion.
 *@
 
 <SfDialog Visible="@Visible" VisibleChanged="@((bool v) => AlCambiarAsync(v))" Header="@Titulo" Width="720px" IsModal="true" ShowCloseIcon="true">
@@ -61,7 +61,7 @@
                                             <tr>
                                                 <td>@string.Join(", ", s.AccountingGroups.Select(g => g.Code))</td>
                                                 <td class="numero">@s.LedgerBalance.ToString("N2")</td>
-                                                <td class="numero">@s.Valuation.ToString("N2")</td>
+                                                <td class="numero">@s.Valuation.Total.ToString("N2")</td>
                                                 <td class="numero">@s.Difference.ToString("N2")</td>
                                             </tr>
                                         }

@@ -7,6 +7,9 @@ using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Tests.Accounting.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
+using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -27,10 +30,30 @@ public class PeriodCommandsTests
         public ContabilidadTestData D { get; } = new();
         public AccountingAuditEmitter Emisor { get; }
         public ISender Sender { get; } = Substitute.For<ISender>();
+        public IAuditAppendOnlyWriter Auditoria { get; } = Substitute.For<IAuditAppendOnlyWriter>();
 
         public Escenario()
         {
-            Emisor = new AccountingAuditEmitter(Substitute.For<IAuditAppendOnlyWriter>(), D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
+            Emisor = new AccountingAuditEmitter(Auditoria, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
+        }
+
+        /// <summary>Un mensaje de Inventario con su entrega a Contabilidad en el estado pedido (feature 012, I2).</summary>
+        public void Entrega(DateOnly fecha, DeliveryStatus estado, string tipo = "AJ", string destino = IntegrationDestinations.Accounting)
+        {
+            var mensaje = new IntegrationMessage
+            {
+                Type = "AjusteRegistrado", Kind = IntegrationMessageKind.Business, OriginModule = "INV", OriginKind = MessageOriginKind.Document,
+                OriginPublicId = Guid.NewGuid(), OriginDocumentTypeCode = tipo, OriginEventKey = Guid.NewGuid().ToString("N"),
+                ChainRootPublicId = Guid.NewGuid(), OperationDate = fecha, BranchPublicId = Guid.NewGuid(), PayloadJson = "{}", PayloadSha256 = "x",
+                OriginUserCentralId = Guid.NewGuid(), OriginUserName = "bodega@demo", EmittedAt = ContabilidadTestData.Ahora, CreatedBy = "test",
+            };
+            D.Db.IntegrationMessages.Add(mensaje);
+            D.Db.SaveChanges();
+            D.Db.IntegrationMessageDeliveries.Add(new IntegrationMessageDelivery
+            {
+                MessageId = mensaje.Id, Destination = destino, Mode = DeliveryMode.Online, Status = estado, CreatedBy = "test",
+            });
+            D.Db.SaveChanges();
         }
 
         public ClosePeriodCommandHandler Cerrador() => new(D.Db, D.Clock, D.User, Emisor);
@@ -108,5 +131,54 @@ public class PeriodCommandsTests
         r.Value.Periods.Should().HaveCount(12).And.OnlyContain(p => p.Status == "Open");
         (await abridor.Handle(new OpenFiscalYearCommand(2027), CancellationToken.None)).Error.Code.Should().Be("Accounting.FiscalYear.AlreadyExists");
         (await abridor.Handle(new OpenFiscalYearCommand(2030), CancellationToken.None)).Error.Code.Should().Be("Accounting.FiscalYear.NotFound");
+    }
+
+    // ---- feature 012, I2 (T459; contracts/contabilidad.md §8): aviso de mensajes de Inventario antes del cierre ----
+
+    [Fact]
+    public async Task Cerrar_con_mensajes_de_inventario_pendientes_exige_reconocerlos()
+    {
+        var e = new Escenario();
+        e.Entrega(new DateOnly(2026, 3, 5), DeliveryStatus.Pending, "AJ");
+        e.Entrega(new DateOnly(2026, 3, 2), DeliveryStatus.InBatch, "TR");
+        e.Entrega(new DateOnly(2026, 3, 9), DeliveryStatus.Rejected, "AJ");
+        e.Entrega(new DateOnly(2026, 3, 9), DeliveryStatus.InBatch, "AJ");
+        // No cuentan: lo que no pasa, lo ya procesado, otro mes y otro destino.
+        e.Entrega(new DateOnly(2026, 3, 1), DeliveryStatus.NotApplicable, "CO");
+        e.Entrega(new DateOnly(2026, 3, 1), DeliveryStatus.Processed, "CO");
+        e.Entrega(new DateOnly(2026, 4, 1), DeliveryStatus.Pending, "CO");
+        e.Entrega(new DateOnly(2026, 3, 1), DeliveryStatus.Pending, "CO", IntegrationDestinations.Lending);
+
+        var sinReconocer = await e.Cerrador().Handle(new ClosePeriodCommand(2026, 3), CancellationToken.None);
+
+        sinReconocer.IsFailure.Should().BeTrue();
+        sinReconocer.Error.Code.Should().Be("Accounting.Period.InventoryPending");
+        var datos = sinReconocer.Error.Should().BeOfType<ErrorConDatos>().Which.Data;
+        System.Text.Json.JsonSerializer.Serialize(datos, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+            .Should().Be("""{"pending":1,"inBatch":2,"rejected":1,"oldestOperationDate":"2026-03-02","types":["AJ","TR"]}""");
+        sinReconocer.Error.Message.Should().Contain("4");
+        (await e.D.Db.AccountingPeriods.SingleAsync(p => p.Month == 3)).Status.Should().Be(PeriodStatus.Open);
+
+        AuditEventDocument? evento = null;
+        e.Auditoria.AppendAsync(Arg.Do<AuditEventDocument>(d => evento = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        var reconocido = await e.Cerrador().Handle(new ClosePeriodCommand(2026, 3, AcknowledgeInventoryPending: true), CancellationToken.None);
+
+        reconocido.IsSuccess.Should().BeTrue(reconocido.Error?.Message);
+        (await e.D.Db.AccountingPeriods.SingleAsync(p => p.Month == 3)).Status.Should().Be(PeriodStatus.Closed);
+        evento.Should().NotBeNull();
+        evento!.Action.Should().Be("Accounting.Period.Closed");
+        evento.NewValuesJson.Should().Contain("\"inventoryPendingAcknowledged\":true").And.Contain("\"pending\":1").And.Contain("\"rejected\":1");
+    }
+
+    [Fact]
+    public async Task Lo_que_no_pasa_a_contabilidad_no_estorba_el_cierre()
+    {
+        var e = new Escenario();
+        e.Entrega(new DateOnly(2026, 3, 5), DeliveryStatus.NotApplicable);
+        e.Entrega(new DateOnly(2026, 3, 5), DeliveryStatus.Processed);
+
+        var r = await e.Cerrador().Handle(new ClosePeriodCommand(2026, 3), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error?.Message);
     }
 }

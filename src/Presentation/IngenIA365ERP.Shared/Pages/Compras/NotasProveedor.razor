@@ -76,6 +76,8 @@
                         <SfButton CssClass="e-primary" IconCss="e-icons e-check" OnClick="@ConfirmarAsync">Confirmar la nota</SfButton>
                     }
                 </div>
+                @* US7 (T539): lo que dijo Contabilidad antes de confirmar. *@
+                <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_borrador?.PublicId" />
                 @if (_borrador is { } b)
                 {
                     @if (b.Warnings.Count > 0) { <div class="aviso aviso-alerta"><ul>@foreach (var a in b.Warnings) { <li>@a.Message</li> }</ul></div> }
@@ -146,6 +148,7 @@
     private string? _prefijo, _numero, _cude, _motivoNota;
     private DateOnly? _emision = DateOnly.FromDateTime(DateTime.Today);
     private DocumentoDeInventarioDto? _borrador;
+    private ResultadoDeValidacionPrevia? _validacion;
 
     private bool PuedeGuardar => _proveedor is not null && _factura is not null && _tipo is not null && !string.IsNullOrWhiteSpace(_numero)
                                  && _lineasFactura.Any(l => l.Valor > 0m) && !_guardado.Activa;
@@ -209,9 +212,15 @@
     private async Task ConfirmarAsync()
     {
         if (_borrador is null) return;
+        if (_validacion is not null && !await _validacion.ValidarAsync()) return;
         using var guardado = _guardado.Iniciar();
         var r = await Compras.ConfirmarAsync(ComprasClient.Rutas.Notas, _borrador.PublicId, _borrador.RowVersion, _claveConfirmar);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la nota."); return; }
+        if (!r.IsSuccess || r.Value is null)
+        {
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la nota.");
+            return;
+        }
+        _validacion?.Limpiar();
         await Notification.SuccessAsync(r.Value.Status == 1 ? "La nota quedó en aprobación." : $"Nota {r.Value.DisplayNumber} registrada.");
         _borrador = null;
         _claveGuardar = new();

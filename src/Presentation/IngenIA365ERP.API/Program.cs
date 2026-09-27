@@ -227,6 +227,14 @@ try
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
 
+    // Feature 012, I2 (T527): el despachador de mensajes de integracion (en linea, lotes programados y ordenados) y la
+    // politica de reintentos que aplica RegisterDeliveryResultCommand, desde Integration:Retries (T10).
+    builder.Services.Configure<IngenIA365ERP.Application.Common.Integration.ReintentosDeIntegracion>(
+        builder.Configuration.GetSection($"{IngenIA365ERP.API.Integration.IntegrationOptions.SectionName}:Retries"));
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.DespachadorDeMensajes>();
+    if (integracion.Dispatcher.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.DespachadorDeMensajes>());
+
     builder.Services.AddSingleton(sp => new IngenIA365ERP.Storage.Services.NotificationEmailDispatcher(
         sp.GetRequiredService<IServiceScopeFactory>(),
         sp.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>(),

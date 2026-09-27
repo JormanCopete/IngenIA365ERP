@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Documents.Efectos;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -16,13 +17,15 @@ public interface IPasoFiscalDeConfirmacion
 
 /// <summary>
 /// Paso 5 del flujo canónico: la validación previa contable, fuera del cerrojo, sólo si el modo que se sellará no es
-/// <c>NotPosted</c>. La confirmación lo omite mientras no haya implementación registrada (I2 registra la que llama a
-/// <c>IContabilidadParaInventario.EvaluarAsync</c>); entonces <c>prevalidation.outcome = NotApplicable</c>. (nuevo)
+/// <c>NotPosted</c>. La confirmación lo omite mientras no haya implementación registrada; desde I2 la registrada es
+/// <c>ValidacionPreviaContable</c> (T520), que llama a <c>IContabilidadParaInventario.EvaluarAsync</c>. Recibe los sobres tal como
+/// se emitirían (<c>MensajesDelDocumento.Sobres</c>), con los costos provisionales. (nuevo)
 /// </summary>
 public interface IPasoDeValidacionPrevia
 {
     /// <summary>El resultado a sellar en los mensajes, o el error que deja el documento en borrador.</summary>
-    Task<Result<ResultadoDeValidacionPrevia>> EvaluarAsync(ContextoDeEfecto contexto, IReadOnlyList<object> contenidos, CancellationToken ct);
+    Task<Result<ResultadoDeValidacionPrevia>> EvaluarAsync(
+        ContextoDeEfecto contexto, IReadOnlyList<MensajeContableDto> mensajes, CancellationToken ct);
 }
 
 /// <summary>Lo que devuelve la validación previa: el desenlace y sus avisos. (nuevo)</summary>
