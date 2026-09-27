@@ -5,6 +5,8 @@ using IngenIA365ERP.Application.Inventory.Catalog;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Kardex;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Entities.Inventory.Pos;
+using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Entities.Inventory.Transactions;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -317,6 +319,273 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
             })
             .ToList();
     }
+
+    // -------------------------------------------------------------------------------------- ventas (US5) --
+
+    /// <summary>
+    /// <c>VentaFacturada</c> v1 de una venta (I3, T614; mensajes.md §6.1): ingresos por grupo contable y bodega (nula en servicios), la
+    /// foto de impuestos y retenciones (<paramref name="impuestos"/>: <c>Generated</c> y <c>WithholdingSuffered</c>), un
+    /// <see cref="PaymentLineV1"/> por pago <c>Received</c> y los totales. Sin costo. Invariantes (§6.1): Σ bruto = subtotal, Σ descuentos,
+    /// Σ impuestos generados = taxTotal, Σ retenciones = withholdingTotal, Σ pagos = amountDue.
+    /// </summary>
+    public async Task<VentaFacturadaV1> VentaFacturadaAsync(InventoryDocument documento, IReadOnlyList<DocumentTaxLine> impuestos,
+        IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
+    {
+        var caja = await DeCajaAsync(documento, ct);
+        var canal = documento.SalesChannelId is int c ? await db.SalesChannels.AsNoTracking().Where(x => x.Id == c).Select(x => x.Code).FirstOrDefaultAsync(ct) : null;
+        return new VentaFacturadaV1
+        {
+            SalesChannelCode = canal,
+            PointOfSaleCode = caja.PointOfSaleCode,
+            CashRegisterCode = caja.CashRegisterCode,
+            CashSessionPublicId = caja.CashSessionPublicId,
+            Lines = await LineasDeVentaAsync(documento, ct),
+            Taxes = await RenglonesDeImpuestoAsync(documento, impuestos, ct),
+            Payments = await LineasDePagoAsync(documento, pagos.Where(p => p.Direction == PaymentDirection.Received).ToList(), ct),
+            Totals = Totales(documento),
+        };
+    }
+
+    /// <summary><c>CostoDeVentaReconocido</c> v1 (§6.2): cantidades y costo de lo que salió, <c>movement = Exit</c>, sin base ni impuestos.</summary>
+    public async Task<CostoDeVentaReconocidoV1> CostoDeVentaAsync(InventoryDocument documento, IReadOnlyList<KardexEntry> kardex, CancellationToken ct)
+    {
+        var caja = await DeCajaAsync(documento, ct);
+        return new CostoDeVentaReconocidoV1
+        {
+            PointOfSaleCode = caja.PointOfSaleCode,
+            CashSessionPublicId = caja.CashSessionPublicId,
+            Lines = await LineasDeCostoAsync(documento, kardex.Where(k => k.Kind != KardexEntryKind.Entry).ToList(), KardexEntryKind.Exit, ct),
+        };
+    }
+
+    /// <summary>
+    /// <c>NotaCreditoEmitida</c> v1 (§6.11): lo que se acredita por grupo y bodega, los impuestos con la foto del original en proporción,
+    /// los reintegros (<c>Refunded</c>) y los totales, con la marca de anulación total y de devolución.
+    /// </summary>
+    public async Task<NotaCreditoEmitidaV1> NotaCreditoAsync(InventoryDocument nota, IReadOnlyList<DocumentTaxLine> impuestos,
+        IReadOnlyList<DocumentPayment> reintegros, CancellationToken ct)
+    {
+        var caja = await DeCajaAsync(nota, ct);
+        return new NotaCreditoEmitidaV1
+        {
+            IsTotalVoid = nota.IsFullReversal,
+            WithReturn = nota.ReturnsGoods,
+            PointOfSaleCode = caja.PointOfSaleCode,
+            CashSessionPublicId = caja.CashSessionPublicId,
+            Lines = await LineasDeVentaAsync(nota, ct),
+            Taxes = await RenglonesDeImpuestoAsync(nota, impuestos, ct),
+            Payments = await LineasDePagoAsync(nota, reintegros.Where(p => p.Direction == PaymentDirection.Refunded).ToList(), ct),
+            Totals = Totales(nota),
+        };
+    }
+
+    /// <summary><c>DevolucionRegistrada</c> v1 de una devolución de cliente (§6.8): <c>Entry</c> al costo con que salió.</summary>
+    public async Task<DevolucionRegistradaV1> DevolucionDeClienteAsync(InventoryDocument nota, IEnumerable<KardexEntry> kardex, CancellationToken ct) => new()
+    {
+        Operation = "DevolucionDeCliente",
+        Lines = await LineasDeCostoAsync(nota, kardex.Where(k => k.Kind == KardexEntryKind.Entry).ToList(), KardexEntryKind.Entry, ct),
+    };
+
+    // --------------------------------------------------------------------------------------- caja (US5) --
+
+    /// <summary>
+    /// <c>MovimientoDeCajaRegistrado</c> v1 (§6.14): el medio que se mueve (o el que sale, en una reclasificación), la caja y la sesión,
+    /// el destino (la <c>ReasonCode</c> del rol <c>CajaDestino</c>) y, con <c>Register</c>, la caja y la sesión que reciben.
+    /// </summary>
+    public async Task<MovimientoDeCajaRegistradoV1> MovimientoDeCajaAsync(InventoryDocument documento, CashMovementDetail detalle, CancellationToken ct)
+    {
+        var medios = await db.PaymentMeans.AsNoTracking().Where(m => m.Id == detalle.SourcePaymentMeansId || m.Id == detalle.TargetPaymentMeansId)
+            .ToDictionaryAsync(m => m.Id, m => new { m.Code, m.Class }, ct);
+        var sesiones = await db.CashSessions.AsNoTracking().Where(s => s.Id == detalle.CashSessionId || s.Id == detalle.DestinationCashSessionId)
+            .Select(s => new { s.Id, s.PublicId, s.CashRegisterId, s.PointOfSaleId }).ToDictionaryAsync(s => s.Id, ct);
+        var origen = sesiones[detalle.CashSessionId];
+        var cajas = await db.CashRegisters.AsNoTracking().Where(r => r.Id == origen.CashRegisterId || r.Id == detalle.DestinationCashRegisterId)
+            .Select(r => new { r.Id, r.Code, r.PointOfSaleId }).ToDictionaryAsync(r => r.Id, ct);
+        var puntosIds = cajas.Values.Select(r => r.PointOfSaleId).Append(origen.PointOfSaleId).Distinct().ToList();
+        var puntos = await db.PointsOfSale.AsNoTracking().Where(p => puntosIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Code, ct);
+        var destino = detalle.DestinationCashRegisterId is int dc && cajas.TryGetValue(dc, out var cajaDestino) ? cajaDestino : null;
+        return new MovimientoDeCajaRegistradoV1
+        {
+            MovementKind = detalle.Kind,
+            PaymentMeansCode = medios[detalle.SourcePaymentMeansId].Code,
+            PaymentMeansClass = medios[detalle.SourcePaymentMeansId].Class,
+            DestinationPaymentMeansCode = detalle.TargetPaymentMeansId is int t && medios.TryGetValue(t, out var aDonde) ? aDonde.Code : null,
+            PointOfSaleCode = puntos.GetValueOrDefault(origen.PointOfSaleId) ?? string.Empty,
+            CashRegisterCode = cajas.TryGetValue(origen.CashRegisterId, out var caja) ? caja.Code : string.Empty,
+            CashSessionPublicId = origen.PublicId,
+            Destination = detalle.Destination,
+            DestinationPointOfSaleCode = destino is null ? null : puntos.GetValueOrDefault(destino.PointOfSaleId),
+            DestinationCashRegisterCode = destino?.Code,
+            DestinationCashSessionPublicId = detalle.DestinationCashSessionId is int ds && sesiones.TryGetValue(ds, out var recibe) ? recibe.PublicId : null,
+            Amount = detalle.Amount,
+            Reason = documento.Reason ?? string.Empty,
+        };
+    }
+
+    /// <summary>
+    /// <c>DiferenciaDeArqueoAprobada</c> v1 (§6.15): una línea por medio con diferencia —también la aceptada dentro de la tolerancia—, con
+    /// lo esperado, lo contado, la tolerancia copiada y el tratamiento; el cajero con su persona (obligatoria si hay
+    /// <c>ShortageToCashier</c>) y la aprobación si la hubo. <c>Difference = Counted − Expected</c>.
+    /// </summary>
+    public async Task<DiferenciaDeArqueoAprobadaV1> DiferenciaDeArqueoAsync(InventoryDocument documento, IReadOnlyList<CashDocumentLine> lineas,
+        ApprovalRefV1? aprobacion, Guid? cajeroCentralUserId, CancellationToken ct)
+    {
+        var sesionId = documento.CashSessionId ?? throw new InvalidOperationException("La diferencia de arqueo lleva su sesión de caja.");
+        var sesion = await db.CashSessions.AsNoTracking().FirstAsync(s => s.Id == sesionId, ct);
+        var caja = await db.CashRegisters.AsNoTracking().Where(r => r.Id == sesion.CashRegisterId).Select(r => r.Code).FirstAsync(ct);
+        var punto = await db.PointsOfSale.AsNoTracking().Where(p => p.Id == sesion.PointOfSaleId).Select(p => p.Code).FirstAsync(ct);
+        var conteoIds = lineas.Select(l => l.CashCountLineId).Distinct().ToList();
+        var conteos = await db.CashCountLines.AsNoTracking().Where(l => conteoIds.Contains(l.Id)).ToDictionaryAsync(l => l.Id, ct);
+        var medioIds = lineas.Select(l => l.PaymentMeansId).Distinct().ToList();
+        var medios = await db.PaymentMeans.AsNoTracking().Where(m => medioIds.Contains(m.Id)).ToDictionaryAsync(m => m.Id, m => new { m.Code, m.Class }, ct);
+        var personaId = lineas.Select(l => l.CashierPersonId).FirstOrDefault(p => p is not null) ?? sesion.CashierPersonId;
+        Guid? persona = personaId is int pid ? await db.People.AsNoTracking().Where(p => p.Id == pid).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct) : null;
+        if (persona is null && lineas.Any(l => l.Treatment == CashDifferenceTreatment.ShortageToCashier))
+            throw new InvalidOperationException("Un faltante a cargo del cajero exige la persona del cajero (T50).");
+
+        return new DiferenciaDeArqueoAprobadaV1
+        {
+            PointOfSaleCode = punto,
+            CashRegisterCode = caja,
+            CashSessionPublicId = sesion.PublicId,
+            Cashier = new CashierV1 { CentralUserId = cajeroCentralUserId, PersonPublicId = persona, Name = sesion.CashierName },
+            Approval = aprobacion,
+            Lines = lineas.OrderBy(l => l.LineNumber).Select(l =>
+            {
+                var conteo = conteos.GetValueOrDefault(l.CashCountLineId);
+                return new CashCountDifferenceLineV1
+                {
+                    PaymentMeansCode = medios[l.PaymentMeansId].Code,
+                    PaymentMeansClass = medios[l.PaymentMeansId].Class,
+                    CountMethod = conteo?.CountMethod ?? CashCountMethod.PhysicalCount,
+                    Expected = conteo?.ExpectedAmount ?? 0m,
+                    Counted = conteo?.CountedAmount ?? 0m,
+                    Difference = conteo?.DifferenceAmount ?? l.Sign * l.Amount,
+                    ToleranceAmount = conteo?.ToleranceAmount ?? 0m,
+                    WithinTolerance = l.WithinTolerance,
+                    Treatment = l.Treatment,
+                    Reason = l.Reason,
+                };
+            }).ToList(),
+        };
+    }
+
+    // ------------------------------------------------------------------------------------- apoyo de ventas --
+
+    /// <summary>El punto, la caja y la sesión del documento (la <c>BatchScopeKey</c> de <c>CierreDeTurno</c>), si los tiene.</summary>
+    private async Task<(string? PointOfSaleCode, string? CashRegisterCode, Guid? CashSessionPublicId)> DeCajaAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        var punto = documento.PointOfSaleId is int p ? await db.PointsOfSale.AsNoTracking().Where(x => x.Id == p).Select(x => x.Code).FirstOrDefaultAsync(ct) : null;
+        var caja = documento.CashRegisterId is int c ? await db.CashRegisters.AsNoTracking().Where(x => x.Id == c).Select(x => x.Code).FirstOrDefaultAsync(ct) : null;
+        Guid? sesion = documento.CashSessionId is int s ? await db.CashSessions.AsNoTracking().Where(x => x.Id == s).Select(x => (Guid?)x.PublicId).FirstOrDefaultAsync(ct) : null;
+        return (punto, caja, sesion);
+    }
+
+    /// <summary>Las <see cref="SalesAmountLineV1"/>: por grupo contable a la fecha y bodega (nula en servicios), sin impuestos.</summary>
+    private async Task<IReadOnlyList<SalesAmountLineV1>> LineasDeVentaAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        var vivas = documento.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
+        if (vivas.Count == 0) return [];
+        var productoIds = vivas.Select(l => l.ProductId).Distinct().ToList();
+        var servicios = (await db.Products.AsNoTracking().Where(p => productoIds.Contains(p.Id) && p.Kind == ProductKind.Service).Select(p => p.Id).ToListAsync(ct)).ToHashSet();
+        var (grupos, bodegas) = await DimensionesAsync(productoIds, documento.WarehouseId is int w ? [w] : [], documento.OperationDate, ct);
+        string? bodega = documento.WarehouseId is int b && bodegas.TryGetValue(b, out var d) ? d.Code : null;
+        return vivas
+            .GroupBy(l => (Grupo: grupos.GetValueOrDefault(l.ProductId) ?? string.Empty, Bodega: servicios.Contains(l.ProductId) ? null : bodega))
+            .OrderBy(g => g.Key.Grupo, StringComparer.Ordinal).ThenBy(g => g.Key.Bodega ?? string.Empty, StringComparer.Ordinal)
+            .Select(g => new SalesAmountLineV1
+            {
+                AccountingGroupCode = g.Key.Grupo,
+                WarehouseCode = g.Key.Bodega,
+                GrossAmount = g.Sum(l => l.GrossAmount),
+                DiscountAmount = g.Sum(l => l.DiscountAmount),
+                NetAmount = g.Sum(l => l.NetAmount),
+                DocumentLines = g.Select(l => l.LineNumber).Order().ToList(),
+            })
+            .ToList();
+    }
+
+    /// <summary>Los <see cref="TaxLineV1"/> de la foto: uno por impuesto, tarifa, tratamiento, concepto y municipio.</summary>
+    private async Task<IReadOnlyList<TaxLineV1>> RenglonesDeImpuestoAsync(InventoryDocument documento, IReadOnlyList<DocumentTaxLine> impuestos, CancellationToken ct)
+    {
+        if (impuestos.Count == 0) return [];
+        var definiciones = impuestos.Select(r => r.TaxDefinitionId).Distinct().ToList();
+        var codigos = await db.TaxDefinitions.AsNoTracking().Where(t => definiciones.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Code, ct);
+        var conceptosIds = impuestos.Select(r => r.WithholdingConceptId).OfType<int>().Distinct().ToList();
+        var conceptos = await db.WithholdingConcepts.AsNoTracking().Where(c => conceptosIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Code, ct);
+        var numeroDeLinea = documento.Lines.Where(l => l.Id != 0).ToDictionary(l => l.Id, l => l.LineNumber);
+        return impuestos
+            .GroupBy(r => (r.TaxDefinitionId, r.TaxRateCode, r.Treatment, r.WithholdingConceptId, r.MunicipalityDaneCode, r.Kind, r.Rate, r.AmountPerUnit))
+            .Select(g => new TaxLineV1
+            {
+                TaxCode = codigos.GetValueOrDefault(g.Key.TaxDefinitionId) ?? string.Empty,
+                TaxKind = g.Key.Kind,
+                TaxRateCode = g.Key.TaxRateCode,
+                Rate = g.Key.Rate,
+                AmountPerUnit = g.Key.AmountPerUnit,
+                TaxableUnits = g.Key.AmountPerUnit is null ? null : g.Sum(r => r.TaxableUnits ?? 0m),
+                Treatment = g.Key.Treatment,
+                TaxableBase = g.Sum(r => r.Base),
+                Amount = g.Sum(r => r.Amount),
+                WithholdingConceptCode = g.Key.WithholdingConceptId is int c ? conceptos.GetValueOrDefault(c) : null,
+                MunicipalityDaneCode = g.Key.MunicipalityDaneCode,
+                DocumentLines = g.Select(r => r.DocumentLineId is int li && numeroDeLinea.TryGetValue(li, out var n) ? n : 0).Where(n => n > 0).Distinct().Order().ToList(),
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Un <see cref="PaymentLineV1"/> por pago, con el tercero natural según la clase del medio (§5): el adquirente en tarjetas, el banco en
+    /// consignaciones y transferencias, el cliente en créditos; nulo en efectivo y bonos. Nunca el número de la tarjeta.
+    /// </summary>
+    private async Task<IReadOnlyList<PaymentLineV1>> LineasDePagoAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
+    {
+        if (pagos.Count == 0) return [];
+        var adquirentes = pagos.Select(p => p.CardAcquirerPersonId).OfType<int>().Distinct().ToList();
+        var bancos = pagos.Select(p => p.BankId).OfType<int>().Distinct().ToList();
+        var personasDeBanco = await db.Banks.AsNoTracking().Where(b => bancos.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PersonId, ct);
+        var personas = adquirentes.Concat(personasDeBanco.Values.OfType<int>()).Concat(documento.CounterpartyPersonId is int c ? [c] : []).Distinct().ToList();
+        var publicos = await db.People.AsNoTracking().Where(p => personas.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
+        var terminalIds = pagos.Select(p => p.CardTerminalId).OfType<int>().Distinct().ToList();
+        var terminales = await db.CardTerminals.AsNoTracking().Where(t => terminalIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Code, ct);
+
+        return pagos.OrderBy(p => p.LineNumber).Select(p =>
+        {
+            int? tercero = p.MeansClass switch
+            {
+                PaymentMeansClass.CreditCard or PaymentMeansClass.DebitCard => p.CardAcquirerPersonId,
+                PaymentMeansClass.BankDeposit or PaymentMeansClass.Transfer => p.BankId is int b ? personasDeBanco.GetValueOrDefault(b) : null,
+                PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit => documento.CounterpartyPersonId,
+                _ => null,
+            };
+            return new PaymentLineV1
+            {
+                PaymentPublicId = p.PublicId,
+                LineNumber = p.LineNumber,
+                PaymentMeansCode = p.MeansCode,
+                PaymentMeansClass = p.MeansClass,
+                Direction = p.Direction,
+                Amount = p.Amount,
+                Reference = p.NormalizedReference ?? p.Reference,
+                ThirdPartyPersonPublicId = tercero is int t && publicos.TryGetValue(t, out var g) ? g : null,
+                CardNetworkCode = p.CardNetworkCode,
+                CardAcquirerCode = p.CardAcquirerCode,
+                CardTerminalCode = p.CardTerminalId is int ti ? terminales.GetValueOrDefault(ti) : null,
+                BatchNumber = p.TerminalBatchNumber,
+                PendingValidation = p.PendingValidation,
+            };
+        }).ToList();
+    }
+
+    private static SalesTotalsV1 Totales(InventoryDocument documento) => new()
+    {
+        Subtotal = documento.Subtotal,
+        DiscountTotal = documento.DiscountTotal,
+        TaxTotal = documento.TaxTotal,
+        WithholdingTotal = documento.WithholdingTotal,
+        Total = documento.Total,
+        AmountDue = documento.AmountDue,
+    };
 
     // ---------------------------------------------------------------------------------------- anulación --
 

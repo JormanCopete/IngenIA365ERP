@@ -176,6 +176,9 @@ public static class AuditEventTypes
     public const string InventoryDocumentDelivered = "Inventory.Document.Delivered";
     public const string InventoryDocumentReprinted = "Inventory.Document.Reprinted";
 
+    // Feature 012, I3 (T612): el reintegro de una nota por un medio que no fue de la venta (Inventory.Sales.RefundOtherMeans).
+    public const string InventorySalesRefundOtherMeans = "Inventory.Sales.RefundOtherMeans";
+
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el
     // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.

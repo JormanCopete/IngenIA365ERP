@@ -260,6 +260,22 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Sales.RegistroDePagos>();
         services.AddScoped<Inventory.Sales.ConstructorDeTirilla>();
         services.AddScoped<Inventory.Sales.EntregaDeDocumentos>();
+        // Feature 012, I3 (T608-T615): la guardia fiscal (versión mínima de I3), el borrador y las reglas de las ventas de oficina, las
+        // notas, las estrategias de las clases de venta (su anulación no tiene estrategia propia: AnulacionDeVenta), la alerta de venta
+        // bajo costo después del guardado y el retiro gravado.
+        services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
+        services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
+        services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Sales.BorradorDeVenta>();
+        services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Sales.AlertaDeVentaBajoCosto>();
+        services.AddScoped<Inventory.Documents.Efectos.AnulacionDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.RetiroGravado>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoFacturaDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDocumentoEquivalentePos>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoComprobanteDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaCreditoDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeAjustePos>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeVentaNoElectronica>();
         // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
         services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();

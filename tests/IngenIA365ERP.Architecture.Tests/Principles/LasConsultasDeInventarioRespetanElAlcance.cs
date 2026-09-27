@@ -72,6 +72,9 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "GetIntegrationMessageQueryHandler",
         "MessagesReportQueryHandler",
         "AccountingBatchesReportQueryHandler",
+        // Fase 13, US5 (I3; T613): la lista y el detalle de los documentos de venta (por la bodega o el punto de venta).
+        "ListSalesDocumentsQueryHandler",
+        "GetSalesDocumentQueryHandler",
     ];
 
     [Fact]

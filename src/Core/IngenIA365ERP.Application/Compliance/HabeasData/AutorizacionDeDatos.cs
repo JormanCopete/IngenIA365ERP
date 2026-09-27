@@ -18,7 +18,8 @@ public sealed class AutorizacionDeDatos(
     IApplicationDbContext db,
     ICurrentUserService usuario,
     IDateTimeService reloj,
-    IAuditService auditoria) : IAutorizacionDeDatos
+    IAuditService auditoria,
+    IngenIA365ERP.Application.Common.Alerts.IAlertas? alertas = null) : IAutorizacionDeDatos
 {
     /// <summary>La constancia del alta sin política publicada.</summary>
     public const string SinPoliticaVigente = "sin política vigente";
@@ -89,10 +90,28 @@ public sealed class AutorizacionDeDatos(
         return consentimiento;
     }
 
-    /// <summary>La constancia «sin política vigente» de un alta ya guardada (evento explícito de auditoría).</summary>
-    public Task DejarConstanciaSinPoliticaAsync(Person persona, AutorizacionResuelta autorizacion, CancellationToken ct) =>
-        auditoria.LogAsync(AuditEventTypes.PersonDataAuthorizationNoCurrentPolicy, "Person", persona.PublicId.ToString(), null,
+    /// <summary>
+    /// La constancia «sin política vigente» de un alta ya guardada (evento explícito de auditoría) y, desde I3 (T616, T46), la alerta
+    /// <c>Personas.SinPoliticaDeDatos</c> a quien registra consentimientos (<c>Compliance.HabeasData.RecordConsent</c>): una por alta;
+    /// mientras siga pendiente, las siguientes suman ocurrencias. Vale para toda alta con autorización —POS, Compras y los compuestos
+    /// <c>with-person</c>—, porque todas pasan por aquí.
+    /// </summary>
+    public async Task DejarConstanciaSinPoliticaAsync(Person persona, AutorizacionResuelta autorizacion, CancellationToken ct)
+    {
+        await auditoria.LogAsync(AuditEventTypes.PersonDataAuthorizationNoCurrentPolicy, "Person", persona.PublicId.ToString(), null,
             new { constancia = SinPoliticaVigente, decision = autorizacion.Decision.ToString(), channel = autorizacion.Channel }, ct);
+        if (alertas is null) return;
+        await alertas.LevantarAsync(new IngenIA365ERP.Application.Common.Alerts.AlertaALevantar(
+            IngenIA365ERP.Application.Common.Alerts.TiposDeAlerta.SinPoliticaDeDatos,
+            "Alta de persona sin política de tratamiento de datos",
+            "Se dio de alta una persona sin política de tratamiento de datos publicada: publíquela en Cumplimiento › Habeas Data y registre la autorización del titular.",
+            "Person", persona.PublicId,
+            DedupKey: IngenIA365ERP.Application.Common.Alerts.TiposDeAlerta.SinPoliticaDeDatos,
+            RecipientPermissions: [PermisoDeConsentimiento]), ct);
+    }
+
+    /// <summary>Quien recibe la alerta de alta sin política (T46).</summary>
+    public const string PermisoDeConsentimiento = "Compliance.HabeasData.RecordConsent";
 
     public async Task<AutorizacionVigente?> VigenteAsync(Guid personPublicId, CancellationToken ct)
     {

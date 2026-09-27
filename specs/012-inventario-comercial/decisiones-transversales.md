@@ -1709,6 +1709,32 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     **valor** de sus descuentos y la que cambió de cantidad por su **fracción**; las filas de descuento iguales se **conservan** (su
     `PublicId` es la fuente de la aprobación); el descuento por total se conserva en pesos; la primera entrega se sabe por el evento
     `Inventory.Document.Delivered` con su `Format` (en I3 no hay columna; I4 usa `COR_ElectronicDocuments.DeliveredAt`).
+- **I3, ventas y notas de oficina (T608–T616) (nuevo)**: en `Application/ElectronicInvoicing`, `GuardiaDeEmisionFiscal` con
+    `EvaluarAsync(fecha, tipoDeDocumento, caja?)` y la regla pura `Evaluar(obligada, clase)`, `VeredictoFiscal { Electronic,
+    NonElectronic, Blocked }`, `EvaluacionFiscal { Veredicto, ClasesAdmitidas, Motivos, Canal?, Resolucion? }` y `MotivoDeBloqueoFiscal`
+    (motivo de I3 `ElectronicInvoicing.I4NotActive`). En `Application/Inventory/Sales`: `SalesDraftInput`, `SalesLineInput`,
+    `SalesDiscountInput` (`percent` es **fracción**, como en el POS) con `ComoBorrador()`; `DatosDeVentaDelBorrador`, que viaja en
+    `SaveInventoryDraftRequest.Sales` (sólo lo admite el grupo `Sales`); `BorradorDeVenta : IBorradorDeGrupo`;
+    `ReglasDeConfirmacionDeVenta.{TotalCambioAsync, ValidarVentaAsync, AlConfirmarVentaAsync, ValidarNotaAsync, AlConfirmarNotaAsync,
+    ImpuestosDeAsync, PagosDeAsync, MedioNoDisponibleAsync, PermisoOtroMedio}`; `CalculoTributarioDeVenta` (el motor en perspectiva de
+    venta sobre las líneas ya precificadas; la base excluye el residuo de una lista con impuestos); `AlertaDeVentaBajoCosto :
+    IAvisoAlConfirmar`; `CreditNoteDraftInput`, `CreditNoteLineInput`, `SaveCreditNoteDraftCommand`; `NotasDeVenta.{ClaseDeNota, EsNota,
+    OriginalDeAsync, RestantesAsync, ExcesoAsync, ImpuestosAsync}`; `ErroresDeVentas`; `ListSalesDocumentsQuery`,
+    `GetSalesDocumentQuery` y sus DTO (`SalesDocumentSummaryDto`, `SalesPaymentSummaryDto`, `SalesDocumentDto`, `SalesCounterpartyDto`,
+    `SalesLineDto`, `SalesLineDiscountDto`, `SalesDiscountApprovalDto`, `SalesTaxDto`, `SalesTotalsDto`, `DocumentPaymentDto`,
+    `SalesMessageDto`, `SalesLinksDto`, `SalesIssueDto`). En `Documents/Efectos`: `SalidaPorVenta` (`EfectoFacturaDeVenta`,
+    `EfectoDocumentoEquivalentePos`, `EfectoComprobanteDeVenta`), `DevolucionDeCliente` (`EfectoNotaCreditoDeVenta`,
+    `EfectoNotaDeAjustePos`, `EfectoNotaDeVentaNoElectronica`), `AnulacionDeVenta` (la anulación no tiene estrategia propia),
+    `ReglasDeLineasDeVenta` y `RetiroGravado` (T615). En el ciclo común: `IAvisoAlConfirmar` (aviso después del guardado de la
+    confirmación), `ConfirmInventoryDocumentCommand.ExpectedAmountDue { init; }` y el parámetro opcional
+    `EfectosDeClase(…, entregaVigente)` para probar una entrega posterior sin subir la del despliegue. En `EmisionDeInventario`:
+    `VentaFacturadaAsync`, `CostoDeVentaAsync`, `NotaCreditoAsync`, `DevolucionDeClienteAsync`, `MovimientoDeCajaAsync`,
+    `DiferenciaDeArqueoAsync`. Evento de auditoría `Inventory.Sales.RefundOtherMeans`. Errores nuevos:
+    `Inventory.CreditNote.{OriginInvalid, CorrectionConceptRequired}`; `Inventory.Document.FiscalUseCorrection` lleva `data {
+    correctionClass, route, totalVoid }` en ventas. Decisiones: la nota **deriva** de la venta que corrige (copia su modo y la nombra
+    como relacionada); lo que queda por acreditar es cantidad = original − `ReturnOf` vivos y valor = neto original − `NoteOf` vivos; los
+    reintegros por defecto van por los medios de la venta en proporción (residuo al mayor); las reglas de venta las llaman las
+    estrategias, así rigen igual en oficina y en el cobro del POS.
 
 ### 2.17 Códigos de error principales (familias)
 

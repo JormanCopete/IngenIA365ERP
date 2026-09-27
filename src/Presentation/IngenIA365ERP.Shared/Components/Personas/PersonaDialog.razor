@@ -12,7 +12,7 @@
     vigente y registra la decisión del titular junto con la persona (o el aviso «sin política vigente»).
 *@
 
-<SfDialog @bind-Visible="Visible" Header="@Titulo" Width="900px" IsModal="true" ShowCloseIcon="true">
+<SfDialog @bind-Visible="Visible" Header="@Titulo" Width="@(Compacto ? "640px" : "900px")" IsModal="true" ShowCloseIcon="true">
     <DialogEvents Opened="@OnAbiertoAsync" Closed="@OnCerrado" />
     <DialogTemplates>
         <Content>
@@ -20,7 +20,7 @@
                 <EditForm Model="_modelo" OnValidSubmit="GuardarAsync">
                     <DataAnnotationsValidator />
                     @* «Registrar como…» sólo tiene sentido con una persona ya guardada. *@
-                    <PersonaFormulario Modelo="@_modelo" Ciudades="@_ciudades"
+                    <PersonaFormulario Modelo="@_modelo" Ciudades="@_ciudades" Compacto="@Compacto"
                                        RolesRegistrables="@(_modelo.PublicId is null ? [] : RolesRegistrables)"
                                        OnRegistrarRol="@RegistrarRolAsync" />
                     <button type="submit" class="oculto"></button>
@@ -106,6 +106,12 @@
 
     /// <summary>Canal que queda en el consentimiento (<c>Pos</c>, <c>Compras</c>…); sin él, «InPerson».</summary>
     [Parameter] public string? CanalDeAutorizacion { get; set; }
+
+    /// <summary>
+    /// Feature 012 (T616): el modo compacto para el alta de cliente desde el POS (<c>ClienteDelPos</c>): sin pestañas, sólo
+    /// identificación, contacto y datos tributarios, y con la autorización de datos si <see cref="CapturarAutorizacion"/>.
+    /// </summary>
+    [Parameter] public bool Compacto { get; set; }
 
     /// <summary>Se guardó (creación o edición); el argumento es el PublicId de la persona.</summary>
     [Parameter] public EventCallback<Guid> OnGuardado { get; set; }

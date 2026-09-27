@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
 
@@ -15,9 +16,17 @@ namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 public sealed class EfectosDeClase
 {
     private readonly IReadOnlyDictionary<DocumentClass, IEfectoDeClase> _porClase;
+    private readonly EntregaDelComercio _entrega;
 
-    public EfectosDeClase(IEnumerable<IEfectoDeClase> efectos)
+    /// <param name="efectos">Las estrategias registradas.</param>
+    /// <param name="entregaVigente">
+    /// La entrega contra la que se decide si una clase opera; por defecto, la del despliegue
+    /// (<see cref="CatalogoDeParametros.EntregaVigente"/>). Las pruebas de una entrega posterior (I3: ventas) la fijan aquí sin
+    /// cambiar la del despliegue. (nuevo)
+    /// </param>
+    public EfectosDeClase(IEnumerable<IEfectoDeClase> efectos, EntregaDelComercio entregaVigente = CatalogoDeParametros.EntregaVigente)
     {
+        _entrega = entregaVigente;
         var porClase = new Dictionary<DocumentClass, IEfectoDeClase>();
         foreach (var efecto in efectos)
         {
@@ -31,7 +40,7 @@ public sealed class EfectosDeClase
 
     /// <summary>¿Hay estrategia registrada y la clase es operable en este despliegue?</summary>
     public bool Opera(DocumentClass clase) =>
-        _porClase.ContainsKey(clase) && ClasesDeDocumento.De(clase).Operable();
+        _porClase.ContainsKey(clase) && ClasesDeDocumento.De(clase).Operable(_entrega);
 
     /// <summary>
     /// La estrategia de <paramref name="clase"/>; para una anulación, pasar la clase del <b>original</b>. Sin estrategia o

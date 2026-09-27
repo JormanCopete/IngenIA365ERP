@@ -63,7 +63,8 @@ public sealed class ConfirmacionDeDocumento(
     IEnumerable<IPasoDeValidacionPrevia> validacionesPrevias,
     Counts.BloqueoPorConteo? bloqueoPorConteo = null,
     Replenishment.AvisoDeReposicionAlConfirmar? avisoDeReposicion = null,
-    MensajesDelDocumento? mensajesDelDocumento = null)
+    MensajesDelDocumento? mensajesDelDocumento = null,
+    IEnumerable<IAvisoAlConfirmar>? avisosAlConfirmar = null)
 {
     private readonly MensajesDelDocumento _mensajes = mensajesDelDocumento ?? new MensajesDelDocumento(db, parametros);
 
@@ -226,6 +227,8 @@ public sealed class ConfirmacionDeDocumento(
         // US17 (T953): con el kardex ya escrito, las salidas que dejaron la posición en o bajo el punto de reorden avisan en
         // warnings[] y levantan Inventario.Reorden / Inventario.Quiebre en esta misma transacción. Nunca bloquea.
         IReadOnlyList<AvisoDto> avisos = avisoDeReposicion is null ? [] : await avisoDeReposicion.AvisarAsync(documento, ct);
+        // I3 (T611): los avisos de la clase después del guardado (la venta bajo costo con «Alertar»); nunca bloquean.
+        foreach (var aviso in avisosAlConfirmar ?? []) avisos = [.. avisos, .. await aviso.AvisarAsync(documento, ct)];
         if (validacion.Outcome == PrevalidationOutcome.NoResponse) avisos = [.. validacion.Warnings, .. avisos];
 
         var mensajes = await vista.TieneAsync(PermisosDeGrupo.VerMensajes, ct)

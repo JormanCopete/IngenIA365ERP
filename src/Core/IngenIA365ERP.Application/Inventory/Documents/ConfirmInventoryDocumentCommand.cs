@@ -18,6 +18,12 @@ public sealed record ConfirmInventoryDocumentCommand(Guid DocumentPublicId, Docu
 {
     public byte[]? RowVersion { get; init; }
 
+    /// <summary>
+    /// Ventas (§18.2, T611): lo que la persona vio a pagar. Si el documento dice otra cosa → <c>Inventory.Document.TotalChanged</c>
+    /// (<c>data.amountDue</c>). Nulo = no se compara (las demás rutas).
+    /// </summary>
+    public decimal? ExpectedAmountDue { get; init; }
+
     public Guid OperationKey { get; init; }
 }
 
@@ -35,7 +41,10 @@ public sealed class ConfirmInventoryDocumentCommandHandler(IApplicationDbContext
     : IRequestHandler<ConfirmInventoryDocumentCommand, Result<ConfirmationResultDto>>
 {
     public Task<Result<ConfirmationResultDto>> Handle(ConfirmInventoryDocumentCommand request, CancellationToken ct) =>
-        TransaccionExplicita.EjecutarAsync(db,
-            () => confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(request.DocumentPublicId, request.ExpectedGroup, request.RowVersion), ct),
-            ct);
+        TransaccionExplicita.EjecutarAsync(db, async () =>
+        {
+            if (await Sales.ReglasDeConfirmacionDeVenta.TotalCambioAsync(db, request.DocumentPublicId, request.ExpectedAmountDue, ct) is { } cambio)
+                return Result.Failure<ConfirmationResultDto>(cambio);
+            return await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(request.DocumentPublicId, request.ExpectedGroup, request.RowVersion), ct);
+        }, ct);
 }
