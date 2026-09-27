@@ -31,9 +31,12 @@ namespace IngenIA365ERP.Application.Inventory.Cash;
 /// T617; contracts/api.md §21.1; T50). (nuevo)
 /// </summary>
 public sealed record OpenCashSessionCommand(Guid CashRegisterPublicId, decimal? OpeningBase = null, IReadOnlyList<DenominationCountInput>? Denominations = null)
-    : IRequest<Result<OpenCashSessionResultDto>>, IOperacionIdempotente
+    : IRequest<Result<OpenCashSessionResultDto>>, IOperacionIdempotente, IOperacionDePuntoDeVenta
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>Se hace desde la caja (canal <c>pos</c>, T36, T562), pero la sesión todavía no existe: vacía.</summary>
+    Guid IOperacionDePuntoDeVenta.CashSessionPublicId => Guid.Empty;
 }
 
 public sealed class OpenCashSessionCommandValidator : AbstractValidator<OpenCashSessionCommand>

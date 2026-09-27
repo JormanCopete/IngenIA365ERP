@@ -1780,6 +1780,22 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     de oficina cuenta en la sesión donde se arquean sus pagos; el esperado de una sesión con arqueo ciego no sale en el informe mientras
     esté abierta, salvo con `CashSessions.ViewAll`; el valor neto realizable del deterioro es el precio general sin IVA menos los gastos de
     venta.
+- **I3, API y pruebas de arquitectura (T627–T632, T560–T562) (nuevo)**: módulos Carter `API/Endpoints/Inventory/{PosEndpoints,
+    CashEndpoints, SalesEndpoints}` (nuevos) y los que I1 dejó sólo con la plantilla, ampliados: `Core/PaymentMeansEndpoints` (medios,
+    `/api/core/card-networks`, `/card-acquirers`, `/card-terminals`, `/cash-denominations`), `Inventory/PointsOfSaleEndpoints` (puntos,
+    cajas y `/api/inventory/payment-means/{id}/availability`) e `Inventory/PricingEndpoints` (listas, `/prices/resolve`, topes); la
+    reimpresión `POST /api/inventory/documents/{id}/reprint` en `DocumentsEndpoints`. Las plantillas 10 a 13 importan (la de la e2e pasa a
+    `Las_plantillas_10_a_13_se_descargan_vacias_y_se_importan_desde_I3`); `?withData` sigue siendo 404 (no tienen consulta de datos).
+    Application: `GetDefaultCashMovementTypeQuery` (el tipo de movimiento por defecto, para que la ruta no toque la base) y
+    `OpenCashSessionCommand`, `CloseCashSessionCommand`, `RecountCashSessionCommand` implementan `IOperacionDePuntoDeVenta` (canal `pos`;
+    la apertura con sesión vacía porque todavía no existe). Pruebas: `LosPagosNoGuardanElNumeroDeTarjeta` (entidades, DTO, entradas y
+    parámetros posicionales de las carpetas de pago, `Last4` `char(4)` en las dos instantáneas, `ValidadorDePagos.PareceNumeroDeTarjeta`);
+    `LosComandosDeInventarioLlevanClave.ComandosDePuntoDeVenta` con `Los_comandos_del_POS_y_de_la_caja_se_auditan_con_canal_pos` (fuera,
+    a propósito, el cierre del día y los movimientos de caja); `LasConsultasDeInventarioRespetanElAlcance.AplicadoresDeAlcance`
+    (`SesionesDeCaja`, `BorradorDelPos`: un handler que los recibe aplica el alcance por ellos). Decisiones: los `POST`/`PUT` de facturas,
+    notas y movimientos responden con el detalle de la consulta (`SalesDocumentDto`, `CashMovementDto`) y, si ésta falla, con lo que devolvió
+    el guardado; `deliver` y `reprint` devuelven la carta como `application/pdf` y la tirilla como JSON; el `PUT` de un medio lee el
+    `PaymentMeansInput` y el `reason` del mismo cuerpo.
 
 ### 2.17 Códigos de error principales (familias)
 

@@ -64,7 +64,7 @@ public class CatalogoYBodegasTests(CentralIdentityApiFixture fx)
 
     [Theory]
     [MemberData(nameof(SoloDescarga))]
-    public async Task Las_plantillas_10_a_13_se_descargan_vacias_y_no_se_importan_en_I1(string ruta, string primeraHoja)
+    public async Task Las_plantillas_10_a_13_se_descargan_vacias_y_se_importan_desde_I3(string ruta, string primeraHoja)
     {
         var coop = await InventarioE2E.CooperativaAisladaAsync(fx, Coop);
         using var http = fx.CreateClient();
@@ -73,7 +73,7 @@ public class CatalogoYBodegasTests(CentralIdentityApiFixture fx)
         libro.Worksheet(primeraHoja).Row(2).IsEmpty().Should().BeTrue();
 
         var importar = await ImportarAsync(http, coop.TokenAdmin, ruta, "review", Libro(("Datos", ["x"], [])));
-        importar.StatusCode.Should().Be(HttpStatusCode.NotFound, "la importación de estas plantillas llega con I3");
+        importar.StatusCode.Should().NotBe(HttpStatusCode.NotFound, "desde I3 estas plantillas se importan (T627–T629)");
         (await Peticion(http, coop.TokenAdmin, HttpMethod.Get, $"{ruta}/template.xlsx?withData=true")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 

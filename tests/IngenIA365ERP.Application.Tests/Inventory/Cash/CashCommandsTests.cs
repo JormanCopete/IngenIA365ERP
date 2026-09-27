@@ -459,4 +459,18 @@ public class CashCommandsTests
             .Should().Equal(DayCloseLine.Clave(t.V.Efectivo.Id, null, null));
         t.V.MensajesDe(segundo.Value.DayClosePublicId).Should().BeEmpty("el cierre del día no emite mensajes");
     }
+
+    // T631: sin documentTypePublicId, la ruta de movimientos toma el tipo por defecto de la clase CashMovement.
+    [Fact]
+    public async Task El_tipo_de_movimiento_por_defecto_es_el_primero_activo_de_la_clase()
+    {
+        var t = await CrearAsync();
+        var handler = new GetDefaultCashMovementTypeQueryHandler(t.Db);
+
+        (await handler.Handle(new GetDefaultCashMovementTypeQuery(), default)).Value.Should().Be(t.K.Tipo("CJ").PublicId);
+
+        t.K.Tipo("CJ").IsActive = false;
+        await t.Db.SaveChangesAsync();
+        (await handler.Handle(new GetDefaultCashMovementTypeQuery(), default)).Value.Should().BeNull("sin tipo activo, el guardado responde el error del tipo");
+    }
 }

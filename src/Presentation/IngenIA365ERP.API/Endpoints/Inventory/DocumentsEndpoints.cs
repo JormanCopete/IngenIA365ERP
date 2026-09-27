@@ -44,5 +44,18 @@ public class DocumentsEndpoints : ICarterModule
             .WithName("Inventory_Documents_Prevalidate")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Inventory.Documents.View");
+
+        // Feature 012, I3 (T632; api.md §20.3): la reimpresión, con la marca «COPIA», de la copia fiscal vigente. Sirve para cualquier
+        // grupo; las ventas usan tirilla o carta. Queda auditada (ReprintDocumentCommand) y lleva clave de operación.
+        group.MapPost("/{id:guid}/reprint", async (Guid id, SalesEndpoints.EntregaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                SalesEndpoints.ComoArchivoOJson(http, await sender.Send(new IngenIA365ERP.Application.Inventory.Sales.ReprintDocumentCommand(
+                    id, body.Format ?? IngenIA365ERP.Application.Inventory.Pos.CashRegisterPrintFormat.Ticket80, body.Reason)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct)))
+            .WithName("Inventory_Documents_Reprint")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission("Inventory.Documents.Reprint");
     }
 }

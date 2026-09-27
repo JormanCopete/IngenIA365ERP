@@ -47,7 +47,7 @@ public sealed class GetCashSessionExpectedQueryHandler(SesionesDeCaja sesiones) 
 /// feature 012, I3, T618; contracts/api.md §21.2; FR-099, T50, T12). (nuevo)
 /// </summary>
 public sealed record CloseCashSessionCommand(Guid CashSessionPublicId, IReadOnlyList<CashCountInput> Counts, ClosingWithdrawalInput? ClosingWithdrawal = null)
-    : IRequest<Result<CloseCashSessionResultDto>>, IOperacionIdempotente
+    : IRequest<Result<CloseCashSessionResultDto>>, IOperacionIdempotente, IOperacionDePuntoDeVenta
 {
     public Guid OperationKey { get; init; }
 }
@@ -254,7 +254,7 @@ public sealed class CloseCashSessionCommandHandler(
 /// <c>counts</c>. (nuevo)
 /// </summary>
 public sealed record RecountCashSessionCommand(Guid CashSessionPublicId, IReadOnlyList<CashCountInput> Counts)
-    : IRequest<Result<CloseCashSessionResultDto>>, IOperacionIdempotente
+    : IRequest<Result<CloseCashSessionResultDto>>, IOperacionIdempotente, IOperacionDePuntoDeVenta
 {
     public Guid OperationKey { get; init; }
 }
