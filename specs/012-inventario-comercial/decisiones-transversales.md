@@ -1622,6 +1622,17 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `DayClose.Reabrir`, `DayCloseLine.Clave`, `VoucherRedemption.Liberar`, `PriceList.FijarAmbito`,
     `DocumentPayment.CopiarDelMedio`, `PaymentMeans.ComisionEsperada`, `CashRegisterDocumentType.ClasesDelRol`.
 
+  - **(nuevo, I3 persistencia, T585–T589)** `Application/Inventory/Common/ColisionesDeVenta` con `IndiceDelBono`, `IndiceDeLaCaja`,
+    `IndiceDelCajero`, `IndiceDelCierreDelDia`, `Indice(ex)`, `Es(ex)`, `TraducirAsync(db, ex, DatosDeLaColision, ct)` y las
+    comprobaciones previas `BonoUsadoAsync`, `CajaOcupadaAsync`, `CajeroOcupadoAsync`, `DiaCerradoAsync` (el mismo error antes y
+    después de la carrera); `DatosDeLaColision(Bonos, CashRegisterId, CashierUserId, PointOfSaleId, OperatingDate)` es lo que el
+    comando sabe de lo que intentó escribir. `CatalogoDian.IdTypeDe(codigoDian, fecha)`, la traducción inversa de
+    `TipoDeIdentificacionDe` (la forma más corta: «13» → «C»). Semillas: `CashDenominationsSeeder.{Denominaciones,
+    TieneLaMigracionAsync}` (las tres de I3 esperan a `VentasYPuntoDeVenta`), `DefaultPaymentMeansSeeder.{CodigoEfectivo,
+    CodigoDianSugerido}`, `ConsumidorFinalSeeder.NombreVisible`; `InventoryDocumentTypesSeeder.AplicarAsync(db, entrega, ct)` y en
+    `Sembrados` `CashMovement` → `MC` «Movimiento de caja» (con motivo) y `CashCountDifference` → `DA` «Diferencia de arqueo»,
+    que se siembran cuando la entrega vigente llega a I3.
+
 ### 2.17 Códigos de error principales (familias)
 
 `Operation.KeyRequired` (400), `Operation.KeyReused` (422) y cabecera `Idempotent-Replayed: true` ·

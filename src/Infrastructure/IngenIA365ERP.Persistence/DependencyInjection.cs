@@ -200,6 +200,11 @@ public static class DependencyInjection
         // Feature 012, entrega I2 (T485): el tipo de comprobante y el cruce por defecto de cada operación de Inventario (Order 84).
         // No hace nada hasta que la base tenga IntegracionContableDeInventario (T486), que crea su tabla.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.InventoryVoucherMappingsSeeder>();
+        // Feature 012, entrega I3 (T587): billetes y monedas (Order 85), el medio EFECTIVO (86) y la persona «Consumidor final» (87).
+        // No hacen nada hasta que la base tenga VentasYPuntoDeVenta (T586).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CashDenominationsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DefaultPaymentMeansSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ConsumidorFinalSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.

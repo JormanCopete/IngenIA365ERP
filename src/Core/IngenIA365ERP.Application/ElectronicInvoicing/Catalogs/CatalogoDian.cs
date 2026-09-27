@@ -74,6 +74,22 @@ public sealed class CatalogoDian
         return version.TraduccionIdType.TryGetValue(idType.Trim().ToUpperInvariant(), out var dian) ? dian : null;
     }
 
+    /// <summary>
+    /// La traducción inversa de <see cref="TipoDeIdentificacionDe"/>: el <c>COR_People.IdType</c> que corresponde a un código DIAN,
+    /// eligiendo la forma más corta («13» → «C»), que es la que guarda el maestro. Nulo si ninguno lo traduce. La usa la semilla
+    /// del consumidor final (T587). (nuevo)
+    /// </summary>
+    public string? IdTypeDe(string? codigoDian, DateOnly fecha)
+    {
+        if (string.IsNullOrWhiteSpace(codigoDian)) return null;
+        var version = Vigente(Catalogos.TiposDeIdentificacion, fecha);
+        return version?.TraduccionIdType?
+            .Where(t => t.Value == codigoDian.Trim())
+            .Select(t => t.Key)
+            .OrderBy(k => k.Length).ThenBy(k => k, StringComparer.Ordinal)
+            .FirstOrDefault();
+    }
+
     /// <summary>La identificación genérica del adquirente «consumidor final» (Res. 202/2025), o nulo sin catálogo vigente.</summary>
     public ConsumidorFinalDian? ConsumidorFinal(DateOnly fecha) => Vigente(Catalogos.TiposDeIdentificacion, fecha)?.ConsumidorFinal;
 
