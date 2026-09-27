@@ -9,12 +9,12 @@ using IngenIA365ERP.Domain.Entities.Inventory.GoLive;
 using IngenIA365ERP.Domain.Entities.Inventory.Warehousing;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using F = IngenIA365ERP.Application.Inventory.GoLive.PlantillaDeCifrasDeSolido;
+using F = IngenIA365ERP.Application.Inventory.GoLive.PlantillaDeCifrasDeReferencia;
 
 namespace IngenIA365ERP.Application.Inventory.GoLive;
 
 /// <summary>
-/// La plantilla 15 — cifras de SOLIDO (feature 012, T311; contracts/plantillas.md §15; api.md §13.2; FR-091, US4-6;
+/// La plantilla 15 — cifras de referencia (feature 012, T311; contracts/plantillas.md §15; api.md §13.2; FR-091, US4-6;
 /// <c>POST /api/inventory/legacy-figures/import?mode=</c>, permiso <c>Inventory.LegacyFigures.Import</c>). Escribe
 /// <c>INV_LegacyFigures</c> y <b>nunca</b> el kardex ni sus proyecciones (FR-001): son dato para comparar.
 /// <list type="bullet">

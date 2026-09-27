@@ -4,7 +4,7 @@ namespace IngenIA365ERP.Application.Inventory.GoLive;
 
 /// <summary>
 /// Los códigos de la puesta en marcha (feature 012, US4; contracts/api.md §13.1–§13.3; decisiones-transversales §2.17): saldo
-/// inicial, cifras de SOLIDO y activación de bodegas. Al pie de la letra del contrato; <c>data</c> trae lo que hace falta para
+/// inicial, cifras de referencia y activación de bodegas. Al pie de la letra del contrato; <c>data</c> trae lo que hace falta para
 /// corregir. (nuevo)
 /// </summary>
 public static class GoLiveErrors
@@ -34,9 +34,9 @@ public static class GoLiveErrors
         $"La bodega {warehouseCode} ya tiene su saldo inicial confirmado ({string.Join(", ", documents.Select(d => d.DisplayNumber ?? "sin número"))}): anúlelo primero.",
         new { warehouseCode, documents });
 
-    // ------------------------------------------------------------------------------------ cifras de SOLIDO --
+    // ------------------------------------------------------------------------------------ cifras de referencia --
 
-    /// <summary>Aviso de fila: el código de producto de SOLIDO no está en el catálogo nuevo (queda sin resolver).</summary>
+    /// <summary>Aviso de fila: el código de producto de origen no está en el catálogo nuevo (queda sin resolver).</summary>
     public const string LegacyFiguresCodeUnresolvedCode = "Inventory.LegacyFigures.CodeUnresolved";
 
     /// <summary><b>(nuevo)</b> Aviso de fila: el grupo del archivo no es el del producto a la fecha de la cifra.</summary>
@@ -64,12 +64,12 @@ public static class GoLiveErrors
         new { warehouseCode, cutoffDate, openingBalanceDate });
 
     /// <summary>
-    /// US7 (T523): bodegas no activas que comparten cuentas con la que se activa y no tienen cifras de SOLIDO a la fecha de corte:
+    /// US7 (T523): bodegas no activas que comparten cuentas con la que se activa y no tienen cifras de referencia a la fecha de corte:
     /// sin ellas el valorizado del conjunto no se puede comparar con los libros (§13.3, <c>data: { warehouseCodes[] }</c>).
     /// </summary>
     public static Error ActivationLegacyFiguresMissing(IReadOnlyList<string> warehouseCodes, DateOnly cutoffDate) => new ErrorConDatos(
         ActivationLegacyFiguresMissingCode,
-        $"Las bodegas {string.Join(", ", warehouseCodes)} comparten cuentas con la que se activa y no tienen cifras de SOLIDO al {cutoffDate:yyyy-MM-dd}: impórtelas primero.",
+        $"Las bodegas {string.Join(", ", warehouseCodes)} comparten cuentas con la que se activa y no tienen cifras de referencia al {cutoffDate:yyyy-MM-dd}: impórtelas primero.",
         new { warehouseCodes, cutoffDate });
 
     /// <summary>

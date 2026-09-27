@@ -133,7 +133,7 @@ public static class InventoryPermissionCatalogSeeder
 
         ("Inventory.OpeningBalance",   "Load",                          "Importar, confirmar y anular el saldo inicial de inventario"),
         ("Inventory.OpeningBalance",   "Approve",                       "Aprobar el saldo inicial de inventario"),
-        ("Inventory.LegacyFigures",    "Import",                        "Importar y consultar las cifras de SOLIDO"),
+        ("Inventory.LegacyFigures",    "Import",                        "Importar y consultar las cifras de referencia"),
 
         ("Inventory.Messages",         "View",                          "Ver la bandeja de mensajes y su estado en cada documento"),
         ("Inventory.Messages",         "Reprocess",                     "Reprocesar un mensaje fallido"),
@@ -156,12 +156,25 @@ public static class InventoryPermissionCatalogSeeder
         var existing = await db.Permissions
             .IgnoreQueryFilters()
             .Where(p => p.Resource.StartsWith("Inventory."))
-            .Select(p => new { p.Resource, p.Action })
             .ToListAsync();
 
         var existingKeys = existing
             .Select(p => $"{p.Resource}.{p.Action}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // La descripción es texto de pantalla: si el catálogo la cambia, se pone al día en las bases ya sembradas
+        // (2026-09-27: las cifras importadas para comparar cambiaron de nombre).
+        var descripciones = Catalog.ToDictionary(p => $"{p.Resource}.{p.Action}", p => p.Description, StringComparer.OrdinalIgnoreCase);
+        var actualizadas = 0;
+        foreach (var p in existing)
+        {
+            if (descripciones.TryGetValue($"{p.Resource}.{p.Action}", out var descripcion) && p.Description != descripcion)
+            {
+                p.Description = descripcion;
+                p.UpdatedBy = "Seed";
+                actualizadas++;
+            }
+        }
 
         var toInsert = Catalog
             .Where(p => !existingKeys.Contains($"{p.Resource}.{p.Action}"))
@@ -177,6 +190,12 @@ public static class InventoryPermissionCatalogSeeder
 
         if (toInsert.Count == 0)
         {
+            if (actualizadas > 0)
+            {
+                await db.SaveChangesAsync(default);
+                logger.LogInformation("Permisos de inventario: {Updated} descripciones puestas al día.", actualizadas);
+                return;
+            }
             logger.LogDebug("Permisos de inventario ya presentes ({Count}).", Catalog.Length);
             return;
         }

@@ -142,7 +142,7 @@ exportación. Así se exporta, se corrige y se vuelve a importar con el mismo li
 
 Todas publican su descarga en I1. Importan en I1 la 1 a la 9 (impuestos, grupos contables, unidades,
 marcas, categorías, productos, bodegas, tipos de documento, vendedores), la 14 (saldo inicial) y la 15
-(cifras de SOLIDO); la 10 a la 13 (puntos de venta, medios de pago, listas de precios, topes) importan con
+(cifras de referencia); la 10 a la 13 (puntos de venta, medios de pago, listas de precios, topes) importan con
 I3; la 16 (matriz contable) descarga e importa con I2. El detalle y la receta de uso, en
 [inventario-puesta-en-marcha.md](../operaciones/inventario-puesta-en-marcha.md) y en la pantalla
 `/inventario/plantillas`.

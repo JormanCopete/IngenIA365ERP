@@ -1,13 +1,13 @@
 # Inventario (feature 012): puesta en marcha de una cooperativa, bodega por bodega
 
 > Qué deja la semilla, qué se carga por plantilla y en qué orden, cómo entra el saldo inicial de cada
-> bodega, cómo se compara con SOLIDO y cómo se activa. Es el equivalente, para el inventario, de
+> bodega, cómo se compara con las cifras de referencia y cómo se activa. Es el equivalente, para el inventario, de
 > [contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md). Está escrito sobre la entrega
 > **I1**: la parte del **cuadre contable** antes de activar llega con I2 y se completa aquí entonces (§6).
 > Recorrido de ensayo: [quickstart.md](../../specs/012-inventario-comercial/quickstart.md) §2.5, §3.5 y §4.2.
 
-La salida en vivo de COOFLOPAL es el 01/12/2026 con el módulo nuevo. SOLIDO no se apaga de un golpe:
-**cada bodega pasa sola**, con su fecha de corte. Mientras una bodega no está activa, SOLIDO sigue siendo
+La salida en vivo de COOFLOPAL es el 01/12/2026 con el módulo nuevo. El sistema anterior no se apaga de un golpe:
+**cada bodega pasa sola**, con su fecha de corte. Mientras una bodega no está activa, el sistema anterior sigue siendo
 el sistema de registro de esa bodega; desde que se activa, sólo la opera el módulo nuevo. **No hay
 sincronización automática** de transacciones entre los dos (FR-091).
 
@@ -75,35 +75,35 @@ I1 y se **importan** con I3; la 16 (matriz contable) es de I2. La 14 y la 15 son
 Con `?withData=true` cada libro sale lleno con lo que ya se cargó: se corrige sobre él y se vuelve a
 subir sin duplicar.
 
-## 3. Por cada bodega: conteo, cifras de SOLIDO y saldo inicial
+## 3. Por cada bodega: conteo, cifras de referencia y saldo inicial
 
 Se repite **bodega por bodega**, en el orden que decida el jefe de inventario.
 
 ### 3.1 El conteo físico, antes de cada carga
 
-El saldo inicial es la cantidad **contada**, no la que dice SOLIDO. Antes de cargar una bodega se cuenta
+El saldo inicial es la cantidad **contada**, no la que dice el sistema anterior. Antes de cargar una bodega se cuenta
 en el piso, y la cantidad de la plantilla es la del conteo **más o menos los movimientos que la bodega
-tuvo en SOLIDO entre el conteo y el corte**. La otra opción, más simple si la bodega lo permite, es que
-deje de operar en SOLIDO desde el conteo hasta su activación (FR-089).
+tuvo en el sistema anterior entre el conteo y el corte**. La otra opción, más simple si la bodega lo permite, es que
+deje de operar en el sistema anterior desde el conteo hasta su activación (FR-089).
 
 Este conteo es del mundo real y se hace sobre las planillas del jefe de inventario: el conteo físico del
 módulo (`/inventario/conteos`) sólo opera bodegas **activas**, y ésta todavía no lo es.
 
-### 3.2 Las cifras de SOLIDO (plantilla 15)
+### 3.2 Las cifras de referencia (plantilla 15)
 
-`/inventario/cifras-solido` (`POST /api/inventory/legacy-figures/import`, permiso
-`Inventory.LegacyFigures.Import`): existencias y valores de SOLIDO a una fecha, **sólo informativos**. No
+`/inventario/cifras-de-referencia` (`POST /api/inventory/legacy-figures/import`, permiso
+`Inventory.LegacyFigures.Import`): existencias y valores de referencia a una fecha, **sólo informativos**. No
 mueven existencias ni costo; escriben `INV_LegacyFigures`.
 
 - Llave `fecha` + `bodega` + `producto`. La bodega debe existir en el ERP (activa o no) y estar al alcance.
 - Un código de producto que no está en el catálogo nuevo **no es error**: la fila exige `grupoContable`,
   queda «sin producto en el catálogo» y avisa `Inventory.LegacyFigures.CodeUnresolved`. Con producto, un
-  grupo distinto del suyo avisa `…GroupMismatch`. La cantidad puede ser negativa (así estaba en SOLIDO).
+  grupo distinto del suyo avisa `…GroupMismatch`. La cantidad puede ser negativa (así estaba en el sistema anterior).
 - Cada importación es un lote; importar otra vez un par (fecha, bodega) deja el anterior como historia, y
   los comparativos usan siempre el lote más reciente.
 
-Se cargan las cifras al corte de **todas** las bodegas, no sólo de la que se activa: las que siguen en
-SOLIDO entran con ellas a la comparación de activación (FR-090, §6).
+Se cargan las cifras al corte de **todas** las bodegas, no sólo de la que se activa: las que siguen fuera del
+módulo entran con ellas a la comparación de activación (FR-090, §6).
 
 ### 3.3 El saldo inicial (plantilla 14)
 
@@ -149,15 +149,15 @@ La revisión de la plantilla no los calcula: aparecen al confirmar. Es el caso d
 `SaldoInicialYActivacionTests`. Un ajuste digitado con la misma fecha, en cambio, sigue rechazado hasta
 I5. Los ajustes de un conteo aprobado tienen la misma exención (D9).
 
-## 4. Comparar con SOLIDO
+## 4. Comparar con las cifras de referencia
 
 Dos vistas del centro de informes (`/inventario/informes`, permiso `Inventory.Reports.View`):
 
 - **`legacy-comparison-valuation`** — a una fecha (hoy por defecto), por grupo contable, bodega y
-  producto: cantidad y valor de SOLIDO contra el valorizado del módulo a esa fecha, y la diferencia. Las
+  producto: cantidad y valor de referencia contra el valorizado del módulo a esa fecha, y la diferencia. Las
   cifras sin producto resuelto suman a su grupo en una fila «Sin producto en el catálogo». Exige
   `Inventory.Costs.Read` (sin él, el 404 genérico).
-- **`legacy-comparison-kardex`** — para una bodega, en cada fecha con cifras de SOLIDO dentro del rango,
+- **`legacy-comparison-kardex`** — para una bodega, en cada fecha con cifras de referencia dentro del rango,
   por producto: cantidad y valor de cada sistema. Sin `Inventory.Costs.Read`, las columnas de valor van
   vacías y la nota lo dice.
 
@@ -166,10 +166,10 @@ Las dos usan el lote más reciente de cada par (fecha, bodega) y respetan el alc
 ## 5. La marcha paralela (SC-018)
 
 Entre la carga de la primera bodega y la salida en vivo, las bodegas operan en los dos mundos: las activas
-en el módulo nuevo, las demás en SOLIDO. Cada semana (o al corte que fije el jefe de inventario) se
-importan las cifras de SOLIDO de todas las bodegas a esa fecha y se corren los dos comparativos.
+en el módulo nuevo, las demás en el sistema anterior. Cada semana (o al corte que fije el jefe de inventario) se
+importan las cifras de referencia de todas las bodegas a esa fecha y se corren los dos comparativos.
 
-**Cada diferencia** de kardex o de valorizado se explica —conteo mal digitado, movimiento de SOLIDO entre
+**Cada diferencia** de kardex o de valorizado se explica —conteo mal digitado, movimiento del sistema anterior entre
 el conteo y el corte que no se sumó, producto con otro código, costo distinto— y el jefe de inventario la
 **aprueba por escrito** antes de la salida en vivo. La causa y la aprobación se llevan en el acta de la
 marcha paralela; el sistema no tiene una pantalla para eso. Una diferencia sin causa detiene la salida en
@@ -189,7 +189,7 @@ previa muestra lo que se compararía y lo que hoy impide activar; la activación
 
 **Lo que FR-090 pide y en I1 todavía no hay**: comparar, a la fecha de corte y por grupo contable y
 conjunto de cuentas mapeadas, el valorizado de todas las bodegas que usan esas cuentas (las activas y la
-que se activa con el módulo nuevo; las no activas con sus cifras de SOLIDO) contra el saldo contable. Eso
+que se activa con el módulo nuevo; las no activas con sus cifras de referencia) contra el saldo contable. Eso
 necesita la matriz contable y la consulta de saldos de Contabilidad (`IContabilidadParaInventario`), que
 son de **I2**. Hasta entonces:
 
@@ -200,12 +200,12 @@ son de **I2**. Hasta entonces:
   `Inventory.Activation.AccountingUnavailable` y no escribe nada. Lo fija la API por ambiente
   (`PuestaEnMarchaOptions.PermitirActivacionSinComparacion = !IsProduction()`), no la configuración.
 
-En producción, con I1 sola, se puede **cargar y aprobar** saldos, importar cifras de SOLIDO y correr los
+En producción, con I1 sola, se puede **cargar y aprobar** saldos, importar cifras de referencia y correr los
 comparativos; activar espera a I2. Esta sección se completa con el cuadre contable cuando I2 esté.
 
 ## 7. Después de activar
 
-- La bodega ya sólo la opera el módulo nuevo; en SOLIDO se cierra.
+- La bodega ya sólo la opera el módulo nuevo; en el sistema anterior se cierra.
 - El conteo físico del módulo (`/inventario/conteos`) ya la cubre: foto al abrir, captura, comparación,
   ajuste aprobado (`CONP`/`CONN`, con su política de un nivel).
 - El período del inventario (`/inventario/periodos`) se cierra mes a mes; lo cerrado no admite
@@ -224,4 +224,4 @@ comparativos; activar espera a I2. Esta sección se completa con el cuadre conta
 | `Inventory.Numbering.SequenceMissing` al confirmar el saldo | el tipo `SIN` no tiene consecutivo vigente a la fecha de corte | revisar `/inventario/tipos-de-documento`; los sembrados rigen desde siempre |
 | `Inventory.Period.NotStarted` al cerrar un mes | no existe `INV_Setup` | se crea con el primer `apply` del saldo o con la primera activación |
 | `Inventory.Activation.AccountingUnavailable` | producción antes de I2 | esperar I2; no hay atajo |
-| El comparativo muestra filas «Sin producto en el catálogo» | códigos de SOLIDO que no están en el catálogo nuevo | crear el producto o aceptar la fila como obsoleta en el acta |
+| El comparativo muestra filas «Sin producto en el catálogo» | códigos de origen que no están en el catálogo nuevo | crear el producto o aceptar la fila como obsoleta en el acta |

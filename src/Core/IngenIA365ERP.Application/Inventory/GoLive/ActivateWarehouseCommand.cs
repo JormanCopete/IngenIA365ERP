@@ -56,17 +56,17 @@ public sealed record CuentaDelConjuntoDto(string Code, string Name, string Role,
 
 /// <summary>
 /// El valorizado del conjunto (§13.3): el de la bodega que se activa, el de las activas y el de las no activas que comparten cuentas
-/// con sus cifras de SOLIDO al corte (suman al conjunto y se muestran aparte), y el total. (nuevo, T523)
+/// con sus cifras de referencia al corte (suman al conjunto y se muestran aparte), y el total. (nuevo, T523)
 /// </summary>
 public sealed record ValorizadoDelConjuntoDto(
     decimal ThisWarehouse,
     IReadOnlyList<BodegaActivaDelConjuntoDto> ActiveWarehouses,
-    IReadOnlyList<BodegaDeSolidoDelConjuntoDto> LegacyWarehouses,
+    IReadOnlyList<BodegaFueraDelModuloDelConjuntoDto> LegacyWarehouses,
     decimal Total);
 
 public sealed record BodegaActivaDelConjuntoDto(Guid WarehousePublicId, string Code, decimal Value);
 
-public sealed record BodegaDeSolidoDelConjuntoDto(string WarehouseCode, Guid? WarehousePublicId, decimal Value, DateOnly FiguresAsOf, Guid BatchPublicId);
+public sealed record BodegaFueraDelModuloDelConjuntoDto(string WarehouseCode, Guid? WarehousePublicId, decimal Value, DateOnly FiguresAsOf, Guid BatchPublicId);
 
 /// <summary>Los mensajes de Inventario a Contabilidad hasta el corte que explican parte de la diferencia (§13.3). (nuevo, T523)</summary>
 public sealed record ExplicacionDelConjuntoDto(int Pending, int InBatch, int Rejected, int NotPosted);

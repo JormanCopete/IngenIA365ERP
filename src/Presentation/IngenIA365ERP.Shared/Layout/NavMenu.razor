@@ -28,7 +28,7 @@
         <NavMenuGroup Icon="e-chart" Title="Contabilidad" Expanded="SidebarOpen">
             @* Feature 009: el modulo reescrito bajo NIIF. Las rutas heredadas (plan-cuentas,
                movimientos, saldos, grupos, categorias de riesgo, lineas IVA, formatos DIAN,
-               codigos de impuestos, cierre) desaparecieron con el modelo de SOLIDO; lo que
+               codigos de impuestos, cierre) desaparecieron con el modelo del sistema anterior; lo que
                vuelve en E2-E4 (conciliacion, presupuesto, impuestos, exogena, activos) se
                agrega en su entrega. *@
             <NavLink href="/contabilidad/configuracion" class="nav-subitem">Configuracion inicial</NavLink>
@@ -142,12 +142,12 @@
             <PermissionGate Required="Inventory.Periods.View">
                 <NavLink href="/inventario/periodos" class="nav-subitem">Períodos</NavLink>
             </PermissionGate>
-            @* US4 (T323): saldo inicial bodega por bodega y cifras de SOLIDO para comparar. *@
+            @* US4 (T323): saldo inicial bodega por bodega y cifras de referencia para comparar. *@
             <PermissionGate Required="Inventory.OpeningBalance.Load">
                 <NavLink href="/inventario/saldo-inicial" class="nav-subitem">Saldo inicial</NavLink>
             </PermissionGate>
             <PermissionGate Required="Inventory.LegacyFigures.Import">
-                <NavLink href="/inventario/cifras-solido" class="nav-subitem">Cifras de SOLIDO</NavLink>
+                <NavLink href="/inventario/cifras-de-referencia" class="nav-subitem">Cifras de referencia</NavLink>
             </PermissionGate>
             <PermissionGate Required="Inventory.Reports.View">
                 <NavLink href="/inventario/informes" class="nav-subitem">Informes</NavLink>

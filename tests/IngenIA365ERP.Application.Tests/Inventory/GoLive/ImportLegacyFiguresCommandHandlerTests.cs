@@ -3,12 +3,12 @@ using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Inventory.GoLive;
 using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 using Microsoft.EntityFrameworkCore;
-using F = IngenIA365ERP.Application.Inventory.GoLive.PlantillaDeCifrasDeSolido;
+using F = IngenIA365ERP.Application.Inventory.GoLive.PlantillaDeCifrasDeReferencia;
 
 namespace IngenIA365ERP.Application.Tests.Inventory.GoLive;
 
 /// <summary>
-/// Feature 012, T300 (contracts/plantillas.md §15; api.md §13.2; FR-091): la plantilla 15 —cifras de SOLIDO—. Llave fecha +
+/// Feature 012, T300 (contracts/plantillas.md §15; api.md §13.2; FR-091): la plantilla 15 —cifras de referencia—. Llave fecha +
 /// bodega + producto; la bodega debe existir; un producto que no está en el catálogo nuevo exige su grupo y queda sin resolver
 /// con aviso; un grupo distinto del del producto avisa; la cantidad puede ser negativa; reimportar un par (fecha, bodega) deja
 /// el lote anterior de baja; y nada de esto toca el kardex (FR-001).
@@ -75,7 +75,7 @@ public class ImportLegacyFiguresCommandHandlerTests
         (await p.Db.LegacyFigures.IgnoreQueryFilters().CountAsync(x => x.WarehouseId == p.B3.Id && x.IsDeleted)).Should().Be(2);
         (await p.Db.LegacyFigures.CountAsync(x => x.WarehouseId == p.B4.Id)).Should().Be(1, "otro par no se toca");
 
-        (await p.Db.KardexEntries.CountAsync()).Should().Be(0, "las cifras de SOLIDO nunca mueven existencias (FR-001)");
+        (await p.Db.KardexEntries.CountAsync()).Should().Be(0, "las cifras de referencia nunca mueven existencias (FR-001)");
         (await p.Db.StockBalances.CountAsync()).Should().Be(0);
         (await p.Db.CostStates.CountAsync()).Should().Be(0);
     }

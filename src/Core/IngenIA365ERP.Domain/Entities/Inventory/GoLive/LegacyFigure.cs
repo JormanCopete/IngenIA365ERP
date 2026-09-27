@@ -3,7 +3,7 @@ using IngenIA365ERP.Domain.Common;
 namespace IngenIA365ERP.Domain.Entities.Inventory.GoLive;
 
 /// <summary>
-/// Una cifra de SOLIDO (<c>INV_LegacyFigures</c>; feature 012, T305; FR-090, FR-091, SC-018; data-model §6.5): existencia y
+/// Una cifra de referencia (<c>INV_LegacyFigures</c>; feature 012, T305; FR-090, FR-091, SC-018; data-model §6.5): existencia y
 /// valor de un producto en una bodega a una fecha, tal como vienen del sistema anterior. <b>Sólo informativa</b>: nunca mueve
 /// existencia ni costo (FR-001); alimenta la activación, la conciliación y los comparativos <c>legacy-comparison-*</c>. Cada
 /// importación es un lote (<see cref="ImportBatchPublicId"/>); un lote nuevo de la misma (fecha, bodega) da de baja lógica al
@@ -39,7 +39,7 @@ public class LegacyFigure : AuditableEntity
     /// </summary>
     public int? AccountingGroupId { get; set; }
 
-    /// <summary>Saldo a <see cref="AsOfDate"/>, en unidad base de SOLIDO; puede ser negativo.</summary>
+    /// <summary>Saldo a <see cref="AsOfDate"/>, en la unidad base del sistema de origen; puede ser negativo.</summary>
     public decimal? Quantity { get; set; }
 
     public decimal? Value { get; set; }

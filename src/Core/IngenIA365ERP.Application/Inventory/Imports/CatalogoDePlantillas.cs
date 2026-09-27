@@ -58,7 +58,7 @@ public static class CatalogoDePlantillas
     public const string ListasDePreciosClave = "inventory.price-lists";
     public const string TopesDeDescuentoClave = "inventory.discount-caps";
     public const string SaldoInicialClave = "inventory.opening-balances";
-    public const string CifrasDeSolidoClave = "inventory.legacy-figures";
+    public const string CifrasDeReferenciaClave = "inventory.legacy-figures";
     public const string MatrizContableClave = "accounting.inventory-rules";
 
     private const string Datos = "Datos";
@@ -117,7 +117,7 @@ public static class CatalogoDePlantillas
             "/api/inventory/opening-balances", "ImportOpeningBalanceCommand", EntregaDelComercio.I1, EntregaDelComercio.I1,
             "Inventory.Warehouses.View", "Inventory.OpeningBalance.Load",
             "Confirmar el documento: Inventory.OpeningBalance.Approve (fuera de la plantilla)"),
-        new(15, Inventory.GoLive.PlantillaDeCifrasDeSolido.Definicion,
+        new(15, Inventory.GoLive.PlantillaDeCifrasDeReferencia.Definicion,
             "/api/inventory/legacy-figures", "ImportLegacyFiguresCommand", EntregaDelComercio.I1, EntregaDelComercio.I1,
             "Inventory.Warehouses.View", "Inventory.LegacyFigures.Import"),
         new(16, Def(MatrizContableClave, "Matriz de reglas contables", ModuloDeAuditoria.Accounting, Datos),

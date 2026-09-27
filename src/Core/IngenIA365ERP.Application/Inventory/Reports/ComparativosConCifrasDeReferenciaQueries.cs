@@ -14,10 +14,10 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Inventory.Reports;
 
 /// <summary>
-/// Lo que comparten los dos comparativos con SOLIDO (feature 012, T314; US4-6; api.md §27): las cifras vivas de un par (fecha,
+/// Lo que comparten los dos comparativos con las cifras de referencia (feature 012, T314; US4-6; api.md §27): las cifras vivas de un par (fecha,
 /// bodega) —las del <b>lote más reciente</b> de ese par: importar otra vez deja las anteriores de baja— y los nombres. (nuevo)
 /// </summary>
-internal static class CifrasDeSolido
+internal static class CifrasDeReferencia
 {
     public const string SinProducto = "Sin producto en el catálogo";
 
@@ -40,7 +40,7 @@ internal static class CifrasDeSolido
 
 /// <summary>
 /// La vista <c>legacy-comparison-valuation</c> (feature 012, T314; US4-6; api.md §27): a <c>asOf</c> (hoy por defecto), por grupo
-/// contable, bodega y producto, cantidad y valor de SOLIDO (lote más reciente del par fecha–bodega) contra el valorizado del
+/// contable, bodega y producto, cantidad y valor de referencia (lote más reciente del par fecha–bodega) contra el valorizado del
 /// módulo a esa fecha (<see cref="ValorizadoALaFecha"/>) y sus diferencias. Las cifras sin producto resuelto suman a su grupo
 /// en una fila «Sin producto en el catálogo» por grupo y bodega; no aparecen por producto. Filtros <c>warehouse</c> y
 /// <c>accountingGroup</c>; alcance por bodega. Exige <c>Inventory.Costs.Read</c> (sin él, el 404 genérico). (nuevo)
@@ -60,8 +60,8 @@ public sealed class LegacyComparisonValuationQueryHandler(
         new("Grupo", TipoDeColumna.Texto),
         new("Bodega", TipoDeColumna.Texto),
         new("Producto", TipoDeColumna.Texto),
-        new("Cantidad SOLIDO", TipoDeColumna.Cantidad),
-        new("Valor SOLIDO", TipoDeColumna.Moneda),
+        new("Cantidad de referencia", TipoDeColumna.Cantidad),
+        new("Valor de referencia", TipoDeColumna.Moneda),
         new("Cantidad módulo", TipoDeColumna.Cantidad),
         new("Valor módulo", TipoDeColumna.Moneda),
         new("Diferencia (cantidad)", TipoDeColumna.Cantidad),
@@ -70,7 +70,7 @@ public sealed class LegacyComparisonValuationQueryHandler(
         new("Bodega", TipoDeColumna.Texto, "_bodega"),
     ];
 
-    private sealed record Linea(int? GrupoId, int BodegaId, int? ProductoId, decimal? CantidadSolido, decimal? ValorSolido,
+    private sealed record Linea(int? GrupoId, int BodegaId, int? ProductoId, decimal? CantidadReferencia, decimal? ValorReferencia,
         decimal? CantidadModulo, decimal? ValorModulo, int CodigosSinResolver = 0);
 
     public async Task<Result<TablaExportable>> Handle(LegacyComparisonValuationQuery request, CancellationToken ct)
@@ -98,7 +98,7 @@ public sealed class LegacyComparisonValuationQueryHandler(
         }
         var ids = visibles.Select(w => w.Id).ToList();
 
-        var cifras = await CifrasDeSolido.VigentesAsync(db, [fecha], ids, ct);
+        var cifras = await CifrasDeReferencia.VigentesAsync(db, [fecha], ids, ct);
         var modulo = (await valorizado.CalcularAsync(fecha, null, ct)).Where(x => ids.Contains(x.WarehouseId)).ToList();
         var productoIds = cifras.Select(c => c.ProductId).OfType<int>().Concat(modulo.Select(m => m.ProductId)).Distinct().ToList();
         var grupos = await GrupoContableALaFecha.DeAsync(db, productoIds, fecha, ct);
@@ -136,15 +136,15 @@ public sealed class LegacyComparisonValuationQueryHandler(
                 L = l,
                 Grupo = l.GrupoId is int gi ? nombresDeGrupo.GetValueOrDefault(gi) ?? string.Empty : string.Empty,
                 Bodega = porId[l.BodegaId],
-                Producto = l.ProductoId is int pi ? productos[pi].Texto : $"{CifrasDeSolido.SinProducto} ({l.CodigosSinResolver} código(s))",
+                Producto = l.ProductoId is int pi ? productos[pi].Texto : $"{CifrasDeReferencia.SinProducto} ({l.CodigosSinResolver} código(s))",
             })
             .OrderBy(x => x.Grupo, StringComparer.Ordinal).ThenBy(x => x.Bodega.Code, StringComparer.Ordinal)
             .ThenBy(x => x.L.ProductoId is null ? 1 : 0).ThenBy(x => x.Producto, StringComparer.Ordinal)
             .Select(x => new FilaExportable(
             [
                 x.Grupo, x.Bodega.Code, x.Producto,
-                x.L.CantidadSolido, x.L.ValorSolido, x.L.CantidadModulo, x.L.ValorModulo,
-                CifrasDeSolido.Resta(x.L.CantidadSolido, x.L.CantidadModulo), CifrasDeSolido.Resta(x.L.ValorSolido, x.L.ValorModulo),
+                x.L.CantidadReferencia, x.L.ValorReferencia, x.L.CantidadModulo, x.L.ValorModulo,
+                CifrasDeReferencia.Resta(x.L.CantidadReferencia, x.L.CantidadModulo), CifrasDeReferencia.Resta(x.L.ValorReferencia, x.L.ValorModulo),
                 x.L.ProductoId is int pi ? productos[pi].PublicId.ToString() : null, x.Bodega.PublicId.ToString(),
             ]))
             .ToList();
@@ -152,14 +152,14 @@ public sealed class LegacyComparisonValuationQueryHandler(
         decimal Suma(Func<Linea, decimal?> campo) => lineas.Sum(l => campo(l) ?? 0m);
         var totales = new FilaExportable(
         [
-            "Total", null, null, Suma(l => l.CantidadSolido), Suma(l => l.ValorSolido), Suma(l => l.CantidadModulo), Suma(l => l.ValorModulo),
-            Suma(l => l.CantidadSolido) - Suma(l => l.CantidadModulo), Suma(l => l.ValorSolido) - Suma(l => l.ValorModulo), null, null,
+            "Total", null, null, Suma(l => l.CantidadReferencia), Suma(l => l.ValorReferencia), Suma(l => l.CantidadModulo), Suma(l => l.ValorModulo),
+            Suma(l => l.CantidadReferencia) - Suma(l => l.CantidadModulo), Suma(l => l.ValorReferencia) - Suma(l => l.ValorModulo), null, null,
         ]);
 
-        return Result.Success(new TablaExportable("Comparativo de valorizado con SOLIDO", $"Al {fecha:yyyy-MM-dd}", Columnas, filas, totales,
+        return Result.Success(new TablaExportable("Comparativo de valorizado con cifras de referencia", $"Al {fecha:yyyy-MM-dd}", Columnas, filas, totales,
         [
-            "SOLIDO: las cifras importadas a esa fecha, del lote más reciente de cada bodega. Módulo: el valorizado a la misma fecha.",
-            "Diferencia = SOLIDO − módulo. Las cifras cuyo producto no está en el catálogo nuevo suman a su grupo, sin detalle por producto.",
+            "Referencia: las cifras importadas a esa fecha, del lote más reciente de cada bodega. Módulo: el valorizado a la misma fecha.",
+            "Diferencia = referencia − módulo. Las cifras cuyo producto no está en el catálogo nuevo suman a su grupo, sin detalle por producto.",
         ]));
     }
 }
@@ -168,8 +168,8 @@ public sealed class LegacyComparisonValuationQueryHandler(
 
 /// <summary>
 /// La vista <c>legacy-comparison-kardex</c> (feature 012, T314; US4-6; api.md §27): para una bodega (<c>warehouse</c>,
-/// obligatoria), en cada fecha con cifras de SOLIDO dentro de <c>from</c>–<c>to</c>, por producto, la cantidad y el valor de
-/// SOLIDO contra los del módulo a esa fecha en esa bodega. Filtro <c>product</c>. Sin <c>Inventory.Costs.Read</c> las columnas
+/// obligatoria), en cada fecha con cifras de referencia dentro de <c>from</c>–<c>to</c>, por producto, la cantidad y el valor de
+/// referencia contra los del módulo a esa fecha en esa bodega. Filtro <c>product</c>. Sin <c>Inventory.Costs.Read</c> las columnas
 /// de valor van vacías y la nota lo dice. Las cifras sin producto resuelto no entran (van en el comparativo de valorizado). (nuevo)
 /// </summary>
 public sealed record LegacyComparisonKardexQuery(FiltrosDeInformeDeInventario Filtros) : IRequest<Result<TablaExportable>>;
@@ -189,10 +189,10 @@ public sealed class LegacyComparisonKardexQueryHandler(
         new("Producto", TipoDeColumna.Texto),
         new("Bodega", TipoDeColumna.Texto),
         new("Fecha", TipoDeColumna.Fecha),
-        new("Cantidad SOLIDO", TipoDeColumna.Cantidad),
+        new("Cantidad de referencia", TipoDeColumna.Cantidad),
         new("Cantidad módulo", TipoDeColumna.Cantidad),
         new("Diferencia (cantidad)", TipoDeColumna.Cantidad),
-        new("Valor SOLIDO", TipoDeColumna.Moneda),
+        new("Valor de referencia", TipoDeColumna.Moneda),
         new("Valor módulo", TipoDeColumna.Moneda),
         new("Diferencia (valor)", TipoDeColumna.Moneda),
         new("Producto", TipoDeColumna.Texto, "_producto"),
@@ -220,7 +220,7 @@ public sealed class LegacyComparisonKardexQueryHandler(
             .Where(x => x.WarehouseId == bodega.Id && x.AsOfDate >= desde && x.AsOfDate <= hasta)
             .Select(x => x.AsOfDate).Distinct().ToListAsync(ct);
 
-        var cifras = (await CifrasDeSolido.VigentesAsync(db, fechas, [bodega.Id], ct))
+        var cifras = (await CifrasDeReferencia.VigentesAsync(db, fechas, [bodega.Id], ct))
             .Where(c => c.ProductId is not null && (productoFiltro is null || c.ProductId == productoFiltro))
             .ToList();
 
@@ -251,17 +251,17 @@ public sealed class LegacyComparisonKardexQueryHandler(
             .Select(x => new FilaExportable(
             [
                 productos[x.Producto].Texto, bodega.Code, x.Fecha,
-                x.Cs, x.Cm, CifrasDeSolido.Resta(x.Cs, x.Cm),
-                conCostos ? x.Vs : null, conCostos ? x.Vm : null, conCostos ? CifrasDeSolido.Resta(x.Vs, x.Vm) : null,
+                x.Cs, x.Cm, CifrasDeReferencia.Resta(x.Cs, x.Cm),
+                conCostos ? x.Vs : null, conCostos ? x.Vm : null, conCostos ? CifrasDeReferencia.Resta(x.Vs, x.Vm) : null,
                 productos[x.Producto].PublicId.ToString(),
             ]))
             .ToList();
 
         var notas = new List<string>
         {
-            "En cada fecha con cifras de SOLIDO de la bodega: SOLIDO (lote más reciente) contra el módulo a esa misma fecha. Diferencia = SOLIDO − módulo.",
+            "En cada fecha con cifras de referencia de la bodega: la referencia (lote más reciente) contra el módulo a esa misma fecha. Diferencia = referencia − módulo.",
         };
         if (!conCostos) notas.Add("Sin el permiso de ver costos (Inventory.Costs.Read) las columnas de valor van vacías.");
-        return Result.Success(new TablaExportable("Comparativo de kardex con SOLIDO", $"Bodega {bodega.Code}", Columnas, tabla, null, notas));
+        return Result.Success(new TablaExportable("Comparativo de kardex con cifras de referencia", $"Bodega {bodega.Code}", Columnas, tabla, null, notas));
     }
 }

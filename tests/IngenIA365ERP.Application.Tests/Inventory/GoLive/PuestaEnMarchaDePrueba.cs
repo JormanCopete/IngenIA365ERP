@@ -187,7 +187,7 @@ public sealed class PuestaEnMarchaDePrueba
     {
         Datos(encabezados, filas);
         var r = await new ImportLegacyFiguresCommandHandler(Db, Ejecutor(), K.Alcance, K.Actor, K.C.Reloj)
-            .Handle(new ImportLegacyFiguresCommand(modo, new ArchivoDeImportacion("cifras-solido.xlsx", [4, 5, 6])), default);
+            .Handle(new ImportLegacyFiguresCommand(modo, new ArchivoDeImportacion("cifras-de-referencia.xlsx", [4, 5, 6])), default);
         Db.ChangeTracker.Clear();
         return r;
     }

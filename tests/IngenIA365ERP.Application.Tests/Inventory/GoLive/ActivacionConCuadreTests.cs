@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Application.Tests.Inventory.GoLive;
 /// Feature 012, T470 (FR-090, US4-2, US4-3, SC-018; api.md §13.3; data-model §6.4): la activación con el cuadre contable de I2,
 /// con un doble de <c>IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync</c>. El valorizado del conjunto suma la bodega que se
 /// activa (B3, saldo inicial 10 × 1.500), las activas que usan las cuentas (PRIN, 4 × 1.000 de P2) y las no activas con sus cifras de
-/// SOLIDO al corte (B4, 3.000); los bloqueos <c>.LegacyFiguresMissing</c>, <c>.RulesMissing</c>, <c>.AccountingUnavailable</c>,
+/// referencia al corte (B4, 3.000); los bloqueos <c>.LegacyFiguresMissing</c>, <c>.RulesMissing</c>, <c>.AccountingUnavailable</c>,
 /// <c>.AlreadyActive</c>, <c>.OpeningBalanceNotConfirmed</c> y <c>.CutoffMismatch</c>; la diferencia exige aceptarla con permiso; y
 /// el POST vuelve a calcular.
 /// </summary>
@@ -110,14 +110,14 @@ public class ActivacionConCuadreTests
         sinAceptar.Error.Code.Should().Be(GoLiveErrors.ActivationDifferenceCode);
 
         p.K.Permisos.HasPermissionAsync(Permiso, Arg.Any<CancellationToken>()).Returns(false);
-        var sinPermiso = await ActivarAsync(p, aceptar: true, motivo: "Diferencia de SOLIDO conocida");
+        var sinPermiso = await ActivarAsync(p, aceptar: true, motivo: "Diferencia con las cifras de referencia conocida");
         sinPermiso.Error.Code.Should().Be(GoLiveErrors.ActivationAcceptDifferenceNotAllowedCode);
 
         p.K.Permisos.HasPermissionAsync(Permiso, Arg.Any<CancellationToken>()).Returns(true);
-        var aceptada = await ActivarAsync(p, aceptar: true, motivo: "Diferencia de SOLIDO conocida");
+        var aceptada = await ActivarAsync(p, aceptar: true, motivo: "Diferencia con las cifras de referencia conocida");
         aceptada.IsSuccess.Should().BeTrue(aceptada.IsFailure ? $"{aceptada.Error.Code}: {aceptada.Error.Message}" : string.Empty);
         aceptada.Value.DifferenceAccepted.Should().BeTrue();
-        aceptada.Value.Reason.Should().Be("Diferencia de SOLIDO conocida", "con la comparación hecha, el motivo no lleva el prefijo «sin comparación»");
+        aceptada.Value.Reason.Should().Be("Diferencia con las cifras de referencia conocida", "con la comparación hecha, el motivo no lleva el prefijo «sin comparación»");
     }
 
     [Fact]

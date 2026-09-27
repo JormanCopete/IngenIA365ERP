@@ -6,17 +6,17 @@ using IngenIA365ERP.Application.Inventory.Periods;
 using IngenIA365ERP.Application.Inventory.Reports;
 using IngenIA365ERP.Application.Tests.Inventory.GoLive;
 using NSubstitute;
-using F = IngenIA365ERP.Application.Inventory.GoLive.PlantillaDeCifrasDeSolido;
+using F = IngenIA365ERP.Application.Inventory.GoLive.PlantillaDeCifrasDeReferencia;
 
 namespace IngenIA365ERP.Application.Tests.Inventory.Reports;
 
 /// <summary>
-/// Feature 012, T302 (US4-6; api.md §27): los comparativos con SOLIDO. <c>legacy-comparison-valuation</c> a una fecha da, por
-/// grupo, bodega y producto, cantidad y valor de SOLIDO (lote más reciente del par fecha–bodega) contra el valorizado del módulo y
+/// Feature 012, T302 (US4-6; api.md §27): los comparativos con las cifras de referencia. <c>legacy-comparison-valuation</c> a una fecha da, por
+/// grupo, bodega y producto, cantidad y valor de referencia (lote más reciente del par fecha–bodega) contra el valorizado del módulo y
 /// sus diferencias, con las cifras sin producto resuelto sumadas a su grupo y nunca por producto; <c>legacy-comparison-kardex</c>
 /// exige la bodega y, sin <c>Inventory.Costs.Read</c>, deja vacías las columnas de valor.
 /// </summary>
-public class ComparativosConSolidoTests
+public class ComparativosConCifrasDeReferenciaTests
 {
     private static readonly string[] Encabezados = [F.Fecha, F.Bodega, F.Producto, F.Cantidad, F.Valor, F.GrupoContable];
 
@@ -27,7 +27,7 @@ public class ComparativosConSolidoTests
 
     private static int Oculta(TablaExportable tabla, string clave) => tabla.Columnas.Select((c, i) => (c, i)).First(x => x.c.Clave == clave).i;
 
-    /// <summary>B3 con su saldo confirmado (P1: 10 a 1.500) y dos cargas de SOLIDO al corte; manda la más reciente.</summary>
+    /// <summary>B3 con su saldo confirmado (P1: 10 a 1.500) y dos cargas de cifras de referencia al corte; manda la más reciente.</summary>
     private static async Task<PuestaEnMarchaDePrueba> EscenarioAsync()
     {
         var p = await PuestaEnMarchaDePrueba.CrearAsync();
@@ -50,7 +50,7 @@ public class ComparativosConSolidoTests
         new(p.Db, p.K.Alcance, p.K.Permisos, new ValorizadoALaFecha(p.Db, p.K.Lector()), p.K.C.Reloj);
 
     [Fact]
-    public async Task El_valorizado_compara_SOLIDO_del_lote_mas_reciente_con_el_modulo_y_lo_sin_producto_suma_al_grupo()
+    public async Task El_valorizado_compara_las_cifras_de_referencia_del_lote_mas_reciente_con_el_modulo_y_lo_sin_producto_suma_al_grupo()
     {
         var p = await EscenarioAsync();
 
@@ -60,8 +60,8 @@ public class ComparativosConSolidoTests
         var t = r.Value;
         t.Filas.Should().HaveCount(2);
         var p1 = t.Filas.Single(f => (string?)f.Valores[Oculta(t, "_producto")] is not null);
-        Celda(t, p1, "Cantidad SOLIDO").Should().Be(12m, "el lote más reciente del par (fecha, bodega)");
-        Celda(t, p1, "Valor SOLIDO").Should().Be(18_500m);
+        Celda(t, p1, "Cantidad de referencia").Should().Be(12m, "el lote más reciente del par (fecha, bodega)");
+        Celda(t, p1, "Valor de referencia").Should().Be(18_500m);
         Celda(t, p1, "Cantidad módulo").Should().Be(10m);
         Celda(t, p1, "Valor módulo").Should().Be(15_000m);
         Celda(t, p1, "Diferencia (cantidad)").Should().Be(2m);
@@ -70,8 +70,8 @@ public class ComparativosConSolidoTests
         var sinProducto = t.Filas.Single(f => f.Valores[Oculta(t, "_producto")] is null);
         ((string)Celda(t, sinProducto, "Producto")!).Should().StartWith("Sin producto en el catálogo");
         ((string)Celda(t, sinProducto, "Grupo")!).Should().StartWith("ABARR");
-        Celda(t, sinProducto, "Valor SOLIDO").Should().Be(45_000m);
-        t.Totales!.Valores[Columna(t, "Valor SOLIDO")].Should().Be(63_500m);
+        Celda(t, sinProducto, "Valor de referencia").Should().Be(45_000m);
+        t.Totales!.Valores[Columna(t, "Valor de referencia")].Should().Be(63_500m);
     }
 
     [Fact]
@@ -97,16 +97,16 @@ public class ComparativosConSolidoTests
         var conCostos = await Kardex(p).Handle(new LegacyComparisonKardexQuery(Filtros(p)), default);
         var fila = conCostos.Value.Filas.Should().ContainSingle().Subject;
         Celda(conCostos.Value, fila, "Fecha").Should().Be(PuestaEnMarchaDePrueba.Corte);
-        Celda(conCostos.Value, fila, "Cantidad SOLIDO").Should().Be(12m);
+        Celda(conCostos.Value, fila, "Cantidad de referencia").Should().Be(12m);
         Celda(conCostos.Value, fila, "Cantidad módulo").Should().Be(10m);
         Celda(conCostos.Value, fila, "Diferencia (valor)").Should().Be(3_500m);
 
         p.K.Permisos.HasPermissionAsync("Inventory.Costs.Read", Arg.Any<CancellationToken>()).Returns(false);
         var sinCostos = await Kardex(p).Handle(new LegacyComparisonKardexQuery(Filtros(p)), default);
         var vacia = sinCostos.Value.Filas.Single();
-        Celda(sinCostos.Value, vacia, "Valor SOLIDO").Should().BeNull();
+        Celda(sinCostos.Value, vacia, "Valor de referencia").Should().BeNull();
         Celda(sinCostos.Value, vacia, "Valor módulo").Should().BeNull();
-        Celda(sinCostos.Value, vacia, "Cantidad SOLIDO").Should().Be(12m);
+        Celda(sinCostos.Value, vacia, "Cantidad de referencia").Should().Be(12m);
         sinCostos.Value.Notas.Should().Contain(n => n.Contains("Inventory.Costs.Read"));
     }
 }

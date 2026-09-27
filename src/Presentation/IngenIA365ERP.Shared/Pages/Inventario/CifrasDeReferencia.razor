@@ -1,4 +1,4 @@
-@page "/inventario/cifras-solido"
+@page "/inventario/cifras-de-referencia"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Inventario
 @using IngenIA365ERP.Shared.Services.Http
@@ -6,9 +6,9 @@
 @inject InventarioClient Inventario
 @inject INotificationService Notification
 
-<PageTitle>Cifras de SOLIDO - IngenIA365ERP</PageTitle>
+<PageTitle>Cifras de referencia - IngenIA365ERP</PageTitle>
 
-@* Feature 012, T322 (FR-091, US4-6; contracts/api.md §13.2, contracts/plantillas.md §15): las existencias y valores de SOLIDO a
+@* Feature 012, T322 (FR-091, US4-6; contracts/api.md §13.2, contracts/plantillas.md §15): las existencias y valores de referencia a
    una fecha, sólo para comparar: nunca mueven el inventario. La plantilla 15 se revisa y se aplica todo o nada; un código de
    producto que no está en el catálogo nuevo no es error (queda sin resolver, con su grupo contable). Cada importación es un lote;
    importar otra vez una fecha y bodega deja el anterior como historia («reemplazado»). Los comparativos por producto y bodega
@@ -16,7 +16,7 @@
 <PermissionGate Required="Inventory.LegacyFigures.Import" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>Cifras de SOLIDO</h3>
+        <h3>Cifras de referencia</h3>
         <div class="toolbar">
             <a class="e-btn e-outline" href="/inventario/informes?vista=legacy-comparison-valuation">Comparativo de valorizado</a>
             <a class="e-btn e-outline" href="/inventario/informes?vista=legacy-comparison-kardex">Comparativo de kardex</a>
@@ -26,7 +26,7 @@
 
     <div class="info-card">
         <h4>Importar la plantilla</h4>
-        <ImportarPlantilla RutaBase="@InventarioClient.RutaDeCifrasDeSolido" PermisoDeDescarga="Inventory.Warehouses.View"
+        <ImportarPlantilla RutaBase="@InventarioClient.RutaDeCifrasDeReferencia" PermisoDeDescarga="Inventory.Warehouses.View"
                            PermisoDeImportacion="Inventory.LegacyFigures.Import" ConDatos="false"
                            Revisado="@VerResumen" Aplicado="@AplicadoAsync" />
         <IndicadorDeCarga Cargando="@_importacion.Activa">
@@ -57,7 +57,7 @@
     <IndicadorDeCarga Cargando="@_lotes.Activa">
         @if (!_lotes.Activa && _lista.Count == 0)
         {
-            <p class="texto-tenue">No hay cifras de SOLIDO con estos filtros.</p>
+            <p class="texto-tenue">No hay cifras de referencia con estos filtros.</p>
         }
         else
         {
@@ -98,7 +98,7 @@
                 <p class="texto-apoyo">Suman al valorizado de su grupo contable, pero no aparecen en el comparativo por producto.</p>
                 <div class="tabla-desplazable">
                     <table class="data-grid">
-                        <thead><tr><th>Producto (SOLIDO)</th><th>Grupo</th><th class="numero">Cantidad</th><th class="numero">Valor</th></tr></thead>
+                        <thead><tr><th>Producto (origen)</th><th>Grupo</th><th class="numero">Cantidad</th><th class="numero">Valor</th></tr></thead>
                         <tbody>
                             @foreach (var f in _filasSinResolver)
                             {
@@ -131,7 +131,7 @@
         if (!r.IsSuccess)
         {
             _lista = [];
-            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cifras de SOLIDO.");
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cifras de referencia.");
             return;
         }
         _lista = [.. r.Value ?? []];

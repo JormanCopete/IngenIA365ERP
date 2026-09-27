@@ -20,13 +20,13 @@ namespace IngenIA365ERP.Application.Inventory.Reports;
 /// libros. Cinco secciones en una tabla (<see cref="FilaExportable.Seccion"/>) sobre las mismas columnas:
 /// <list type="number">
 /// <item><b>Conjuntos</b>: grupos, cuentas, valorizado en bodegas (operativas, activas o no), en tránsito, el de las no activas con
-/// cifras de SOLIDO, total, saldo contable, diferencia (valorizado − saldo), y lo que la explica en pesos —el kardex de los documentos
+/// cifras de referencia, total, saldo contable, diferencia (valorizado − saldo), y lo que la explica en pesos —el kardex de los documentos
 /// cuyos mensajes siguen pendientes, en lote o rechazados— y lo que queda sin explicar (descontado también lo movido por tipos que no
 /// pasan, sección 3);</item>
 /// <item><b>Detalle por bodega</b> (informativo): el valorizado de cada bodega y grupo;</item>
 /// <item><b>Lo movido por tipos que no pasan</b> (documentos sellados <c>NotPosted</c>), por tipo y grupo;</item>
 /// <item><b>Ventas a crédito de esos tipos</b>: las ventas nacen en I3; hasta entonces no hay filas;</item>
-/// <item><b>Bodegas no activas</b> que comparten cuentas, con sus cifras de SOLIDO más recientes a la fecha: suman al valorizado del
+/// <item><b>Bodegas no activas</b> que comparten cuentas, con sus cifras de referencia más recientes a la fecha: suman al valorizado del
 /// conjunto y se muestran aparte; la diferencia no se les atribuye.</item>
 /// </list>
 /// Una bodega usa las cuentas de un grupo si el conjunto trae el par (grupo, su código) o (grupo, <c>*</c>). Si Contabilidad no
@@ -47,7 +47,7 @@ public sealed class ConciliacionReportQueryHandler(
     public const string SeccionBodegas = "2. Detalle por bodega (informativo)";
     public const string SeccionNoPasan = "3. Movido por tipos que no pasan";
     public const string SeccionCredito = "4. Ventas a crédito de tipos que no pasan";
-    public const string SeccionSolido = "5. Bodegas no activas con cifras de SOLIDO";
+    public const string SeccionReferencia = "5. Bodegas no activas con cifras de referencia";
 
     public static readonly VistaDeInformeDeInventario Vista = new(
         "reconciliation", "Conciliación con Contabilidad", "El valorizado por conjunto de cuentas contra el saldo contable, con lo que explica la diferencia.",
@@ -78,7 +78,7 @@ public sealed class ConciliacionReportQueryHandler(
         var notas = new List<string>
         {
             "Diferencia = valorizado total − saldo contable. Pendientes, en lote y rechazados son el kardex de los documentos cuyos mensajes todavía no llegan al libro.",
-            "Las bodegas no activas suman con sus cifras de SOLIDO; la diferencia no se les atribuye.",
+            "Las bodegas no activas suman con sus cifras de referencia; la diferencia no se les atribuye.",
         };
 
         IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.ConjuntoDeCuentasDto>? conjuntos = null;
@@ -101,7 +101,7 @@ public sealed class ConciliacionReportQueryHandler(
         var porId = bodegas.ToDictionary(w => w.Id);
         var grupos = await db.AccountingGroups.AsNoTracking().IgnoreQueryFilters().ToDictionaryAsync(g => g.Id, g => g.Code, ct);
 
-        // Las cifras de SOLIDO más recientes a la fecha de cada bodega no activa.
+        // Las cifras de referencia más recientes a la fecha de cada bodega no activa.
         var cifras = (await db.LegacyFigures.AsNoTracking().Where(f => f.AsOfDate <= corte && f.WarehouseId != null)
                 .Select(f => new { WarehouseId = f.WarehouseId!.Value, f.AccountingGroupId, Value = f.Value ?? 0m, f.AsOfDate }).ToListAsync(ct))
             .Where(f => porId.TryGetValue(f.WarehouseId, out var w) && !w.EstaActiva)
@@ -123,9 +123,9 @@ public sealed class ConciliacionReportQueryHandler(
             var delConjunto = valorizado.Where(v => codigos.Contains(v.Key.Grupo) && porId.TryGetValue(v.Key.WarehouseId, out var w) && LaUsa(w.Code)).ToList();
             var enBodegas = delConjunto.Where(v => !porId[v.Key.WarehouseId].EsTransito).Sum(v => v.Value.Valor);
             var enTransito = delConjunto.Where(v => porId[v.Key.WarehouseId].EsTransito).Sum(v => v.Value.Valor);
-            var deSolido = cifras.Where(f => LaUsa(porId[f.WarehouseId].Code) && f.AccountingGroupId is int g && grupos.TryGetValue(g, out var gc) && codigos.Contains(gc))
+            var fueraDelModulo = cifras.Where(f => LaUsa(porId[f.WarehouseId].Code) && f.AccountingGroupId is int g && grupos.TryGetValue(g, out var gc) && codigos.Contains(gc))
                 .Sum(f => f.Value);
-            var total = enBodegas + enTransito + deSolido;
+            var total = enBodegas + enTransito + fueraDelModulo;
             var diferencia = total - c.Balance;
             decimal Suma(DeliveryStatus estado) => explicado
                 .Where(x => x.Estado == estado && codigos.Contains(x.Grupo) && porId.TryGetValue(x.WarehouseId, out var w) && LaUsa(w.Code)).Sum(x => x.Valor);
@@ -136,7 +136,7 @@ public sealed class ConciliacionReportQueryHandler(
             filas.Add(new FilaExportable(
             [
                 $"Conjunto {numero}", string.Join(", ", c.AccountingGroupCodes), string.Join(", ", c.Accounts.Select(a => $"{a.AccountCode} {a.AccountName}")),
-                enBodegas + deSolido, enTransito, total, c.Balance, diferencia, pendiente, enLote, rechazado,
+                enBodegas + fueraDelModulo, enTransito, total, c.Balance, diferencia, pendiente, enLote, rechazado,
                 diferencia - pendiente - enLote - rechazado - noPasa, null,
             ], SeccionConjuntos, Resaltada: diferencia != 0m));
         }
@@ -174,7 +174,7 @@ public sealed class ConciliacionReportQueryHandler(
                 porId[g.Key.WarehouseId].Code, g.Key.AccountingGroupId is int gid2 ? grupos.GetValueOrDefault(gid2) : null,
                 $"Cifras al {g.Max(x => x.AsOfDate):yyyy-MM-dd}", g.Sum(x => x.Value), null, g.Sum(x => x.Value),
                 null, null, null, null, null, null, null,
-            ], SeccionSolido));
+            ], SeccionReferencia));
         }
 
         return Result.Success(new TablaExportable("Conciliación con Contabilidad", $"Al {corte:yyyy-MM-dd}", Columnas, filas, null, notas));

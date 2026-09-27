@@ -8,19 +8,19 @@ namespace IngenIA365ERP.Shared.Services.Inventario;
 /// <summary>
 /// La puesta en marcha (feature 012, T319; contracts/api.md §13.1–§13.3): el saldo inicial (plantilla 14 con
 /// <see cref="RevisarPlantillaAsync"/>/<see cref="AplicarPlantillaAsync"/> sobre <see cref="RutaDeSaldoInicial"/>, la lista, el
-/// detalle y confirmar, descartar y anular por el ciclo común de <see cref="RutasDeGrupo.SaldoInicial"/>), las cifras de SOLIDO
+/// detalle y confirmar, descartar y anular por el ciclo común de <see cref="RutasDeGrupo.SaldoInicial"/>), las cifras de referencia
 /// (plantilla 15, lotes y filas) y la vista previa y la activación de una bodega. Toda escritura con la
 /// <see cref="ClaveDeOperacion"/> de la pantalla, nueva por operación.
 /// </summary>
 public sealed partial class InventarioClient
 {
     public const string RutaDeSaldoInicial = RutasDeGrupo.SaldoInicial;
-    public const string RutaDeCifrasDeSolido = Base + "/legacy-figures";
+    public const string RutaDeCifrasDeReferencia = Base + "/legacy-figures";
 
     /// <summary>La clave de <c>extra</c> con el resumen por bodega del saldo inicial (§14).</summary>
     public const string ExtraSaldoPorBodega = "byWarehouse";
 
-    /// <summary>La clave de <c>extra</c> con el resumen por fecha, bodega y grupo de las cifras de SOLIDO (§15).</summary>
+    /// <summary>La clave de <c>extra</c> con el resumen por fecha, bodega y grupo de las cifras de referencia (§15).</summary>
     public const string ExtraCifrasPorFechaBodegaGrupo = "byDateWarehouseGroup";
 
     /// <summary>Los documentos de saldo inicial del alcance (clase <c>OpeningBalance</c>), con su estado y valor.</summary>
@@ -44,15 +44,15 @@ public sealed partial class InventarioClient
     public Task<ResultadoDeInventario<ResultadoDeAnulacionDto>> AnularSaldoInicialAsync(Guid id, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         AnularAsync(RutaDeSaldoInicial, id, motivo, null, clave, ct);
 
-    // ------------------------------------------------------------------------------------ cifras de SOLIDO --
+    // ------------------------------------------------------------------------------------ cifras de referencia --
 
     public Task<ResultadoDeInventario<IReadOnlyList<LoteDeCifrasDto>>> LotesDeCifrasAsync(DateOnly? fecha = null, string? bodega = null, CancellationToken ct = default) =>
-        EnviarAsync<IReadOnlyList<LoteDeCifrasDto>>(HttpMethod.Get, ConQuery(RutaDeCifrasDeSolido, Query(
+        EnviarAsync<IReadOnlyList<LoteDeCifrasDto>>(HttpMethod.Get, ConQuery(RutaDeCifrasDeReferencia, Query(
             ("asOf", fecha?.ToString("yyyy-MM-dd")), ("warehouseCode", bodega))), null, null, ct);
 
     public Task<ResultadoDeInventario<PaginaDeInventarioDto<FilaDeCifraDto>>> FilasDeCifrasAsync(Guid lote, bool soloSinResolver, int pagina = 1, int tamano = 50,
         CancellationToken ct = default) =>
-        EnviarAsync<PaginaDeInventarioDto<FilaDeCifraDto>>(HttpMethod.Get, ConQuery($"{RutaDeCifrasDeSolido}/{lote}/rows", Query(
+        EnviarAsync<PaginaDeInventarioDto<FilaDeCifraDto>>(HttpMethod.Get, ConQuery($"{RutaDeCifrasDeReferencia}/{lote}/rows", Query(
             ("unresolvedOnly", soloSinResolver ? "true" : null), ("page", pagina.ToString()), ("pageSize", tamano.ToString()))), null, null, ct);
 
     // ------------------------------------------------------------------------------------------- activación --
@@ -67,8 +67,8 @@ public sealed partial class InventarioClient
         CancellationToken ct = default) =>
         EnviarAsync<ResultadoDeActivacionDto>(HttpMethod.Post, $"{Base}/warehouses/{bodega}/activation", request, clave, ct);
 
-    /// <summary>Un comparativo con SOLIDO (<c>legacy-comparison-valuation</c> o <c>legacy-comparison-kardex</c>).</summary>
-    public Task<ResultadoDeInventario<TablaReporteDto>> ComparativoConSolidoAsync(string vista, DateOnly? fecha, Guid? bodega, CancellationToken ct = default) =>
+    /// <summary>Un comparativo con las cifras de referencia (<c>legacy-comparison-valuation</c> o <c>legacy-comparison-kardex</c>).</summary>
+    public Task<ResultadoDeInventario<TablaReporteDto>> ComparativoConCifrasDeReferenciaAsync(string vista, DateOnly? fecha, Guid? bodega, CancellationToken ct = default) =>
         InformeAsync(vista, Query(("asOf", fecha?.ToString("yyyy-MM-dd")), ("warehouse", bodega?.ToString())), ct);
 }
 
@@ -80,10 +80,10 @@ public sealed record ResumenDeSaldoInicialDto(string Bodega, DateOnly FechaDeCor
 
 public sealed record ValorPorGrupoDto(string GrupoContable, decimal Valor);
 
-/// <summary>Cantidad y valor de SOLIDO por (fecha, bodega, grupo) de la plantilla 15 (<c>extra.byDateWarehouseGroup</c>, §15).</summary>
+/// <summary>Cantidad y valor de referencia por (fecha, bodega, grupo) de la plantilla 15 (<c>extra.byDateWarehouseGroup</c>, §15).</summary>
 public sealed record CifraPorFechaBodegaGrupoDto(DateOnly Fecha, string Bodega, string GrupoContable, decimal Cantidad, decimal Valor, int Filas);
 
-/// <summary>Un lote de cifras de SOLIDO por fecha y bodega (§13.2).</summary>
+/// <summary>Un lote de cifras de referencia por fecha y bodega (§13.2).</summary>
 public sealed record LoteDeCifrasDto(Guid BatchPublicId, DateOnly AsOf, string WarehouseCode, Guid? WarehousePublicId, int Rows, int ResolvedRows,
     int UnresolvedRows, decimal Quantity, decimal Value, DateTime ImportedAt, string? ImportedBy, bool Superseded, string SourceFileName);
 
@@ -123,14 +123,14 @@ public sealed record CuentaDeActivacionDto(string Code, string Name, string Role
 
 /// <summary>
 /// El valorizado de un conjunto (api.md §13.3; T523): el de la bodega que se activa, el de las activas que comparten cuentas y, aparte,
-/// el de las no activas con sus cifras de SOLIDO al corte (suman al conjunto; la diferencia no se les atribuye). US7 (T538).
+/// el de las no activas con sus cifras de referencia al corte (suman al conjunto; la diferencia no se les atribuye). US7 (T538).
 /// </summary>
 public sealed record ValorizadoDeActivacionDto(decimal ThisWarehouse, decimal Total, IReadOnlyList<BodegaActivaDeActivacionDto>? ActiveWarehouses = null,
-    IReadOnlyList<BodegaDeSolidoDeActivacionDto>? LegacyWarehouses = null);
+    IReadOnlyList<BodegaFueraDelModuloDeActivacionDto>? LegacyWarehouses = null);
 
 public sealed record BodegaActivaDeActivacionDto(Guid WarehousePublicId, string Code, decimal Value);
 
-public sealed record BodegaDeSolidoDeActivacionDto(string WarehouseCode, Guid? WarehousePublicId, decimal Value, DateOnly FiguresAsOf, Guid BatchPublicId);
+public sealed record BodegaFueraDelModuloDeActivacionDto(string WarehouseCode, Guid? WarehousePublicId, decimal Value, DateOnly FiguresAsOf, Guid BatchPublicId);
 
 /// <summary>Los mensajes a Contabilidad hasta el corte que explican parte de la diferencia (cantidades). US7 (T538).</summary>
 public sealed record ExplicacionDeActivacionDto(int Pending, int InBatch, int Rejected, int NotPosted);

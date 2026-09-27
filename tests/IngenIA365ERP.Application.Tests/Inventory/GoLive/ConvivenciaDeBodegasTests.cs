@@ -11,7 +11,7 @@ using IngenIA365ERP.Domain.Inventory.Documents;
 namespace IngenIA365ERP.Application.Tests.Inventory.GoLive;
 
 /// <summary>
-/// Feature 012, T299 (FR-091, US4-4): la convivencia con SOLIDO. Una bodega <c>NotActivated</c> sólo admite su saldo inicial y su
+/// Feature 012, T299 (FR-091, US4-4): la convivencia con el sistema anterior. Una bodega <c>NotActivated</c> sólo admite su saldo inicial y su
 /// anulación: cualquier otra clase de I1 con bodega responde 422 <c>Inventory.Warehouse.NotActive</c> con
 /// <c>data.allowedClasses</c>; guardar el borrador no falla pero lo avisa; y en una bodega activa el saldo inicial responde
 /// <c>Inventory.OpeningBalance.WarehouseActive</c>. Recorre todas las clases de I1 que llevan bodega (<see cref="ClasesDeDocumento"/>).
