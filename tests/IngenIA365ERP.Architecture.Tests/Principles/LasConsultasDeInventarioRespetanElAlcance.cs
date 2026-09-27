@@ -75,6 +75,18 @@ public class LasConsultasDeInventarioRespetanElAlcance
         // Fase 13, US5 (I3; T613): la lista y el detalle de los documentos de venta (por la bodega o el punto de venta).
         "ListSalesDocumentsQueryHandler",
         "GetSalesDocumentQueryHandler",
+        // I3 (T623, T624): las vistas de ventas y caja y los indicios de deterioro.
+        "SalesBySessionReportQueryHandler",
+        "SalesByRegisterReportQueryHandler",
+        "SalesByPaymentMeansReportQueryHandler",
+        "CashSessionReportQueryHandler",
+        "DayCloseReportQueryHandler",
+        "CardPaymentsReportQueryHandler",
+        "CashMovementsReportQueryHandler",
+        "CashDifferencesReportQueryHandler",
+        "VoucherRedemptionsReportQueryHandler",
+        "DiscountApprovalsReportQueryHandler",
+        "ImpairmentReportQueryHandler",
     ];
 
     [Fact]

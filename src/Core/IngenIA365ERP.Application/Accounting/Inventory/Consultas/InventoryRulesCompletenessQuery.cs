@@ -51,6 +51,12 @@ public sealed class InventoryRulesCompletenessQueryHandler(
     public const string AvisoMercanciaConCruce = "GoodsNotInvoicedRequiresCrossDocument";
     public const string AvisoGrupoConVariasCuentas = "GroupWithSeveralInventoryAccounts";
 
+    /// <summary>Una regla vigente o futura con un medio de pago que no existe o no está activo y vigente (I3, T622). (nuevo)</summary>
+    public const string AvisoMedioInexistente = "RuleWithUnknownPaymentMeans";
+
+    /// <summary>Una regla vigente o futura con un punto de venta que no existe o no está activo (I3, T622). (nuevo)</summary>
+    public const string AvisoPuntoInexistente = "RuleWithUnknownPointOfSale";
+
     public async Task<Result<CompletitudDeLaMatrizDto>> Handle(InventoryRulesCompletenessQuery request, CancellationToken ct)
     {
         var fecha = request.Date;
@@ -66,10 +72,7 @@ public sealed class InventoryRulesCompletenessQueryHandler(
         var bodegas = catalogo.Warehouses.ToDictionary(w => w.Code, StringComparer.OrdinalIgnoreCase);
 
         var faltantes = Faltantes(combinaciones, vigentes, bodegas, sucursales);
-        var medios = (catalogo.PaymentMeans ?? [])
-            .Where(m => !vigentes.Any(r => r.Role == R.MedioDePago && string.Equals(r.PaymentMeansCode, m.Code, StringComparison.OrdinalIgnoreCase)))
-            .Select(m => new MedioSinCuentaDto(m.Code, m.Name, null))
-            .ToList();
+        var medios = MediosSinCuenta(catalogo, vigentes);
         var noElegibles = reglas
             .Select(r => (Regla: r, Reparo: AccountEligibility.Reparo(cuentas.GetValueOrDefault(r.AccountId), ModuloContable.Inventario)))
             .Where(x => x.Reparo is not null)
@@ -82,6 +85,7 @@ public sealed class InventoryRulesCompletenessQueryHandler(
         var sinMapeo = await SinMapeoAsync(combinaciones, ct);
         var avisos = await AvisosAsync(reglas, cuentas, ct);
         avisos.AddRange(await GruposConVariasCuentasAsync(vigentes, cuentas, fecha, ct));
+        avisos.AddRange(DimensionesInexistentes(catalogo, reglas, cuentas));
 
         var porTipo = new Dictionary<string, int>(StringComparer.Ordinal)
         {
@@ -204,6 +208,53 @@ public sealed class InventoryRulesCompletenessQueryHandler(
             .Select(x => new AvisoDeCompletitudDto(AvisoGrupoConVariasCuentas,
                 $"El costo es por cooperativa y el grupo {x.Grupo} va a {x.Cuentas.Count} cuentas de inventario según la bodega ({string.Join(", ", x.Cuentas)}).",
                 x.Cuentas[0], null));
+    }
+
+    /// <summary>
+    /// Los medios de pago activos sin regla <c>MedioDePago</c> vigente (FR-098, SC-024; I3, T622). Con puntos de venta publicados, un
+    /// medio cuyas reglas son todas de puntos concretos queda sin cuenta en los demás: sale una fila por cada punto que no cubre. Un
+    /// medio sin ninguna regla sale una sola vez, sin punto.
+    /// </summary>
+    public static List<MedioSinCuentaDto> MediosSinCuenta(CatalogoDeDimensionesDto catalogo, IReadOnlyList<InventoryPostingRule> vigentes)
+    {
+        var resultado = new List<MedioSinCuentaDto>();
+        foreach (var m in catalogo.PaymentMeans ?? [])
+        {
+            var suyas = vigentes.Where(r => r.Role == R.MedioDePago && string.Equals(r.PaymentMeansCode, m.Code, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (suyas.Count == 0)
+            {
+                resultado.Add(new MedioSinCuentaDto(m.Code, m.Name, null));
+                continue;
+            }
+            if (suyas.Any(r => r.PointOfSaleCode is null)) continue;
+            resultado.AddRange(catalogo.PointsOfSale
+                .Where(p => !suyas.Any(r => string.Equals(r.PointOfSaleCode, p.Code, StringComparison.OrdinalIgnoreCase)))
+                .Select(p => new MedioSinCuentaDto(m.Code, m.Name, p.Code)));
+        }
+        return resultado;
+    }
+
+    /// <summary>
+    /// Las reglas que nombran un medio de pago o un punto de venta que Inventario no publica (FR-082; I3, T622): no estorban —ningún
+    /// pago las alcanza— pero quedan en la matriz como ruido o como un código mal escrito. Mientras Inventario no publique medios
+    /// (<see cref="CatalogoDeDimensionesDto.PaymentMeans"/> nulo, antes de I3) no se comprueban. Son avisos: no suman al resumen.
+    /// </summary>
+    public static IEnumerable<AvisoDeCompletitudDto> DimensionesInexistentes(
+        CatalogoDeDimensionesDto catalogo, IReadOnlyList<InventoryPostingRule> reglas, IReadOnlyDictionary<int, ChartOfAccount> cuentas)
+    {
+        if (catalogo.PaymentMeans is not { } medios) yield break;
+        var codigosDeMedio = medios.Select(m => m.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var codigosDePunto = catalogo.PointsOfSale.Select(p => p.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in reglas)
+        {
+            var cuenta = cuentas.GetValueOrDefault(r.AccountId)?.Code;
+            if (r.PaymentMeansCode is { } medio && !codigosDeMedio.Contains(medio))
+                yield return new AvisoDeCompletitudDto(AvisoMedioInexistente,
+                    $"La regla {r.Operation}/{r.Role} nombra el medio de pago {medio}, que no existe o no está activo y vigente.", cuenta, r.PublicId);
+            if (r.PointOfSaleCode is { } punto && !codigosDePunto.Contains(punto))
+                yield return new AvisoDeCompletitudDto(AvisoPuntoInexistente,
+                    $"La regla {r.Operation}/{r.Role} nombra el punto de venta {punto}, que no existe o no está activo.", cuenta, r.PublicId);
+        }
     }
 
     private static bool RolTieneGrupo(string rol) => R.Buscar(rol) is { } r && r.Admite(DimensionDeRegla.AccountingGroupCode);

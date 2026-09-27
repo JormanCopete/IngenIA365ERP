@@ -140,7 +140,36 @@ public class InventoryReportsEndpoints : ICarterModule
                 Enum.TryParse<IngenIA365ERP.Domain.Enums.Integration.BatchTrigger>(q["trigger"].ToString(), ignoreCase: true, out var disparador) && Enum.IsDefined(disparador) ? disparador : null,
                 toleranciaDeLotes));
         group.MapVistaDeInventario(ConciliacionReportQueryHandler.Vista, (f, _) => new ConciliacionReportQuery(f));
+
+        // US5 (I3, T625): las diez vistas de ventas y caja (T623) y los indicios de deterioro (T624, que exige además
+        // Inventory.Costs.Read). card-payments y voucher-redemptions traen datos de clientes siempre; las sales-by-* con groupBy=customer.
+        // Los enums propios (class, kind, treatment, status) entran por nombre o por número.
+        group.MapVistaDeInventario(SalesBySessionReportQueryHandler.Vista,
+            (f, q) => new SalesBySessionReportQuery(f, Id(q, "cashier"), Texto(q, "groupBy")));
+        group.MapVistaDeInventario(SalesByRegisterReportQueryHandler.Vista, (f, q) => new SalesByRegisterReportQuery(f, Texto(q, "groupBy")));
+        group.MapVistaDeInventario(SalesByPaymentMeansReportQueryHandler.Vista,
+            (f, q) => new SalesByPaymentMeansReportQuery(f, Id(q, "paymentMeans"), Enumerado<IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass>(q, "class"), Texto(q, "groupBy")));
+        group.MapVistaDeInventario(CashSessionReportQueryHandler.Vista, (f, _) => new CashSessionReportQuery(f));
+        group.MapVistaDeInventario(DayCloseReportQueryHandler.Vista,
+            (f, q) => new DayCloseReportQuery(f, DateOnly.TryParse(q["operatingDate"].ToString(), System.Globalization.CultureInfo.InvariantCulture, out var dia) ? dia : null,
+                Id(q, "dayClose")));
+        group.MapVistaDeInventario(CardPaymentsReportQueryHandler.Vista,
+            (f, q) => new CardPaymentsReportQuery(f, Id(q, "acquirer"), Id(q, "terminal"), Id(q, "network")));
+        group.MapVistaDeInventario(CashMovementsReportQueryHandler.Vista, (f, q) => new CashMovementsReportQuery(f, Enumerado<CashMovementKind>(q, "kind")));
+        group.MapVistaDeInventario(CashDifferencesReportQueryHandler.Vista,
+            (f, q) => new CashDifferencesReportQuery(f, Id(q, "cashier"), Enumerado<CashDifferenceTreatment>(q, "treatment")));
+        group.MapVistaDeInventario(VoucherRedemptionsReportQueryHandler.Vista,
+            (f, q) => new VoucherRedemptionsReportQuery(f, Id(q, "paymentMeans"), Enumerado<VoucherRedemptionStatus>(q, "status")));
+        group.MapVistaDeInventario(DiscountApprovalsReportQueryHandler.Vista, (f, q) => new DiscountApprovalsReportQuery(f, Id(q, "approver")));
+        group.MapVistaDeInventario(ImpairmentReportQueryHandler.Vista, (f, _) => new ImpairmentReportQuery(f));
     }
+
+    private static Guid? Id(IQueryCollection q, string clave) => Guid.TryParse(q[clave].ToString(), out var id) ? id : null;
+
+    private static string? Texto(IQueryCollection q, string clave) => string.IsNullOrWhiteSpace(q[clave].ToString()) ? null : q[clave].ToString().Trim();
+
+    private static T? Enumerado<T>(IQueryCollection q, string clave) where T : struct, Enum =>
+        Enum.TryParse<T>(q[clave].ToString(), ignoreCase: true, out var valor) && Enum.IsDefined(valor) ? valor : null;
 }
 
 /// <summary>La extensión con la que se publica cada vista de inventario (feature 012, T182). (nuevo)</summary>

@@ -17,7 +17,8 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 /// códigos vivos de cada dimensión de la matriz y las combinaciones en uso.
 /// <list type="bullet">
 /// <item><b>Catálogo</b>: grupos contables, bodegas (con su sucursal de Core y su comportamiento), causas de ajuste y tipos de
-/// documento activos. Los puntos de venta y los medios de pago no existen todavía (I3, T622): van vacío y nulo.</item>
+/// documento activos; desde I3 (T622) también los puntos de venta activos y los medios de pago activos y vigentes hoy, con su clase
+/// (Core no es de Contabilidad: Inventario los publica como dimensión para que la matriz no lea <c>COR_PaymentMeans</c>).</item>
 /// <item><b>Combinaciones en uso</b> a una fecha: por cada tipo de documento cuyo <c>Contabilidad.ModoDePaso</c> vigente a esa
 /// fecha no es <c>NoPasa</c> y cuya clase emite mensajes de negocio a Contabilidad, las operaciones de la matriz que trae su clase
 /// × el grupo contable del producto × la bodega, tomadas del kardex de sus documentos (todas las bodegas que movieron, también el
@@ -27,7 +28,7 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 /// La operación de cada clase se nombra aquí con el texto literal de la matriz (<c>AjustePositivo</c>, <c>Compra</c>…) porque
 /// Inventario no ve el catálogo de operaciones de Contabilidad (<c>InventarioNoConoceContabilidadNiCartera</c>). (nuevo)
 /// </summary>
-public sealed class DimensionesDeInventario(IApplicationDbContext db, ILectorDeParametros parametros) : IDimensionesDeInventario
+public sealed class DimensionesDeInventario(IApplicationDbContext db, ILectorDeParametros parametros, IDateTimeService reloj) : IDimensionesDeInventario
 {
     public async Task<CatalogoDeDimensionesDto> CatalogoAsync(CancellationToken ct)
     {
@@ -44,7 +45,15 @@ public sealed class DimensionesDeInventario(IApplicationDbContext db, ILectorDeP
             .OrderBy(c => c.Code).Select(c => new CodigoDeDimensionDto(c.Code, c.Name)).ToListAsync(ct);
         var tipos = await db.InventoryDocumentTypes.AsNoTracking().Where(t => t.IsActive)
             .OrderBy(t => t.Code).Select(t => new CodigoDeDimensionDto(t.Code, t.Name)).ToListAsync(ct);
-        return new CatalogoDeDimensionesDto(grupos, bodegas, [], causas, tipos);
+        // I3 (T622; FR-082, FR-098, SC-024): los puntos de venta activos y los medios de pago activos y vigentes hoy.
+        var puntos = await db.PointsOfSale.AsNoTracking().Where(p => p.IsActive)
+            .OrderBy(p => p.Code).Select(p => new CodigoDeDimensionDto(p.Code, p.Name)).ToListAsync(ct);
+        var hoy = reloj.HoyLocal;
+        var medios = await db.PaymentMeans.AsNoTracking()
+            .Where(m => m.IsActive && m.ValidFrom <= hoy && (m.ValidTo == null || m.ValidTo >= hoy))
+            .OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code)
+            .Select(m => new MedioDePagoDeDimensionDto(m.Code, m.Name, m.Class)).ToListAsync(ct);
+        return new CatalogoDeDimensionesDto(grupos, bodegas, puntos, causas, tipos, medios);
     }
 
     public async Task<IReadOnlyList<CombinacionEnUsoDto>> CombinacionesEnUsoAsync(DateOnly fecha, CancellationToken ct)

@@ -1762,6 +1762,24 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `OrderIntegrationBatchCommand`, que es manual); el tope de un retiro es lo esperado del medio o, ya contada la sesión, lo contado; el
     reconteo que cuadra descarta el documento de diferencia; el esperado cuenta los pagos de documentos confirmados (una venta anulada deja
     de contar).
+- **I3, contabilidad por medio de pago e informes (T621–T626, pruebas T558–T559) (nuevo)**: en
+    `Application/Inventory/Integration/DimensionesDeInventario` los puntos de venta activos y los medios de pago activos y vigentes con su
+    clase (`CatalogoDeDimensionesDto.PaymentMeans` deja de ser nulo desde I3). En `InventoryRulesCompletenessQueryHandler`:
+    `MediosSinCuenta` (una fila por punto no cubierto cuando las reglas del medio son sólo de puntos concretos), `DimensionesInexistentes`
+    y los avisos `RuleWithUnknownPaymentMeans`, `RuleWithUnknownPointOfSale` (`AvisoMedioInexistente`, `AvisoPuntoInexistente`; no suman al
+    resumen). En `Application/Inventory/Reports`: `DatosDeVentasYCaja.{ClasesDeVenta, ClasesDeDevolucion, FiltrosAsync, DocumentosAsync,
+    ClientesAsync, AprobadoresAsync, Estado, Tratamiento, TipoDeMovimiento, Destino, Rango}`, `FiltrosDeCaja`, y las consultas
+    `SalesBySessionReportQuery`, `SalesByRegisterReportQuery`, `SalesByPaymentMeansReportQuery`, `CashSessionReportQuery`,
+    `DayCloseReportQuery`, `CardPaymentsReportQuery`, `CashMovementsReportQuery`, `CashDifferencesReportQuery`,
+    `VoucherRedemptionsReportQuery`, `DiscountApprovalsReportQuery` (cada handler con su `Vista`); en `Reports/Vistas`,
+    `ImpairmentReportQuery` (motivo `MotivoCostoSobreVnr`). En `Application/Inventory/Cash/DocumentosDeCaja`: el puerto
+    `IDocumentosDeCajaEnPdf.{Arqueo, ComprobanteDeMovimiento}`, `GetCashCountReportQuery`, `GetCashMovementReceiptQuery`, `EncabezadoDeCaja`
+    y los modelos `CashCountReportModel`, `CashMovementReceiptModel`, `EmpresaDeCajaDto`, `DenominacionContadaDto`, `LoteDeArqueoDto`,
+    `ReferenciaDeArqueoDto`, `LineaDeArqueoDto`. En la API: `SalesDocumentReport` + `SalesDocumentPdfRenderer` (implementa
+    `IRepresentacionDeVentaEnPdf`), `CashCountReport`, `CashMovementReceiptReport` y `DocumentosDeCajaPdfRenderer`. Decisiones: una venta
+    de oficina cuenta en la sesión donde se arquean sus pagos; el esperado de una sesión con arqueo ciego no sale en el informe mientras
+    esté abierta, salvo con `CashSessions.ViewAll`; el valor neto realizable del deterioro es el precio general sin IVA menos los gastos de
+    venta.
 
 ### 2.17 Códigos de error principales (familias)
 
