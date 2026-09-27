@@ -108,7 +108,7 @@ public class PreviewInventoryBatchQueryTests
     public async Task El_adaptador_delega_en_las_cuatro_consultas()
     {
         var sender = Substitute.For<ISender>();
-        var adaptador = new ContabilidadParaInventario(sender);
+        var adaptador = new ContabilidadParaInventario(sender, E.D.Db);
         var corte = new DateOnly(2026, 3, 31);
 
         await adaptador.EvaluarAsync([], default);

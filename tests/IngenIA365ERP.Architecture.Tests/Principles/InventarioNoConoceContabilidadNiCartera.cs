@@ -105,11 +105,13 @@ public class InventarioNoConoceContabilidadNiCartera
     }
 
     [Fact]
-    public void El_puerto_de_Contabilidad_declara_exactamente_sus_cuatro_consultas()
+    public void El_puerto_de_Contabilidad_declara_exactamente_sus_cinco_consultas()
     {
+        // La quinta, SinIniciarAsync, llegó con la decisión del dueño del 2026-09-26: sin contabilidad iniciada el modo de paso
+        // por defecto es «no pasa».
         var puerto = typeof(IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario);
         Assert.Equal(
-            ["CompletitudAsync", "EvaluarAsync", "PrevisualizarLoteAsync", "SaldosDeCuentasMapeadasAsync"],
+            ["CompletitudAsync", "EvaluarAsync", "PrevisualizarLoteAsync", "SaldosDeCuentasMapeadasAsync", "SinIniciarAsync"],
             MetodosDe(puerto));
     }
 

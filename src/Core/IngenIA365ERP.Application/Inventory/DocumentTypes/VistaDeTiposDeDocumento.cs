@@ -1,6 +1,8 @@
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.Documents;
+using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
@@ -21,7 +23,8 @@ public sealed class VistaDeTiposDeDocumento(
     IApplicationDbContext db,
     IMaestrosDelDocumento maestros,
     ILectorDeParametros parametros,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    IContabilidadParaInventario? contabilidad = null)
 {
     public async Task<IReadOnlyList<DocumentTypeDto>> ArmarAsync(IReadOnlyList<InventoryDocumentType> tipos, bool conHistorial, CancellationToken ct)
     {
@@ -74,11 +77,12 @@ public sealed class VistaDeTiposDeDocumento(
         if (!ConfirmacionDeDocumento.EmiteNegocioAContabilidad(clase)) return null;
 
         var modo = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ContabilidadModoDePaso, hoy, ParameterScopeKind.DocumentType, tipo.Id, ct);
+        var vigente = await ModoDePasoVigente.LeerAsync(parametros, contabilidad, hoy, ParameterScopeKind.DocumentType, tipo.Id, ct);
         var granularidad = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ContabilidadGranularidad, hoy, ParameterScopeKind.DocumentType, tipo.Id, ct);
         var disparador = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ContabilidadDisparadorDeLote, hoy, ParameterScopeKind.DocumentType, tipo.Id, ct);
         var hora = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ContabilidadHoraDeLote, hoy, ParameterScopeKind.DocumentType, tipo.Id, ct);
 
-        var texto = modo.IsSuccess ? modo.Value.Texto : string.Empty;
+        var texto = vigente.IsSuccess ? vigente.Value : string.Empty;
         var heredado = !modo.IsSuccess || modo.Value.Vigencia is null || modo.Value.Vigencia.ScopeKind != ParameterScopeKind.DocumentType;
         return new ModoDePasoDelTipoDto(
             texto switch { "PorLotes" => PostingMode.Batch, "NoPasa" => PostingMode.NotPosted, _ => PostingMode.Online },

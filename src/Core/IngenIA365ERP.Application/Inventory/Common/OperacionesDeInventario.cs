@@ -1,6 +1,9 @@
 using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Parameters;
+using IngenIA365ERP.Application.Inventory.Integration;
+using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Inventory.Parameters;
 using Microsoft.EntityFrameworkCore;
@@ -25,11 +28,14 @@ public static class OperacionesDeInventario
     /// <summary>
     /// El modo de una operación de negocio sin tipo de documento (FR-069): el <b>valor general</b> de
     /// <c>Contabilidad.ModoDePaso</c> a la fecha; por lotes, con el disparador, la hora y la granularidad generales y el tipo
-    /// de mensaje como raíz del horario (<see cref="ClavesDeLote.Horario"/>).
+    /// de mensaje como raíz del horario (<see cref="ClavesDeLote.Horario"/>). Sin vigencia guardada y sin contabilidad iniciada, «no
+    /// pasa» (<see cref="ModoDePasoVigente"/>).
     /// </summary>
-    public static async Task<ModoDeEntrega> ModoGeneralAsync(ILectorDeParametros parametros, string raiz, DateOnly fecha, CancellationToken ct)
+    public static async Task<ModoDeEntrega> ModoGeneralAsync(ILectorDeParametros parametros, IContabilidadParaInventario? contabilidad,
+        string raiz, DateOnly fecha, CancellationToken ct)
     {
-        var modo = await TextoAsync(ParametrosDeInventario.ContabilidadModoDePaso, "EnLinea");
+        var vigente = await ModoDePasoVigente.LeerAsync(parametros, contabilidad, fecha, ParameterScopeKind.None, 0, ct);
+        var modo = vigente.IsSuccess && !string.IsNullOrWhiteSpace(vigente.Value) ? vigente.Value : ModoDePasoVigente.EnLinea;
         switch (modo)
         {
             case "PorLotes":

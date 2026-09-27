@@ -547,7 +547,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   **mensajes nacidos en la misma transacción** que el documento, por el único escritor
   `EmisorDeMensajes`, que nunca guarda (T7–T12); el mensaje lo origina la persona, nunca el proceso.
   En I1 **no hay despachador**: los mensajes quedan `Pending`/`InBatch` hasta I2, y el modo de paso
-  (`EnLinea`, `PorLotes`, `NoPasa`) se sella al confirmar. **Todo lo que mueve inventario es un
+  (`EnLinea`, `PorLotes`, `NoPasa`) se sella al confirmar. **Sin contabilidad iniciada el defecto es
+  `NoPasa`** (`ModoDePasoVigente`, decisión del dueño del 2026-09-26; lo pregunta
+  `IContabilidadParaInventario.SinIniciarAsync`): con el defecto «en línea» una cooperativa nueva no
+  confirmaba nada; un modo guardado a propósito se respeta. **Todo lo que mueve inventario es un
   `INV_Documents`** con su clase (34, fijas en `ClasesDeDocumento`, no son columna) y un tipo de la
   cooperativa; **un solo flujo de confirmación**, `ConfirmacionDeDocumento` (relectura → aprobación →
   guardia fiscal y validación previa → cerrojo → efecto de la clase → número → mensajes → un

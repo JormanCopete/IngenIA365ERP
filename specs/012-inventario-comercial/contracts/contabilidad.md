@@ -482,6 +482,10 @@ public interface IContabilidadParaInventario
     // FR-077: los comprobantes que generaría un lote, sin numerar ni guardar.
     Task<Result<VistaPreviaDeLoteDto>> PrevisualizarLoteAsync(
         IReadOnlyList<Guid> messagePublicIds, CancellationToken ct);
+
+    // ¿Falta iniciar la contabilidad? (decisión del dueño del 2026-09-26, §4.3). En negativo, para que
+    // un doble sin configurar deje el comportamiento de siempre.
+    Task<bool> SinIniciarAsync(CancellationToken ct);
 }
 
 public sealed record MensajeContableDto(IntegrationEnvelopeV1 Envelope, object Payload);
@@ -545,8 +549,13 @@ se muestran y no impiden confirmar.
 | `Accounting.NotInitialized` | Contabilidad | `/contabilidad/configuracion` | `Accounting.Setup.Manage` |
 | `Accounting.InventoryMessage.Unbalanced`, más de dos decimales | Inventario | — | defecto del emisor: soporte |
 
-Una cooperativa sin contabilidad iniciada pone `Contabilidad.ModoDePaso = NoPasa`; si no, toda
-confirmación que pase se detiene en `Accounting.NotInitialized`.
+**Sin contabilidad iniciada el modo por defecto es «no pasa»** (decisión del dueño del 2026-09-26,
+`ModoDePasoVigente`): si no hay vigencia guardada de `Contabilidad.ModoDePaso` —ni del tipo ni la
+general— y `SinIniciarAsync` responde que falta iniciarla, el documento se confirma y se sella
+`NotPosted`; al iniciar la contabilidad el defecto vuelve a ser «en línea» y lo confirmado antes se
+envía con «Enviar lo que no pasaba» (api.md §25.2). Un modo **guardado** a propósito se respeta: quien
+guardó «en línea» sin contabilidad iniciada recibe `Accounting.NotInitialized` en cada confirmación.
+Hasta ese día el defecto era «en línea» sin excepción y una cooperativa nueva no confirmaba nada.
 
 ### 4.4 Tiempo y política
 

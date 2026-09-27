@@ -6,7 +6,7 @@ namespace IngenIA365ERP.Application.Common.Integration.Accounting;
 
 /// <summary>
 /// Lo único de Contabilidad que Inventario conoce (feature 012, T30, T31; FR-014; contracts/contabilidad.md §4.1, §7.2).
-/// Declara <b>exactamente</b> estos cuatro métodos (<c>InventarioNoConoceContabilidadNiCartera</c>). Lo implementa el
+/// Declara <b>exactamente</b> estos cinco métodos (<c>InventarioNoConoceContabilidadNiCartera</c>). Lo implementa el
 /// adaptador <c>ContabilidadParaInventario</c> de <c>Application/Accounting/Inventory</c> (T517), que delega en sus cuatro
 /// consultas; mientras no esté registrado, la validación previa queda <c>NotApplicable</c> y la vista previa de un lote
 /// responde <c>Integration.Destination.Unavailable</c>.
@@ -29,6 +29,12 @@ public interface IContabilidadParaInventario
 
     /// <summary>FR-077: los comprobantes que generaría un lote con estos mensajes (en orden de emisión), sin numerar ni guardar.</summary>
     Task<Result<VistaPreviaDeLoteDto>> PrevisualizarLoteAsync(IReadOnlyList<Guid> messagePublicIds, CancellationToken ct);
+
+    /// <summary>
+    /// ¿Falta iniciar la contabilidad? Mientras falte, el modo de paso por defecto es «no pasa» (<c>ModoDePasoVigente</c>; decisión
+    /// del dueño del 2026-09-26). Se pregunta en negativo para que «no sé» —un doble sin configurar— deje el comportamiento de siempre.
+    /// </summary>
+    Task<bool> SinIniciarAsync(CancellationToken ct);
 }
 
 /// <summary>El sobre y el contenido tal como se emitirían (§4.1): lo evaluado y lo emitido son el mismo contrato.</summary>

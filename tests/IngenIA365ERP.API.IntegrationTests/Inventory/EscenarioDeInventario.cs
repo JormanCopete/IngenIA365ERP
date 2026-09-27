@@ -73,11 +73,9 @@ public sealed class EscenarioDeInventario
         using var http = fx.CreateClient();
         var t = coop.TokenAdmin;
 
-        // Desde I2 (T520) la confirmación pregunta a Contabilidad si el documento es contabilizable, y una cooperativa sin
-        // contabilidad iniciada responde Accounting.NotInitialized como NotPostable. Los escenarios de I1 no inician la
-        // contabilidad: sus tipos van en «no pasa» desde antes de todo movimiento, como haría una cooperativa que todavía no
-        // lleva su contabilidad en el ERP (contracts/contabilidad.md §4.3).
-        if (primerEjercicioContable is null) await SinPasoAContabilidadAsync(http, t);
+        // Los escenarios de I1 no inician la contabilidad y no guardan ningún modo de paso: sus documentos confirman en «no pasa»
+        // por el defecto de una cooperativa sin contabilidad (ModoDePasoVigente, decisión del dueño del 2026-09-26). Hasta ese día
+        // guardaban «no pasa» a mano, porque el defecto «en línea» hacía que la validación previa lo rechazara todo.
 
         // Sucursal S2 (la Principal ya existe, sin código).
         var s2 = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/core/branches", new { code = "S2", name = "Sucursal Dos", shortName = "SDOS" });
@@ -154,19 +152,6 @@ public sealed class EscenarioDeInventario
         {
             Coop = coop, S1 = principal, S2 = idS2, Corte = fechaDeCorte, Bodegas = bodegas, Productos = productos, Tipos = tipos, Causas = causas,
         };
-    }
-
-    /// <summary>
-    /// <c>Contabilidad.ModoDePaso = NoPasa</c> general, vigente desde el 1 de enero de hace dos años (antes de todo movimiento): la
-    /// cooperativa no pasa nada a Contabilidad. Los tipos fiscales piden la confirmación explícita.
-    /// </summary>
-    public static async Task SinPasoAContabilidadAsync(HttpClient http, string token)
-    {
-        await InventarioE2E.ExitoAsync(http, token, HttpMethod.Post, "/api/inventory/parameters/INV/Contabilidad.ModoDePaso/versions", new
-        {
-            scopeKind = "None", value = "NoPasa", validFrom = new DateOnly(InventarioE2E.HoyEnColombia.Year - 2, 1, 1).ToString("yyyy-MM-dd"),
-            reason = "Escenario sin contabilidad iniciada", confirmFiscalWithoutPosting = true,
-        });
     }
 
     /// <summary>Activa una bodega fuera de producción: sin comparación contable (I1), con la diferencia aceptada y motivo.</summary>

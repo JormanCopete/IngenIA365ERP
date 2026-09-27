@@ -33,7 +33,7 @@ public sealed record ModoDelDocumento(PostingMode? Modo, IReadOnlyList<Inventory
 /// <item><see cref="Sobres"/>: los sobres tal como se emitirían, con un <c>messageId</c> provisional que no se guarda.</item>
 /// </list>
 /// </summary>
-public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDeParametros parametros)
+public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDeParametros parametros, IContabilidadParaInventario? contabilidad = null)
 {
     /// <summary>El modo que se sellará al confirmar (y, en un derivado, sus orígenes).</summary>
     public async Task<Result<ModoDelDocumento>> ModoAsync(ContextoDeEfecto contexto, IEfectoDeClase efecto, DateOnly hoy, CancellationToken ct)
@@ -49,18 +49,18 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
 
     /// <summary>
     /// <c>Contabilidad.ModoDePaso</c> vigente a la fecha de confirmación, del tipo si tiene excepción o el general, en toda clase que
-    /// emite mensajes de negocio a Contabilidad; nulo en las demás.
+    /// emite mensajes de negocio a Contabilidad; nulo en las demás. Sin vigencia guardada y sin contabilidad iniciada, «no pasa»
+    /// (<see cref="ModoDePasoVigente"/>).
     /// </summary>
     private async Task<Result<PostingMode?>> ModoASellarAsync(InventoryDocumentType tipo, DescripcionDeClase clase, DateOnly hoy, CancellationToken ct)
     {
         if (!ConfirmacionDeDocumento.EmiteNegocioAContabilidad(clase)) return Result.Success<PostingMode?>(null);
-        var leido = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ContabilidadModoDePaso, hoy,
-            ParameterScopeKind.DocumentType, tipo.Id, ct);
+        var leido = await ModoDePasoVigente.LeerAsync(parametros, contabilidad, hoy, ParameterScopeKind.DocumentType, tipo.Id, ct);
         if (leido.IsFailure) return Result.Failure<PostingMode?>(leido.Error);
-        return Result.Success<PostingMode?>(leido.Value.Texto switch
+        return Result.Success<PostingMode?>(leido.Value switch
         {
-            "PorLotes" => PostingMode.Batch,
-            "NoPasa" => PostingMode.NotPosted,
+            ModoDePasoVigente.PorLotes => PostingMode.Batch,
+            ModoDePasoVigente.NoPasa => PostingMode.NotPosted,
             _ => PostingMode.Online,
         });
     }

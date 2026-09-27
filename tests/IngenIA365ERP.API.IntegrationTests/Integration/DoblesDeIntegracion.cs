@@ -66,6 +66,8 @@ public sealed class ContabilidadParaInventarioConDoble(ContabilidadParaInventari
 
     public Task<Result<VistaPreviaDeLoteDto>> PrevisualizarLoteAsync(IReadOnlyList<Guid> messagePublicIds, CancellationToken ct) =>
         real.PrevisualizarLoteAsync(messagePublicIds, ct);
+
+    public Task<bool> SinIniciarAsync(CancellationToken ct) => real.SinIniciarAsync(ct);
 }
 
 /// <summary>El destino Contabilidad real, salvo en la cooperativa marcada, donde lanza las veces pedidas.</summary>
