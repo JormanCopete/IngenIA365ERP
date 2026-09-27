@@ -6,7 +6,7 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Documents;
 /// El consecutivo de un tipo de documento con un prefijo y una vigencia (<c>INV_DocumentSequences</c>; feature 012,
 /// T16, FR-038; data-model §5.9). A lo sumo una vigente por tipo a una fecha, compartida por todas las cajas que usan
 /// el tipo. Cambiar de prefijo es una fila nueva que cierra la anterior la víspera; volver a un prefijo usado reabre su
-/// fila. <see cref="NextValue"/> se fija al crear (para continuar la numeración de SOLIDO) y después sólo lo cambia
+/// fila. <see cref="NextValue"/> se fija al crear (para continuar la numeración del sistema anterior) y después sólo lo cambia
 /// <c>Numerador</c>, dentro de la transacción de confirmación y con la fila bloqueada al final del cerrojo
 /// (<c>SoloElNumeradorNumera</c>). Nunca se llama <c>NextNumber</c> (§2.1).
 /// </summary>

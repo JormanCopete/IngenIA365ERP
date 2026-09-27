@@ -12,7 +12,7 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 
 /// <summary>
 /// La puesta en marcha (feature 012, T316; contracts/api.md §13.1, §13.2; FR-089, FR-091): el saldo inicial y las cifras de
-/// SOLIDO. Cada ruta sólo reenvía al <see cref="ISender"/>, con el sobre de error, <c>Idempotency-Key</c> en toda escritura y su
+/// referencia. Cada ruta sólo reenvía al <see cref="ISender"/>, con el sobre de error, <c>Idempotency-Key</c> en toda escritura y su
 /// <c>.RequirePermission(...)</c> (sin él, el 404 de lo inexistente).
 /// <list type="bullet">
 /// <item><c>/api/inventory/opening-balances</c>: la plantilla 14 (<c>template.xlsx</c> con <c>Inventory.Warehouses.View</c>,
@@ -34,7 +34,7 @@ public class GoLiveEndpoints : ICarterModule
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         SaldoInicial(app);
-        CifrasDeSolido(app);
+        CifrasDeReferencia(app);
     }
 
     private static void SaldoInicial(IEndpointRouteBuilder app)
@@ -75,11 +75,11 @@ public class GoLiveEndpoints : ICarterModule
             .WithName("Inventory_OpeningBalances_Void").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(CargarSaldo);
     }
 
-    private static void CifrasDeSolido(IEndpointRouteBuilder app)
+    private static void CifrasDeReferencia(IEndpointRouteBuilder app)
     {
         var g = app.MapGroup("/api/inventory/legacy-figures").WithTags("Inventory Legacy Figures").RequireAuthorization();
 
-        g.MapPlantilla(VerBodegas, ImportarCifras, PlantillaDeCifrasDeSolido.Clave, "Inventory_LegacyFigures",
+        g.MapPlantilla(VerBodegas, ImportarCifras, PlantillaDeCifrasDeReferencia.Clave, "Inventory_LegacyFigures",
             importar: (modo, archivo, motivo, clave) => new ImportLegacyFiguresCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
 
         g.MapGet("/", async (DateOnly? asOf, string? warehouseCode, ISender sender, CancellationToken ct) =>

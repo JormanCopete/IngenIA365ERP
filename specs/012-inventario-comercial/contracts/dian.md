@@ -1014,7 +1014,7 @@ destinatarios por permiso (`ElectronicInvoicing.Documents.View` por defecto).
 
 - **A3**: proveedor tecnológico (lista corta y prueba pagada en sandbox). Bloquea el adaptador real y
   la salida, no el desarrollo.
-- **A4**: cómo factura COOFLOPAL hoy (SOLIDO no lo hace), sus resoluciones, prefijos, software
+- **A4**: cómo factura COOFLOPAL hoy (el sistema anterior no lo hace), sus resoluciones, prefijos, software
   asociado, resolución de contingencia y numeración del DEE POS. Bloquea el ensayo de I4.
 - **A5**: buzón y dominio del correo al comprador (SPF/DKIM del relay).
 - **I1 a I7** con sus propuestas por defecto (15 s de espera; 03 automática y manual; no guardar el PDF

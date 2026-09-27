@@ -7,7 +7,7 @@
 
 ## 1. Qué se retira y qué se conserva
 
-El traslado a medias de SOLIDO había dejado **23 tablas `INV_*`** que ninguna pantalla nueva usa:
+El traslado a medias del sistema anterior había dejado **23 tablas `INV_*`** que ninguna pantalla nueva usa:
 
 `INV_CommissionParameters`, `INV_CommissionPriceParams`, `INV_DiscountTypes`, `INV_Discounts`,
 `INV_Documents`, `INV_Invoices`, `INV_Transactions`, `INV_TransactionTypes`, `INV_Locations`,

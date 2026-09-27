@@ -104,7 +104,7 @@ public class DiscardDraftWithAttachmentsTests
     {
         var e = new Escenario();
         var apertura = e.Borrador(DocumentKind.Opening);
-        e.Soporte(apertura, "balance-solido");
+        e.Soporte(apertura, "balance-anterior");
 
         var sinConfirmar = await e.Descartador().Handle(new DiscardDraftCommand(apertura.PublicId), CancellationToken.None);
         var confirmado = await e.Descartador().Handle(new DiscardDraftCommand(apertura.PublicId, DeleteAttachments: true), CancellationToken.None);

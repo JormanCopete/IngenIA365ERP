@@ -6,7 +6,7 @@ namespace IngenIA365ERP.Domain.Entities.Payroll;
 
 /// <summary>
 /// Caja de compensación familiar a la que está afiliado cada empleado
-/// (<c>PAY_FamilyCompensationFunds</c>; <see cref="Employee.FamilySubsidyId"/>). En SOLIDO la
+/// (<c>PAY_FamilyCompensationFunds</c>; <see cref="Employee.FamilySubsidyId"/>). En el sistema anterior la
 /// caja era un entero suelto en la ficha sin tabla detrás; aquí es un catálogo como
 /// EPS, pensión, ARL y cesantías. El aporte del 4 % (<c>CAJA</c>) se liquida igual sin
 /// caja; el dato importa para la planilla PILA y los reportes por entidad.

@@ -518,7 +518,7 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   marcas, grupos contables con vigencia por producto, productos con códigos de barras e impuestos,
   causas de ajuste, canales), bodegas con ubicaciones y **bodega de tránsito por sucursal**, kardex y
   existencias, costo promedio ponderado (cooperativa o bodega), períodos con cierre y reapertura,
-  saldo inicial y **activación bodega por bodega** con cifras de SOLIDO y comparativos, compra directa,
+  saldo inicial y **activación bodega por bodega** con cifras de referencia (`/inventario/cifras-de-referencia`; ninguna pantalla nombra al sistema anterior) y comparativos, compra directa,
   recepción, factura y notas del proveedor, devolución y eventos RADIAN, traslados en dos pasos con
   diferencias aprobadas, movimiento entre ubicaciones, conteo físico con foto y ajuste aprobado, reorden
   y quiebre, nueve vistas en `/api/reports/inventory/{vista}` (`kardex`, `stock`, `valuation`,

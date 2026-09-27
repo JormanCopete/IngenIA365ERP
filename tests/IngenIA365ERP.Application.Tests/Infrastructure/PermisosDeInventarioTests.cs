@@ -197,4 +197,19 @@ public class PermisosDeInventarioTests
         codigos.Should().Contain("Inventory.CashSessions.View").And.NotContain("Inventory.CashSessions.ViewAll");
         codigos.Should().OnlyContain(c => c.StartsWith("Inventory.") && c.EndsWith(".View"));
     }
+
+    [Fact]
+    public async Task Sembrar_otra_vez_pone_al_dia_la_descripcion_que_cambio_en_el_catalogo()
+    {
+        using var db = IngenIA365ERP.Application.Tests.Common.TestDbContextFactory.Create();
+        await InventoryPermissionCatalogSeeder.SeedAsync(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var cifras = db.Permissions.Single(p => p.Resource == "Inventory.LegacyFigures" && p.Action == "Import");
+        cifras.Description = "Descripción vieja";
+        await db.SaveChangesAsync();
+
+        await InventoryPermissionCatalogSeeder.SeedAsync(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        db.Permissions.Single(p => p.Resource == "Inventory.LegacyFigures" && p.Action == "Import").Description
+            .Should().Be("Importar y consultar las cifras de referencia");
+    }
 }

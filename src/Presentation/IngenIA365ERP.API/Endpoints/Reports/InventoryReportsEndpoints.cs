@@ -88,17 +88,17 @@ public class InventoryReportsEndpoints : ICarterModule
                 RequiredPermission: ValuationReportQueryHandler.PermisoDeCostos),
             (f, q) => new ValuationReportQuery(f, bool.TryParse(q["includeTransit"].ToString(), out var conTransito) && conTransito));
 
-        // US4 (T318): los comparativos con SOLIDO (US4-6). El de valorizado exige además Inventory.Costs.Read; el de kardex
+        // US4 (T318): los comparativos con las cifras de referencia (US4-6). El de valorizado exige además Inventory.Costs.Read; el de kardex
         // exige la bodega y deja vacíos los valores sin ese permiso.
         group.MapVistaDeInventario(
-            new VistaDeInformeDeInventario("legacy-comparison-kardex", "Comparativo de kardex con SOLIDO",
-                "Por producto, en cada fecha con cifras de SOLIDO de la bodega: cantidad y valor de SOLIDO contra el módulo.",
-                "comparativo-kardex-solido", ["warehouse", "product", "from", "to"], []),
+            new VistaDeInformeDeInventario("legacy-comparison-kardex", "Comparativo de kardex con cifras de referencia",
+                "Por producto, en cada fecha con cifras de referencia de la bodega: cantidad y valor de referencia contra el módulo.",
+                "comparativo-kardex-referencia", ["warehouse", "product", "from", "to"], []),
             (f, _) => new LegacyComparisonKardexQuery(f));
         group.MapVistaDeInventario(
-            new VistaDeInformeDeInventario("legacy-comparison-valuation", "Comparativo de valorizado con SOLIDO",
-                "Por grupo contable, bodega y producto a una fecha: cantidad y valor de SOLIDO contra el valorizado del módulo.",
-                "comparativo-valorizado-solido", ["asOf", "warehouse", "accountingGroup"], [],
+            new VistaDeInformeDeInventario("legacy-comparison-valuation", "Comparativo de valorizado con cifras de referencia",
+                "Por grupo contable, bodega y producto a una fecha: cantidad y valor de referencia contra el valorizado del módulo.",
+                "comparativo-valorizado-referencia", ["asOf", "warehouse", "accountingGroup"], [],
                 RequiredPermission: ValuationReportQueryHandler.PermisoDeCostos),
             (f, _) => new LegacyComparisonValuationQuery(f));
 

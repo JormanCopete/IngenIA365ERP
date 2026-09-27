@@ -239,7 +239,7 @@ public class Person : AuditableEntity
     public bool IsInsolvent { get; set; }
     public bool IsDeceased { get; set; }
 
-    // === LEGACY AUDIT (preservado del SOLIDO original) ===
+    // === LEGACY AUDIT (preservado del sistema anterior original) ===
 
     [MaxLength(20)]
     public string? LegacyUser { get; set; }

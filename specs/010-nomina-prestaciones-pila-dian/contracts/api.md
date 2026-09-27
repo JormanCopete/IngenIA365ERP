@@ -427,7 +427,7 @@ Errores: `Payroll.Disbursement.RunNotApproved`, `.FileNotFound`, `.FormatNotFoun
 `.LineTooLong` (`data: { lineNumber, field, employee }`), `.NotGenerated` (`data: { status }`),
 `.CompanyMissing` (sin empresa con NIT para la cabecera), `.FileMissing`, `.FileTampered` (la huella no
 coincide), aviso `.Excluded` (`data: { count }`), `.PaymentsAlreadyMarked` (`data: { employeePublicIds[] }`).
-D-10 resuelto: `COR_Banks.TransferCode` **es** el código de transferencia (ACH) —SOLIDO lo escribía
+D-10 resuelto: `COR_Banks.TransferCode` **es** el código de transferencia (ACH) —el sistema anterior lo escribía
 como `codtras` en su plano de dispersión—; sin él el empleado queda en pendientes con `BankCodeMissing`.
 La consignación por fondo (`/settlements/severance/{runId}/deposit-schedule/{fundId}/file?formatId=`)
 usa el mismo motor con `scope = SeveranceDeposit` (el indicado o el vigente al corte); sin formato,

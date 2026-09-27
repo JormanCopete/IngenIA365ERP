@@ -35,7 +35,7 @@ public class LosComandosDeInventarioLlevanClave
         "SetUserCommercialScopeCommand",
         // Fase 3 (T128): crear un rol desde un perfil sugerido, desde la pantalla de Roles.
         "CreateRoleFromTemplateCommand",
-        // Fase 7, US4 (T324): la puesta en marcha —saldo inicial, cifras de SOLIDO y activación de una bodega—.
+        // Fase 7, US4 (T324): la puesta en marcha —saldo inicial, cifras de referencia y activación de una bodega—.
         "ImportOpeningBalanceCommand",
         "ImportLegacyFiguresCommand",
         "ActivateWarehouseCommand",

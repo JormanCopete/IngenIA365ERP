@@ -6,7 +6,7 @@ public sealed record OpcionDeCatalogo(string Codigo, string Nombre);
 /// <summary>
 /// Los catálogos cerrados del formulario de persona, en un solo sitio (feature 008). Hasta el
 /// 2026-09-13 vivían copiados a mano en Personas, Empleados y Asociados, y las copias
-/// divergían. Son códigos del modelo SOLIDO (una o dos letras) que la base guarda tal cual;
+/// divergían. Son códigos del modelo el sistema anterior (una o dos letras) que la base guarda tal cual;
 /// no son catálogos de tabla, por eso no salen de la API.
 /// </summary>
 public static class CatalogosDePersona

@@ -609,7 +609,7 @@ trae hijos, código existente = actualización, con movimientos sólo el nombre�
 la propuesta; se mueve hasta el fin del primer ejercicio y nunca a un mes cerrado) que se **edita
 entera mientras sea borrador**: agregar, cambiar y quitar cuentas desde el comprobante, cambiar la
 fecha, descartarlo, y volver a importar reemplaza sus líneas conservando el mismo comprobante. Con
-esto una cooperativa que llega de SOLIDO carga cuentas y saldos al corte real sin digitar de a una.
+esto una cooperativa que llega del sistema anterior carga cuentas y saldos al corte real sin digitar de a una.
 Verde: 1.664 sin contenedores y 213 e2e (212 pasan, 1 omitida). Runbook §4 y §7a. **En producción
 desde el `release 8d3f9a1`** (2026-09-22).
 
@@ -706,7 +706,7 @@ Lo que sigue y a quién le toca:
 #### P17 — Feature 012 (inventario comercial): entrega I1 terminada en su rama, **sin desplegar**
 
 **Estado: rama local `012-inventario-comercial`, sin merge a `develop` y sin desplegar en DEV, QA ni
-producción** (corte 2026-09-26). La feature reemplaza el traslado a medias del inventario de SOLIDO por
+producción** (corte 2026-09-26). La feature reemplaza el traslado a medias del inventario del sistema anterior por
 un módulo comercial nuevo en seis entregas (I1 núcleo, I2 integración con Contabilidad, I3 ventas y POS,
 I4 documentos electrónicos DIAN, I5 compras completas y costeo avanzado, I6 comercio ampliado) más IC
 (crédito con Cartera). Spec-kit completo desde el 2026-09-24 (spec, plan, research R1–R34, decisiones
@@ -716,7 +716,7 @@ genera desde mensajes, con modo de paso en línea, por lotes o «no pasa», enmi
 (el canal de facturación electrónica es configurable por cooperativa y con vigencia, proveedor tecnológico primero).
 
 **Entrega I1** (fases 1–11 y la parte básica de la 21): catálogo, bodegas con tránsito, kardex y
-existencias, costo promedio, períodos, saldo inicial y activación bodega por bodega con cifras de SOLIDO,
+existencias, costo promedio, períodos, saldo inicial y activación bodega por bodega con cifras de referencia,
 compra directa y documentos del proveedor, traslados en dos pasos, conteos, reorden, informes básicos,
 vendedores como rol, y la plataforma (mensajes, ejecución por cooperativa, idempotencia, parámetros con
 vigencia, aprobaciones con montos, alertas, auditoría encadenada). Tres migraciones pares:
@@ -737,8 +737,7 @@ Lo que hay que saber antes de llevarla a un ambiente:
   mensajes en `COR_IntegrationMessages` en `Pending`/`InBatch`, correctos y en orden, esperando.
 - **En producción ninguna bodega se puede activar con I1 sola**: la comparación contra los libros
   (FR-090) necesita la consulta de saldos de I2, y sin ella `POST …/activation` responde
-  `Inventory.Activation.AccountingUnavailable`. Se puede cargar y aprobar saldos, importar cifras de
-  SOLIDO y correr los comparativos. Fuera de producción se activa aceptando la diferencia con permiso y
+  `Inventory.Activation.AccountingUnavailable`. Se puede cargar y aprobar saldos, importar cifras del sistema anterior y correr los comparativos. Fuera de producción se activa aceptando la diferencia con permiso y
   motivo.
 - **Retiro heredado**: el diagnóstico del 2026-09-25 (con autorización del dueño para leer PDN) dio 0 filas
   en las 23 tablas y 0 vendedores en DEV `ingenia365erp`, QA `ingenia365erp` y `coop_prueba`, y producción
@@ -878,7 +877,7 @@ sacan de la lista. Los demás módulos que buscan personas por `/api/core/people
 
 #### P14 — Motivo de terminación de contrato: texto libre sobre `varchar(4)` — ✅ cerrado el 2026-09-13
 
-`PAY_Employees.TerminationCause` era el código de 4 caracteres de SOLIDO y la pantalla lo pedía
+`PAY_Employees.TerminationCause` era el código de 4 caracteres del sistema anterior y la pantalla lo pedía
 como texto libre: cualquier motivo real hacía fallar «Terminar contrato» con un 500
 (`22001: value too long for type character varying(4)`). Se vio al escribir la e2e de la 008. Como
 nada en la aplicación lo interpreta como código (el detalle del empleado lo muestra tal cual), la

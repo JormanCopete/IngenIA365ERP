@@ -168,7 +168,7 @@ public sealed class ClosedXmlTabularFileReader : ITabularFileReader
         }
         catch (DecoderFallbackException)
         {
-            // Extractos de banco y archivos de SOLIDO vienen a veces en Latin-1.
+            // Extractos de banco y archivos del sistema anterior vienen a veces en Latin-1.
             return Encoding.Latin1.GetString(bytes);
         }
     }

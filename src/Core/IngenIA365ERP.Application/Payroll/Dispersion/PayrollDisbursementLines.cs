@@ -22,7 +22,7 @@ public sealed record InsumosDeDispersion(PayrollRun Run, string Etiqueta, string
 /// <summary>
 /// Arma las líneas del archivo desde la relación de pago de una corrida aprobada (feature 010, US8):
 /// el neto del empleado, su banco destino (<c>Employee.DisbursementBankId</c> → <c>COR_Banks.TransferCode</c>,
-/// que es el código ACH que ya usaba SOLIDO: D-10) y su cuenta. Quien ya tiene marca de pago vigente
+/// que es el código ACH que ya usaba el sistema anterior: D-10) y su cuenta. Quien ya tiene marca de pago vigente
 /// o está en otro archivo no anulado de la corrida queda fuera (<c>AlreadyPaid</c>, <c>AlreadySent</c>); quien
 /// no tiene cuenta, banco o código de banco, o un campo requerido vacío, queda en pendientes con motivo
 /// (FR-032). El módulo decide qué va en cada origen; el motor sólo escribe.

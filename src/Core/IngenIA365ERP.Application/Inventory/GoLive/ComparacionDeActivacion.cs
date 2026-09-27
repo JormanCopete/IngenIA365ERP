@@ -22,7 +22,7 @@ namespace IngenIA365ERP.Application.Inventory.GoLive;
 /// al corte (grupos y cuentas de rol <c>Inventario</c> y <c>Transito</c>, unidos cuando comparten cuenta, con su saldo sin alcance
 /// de sucursal). Se muestran los que tocan algún grupo con valorizado en la bodega al corte.</item>
 /// <item>Por cada conjunto se suma el valorizado al corte (<see cref="Periods.ValorizadoALaFecha"/>, grupo a esa fecha) de la bodega
-/// que se activa y de las activas que usan esas cuentas; las <b>no activas</b> que las comparten suman con sus cifras de SOLIDO a esa
+/// que se activa y de las activas que usan esas cuentas; las <b>no activas</b> que las comparten suman con sus cifras de referencia a esa
 /// misma fecha (<c>INV_LegacyFigures</c>) y se muestran aparte. Una bodega «usa» las cuentas de un grupo si el conjunto tiene el par
 /// (grupo, su código) o (grupo, <c>*</c>).</item>
 /// <item>La diferencia es valorizado − saldo contable; <c>explanation</c> cuenta los mensajes de negocio a Contabilidad hasta el corte
@@ -150,7 +150,7 @@ public sealed class ComparacionDeActivacion(
             var activas = bodegas.Where(w => w.Id != bodega.Id && w.EstaActiva && LaUsa(w))
                 .Select(w => new BodegaActivaDelConjuntoDto(w.PublicId, w.Code, ValorDe(w.Id)))
                 .Where(a => a.Value != 0m).OrderBy(a => a.Code, StringComparer.Ordinal).ToList();
-            var deSolido = new List<BodegaDeSolidoDelConjuntoDto>();
+            var fueraDelModulo = new List<BodegaFueraDelModuloDelConjuntoDto>();
             foreach (var w in bodegas.Where(w => w.Id != bodega.Id && !w.EstaActiva && !w.EsTransito && LaUsa(w)).OrderBy(w => w.Code, StringComparer.Ordinal))
             {
                 var suyas = cifras.Where(f => f.WarehouseId == w.Id).ToList();
@@ -160,16 +160,16 @@ public sealed class ComparacionDeActivacion(
                     continue;
                 }
                 var valor = suyas.Where(f => f.AccountingGroupId is int g && grupos.TryGetValue(g, out var gr) && codigos.Contains(gr.Code)).Sum(f => f.Value);
-                deSolido.Add(new BodegaDeSolidoDelConjuntoDto(w.Code, w.PublicId, valor, corte, suyas.OrderByDescending(f => f.CreatedAt).First().Lote));
+                fueraDelModulo.Add(new BodegaFueraDelModuloDelConjuntoDto(w.Code, w.PublicId, valor, corte, suyas.OrderByDescending(f => f.CreatedAt).First().Lote));
             }
 
-            var total = esta + activas.Sum(a => a.Value) + deSolido.Sum(l => l.Value);
+            var total = esta + activas.Sum(a => a.Value) + fueraDelModulo.Sum(l => l.Value);
             var usadas = bodegas.Where(w => w.Id == bodega.Id || (w.EstaActiva && LaUsa(w))).Select(w => w.Code).ToList();
             resultado.Add(new ConjuntoDeCuentasDto(
                 c.AccountingGroupCodes.Select(g => new CodigoYNombreDto(g, grupos.Values.Where(x => Mismo(x.Code, g)).Select(x => x.Name).FirstOrDefault() ?? g)).ToList(),
                 c.Accounts.Select(a => new CuentaDelConjuntoDto(a.AccountCode, a.AccountName, a.Role, a.BalanceByBranch.Sum(b => b.Balance))).ToList(),
                 c.Balance,
-                new ValorizadoDelConjuntoDto(esta, activas, deSolido, total),
+                new ValorizadoDelConjuntoDto(esta, activas, fueraDelModulo, total),
                 total - c.Balance,
                 await ExplicacionAsync(db, usadas, corte, ct)));
         }
@@ -194,10 +194,10 @@ public sealed class ComparacionDeActivacion(
             .ToDictionary(g => g.Key, g => (g.Sum(f => f.Quantity), g.Sum(f => f.Value)));
     }
 
-    /// <summary>Una fila de las cifras de SOLIDO al corte: bodega, grupo, valor, lote y cuándo se importó. (nuevo)</summary>
+    /// <summary>Una fila de las cifras de referencia al corte: bodega, grupo, valor, lote y cuándo se importó. (nuevo)</summary>
     public sealed record CifraAlCorte(int WarehouseId, int? AccountingGroupId, decimal Value, Guid Lote, DateTime CreatedAt);
 
-    /// <summary>Las cifras de SOLIDO vigentes a esa fecha de corte (las dadas de baja por un lote posterior no cuentan).</summary>
+    /// <summary>Las cifras de referencia vigentes a esa fecha de corte (las dadas de baja por un lote posterior no cuentan).</summary>
     public static async Task<IReadOnlyList<CifraAlCorte>> CifrasAlCorteAsync(IApplicationDbContext db, DateOnly corte, CancellationToken ct) =>
         await db.LegacyFigures.AsNoTracking().Where(f => f.AsOfDate == corte && f.WarehouseId != null)
             .Select(f => new CifraAlCorte(f.WarehouseId!.Value, f.AccountingGroupId, f.Value ?? 0m, f.ImportBatchPublicId, f.CreatedAt))

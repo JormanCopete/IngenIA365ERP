@@ -536,13 +536,13 @@ public static class ManualCatalogo
             "Cargar una sola vez los saldos con que la cooperativa arranca en el ERP: se importan desde una plantilla, se revisan como borrador y se contabilizan como cualquier comprobante.",
             [
                 P("Antes", "Contabilidad iniciada, ejercicio abierto y las auxiliares de movimiento creadas con sus reglas (tercero, documento cruce, centro de costo). Las personas de cartera y proveedores tienen que existir en Personas.", "/contabilidad/plan-de-cuentas", "Abrir Plan de cuentas"),
-                P("Contabilidad → Saldos de apertura", "«Plantilla Excel» descarga la hoja con los encabezados; el contador la llena desde SOLIDO con una fila por auxiliar (y por tercero y documento donde la cuenta lo exige): importes sin miles y con hasta dos decimales.", "/contabilidad/apertura", "Abrir Saldos de apertura"),
+                P("Contabilidad → Saldos de apertura", "«Plantilla Excel» descarga la hoja con los encabezados; el contador la llena desde el sistema anterior con una fila por auxiliar (y por tercero y documento donde la cuenta lo exige): importes sin miles y con hasta dos decimales.", "/contabilidad/apertura", "Abrir Saldos de apertura"),
                 P("Elegí la fecha", "Es el corte de tus saldos anteriores. Se propone la víspera del primer período y podés moverla hasta el fin del primer ejercicio; lo único que no se admite es un mes ya cerrado. Cualquiera sea, la apertura es saldo inicial y nunca movimiento del mes."),
                 P("Importar", "Cada fila se valida con las reglas de su cuenta. Si una falla, la pantalla muestra fila, columna y problema, y no se guarda nada: corregí el archivo y volvé a importar. Sin errores queda un borrador; no tiene que cuadrar para importarse."),
                 P("Corregir mientras sea borrador", "«Editar» abre el comprobante y ahí agregás, cambiás o quitás cuentas línea a línea; «Cambiar la fecha» la mueve sin tocar las líneas; «Descartar» lo elimina; y volver a importar reemplaza todas las líneas por las del archivo nuevo."),
                 P("Contabilizar", "Revisá el borrador y contabilizalo (cuatro ojos si la empresa lo exige). Queda como la única apertura vigente: para cargar otra, reversá ésta primero. Desde ahí ya no se edita. En el balance de prueba la apertura es saldo inicial, no movimiento del mes."),
             ],
-            ["apertura", "saldos iniciales", "saldos de apertura", "migración", "solido", "plantilla", "importar saldos", "fecha de corte"], ["Cooperativa activa.", "Permiso Accounting.Opening.Manage."],
+            ["apertura", "saldos iniciales", "saldos de apertura", "migración", "sistema anterior", "plantilla", "importar saldos", "fecha de corte"], ["Cooperativa activa.", "Permiso Accounting.Opening.Manage."],
             ["comprobante-contable", "plan-de-cuentas", "cierre-de-periodo", "contabilidad-informes"], [], TipoDeTema.Proceso));
 
         // Feature 009 E2 (US9): la ruta es /contabilidad/presupuesto (singular, la de T140); hasta el
@@ -876,7 +876,7 @@ public static class ManualCatalogo
             "El inventario valorizado contra el saldo contable, por conjunto de cuentas, a una fecha, con lo que explica la diferencia.",
             [
                 P("Inventario → Conciliación con Contabilidad", "Elegí la fecha y «Conciliar»; Excel o PDF con Inventory.Reports.Export.", "/inventario/conciliacion", "Abrir la Conciliación"),
-                P("Las cinco secciones", "Conjuntos de cuentas (valorizado, saldo, diferencia, pendientes, en lote, rechazados y sin explicar), detalle por bodega, lo movido por tipos que no pasan, ventas a crédito de esos tipos y bodegas todavía en SOLIDO con sus cifras."),
+                P("Las cinco secciones", "Conjuntos de cuentas (valorizado, saldo, diferencia, pendientes, en lote, rechazados y sin explicar), detalle por bodega, lo movido por tipos que no pasan, ventas a crédito de esos tipos y bodegas todavía fuera del módulo con sus cifras."),
                 P("Profundizar", "Una fila con mensaje abre ese mensaje en la bandeja."),
             ],
             ["conciliacion", "valorizado", "saldo contable", "diferencia", "cuadre"],
@@ -884,15 +884,15 @@ public static class ManualCatalogo
             ["inventario-bandeja-de-mensajes", "inventario-activacion"], [], TipoDeTema.Reporte));
 
         t.Add(Proceso("inventario-activacion", "Activación de bodegas", Modulos.Inventario, "/inventario/activacion",
-            "Pasar una bodega de SOLIDO al módulo nuevo con cuadre contable: el valorizado de su conjunto de cuentas contra el saldo contable al corte.",
+            "Pasar una bodega del sistema anterior al módulo nuevo con cuadre contable: el valorizado de su conjunto de cuentas contra el saldo contable al corte.",
             [
                 P("Inventario → Activación de bodegas", "Elegí la bodega y la fecha de corte.", "/inventario/activacion", "Abrir la Activación"),
-                P("Revisar", "Por conjunto: saldo contable, esta bodega, las activas que comparten cuentas y, aparte, las que siguen en SOLIDO con sus cifras al corte; la diferencia y los mensajes que la explican. Los bloqueos dicen qué falta."),
+                P("Revisar", "Por conjunto: saldo contable, esta bodega, las activas que comparten cuentas y, aparte, las que siguen fuera del módulo con sus cifras al corte; la diferencia y los mensajes que la explican. Los bloqueos dicen qué falta."),
                 P("Activar", "Sin diferencia, «Activar la bodega». Con diferencia, aceptarla con motivo exige Inventory.Warehouses.AcceptActivationDifference."),
             ],
-            ["activar", "bodega", "puesta en marcha", "cuadre", "solido", "corte"],
-            ["Permiso Inventory.Warehouses.Activate.", "Saldo inicial confirmado y cifras de SOLIDO de las bodegas que comparten cuentas."],
-            ["inventario-saldo-inicial", "inventario-cifras-solido", "inventario-conciliacion"], [], TipoDeTema.Proceso));
+            ["activar", "bodega", "puesta en marcha", "cuadre", "cifras de referencia", "corte"],
+            ["Permiso Inventory.Warehouses.Activate.", "Saldo inicial confirmado y cifras de referencia de las bodegas que comparten cuentas."],
+            ["inventario-saldo-inicial", "inventario-cifras-de-referencia", "inventario-conciliacion"], [], TipoDeTema.Proceso));
 
         // Feature 012, I1 (T983): un tema por opción del menú de decisiones-transversales §2.11. Los catálogos simples
         // comparten CatalogoDeInventario (Nuevo, Editar, Inactivar/Reactivar con motivo, Plantilla) y por eso su guía.
@@ -935,7 +935,7 @@ public static class ManualCatalogo
                 P("Inventario → Bodegas", "«Ver inactivas» trae también las retiradas. Una bodega nueva sólo la ve quien tiene alcance total hasta que se la asignen.", "/inventario/bodegas", "Abrir Bodegas"),
                 P("Nueva bodega", "Código, nombre y sucursal. Si la sucursal no tiene municipio, la pantalla avisa por la ReteICA."),
                 P("Detalle", "Pestañas Datos, Ubicaciones (una por defecto; ninguna con existencia se inactiva), Mínimos y máximos (por producto: 0 ≤ mínimo ≤ punto de reorden ≤ máximo) y Saldo inicial y activación."),
-                P("Activar", "Desde «Saldo inicial y activación»: compara el saldo inicial con Contabilidad y con las cifras de SOLIDO. En producción la activación espera la integración contable (Inventory.Activation.AccountingUnavailable)."),
+                P("Activar", "Desde «Saldo inicial y activación»: compara el saldo inicial con Contabilidad y con las cifras de referencia. En producción la activación espera la integración contable (Inventory.Activation.AccountingUnavailable)."),
                 P("Plantilla 7", "Carga bodegas y ubicaciones por archivo."),
             ],
             ["bodegas", "ubicaciones", "transito", "activar", "minimos", "maximos", "reorden", "plantilla 7"],
@@ -1053,22 +1053,22 @@ public static class ManualCatalogo
             ],
             ["saldo inicial", "apertura", "plantilla 14", "puesta en marcha", "corte", "activar"],
             ["Permiso Inventory.OpeningBalance.Load.", "Productos y bodegas cargados; conteo físico de la bodega antes de la carga."],
-            ["inventario-bodegas", "inventario-cifras-solido", "inventario-plantillas"], [], TipoDeTema.Proceso));
+            ["inventario-bodegas", "inventario-cifras-de-referencia", "inventario-plantillas"], [], TipoDeTema.Proceso));
 
-        t.Add(Proceso("inventario-cifras-solido", "Cifras de SOLIDO", Modulos.Inventario, "/inventario/cifras-solido",
-            "Las existencias y valores de SOLIDO a una fecha, sólo para comparar: nunca mueven el inventario. Cada importación es un lote; importar otra vez una fecha y bodega deja el anterior como historia.",
+        t.Add(Proceso("inventario-cifras-de-referencia", "Cifras de referencia", Modulos.Inventario, "/inventario/cifras-de-referencia",
+            "Las existencias y valores de referencia a una fecha, sólo para comparar: nunca mueven el inventario. Cada importación es un lote; importar otra vez una fecha y bodega deja el anterior como historia.",
             [
-                P("Inventario → Cifras de SOLIDO", null, "/inventario/cifras-solido", "Abrir Cifras de SOLIDO"),
+                P("Inventario → Cifras de referencia", null, "/inventario/cifras-de-referencia", "Abrir Cifras de referencia"),
                 P("Importar la plantilla 15", "Se revisa y se aplica todo o nada. Un código que no está en el catálogo nuevo no es error: queda sin resolver, con su grupo contable."),
                 P("Leer", "Por fecha, bodega y grupo contable, y los códigos sin producto en el catálogo. Los sin resolver suman al valorizado de su grupo pero no al comparativo por producto."),
                 P("Comparar", "Los comparativos por producto y bodega están en el centro de informes de Inventario.", "/inventario/informes", "Abrir Informes"),
             ],
-            ["solido", "comparativo", "cifras", "plantilla 15", "marcha paralela"],
+            ["referencia", "comparativo", "cifras", "plantilla 15", "marcha paralela"],
             ["Permiso Inventory.LegacyFigures.Import."],
             ["inventario-saldo-inicial", "inventario-informes"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("inventario-informes", "Informes de inventario", Modulos.Inventario, "/inventario/informes",
-            "El centro de informes del módulo. El selector trae las vistas que publica cada parte (kardex, existencias, valorizado, documentos, reorden y quiebres, comparativos con SOLIDO, entre otras) y aparecen aquí sin tocar la pantalla.",
+            "El centro de informes del módulo. El selector trae las vistas que publica cada parte (kardex, existencias, valorizado, documentos, reorden y quiebres, comparativos con las cifras de referencia, entre otras) y aparecen aquí sin tocar la pantalla.",
             [
                 P("Inventario → Informes", "Elegí la vista; se editan el rango o el corte, la bodega y los filtros propios de la vista.", "/inventario/informes", "Abrir Informes"),
                 P("Consultar y profundizar", "La fila de un documento abre el documento; la de un producto o una bodega, su kardex."),

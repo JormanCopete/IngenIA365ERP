@@ -384,7 +384,7 @@ public sealed record ResultadoDeImportacionDto
 
     /// <summary>
     /// Lo propio de cada plantilla (§8, §14, §15): la lee la pantalla de esa plantilla con <see cref="ExtraComo{T}"/> (US4, T320:
-    /// <c>byWarehouse</c> del saldo inicial, <c>byDateWarehouseGroup</c> de las cifras de SOLIDO).
+    /// <c>byWarehouse</c> del saldo inicial, <c>byDateWarehouseGroup</c> de las cifras de referencia).
     /// </summary>
     public IReadOnlyDictionary<string, System.Text.Json.JsonElement>? Extra { get; init; }
 

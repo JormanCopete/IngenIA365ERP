@@ -103,7 +103,7 @@ public class MunicipioDeSucursalTests
     public async Task DivipolaSeeder_actualiza_por_nombre_y_agrega_las_faltantes_sin_duplicar()
     {
         var (db, _, _) = Escenario();
-        // Como las deja la semilla heredada de SOLIDO: sin código y con el nombre sin tildes.
+        // Como las deja la semilla heredada del sistema anterior: sin código y con el nombre sin tildes.
         Ciudad(db, "Bogota", null, "Bogota D.C.", "11");
         Ciudad(db, "Cali", null);
         Ciudad(db, "Buga", null); // el DANE la escribe «Guadalajara de Buga»: la semilla trae el nombre corto como alias

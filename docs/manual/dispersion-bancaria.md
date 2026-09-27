@@ -21,7 +21,7 @@ pagarán a proveedores con el mismo motor (`SupplierPayments`, reservado).
 
 | Qué | Dónde | Por qué |
 |---|---|---|
-| **Código de transferencia (ACH)** de cada banco destino | Maestros › Bancos, campo «Código de transferencia (ACH)» (`COR_Banks.TransferCode`) | Es lo que el archivo escribe como banco destino del empleado (`PayeeBankCode`). SOLIDO lo guardaba en `codtras` y lo usaba en su plano de Colmena; es el mismo dato (D-10). Sin él, el empleado queda en **pendientes** con motivo `BankCodeMissing`. |
+| **Código de transferencia (ACH)** de cada banco destino | Maestros › Bancos, campo «Código de transferencia (ACH)» (`COR_Banks.TransferCode`) | Es lo que el archivo escribe como banco destino del empleado (`PayeeBankCode`). El sistema anterior lo guardaba en `codtras` y lo usaba en su plano de Colmena; es el mismo dato (D-10). Sin él, el empleado queda en **pendientes** con motivo `BankCodeMissing`. |
 | **Cuenta bancaria del plan** del banco pagador | Contabilidad › Plan de cuentas: la auxiliar bajo `111005` con banco y número de cuenta | Es la **cuenta origen** del archivo (`SourceAccountNumber`, `SourceBankCode`). Un formato que la escribe la exige (`SourceAccountRequired`), y la cuenta debe ser del banco del formato (`SourceAccountBankMismatch`). |
 | **Empresa** (NIT, dígito, razón social) | Maestros › Empresas | Van en la cabecera (`CompanyNit`, `CompanyNitDv`, `CompanyName`); sin empresa, `CompanyMissing`. |
 | **Ficha del empleado**: banco de dispersión, tipo y número de cuenta | Nómina › Empleados, pestaña Banca | Sin los tres, el empleado no va al archivo (`NoBankAccount`) y se paga a mano. |

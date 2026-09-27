@@ -86,7 +86,7 @@ public class DocumentTypeCommandsTests
         r.Value.Class.Should().Be(DocumentClass.PositiveAdjustment);
         r.Value.Group.Should().Be(DocumentClassGroup.Adjustments);
         r.Value.Prefix.Should().Be("AX", "el prefijo va en mayúsculas");
-        r.Value.CurrentSequence!.NextValue.Should().Be(100, "continúa la numeración de SOLIDO");
+        r.Value.CurrentSequence!.NextValue.Should().Be(100, "continúa la numeración del sistema anterior");
         r.Value.CurrentSequence.ValidFrom.Should().Be(new DateOnly(2026, 9, 1));
         r.Value.RequiredFields.Reason.Should().BeTrue();
         r.Value.Warehouses.Should().BeEmpty("sin bodegas = todas las operativas");

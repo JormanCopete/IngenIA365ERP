@@ -1,6 +1,6 @@
 # IngenIA365ERP
 
-ERP Financiero SaaS para cooperativas colombianas. Migrado desde SOLIDO (VB.NET/WinForms) a una arquitectura moderna Clean Architecture con .NET 10.
+ERP Financiero SaaS para cooperativas colombianas. Migrado desde el sistema anterior (VB.NET/WinForms) a una arquitectura moderna Clean Architecture con .NET 10.
 
 ## Tecnologia
 
@@ -83,7 +83,7 @@ IngenIA365ERP.slnx
 |   +-- IngenIA365ERP.Architecture.Tests/
 |
 +-- tools/
-    +-- IngenIA365ERP.DataMigrator/         -> Migracion de datos SOLIDO -> nuevo
+    +-- IngenIA365ERP.DataMigrator/         -> Migracion de datos el sistema anterior -> nuevo
     +-- IngenIA365ERP.DbMigrator/           -> Crear schemas por tenant
     +-- scripts/                            -> Scripts SQL e inicializacion
 ```
@@ -118,7 +118,7 @@ Pipeline en `.github/workflows/ci.yml`:
 - Build + tests en cada push/PR
 - Docker build + push a GHCR en merge a `main`
 
-## Migracion desde SOLIDO
+## Migracion desde el sistema anterior
 
 - **Fase 1:** 33 plugins VB.NET -> C# -> ERP.Core consolidado
 - **Fase 2:** Rediseno BD (272 tablas), Clean Architecture, 382 archivos CQRS, 136 paginas Blazor, 15 reportes PDF

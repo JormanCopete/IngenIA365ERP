@@ -434,7 +434,7 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         if (request.Kind == DocumentKind.Opening)
         {
             // La apertura la fecha quien implanta (E2, 2026-09-22: el dueño la necesitó al corte real
-            // de SOLIDO, que casi nunca cae la víspera del primer período). Dos límites, y nada más:
+            // del sistema anterior, que casi nunca cae la víspera del primer período). Dos límites, y nada más:
             // no puede ser posterior al último día del primer ejercicio —después de eso ya no es un
             // saldo inicial sino un movimiento— ni caer en un período CERRADO. Su período queda nulo
             // aunque la fecha caiga dentro de uno: en las consultas es saldo inicial, no movimiento

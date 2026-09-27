@@ -6,7 +6,7 @@
 > y §5, y [decisiones-transversales.md](../../specs/012-inventario-comercial/decisiones-transversales.md)
 > §1.3 (el flujo canónico). Aquellos son el contrato; esto es la receta para el equipo.
 
-El inventario heredado de SOLIDO tenía una tabla por tipo de movimiento, cada una con su numeración y
+El inventario heredado del sistema anterior tenía una tabla por tipo de movimiento, cada una con su numeración y
 su forma de tocar la existencia. Desde la 012 **todo lo que mueve inventario es una fila de
 `INV_Documents`** con su clase, y hay **un solo camino** para confirmarlo: `ConfirmacionDeDocumento`
 (`Application/Inventory/Documents`). Nadie más escribe el kardex, nadie más numera, y lo confirmado no

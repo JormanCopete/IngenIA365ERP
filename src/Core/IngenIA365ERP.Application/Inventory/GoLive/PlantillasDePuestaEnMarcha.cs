@@ -53,11 +53,11 @@ public static class PlantillaDeSaldoInicial
 }
 
 /// <summary>
-/// Plantilla 15 — cifras de SOLIDO (§15). Escribe <c>INV_LegacyFigures</c>: sólo informativas, nunca kardex. (nuevo)
+/// Plantilla 15 — cifras de referencia (§15). Escribe <c>INV_LegacyFigures</c>: sólo informativas, nunca kardex. (nuevo)
 /// </summary>
-public static class PlantillaDeCifrasDeSolido
+public static class PlantillaDeCifrasDeReferencia
 {
-    public const string Clave = CatalogoDePlantillas.CifrasDeSolidoClave;
+    public const string Clave = CatalogoDePlantillas.CifrasDeReferenciaClave;
 
     public const string Fecha = "fecha";
     public const string Bodega = "bodega";
@@ -66,7 +66,7 @@ public static class PlantillaDeCifrasDeSolido
     public const string Valor = "valor";
     public const string GrupoContable = "grupoContable";
 
-    public static DefinicionDePlantilla Definicion { get; } = new(Clave, "Cifras de SOLIDO", ModuloDeAuditoria.Inventory,
+    public static DefinicionDePlantilla Definicion { get; } = new(Clave, "Cifras de referencia", ModuloDeAuditoria.Inventory,
     [
         new HojaDePlantilla("Datos",
         [
@@ -74,8 +74,8 @@ public static class PlantillaDeCifrasDeSolido
             new(Bodega, TipoDeValor.Texto, Obligatoria: true, Largo: LegacyFigure.LargoDelCodigoDeBodega,
                 Reglas: "código de una bodega que ya existe en el ERP (activa o no)", Ejemplo: "B02"),
             new(Producto, TipoDeValor.Texto, Obligatoria: true, Largo: LegacyFigure.LargoDelCodigoDeProducto,
-                Reglas: "tal como viene de SOLIDO; si no existe en el catálogo nuevo, la fila exige grupoContable y queda sin resolver", Ejemplo: "ARZ-001"),
-            new(Cantidad, TipoDeValor.Cantidad, Obligatoria: true, Reglas: "en unidad base de SOLIDO; puede ser negativa", Ejemplo: "640"),
+                Reglas: "tal como viene del sistema de origen; si no existe en el catálogo nuevo, la fila exige grupoContable y queda sin resolver", Ejemplo: "ARZ-001"),
+            new(Cantidad, TipoDeValor.Cantidad, Obligatoria: true, Reglas: "en la unidad base del sistema de origen; puede ser negativa", Ejemplo: "640"),
             new(Valor, TipoDeValor.Monto, Obligatoria: true, Reglas: "valor total de la existencia", Ejemplo: "1184000,00"),
             new(GrupoContable, TipoDeValor.Codigo, Largo: CodigoDeCatalogo.LargoCorto,
                 Reglas: "obligatorio si el producto no existe; si existe y difiere del suyo, aviso", Ejemplo: "ABARROTES"),

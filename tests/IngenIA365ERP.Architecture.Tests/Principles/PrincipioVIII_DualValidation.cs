@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// que sea <see cref="IRequest{TResponse}"/> tiene un
 /// <see cref="AbstractValidator{T}"/> hermano en el mismo assembly.
 ///
-/// Scope intencional: los módulos legacy migrados desde SOLIDO
+/// Scope intencional: los módulos legacy migrados desde el sistema anterior
 /// (Accounting, Lending, Payroll, Inventory, CDT, Debit, Treasury) tienen
 /// commands sin validator — deuda técnica conocida que se documenta
 /// fuera del alcance de esta fase. Cuando un módulo legacy entre a una

@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Inventory.GoLive;
 
 /// <summary>
-/// Los lotes de cifras de SOLIDO (feature 012, T312; api.md §13.2 <c>GET /api/inventory/legacy-figures?asOf=&amp;warehouseCode=</c>):
+/// Los lotes de cifras de referencia (feature 012, T312; api.md §13.2 <c>GET /api/inventory/legacy-figures?asOf=&amp;warehouseCode=</c>):
 /// uno por (lote, fecha, bodega), con filas, resueltas, sin resolver, cantidad, valor, quién y cuándo, y si otro lote posterior
 /// del mismo par lo dejó de baja (<c>superseded</c>). Sólo las bodegas del alcance. (nuevo)
 /// </summary>

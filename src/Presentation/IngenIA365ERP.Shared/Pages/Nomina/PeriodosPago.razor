@@ -132,8 +132,7 @@
                     }
                     <ValidationMessage For="() => _modelo.EndDate" />
                     <SfTextBox @bind-Value="_modelo.PayDate" MaxLength="40" Placeholder="Fecha de pago (texto)" FloatLabelType="FloatLabelType.Always" />
-                    @* «Empresa de nómina» y «Número de planilla» eran campos heredados del
-                       SOLIDO sin efecto en el cálculo (2026-09-12): el período pertenece a un
+                    @* «Empresa de nómina» y «Número de planilla» eran campos heredados del sistema anterior sin efecto en el cálculo (2026-09-12): el período pertenece a un
                        plan de nómina, y eso es lo que se elige arriba. La API sigue recibiendo
                        empresa 1 y planilla «siguiente» por compatibilidad. *@
                     @if (_editId is null && _planes.Count == 1)
@@ -309,7 +308,7 @@
     private sealed class Modelo
     {
         public string PlanPublicId { get; set; } = string.Empty;
-        /// <summary>Heredados del SOLIDO; ya no se piden: planilla «siguiente» (0) y empresa 1.</summary>
+        /// <summary>Heredados del sistema anterior; ya no se piden: planilla «siguiente» (0) y empresa 1.</summary>
         public int PlanId { get; set; }
         public int PayrollCompanyId { get; set; } = 1;
         public int SubPeriodNumber { get; set; } = 1;

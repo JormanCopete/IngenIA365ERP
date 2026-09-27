@@ -11,8 +11,8 @@
 @* Feature 012, US7 (T538; FR-090, US4-2, US4-3; contracts/api.md §13.3, §26.6): la activación bodega por bodega con cuadre contable.
    La vista previa la calcula el servidor por conjunto de cuentas (componentes conexos grupo ↔ cuenta de los roles Inventario y
    Tránsito): el saldo contable al corte que responde Contabilidad, el valorizado de la bodega que se activa, el de las activas que
-   comparten cuentas y, APARTE, el de las bodegas todavía en SOLIDO con sus cifras al corte (suman al conjunto; la diferencia no se les
-   atribuye), la diferencia y los mensajes que la explican; y los bloqueos (saldo inicial sin confirmar, cifras de SOLIDO faltantes,
+   comparten cuentas y, APARTE, el de las bodegas todavía fuera del módulo con sus cifras al corte (suman al conjunto; la diferencia no se les
+   atribuye), la diferencia y los mensajes que la explican; y los bloqueos (saldo inicial sin confirmar, cifras de referencia faltantes,
    reglas faltantes…). Con diferencia, activar exige aceptarla con motivo y sólo se ofrece si PermisosDelUsuario trae
    Inventory.Warehouses.AcceptActivationDifference; el servidor lo vuelve a exigir. La orden lleva su Idempotency-Key. *@
 <PermissionGate Required="Inventory.Warehouses.Activate" MostrarAviso="true">
@@ -21,7 +21,7 @@
         <h3>Activación de bodegas</h3>
         <div class="toolbar">
             <a class="e-btn e-outline" href="/inventario/saldo-inicial">Saldo inicial</a>
-            <a class="e-btn e-outline" href="/inventario/cifras-solido">Cifras de SOLIDO</a>
+            <a class="e-btn e-outline" href="/inventario/cifras-de-referencia">Cifras de referencia</a>
             <a class="e-btn e-outline" href="/inventario/conciliacion">Conciliación</a>
         </div>
     </div>
@@ -89,11 +89,11 @@
                     {
                         <p>Bodegas ya activas que comparten estas cuentas: @string.Join(" · ", activas.Select(a => $"{a.Code} {a.Value:N2}"))</p>
                     }
-                    @if (s.Valuation.LegacyWarehouses is { Count: > 0 } deSolido)
+                    @if (s.Valuation.LegacyWarehouses is { Count: > 0 } fueraDelModulo)
                     {
                         <div class="aviso aviso-info">
-                            <b>Bodegas todavía en SOLIDO (con sus cifras al corte; suman al conjunto y la diferencia no se les atribuye):</b>
-                            <ul>@foreach (var w in deSolido) { <li>@w.WarehouseCode · @w.Value.ToString("N2") · cifras al @w.FiguresAsOf.ToString("dd/MM/yyyy")</li> }</ul>
+                            <b>Bodegas todavía fuera del módulo (con sus cifras al corte; suman al conjunto y la diferencia no se les atribuye):</b>
+                            <ul>@foreach (var w in fueraDelModulo) { <li>@w.WarehouseCode · @w.Value.ToString("N2") · cifras al @w.FiguresAsOf.ToString("dd/MM/yyyy")</li> }</ul>
                         </div>
                     }
                     @if (s.Explanation is { } x && (x.Pending + x.InBatch + x.Rejected + x.NotPosted) > 0)

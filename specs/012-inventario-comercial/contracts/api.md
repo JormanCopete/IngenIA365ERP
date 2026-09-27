@@ -70,7 +70,7 @@ código se siembra entero en I1 para que las plantillas de rol no cambien de for
 | `Inventory.CashDifferences` | Approve | §21 | I3 |
 | `Inventory.DayClose` | Execute, Reopen | §21 | I3 |
 | `Inventory.OpeningBalance` | Load, Approve | importar, confirmar y anular el saldo inicial; aprobarlo | I1 |
-| `Inventory.LegacyFigures` | Import | importar y consultar cifras de SOLIDO (FR-091) | I1 |
+| `Inventory.LegacyFigures` | Import | importar y consultar cifras de referencia (FR-091) | I1 |
 | `Inventory.Messages` | View, Reprocess, SendNotApplicable | bandeja de mensajes (§25); en §1–§17 sólo decide si el detalle de un documento muestra el estado de sus mensajes | I1 (ver) / I2 |
 | `Inventory.Reconciliation` | View | conciliación (§26 y vista `reconciliation` de §27) | I2 |
 | `Inventory.Dashboard` | View | tablero (§28) | I6 |
@@ -235,7 +235,7 @@ Un `2xx` con cuerpo devuelve el DTO; una acción sin valor, 204. Un POST que cre
 ### 2.4 Paginación y orden
 
 Las listas que pueden crecer (productos, documentos, existencias, capturas, alertas, aprobaciones,
-cifras de SOLIDO) reciben `?page=&pageSize=` y responden `PagedResult { items, page, pageSize,
+cifras de referencia) reciben `?page=&pageSize=` y responden `PagedResult { items, page, pageSize,
 totalCount, totalPages }` (`Application/Common/Paging`): `page` desde 1, `pageSize` por defecto 20,
 máximo 200 (`PageRequest.MaxPageSize`; un valor mayor se recorta, no falla). Los catálogos chicos
 (unidades, marcas, categorías, grupos, tipos de bodega, causas, canales, tipos de documento, bodegas,
@@ -625,7 +625,7 @@ bodegas operativas, activadas y activas.
   totales del kardex de esa bodega (T18).
 - Cantidades en unidad base. Sin `warehousePublicId`, suma las bodegas del alcance; la existencia propia
   de una bodega de tránsito sólo con alcance total o asignación explícita (T35).
-- El valorizado a una fecha pasada, el kardex exportable y los comparativos con SOLIDO son vistas de
+- El valorizado a una fecha pasada, el kardex exportable y los comparativos con las cifras de referencia son vistas de
   informe (`valuation`, `kardex`, `legacy-comparison-*`; §27).
 
 ## 6. Kardex e integridad
@@ -1193,17 +1193,17 @@ Reglas (FR-089, US4):
   en **I1**; los documentos retroactivos generales siguen en I5. Lo fija el caso dorado «segunda bodega
   activada después de ventas en la primera, ámbito cooperativa».
 
-### 13.2 Cifras de SOLIDO — `/api/inventory/legacy-figures` (`GoLiveEndpoints.cs`, I1)
+### 13.2 Cifras de referencia — `/api/inventory/legacy-figures` (`GoLiveEndpoints.cs`, I1)
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
-| `GET /template.xlsx` | Warehouses.View | la plantilla 15 de contracts/plantillas.md (§15: hoja `Datos`, códigos de producto **tal como vienen de SOLIDO**; permisos en su §0.7) |
+| `GET /template.xlsx` | Warehouses.View | la plantilla 15 de contracts/plantillas.md (§15: hoja `Datos`, códigos de producto **tal como vienen del sistema anterior**; permisos en su §0.7) |
 | `POST /import?mode=review` | LegacyFigures.Import | multipart con el archivo → 200 `ImportResultDto` (contracts/plantillas.md §0.5) con `extra.byDateWarehouseGroup[]` (§15 de ese contrato) |
 | `POST /import?mode=apply` | LegacyFigures.Import | igual → 200 `ImportResultDto` (`applied: true`) con `extra: { batchPublicId, supersededBatchPublicIds[] }` (`ImportLegacyFiguresCommand`); con errores 422 `Import.Invalid` |
 | `GET /?asOf=&warehouseCode=` | LegacyFigures.Import | `[{ batchPublicId, asOf, rows, resolvedRows, unresolvedRows, quantity, value, importedAt, importedBy, superseded }]` |
 | `GET /{batchId}/rows?unresolvedOnly=&page=&pageSize=` | LegacyFigures.Import | `PagedResult<{ warehouseCode, productCode, warehousePublicId?, productPublicId?, quantity, value }>` |
 
-Las cifras son dato para comparar, no movimientos: nunca tocan el kardex. Un código de producto de SOLIDO
+Las cifras son dato para comparar, no movimientos: nunca tocan el kardex. Un código de producto del sistema anterior
 que no existe en el catálogo nuevo **no** es error: queda sin resolver, como aviso de fila
 (`Inventory.LegacyFigures.CodeUnresolved`), exige `grupoContable` y los comparativos lo muestran aparte;
 la bodega sí debe existir en el ERP (activa o no). Columnas y reglas: contracts/plantillas.md §15. Reimportar la misma (fecha, bodega) deja la carga anterior `superseded`, sin
@@ -1232,9 +1232,9 @@ Cómo se arma (FR-090, US4-2, SC-018):
   el alcance de sucursal del usuario, G5; la apertura de la 009 cuenta como saldo).
 - Por cada conjunto se suma el valorizado de **todas** las bodegas que usan esas cuentas: la que se
   activa y las ya activas, con el valorizado del módulo nuevo al corte; las no activas **entran al
-  valorizado del conjunto** con las cifras de SOLIDO a esa misma fecha (§13.2), y se muestran aparte
+  valorizado del conjunto** con las cifras de referencia a esa misma fecha (§13.2), y se muestran aparte
   (`legacyWarehouses`) para identificarlas. Así la primera bodega no muestra como diferencia lo que
-  sigue en SOLIDO.
+  sigue en el sistema anterior.
 - `explanation` cuenta los mensajes de Inventario que explican parte de la diferencia (pendientes, en
   lote, rechazados, de tipos que no pasan). El saldo inicial es informativo: se cuenta como incluido en
   el saldo contable.
@@ -1267,7 +1267,7 @@ saldos no exista, así que ninguna bodega se activa sin la comparación de FR-09
 
 La conciliación permanente (inventario valorizado contra saldo contable por conjunto de cuentas, FR-081)
 es la vista `reconciliation` con `Inventory.Reconciliation.View` (§27), con la misma regla: las
-bodegas no activas que comparten cuentas suman al valorizado del conjunto con sus cifras de SOLIDO a la
+bodegas no activas que comparten cuentas suman al valorizado del conjunto con sus cifras de referencia a la
 fecha de corte y se muestran aparte; la diferencia no se les atribuye.
 
 ### 13.4 Períodos — `/api/inventory/periods` (`PeriodsEndpoints.cs`, I1)
@@ -3214,11 +3214,11 @@ De esta sección: `Accounting.InventoryRule.DimensionRequired`, `.DimensionNotAl
 | `count-differences` | I1 | `count?`, `warehouse?` | Costs.Read para valores | Conteo (número, fecha de la foto), Bodega, Ubicación, Producto, Teórico, Contado, Reconteo, Diferencia (cantidad), Costo unitario, Diferencia (valor), Ajuste · `_documento`, `_producto` |
 | `reorder-alerts` | I1 | `warehouse?`, `category?` | — | Bodega, Producto, Disponible, En tránsito, Por recibir, Posición, Mínimo, Punto de reorden, Máximo, Sugerido (máximo − posición), Quiebre · `_producto`, `_bodega` |
 | `radian-events` | I1 | `supplier?`, `status?` | — | Proveedor, Factura (prefijo y número), CUFE, Emisión, Vencimiento, Forma de pago, 030 (estado, fecha, fuente), 032 (estado, fecha, fuente), Días sin eventos · `_documento` |
-| `legacy-comparison-kardex` | I1 | `warehouse`, `product?` | Costs.Read para valores | Producto, Bodega, Fecha, Cantidad SOLIDO, Cantidad módulo, Diferencia (cantidad), Valor SOLIDO, Valor módulo, Diferencia (valor) · `_producto` |
-| `legacy-comparison-valuation` | I1 | `asOf`, `warehouse?`, `accountingGroup?` | Costs.Read | Grupo, Bodega, Producto, Cantidad SOLIDO, Valor SOLIDO, Cantidad módulo, Valor módulo, Diferencias · `_producto`, `_bodega` |
+| `legacy-comparison-kardex` | I1 | `warehouse`, `product?` | Costs.Read para valores | Producto, Bodega, Fecha, Cantidad de referencia, Cantidad módulo, Diferencia (cantidad), Valor de referencia, Valor módulo, Diferencia (valor) · `_producto` |
+| `legacy-comparison-valuation` | I1 | `asOf`, `warehouse?`, `accountingGroup?` | Costs.Read | Grupo, Bodega, Producto, Cantidad de referencia, Valor de referencia, Cantidad módulo, Valor módulo, Diferencias · `_producto`, `_bodega` |
 | `messages` | I2 | `status?`, `destination?`, `type?`, `batch?` | — | Número, Tipo, Versión, Destino, Estado, Modo, Documento, Fecha de operación, Lote, Intentos, Último error, Procesado, Comprobante · `_mensaje`, `_documento` |
 | `accounting-batches` | I2 | `status?`, `trigger?` | — | Lote, Disparador, Programado para, Estado, Rango, Granularidad, Documentos, Mensajes, Comprobantes, Rechazados, Solicitado por, Inicio, Fin, Tarde |
-| `reconciliation` | I2 | `asOf` | Reconciliation.View | Sección 1 (por conjunto): Conjunto, Grupos, Cuentas, Valorizado en bodegas, En tránsito, Valorizado total, Saldo contable, Diferencia, Pendientes, En lote, Rechazados, Sin explicar. Sección 2: detalle por bodega (informativo). Sección 3: lo movido por tipos que no pasan. Sección 4: ventas a crédito de esos tipos. Sección 5: bodegas no activas que comparten cuentas, con sus cifras de SOLIDO a la fecha de corte; **suman al valorizado del conjunto**, como en FR-090, y se muestran aparte para identificarlas (la diferencia no se les atribuye: entran con sus cifras importadas; precisión aplicada a la spec, FR-081) · `_mensaje` |
+| `reconciliation` | I2 | `asOf` | Reconciliation.View | Sección 1 (por conjunto): Conjunto, Grupos, Cuentas, Valorizado en bodegas, En tránsito, Valorizado total, Saldo contable, Diferencia, Pendientes, En lote, Rechazados, Sin explicar. Sección 2: detalle por bodega (informativo). Sección 3: lo movido por tipos que no pasan. Sección 4: ventas a crédito de esos tipos. Sección 5: bodegas no activas que comparten cuentas, con sus cifras de referencia a la fecha de corte; **suman al valorizado del conjunto**, como en FR-090, y se muestran aparte para identificarlas (la diferencia no se les atribuye: entran con sus cifras importadas; precisión aplicada a la spec, FR-081) · `_mensaje` |
 | `sales-by-session` | I3 | `session?`, `cashier?` | (PD) con `groupBy=customer` | Sesión, Punto, Caja, Cajero, Fecha operativa, Documentos, Ventas brutas, Descuentos, Impuestos, Devoluciones, Neto · `_sesion` |
 | `sales-by-register` | I3 | `cashRegister?`, `groupBy=day\|customer` | (PD) con `groupBy=customer` | Punto, Caja, Día, Documentos, Ventas brutas, Descuentos, Impuestos, Devoluciones, Neto |
 | `sales-by-payment-means` | I3 | `paymentMeans?`, `class?` | (PD) con `groupBy=customer` | Medio, Clase, Punto, Caja, Pagos, Recibido, Reintegrado, Neto |

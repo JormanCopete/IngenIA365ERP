@@ -14,7 +14,7 @@ namespace IngenIA365ERP.Domain.Entities.Accounting;
 /// movimientos en el ejercicio (FR-012, <see cref="FirstMovementAt"/>).
 ///
 /// <para>
-/// Reescrita en la 009: la versión heredada de SOLIDO arrastraba más de cincuenta atributos
+/// Reescrita en la 009: la versión heredada del sistema anterior arrastraba más de cincuenta atributos
 /// que ninguna pantalla usaba y unas banderas que nadie hacía cumplir.
 /// </para>
 /// </summary>

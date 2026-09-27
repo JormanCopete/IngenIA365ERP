@@ -104,7 +104,7 @@ public sealed class EmployeeRegistrar(
             PayrollBankId = payrollBankId == 0 ? "" : payrollBankId.ToString(),
             PayrollBankAccountNumber = input.PayrollBankAccountNumber ?? "",
             PayrollBankAccountType = input.PayrollBankAccountType,
-            // Fechas legacy (sentinel del SOLIDO original). RehireDate no se usa: el
+            // Fechas legacy (sentinel del sistema anterior original). RehireDate no se usa: el
             // reingreso es una ficha nueva, no una fecha en la retirada (FR-017).
             TerminationDate = DateTime.MaxValue,
             ContractEndDate = DateTime.MaxValue,
@@ -124,7 +124,7 @@ public sealed class EmployeeRegistrar(
         context.Employees.Add(employee);
 
         // Registro inicial en historial salarial, enlazado por navegación: EF pone el
-        // EmployeeId al insertar. UserName es la columna legada de SOLIDO: varchar(20).
+        // EmployeeId al insertar. UserName es la columna legada del sistema anterior: varchar(20).
         // Un correo como usuario no cabe y PostgreSQL rechaza el INSERT entero (22001).
         // Quién lo hizo de verdad va en CreatedBy, sin recorte.
         context.SalaryChanges.Add(new SalaryChange

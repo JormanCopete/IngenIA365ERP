@@ -14,7 +14,7 @@
 
 @* Feature 012, T182 (T44; contracts/api.md §27): la página base del centro de informes de Inventario, en el molde de
    /contabilidad/informes. El selector se alimenta del REGISTRO DE VISTAS de la API (GET /api/reports/inventory): cada
-   historia publica las suyas (kardex y existencias en US2, comparativos con SOLIDO en US4, mensajes y conciliación en
+   historia publica las suyas (kardex y existencias en US2, comparativos con las cifras de referencia en US4, mensajes y conciliación en
    I2…) y aparecen aquí sin tocar esta pantalla. Filtros comunes: el rango y el corte se editan; bodega, producto y los
    filtros propios llegan por el enlace (?vista=kardex&product=…) y viajan tal cual. Las columnas ocultas (_documento,
    _producto…) no se pintan ni se exportan. Exportar exige Inventory.Reports.Export y, en las vistas con datos de
