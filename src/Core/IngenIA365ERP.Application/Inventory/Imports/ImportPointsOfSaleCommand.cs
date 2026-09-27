@@ -22,7 +22,7 @@ namespace IngenIA365ERP.Application.Inventory.Imports;
 /// <summary>
 /// Plantilla 10 — puntos de venta y cajas (feature 012, I3, T595; contracts/plantillas.md §10). Escribe <c>INV_PointsOfSale</c>,
 /// <c>INV_CashRegisters</c> e <c>INV_CashRegisterDocumentTypes</c>. Reemplaza la definición que I1 publicaba sólo para descargar
-/// (<see cref="PlantillasQueSeImportanConI3"/>). Las seis columnas de tipo de la hoja Cajas son los seis roles de
+/// (la que retiró T600). Las seis columnas de tipo de la hoja Cajas son los seis roles de
 /// <see cref="CashRegisterDocumentRole"/>. (nuevo)
 /// </summary>
 public static class PlantillaDePuntosDeVenta

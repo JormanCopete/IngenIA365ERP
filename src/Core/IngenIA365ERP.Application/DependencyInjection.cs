@@ -249,6 +249,11 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();
         services.AddScoped<Inventory.DocumentTypes.VistaDeTiposDeDocumento>();
+        // Feature 012 (I3, T601, T602): la precificación de las líneas de venta y la aprobación de los descuentos sobre el tope, con
+        // su fuente (SourceType DocumentLineDiscount), que exige al aprobador un tope suficiente y le copia aprobador y método.
+        services.AddScoped<Inventory.Sales.PrecificacionDeVenta>();
+        services.AddScoped<Inventory.Pricing.AprobacionDeDescuentos>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Pricing.FuenteDeAprobacionDeDescuento>();
         // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
         services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();

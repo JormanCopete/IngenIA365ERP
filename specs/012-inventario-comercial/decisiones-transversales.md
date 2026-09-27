@@ -1657,6 +1657,29 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     Slugs de `CampoCodigo`: `medios-de-pago`, `franquicias`, `adquirentes`, `puntos-de-venta`, `cajas`. `FiltroDeAlcance` ve una venta
     por su bodega **o** su punto (T35, FR-009).
 
+  - **(nuevo, I3 precios y descuentos, T597–T602)** En `Application/Inventory/Pricing`: `ReglasDeListaDePrecios.{AltaAsync,
+    ActualizarAsync, AmbitoBloqueado, AplicarPrecio, AplicarPrecioAsync, UnidadAdmitida, UnidadAdmitidaAsync, PreciosVivosAsync,
+    SegmentosAsync, SegmentoDeAsync, SeCruzan}` con `DatosDeLista`, `PrecioPedido`, `CambioDePrecio` { Created, Updated, Unchanged };
+    `CreatePriceListCommand`, `UpdatePriceListCommand` (con `Code`, `IncludesTaxes` y `Scope` opcionales sólo para `ScopeLocked`),
+    `SetPriceListItemsCommand`, `ListPriceListsQuery`, `GetPriceListQuery`, `ReferenciasDeLista`, `VistaDeListasDePrecios`;
+    `ResolvePriceQuery`, `ResolucionDePrecios.{CandidatasAsync, ResolverAsync, GeneralAsync}`, `PrecioResueltoConListas`;
+    `CreateDiscountCapCommand`, `ListDiscountCapsQuery`, `GetMyDiscountCapQuery`, `ReglasDeTopesDeDescuento.AltaAsync` con `DatosDeTope`,
+    `TopesDeDescuento.DelUsuarioAsync`; DTO `PriceListScopeInput`, `PriceListScopeDto`, `PriceListDto`, `PriceListItemDto`,
+    `PriceListDetailDto`, `PriceListItemInput`, `PriceListItemsResultDto`, `PriceCandidateDto`, `ResolvedPriceListDto`, `ResolvedPriceDto`,
+    `DiscountCapDto` (con `RoleCode`), `DiscountCapRoleDto`, `MyDiscountCapDto`; `AprobacionDeDescuentos.{Huella, SolicitarAsync,
+    LineasSinAprobarAsync, ExigirAprobadosAsync, EnlazarSolicitudesAsync}` y `FuenteDeAprobacionDeDescuento` (SourceType
+    `DocumentLineDiscount`); `ErroresDePrecios`. En `Application/Inventory/Sales`: `PrecificacionDeVenta.{PrecificarAsync, AplicarALinea}`
+    con `LineaAPrecificar`, `PrecioFijado`, `PedidoDePrecificacion`, `DescuentoCalculado`, `LineaPrecificada`, `TotalesDeVenta`,
+    `VentaPrecificada`. En `Application/Inventory/Imports`: `PlantillaDeListasDePrecios` + `ImportPriceListsCommand` (plantilla 12) y
+    `PlantillaDeTopesDeDescuento` + `ImportDiscountCapsCommand` (plantilla 13); `PlantillasQueSeImportanConI3` se retiró;
+    `CatalogoDePlantillas.EntregaConstruida` (= I3) decide `canDownload`/`canImport` de `GET /api/inventory/templates`, aparte de
+    `CatalogoDeParametros.EntregaVigente`. Plataforma: `Application/Inventory/Common/ICerrojoPorClave` + `ClavesDeCerrojo.{AmbitoDeLista,
+    TopeDelRol}` (implementación `Persistence/Inventory/CerrojoPorClave`: `sp_getapplock` / `pg_advisory_xact_lock`, sin transacción no
+    bloquea) y `Application/Common/Approvals/IFuenteConAprobador.AlAprobarElNivelAsync` (el motor la llama en cada aprobación antes de
+    registrarla). Errores: `Inventory.PriceList.{NotFound, ProductNotPriceable, UnitNotForSale}`, `Inventory.DiscountCap.RoleNotFound`,
+    `Inventory.Discount.CapInsufficient`; aviso de importación `Import.Product.Inactive`. Slug de `CampoCodigo`: `listas-de-precios`. Los
+    topes de `/discount-caps` (`maxLinePercent`, `maxDocumentPercent`) viajan como **fracción**, como toda tarifa (§2.6 de api.md).
+
 ### 2.17 Códigos de error principales (familias)
 
 `Operation.KeyRequired` (400), `Operation.KeyReused` (422) y cabecera `Idempotent-Replayed: true` ·

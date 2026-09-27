@@ -91,8 +91,8 @@ public class CatalogoYBodegasTests(CentralIdentityApiFixture fx)
         productos.GetProperty("canImport").GetBoolean().Should().BeTrue();
         var puntos = lista.Single(p => p.GetProperty("key").GetString() == "inventory.points-of-sale");
         puntos.GetProperty("canDownload").GetBoolean().Should().BeTrue();
-        puntos.GetProperty("canImport").GetBoolean().Should().BeFalse();
-        puntos.GetProperty("note").GetString().Should().Contain("I3");
+        puntos.GetProperty("canImport").GetBoolean().Should().BeTrue("con I3 la plantilla 10 importa (T600)");
+        puntos.GetProperty("note").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
     }
 
     [Fact]

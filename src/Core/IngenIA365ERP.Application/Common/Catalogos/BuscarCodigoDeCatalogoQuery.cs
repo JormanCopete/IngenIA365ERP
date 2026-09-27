@@ -89,6 +89,8 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "franquicias" => db.CardNetworks.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "adquirentes" => db.CardAcquirers.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "puntos-de-venta" => db.PointsOfSale.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Listas de precios (feature 012, I3, T597; data-model §14): el código no cambia (otra vigencia es otra lista).
+        "listas-de-precios" => db.PriceLists.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "cajas" => db.CashRegisters.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "ciudades" => db.Cities.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         _ => null,

@@ -32,9 +32,9 @@ public sealed record PlantillaDeParametrizacion(
 
     public string Nombre => Definicion.Nombre;
 
-    public bool SeDescargaYa => DescargaDesde <= CatalogoDeParametros.EntregaVigente;
+    public bool SeDescargaYa => DescargaDesde <= CatalogoDePlantillas.EntregaConstruida;
 
-    public bool SeImportaYa => ImportaDesde <= CatalogoDeParametros.EntregaVigente;
+    public bool SeImportaYa => ImportaDesde <= CatalogoDePlantillas.EntregaConstruida;
 }
 
 /// <summary>
@@ -62,6 +62,15 @@ public static class CatalogoDePlantillas
     public const string MatrizContableClave = "accounting.inventory-rules";
 
     private const string Datos = "Datos";
+
+    /// <summary>
+    /// La última entrega cuyas rutas de plantilla existen en el código (feature 012, T600): decide <c>canDownload</c>/<c>canImport</c>
+    /// de <c>GET /api/inventory/templates</c>. Es otra cosa que <see cref="CatalogoDeParametros.EntregaVigente"/>, que decide qué
+    /// valores de parámetro se admiten y qué clases de documento operan: con I3 las plantillas 10 a 13 ya importan (y la 16, de
+    /// I2, ya se descarga) aunque la entrega vigente de los parámetros no haya subido. La sube la entrega que publica una
+    /// plantilla nueva. (nuevo)
+    /// </summary>
+    public const EntregaDelComercio EntregaConstruida = EntregaDelComercio.I3;
 
     public static IReadOnlyList<PlantillaDeParametrizacion> Todas { get; } =
     [
@@ -109,10 +118,11 @@ public static class CatalogoDePlantillas
             "/api/core/payment-means", "ImportPaymentMeansCommand", EntregaDelComercio.I3, EntregaDelComercio.I1,
             "Core.PaymentMeans.View", "Core.PaymentMeans.Manage",
             "Columnas de disponibilidad (puntos, canales, tiposDeDocumento): Inventory.PointsOfSale.Manage"),
-        new(12, PlantillasQueSeImportanConI3.ListasDePrecios,
+        // T600: las plantillas 12 y 13 declaran sus columnas junto a su comando (ImportPriceListsCommand, ImportDiscountCapsCommand).
+        new(12, PlantillaDeListasDePrecios.Definicion,
             "/api/inventory/price-lists", "ImportPriceListsCommand", EntregaDelComercio.I3, EntregaDelComercio.I1,
             "Inventory.Prices.View", "Inventory.Prices.Manage"),
-        new(13, PlantillasQueSeImportanConI3.TopesDeDescuento,
+        new(13, PlantillaDeTopesDeDescuento.Definicion,
             "/api/inventory/discount-caps", "ImportDiscountCapsCommand", EntregaDelComercio.I3, EntregaDelComercio.I1,
             "Inventory.Prices.View", "Inventory.DiscountCaps.Manage"),
         new(14, Inventory.GoLive.PlantillaDeSaldoInicial.Definicion,
