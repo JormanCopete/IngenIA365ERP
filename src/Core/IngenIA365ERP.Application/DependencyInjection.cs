@@ -266,6 +266,14 @@ public static class DependencyInjection
         services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
         services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
         services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
+        // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,
+        // las consultas a Cartera responden CarteraNoHabilitada (la entrega IC, T661, registra la real). El crédito dentro del pago, su
+        // aprobación (SourceType DocumentPayment, Subject ProvisionalCredit) y la marca de lo que se está aprobando en la petición.
+        services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Common.Integration.Lending.ConsultasDeCarteraNoHabilitada>();
+        services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
+        services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
+        services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Sales.FuenteDeAprobacionDeCredito>();
         services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Sales.BorradorDeVenta>();
         services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Sales.AlertaDeVentaBajoCosto>();
         services.AddScoped<Inventory.Documents.Efectos.AnulacionDeVenta>();

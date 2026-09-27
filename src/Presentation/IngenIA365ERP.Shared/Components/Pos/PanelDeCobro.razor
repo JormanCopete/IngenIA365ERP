@@ -1,10 +1,13 @@
 @using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
 
 @* Feature 012, I3 (T639; FR-056, FR-096, FR-097, FR-019; contracts/api.md §22.4): el panel de cobro, usado por el POS y por la factura
    de oficina. La tecla rápida de un medio (o su botón) agrega un pago por lo que falta; se ve lo que falta, lo que sobra y las vueltas.
    Por medio: referencia (el número del bono va aquí), autorización, datáfono (el de la caja, propuesto), lote y los últimos cuatro
    dígitos —nunca el número de la tarjeta—; el crédito pide cuotas, plazo, periodicidad y primer vencimiento (provisional mientras
-   Cartera no responda en línea). Las reglas definitivas (bono ya usado, disponibilidad, crédito) las decide el servidor. (nuevo) *@
+   Cartera no responda en línea). Las reglas definitivas (bono ya usado, disponibilidad, crédito) las decide el servidor. (nuevo)
+   I3 (T658, §23.1): al elegir un medio de crédito se evalúa —elegibilidad, cuotas y plazo máximos del medio, línea sugerida— y se avisa
+   que la venta exige aprobación de alguien con monto suficiente. *@
 <div class="pos-cobro">
     <div class="pos-total">
         <div class="pos-renglon"><span>A pagar</span><span class="pos-a-pagar">@Cobro.APagar.ToString("N0")</span></div>
@@ -55,13 +58,43 @@
                 }
                 @if (TextosDeVentas.EsCredito(p.Medio.Class))
                 {
-                    <label class="campo">Cuotas <input class="e-input numero" type="number" min="1" value="@p.Cuotas" @onchange="@(e => Fijar(() => pago.Cuotas = Corto(e.Value)))" /></label>
-                    <label class="campo">Plazo (días) <input class="e-input numero" type="number" min="1" value="@p.PlazoDias" @onchange="@(e => Fijar(() => pago.PlazoDias = Corto(e.Value)))" /></label>
+                    var condiciones = _evaluaciones.TryGetValue(pago, out var evaluada) ? evaluada.CreditDefaults : null;
+                    <label class="campo">Cuotas@(condiciones?.MaxInstallments is { } mc ? $" (máx. {mc})" : "") <input class="e-input numero" type="number" min="1" max="@condiciones?.MaxInstallments" value="@p.Cuotas" @onchange="@(e => Fijar(() => pago.Cuotas = Corto(e.Value)))" /></label>
+                    <label class="campo">Plazo (días)@(condiciones?.MaxTermDays is { } md ? $" (máx. {md})" : "") <input class="e-input numero" type="number" min="1" max="@condiciones?.MaxTermDays" value="@p.PlazoDias" @onchange="@(e => Fijar(() => pago.PlazoDias = Corto(e.Value)))" /></label>
                     <label class="campo">Periodicidad (días) <input class="e-input numero" type="number" min="1" value="@p.PeriodicidadDias" @onchange="@(e => Fijar(() => pago.PeriodicidadDias = Corto(e.Value)))" /></label>
                     <label class="campo">Primer vencimiento <input type="date" class="e-input" value="@(p.PrimerVencimiento?.ToString("yyyy-MM-dd"))" @onchange="@(e => Fijar(() => pago.PrimerVencimiento = DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null))" /></label>
+                    <label class="campo">Línea sugerida <input class="e-input" maxlength="20" value="@p.LineaSugerida" @onchange="@(e => Fijar(() => pago.LineaSugerida = e.Value?.ToString()))" /></label>
                 }
                 <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el pago" OnClick="@(() => QuitarAsync(pago))" />
             </div>
+            @if (TextosDeVentas.EsCredito(p.Medio.Class))
+            {
+                @* T658 (§23.1): la evaluación del crédito provisional —elegibilidad, máximos del medio y la aprobación que exigirá—. *@
+                <IndicadorDeCarga Cargando="@_evaluando.Activa" Texto="Evaluando el crédito…" Compacto="true">
+                    @if (Cliente is null)
+                    {
+                        <p class="aviso aviso-alerta">Elija un cliente identificado: al consumidor final no se le vende a crédito.</p>
+                    }
+                    else if (_evaluaciones.TryGetValue(pago, out var ev))
+                    {
+                        @if (!ev.Person.Eligible)
+                        {
+                            <p class="aviso aviso-alerta">@string.Join(" ", ev.Person.Reasons.Select(r => r.Message))</p>
+                        }
+                        else
+                        {
+                            <p class="aviso aviso-info">
+                                Crédito provisional a @ev.Person.Name@(ev.CreditDefaults.SuggestedLineCode is { } linea ? $", línea sugerida {linea}" : "").
+                                @if (ev.RequiresApproval)
+                                {
+                                    <span> Exige la aprobación de alguien con monto suficiente@(ev.Approval?.ApproverMaxAmount is { } max ? $" (hasta {max:N0})" : ""): la venta queda pendiente hasta que la aprueben, nunca quien cobra.</span>
+                                }
+                            </p>
+                        }
+                    }
+                    <SfButton CssClass="e-flat" Disabled="@(Cliente is null)" OnClick="@(() => EvaluarAsync(pago))">Evaluar el crédito</SfButton>
+                </IndicadorDeCarga>
+            }
         </div>
     }
 
@@ -79,6 +112,47 @@
     /// <summary>Avisa a la pantalla que cambió algo del cobro (para repintar su total y su botón).</summary>
     [Parameter] public EventCallback Cambio { get; set; }
 
+    /// <summary>El cliente de la venta, para evaluar un crédito (§23.1); nulo = consumidor final.</summary>
+    [Parameter] public Guid? Cliente { get; set; }
+
+    [Parameter] public Guid? PuntoDeVenta { get; set; }
+
+    [Parameter] public Guid? TipoDeDocumento { get; set; }
+
+    [Parameter] public DateOnly? Fecha { get; set; }
+
+    private readonly EstadoDeCarga _evaluando = new();
+    private readonly Dictionary<PagoEnCobro, EvaluacionDeCreditoDto> _evaluaciones = [];
+    private Guid? _clienteEvaluado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Otro cliente, otra evaluación: la anterior ya no dice nada.
+        if (_clienteEvaluado == Cliente) return;
+        _clienteEvaluado = Cliente;
+        _evaluaciones.Clear();
+        foreach (var pago in Cobro.Pagos.Where(p => TextosDeVentas.EsCredito(p.Medio.Class)).ToList()) await EvaluarAsync(pago);
+    }
+
+    /// <summary>
+    /// La evaluación del crédito (§23.1) al elegir el medio o al pedirla: propone las condiciones del medio si el pago no las trae. El servidor
+    /// la repite al confirmar; aquí sólo se muestra.
+    /// </summary>
+    private async Task EvaluarAsync(PagoEnCobro pago)
+    {
+        if (Cliente is not { } cliente || pago.Monto <= 0m) return;
+        using var evaluando = _evaluando.Iniciar();
+        var r = await Ventas.EvaluarCreditoAsync(new EvaluacionDeCreditoRequest(cliente, pago.Medio.PaymentMeansPublicId, pago.Monto, Fecha, PuntoDeVenta, TipoDeDocumento));
+        if (!r.IsSuccess || r.Value is null) { _evaluaciones.Remove(pago); return; }
+        var ev = r.Value;
+        _evaluaciones[pago] = ev;
+        pago.Cuotas ??= ev.CreditDefaults.DefaultInstallments ?? 1;
+        pago.PlazoDias ??= ev.CreditDefaults.TermDays;
+        pago.PeriodicidadDias ??= ev.CreditDefaults.PeriodicityDays;
+        pago.LineaSugerida ??= ev.CreditDefaults.SuggestedLineCode;
+        await Cambio.InvokeAsync();
+    }
+
     /// <summary>La tecla rápida de un medio: agrega un pago por lo que falta. Devuelve si la tecla era de un medio.</summary>
     public async Task<bool> TeclaRapidaAsync(string tecla)
     {
@@ -90,13 +164,15 @@
 
     private async Task AgregarAsync(MedioDelPosDto medio)
     {
-        Cobro.AgregarPorLoQueFalta(medio);
+        var pago = Cobro.AgregarPorLoQueFalta(medio);
         await Cambio.InvokeAsync();
+        if (pago is not null && TextosDeVentas.EsCredito(medio.Class)) await EvaluarAsync(pago);
     }
 
     private async Task QuitarAsync(PagoEnCobro pago)
     {
         Cobro.Quitar(pago);
+        _evaluaciones.Remove(pago);
         await Cambio.InvokeAsync();
     }
 

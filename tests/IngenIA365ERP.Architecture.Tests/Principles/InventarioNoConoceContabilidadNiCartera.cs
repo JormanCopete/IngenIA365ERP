@@ -118,17 +118,23 @@ public class InventarioNoConoceContabilidadNiCartera
     [Fact]
     public void El_puerto_de_Cartera_declara_exactamente_sus_dos_consultas()
     {
-        // IConsultasDeCartera nace con Cartera (IC, D-02). Mientras no exista no hay nada que violar; en cuanto aparezca,
-        // tiene que vivir en los puertos de la plataforma y declarar sus dos métodos, ni uno más.
-        var puertos = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes()
-            .Where(t => t.IsInterface && t.Name == "IConsultasDeCartera")
-            .ToList();
-        Assert.True(puertos.Count <= 1, "Hay más de un IConsultasDeCartera.");
-        foreach (var puerto in puertos)
-        {
-            Assert.StartsWith("IngenIA365ERP.Application.Common.Integration", puerto.Namespace, StringComparison.Ordinal);
-            Assert.Equal(2, MetodosDe(puerto).Count);
-        }
+        // I3 (T649, T651): IConsultasDeCartera existe desde el crédito provisional, en los puertos de la plataforma, con exactamente sus
+        // dos consultas; mientras IC esté pendiente (D-02) la implementación registrada responde CarteraNoHabilitada.
+        var puerto = typeof(IngenIA365ERP.Application.Common.Integration.Lending.IConsultasDeCartera);
+        Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
+        Assert.Single(typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes(), t => t.IsInterface && t.Name == "IConsultasDeCartera");
+        Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync"], MetodosDe(puerto));
+    }
+
+    [Fact]
+    public void Inventario_no_nombra_entidades_ni_tablas_de_Cartera()
+    {
+        // FR-014, FR-085: lo de Cartera se pregunta por IConsultasDeCartera y se le avisa por mensajes; ningún tipo de
+        // Application/Inventory usa una entidad de Domain.Entities.Lending (las tablas LND_* las revisa la prueba del fuente).
+        Types().That().ResideInNamespaceMatching(ConHijos("IngenIA365ERP.Application.Inventory"))
+            .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(ConHijos("IngenIA365ERP.Domain.Entities.Lending"))
+            .Because("FR-085: Inventario no conoce las entidades de Cartera; usa IConsultasDeCartera y los mensajes a Lending")
+            .Check(Arquitectura.Value);
     }
 
     [Fact]

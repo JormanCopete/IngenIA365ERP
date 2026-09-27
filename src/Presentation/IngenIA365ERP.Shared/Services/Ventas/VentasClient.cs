@@ -35,6 +35,7 @@ public sealed partial class VentasClient(HttpClient http, CentralAuthClient auth
         public const string Documentos = Base + "/sales/documents";
         public const string Facturas = Base + "/sales/invoices";
         public const string Notas = Base + "/sales/credit-notes";
+        public const string EvaluacionesDeCredito = Base + "/sales/credit-evaluations";
         public const string Reimpresion = Base + "/documents";
     }
 

@@ -91,7 +91,8 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
     {
         var solicitudes = new List<SolicitudDeEmision>();
         var ajustesDeCosto = contenidos.OfType<AjusteDeCostoReconocidoV1>().ToList();
-        var delEvento = contenidos.Where(c => c is not AjusteDeCostoReconocidoV1).ToList();
+        var aCartera = contenidos.Where(c => c is VentaACreditoRegistradaV1 or AjusteDeVentaACreditoV1).ToList();
+        var delEvento = contenidos.Where(c => c is not AjusteDeCostoReconocidoV1 && c is not VentaACreditoRegistradaV1 && c is not AjusteDeVentaACreditoV1).ToList();
 
         if (delEvento.Count > 0)
         {
@@ -117,6 +118,27 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
                         VistaDeDocumentos.NumeroVisible(original.Prefix, original.Number) ?? string.Empty),
                     ValidacionPrevia: validacion,
                     KindDelOriginal: informativo ? IntegrationMessageKind.Informational : IntegrationMessageKind.Business));
+            }
+        }
+
+        // I3 (T656; mensajes.md §8, §9): a Cartera, un evento por pago de crédito (Confirmation:{pago:N}), siempre Always/Pending; el
+        // ajuste nombra la venta original como relacionada y depende de su cadena (la VentaACreditoRegistrada que ajusta).
+        foreach (var credito in aCartera)
+        {
+            switch (credito)
+            {
+                case VentaACreditoRegistradaV1 venta:
+                    solicitudes.Add(new SolicitudDeEmision(origen, ClavesDeEvento.ConfirmacionPor(venta.CreditPayment.PaymentPublicId), [venta],
+                        new ModoDeEntrega.Sellado(DeliveryMode.Online), ValidacionPrevia: validacion));
+                    break;
+                case AjusteDeVentaACreditoV1 ajuste:
+                    var vendido = ajuste.OriginalDocument;
+                    solicitudes.Add(new SolicitudDeEmision(origen, ClavesDeEvento.ConfirmacionPor(ajuste.OriginalCreditPaymentPublicId), [ajuste],
+                        new ModoDeEntrega.Heredado(vendido.PublicId),
+                        CadenasDeLasQueDepende: [vendido.PublicId],
+                        Relacionado: new DocumentoRelacionado(vendido.PublicId, vendido.DocumentClass.ToString(), vendido.Number),
+                        ValidacionPrevia: validacion));
+                    break;
             }
         }
 

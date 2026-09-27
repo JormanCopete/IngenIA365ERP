@@ -55,7 +55,9 @@ public sealed class ReglasDeConfirmacionDeVenta(
     GuardiaDeEmisionFiscal guardia,
     CalculoTributarioDeVenta calculo,
     AprobacionDeDescuentos aprobaciones,
-    IToqueDeSesionDeCaja toque)
+    IToqueDeSesionDeCaja toque,
+    CreditoEnLaVenta? credito = null,
+    AprobacionDeCredito? aprobacionDeCredito = null)
 {
     public const string PermisoOtroMedio = "Inventory.Sales.RefundOtherMeans";
 
@@ -104,7 +106,21 @@ public sealed class ReglasDeConfirmacionDeVenta(
         if (await PersonaInactivaDeContadoAsync(documento, pagos, ct) is { } inactiva) return Result.Failure(inactiva);
 
         var validados = await ValidarPagosAsync(documento, pagos, ct);
-        return validados;
+        if (validados.IsFailure || credito is null) return validados;
+
+        // I3 (T654): el crédito dentro del pago —elegibilidad, condiciones, vencimientos y sello—, en oficina y en el POS.
+        return await credito.ValidarAsync(documento, pagos, ct);
+    }
+
+    /// <summary>
+    /// I3 (T655): la aprobación del crédito provisional de la venta (<see cref="AprobacionDeCredito"/>); nula si no tiene pagos de
+    /// crédito, si ya están aprobados o si no hay servicio de crédito registrado.
+    /// </summary>
+    public async Task<Result<Domain.Entities.Approvals.ApprovalRequest?>> AprobacionDeCreditoAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        if (aprobacionDeCredito is null) return Result.Success<Domain.Entities.Approvals.ApprovalRequest?>(null);
+        var pagos = await PagosAsync(contexto.Documento, PaymentDirection.Received, ct);
+        return await aprobacionDeCredito.SolicitarAsync(contexto.Documento, pagos, ct);
     }
 
     /// <summary>Dentro del cerrojo: la foto de impuestos, los bonos, el toque de las sesiones y el vencimiento.</summary>
@@ -242,7 +258,18 @@ public sealed class ReglasDeConfirmacionDeVenta(
     private async Task<Result> ValidarPagosAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
     {
         var medios = await MediosAsync(pagos, ct);
-        var abiertas = await SesionesAbiertasAsync(ct);
+        // I3 (T655): en la reentrada de la última aprobación confirma el aprobador, no el cajero: valen las sesiones de los pagos que
+        // sigan abiertas, no las del aprobador.
+        IReadOnlyCollection<int> abiertas;
+        if (documento.Status == DocumentStatus.PendingApproval)
+        {
+            var sesiones = pagos.Select(p => p.CashSessionId).OfType<int>().Distinct().ToList();
+            abiertas = await db.CashSessions.AsNoTracking().Where(s => sesiones.Contains(s.Id) && s.Status == CashSessionStatus.Open).Select(s => s.Id).ToListAsync(ct);
+        }
+        else
+        {
+            abiertas = await SesionesAbiertasAsync(ct);
+        }
         var validado = ValidadorDePagos.Validar(new PedidoDeCobro(documento.AmountDue, pagos.Select(p => Propuesto(p, medios[p.PaymentMeansId])).ToList(), abiertas));
         if (!validado.IsValid) return Result.Failure(RegistroDePagos.ErrorDePago(validado.Errors[0]));
         var noDisponible = await MedioNoDisponibleAsync(db, permisos, documento, medios.Values.ToList(), await BorradorDeVenta.EsConsumidorFinalAsync(db, documento, ct), ct);

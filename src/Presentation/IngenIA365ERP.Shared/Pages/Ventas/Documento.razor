@@ -116,6 +116,60 @@
                 </table>
             }
 
+            @if (doc.Payments.Any(p => TextosDeVentas.EsCredito(p.MeansClass)))
+            {
+                @* I3 (T658, T657; §23.2): la pestaña «Crédito» —condiciones, aprobación, sello y mensajes a Cartera—. Nunca saldos de Cartera. *@
+                <div class="toolbar" role="tablist">
+                    <SfButton CssClass="@(_verCredito ? "e-outline" : "e-primary")" OnClick="@(() => _verCredito = false)">Detalle</SfButton>
+                    <SfButton CssClass="@(_verCredito ? "e-primary" : "e-outline")" OnClick="@VerCreditoAsync">Crédito</SfButton>
+                </div>
+                @if (_verCredito)
+                {
+                    <IndicadorDeCarga Cargando="@_cargaCredito.Activa" Texto="Cargando el crédito…">
+                        @if (_credito is { } cr)
+                        {
+                            <p>Cuenta por cobrar registrada por: <b>@(cr.AccountsReceivableRecordedBy ?? "—")</b></p>
+                            <table class="data-grid">
+                                <thead><tr><th>Medio</th><th class="numero">Financiado</th><th class="numero">Cuotas</th><th class="numero">Plazo (días)</th><th class="numero">Cada (días)</th><th>Primer vencimiento</th><th>Último vencimiento</th><th>Línea sugerida</th><th>Estado</th><th>Aprobación</th></tr></thead>
+                                <tbody>
+                                    @foreach (var p in cr.Payments)
+                                    {
+                                        <tr>
+                                            <td>@p.MeansCode · @TextosDeVentas.ClaseDeMedio(p.MeansClass)</td><td class="numero">@p.Amount.ToString("N0")</td>
+                                            <td class="numero">@p.Installments</td><td class="numero">@p.TermDays</td><td class="numero">@p.PeriodicityDays</td>
+                                            <td>@p.FirstDueDate?.ToString("dd/MM/yyyy")</td><td>@p.FinalDueDate?.ToString("dd/MM/yyyy")</td><td>@p.SuggestedLineCode</td>
+                                            <td>@TextosDeVentas.OrigenDeCredito(p.CreditOrigin)@(p.PendingValidation ? " · pendiente de validar" : "")</td>
+                                            <td>@(p.Approval is { } a ? $"{a.Status}{(a.ApprovedByName is { } n ? $" · {n}" : "")}{(a.DecidedAt is { } f ? $" · {f.ToLocalTime():dd/MM/yyyy HH:mm}" : "")}" : "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            <h4>Mensajes a Cartera</h4>
+                            @if (cr.LendingMessages.Count == 0)
+                            {
+                                <p class="texto-tenue">Todavía no hay mensajes a Cartera: se emiten al confirmar la venta.</p>
+                            }
+                            else
+                            {
+                                <table class="data-grid">
+                                    <thead><tr><th>Tipo</th><th>Entrega</th><th>Validación</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var m in cr.LendingMessages)
+                                        {
+                                            <tr>
+                                                <td>@m.Type</td>
+                                                <td>@m.DeliveryStatus@(m.DestinationAvailable ? "" : " — destino aún no disponible")</td>
+                                                <td>@(m.Validation.Reason ?? m.Validation.Status)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        }
+                    </IndicadorDeCarga>
+                }
+            }
+
             @if (doc.Messages.Count > 0)
             {
                 <h4>Mensajes a los otros módulos</h4>
@@ -196,7 +250,9 @@
 
     [Parameter] public Guid Id { get; set; }
 
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaCredito = new();
+    private CreditoDeLaVentaDto? _credito;
+    private bool _verCredito;
     private readonly ClaveDeOperacion _claveConfirmar = new(), _claveEntrega = new(), _claveMotivo = new();
     private DocumentoDeVentaDto? _doc;
     private TirillaDto? _tirilla;
@@ -211,8 +267,20 @@
 
     protected override Task OnParametersSetAsync() => CargarAsync();
 
+    /// <summary>La pestaña «Crédito» (§23.2): se consulta al abrirla.</summary>
+    private async Task VerCreditoAsync()
+    {
+        _verCredito = true;
+        using var carga = _cargaCredito.Iniciar();
+        var r = await Ventas.ObtenerCreditoAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el crédito."); return; }
+        _credito = r.Value;
+    }
+
     private async Task CargarAsync()
     {
+        _credito = null;
+        _verCredito = false;
         using var carga = _carga.Iniciar();
         var r = await Ventas.ObtenerDocumentoAsync(Id);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el documento."); return; }

@@ -60,6 +60,19 @@ public sealed partial class VentasClient
     public Task<ResultadoDeInventario<EmptyResponse>> DescartarAsync(string ruta, Guid id, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<EmptyResponse>(HttpMethod.Post, $"{ruta}/{id}/discard", new MotivoRequest(motivo), clave, ct);
 
+    // ------------------------------------------------------------------------------------ crédito --
+
+    /// <summary>
+    /// Evaluar una venta a crédito al elegir un medio de crédito (§23.1): elegibilidad, condiciones del medio y la aprobación que exigirá.
+    /// Es una consulta: no lleva <c>Idempotency-Key</c>. El servidor repite la evaluación al confirmar.
+    /// </summary>
+    public Task<ResultadoDeInventario<EvaluacionDeCreditoDto>> EvaluarCreditoAsync(EvaluacionDeCreditoRequest request, CancellationToken ct = default) =>
+        Enviar<EvaluacionDeCreditoDto>(HttpMethod.Post, Rutas.EvaluacionesDeCredito, request, null, ct);
+
+    /// <summary>El crédito de una venta (§23.2): pagos de crédito, aprobación, sello y mensajes a Cartera.</summary>
+    public Task<ResultadoDeInventario<CreditoDeLaVentaDto>> ObtenerCreditoAsync(Guid id, CancellationToken ct = default) =>
+        Enviar<CreditoDeLaVentaDto>(HttpMethod.Get, $"{Rutas.Documentos}/{id}/credit", null, null, ct);
+
     // ------------------------------------------------------------------------------------ entrega --
 
     private async Task<ResultadoDeInventario<EntregaDeVentaDto>> EntregaAsync(string url, Guid id, EntregaRequest request, ClaveDeOperacion clave, CancellationToken ct)

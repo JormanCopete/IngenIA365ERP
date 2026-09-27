@@ -75,6 +75,8 @@ public class LasConsultasDeInventarioRespetanElAlcance
         // Fase 13, US5 (I3; T613): la lista y el detalle de los documentos de venta (por la bodega o el punto de venta).
         "ListSalesDocumentsQueryHandler",
         "GetSalesDocumentQueryHandler",
+        // Fase 14, US6 (I3; T657): el crédito de una venta (su pestaña «Crédito»), por la vista del documento.
+        "GetSalesDocumentCreditQueryHandler",
         // I3 (T623, T624): las vistas de ventas y caja y los indicios de deterioro.
         "SalesBySessionReportQueryHandler",
         "SalesByRegisterReportQueryHandler",

@@ -30,7 +30,7 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 /// de hoy: una reclasificación posterior no cambia lo que dice el mensaje de un documento anterior.
 /// </para>
 /// </summary>
-public sealed class EmisionDeInventario(IApplicationDbContext db)
+public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.CreditosAprobadosEnCurso? creditosEnCurso = null)
 {
     /// <summary>Las propiedades de un contenido que son importes o cantidades: las que la anulación invierte (§6.9).</summary>
     public static readonly IReadOnlySet<string> ImportesYCantidades = new HashSet<string>(StringComparer.Ordinal)
@@ -385,6 +385,154 @@ public sealed class EmisionDeInventario(IApplicationDbContext db)
         Operation = "DevolucionDeCliente",
         Lines = await LineasDeCostoAsync(nota, kardex.Where(k => k.Kind == KardexEntryKind.Entry).ToList(), KardexEntryKind.Entry, ct),
     };
+
+    // ------------------------------------------------------------------------------------- Cartera (US6) --
+
+    /// <summary>
+    /// <c>VentaACreditoRegistrada</c> v1 (I3, T656; mensajes.md §8.1): una por pago de crédito <c>Received</c> de la venta, con la foto de la
+    /// contraparte, el valor financiado, las condiciones del medio (T32), la línea sugerida, la marca «pendiente de validar», el origen del
+    /// crédito, la aprobación (nunca el cajero) y el sello <c>accountsReceivableRecordedBy</c>. La clave de cada una es
+    /// <c>Confirmation:{paymentPublicId:N}</c> y la pone <see cref="MensajesDelDocumento.Solicitudes"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<VentaACreditoRegistradaV1>> VentasACreditoAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos,
+        CancellationToken ct)
+    {
+        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.EsCredito).OrderBy(p => p.LineNumber).ToList();
+        if (creditos.Count == 0) return [];
+        var persona = documento.CounterpartyPersonId is int pid ? await db.People.AsNoTracking().FirstOrDefaultAsync(p => p.Id == pid, ct) : null;
+        var foto = persona is null ? null : FotoDeLaContraparte.De(documento, persona);
+        var caja = await DeCajaAsync(documento, ct);
+        var canal = documento.SalesChannelId is int c ? await db.SalesChannels.AsNoTracking().Where(x => x.Id == c).Select(x => x.Code).FirstOrDefaultAsync(ct) : null;
+
+        var lista = new List<VentaACreditoRegistradaV1>(creditos.Count);
+        foreach (var p in creditos)
+        {
+            lista.Add(new VentaACreditoRegistradaV1
+            {
+                ThirdPartyKind = p.MeansClass == PaymentMeansClass.AssociateCredit ? "Associate" : "Customer",
+                Person = new PartySnapshotV1 { TaxIdType = foto?.DianIdTypeCode ?? string.Empty, TaxId = foto?.TaxId ?? string.Empty, Name = foto?.LegalName ?? string.Empty },
+                CreditPayment = new CreditPaymentV1
+                {
+                    PaymentPublicId = p.PublicId, LineNumber = p.LineNumber, PaymentMeansCode = p.MeansCode, PaymentMeansClass = p.MeansClass, Amount = p.Amount,
+                },
+                DocumentTotal = documento.Total,
+                AmountDue = documento.AmountDue,
+                Terms = CondicionesDelCredito(p, documento.OperationDate),
+                CreditLineCode = null,
+                SuggestedCreditLineCode = p.SuggestedCreditLineCode,
+                PendingValidation = p.PendingValidation,
+                Origin = p.CreditOrigin ?? CreditOrigin.ProvisionalCredit,
+                Approval = await AprobacionDelCreditoAsync(p, ct),
+                ConsultationEvidence = null,
+                AccountsReceivableRecordedBy = p.AccountsReceivableRecordedBy ?? Sales.CreditoEnLaVenta.Contabilidad,
+                PointOfSaleCode = caja.PointOfSaleCode,
+                SalesChannelCode = canal,
+            });
+        }
+        return lista;
+    }
+
+    /// <summary>
+    /// <c>AjusteDeVentaACredito</c> v1 (I3, T656; mensajes.md §8.2): uno por pago de crédito del <paramref name="original"/> afectado. En una
+    /// nota, lo reintegrado a ese pago (<c>RefundsPaymentId</c>, o el mismo medio si el reintegro no lo nombra) con signo negativo, clase
+    /// <c>Return</c> si devuelve mercancía y <c>CreditNote</c> si no; una nota que reintegra sólo por medios de contado no emite nada. En una
+    /// anulación (<paramref name="reintegros"/> nulo), todo el valor financiado en negativo, clase <c>Voiding</c>. Cada uno nombra la
+    /// <c>VentaACreditoRegistrada</c> que ajusta y conserva su sello; sin ella (una venta anterior a la entrega) no hay qué ajustar.
+    /// <c>VoidingByDianRejection</c> y <c>Replacement</c> los emite I4.
+    /// </summary>
+    public async Task<IReadOnlyList<AjusteDeVentaACreditoV1>> AjustesDeVentaACreditoAsync(InventoryDocument documento, InventoryDocument original,
+        IReadOnlyList<DocumentPayment>? reintegros, CancellationToken ct)
+    {
+        var creditos = await db.DocumentPayments.AsNoTracking()
+            .Where(p => p.DocumentId == original.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
+                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit))
+            .OrderBy(p => p.LineNumber).ToListAsync(ct);
+        if (creditos.Count == 0) return [];
+        var originales = await db.IntegrationMessages.AsNoTracking()
+            .Where(m => m.OriginPublicId == original.PublicId && m.Type == VentaACreditoRegistradaV1.Type)
+            .Select(m => new { m.PublicId, m.OriginEventKey }).ToListAsync(ct);
+
+        var clase = reintegros is null ? "Voiding" : documento.ReturnsGoods ? "Return" : "CreditNote";
+        var ajustes = new List<AjusteDeVentaACreditoV1>();
+        foreach (var p in creditos)
+        {
+            var clave = IngenIA365ERP.Application.Common.Integration.ClavesDeEvento.ConfirmacionPor(p.PublicId);
+            var mensaje = originales.FirstOrDefault(m => m.OriginEventKey == clave);
+            if (mensaje is null) continue;
+            var monto = reintegros is null
+                ? p.Amount
+                : reintegros.Where(r => !r.IsDeleted && (r.RefundsPaymentId == p.Id || r.RefundsPaymentId is null && r.PaymentMeansId == p.PaymentMeansId)).Sum(r => r.Amount);
+            if (monto == 0m) continue;
+            ajustes.Add(new AjusteDeVentaACreditoV1
+            {
+                AdjustmentClass = clase,
+                Amount = -monto,
+                OriginalMessageId = mensaje.PublicId,
+                OriginalCreditPaymentPublicId = p.PublicId,
+                OriginalDocument = Referencia(original),
+                PaymentMeansCode = p.MeansCode,
+                Reason = documento.Reason,
+                AccountsReceivableRecordedBy = p.AccountsReceivableRecordedBy ?? Sales.CreditoEnLaVenta.Contabilidad,
+            });
+        }
+        return ajustes;
+    }
+
+    /// <summary>Las condiciones del pago de crédito en la forma de §8.1 (días; la periodicidad por nombre).</summary>
+    public static CreditTermsV1 CondicionesDelCredito(DocumentPayment p, DateOnly fecha)
+    {
+        var cuotas = p.InstallmentCount ?? 1;
+        var ultimo = p.FinalDueDate ?? fecha.AddDays(p.CreditTermDays ?? 0);
+        return new CreditTermsV1
+        {
+            TermUnit = "Days",
+            Term = p.CreditTermDays ?? 0,
+            Installments = cuotas,
+            Periodicity = cuotas <= 1 ? "SinglePayment" : p.InstallmentPeriodDays switch
+            {
+                <= 7 => "Weekly",
+                <= 15 => "Biweekly",
+                _ => "Monthly",
+            },
+            FirstDueDate = p.FirstDueDate ?? ultimo,
+            FinalDueDate = ultimo,
+        };
+    }
+
+    /// <summary>
+    /// La aprobación del crédito (§8.1): la que se está decidiendo en esta petición (el motor registra la decisión después de confirmar) o
+    /// la última aprobación registrada de la solicitud del pago. Nula si no la hubo.
+    /// </summary>
+    private async Task<ApprovalRefV1?> AprobacionDelCreditoAsync(DocumentPayment pago, CancellationToken ct)
+    {
+        if (creditosEnCurso?.DecisionDe(pago.PublicId) is { } enCurso)
+        {
+            var usuario = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == enCurso.ApproverUserId)
+                .Select(u => new { u.CentralUserId, u.Username }).FirstOrDefaultAsync(ct);
+            return new ApprovalRefV1
+            {
+                ApprovalRequestPublicId = enCurso.RequestPublicId,
+                ApprovedBy = new UserRefV1 { CentralUserId = usuario?.CentralUserId, Name = usuario?.Username ?? string.Empty },
+                Level = enCurso.Level,
+                Method = enCurso.Method,
+                DecidedAt = new DateTimeOffset(DateTime.SpecifyKind(enCurso.DecidedAt, DateTimeKind.Utc)),
+            };
+        }
+        if (pago.ApprovalRequestId is not int solicitudId) return null;
+        var solicitud = await db.ApprovalRequests.AsNoTracking().Include(r => r.Decisions).FirstOrDefaultAsync(r => r.Id == solicitudId, ct);
+        var decision = solicitud?.Decisions.Where(d => d.Decision == Domain.Enums.Approvals.ApprovalDecisionKind.Approve).OrderByDescending(d => d.Level).FirstOrDefault();
+        if (solicitud is null || decision is null) return null;
+        var central = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == decision.DecidedByUserId).Select(u => u.CentralUserId).FirstOrDefaultAsync(ct);
+        return new ApprovalRefV1
+        {
+            ApprovalRequestPublicId = solicitud.PublicId,
+            ApprovedBy = new UserRefV1 { CentralUserId = central, Name = decision.DecidedByName },
+            Level = decision.Level,
+            Method = decision.Method,
+            Reason = decision.Reason ?? string.Empty,
+            DecidedAt = new DateTimeOffset(DateTime.SpecifyKind(decision.DecidedAt, DateTimeKind.Utc)),
+        };
+    }
 
     // --------------------------------------------------------------------------------------- caja (US5) --
 

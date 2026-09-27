@@ -129,6 +129,21 @@ public class LineasPorMedioDePagoTests
     }
 
     [Fact]
+    public async Task Un_credito_en_una_cuenta_que_no_exige_tercero_y_cruce_no_es_contabilizable()
+    {
+        // I3, T659 (contabilidad.md §3.4; T32): la cuenta por cobrar provisional exige tercero y documento cruce; la del adquirente no.
+        E.AgregarReglas(JsonNode.Parse("""[{ "op": "Venta", "rol": "MedioDePago", "cuenta": "13050501", "medio": "CREDASOC", "punto": "PTO02" }]""")!.AsArray());
+        var unidad = Venta("PTO02", "FV-9", EscenarioContable.Asociado, Pago(1, "CREDASOC", PaymentMeansClass.AssociateCredit, 100m, EscenarioContable.Asociado));
+
+        var c = ConstructorDeLineasDeInventario.Construir(unidad, await E.CatalogosAsync(unidad));
+
+        c.EsValida.Should().BeFalse();
+        c.Fallos.Should().ContainSingle().Which.Should().Match<FalloDeConstruccion>(f =>
+            f.Error.Code == "Accounting.InventoryRule.CreditAccountRequirements" && f.AccountCode == "13050501");
+        QuienCorrige.De("Accounting.InventoryRule.CreditAccountRequirements").Page.Should().Be("/contabilidad/plan-de-cuentas");
+    }
+
+    [Fact]
     public async Task Recibido_va_al_debito_y_reintegrado_al_credito()
     {
         var nota = new NotaCreditoEmitidaV1

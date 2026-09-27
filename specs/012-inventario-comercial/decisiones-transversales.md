@@ -1822,6 +1822,31 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     **Punto de venta** y enlaces de I3 en **Ventas** y **Maestros Core**; «Vender en el POS» se oculta si la sesión abierta del usuario es de un
     punto sin POS (FR-058). `DestinoDeDocumentoDeInventario` abre las ventas y notas de I3 en `/ventas/documentos/{id}`. Siete temas de ayuda
     `ventas-*` en `ManualCatalogo`.
+- **I3, crédito provisional (T646–T660; IC, T661–T667, sigue bloqueada por D-02) (nuevo)**: en `Application/Common/Integration/Lending`
+    el puerto `IConsultasDeCartera` (exactamente `EstadoCrediticioAsync(ConsultaCrediticia)` y `EstadoDeValidacionAsync(messagePublicId)`,
+    con `EstadoCrediticioDto`, `LineaDeCreditoDto`, `EstadoDeValidacionDto` y `EstadosDeValidacion`, provisionales y no persistidos), la marca
+    `CarteraNoHabilitada` (un `EstadoCrediticioDto` con `LendingEnabled = false` y el texto «Pendiente: el destino aún no está disponible
+    (IC)») y la implementación por defecto `ConsultasDeCarteraNoHabilitada`, registrada en `Application/DependencyInjection`. En
+    `Application/Common/Approvals`, `LimitesDePermisoPorUsuario` (el monto máximo de un permiso para cualquier usuario y el mayor de la
+    cooperativa sin contar a los excluidos; `LimitesPorPermiso` de la API delega en él). En `Application/Inventory/Sales`:
+    `EvaluateSaleCreditQuery` (+ `SaleCreditEvaluationDto`, `CreditPersonDto`, `CreditReasonDto`, `CreditApprovalDto`,
+    `CreditApprovalLevelDto`, `CreditDefaultsDto` —con `MaxTermDays` y `DefaultInstallments` además de los de §23.1— y `LendingStatusDto`);
+    `CreditoEnLaVenta` (elegibilidad `ElegibilidadDeCredito`, condiciones `CondicionesDeCredito`, sello `SelloAsync`) que llama
+    `ReglasDeConfirmacionDeVenta.ValidarVentaAsync`, así rige igual en la factura y en el cobro del POS; `AprobacionDeCredito` con su fuente
+    `FuenteDeAprobacionDeCredito` (`SourceType = DocumentPayment`, `IFuenteConAprobador`: el aprobador del nivel `Inventory.Sales.SellOnCredit`
+    necesita monto ≥ lo financiado) y la marca de petición `CreditosAprobadosEnCurso` (+ `AprobacionEnCurso`); `ErroresDeCredito` (`Inventory.Credit.TermsOutOfRange` y `.MeansNotCredit` son nuevos; `AmountExceedsLimit` con el texto del crédito);
+    `GetSalesDocumentCreditQuery` (+ `SalesDocumentCreditDto`, `CreditPaymentDto`, `CreditPaymentApprovalDto`, `LendingMessageDto`,
+    `LendingValidationDto`). El ciclo común gana `IEfectoDeClase.AprobacionPropiaAsync` (la aprobación propia de la clase, consultada en el
+    paso 2 y en la reentrada de la última aprobación; `SalidaPorVenta` la usa para el crédito) y, en esa reentrada, las reglas de venta validan
+    las sesiones de los pagos que siguen abiertas, no las del aprobador. `EmisionDeInventario.VentasACreditoAsync` y
+    `.AjustesDeVentaACreditoAsync` (+ `CondicionesDelCredito`); `MensajesDelDocumento.Solicitudes` emite cada `VentaACreditoRegistrada` y
+    cada `AjusteDeVentaACredito` como su propio evento (`Confirmation:{pago:N}`; el ajuste con la venta como relacionada y dependiente de su
+    cadena). Rutas `POST /api/inventory/sales/credit-evaluations` (`Inventory.Sales.SellOnCredit`, sin `Idempotency-Key`) y
+    `GET /api/inventory/sales/documents/{id}/credit` (`Inventory.Sales.View`). En Contabilidad, el error
+    `Accounting.InventoryRule.CreditAccountRequirements` (la cuenta del medio de crédito no exige tercero y documento cruce; lo corrige el plan
+    de cuentas). Shared: `VentasClient.EvaluarCreditoAsync`/`ObtenerCreditoAsync`, DTO espejo en `VentasDtos.Documentos`
+    (`EvaluacionDeCreditoRequest`, `EvaluacionDeCreditoDto`, `CreditoDeLaVentaDto`…), la evaluación en `PanelDeCobro` (parámetros `Cliente`,
+    `PuntoDeVenta`, `TipoDeDocumento`, `Fecha`) y la pestaña «Crédito» de `/ventas/documentos/{id}`.
 
 ### 2.17 Códigos de error principales (familias)
 

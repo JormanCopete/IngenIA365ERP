@@ -129,6 +129,9 @@ public abstract class DevolucionDeCliente(
         var reintegros = await reglas.PagosDeAsync(nota, PaymentDirection.Refunded, ct);
         var contenidos = new List<object> { await emision.NotaCreditoAsync(nota, impuestos, reintegros, ct) };
         if (nota.ReturnsGoods && filas.Count > 0) contenidos.Add(await emision.DevolucionDeClienteAsync(nota, filas, ct));
+        // I3 (T656): lo que la nota reintegra a un pago de crédito de la venta ajusta su crédito en Cartera.
+        if (await NotasDeVenta.OriginalDeAsync(db, nota, ct) is { } original)
+            contenidos.AddRange(await emision.AjustesDeVentaACreditoAsync(nota, original, reintegros, ct));
         return contenidos;
     }
 

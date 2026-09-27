@@ -185,3 +185,40 @@ public sealed record BorradorDeNotaRequest(
 public sealed record ConfirmarVentaRequest(decimal? ExpectedAmountDue, byte[]? RowVersion);
 
 public sealed record AnularVentaRequest(string Reason, DateOnly? OperationDate, Guid? CashSessionPublicId);
+
+// ------------------------------------------------------------------------------------------ el crédito (US6) --
+// Espejos del crédito provisional (feature 012, I3, T658; contracts/api.md §23.1, §23.2). (nuevos)
+
+/// <summary>El cuerpo de <c>POST /sales/credit-evaluations</c>: una consulta, sin clave de operación.</summary>
+public sealed record EvaluacionDeCreditoRequest(Guid PersonPublicId, Guid PaymentMeansPublicId, decimal Amount, DateOnly? OperationDate = null,
+    Guid? PointOfSalePublicId = null, Guid? DocumentTypePublicId = null);
+
+public sealed record MotivoDelCreditoDto(string Code, string Message);
+
+public sealed record PersonaDelCreditoDto(Guid PublicId, string Name, bool IsAssociate, bool? AssociateActive, bool IsCustomer, bool Eligible,
+    IReadOnlyList<MotivoDelCreditoDto> Reasons);
+
+public sealed record NivelDelCreditoDto(int Order, string PermissionCode, decimal Threshold);
+
+public sealed record AprobacionDelCreditoDto(IReadOnlyList<NivelDelCreditoDto> Levels, decimal? ApproverMaxAmount);
+
+public sealed record CondicionesDelCreditoDto(short? MaxInstallments, short? TermDays, short? PeriodicityDays, string? SuggestedLineCode, short? MaxTermDays,
+    short? DefaultInstallments);
+
+/// <summary>La evaluación (§23.1). <c>Origin</c> es <c>CreditOrigin</c> como número; <c>Lending</c> sólo con Cartera habilitada (IC).</summary>
+public sealed record EvaluacionDeCreditoDto(bool LendingEnabled, int Origin, PersonaDelCreditoDto Person, bool RequiresApproval,
+    AprobacionDelCreditoDto? Approval, CondicionesDelCreditoDto CreditDefaults, JsonElement? Lending);
+
+public sealed record AprobacionDelPagoDto(Guid ApprovalRequestPublicId, string Status, string? ApprovedByName, int? Level, DateTime? DecidedAt);
+
+public sealed record PagoACreditoDto(Guid DocumentPaymentPublicId, string MeansCode, int MeansClass, decimal Amount, short? Installments, short? TermDays,
+    short? PeriodicityDays, DateOnly? FirstDueDate, DateOnly? FinalDueDate, string? SuggestedLineCode, bool PendingValidation, int? CreditOrigin,
+    AprobacionDelPagoDto? Approval);
+
+public sealed record ValidacionDeCarteraDto(string Status, DateTime? EvaluatedAt, string? Reason);
+
+public sealed record MensajeACarteraDto(Guid MessagePublicId, string Type, string DeliveryStatus, bool DestinationAvailable, ValidacionDeCarteraDto Validation);
+
+/// <summary>La pestaña «Crédito» de una venta (§23.2): nunca trae saldos de Cartera.</summary>
+public sealed record CreditoDeLaVentaDto(IReadOnlyList<PagoACreditoDto> Payments, string? AccountsReceivableRecordedBy,
+    IReadOnlyList<MensajeACarteraDto> LendingMessages);

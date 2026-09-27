@@ -33,7 +33,7 @@ public static class QuienCorrige
         "Accounting.Line.AccountNotMovement" or "Accounting.Line.AccountInactive" or "Accounting.Line.AccountNotEnabledForModule"
             or "Accounting.Line.AccountNotFound" or "Accounting.Line.CostCenterNotAllowed" or "Accounting.Line.TaxBaseRequired"
             or "Accounting.Line.TaxAmountMismatch" or "Accounting.Line.TaxAmountDiffers" or "Accounting.Line.TaxRateMissing"
-            or "Accounting.Line.BranchRequired" => PlanDeCuentas,
+            or "Accounting.Line.BranchRequired" or "Accounting.InventoryRule.CreditAccountRequirements" => PlanDeCuentas,
         "Accounting.Line.ThirdPartyRequired" => ClaseLlevaTercero(clase) ? ElDocumento(clase) : Matriz,
         "Accounting.Line.CostCenterRequired" => ElDocumento(clase),
         "Accounting.Line.CrossDocumentRequired" => Matriz,

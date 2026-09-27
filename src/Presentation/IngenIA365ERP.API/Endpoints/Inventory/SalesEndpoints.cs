@@ -25,12 +25,37 @@ public class SalesEndpoints : ICarterModule
     public const string Crear = "Inventory.Sales.Create";
     public const string Confirmar = "Inventory.Sales.Confirm";
     public const string Anular = "Inventory.Sales.Void";
+    public const string VenderACredito = "Inventory.Sales.SellOnCredit";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         Documentos(app);
         Facturas(app);
         Notas(app);
+        Credito(app);
+    }
+
+    /// <summary>
+    /// I3 (T653, T657; §23.1, §23.2): evaluar una venta a crédito —una consulta, sin <c>Idempotency-Key</c>— y la pestaña «Crédito» de la
+    /// venta (<c>GET /sales/documents/{id}/credit</c>). La venta nunca muestra saldos de Cartera.
+    /// </summary>
+    private static void Credito(IEndpointRouteBuilder app)
+    {
+        app.MapPost("/api/inventory/sales/credit-evaluations", async (EvaluateSaleCreditQuery body, ISender sender, CancellationToken ct) =>
+                await sender.Send(body, ct))
+            .WithTags("Inventory Sales Credit")
+            .WithName("Inventory_Sales_Credit_Evaluate")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(VenderACredito);
+
+        app.MapGet("/api/inventory/sales/documents/{id:guid}/credit", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetSalesDocumentCreditQuery(id), ct))
+            .WithTags("Inventory Sales Documents")
+            .WithName("Inventory_Sales_Documents_Credit")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
     }
 
     private static void Documentos(IEndpointRouteBuilder app)

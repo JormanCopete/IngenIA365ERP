@@ -418,3 +418,102 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == userId).Select(u => new UsuarioDto(u.PublicId, u.Username)).FirstOrDefaultAsync(ct)
         ?? new UsuarioDto(null, string.Empty);
 }
+
+// ------------------------------------------------------------------------------------------ el crédito (US6) --
+
+/// <summary>La aprobación del crédito de un pago (§23.2). (nuevo)</summary>
+public sealed record CreditPaymentApprovalDto(Guid ApprovalRequestPublicId, string Status, string? ApprovedByName, int? Level, DateTime? DecidedAt);
+
+/// <summary>Un pago de crédito con sus condiciones, su aprobación y su sello (§23.2). (nuevo)</summary>
+public sealed record CreditPaymentDto(
+    Guid DocumentPaymentPublicId,
+    string MeansCode,
+    PaymentMeansClass MeansClass,
+    decimal Amount,
+    short? Installments,
+    short? TermDays,
+    short? PeriodicityDays,
+    DateOnly? FirstDueDate,
+    DateOnly? FinalDueDate,
+    string? SuggestedLineCode,
+    bool PendingValidation,
+    CreditOrigin? CreditOrigin,
+    CreditPaymentApprovalDto? Approval);
+
+/// <summary><c>validation</c> de un mensaje a Cartera: <c>Pending</c>, <c>Validated</c> o <c>Failed</c> (§23.2). (nuevo)</summary>
+public sealed record LendingValidationDto(string Status, DateTime? EvaluatedAt, string? Reason);
+
+/// <summary>Un mensaje a Cartera de la venta (el suyo y los ajustes de sus notas y anulación) con su entrega (§23.2). (nuevo)</summary>
+public sealed record LendingMessageDto(Guid MessagePublicId, string Type, string DeliveryStatus, bool DestinationAvailable, LendingValidationDto Validation);
+
+/// <summary>La pestaña «Crédito» de una venta (§23.2). Nunca trae saldos de Cartera (FR-062). (nuevo)</summary>
+public sealed record SalesDocumentCreditDto(
+    IReadOnlyList<CreditPaymentDto> Payments,
+    string? AccountsReceivableRecordedBy,
+    IReadOnlyList<LendingMessageDto> LendingMessages);
+
+/// <summary>
+/// El crédito de una venta (<c>GET /api/inventory/sales/documents/{id}/credit</c>; feature 012, I3, T657; contracts/api.md §23.2;
+/// FR-062) (nuevo nombre): sus pagos de crédito con condiciones, aprobación y sello, y sus mensajes a Cartera —la
+/// <c>VentaACreditoRegistrada</c> de cada pago y los <c>AjusteDeVentaACredito</c> de sus notas y anulación— con el estado de la entrega
+/// (<c>COR_IntegrationMessageDeliveries</c>, destino <c>Lending</c>). Mientras IC esté pendiente, <c>destinationAvailable = false</c> y la
+/// validación dice «Pendiente: el destino aún no está disponible (IC)» (<c>IConsultasDeCartera.EstadoDeValidacionAsync</c>).
+/// </summary>
+public sealed record GetSalesDocumentCreditQuery(Guid DocumentPublicId) : IRequest<Result<SalesDocumentCreditDto>>;
+
+public sealed class GetSalesDocumentCreditQueryHandler(
+    IApplicationDbContext db,
+    VistaDeDocumentos vista,
+    IAlcanceDeInventario alcanceDeLaPeticion,
+    IngenIA365ERP.Application.Common.Integration.Lending.IConsultasDeCartera cartera,
+    IEnumerable<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes> destinos)
+    : IRequestHandler<GetSalesDocumentCreditQuery, Result<SalesDocumentCreditDto>>
+{
+    public async Task<Result<SalesDocumentCreditDto>> Handle(GetSalesDocumentCreditQuery request, CancellationToken ct)
+    {
+        // El alcance lo aplica la vista del documento (bodega y punto de quien consulta).
+        _ = alcanceDeLaPeticion;
+        var d = await vista.BuscarAsync(request.DocumentPublicId, DocumentClassGroup.Sales, seguir: false, ct);
+        if (d is null) return Result.Failure<SalesDocumentCreditDto>(InventoryErrors.DocumentNotFound());
+
+        var pagos = await db.DocumentPayments.AsNoTracking()
+            .Where(p => p.DocumentId == d.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
+                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit))
+            .OrderBy(p => p.LineNumber).ToListAsync(ct);
+        var fuentes = pagos.Select(p => p.PublicId).ToList();
+        var solicitudes = await db.ApprovalRequests.AsNoTracking().Include(r => r.Decisions)
+            .Where(r => r.SourceType == ApprovalSourceTypes.DocumentPayment && fuentes.Contains(r.SourcePublicId) && r.Status != ApprovalRequestStatus.Cancelled)
+            .ToListAsync(ct);
+
+        var tipos = new[] { IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.VentaACreditoRegistradaV1.Type, IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AjusteDeVentaACreditoV1.Type };
+        var mensajes = await (from m in db.IntegrationMessages.AsNoTracking()
+                              join e in db.IntegrationMessageDeliveries.AsNoTracking() on m.Id equals e.MessageId
+                              where tipos.Contains(m.Type) && e.Destination == IntegrationDestinations.Lending
+                                    && (m.OriginPublicId == d.PublicId || m.RelatedPublicId == d.PublicId)
+                              orderby m.Id
+                              select new { m.PublicId, m.Type, e.Status })
+            .ToListAsync(ct);
+        var disponible = destinos.Any(x => x.Destino == IntegrationDestinations.Lending);
+
+        var lendingMessages = new List<LendingMessageDto>(mensajes.Count);
+        foreach (var m in mensajes)
+        {
+            var validacion = await cartera.EstadoDeValidacionAsync(m.PublicId, ct);
+            lendingMessages.Add(new LendingMessageDto(m.PublicId, m.Type, m.Status.ToString(), disponible,
+                new LendingValidationDto(validacion.Status, validacion.EvaluatedAt, validacion.Reason)));
+        }
+
+        return Result.Success(new SalesDocumentCreditDto(
+            pagos.Select(p =>
+            {
+                var solicitud = solicitudes.Where(r => r.SourcePublicId == p.PublicId).OrderByDescending(r => r.Id).FirstOrDefault();
+                var aprobo = solicitud?.Decisions.Where(x => x.Decision == ApprovalDecisionKind.Approve).OrderByDescending(x => x.Level).FirstOrDefault();
+                return new CreditPaymentDto(p.PublicId, p.MeansCode, p.MeansClass, p.Amount, p.InstallmentCount, p.CreditTermDays, p.InstallmentPeriodDays,
+                    p.FirstDueDate, p.FinalDueDate, p.SuggestedCreditLineCode, p.PendingValidation, p.CreditOrigin,
+                    solicitud is null ? null : new CreditPaymentApprovalDto(solicitud.PublicId, solicitud.Status.ToString(), aprobo?.DecidedByName,
+                        aprobo?.Level, aprobo?.DecidedAt));
+            }).ToList(),
+            pagos.Select(p => p.AccountsReceivableRecordedBy).FirstOrDefault(s => s is not null),
+            lendingMessages));
+    }
+}

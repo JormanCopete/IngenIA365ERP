@@ -100,7 +100,7 @@
                 <div class="pos-a-pagar">Total @d.Totals.Total.ToString("N0") · a pagar @d.Totals.AmountDue.ToString("N0")</div>
             </div>
             <h4>Pagos</h4>
-            <PanelDeCobro Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" />
+            <PanelDeCobro Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Cliente="@_cliente?.PublicId" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
         }
         else
         {
@@ -240,7 +240,10 @@
         using var guardado = _guardado.Iniciar();
         var r = await Ventas.ConfirmarAsync(VentasClient.Rutas.Facturas, _doc.DocumentPublicId, _doc.Totals.AmountDue, _doc.RowVersion, _claveConfirmar);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la factura."); return; }
-        if (r.Value.Status == 1) await Notification.InfoAsync("Quedó en aprobación: la confirma la última aprobación.");
+        if (r.Value.Status == 1)
+            await Notification.InfoAsync(_cobro.Pagos.Any(p => TextosDeVentas.EsCredito(p.Medio.Class))
+                ? "El crédito quedó esperando la aprobación de alguien con monto suficiente: la venta se confirma con la última aprobación. Siga su estado en la pestaña «Crédito»."
+                : "Quedó en aprobación: la confirma la última aprobación.");
         else await Notification.SuccessAsync($"Factura {r.Value.DisplayNumber} confirmada.");
         Nav.NavigateTo($"/ventas/documentos/{_doc.DocumentPublicId}");
     }

@@ -65,6 +65,9 @@ public sealed class AnulacionDeVenta(
     public async Task<IReadOnlyList<object>> MensajesAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
         var diferencias = _revertidos.TryGetValue(contexto.Documento.PublicId, out var hecha) ? hecha.Diferencias : [];
-        return await emision.AnulacionAsync(contexto.Documento, contexto.Original!, diferencias, ct);
+        var contenidos = new List<object>(await emision.AnulacionAsync(contexto.Documento, contexto.Original!, diferencias, ct));
+        // I3 (T656): anular una venta a crédito ajusta todo su crédito en Cartera (Voiding).
+        contenidos.AddRange(await emision.AjustesDeVentaACreditoAsync(contexto.Documento, contexto.Original!, null, ct));
+        return contenidos;
     }
 }

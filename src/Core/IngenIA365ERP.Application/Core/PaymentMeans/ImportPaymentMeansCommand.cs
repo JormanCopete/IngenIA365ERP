@@ -15,6 +15,7 @@ using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Pos;
 using IngenIA365ERP.Domain.Enums.Core;
 using MediatR;
+using IngenIA365ERP.Domain.Sales.Payments;
 using Microsoft.EntityFrameworkCore;
 using MedioDePago = IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans;
 using M = IngenIA365ERP.Application.Core.PaymentMeans.PlantillaDeMediosDePago;
@@ -393,6 +394,20 @@ public sealed class ImportPaymentMeansCommandHandler(IApplicationDbContext db, E
             var activo = fila.SiNo(M.Activo, porDefecto: true);
             if (!hoja.LlaveUnica(fila, codigo, M.Codigo) || codigo is null || nombre is null || clase is null || dian is null || desde is null || fila.TieneErrores) continue;
             if (!fila.EstaVacia(M.Franquicia) && red is null || !fila.EstaVacia(M.Adquirente) && adq is null || !fila.EstaVacia(M.Banco) && banco is null) continue;
+
+            // I3 (T660; plantillas.md §11): las columnas de crédito sólo en las clases de crédito, y un crédito no se arquea (None); el
+            // error cae en la columna que sobra, no en el plazo.
+            if (!ClasesDeMedio.EsCredito(clase.Value))
+            {
+                foreach (var columna in new[] { M.PlazoDias, M.Cuotas, M.Periodicidad, M.LineaSugerida })
+                    if (!fila.EstaVacia(columna))
+                        fila.Error(columna, PaymentMeansErrors.InvalidCode, $"«{columna}» sólo va en los medios de crédito (AssociateCredit, CustomerCredit); la clase {clase.Value} no la admite.");
+            }
+            else if (arqueo is { } metodo && metodo != CashCountMethod.None)
+            {
+                fila.Error(M.Arqueo, PaymentMeansErrors.InvalidCode, "Un medio de crédito no se arquea: su arqueo es «None».");
+            }
+            if (fila.TieneErrores) continue;
             if (min is < 0 or > 255 || max is < 0 or > 255)
             {
                 fila.Error(min is < 0 or > 255 ? M.LargoMinimoReferencia : M.LargoMaximoReferencia, ImportErrors.CellFormat, "El largo de la referencia va de 0 a 255.");

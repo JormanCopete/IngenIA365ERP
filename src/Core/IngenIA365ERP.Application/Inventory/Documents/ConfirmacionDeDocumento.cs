@@ -158,6 +158,24 @@ public sealed class ConfirmacionDeDocumento(
             }
         }
 
+        // I3 (T655): la aprobación propia de la clase (el crédito provisional), también en la reentrada de la última aprobación del tipo.
+        if (original is null)
+        {
+            var propia = await efecto.AprobacionPropiaAsync(contexto, ct);
+            if (propia.IsFailure) return Falla(propia.Error);
+            if (propia.Value is { } pendientePropia)
+            {
+                if (documento.Status == DocumentStatus.Draft) documento.EnviarAAprobacion();
+                await db.SaveChangesAsync(ct);
+                var nivelesPropios = pendientePropia.NivelesRequeridos()
+                    .Select(n => new NivelPedidoDto(n.Order, n.Threshold, n.PermissionCode, n.Order == pendientePropia.CurrentLevel ? "Pending" : "Waiting"))
+                    .ToList();
+                return Result.Success(new ConfirmationResultDto(
+                    documento.PublicId, documento.Status, null, null, documento.OperationDate, null, null,
+                    new AprobacionPedidaDto(pendientePropia.PublicId, "Policy", nivelesPropios), null, null, []));
+            }
+        }
+
         // ------------------------------------------------------------------ 3. guardia fiscal y validación previa --
         if (clase.IsFiscal)
         {

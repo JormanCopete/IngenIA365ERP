@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
@@ -112,6 +113,15 @@ public interface IEfectoDeClase
     /// </summary>
     Task<IReadOnlyCollection<int>> ExcluidosDeLaAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         Task.FromResult<IReadOnlyCollection<int>>([]);
+
+    /// <summary>
+    /// Una aprobación propia de la clase, además de la del tipo (feature 012, I3, T655; T32): la del crédito provisional de una venta
+    /// (<c>Subject = ProvisionalCredit</c>, <c>SourceType = DocumentPayment</c>). La consulta el flujo canónico en el paso 2 —y en la
+    /// reentrada de la última aprobación, porque la del tipo pudo aprobarse antes—: una solicitud pendiente deja el documento
+    /// <c>PendingApproval</c> sin número. Nula si no hace falta o ya está aprobada. Por defecto, ninguna. (nuevo)
+    /// </summary>
+    Task<Result<ApprovalRequest?>> AprobacionPropiaAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult(Result.Success<ApprovalRequest?>(null));
 }
 
 /// <summary>
@@ -158,4 +168,7 @@ public abstract class EfectoDeClaseBase : IEfectoDeClase
 
     public virtual Task<IReadOnlyCollection<int>> ExcluidosDeLaAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         Task.FromResult<IReadOnlyCollection<int>>([]);
+
+    public virtual Task<Result<ApprovalRequest?>> AprobacionPropiaAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult(Result.Success<ApprovalRequest?>(null));
 }

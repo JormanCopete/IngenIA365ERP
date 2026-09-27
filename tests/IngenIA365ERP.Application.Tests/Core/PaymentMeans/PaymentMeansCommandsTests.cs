@@ -399,4 +399,22 @@ public class PaymentMeansCommandsTests
 
         r.Value.Errors.Should().ContainSingle(e => e.Column == M.Puntos && e.Code == ImportErrors.CellPermissionRequired);
     }
+
+    [Fact]
+    public async Task La_plantilla_11_admite_columnas_de_credito_solo_en_clases_de_credito_y_sin_arqueo()
+    {
+        // I3, T660 (plantillas.md §11): el error cae en la fila y la columna que sobra.
+        string[] encabezados = [M.Codigo, M.Nombre, M.Clase, M.Arqueo, M.CodigoDian, M.PlazoDias, M.Cuotas, M.Periodicidad, M.LineaSugerida, M.VigenteDesde];
+        Hoja(M.HojaMedios, encabezados,
+            ["CREDASOC", "Crédito asociados", "AssociateCredit", "None", "1", "30", "6", "Mensual", "CONSUMO", "2026-09-01"],
+            ["EFECTIVO", "Efectivo", "Cash", "PhysicalCount", "10", null, null, null, "CONSUMO", "2026-09-01"],
+            ["CREDCLI", "Crédito comercial", "CustomerCredit", "ByReference", "1", "30", "1", null, null, "2026-09-01"]);
+
+        var r = await ImportarAsync(ModoDeImportacion.Review);
+
+        r.Value.Valid.Should().BeFalse();
+        r.Value.Errors.Should().ContainSingle(e => e.Row == 3 && e.Column == M.LineaSugerida && e.Code == PaymentMeansErrors.InvalidCode);
+        r.Value.Errors.Should().ContainSingle(e => e.Row == 4 && e.Column == M.Arqueo && e.Code == PaymentMeansErrors.InvalidCode);
+        r.Value.Errors.Should().NotContain(e => e.Row == 2, "el crédito con sus condiciones y sin arqueo es válido");
+    }
 }

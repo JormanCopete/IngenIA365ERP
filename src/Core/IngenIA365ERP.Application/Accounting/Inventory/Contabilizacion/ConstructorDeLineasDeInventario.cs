@@ -148,7 +148,8 @@ public static class ConstructorDeLineasDeInventario
         decimal? Base,
         CruceDeLaPartida? Cruce,
         string Detalle,
-        string NumeroDelDocumento)
+        string NumeroDelDocumento,
+        bool EsCredito = false)
     {
         public bool EsImpuesto => Rol is R.Impuesto or R.Retencion;
 
@@ -360,7 +361,8 @@ public static class ConstructorDeLineasDeInventario
             // Un reintegro a un medio de crédito salda la venta: cruza contra ella (§3.2).
             var cruce = nota && sobre.Related is { } original ? new CruceDeLaPartida(O.Venta, original.Number) : null;
             d.Agregar(operacion, R.MedioDePago, p.Direction == PaymentDirection.Received, p.Amount, valores, [p.LineNumber],
-                tercero: p.ThirdPartyPersonPublicId, cruce: cruce, dim: p.PaymentMeansCode);
+                tercero: p.ThirdPartyPersonPublicId, cruce: cruce, dim: p.PaymentMeansCode,
+                credito: p.PaymentMeansClass is PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit);
         }
         foreach (var l in lineas)
         {
@@ -511,11 +513,11 @@ public static class ConstructorDeLineasDeInventario
 
         public void Agregar(
             string operacion, string rol, bool debitoSiPositivo, decimal importe, ValoresBuscados valores, IReadOnlyList<int> lineas,
-            Guid? tercero = null, decimal? tarifa = null, decimal? @base = null, CruceDeLaPartida? cruce = null, string? dim = null)
+            Guid? tercero = null, decimal? tarifa = null, decimal? @base = null, CruceDeLaPartida? cruce = null, string? dim = null, bool credito = false)
         {
             var detalle = string.IsNullOrWhiteSpace(dim) ? Sobre.Origin.Number : $"{Sobre.Origin.Number} · {dim}";
             destino.Add(new Partida(tipoDelMensaje, operacion, rol, debitoSiPositivo, importe, valores, fechaDeReglas, lineas,
-                tercero, Sobre.PersonPublicId, tarifa, @base, cruce, detalle, Sobre.Origin.Number));
+                tercero, Sobre.PersonPublicId, tarifa, @base, cruce, detalle, Sobre.Origin.Number, credito));
         }
     }
 
@@ -564,6 +566,15 @@ public static class ConstructorDeLineasDeInventario
             var regla = resolucion.Value!;
             var cuenta = regla.CuentaParaReglas;
             var rol = RolesDeCuenta.Buscar(p.Rol);
+
+            // I3 (T659; contabilidad.md §3.4; T32): el pago a crédito provisional va a una cuenta por cobrar que exige tercero (el cliente)
+            // y documento cruce (FV + número de la venta): así la vista pending-documents de la 009 sirve de cartera provisional.
+            if (p.EsCredito && p.Rol == R.MedioDePago && !(cuenta.RequiresThirdParty && cuenta.RequiresCrossDocument))
+            {
+                fallos.Add(new FalloDeConstruccion(AccountingErrors.InventoryCreditAccountRequirements(regla.Cuenta.Code, p.Valores.PaymentMeansCode),
+                    p.MessageType, p.DocumentLines, regla.Cuenta.Code));
+                continue;
+            }
 
             int? persona = null;
             if ((rol?.SiempreLlevaTercero ?? false) || cuenta.RequiresThirdParty)

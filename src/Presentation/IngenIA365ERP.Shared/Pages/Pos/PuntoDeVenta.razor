@@ -128,7 +128,9 @@
                         </div>
                         @if (_modo == Modo.Cobrando && _venta is { } cobrar)
                         {
-                            <PanelDeCobro @ref="_panel" Cobro="@_cobro" Medios="@cobrar.AvailablePaymentMeans" Cambio="@StateHasChanged" />
+                            <PanelDeCobro @ref="_panel" Cobro="@_cobro" Medios="@cobrar.AvailablePaymentMeans" Cambio="@StateHasChanged"
+                                          Cliente="@(cobrar.Customer.IsFinalConsumer ? null : cobrar.Customer.PersonPublicId)" PuntoDeVenta="@_sesion?.PointOfSale.PointOfSalePublicId"
+                                          TipoDeDocumento="@cobrar.DocumentType.PublicId" Fecha="@cobrar.OperationDate" />
                             <div class="toolbar">
                                 <SfButton CssClass="e-primary" Disabled="@(_trabajo.Activa || _cobro.Problema() is not null)" OnClick="@CobrarAsync">Confirmar (F10)</SfButton>
                                 <SfButton CssClass="e-outline" OnClick="@VolverAVender">Volver (Esc)</SfButton>

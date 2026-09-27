@@ -317,6 +317,15 @@ public static class AccountingErrors
             $"La vigencia empieza el {validFrom:yyyy-MM-dd}: no puede terminar el {validTo:yyyy-MM-dd}.",
             new { validFrom, validTo });
 
+    /// <summary>
+    /// Feature 012, I3 (T659; contracts/contabilidad.md §3.4): la cuenta del medio de un crédito provisional no exige tercero y documento
+    /// cruce, y la cuenta por cobrar quedaría sin cliente ni venta que saldar. (nuevo)
+    /// </summary>
+    public static Error InventoryCreditAccountRequirements(string account, string? paymentMeansCode) =>
+        new ErrorConDatos("Accounting.InventoryRule.CreditAccountRequirements",
+            $"La cuenta {account} del medio de crédito {paymentMeansCode} debe exigir tercero y documento cruce: la venta a crédito se cobra contra el cliente y la factura.",
+            new { account, paymentMeansCode });
+
     public static Error InventoryMessageUnbalanced(decimal difference) =>
         new ErrorConDatos("Accounting.InventoryMessage.Unbalanced",
             $"El contenido del mensaje no cuadra (diferencia {difference:N2}): es un defecto de quien lo emitió, no de la matriz.",

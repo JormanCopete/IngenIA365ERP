@@ -57,6 +57,10 @@ public abstract class SalidaPorVenta(
 
     public override decimal MontoParaAprobar(ContextoDeEfecto contexto) => contexto.Documento.Total;
 
+    /// <summary>I3 (T655): la venta con pago de crédito pide la aprobación del crédito provisional.</summary>
+    public override Task<Result<Domain.Entities.Approvals.ApprovalRequest?>> AprobacionPropiaAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        reglas.AprobacionDeCreditoAsync(contexto, ct);
+
     public override PedidoDeCerrojo Cerrojo(ContextoDeEfecto contexto)
     {
         if (contexto.EsAnulacion) return anulacion.Cerrojo(contexto, base.Cerrojo(contexto));
@@ -110,6 +114,8 @@ public abstract class SalidaPorVenta(
         var pagos = await reglas.PagosDeAsync(documento, PaymentDirection.Received, ct);
         var contenidos = new List<object> { await emision.VentaFacturadaAsync(documento, impuestos, pagos, ct) };
         if (filas.Count > 0) contenidos.Add(await emision.CostoDeVentaAsync(documento, filas, ct));
+        // I3 (T656): una VentaACreditoRegistrada por pago de crédito, hacia Cartera (cada una su propio evento).
+        contenidos.AddRange(await emision.VentasACreditoAsync(documento, pagos, ct));
         return contenidos;
     }
 
