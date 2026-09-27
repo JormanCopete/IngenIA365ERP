@@ -1599,6 +1599,29 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
   - **(nuevo, cierre de I1, T443)** `EjecutorDeImportacion.Deshacer` suelta las altas de la última a la primera y cada una después
     de sus dependientes (`SoltarConSusDependientes`): la revisión de una bodega nueva con ubicaciones nuevas respondía 500.
 
+  - **(nuevo, I3 dominio, T571–T581)** Motores puros de ventas y caja en `Domain/Sales`:
+    `Sales/Pricing/ResolutorDeListaDePrecios` (+ `DimensionDePrecio` { Person=1, Segment=2, Channel=3, Branch=4 } —no se guarda:
+    es el `matchedDimensions` de §19.2—, `PrecioDeLista`, `ListaDePreciosCandidata`, `ContextoDePrecio`, `CandidataDePrecio`,
+    `PrecioResuelto` y `AmbitoDeLista.{Clave, Dimensiones, NormalizarSegmento, ClaveGeneral}`, que arma `ScopeKey` y
+    `DimensionCount`); `Sales/Pricing/TopeDeDescuento.{Efectivo, PorPrecioDigitado, PorPorcentaje, PorValor, SuperaTopeDeLinea,
+    PorTotal}` (+ `TopeDeRol`, `TopeDelUsuario`, `DescuentoDeLinea`, `DescuentoPorTotal`); `Sales/Payments/ValidadorDePagos`
+    (+ `MedioDePagoCopia`, `PagoPropuesto`, `PedidoDeCobro`, `ErrorDePago`, `PagoValidado`, `ResultadoDeCobro`,
+    `PareceNumeroDeTarjeta`, `NormalizarReferencia`), `Sales/Payments/DisponibilidadDeMedio` (+ `MedioOfrecible`, `CasoDeCobro`),
+    `Sales/Payments/ClasesDeMedio.{EsCredito, EsTarjeta, PuedeDarVueltas, ArqueoPorDefecto}` (lo único que el código sabe de la
+    clase de un medio); `Sales/Cash/CalculadoraDeEsperado` (+ `MedioDeArqueo`, `PagoDeLaSesion`, `MovimientoDeCaja`,
+    `BaseDeApertura`, `PedidoDeEsperado`, `EsperadoPorMedio`, `EsperadoPorDatafono`, `ReferenciaParaCotejo`,
+    `EsperadoDeLaSesion`) y `Sales/Cash/EvaluadorDeArqueo` (+ `ConteoDeMedio`, `LineaDeArqueo`, `LineaDeDiferencia`,
+    `ResultadoDeArqueo`, `TratamientoDelFaltanteDesde`). Casos dorados en `Domain.Tests/Sales/{Pricing,Cash}/Casos`.
+    En `ClasesDeDocumento`: `HeaderRequirements` [Flags] { None=0, PointOfSale=1, CashRegister=2, CashSession=4, Reason=8 } (no
+    se guarda) como `DescripcionDeClase.Header`; `SeAnulaConAnulacion(clase)` y `MensajesACartera(clase)` con las constantes
+    `VentaACreditoRegistrada`/`AjusteDeVentaACredito`; `CashCountDifference` sin alta manual (la crea el cierre). Columnas:
+    `INV_CashCounts.Status` e `INV_CashCountLines.Status` (int `DocumentStatus`, copia del estado del documento de diferencia,
+    para que la guarda de `IInmutableTrasConfirmar` fije el arqueo); en `INV_Documents` las de I3 de data-model §5.1
+    (`PointOfSaleId`, `CashRegisterId`, `CashSessionId`, `IsSuspended`, `SuspendedAt`, `SuspendedLabel`) y en `INV_DocumentLines`
+    `ListPrice`/`PriceListId`, que ninguna tarea agregaba. Métodos de entidad: `CashSession.Cerrar`, `CashCount.Fijar`,
+    `DayClose.Reabrir`, `DayCloseLine.Clave`, `VoucherRedemption.Liberar`, `PriceList.FijarAmbito`,
+    `DocumentPayment.CopiarDelMedio`, `PaymentMeans.ComisionEsperada`, `CashRegisterDocumentType.ClasesDelRol`.
+
 ### 2.17 Códigos de error principales (familias)
 
 `Operation.KeyRequired` (400), `Operation.KeyReused` (422) y cabecera `Idempotent-Replayed: true` ·
@@ -1661,7 +1684,7 @@ nota va contra una factura confirmada del mismo proveedor, línea por línea); t
 activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, o fuera del alcance) y
 `Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
 entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US11) → `Inventory.Count.AlreadyOpen` (nuevo, T392: abrir o editar un conteo con foto) y
-`Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+`Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina); pagos → `Payments.AmountInvalid` (nuevo, T579: un pago con valor cero o negativo; `ValidadorDePagos`), y `last4` que no son cuatro dígitos responde `Payments.ReferenceInvalid` con `data.field = "last4"`.
 
 ### 2.18 Pruebas con nombre fijo
 

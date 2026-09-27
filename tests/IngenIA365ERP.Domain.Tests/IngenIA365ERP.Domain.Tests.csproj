@@ -33,6 +33,9 @@
     <None Include="Inventory\Counts\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 012 (T942): casos de la reposición (posición, reorden, sugerido y quiebre), calculados a mano. -->
     <None Include="Inventory\Replenishment\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 012, I3 (T546, T547): casos dorados de precios y de caja, calculados a mano. -->
+    <None Include="Sales\Pricing\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Sales\Cash\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

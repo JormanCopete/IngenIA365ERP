@@ -1,0 +1,135 @@
+{
+  "nombre": "Faltante en efectivo sobre la tolerancia y sobrante de tarjeta dentro de ella",
+  "descripcion": "Efectivo esperado 500.000 (base 100.000 + 400.000), contado 480.000: faltante de 20.000 sobre la tolerancia de 1.000, a cargo del cajero (tratamiento sellado). Visa esperado 300.000, lote de 300.500: sobrante de 500 dentro de la tolerancia. Monto a aprobar = 20.000 (sólo lo que supera la tolerancia). El documento lleva las dos líneas.",
+  "sesion": 1,
+  "tratamientoDelFaltante": "ShortageToCashier",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 2,
+      "codigo": "VISA",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 1000
+    }
+  ],
+  "base": {
+    "medio": "EF",
+    "valor": 100000
+  },
+  "pagos": [
+    {
+      "medio": "EF",
+      "valor": 400000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    },
+    {
+      "medio": "VISA",
+      "valor": 300000,
+      "sentido": "Received",
+      "datafono": 7,
+      "referencia": "X1",
+      "repetir": 1
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 100000,
+      "ventas": 400000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 500000,
+      "pagos": 1,
+      "datafonos": null,
+      "referencias": null
+    },
+    {
+      "medio": "VISA",
+      "base": 0,
+      "ventas": 300000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 300000,
+      "pagos": 1,
+      "datafonos": [
+        {
+          "datafono": 7,
+          "esperado": 300000,
+          "pagos": 1
+        }
+      ],
+      "referencias": [
+        "X1"
+      ]
+    }
+  ],
+  "total": 800000,
+  "conteo": [
+    {
+      "medio": "EF",
+      "contado": 480000,
+      "motivo": "Billete falso retenido"
+    },
+    {
+      "medio": "VISA",
+      "contado": 300500,
+      "motivo": "Voucher de más"
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "EF",
+        "contado": 480000,
+        "diferencia": -20000,
+        "dentroDeTolerancia": false,
+        "tratamiento": "ShortageToCashier"
+      },
+      {
+        "medio": "VISA",
+        "contado": 300500,
+        "diferencia": 500,
+        "dentroDeTolerancia": true,
+        "tratamiento": "Surplus"
+      }
+    ],
+    "totalEsperado": 800000,
+    "totalContado": 780500,
+    "totalDiferencia": -19500,
+    "montoAAprobar": 20000,
+    "lineasDelDocumento": [
+      {
+        "medio": "EF",
+        "signo": -1,
+        "valor": 20000,
+        "tratamiento": "ShortageToCashier",
+        "dentroDeTolerancia": false
+      },
+      {
+        "medio": "VISA",
+        "signo": 1,
+        "valor": 500,
+        "tratamiento": "Surplus",
+        "dentroDeTolerancia": true
+      }
+    ],
+    "sinMotivo": []
+  }
+}

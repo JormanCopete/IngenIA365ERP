@@ -1,0 +1,167 @@
+{
+  "nombre": "Tarjetas con esperado por datáfono y reclasificación Visa a Mastercard",
+  "descripcion": "Visa: 100.000 en el datáfono 7 y 60.000 en el 8. Mastercard: 40.000 en el datáfono 7. Un pago de 60.000 del datáfono 8 se registró como Visa y pasó por Mastercard: la reclasificación confirmada baja Visa y sube Mastercard en el datáfono 8. Una reclasificación en borrador no cuenta.",
+  "sesion": 1,
+  "tratamientoDelFaltante": "ShortageToCashier",
+  "medios": [
+    {
+      "id": 2,
+      "codigo": "VISA",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 1000
+    },
+    {
+      "id": 3,
+      "codigo": "MC",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 1000
+    }
+  ],
+  "base": null,
+  "pagos": [
+    {
+      "medio": "VISA",
+      "valor": 100000,
+      "sentido": "Received",
+      "datafono": 7,
+      "referencia": "A1",
+      "repetir": 1
+    },
+    {
+      "medio": "VISA",
+      "valor": 60000,
+      "sentido": "Received",
+      "datafono": 8,
+      "referencia": "A2",
+      "repetir": 1
+    },
+    {
+      "medio": "MC",
+      "valor": 40000,
+      "sentido": "Received",
+      "datafono": 7,
+      "referencia": "A3",
+      "repetir": 1
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "ReclassificationBetweenMeans",
+      "medio": "VISA",
+      "valor": 60000,
+      "confirmado": true,
+      "medioDestino": "MC",
+      "sesionOrigen": 1,
+      "sesionDestino": null,
+      "datafonoOrigen": 8,
+      "datafonoDestino": 8
+    },
+    {
+      "tipo": "ReclassificationBetweenMeans",
+      "medio": "MC",
+      "valor": 40000,
+      "confirmado": false,
+      "medioDestino": "VISA",
+      "sesionOrigen": 1,
+      "sesionDestino": null,
+      "datafonoOrigen": null,
+      "datafonoDestino": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "VISA",
+      "base": 0,
+      "ventas": 160000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 60000,
+      "esperado": 100000,
+      "pagos": 2,
+      "datafonos": [
+        {
+          "datafono": 7,
+          "esperado": 100000,
+          "pagos": 1
+        },
+        {
+          "datafono": 8,
+          "esperado": 0,
+          "pagos": 1
+        }
+      ],
+      "referencias": [
+        "A1",
+        "A2"
+      ]
+    },
+    {
+      "medio": "MC",
+      "base": 0,
+      "ventas": 40000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 60000,
+      "reclasificacionesSalida": 0,
+      "esperado": 100000,
+      "pagos": 1,
+      "datafonos": [
+        {
+          "datafono": 7,
+          "esperado": 40000,
+          "pagos": 1
+        },
+        {
+          "datafono": 8,
+          "esperado": 60000,
+          "pagos": 0
+        }
+      ],
+      "referencias": [
+        "A3"
+      ]
+    }
+  ],
+  "total": 200000,
+  "conteo": [
+    {
+      "medio": "VISA",
+      "contado": 100000,
+      "motivo": null
+    },
+    {
+      "medio": "MC",
+      "contado": 100000,
+      "motivo": null
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "VISA",
+        "contado": 100000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      },
+      {
+        "medio": "MC",
+        "contado": 100000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      }
+    ],
+    "totalEsperado": 200000,
+    "totalContado": 200000,
+    "totalDiferencia": 0,
+    "montoAAprobar": 0,
+    "lineasDelDocumento": [],
+    "sinMotivo": []
+  }
+}

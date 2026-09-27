@@ -1,0 +1,156 @@
+{
+  "nombre": "La ganadora no trae el producto: se toma de la siguiente aplicable (F8)",
+  "descripcion": "CLI5 sólo trae el producto 10. El producto 11 lo traen SEGA y la general: sale de SEGA con respaldo. El producto 10 en la unidad 2 (caja) sólo lo trae la general.",
+  "listas": [
+    {
+      "id": 1,
+      "codigo": "CLI5",
+      "persona": 5,
+      "segmento": null,
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 900
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "codigo": "SEGA",
+      "persona": null,
+      "segmento": "A",
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 950
+        },
+        {
+          "producto": 11,
+          "unidad": 1,
+          "precio": 4500
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "codigo": "GENERAL",
+      "persona": null,
+      "segmento": null,
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 1000
+        },
+        {
+          "producto": 11,
+          "unidad": 1,
+          "precio": 5000
+        },
+        {
+          "producto": 10,
+          "unidad": 2,
+          "precio": 11500
+        }
+      ]
+    }
+  ],
+  "consultas": [
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": null,
+        "sucursal": null,
+        "fecha": "2026-10-01"
+      },
+      "producto": 11,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 4500,
+        "lista": "SEGA",
+        "dimensiones": [
+          "Segment"
+        ],
+        "respaldo": true,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "CLI5",
+          "SEGA",
+          "GENERAL"
+        ]
+      }
+    },
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": null,
+        "sucursal": null,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 900,
+        "lista": "CLI5",
+        "dimensiones": [
+          "Person"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "CLI5",
+          "SEGA",
+          "GENERAL"
+        ]
+      }
+    },
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": null,
+        "sucursal": null,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 2,
+      "esperado": {
+        "encontrado": true,
+        "precio": 11500,
+        "lista": "GENERAL",
+        "dimensiones": [],
+        "respaldo": true,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "CLI5",
+          "SEGA",
+          "GENERAL"
+        ]
+      }
+    }
+  ]
+}

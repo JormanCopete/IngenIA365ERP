@@ -281,9 +281,58 @@ public class ClasesDeDocumentoTests
     }
 
     [Fact]
-    public void El_ajuste_de_costo_y_la_anulacion_no_tienen_alta_manual()
+    public void El_ajuste_de_costo_la_diferencia_de_arqueo_y_la_anulacion_no_tienen_alta_manual()
     {
+        // I3 (T581): el documento de diferencia de arqueo lo crea el cierre de la sesión (contracts/api.md §21.2), no una ruta.
         Todas.Where(d => !d.ManualCreation).Select(d => d.Class).Should().BeEquivalentTo(
-            [DocumentClass.CostAdjustment, DocumentClass.Voiding]);
+            [DocumentClass.CostAdjustment, DocumentClass.CashCountDifference, DocumentClass.Voiding]);
+    }
+
+    [Fact]
+    public void La_cabecera_de_caja_y_del_documento_equivalente_POS_exige_punto_caja_y_sesion()
+    {
+        // I3 (T581; data-model §14 «POS», §15): el movimiento de caja exige además su motivo; la anulación siempre.
+        const HeaderRequirements DeCaja = HeaderRequirements.PointOfSale | HeaderRequirements.CashRegister | HeaderRequirements.CashSession;
+        var exigencias = Todas.Where(d => d.Header != HeaderRequirements.None).ToDictionary(d => d.Class, d => d.Header);
+        exigencias.Should().BeEquivalentTo(new Dictionary<DocumentClass, HeaderRequirements>
+        {
+            [DocumentClass.CashMovement] = DeCaja | HeaderRequirements.Reason,
+            [DocumentClass.CashCountDifference] = DeCaja,
+            [DocumentClass.PosEquivalentDocument] = DeCaja,
+            [DocumentClass.Voiding] = HeaderRequirements.Reason,
+        });
+        De(DocumentClass.SalesInvoice).Header.Should().Be(HeaderRequirements.None, "en la factura de oficina basta que cada pago que se arquea lleve su sesión (T50)");
+        De(DocumentClass.NonElectronicSalesReceipt).Header.Should().Be(HeaderRequirements.None);
+    }
+
+    [Fact]
+    public void De_las_ventas_solo_se_anulan_lo_no_electronico_la_remision_el_pedido_y_la_cotizacion()
+    {
+        // I3 (T581; data-model §14 fila «Voiding de una venta»; FR-066).
+        DelGrupo(DocumentClassGroup.Sales).Where(SeAnulaConAnulacion).Should().BeEquivalentTo(
+        [
+            DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote, DocumentClass.Shipment,
+            DocumentClass.SalesOrder, DocumentClass.SalesQuote,
+        ]);
+        SeAnulaConAnulacion(DocumentClass.CashMovement).Should().BeTrue("un movimiento de caja se anula mientras su sesión está abierta");
+        SeAnulaConAnulacion(DocumentClass.CashCountDifference).Should().BeFalse("la diferencia se recuenta antes de confirmarla");
+        SeAnulaConAnulacion(DocumentClass.Voiding).Should().BeFalse();
+        SeAnulaConAnulacion(DocumentClass.PurchaseReceipt).Should().BeTrue();
+        Todas.Where(d => d.FiscalDirection == FiscalDirection.Emitted).Select(d => d.Class).Where(SeAnulaConAnulacion)
+            .Should().BeEmpty("un documento fiscal emitido se corrige con su nota");
+    }
+
+    [Fact]
+    public void Las_ventas_a_credito_y_sus_ajustes_emiten_su_mensaje_a_Cartera()
+    {
+        // I3 (T581; §2.6): VentaACreditoRegistrada por pago de crédito y AjusteDeVentaACredito en notas y anulaciones.
+        foreach (var venta in new[] { DocumentClass.SalesInvoice, DocumentClass.SalesInvoiceFromShipments, DocumentClass.PosEquivalentDocument,
+                     DocumentClass.NonElectronicSalesReceipt })
+            MensajesACartera(venta).Should().Equal(VentaACreditoRegistrada);
+        foreach (var ajuste in new[] { DocumentClass.NonElectronicSalesNote, DocumentClass.CreditNote, DocumentClass.PosAdjustmentNote,
+                     DocumentClass.DebitNote, DocumentClass.Voiding })
+            MensajesACartera(ajuste).Should().Equal(AjusteDeVentaACredito);
+        MensajesACartera(DocumentClass.CashMovement).Should().BeEmpty();
+        MensajesACartera(DocumentClass.PurchaseReceipt).Should().BeEmpty();
     }
 }

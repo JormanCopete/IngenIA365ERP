@@ -1,0 +1,124 @@
+{
+  "nombre": "Faltante pequeño al gasto: dentro de la tolerancia no pide aprobación pero sí motivo",
+  "descripcion": "Efectivo esperado 50.000, contado 49.200: faltante de 800 dentro de la tolerancia de 1.000, al gasto. No hay monto a aprobar; la línea igual va al documento. El bono (tolerancia 0) cuadra. Sin motivo, el medio queda en la lista de los que lo exigen.",
+  "sesion": 1,
+  "tratamientoDelFaltante": "ShortageToExpense",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 4,
+      "codigo": "BONO",
+      "clase": "Voucher",
+      "arqueo": "ByReference",
+      "tolerancia": 0
+    }
+  ],
+  "base": {
+    "medio": "EF",
+    "valor": 0
+  },
+  "pagos": [
+    {
+      "medio": "EF",
+      "valor": 50000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    },
+    {
+      "medio": "BONO",
+      "valor": 20000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": "NAV001",
+      "repetir": 1
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 0,
+      "ventas": 50000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 50000,
+      "pagos": 1,
+      "datafonos": null,
+      "referencias": null
+    },
+    {
+      "medio": "BONO",
+      "base": 0,
+      "ventas": 20000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 20000,
+      "pagos": 1,
+      "datafonos": null,
+      "referencias": [
+        "NAV001"
+      ]
+    }
+  ],
+  "total": 70000,
+  "conteo": [
+    {
+      "medio": "EF",
+      "contado": 49200,
+      "motivo": null
+    },
+    {
+      "medio": "BONO",
+      "contado": 20000,
+      "motivo": null
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "EF",
+        "contado": 49200,
+        "diferencia": -800,
+        "dentroDeTolerancia": true,
+        "tratamiento": "ShortageToExpense"
+      },
+      {
+        "medio": "BONO",
+        "contado": 20000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      }
+    ],
+    "totalEsperado": 70000,
+    "totalContado": 69200,
+    "totalDiferencia": -800,
+    "montoAAprobar": 0,
+    "lineasDelDocumento": [
+      {
+        "medio": "EF",
+        "signo": -1,
+        "valor": 800,
+        "tratamiento": "ShortageToExpense",
+        "dentroDeTolerancia": true
+      }
+    ],
+    "sinMotivo": [
+      "EF"
+    ]
+  }
+}

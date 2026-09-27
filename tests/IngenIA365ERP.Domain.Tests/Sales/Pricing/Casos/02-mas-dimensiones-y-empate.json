@@ -1,0 +1,186 @@
+{
+  "nombre": "Gana la que coincide en mas dimensiones; en empate cliente > segmento > canal > sucursal",
+  "descripcion": "CLI5 (una dimension) pierde con SEGCAN (dos). Entre dos listas de dos dimensiones, CLISUC (cliente + sucursal) gana a SEGCAN (segmento + canal) porque la primera dimension que las distingue es el cliente; SEGCAN gana a CANSUC por el segmento.",
+  "listas": [
+    {
+      "id": 1,
+      "codigo": "CLI5",
+      "persona": 5,
+      "segmento": null,
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 900
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "codigo": "SEGCAN",
+      "persona": null,
+      "segmento": "A",
+      "canal": 2,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 880
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "codigo": "CANSUC",
+      "persona": null,
+      "segmento": null,
+      "canal": 2,
+      "sucursal": 3,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 890
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "codigo": "CLISUC",
+      "persona": 5,
+      "segmento": null,
+      "canal": null,
+      "sucursal": 3,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 870
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "codigo": "GENERAL",
+      "persona": null,
+      "segmento": null,
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 1000
+        }
+      ]
+    }
+  ],
+  "consultas": [
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": 2,
+        "sucursal": 3,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 870,
+        "lista": "CLISUC",
+        "dimensiones": [
+          "Person",
+          "Branch"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "CLISUC",
+          "SEGCAN",
+          "CANSUC",
+          "CLI5",
+          "GENERAL"
+        ]
+      }
+    },
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": 2,
+        "sucursal": null,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 880,
+        "lista": "SEGCAN",
+        "dimensiones": [
+          "Segment",
+          "Channel"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "SEGCAN",
+          "CLI5",
+          "GENERAL"
+        ]
+      }
+    },
+    {
+      "contexto": {
+        "persona": 6,
+        "segmento": "A",
+        "canal": 2,
+        "sucursal": 3,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 880,
+        "lista": "SEGCAN",
+        "dimensiones": [
+          "Segment",
+          "Channel"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "SEGCAN",
+          "CANSUC",
+          "GENERAL"
+        ]
+      }
+    }
+  ]
+}

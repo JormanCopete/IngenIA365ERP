@@ -72,6 +72,24 @@ public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
 
     public int? SalesChannelId { get; set; }
 
+    // ---- punto de venta y caja (I3, T574; data-model §5.1 y §14 «POS») ----
+
+    /// <summary><c>INV_PointsOfSale</c>: obligatorio en toda venta del POS y en <c>PosEquivalentDocument</c> y la caja.</summary>
+    public int? PointOfSaleId { get; set; }
+
+    /// <summary><c>INV_CashRegisters</c>.</summary>
+    public int? CashRegisterId { get; set; }
+
+    /// <summary><c>INV_CashSessions</c>: el borrador del POS vive ligado a su sesión desde la primera lectura (T50).</summary>
+    public int? CashSessionId { get; set; }
+
+    /// <summary>Sólo en borradores del POS: la venta quedó suspendida y se recupera en cualquier caja del mismo punto.</summary>
+    public bool IsSuspended { get; set; }
+
+    public DateTime? SuspendedAt { get; set; }
+
+    public string? SuspendedLabel { get; set; }
+
     public string? ExternalReference { get; set; }
 
     public string? Notes { get; set; }
