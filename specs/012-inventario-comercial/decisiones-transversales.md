@@ -485,6 +485,8 @@ trasladado desde `Enums/Payroll` con los mismos valores `Production=1, Testing=2
   DianUnavailable=6, ChannelUnavailable=7, InvalidData=8 }
 - `TransmissionOperation` { Emit=1, TransmitContingency=2, QueryStatus=3, Event=4, Download=5 }
 - `DocumentVersionReason` { Initial=1, CaseA=2, CaseB=3 } · `EmailDeliveryBy` { Erp=1, Channel=2 }
+- `UniqueCodeKind` { Cufe=1, Cude=2, Cuds=3 } · `ContingencyEventStatus` { Open=1, Closed=2 } **(nuevos en §2.5; data-model §26;
+  creados en T690)**
 
 `Domain/Enums/Approvals`, `Alerts`, `Parameters`
 - `ApprovalRequestStatus` { Pending=0, Approved=1, Rejected=2, Cancelled=3 }
@@ -1456,6 +1458,8 @@ comandos `EmitElectronicDocumentCommand`, `QueryElectronicDocumentStatusCommand`
 `LinkResolutionToChannelCommand`, `ConfigureEmissionCommand`, `VerifyChannelCredentialCommand`,
 `EmitRadianEventCommand` (I5); consultas `GetDianReadinessQuery`, `ListElectronicDocumentsQuery`.
 
+**(nuevos, I4, T688–T697)** facturación electrónica, proyecto y dominio: el proyecto `Infrastructure/IngenIA365ERP.ElectronicInvoicing` con `DependencyInjection.AddElectronicInvoicing(IServiceCollection, IConfiguration)` (vacío hasta T749) y las carpetas `Channels/{Simulado,ServicioCentral}`, `Credentials`, `Processor`, `Circuit`; `Domain/Enums/Dian/DianEnvironment` (trasladado desde `Enums/Payroll`, mismos valores); `Domain/Common/EscrituraUnicaAttribute`, que `GuardaDeInmutabilidad.RevisarHecho` respeta (un `Modified` sobre un hecho pasa sólo si toda propiedad modificada lo lleva y su original es nulo); en `Domain/ElectronicInvoicing`, `TransicionesDelDocumentoElectronico` (`AlNumerar`, `Aplicar`, `EsFinal`; constantes `CodigoFinal`, `CodigoEsperaRespuesta`, `CodigoNoRechazado`, `CodigoRechazoSinConfirmar`, `CodigoContingenciaAbierta`, `CodigoTransicionNoPermitida`) con `EventoDelDocumentoElectronico { Emitir, ConsultarEstado, TransmitirContingencia, CorregirCasoA, ReemplazarCasoB, CancelarCasoC }`, `RespuestaDelCanal (Resultado, TieneCodigoUnico, TieneRespuestaDeValidacion)` y `ResultadoDeTransicion` (`Procede`, `Hacia`, `Codigo`, `Motivo`, `RechazadoPor`, `Contingencia`, `NuevaVersion`, `ReenviarMismaVersion`, `ConfirmaElRechazo`, `CuentaComoFallaDelCanal`) —la tabla admite además de §5.1 de contracts/dian.md la consulta desde `Pending` (§6.3), la consulta que confirma un rechazo (§8) y el reintento de la transmisión de contingencia—; `HuellaEconomica.Calcular` sobre `DatosFiscalesDelDocumento (Contraparte, Lineas, Retenciones, Totales)` con `ContraparteFiscal`, `LineaFiscal`, `ImporteFiscal` y `TotalesFiscales` (la vista del canónico que la aplicación le entrega a Domain); `ReglaDeCorreccionFiscal.Decidir` → `ReglaDeCorreccionFiscal.CasoA(CamposCambiados)` | `.CasoB(Fields)` (rutas del canónico: `counterparty.taxId`, `lines[1].quantity`, `totals.payable`…); `PlazoDeContingencia` (`Calcular`, `CuentaDesdeElDiaSiguiente`, `InstanteDeLaAlerta`) con `PlazoCalculado (DesdeCuando, Plazo, HorasAplicadas, FuenteLegal)`; entidades `Entities/ElectronicInvoicing/{ElectronicEmissionSetting (VigenteEn), DianNumberingResolution (TieneNumerosEmitidos, Agotada, Disponibles, VigenteEn; mover `RangeFrom` sin emitir arrastra `LastIssuedNumber`), DianResolutionChannel (VigenteEn), DianContingencyEvent (EstaAbierto), ElectronicDocument (`WaitsForDocumentId` + `WaitsForDocument`, `Iniciar`, `AplicarEvento`, `CancelarSinReemplazo`, `EsFinal`)}` y `Transactions/{ElectronicDocumentVersion (`FijarArtefacto` con `ArtefactoDeVersion { Canonico, XmlFirmado, AttachedDocument, RepresentacionGrafica }`), ElectronicDocumentTransmission}`. Pruebas: `Domain.Tests/ElectronicInvoicing/{TransicionesDelDocumentoElectronicoTests, ReglaDeCorreccionFiscalTests, PlazoDeContingenciaTests, EntidadesDeFacturacionElectronicaTests}` y `Application.Tests/Inventory/Documents/EscrituraUnicaEnHechosTests`.
+
 **Seguridad y cumplimiento**: `PerfilesSugeridos` (+ `PerfilSugerido` (nuevo)), `CreateRoleFromTemplateCommand` (+ `RoleFromTemplateDto` (nuevo)),
 `ListRoleTemplatesQuery` (nuevo; + `RoleTemplateDto` (nuevo)), `ReglasDeRol` (nuevo; reglas de código y nombre de rol compartidas con `CreateRoleCommandValidator`),
 `IAutorizacionDeDatos`, `AutorizacionAlCrear` (en `CreatePersonCommand` y los compuestos
@@ -1895,7 +1899,8 @@ de otro módulo → `Accounting.VoucherType.NotAllowedForModule`; cierre contabl
 `Accounting.Period.InventoryPending` (`data { pending, inBatch, rejected, oldestOperationDate, types[] }`); RADIAN → `Inventory.RadianEvent.OutOfOrder`,
 `.ReceiptNotConfirmed`; DIAN → `ElectronicInvoicing.Document.AwaitingResponse` (**422**: el 409 queda para
 `Concurrency.*`), `.EconomicFootprintChanged` (`data.fields[]`), `.MissingData` (`data.missing[] { field,
-where, permission }`), `ElectronicInvoicing.NotReady` (`data.missing[]`); catálogo tributario →
+where, permission }`), `ElectronicInvoicing.NotReady` (`data.missing[]`), `ElectronicInvoicing.Document.TransitionNotAllowed` y `ElectronicInvoicing.Contingency.StillOpen`
+(nuevos, T695: combinación que la máquina de estados no admite; transmitir una 03 con su evento abierto); catálogo tributario →
 `Core.Tax.NotFound`, `Core.TaxRate.{NotFound, Overlaps, InEffect, Ambiguous}`,
 `Core.WithholdingConcept.{NotFound, InUse}`, `Core.Tax.Immutable` (nuevo: la plantilla no cambia la clase, la forma de
 cálculo ni el impuesto base de un impuesto existente), `Core.TaxRate.MunicipalityUnknown` (nuevo, T176: el municipio de la
