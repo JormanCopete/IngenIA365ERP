@@ -201,6 +201,27 @@ public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
         DiscardReason = motivo.Trim();
     }
 
+    /// <summary>
+    /// Cierra el saldo pendiente de recibir de una orden de compra confirmada (feature 012, I5, T792; data-model §9.8): desde ahora no
+    /// admite recepciones y su saldo deja de contar como «por recibir». No mueve kardex ni cambia lo recibido o facturado. Sólo lo llama
+    /// <c>ClosePurchaseOrderBalanceCommand</c>, que antes responde <c>Inventory.PurchaseOrder.NotOpen</c> si la orden no está abierta. (nuevo)
+    /// </summary>
+    public void CerrarSaldo(int cerradoPor, DateTime cerradoEnUtc, string motivo)
+    {
+        if (Class != DocumentClass.PurchaseOrder)
+            throw new InvalidOperationException("Sólo una orden de compra cierra su saldo pendiente de recibir.");
+        if (Status != DocumentStatus.Confirmed || BalanceClosedAt is not null)
+            throw new InvalidOperationException("Sólo se cierra el saldo de una orden confirmada que todavía lo tiene abierto.");
+        if (string.IsNullOrWhiteSpace(motivo))
+            throw new ArgumentException("Cerrar el saldo de una orden exige el motivo.", nameof(motivo));
+        BalanceClosedAt = cerradoEnUtc;
+        BalanceClosedByUserId = cerradoPor;
+        BalanceClosedReason = motivo.Trim();
+    }
+
+    /// <summary>¿La orden admite recepciones? Confirmada y con el saldo abierto (data-model §9.8). (nuevo)</summary>
+    public bool OrdenAbierta => Class == DocumentClass.PurchaseOrder && Status == DocumentStatus.Confirmed && BalanceClosedAt is null;
+
     /// <summary>Lo pone sólo la confirmación de su anulación (FR-006): referencia el documento contrario.</summary>
     public void MarcarAnulado(int anuladoPorDocumentoId)
     {

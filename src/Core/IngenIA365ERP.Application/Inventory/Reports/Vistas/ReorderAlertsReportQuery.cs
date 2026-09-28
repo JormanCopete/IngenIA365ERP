@@ -12,7 +12,7 @@ namespace IngenIA365ERP.Application.Inventory.Reports.Vistas;
 /// <summary>
 /// La vista <c>reorder-alerts</c> de <c>/api/reports/inventory</c> (feature 012, US17, T956; FR-035; contracts/api.md §27): por
 /// bodega y producto con política de reorden, sólo las filas que <b>piden reorden</b> (posición igual o menor que el punto) o están
-/// en <b>quiebre</b> (disponible bajo el mínimo), con disponible, en tránsito, por recibir (0 hasta I5), posición, mínimo, punto,
+/// en <b>quiebre</b> (disponible bajo el mínimo), con disponible, en tránsito, por recibir (lo pendiente de las órdenes de compra, I5), posición, mínimo, punto,
 /// máximo, sugerido (máximo − posición) y quiebre, y las ocultas <c>_producto</c> y <c>_bodega</c> para llegar al kardex. La posición
 /// es la de <see cref="PosicionDeReposicion"/> y el cálculo el de <c>CalculoDeReposicion</c>, por <see cref="EvaluacionDeReposicion"/>:
 /// lo mismo que avisa la confirmación y levanta la revisión nocturna. Filtros <c>warehouse</c>, <c>category</c> y <c>product</c>;
@@ -79,7 +79,7 @@ public sealed class ReorderAlertsReportQueryHandler(IApplicationDbContext db, IA
         var subtitulo = bodegaFiltrada is null ? "Todas las bodegas del alcance" : $"Bodega {bodegaFiltrada}";
         return Result.Success(new TablaExportable("Reorden y quiebres", subtitulo, Columnas, filas, null,
         [
-            "Posición = disponible + en tránsito hacia la bodega + por recibir (0 hasta la entrega de compras completas, I5).",
+            "Posición = disponible + en tránsito hacia la bodega + por recibir (lo pendiente de las órdenes de compra confirmadas con el saldo abierto).",
             "Sugerido = máximo − posición cuando la posición es igual o menor que el punto de reorden. Quiebre: disponible por debajo del mínimo.",
         ]));
     }

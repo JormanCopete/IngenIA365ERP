@@ -52,7 +52,7 @@ public class DocumentoSoporteTests
             var diferencias = new DiferenciasDePrecioDeCompra(Db, vinculos);
             return new EfectosDeClase(
             [
-                new EfectoRecepcionDeCompra(registro, reversion, emision, maestros, C.Calculo(), Db),
+                new EfectoRecepcionDeCompra(registro, reversion, emision, maestros, C.Calculo(), Db, C.ContraOrden()),
                 new EfectoFacturaDeProveedor(registro, emision, maestros, C.Calculo(), vinculos, diferencias, Db),
                 new EfectoDeDocumentoSoporte(registro, emision, maestros, C.Calculo(), vinculos, diferencias, Db),
                 new EfectoDeNotaDeAjusteDeDocumentoSoporte(registro, emision, maestros, C.Calculo(), vinculos, diferencias, Db),

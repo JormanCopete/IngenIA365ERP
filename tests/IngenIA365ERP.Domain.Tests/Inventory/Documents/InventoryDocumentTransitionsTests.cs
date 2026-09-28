@@ -164,9 +164,27 @@ public class InventoryDocumentTransitionsTests
         IInmutableTrasConfirmar.EstaFijo(DocumentStatus.Draft).Should().BeFalse();
         IInmutableTrasConfirmar.EstaFijo(DocumentStatus.PendingApproval).Should().BeFalse();
         IInmutableTrasConfirmar.PropiedadesMutablesTrasConfirmar.Should().BeEquivalentTo(
-            ["Status", "VoidedByDocumentId", "FiscalNumberReleased", "UpdatedAt", "UpdatedBy", "RowVersion"]);
+            ["Status", "VoidedByDocumentId", "FiscalNumberReleased", "BalanceClosedAt", "BalanceClosedByUserId", "BalanceClosedReason",
+                "UpdatedAt", "UpdatedBy", "RowVersion"]);
         typeof(IInmutableTrasConfirmar).IsAssignableFrom(typeof(InventoryDocument)).Should().BeTrue();
         typeof(IHechoInmutable).IsAssignableFrom(typeof(DocumentPartySnapshot)).Should().BeTrue();
         typeof(IHechoInmutable).IsAssignableFrom(typeof(DocumentTaxLine)).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Una_orden_confirmada_cierra_su_saldo_una_sola_vez_y_con_motivo()
+    {
+        var orden = new InventoryDocument { Class = DocumentClass.PurchaseOrder, OperationDate = new DateOnly(2026, 9, 25) };
+        ((Action)(() => orden.CerrarSaldo(7, Ahora, "el proveedor no tiene más"))).Should().Throw<InvalidOperationException>("todavía es borrador");
+        orden.Confirmar(7, Ahora);
+        orden.OrdenAbierta.Should().BeTrue();
+        ((Action)(() => orden.CerrarSaldo(7, Ahora, " "))).Should().Throw<ArgumentException>();
+
+        orden.CerrarSaldo(8, Ahora, "  el proveedor no tiene más  ");
+        orden.OrdenAbierta.Should().BeFalse();
+        orden.BalanceClosedByUserId.Should().Be(8);
+        orden.BalanceClosedReason.Should().Be("el proveedor no tiene más");
+        ((Action)(() => orden.CerrarSaldo(8, Ahora, "otra vez"))).Should().Throw<InvalidOperationException>();
+        ((Action)(() => En(DocumentStatus.Confirmed).CerrarSaldo(7, Ahora, "no es orden"))).Should().Throw<InvalidOperationException>();
     }
 }

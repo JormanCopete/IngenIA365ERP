@@ -229,6 +229,13 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDevolucionAProveedor>();
         services.AddScoped<Inventory.Documents.IConfirmacionEncadenada, Inventory.Purchasing.CompraDirectaEncadenada>();
         services.AddScoped<Inventory.Purchasing.LectorDeFacturaUbl>();
+        // I5 (T787-T793): solicitudes y ordenes de compra (operan cuando la entrega vigente llega a I5), los pendientes por sus
+        // vinculos, las reglas de la recepcion contra orden y el modelo de la orden en PDF (lo dibuja la API: IOrdenDeCompraEnPdf).
+        services.AddScoped<Inventory.Purchasing.PendientesDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.RecepcionContraOrden>();
+        services.AddScoped<Inventory.Purchasing.ModeloDeOrdenDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeSolicitudDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeOrdenDeCompra>();
         // Feature 012 (US10, T367-T374): traslados en dos pasos y movimiento entre ubicaciones. Las tres estrategias, el cierre de las
         // diferencias (confirma o descarta el documento que las resuelve) y su fuente de aprobación (SourceType TransferDiscrepancy).
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDespachoDeTraslado>();

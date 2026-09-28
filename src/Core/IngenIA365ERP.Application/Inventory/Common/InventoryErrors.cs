@@ -310,7 +310,7 @@ public static class InventoryErrors
     public static Error CurrencyNotSupported() => new("Inventory.Currency.NotSupported",
         "Los documentos se registran en pesos colombianos (COP) con tasa de cambio 1.");
 
-    private static string Estado(DocumentStatus status) => status switch
+    internal static string Estado(DocumentStatus status) => status switch
     {
         DocumentStatus.Draft => "en borrador",
         DocumentStatus.PendingApproval => "en aprobación",

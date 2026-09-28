@@ -1944,6 +1944,22 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     como `DocumentosDeOrigen`, las capas PEPS las protege la fila exclusiva de `INV_CostStates` y el retroactivo pasa en el pedido los
     estados de costo y las existencias de todos los productos que recalcula (lo arma la aplicación, T836–T838). Par
     `ComprasYCosteoAvanzado` (T835).
+- **I5, Application de solicitudes y órdenes (T787–T793, prueba T769; 2026-09-28) (nuevo)**: estrategias
+    `Inventory/Documents/Efectos/EfectoDeSolicitudDeCompra` y `EfectoDeOrdenDeCompra` (sin kardex ni mensajes; la orden recalcula
+    impuestos y totales y se aprueba con su `Total`); `ReglasDeCompra.{ProductosComprablesAsync, TransitoAsync}`;
+    `Inventory/Purchasing/PendientesDeCompra` (`PendienteDeLinea`; `ConsumidoAsync`, `DeDocumentoAsync`, `PorRecibirAsync`),
+    `Purchasing/Common/RecepcionContraOrden` (`ParDeOrden`; `ParesAsync`, `OrdenesAsync`, `RecibidoDeMasAsync`, `ExigirAsync`) y
+    `Purchasing/Common/ToleranciasVigentesDeCompra` (el único lector de las cinco claves `Compras.Tolerancia*`/`ReglaDeTolerancia`
+    para `CruceDeCompra`); `BorradorDeCompra.{CampoNecesarioPara = "neededBy", CampoEntregaEsperada = "expectedDate"}`; campos del
+    borrador `SaveInventoryDraftRequest.{NeededBy, RequestedByPersonPublicId, ExpectedDate, PaymentTerms}` y
+    `SaveInventoryDraftLine.{OrderLinePublicId, RequestLinePublicId}` (entran en `Origen`); `InventoryDocument.CerrarSaldo` y
+    `.OrdenAbierta`, y las tres columnas `BalanceClosed*` en `IInmutableTrasConfirmar.PropiedadesMutablesTrasConfirmar`;
+    `ClosePurchaseOrderBalanceCommand`, `SendPurchaseOrderCommand`, `GetPurchaseOrderPdfQuery`, `ModeloDeOrdenDeCompra`,
+    `IOrdenDeCompraEnPdf`, `OrdenDeCompraImprimible` (`CooperativaDeLaOrden`, `ProveedorDeLaOrden`, `BodegaDeEntrega`,
+    `LineaDeLaOrden`, `ImpuestoDeLaOrden`), `OrdenDeCompraEnPdfDto`, `OrdenesDeCompraEnPdf`; en el detalle de compras
+    `PurchaseDocumentDto.{Plan, PendingLines}` con `PurchasePlanInfoDto` y `PurchasePendingLineDto`; evento de auditoría
+    `Inventory.PurchaseOrder.Sent` (`AuditEventTypes.InventoryPurchaseOrderSent`). API: `Reports/PurchaseOrderReport` y
+    `PurchaseOrderPdfRenderer` (registrado en `Program.cs`). `PosicionDeReposicion` ya llena «por recibir». Reglas en T42c.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2016,6 +2032,15 @@ de T838 (`Inventory.Costing.RetroactiveNotAllowed`, `.RetroactiveTooOld`) los pu
 
 Cruce a tres vías (I5, T796; **(nuevo)**): `Inventory.PurchaseMatch.QuantityNotApprovable` (aprobar por excepción una línea retenida
 por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción).
+
+Solicitudes y órdenes (I5, T787–T792; **(nuevo)** los que api.md §14.9 nombra sin definir): `Inventory.Purchase.OrderFromOtherSupplier`
+(`data { lineNumber, orderPublicId, displayNumber }`), `Inventory.PurchaseOrder.NotOpen` (ahora también recibir contra una orden sin
+confirmar, anulada o con el saldo cerrado; `data { lineNumber?, orderPublicId, displayNumber, status, balanceClosedAt }`),
+`Inventory.Purchase.OverReceiptBeyondTolerance` (`data { lineNumber, ordered, received, tolerance }`, en unidad base),
+`Inventory.PurchaseOrder.NotConfirmed` (`data.status`), `Inventory.PurchaseOrder.SupplierEmailMissing` (`data.supplierPersonPublicId`) e
+`Inventory.PurchaseRequest.NotConfirmed` (**nuevo**, no estaba en api.md: una orden desde una solicitud que no está aprobada;
+`data { lineNumber, requestPublicId, displayNumber, status }`). El PDF sin quien lo dibuje responde
+`Inventory.Document.RepresentationUnavailable`, el mismo de la carta de ventas.
 
 Cierre de las e2e de I4 (T685–T687; **(nuevo)**): `Inventory.DocumentType.ContingencyNotByResolution` (`data.class`: un tipo de contingencia en una clase que no numera por resolución DIAN).
 
@@ -2810,6 +2835,26 @@ por el dueño y la contadora).** Lo que la spec y data-model §3.5 dejaban abier
   manda el ajuste completo sobre una entrada una sola vez por documento y entrada (la primera línea que escribió el motor).
 - *Pendiente en T843.* `DiferenciaDePrecio` y `CostoAdicional` todavía no mueven capas: con PEPS vigente dejarían el estado sin capas.
   No puede pasar mientras `EntregaVigente` siga en I4 (PEPS no se puede elegir), pero T843 tiene que resolverlo antes del cierre de I5.
+
+**T42c · Solicitud y orden de compra: dónde vive cada campo y qué se valida (I5, T787–T793; 2026-09-28; a revisar por el dueño).**
+Lo que api.md §14.9 pide en el cuerpo y data-model no ubicaba (sin columnas nuevas: la migración `ComprasYCosteoAvanzado` ya salió):
+- `neededBy` de la solicitud y `expectedDate` de la orden van en `INV_Documents.ExpectedDate`; `requestedByPersonPublicId` es la
+  **contraparte** de la solicitud (opcional: quien pide; la solicitud no tiene proveedor ni admite `supplierPersonPublicId`).
+- `paymentTerms` de la orden **son sus notas** (data-model §9.8 «condiciones en `Notes`»): traer `paymentTerms` y `notes` a la vez es
+  `Validation.Invalid`, para que ninguno pise al otro sin avisar. El detalle las devuelve en `plan.paymentTerms`.
+- La solicitud no lleva precios ni descuentos; la orden exige precio por línea (`Validation.Invalid` con `lineNumber`) y admite
+  servicios (un flete se ordena), pero no productos inactivos o bloqueados.
+- La orden desde una solicitud (`requestLinePublicId`) exige la solicitud **confirmada** (`Inventory.PurchaseRequest.NotConfirmed`,
+  nuevo); **no** se valida que lo ordenado quepa en lo pendiente por ordenar (comprar más de lo pedido es decisión del comprador y la
+  spec no la prohíbe); `pendingToOrder` queda en cero, nunca negativo.
+- La recepción contra orden toma de la línea de la orden producto, unidad, precio y, si no trae otro, **el descuento en porcentaje**
+  (partido en proporción a lo recibido). Proveedor y orden abierta se exigen ya en el borrador; lo recibido de más fuera de la tolerancia
+  es aviso en el borrador y rechazo al confirmar, **otra vez dentro del cerrojo** con la orden bloqueada como documento de origen.
+- La tolerancia de cantidad se mide contra lo ordenado de la línea (`CruceDeCompra.Recepcion`); sin vigencias, cero: no se recibe nada
+  de más. Anular una recepción devuelve su cantidad a lo pendiente.
+- Una orden en borrador o en aprobación **no** cuenta como «por recibir» (sólo `Confirmed` sin saldo cerrado); cerrada o anulada,
+  `pendingToReceive` = 0. El PDF calcula los impuestos a la fecha de la orden (estimados; sin retenciones) y no guarda foto
+  tributaria: la foto la guarda la factura del proveedor.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

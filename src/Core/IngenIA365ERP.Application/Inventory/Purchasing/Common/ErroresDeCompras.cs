@@ -1,5 +1,6 @@
 using System.Globalization;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Purchasing;
 
@@ -133,6 +134,62 @@ public static class ErroresDeCompras
     /// <summary>La fuente de un registro externo es el portal de la DIAN o el del proveedor.</summary>
     public static Error RadianSourceInvalid() => new("Validation.Invalid",
         "La fuente de un evento registrado por fuera es DianPortal o SupplierPortal.");
+
+    // ------------------------------------------------------------------- solicitudes y órdenes (I5, §14.9) --
+
+    /// <summary>Una recepción contra la orden de otro proveedor (T789). (nuevo)</summary>
+    public static Error OrderFromOtherSupplier(int lineNumber, Guid orderPublicId, string? displayNumber) => new ErrorConDatos(
+        "Inventory.Purchase.OrderFromOtherSupplier",
+        $"Línea {lineNumber}: la orden {displayNumber} es de otro proveedor.",
+        new { lineNumber, orderPublicId, displayNumber });
+
+    /// <summary>
+    /// La orden no admite recepciones ni cerrar su saldo: no está confirmada, está anulada o su saldo ya se cerró (T789, T792; data-model
+    /// §9.8). (nuevo)
+    /// </summary>
+    public static Error OrderNotOpen(Guid orderPublicId, string? displayNumber, DocumentStatus status, DateTime? balanceClosedAt, int? lineNumber = null) =>
+        new ErrorConDatos("Inventory.PurchaseOrder.NotOpen",
+            balanceClosedAt is not null
+                ? $"{(lineNumber is { } n ? $"Línea {n}: l" : "L")}a orden {displayNumber} ya tiene el saldo cerrado: no admite más recepciones."
+                : $"{(lineNumber is { } m ? $"Línea {m}: l" : "L")}a orden {displayNumber ?? "(sin número)"} no está abierta (está {InventoryErrors.Estado(status)}).",
+            new { lineNumber, orderPublicId, displayNumber, status = status.ToString(), balanceClosedAt });
+
+    /// <summary>Lo recibido contra una línea de orden pasa lo ordenado más la tolerancia de cantidad vigente (FR-049; T789). (nuevo)</summary>
+    public static Error OverReceiptBeyondTolerance(int lineNumber, decimal ordered, decimal received, decimal tolerance) => new ErrorConDatos(
+        CruceDeCompra.CodigoRecibidoDeMas,
+        $"Línea {lineNumber}: se recibe más de lo ordenado fuera de la tolerancia (ordenado {ordered}, recibido con ésta {received}, tolerancia {tolerance}).",
+        new { lineNumber, ordered, received, tolerance });
+
+    /// <summary>Enviar al proveedor una orden que no está confirmada (T791). (nuevo)</summary>
+    public static Error OrderNotConfirmed(DocumentStatus status) => new ErrorConDatos("Inventory.PurchaseOrder.NotConfirmed",
+        $"Sólo se envía al proveedor una orden confirmada; ésta está {InventoryErrors.Estado(status)}.",
+        new { status = status.ToString() });
+
+    /// <summary>El proveedor no tiene correo en el maestro de personas y la petición no trae uno (T791). (nuevo)</summary>
+    public static Error SupplierEmailMissing(Guid supplierPersonPublicId) => new ErrorConDatos("Inventory.PurchaseOrder.SupplierEmailMissing",
+        "El proveedor no tiene correo registrado: escríbalo en el envío o regístrelo en Personas.",
+        new { supplierPersonPublicId });
+
+    /// <summary>Una orden desde una solicitud que no está confirmada (T787). (nuevo)</summary>
+    public static Error RequestNotConfirmed(int lineNumber, Guid requestPublicId, string? displayNumber, DocumentStatus status) => new ErrorConDatos(
+        "Inventory.PurchaseRequest.NotConfirmed",
+        $"Línea {lineNumber}: la solicitud {displayNumber ?? "(sin número)"} no está aprobada (está {InventoryErrors.Estado(status)}).",
+        new { lineNumber, requestPublicId, displayNumber, status = status.ToString() });
+
+    /// <summary>La línea de origen no es de la clase que corresponde (recepción ← orden, orden ← solicitud). (nuevo)</summary>
+    public static Error OrigenDeOtraClase(int lineNumber, string esperado) => new ErrorConDatos("Validation.Invalid",
+        $"Línea {lineNumber}: la línea de origen no es de {esperado}.",
+        new { lineNumber });
+
+    /// <summary>Una línea de la orden sin el precio pactado con el proveedor (T787). (nuevo)</summary>
+    public static Error OrderPriceRequired(int lineNumber) => new ErrorConDatos("Validation.Invalid",
+        $"Línea {lineNumber}: la orden lleva el precio pactado con el proveedor.",
+        new { lineNumber, field = "lines.unitPrice" });
+
+    /// <summary>En la orden las condiciones de pago se guardan en sus notas (data-model §9.8): van en uno de los dos campos. (nuevo)</summary>
+    public static Error PaymentTermsAndNotes() => new ErrorConDatos("Validation.Invalid",
+        "En la orden las condiciones de pago son sus notas: envíelas en paymentTerms o en notes, no en los dos.",
+        new { field = "paymentTerms" });
 
     /// <summary>Los campos que la clase no admite (§9.3, §14.1).</summary>
     public static Error CampoNoAdmitido(string campo, DocumentClass clase) => new ErrorConDatos("Validation.Invalid",

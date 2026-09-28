@@ -32,16 +32,22 @@ public sealed record SaveInventoryDraftRequest(
     string? NoteKind = null,
     IngenIA365ERP.Application.Inventory.Sales.DatosDeVentaDelBorrador? Sales = null,
     IngenIA365ERP.Application.Inventory.Cash.DatosDeMovimientoDeCaja? CashMovement = null,
-    string? CorrectionConceptCode = null)
+    string? CorrectionConceptCode = null,
+    DateOnly? NeededBy = null,
+    Guid? RequestedByPersonPublicId = null,
+    DateOnly? ExpectedDate = null,
+    string? PaymentTerms = null)
 {
     /// <summary>La contraparte: la del ciclo común o, en compras, el proveedor (<c>supplierPersonPublicId</c>, api.md §14).</summary>
     public Guid? Contraparte => CounterpartyPersonPublicId ?? SupplierPersonPublicId;
 
-    /// <summary>¿Trae algún campo que sólo admite el grupo de compras (§14.1)?</summary>
+    /// <summary>¿Trae algún campo que sólo admite el grupo de compras (§14.1, §14.9)?</summary>
     public bool TraeCamposDeCompra =>
         OperationMunicipalityDaneCode is not null || SupplierPersonPublicId is not null || Supplier is not null
         || SupplierInvoicePublicId is not null || NoteKind is not null
-        || Lines.Any(l => l.ReceiptLinePublicId is not null || l.InvoiceLinePublicId is not null || l.Amount is not null || l.AffectsCost is not null);
+        || NeededBy is not null || RequestedByPersonPublicId is not null || ExpectedDate is not null || PaymentTerms is not null
+        || Lines.Any(l => l.ReceiptLinePublicId is not null || l.InvoiceLinePublicId is not null || l.Amount is not null || l.AffectsCost is not null
+                          || l.OrderLinePublicId is not null || l.RequestLinePublicId is not null);
 }
 
 /// <summary>
@@ -77,10 +83,15 @@ public sealed record SaveInventoryDraftLine(
     Guid? ReceiptLinePublicId = null,
     Guid? InvoiceLinePublicId = null,
     decimal? Amount = null,
-    bool? AffectsCost = null)
+    bool? AffectsCost = null,
+    Guid? OrderLinePublicId = null,
+    Guid? RequestLinePublicId = null)
 {
-    /// <summary>La línea de origen: la de la recepción (factura, devolución), la de la factura (nota) o la genérica.</summary>
-    public Guid? Origen => SourceLinePublicId ?? ReceiptLinePublicId ?? InvoiceLinePublicId;
+    /// <summary>
+    /// La línea de origen: la de la recepción (factura, devolución), la de la factura (nota), la de la orden (recepción contra orden,
+    /// I5), la de la solicitud (orden desde la solicitud, I5) o la genérica.
+    /// </summary>
+    public Guid? Origen => SourceLinePublicId ?? ReceiptLinePublicId ?? InvoiceLinePublicId ?? OrderLinePublicId ?? RequestLinePublicId;
 }
 
 // -------------------------------------------------------------------------------------------- referencias --

@@ -14,6 +14,8 @@ namespace IngenIA365ERP.Domain.Common;
 /// <item><c>Status</c>, y sólo de <c>Confirmed</c> a <c>Voided</c> (lo pone la confirmación de su anulación);</item>
 /// <item><c>VoidedByDocumentId</c>: el documento que lo anuló;</item>
 /// <item><c>FiscalNumberReleased</c>: la liberación del número del rechazado en el caso b de FR-066;</item>
+/// <item><c>BalanceClosedAt</c>, <c>BalanceClosedByUserId</c> y <c>BalanceClosedReason</c>: el cierre del saldo de una orden de
+/// compra (I5, T792);</item>
 /// <item>las columnas de auditoría (<c>UpdatedAt</c>, <c>UpdatedBy</c>, <c>RowVersion</c>).</item>
 /// </list>
 /// <para>
@@ -30,6 +32,10 @@ public interface IInmutableTrasConfirmar
         "Status",
         "VoidedByDocumentId",
         "FiscalNumberReleased",
+        // I5 (T792, data-model §9.8): el cierre del saldo de una orden confirmada; lo escribe sólo InventoryDocument.CerrarSaldo.
+        "BalanceClosedAt",
+        "BalanceClosedByUserId",
+        "BalanceClosedReason",
         nameof(AuditableEntity.UpdatedAt),
         nameof(AuditableEntity.UpdatedBy),
         nameof(BaseEntity.RowVersion),

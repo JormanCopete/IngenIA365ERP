@@ -404,6 +404,8 @@ try
     // Feature 012 (I3, T626): el comprobante no electrónico en carta y los documentos de caja (arqueo y comprobante de movimiento).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.IRepresentacionDeVentaEnPdf, IngenIA365ERP.API.Reports.SalesDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();
+    // Feature 012 (I5, T790): la orden de compra en PDF (la descarga y el envio al proveedor).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.
     builder.Services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.IRepresentacionGraficaRenderer, IngenIA365ERP.API.Reports.RepresentacionGraficaRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
