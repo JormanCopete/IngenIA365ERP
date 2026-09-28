@@ -2039,6 +2039,14 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     componentes `Components/Inventario/ImpactoEnCostos.razor` y `Components/Inventario/CambioDeMetodoDialog.razor`. En la vista
     `kardex` (`KardexReportQuery`) la columna visible **«Capas consumidas»** (índice 15, antes de las ocultas). Temas del manual
     `compras-solicitudes`, `compras-ordenes`, `compras-cruce`, `compras-costos-adicionales` e `inventario-costeo-avanzado`. Reglas en T42h.
+- **I5, cierre de las e2e (T774, T775, T826; 2026-09-28) (nuevo)**: `CatalogoDeParametros.EntregaVigente` sube a **I5** (las clases
+    `PurchaseRequest`, `PurchaseOrder` y `LandedCost` se operan, la semilla siembra `SOC`, `ORC` y `CAD`, `Costeo.Metodo = Peps` se admite y
+    rige el retroactivo general). Corrección que destapó: `ErroresDeParametros.ValorNoAdmitido(definicion, valor, entrega)` gana el
+    parámetro `entrega` (lo pasan `AddParameterVersionCommandHandler` y `LectorDeParametros`): la lista `allowed` salía siempre con la entrega
+    vigente aunque el manejador evaluara otra. Las pruebas que fijaban el comportamiento anterior a I5 pasan la entrega I4 explícita
+    (`AddParameterVersionCommandTests`, `LectorDeParametrosTests`, `RetroactivoMinimoTests`) y las de clases operables
+    (`DocumentTypeCommandsTests`, e2e `TiposDeDocumentoTests`) esperan la orden y los costos adicionales operables y el ensamble no. Todo
+    sobre `CanalSimulado`. Pruebas: ver §2.18.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2252,6 +2260,10 @@ idempotente sobre una cooperativa con los de I1 a I4) y `tests/IngenIA365ERP.App
 RADIAN en la factura; `ImpactoEnCostos` en las cuatro pantallas; el diálogo del cambio de método desde Parámetros; las capas en el kardex
 y los filtros propios en los informes), `tests/IngenIA365ERP.Shared.Tests/Inventario/ComprasCompletasClientTests` (rutas, clave sólo en
 las escrituras, sin `Authorization`) y `tests/IngenIA365ERP.Application.Tests/Inventory/Kardex/KardexConCapasTests`.
+**(nuevos, I5, T774/T775/T826)** e2e en `tests/IngenIA365ERP.API.IntegrationTests/Inventory/` (colección «Inventario e2e»):
+`ComprasCompletasTests` (escenario «comprasi5»: el ciclo solicitud → orden aprobada → recepciones → factura retenida → aprobación, y el
+flete prorrateado por valor), `EventosRadianEmitidosTests` (sobre `EscenarioDeFacturacionElectronica` «radiani5» con `CanalSimulado`) y
+`CosteoAvanzadoTests` (cooperativas «costeoretro» con contabilidad, «costeocerrado» y «costeopeps»).
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 

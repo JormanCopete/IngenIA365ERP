@@ -307,9 +307,11 @@ public class DocumentTypeCommandsTests
 
         r.Value.Should().HaveCount(34);
         r.Value.Single(c => c.Class == DocumentClass.PositiveAdjustment).Operable.Should().BeTrue();
-        // Desde I4 (EntregaVigente = I4) el documento soporte es operable; la orden de compra sigue esperando a I5.
+        // Desde I5 (EntregaVigente = I5) la orden de compra y los costos adicionales son operables; el ensamble sigue esperando a I6.
         r.Value.Single(c => c.Class == DocumentClass.SupportDocument).Operable.Should().BeTrue();
-        r.Value.Single(c => c.Class == DocumentClass.PurchaseOrder).Operable.Should().BeFalse();
+        r.Value.Single(c => c.Class == DocumentClass.PurchaseOrder).Operable.Should().BeTrue();
+        r.Value.Single(c => c.Class == DocumentClass.LandedCost).Operable.Should().BeTrue();
+        r.Value.Single(c => c.Class == DocumentClass.Assembly).Operable.Should().BeFalse();
         r.Value.Single(c => c.Class == DocumentClass.SalesInvoice).Should().BeEquivalentTo(new
         {
             Operable = true, IsFiscal = true, NumberedBy = Domain.Inventory.Documents.NumberedBy.DianResolution,

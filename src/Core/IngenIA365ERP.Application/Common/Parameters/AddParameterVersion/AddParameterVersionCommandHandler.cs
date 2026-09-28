@@ -48,7 +48,7 @@ public sealed class AddParameterVersionCommandHandler(
 
         var valor = definicion.Interpretar(request.Value, entrega);
         if (!valor.Admitido)
-            return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.ValorNoAdmitido(definicion, request.Value));
+            return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.ValorNoAdmitido(definicion, request.Value, entrega));
 
         if (definicion.ExigeFuenteLegal && string.IsNullOrWhiteSpace(request.LegalSource))
             return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.FuenteLegalRequerida(definicion));

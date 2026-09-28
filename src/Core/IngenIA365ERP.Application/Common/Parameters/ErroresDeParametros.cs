@@ -34,9 +34,10 @@ public static class ErroresDeParametros
     public static Error ClaveInexistente(string? modulo, string? clave) => new(CodigoClaveInexistente,
         $"No existe el parámetro «{modulo}/{clave}».");
 
-    public static Error ValorNoAdmitido(DefinicionDeParametro definicion, string? valor) => new ErrorConDatos(CodigoValorNoAdmitido,
+    public static Error ValorNoAdmitido(DefinicionDeParametro definicion, string? valor,
+        EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente) => new ErrorConDatos(CodigoValorNoAdmitido,
         $"El valor «{valor}» no es admitido en «{definicion.Clave}». Elegí uno de los admitidos.",
-        new { allowed = definicion.Admitidos(CatalogoDeParametros.EntregaVigente) });
+        new { allowed = definicion.Admitidos(entrega) });
 
     public static Error AmbitoNoAdmitido(DefinicionDeParametro definicion) => new ErrorConDatos(CodigoAmbitoNoAdmitido,
         $"«{definicion.Clave}» no admite ese ámbito.",

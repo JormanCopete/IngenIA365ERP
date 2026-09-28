@@ -52,7 +52,7 @@ public sealed class LectorDeParametros(IApplicationDbContext db, EntregaDelComer
             var interpretado = definicion.Interpretar(vigente.Value, entrega);
             resultado = interpretado.Admitido
                 ? Result.Success(new ValorDeParametro(definicion, interpretado.Texto!, interpretado.Valor, vigente))
-                : Result.Failure<ValorDeParametro>(ErroresDeParametros.ValorNoAdmitido(definicion, vigente.Value));
+                : Result.Failure<ValorDeParametro>(ErroresDeParametros.ValorNoAdmitido(definicion, vigente.Value, entrega));
         }
 
         _memoria[llave] = resultado;

@@ -105,7 +105,7 @@ public class LectorDeParametrosTests
     {
         Guardar(Inv, ParametrosDeInventario.CosteoMetodo, "Peps", new DateOnly(2026, 1, 1));
 
-        var r = await Lector().LeerAsync(Inv, ParametrosDeInventario.CosteoMetodo, Hoy);
+        var r = await new LectorDeParametros(_db, EntregaDelComercio.I4).LeerAsync(Inv, ParametrosDeInventario.CosteoMetodo, Hoy);
 
         r.Error.Code.Should().Be(ErroresDeParametros.CodigoValorNoAdmitido);
     }

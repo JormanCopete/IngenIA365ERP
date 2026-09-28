@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Application.Inventory.Kardex;
 using IngenIA365ERP.Application.Tests.Inventory.Kardex;
+using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Periods;
 using IngenIA365ERP.Domain.Entities.Inventory.Warehousing;
@@ -73,6 +74,7 @@ public class RetroactivoMinimoTests
     public async Task El_parametro_de_retroactivos_no_lo_habilita_en_I1()
     {
         var k = await KardexDePrueba.CrearAsync();
+        k.Entrega = EntregaDelComercio.I4; // antes de I5; desde el cierre de I5 lo prueba RetroactivosTests.
         k.Parametro(ParametrosDeInventario.CosteoRetroactivosPermitidos, "true");
         await Confirmado(k, "AJP", D20, k.P1, 10m, 1000m);
 
@@ -230,7 +232,7 @@ public class RetroactivoMinimoTests
         await k.C.Db.SaveChangesAsync();
 
         var cerrado = await AltaAsync(k, ParametrosDeInventario.CosteoMetodo, "PromedioPonderado", new DateOnly(2026, 8, 1));
-        var peps = await AltaAsync(k, ParametrosDeInventario.CosteoMetodo, "Peps", new DateOnly(2026, 10, 1));
+        var peps = await AltaAsync(k, ParametrosDeInventario.CosteoMetodo, "Peps", new DateOnly(2026, 10, 1), EntregaDelComercio.I4);
 
         cerrado.Error.Code.Should().Be("Parameters.ValidFromInClosedPeriod");
         Datos(cerrado.Error).GetProperty("lastClosedDate").GetString().Should().Be("2026-08-31");
@@ -239,10 +241,11 @@ public class RetroactivoMinimoTests
 
     // ------------------------------------------------------------------------------------------- apoyo --
 
-    private static Task<Result<AddParameterVersionResponse>> AltaAsync(KardexDePrueba k, string clave, string valor, DateOnly desde)
+    private static Task<Result<AddParameterVersionResponse>> AltaAsync(KardexDePrueba k, string clave, string valor, DateOnly desde,
+        EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente)
     {
         var reglas = new ReglasDePlataformaDeInventario(k.C.Db, k.Alcance, k.Lector(), k.Permisos);
-        return new AddParameterVersionCommandHandler(k.C.Db, k.Permisos, reglas, reglas).Handle(
+        return new AddParameterVersionCommandHandler(k.C.Db, k.Permisos, reglas, reglas, entrega: entrega).Handle(
             new AddParameterVersionCommand(ParametrosDeInventario.Modulo, clave, ParameterScopeKind.None, null, null, valor, desde, "Cambio aprobado", null),
             default);
     }
