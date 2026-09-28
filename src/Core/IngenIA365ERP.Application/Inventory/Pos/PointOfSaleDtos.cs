@@ -56,7 +56,8 @@ public sealed record CashRegisterDto(
     byte PrintCopies,
     bool IsActive,
     IReadOnlyList<CashRegisterDocumentTypeDto> DocumentTypes,
-    CashRegisterOpenSessionDto? OpenSession);
+    CashRegisterOpenSessionDto? OpenSession,
+    string? DianCashRegisterTypeCode = null);
 
 /// <summary>Un tipo de documento por rol, como lo pide la caja (§20.1 <c>documentTypes: [{ role, documentTypePublicId }]</c>). (nuevo)</summary>
 public sealed record CashRegisterDocumentTypeInput(CashRegisterDocumentRole Role, Guid DocumentTypePublicId);

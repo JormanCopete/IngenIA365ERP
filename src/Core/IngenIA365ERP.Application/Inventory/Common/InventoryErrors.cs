@@ -93,6 +93,11 @@ public static class InventoryErrors
         $"La clase {clase} numera con la resolución de la DIAN: el tipo declara el prefijo de su resolución y no tiene consecutivo propio.",
         new { @class = clase.ToString() });
 
+    /// <summary>Un tipo de contingencia en una clase que no numera por resolución DIAN (I4). (nuevo)</summary>
+    public static Error ContingencyNotByResolution(DocumentClass clase) => new ErrorConDatos("Inventory.DocumentType.ContingencyNotByResolution",
+        $"La clase {clase} no numera con resolución de la DIAN: no admite un tipo de contingencia.",
+        new { @class = clase.ToString() });
+
     public static Error HasOpenDocuments(int drafts, int pendingApproval) => new ErrorConDatos("Inventory.DocumentType.HasOpenDocuments",
         $"El tipo tiene {drafts} borrador(es) y {pendingApproval} documento(s) en aprobación: confírmelos o descártelos antes de inactivarlo.",
         new { drafts, pendingApproval });

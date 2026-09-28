@@ -1881,6 +1881,24 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     invierte también el `amount` de los pagos (mensajes.md §3); `SesionesDeCaja.MovimientosAsync` da a la reclasificación el datáfono del pago
     corregido; `ToqueDeSesionDeCaja` pone al día el token de concurrencia de la sesión seguida; la completitud cuenta sólo la regla
     `MedioDePago` de la operación `Venta`; `TopesDeDescuento` sin filtrar la junción de roles por `IsDeleted`.
+- **I4, cierre de las e2e (T685–T687, T765; 2026-09-28) (nuevo)**: `CatalogoDeParametros.EntregaVigente` sube a **I4** (la guardia
+    decide con la configuración de emisión y las clases del documento soporte se operan). Todo sobre `CanalSimulado`: el canal real sigue sin
+    decidir. Correcciones que las e2e destaparon y sus nombres: `CreateInventoryDocumentTypeCommand.IsContingency` (y `isContingency` en
+    `POST /api/inventory/document-types`, `DocumentTypeDto.IsContingency`): el tipo de contingencia del facturador no lo escribía ningún
+    comando y la 03 no tenía con qué numerar; sólo en una clase numerada por resolución (`Inventory.DocumentType.ContingencyNotByResolution`);
+    `CreateCashRegisterCommand`/`UpdateCashRegisterCommand.DianCashRegisterTypeCode` (y `dianCashRegisterTypeCode` en la caja, `DatosDeCaja.TipoDeCajaDian`,
+    `CashRegisterDto.DianCashRegisterTypeCode`, el campo «Tipo de caja (DIAN)» de `/ventas/puntos-de-venta`): sin él todo documento
+    equivalente POS respondía `ElectronicInvoicing.Document.MissingData`; `IntentoAnteElCanal` reinicia la cuenta del circuito **sólo con una
+    respuesta definitiva** («en proceso» y «no lo encuentro» no lo son: con el canal en proceso las esperas vencidas del POS nunca llegaban al
+    umbral); una `CredentialKey` ajena detiene la emisión también por `SIMULADO` (el mensaje de la transmisión lleva la regla
+    `ElectronicInvoicing.CredentialMismatch`); el caso a compara con el **canónico expedido** de la versión vigente (su adjunto `Canonical`,
+    comprobado contra `CanonicalSha256`) y, sin él, con la huella `EconomicFingerprint` registrada
+    (`CorrectRejectedDocumentCommandHandler.HuellaDeLaVersion = "economicFingerprint"` en `data.fields[]`): antes comparaba dos lecturas de
+    hoy de la fuente y un cambio económico posterior a la expedición pasaba como caso a. Límites que quedan anotados: la undécima factura
+    de un rango agotado responde `ElectronicInvoicing.NotReady` con el motivo `ElectronicInvoicing.Readiness.NoResolution` («agotó su
+    rango») porque la guardia bloquea antes que el `NumeradorFiscal` (que diría `.Resolution.Exhausted`); la confirmación de oficina
+    responde `ConfirmationResultDto` (sin el bloque `electronic` de `SalesConfirmationDto`: se lee de `GET /sales/documents/{id}`); el
+    borrador de reemplazo del caso b copia las líneas y no los pagos (los pone quien lo edita). Pruebas: ver §2.18.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -1946,6 +1964,8 @@ activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, 
 `Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
 entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US11) → `Inventory.Count.AlreadyOpen` (nuevo, T392: abrir o editar un conteo con foto) y
 `Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina); pagos → `Payments.AmountInvalid` (nuevo, T579: un pago con valor cero o negativo; `ValidadorDePagos`), y `last4` que no son cuatro dígitos responde `Payments.ReferenceInvalid` con `data.field = "last4"`.
+
+Cierre de las e2e de I4 (T685–T687; **(nuevo)**): `Inventory.DocumentType.ContingencyNotByResolution` (`data.class`: un tipo de contingencia en una clase que no numera por resolución DIAN).
 
 Facturación electrónica desde Inventario (I4, T734–T743; todos **(nuevo)**): `ElectronicInvoicing.Contingency.UseContingencyType` (en `data.missing[]` de `ElectronicInvoicing.NotReady`: con la 03 abierta, en oficina el tipo normal nombra el de contingencia), `Inventory.SupportDocument.SupplierObligated` (documento soporte a un proveedor obligado a facturar), `Inventory.SupportDocument.Proposed` (aviso: la recepción de un no obligado propuso su DS) e `Inventory.Sales.InvoiceInsteadNotApplicable` (api.md §18.3.1); `Inventory.Document.FiscalUseCorrection` gana `data { route: /api/electronic-invoicing/documents/{id}, cases[] }` sobre un rechazado y `correctionClass = SupportDocumentAdjustmentNote` sobre un documento soporte.
 
@@ -2030,6 +2050,15 @@ comprador); y los ayudantes de `InventarioE2E` (parcial `InventarioE2E.Documento
 `EscalarEnLaCooperativaAsync`). `CentralIdentityApiFixture.CorrerTareaAsync(tenantPublicId, nombre)`: corre **una** tarea
 programada ahora, sin mirar su horario (`DebeCorrer`) ni si ya corrió hoy —la revisión de eventos RADIAN corre desde las 6:00 de
 Colombia y la de reorden desde la hora configurada—, el «disparo manual» de las e2e.
+**(nuevos, I4, T685–T687)** e2e de facturación electrónica en `tests/IngenIA365ERP.API.IntegrationTests/ElectronicInvoicing/`:
+`DocumentosElectronicosTests`, `RechazosYContingenciasTests` y `CanalYConcurrenciaTests` (colección «Inventario e2e», una cooperativa
+aislada por caso) sobre `EscenarioDeFacturacionElectronica` (`PrepararAsync(fx, nombre, configurar)`, `ConfigurarAsync(fx, http, conCredencial)`,
+`TipoFiscalAsync`, `ResolucionAsync`, `AsociarAsync`, `CredencialEnArchivo`, `PersonaAsync(…, ultimoDigito)`, `UsuarioSoloConAsync`,
+`FacturaConfirmadaAsync`, `VentaAsync`, `ElectronicoAsync`, `EmitirAsync`, `ConsultarAsync`, `ProcesarAsync`, `MensajesAsync`,
+`AlertasAsync`) y el canal de ensayo `CanalDePruebaE2E` (código `PRUEBA`, delega en `CanalSimulado`; lo registra sólo la fixture).
+`CentralIdentityApiFixture.DirectorioDeCredenciales` (`ElectronicInvoicing:CredentialsPath` temporal por fixture). El volumen de 30
+emisiones a la vez (`Treinta_emisiones_a_la_vez_responden_con_p95_de_a_lo_sumo_5_segundos`) es `[FactDeRendimiento]`: omitida con su
+motivo sin `RUN_PERF_TESTS=1`.
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 

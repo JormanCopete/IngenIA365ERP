@@ -37,6 +37,7 @@ public class InventoryErrorsTests
         yield return InventoryErrors.FlagNotApplicable("vatNonDeductible", DocumentClass.PositiveAdjustment);
         yield return InventoryErrors.TypeTransitNotAllowed();
         yield return InventoryErrors.NumberedByResolution(DocumentClass.SalesInvoice);
+        yield return InventoryErrors.ContingencyNotByResolution(DocumentClass.CreditNote);
         yield return InventoryErrors.HasOpenDocuments(2, 1);
         yield return InventoryErrors.RequiredBySystem(DocumentClass.Voiding);
         yield return InventoryErrors.SequenceNumberAlreadyIssued(1500);
@@ -87,7 +88,7 @@ public class InventoryErrorsTests
             "Inventory.Document.VoidingNotVoidable", "Inventory.Document.HasDependents", "Inventory.Document.FiscalUseCorrection",
             "Inventory.DocumentType.NotFound", "Inventory.DocumentType.Inactive", "Inventory.DocumentClass.NotAvailable",
             "Inventory.DocumentType.FlagNotApplicable", "Inventory.DocumentType.TransitNotAllowed",
-            "Inventory.DocumentType.NumberedByResolution", "Inventory.DocumentType.HasOpenDocuments",
+            "Inventory.DocumentType.NumberedByResolution", "Inventory.DocumentType.ContingencyNotByResolution", "Inventory.DocumentType.HasOpenDocuments",
             "Inventory.DocumentType.RequiredBySystem", "Inventory.Sequence.NumberAlreadyIssued", "Inventory.Sequence.Overlaps",
             "Inventory.Numbering.SequenceMissing", "Inventory.Period.Closed",
             "Inventory.Period.NotStarted", "Inventory.Period.NotNext", "Inventory.Period.NotEnded", "Inventory.Period.OpenCounts",

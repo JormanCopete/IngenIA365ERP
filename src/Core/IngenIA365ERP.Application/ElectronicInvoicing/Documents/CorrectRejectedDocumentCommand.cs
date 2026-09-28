@@ -2,12 +2,15 @@ using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.ElectronicInvoicing.Canonical;
 using IngenIA365ERP.Domain.ElectronicInvoicing;
 using IngenIA365ERP.Domain.Entities.ElectronicInvoicing;
+using IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions;
 using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.ElectronicInvoicing.Documents;
 
@@ -65,7 +68,8 @@ public sealed class CorrectRejectedDocumentCommandHandler(
     IApplicationDbContext db,
     CasosDeRechazo casos,
     ConstructorDelCanonico constructor,
-    IDateTimeService reloj) : IRequestHandler<CorrectRejectedDocumentCommand, Result<CorreccionDelRechazoDto>>
+    IDateTimeService reloj,
+    IBlobStore? almacen = null) : IRequestHandler<CorrectRejectedDocumentCommand, Result<CorreccionDelRechazoDto>>
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -94,10 +98,17 @@ public sealed class CorrectRejectedDocumentCommandHandler(
         var despues = await constructor.ConstruirAsync(corregida, numeracion, ct);
         if (despues.IsFailure) return Falla(despues.Error);
 
-        var datosAntes = ConstructorDelCanonico.DatosFiscales(antes.Value.Documento);
+        // Lo expedido es el canónico guardado de la versión vigente, no el que hoy sale de la fuente: si el documento comercial cambió desde que
+        // se expidió (cierre de las e2e de I4, T686), comparar dos lecturas de hoy nunca veía el cambio económico. Sin el adjunto (todavía no
+        // subido), la lectura de hoy y la huella económica registrada en la versión.
+        var expedido = await CanonicoExpedidoAsync(version, ct);
+        var datosAntes = ConstructorDelCanonico.DatosFiscales(expedido ?? antes.Value.Documento);
         var datosDespues = ConstructorDelCanonico.DatosFiscales(despues.Value.Documento);
         var decision = ReglaDeCorreccionFiscal.Decidir(datosAntes, datosDespues);
         if (decision is ReglaDeCorreccionFiscal.CasoB b) return Falla(ErroresDeDocumentosElectronicos.EconomicFootprintChanged(b.Fields));
+        if (expedido is null && !string.IsNullOrEmpty(version.EconomicFingerprint)
+            && !string.Equals(despues.Value.EconomicFingerprint, version.EconomicFingerprint, StringComparison.OrdinalIgnoreCase))
+            return Falla(ErroresDeDocumentosElectronicos.EconomicFootprintChanged([HuellaDeLaVersion]));
         var cambiados = ((ReglaDeCorreccionFiscal.CasoA)decision).CamposCambiados;
 
         if (cambiaLaCopia)
@@ -120,6 +131,30 @@ public sealed class CorrectRejectedDocumentCommandHandler(
             ahora, ct);
 
         return Result.Success(new CorreccionDelRechazoDto(documento.PublicId, nueva.VersionNumber, documento.Status));
+    }
+
+    /// <summary>El campo que se nombra cuando sólo la huella económica registrada dice que algo cambió. (nuevo)</summary>
+    public const string HuellaDeLaVersion = "economicFingerprint";
+
+    /// <summary>El canónico guardado de la versión (su adjunto <c>Canonical</c>), si ya se subió y se puede leer.</summary>
+    private async Task<DocumentoElectronicoCanonico?> CanonicoExpedidoAsync(ElectronicDocumentVersion version, CancellationToken ct)
+    {
+        if (almacen is null || version.CanonicalAttachmentPublicId is not { } id) return null;
+        var fila = await db.Attachments.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == id, ct);
+        if (fila is null) return null;
+        try
+        {
+            await using var flujo = await almacen.GetAsync(new BlobReference(fila.StoragePath), ct);
+            using var lector = new StreamReader(flujo, System.Text.Encoding.UTF8);
+            var json = await lector.ReadToEndAsync(ct);
+            return string.Equals(SerializadorCanonico.Sha256(json), version.CanonicalSha256, StringComparison.OrdinalIgnoreCase)
+                ? SerializadorCanonico.Leer(json)
+                : null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Los cambios del cuerpo sobre la contraparte del maestro.</summary>

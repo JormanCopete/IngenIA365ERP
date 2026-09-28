@@ -226,7 +226,7 @@ public sealed class IntentoAnteElCanal(
         if (contexto.IsFailure)
         {
             resultado = ResultadoDeCanal.Sin(ChannelOutcome.ChannelUnavailable, 0,
-                new MensajeDelCanal("Credencial", TipoDeMensajeDelCanal.Rechazo, contexto.Error.Message, contexto.Error.Message));
+                new MensajeDelCanal(contexto.Error.Code, TipoDeMensajeDelCanal.Rechazo, contexto.Error.Message, contexto.Error.Message));
             enviado = clave;
         }
         else
@@ -348,7 +348,10 @@ public sealed class IntentoAnteElCanal(
         CredencialesDeCanal? credencial = null;
         var resuelta = await credenciales.ResolverAsync(documento.ChannelCode, ct);
         if (resuelta.IsSuccess) credencial = resuelta.Value;
-        else if (!string.Equals(documento.ChannelCode, GuardiaDeEmisionFiscal.CanalSimulado, StringComparison.OrdinalIgnoreCase))
+        // El canal simulado no necesita credencial, pero una CredentialKey que no es la de esta cooperativa es una alteración de la base y no
+        // se emite ni por él (contracts/dian.md §11; quickstart §6.10; lo destapó la e2e de T687).
+        else if (!string.Equals(documento.ChannelCode, GuardiaDeEmisionFiscal.CanalSimulado, StringComparison.OrdinalIgnoreCase)
+                 || resuelta.Error.Code == ErroresDeNumeracionYConfiguracion.CredentialMismatchCode)
             return Result.Failure<ContextoDeCanal>(resuelta.Error);
 
         var claveTecnica = documento.Mode == EmissionMode.OwnSoftware && documento.Resolution is { } r
@@ -380,7 +383,10 @@ public sealed class IntentoAnteElCanal(
         {
             if (fallas is null) return;
             if (transicion.CuentaComoFallaDelCanal) await fallas.RegistrarFallaAsync(documento.ChannelCode, ct);
-            else if (resultado.Outcome != ChannelOutcome.ChannelUnavailable) await fallas.RegistrarRespuestaAsync(documento.ChannelCode, ct);
+            // Sólo una respuesta definitiva reinicia la cuenta (contracts/dian.md §7.2): «en proceso» y «no lo encuentro» no lo son, y si
+            // reiniciaran, las esperas vencidas del POS con el canal en proceso nunca llegarían al umbral (lo destapó la e2e de T686).
+            else if (resultado.Outcome is not (ChannelOutcome.ChannelUnavailable or ChannelOutcome.InProcess or ChannelOutcome.NotFound))
+                await fallas.RegistrarRespuestaAsync(documento.ChannelCode, ct);
         });
 
         if (eventoAbierto is not null) await Seguro("contingencia", () => contingencias.AvisarAperturaAsync(eventoAbierto, ct));

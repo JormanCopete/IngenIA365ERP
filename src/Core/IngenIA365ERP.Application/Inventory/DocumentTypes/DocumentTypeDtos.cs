@@ -58,4 +58,5 @@ public sealed record DocumentTypeDto(
     ModoDePasoDelTipoDto? Posting,
     bool IsSeeded,
     bool IsActive,
-    IReadOnlyList<DocumentSequenceDto>? Sequences = null);
+    IReadOnlyList<DocumentSequenceDto>? Sequences = null,
+    bool IsContingency = false);

@@ -28,7 +28,8 @@ public sealed record DatosDeCaja(
     IReadOnlyList<(CashRegisterDocumentRole Rol, InventoryDocumentType Tipo)> Tipos,
     string? Placa,
     byte? Copias,
-    bool IsActive);
+    bool IsActive,
+    string? TipoDeCajaDian = null);
 
 /// <summary>
 /// La regla única de puntos de venta y cajas (feature 012, I3, T593, T595; contracts/api.md §20.1; plantilla 10; FR-058, FR-067):
@@ -157,6 +158,9 @@ public static class ReglasDePuntoDeVenta
         caja.DefaultCardTerminalId = d.Datafono?.Id;
         caja.ReceiptWidthMm = (short)d.Formato;
         caja.DianCashRegisterPlate = string.IsNullOrWhiteSpace(d.Placa) ? null : d.Placa.Trim();
+        // I4 (cierre de las e2e): el tipo de caja DIAN que exige el documento equivalente POS (contracts/dian.md §4); hasta entonces no
+        // lo escribía ningún comando y todo documento equivalente respondía ElectronicInvoicing.Document.MissingData.
+        caja.DianCashRegisterTypeCode = string.IsNullOrWhiteSpace(d.TipoDeCajaDian) ? null : d.TipoDeCajaDian.Trim().ToUpperInvariant();
         if (d.Copias is { } copias) caja.PrintCopies = copias;
         caja.IsActive = d.IsActive;
         if (existente is null) db.CashRegisters.Add(caja);
