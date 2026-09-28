@@ -3,7 +3,9 @@ using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Inventory.Documents.Queries;
+using IngenIA365ERP.Application.ElectronicInvoicing.Documents;
 using IngenIA365ERP.Application.Inventory.Purchasing;
+using IngenIA365ERP.Application.Inventory.Purchasing.Consultas;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -17,8 +19,10 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// Purchases</c>) por <see cref="CicloDeDocumentoRutas.MapCicloDeDocumento"/>, con <c>Inventory.Purchases.{View, Create, Confirm,
 /// Void}</c>; los eventos RADIAN con <c>Inventory.Purchases.RegisterRadianEvent</c>. Toda escritura exige
 /// <c>Idempotency-Key</c> (<c>LosComandosDeInventarioLlevanClave</c>); el prellenado desde el XML es una consulta y el archivo no
-/// se guarda. <c>/support-documents</c> (I4, T748) publica el documento soporte y su nota de ajuste con el mismo ciclo; las solicitudes,
-/// órdenes, cruce y costos adicionales (I5) y la emisión RADIAN (I5) no se publican aquí. (nuevo)
+/// se guarda. <c>/support-documents</c> (I4, T748) publica el documento soporte y su nota de ajuste con el mismo ciclo. I5 (T808; §14.8,
+/// §14.9) suma las solicitudes (<c>/requests</c>), las órdenes (<c>/orders</c>, con su PDF, el envío al proveedor y el cierre del saldo),
+/// el cruce a tres vías (<c>/matches</c> y <c>/supplier-invoices/{id}/match</c>), los costos adicionales (<c>/landed-costs</c>) y la
+/// emisión RADIAN desde el ERP (<c>/supplier-invoices/{id}/radian-events/emit</c>, 202). (nuevo)
 /// </summary>
 public class PurchasesEndpoints : ICarterModule
 {
@@ -28,6 +32,7 @@ public class PurchasesEndpoints : ICarterModule
     private const string Crear = Prefijo + ".Create";
     private const string Confirmar = Prefijo + ".Confirm";
     private const string RegistrarEventoRadian = Prefijo + ".RegisterRadianEvent";
+    private const string EmitirEventoRadian = Prefijo + ".EmitRadianEvent";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -75,6 +80,23 @@ public class PurchasesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .ConClaveDeOperacion()
             .RequirePermission(RegistrarEventoRadian);
+        // I5 (T808; §14.8): el ERP emite el 030 y/o el 032 por el canal de facturación electrónica. 202: quedan Pending y los lleva el
+        // procesador.
+        facturas.MapPost("/{id:guid}/radian-events/emit", async (Guid id, EmitirEventosRadianRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(new EmitRadianEventCommand(id, body.EventCodes ?? []) { OperationKey = http.ClaveDeOperacion() }, ct);
+                return result.IsSuccess ? (object)Results.Accepted($"{Ruta}/supplier-invoices/{id}/radian-events", result.Value) : result;
+            })
+            .WithName("Inventory_Purchases_RadianEvents_Emit")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(EmitirEventoRadian);
+        // I5 (T797, T808; §14.9): el cruce de la factura, línea por línea (vacío si no se cruzó contra una orden).
+        facturas.MapGet("/{id:guid}/match", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetSupplierInvoiceMatchQuery(id), ct))
+            .WithName("Inventory_Purchases_SupplierInvoices_Match")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
         facturas.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_SupplierInvoices", conConsultas: false);
 
         // ------------------------------------------------------------------------------------ notas (§14.5) --
@@ -94,10 +116,7 @@ public class PurchasesEndpoints : ICarterModule
         // ------------------------------------------------------------------------------- devoluciones (§14.6) --
         var devoluciones = compras.MapGroup("/returns");
         devoluciones.MapGet("/", async ([AsParameters] FiltrosDeComprasRequest f, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ListInventoryDocumentsQuery(
-                    new FiltrosDeDocumentos(DocumentClassGroup.Purchases, DocumentClass.SupplierReturn, null, f.Status, f.From, f.To, f.WarehousePublicId,
-                        f.SupplierPersonPublicId, f.Number, null),
-                    f.Pagina()), ct))
+                await sender.Send(new ListInventoryDocumentsQuery(DeClase(f, DocumentClass.SupplierReturn), f.Pagina()), ct))
             .WithName("Inventory_Purchases_Returns_List")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);
@@ -136,6 +155,81 @@ public class PurchasesEndpoints : ICarterModule
             .RequirePermission(Crear);
         soportes.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_SupportDocuments", conConsultas: false);
 
+        // -------------------------------------------------------------------------------- I5: solicitudes (§14.9) --
+        // T808: el ciclo común con la aprobación por la política del tipo; sin efecto en inventario. El detalle trae neededBy y, por
+        // línea, pendingToOrder.
+        var solicitudes = compras.MapGroup("/requests");
+        solicitudes.MapGet("/", async ([AsParameters] FiltrosDeComprasRequest f, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListInventoryDocumentsQuery(DeClase(f, DocumentClass.PurchaseRequest), f.Pagina()), ct))
+            .WithName("Inventory_Purchases_Requests_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        solicitudes.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetPurchaseDocumentQuery(id, DocumentClass.PurchaseRequest), ct))
+            .WithName("Inventory_Purchases_Requests_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        solicitudes.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_Requests", conConsultas: false);
+
+        // ------------------------------------------------------------------------------------ I5: órdenes (§14.9) --
+        // T808: el ciclo común con el límite de monto de Confirm y la política (FR-048); el detalle trae expectedDate, las condiciones,
+        // el cierre del saldo y, por línea, pendingToReceive. Rutas propias: el PDF, el envío al proveedor y el cierre del saldo (T792).
+        var ordenes = compras.MapGroup("/orders");
+        ordenes.MapGet("/", async ([AsParameters] FiltrosDeComprasRequest f, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListInventoryDocumentsQuery(DeClase(f, DocumentClass.PurchaseOrder), f.Pagina()), ct))
+            .WithName("Inventory_Purchases_Orders_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        ordenes.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetPurchaseDocumentQuery(id, DocumentClass.PurchaseOrder), ct))
+            .WithName("Inventory_Purchases_Orders_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        ordenes.MapGet("/{id:guid}/pdf", async (Guid id, ISender sender, CancellationToken ct) =>
+            {
+                var pdf = await sender.Send(new GetPurchaseOrderPdfQuery(id), ct);
+                return pdf.IsSuccess ? (object)Results.File(pdf.Value.Pdf, "application/pdf", pdf.Value.FileName) : pdf;
+            })
+            .WithName("Inventory_Purchases_Orders_Pdf")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        ordenes.MapPost("/{id:guid}/send", async (Guid id, EnviarOrdenRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SendPurchaseOrderCommand(id, body?.Email) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_Purchases_Orders_Send")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Confirmar);
+        ordenes.MapPost("/{id:guid}/close-balance", async (Guid id, CicloDeDocumentoRutas.MotivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ClosePurchaseOrderBalanceCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_Purchases_Orders_CloseBalance")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Confirmar);
+        ordenes.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_Orders", conConsultas: false);
+
+        // ---------------------------------------------------------------------------- I5: cruce a tres vías (§14.9) --
+        // T808: las líneas del cruce de las facturas visibles en el alcance (precios nulos sin Inventory.Costs.Read).
+        compras.MapGet("/matches", async (PurchaseMatchStatus? status, Guid? supplierPersonPublicId, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListPurchaseMatchesQuery(status, supplierPersonPublicId, new PageRequest(page ?? 1, pageSize ?? 20)), ct))
+            .WithName("Inventory_Purchases_Matches_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+
+        // ------------------------------------------------------------------------- I5: costos adicionales (§14.9) --
+        // T808: el ciclo común; el borrador arma sus líneas desde las recepciones y devuelve landedCost con el reparto.
+        var costos = compras.MapGroup("/landed-costs");
+        costos.MapGet("/", async ([AsParameters] FiltrosDeComprasRequest f, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListInventoryDocumentsQuery(DeClase(f, DocumentClass.LandedCost), f.Pagina()), ct))
+            .WithName("Inventory_Purchases_LandedCosts_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        costos.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetPurchaseDocumentQuery(id, DocumentClass.LandedCost), ct))
+            .WithName("Inventory_Purchases_LandedCosts_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        costos.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_LandedCosts", conConsultas: false);
+
         // ------------------------------------------------------------------------------ compra directa (§14.3) --
         compras.MapPost("/direct", async (CompraDirectaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
@@ -159,6 +253,16 @@ public class PurchasesEndpoints : ICarterModule
         if (archivo is not null) await archivo.CopyToAsync(memoria, ct);
         return await sender.Send(new PrefillSupplierInvoiceQuery(memoria.ToArray()), ct);
     }
+
+    /// <summary>Los filtros de una lista de compras por clase (solicitudes, órdenes, costos adicionales, devoluciones).</summary>
+    private static FiltrosDeDocumentos DeClase(FiltrosDeComprasRequest f, DocumentClass clase) =>
+        new(DocumentClassGroup.Purchases, clase, null, f.Status, f.From, f.To, f.WarehousePublicId, f.SupplierPersonPublicId, f.Number, null);
+
+    /// <summary>El cuerpo de <c>POST /orders/{id}/send</c> (§14.9): a qué correo (nulo = el del proveedor en el maestro). (nuevo)</summary>
+    public sealed record EnviarOrdenRequest(string? Email);
+
+    /// <summary>El cuerpo de <c>POST /supplier-invoices/{id}/radian-events/emit</c> (§14.8): qué eventos emitir. (nuevo)</summary>
+    public sealed record EmitirEventosRadianRequest(IReadOnlyList<SupplierInvoiceEventCode>? EventCodes);
 
     /// <summary>El cuerpo de <c>POST /support-documents/weekly</c>: hasta qué día de la semana (nulo = hoy). (nuevo)</summary>
     public sealed record GenerarSemanalRequest(DateOnly? UpTo);

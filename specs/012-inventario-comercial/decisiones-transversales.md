@@ -2012,6 +2012,19 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     (`UnitCost` pasa a `private set`), `LayerConsumption.{ExitKardexEntry, Layer}` (navegaciones sin columnas nuevas) y el parámetro
     `metodo` en `DiferenciaDePrecio.Aplicar`, `Prorrateo.AlKardex`, `MotorDeCosteo.DiferenciaDePrecio` y `MotorDeCosteo.CostoAdicional`;
     `ResultadoDeVerificacion.CostLayers`. Clave `Costeo.CambioExigeActa` (§2.8). Reglas en T42g.
+- **I5, API de compras y costeo (T808, T809, T845, T846; 2026-09-28) (nuevo)**: en `API/Endpoints/Inventory/PurchasesEndpoints` los
+    grupos `/requests`, `/orders` y `/landed-costs` (lista por clase con `FiltrosDeComprasRequest`, detalle por `GetPurchaseDocumentQuery`
+    con su clase y el ciclo común de §9.3 por `MapCicloDeDocumento`), `GET /orders/{id}/pdf` (`GetPurchaseOrderPdfQuery` → archivo),
+    `POST /orders/{id}/send` (`SendPurchaseOrderCommand`, cuerpo `EnviarOrdenRequest (Email)`), `POST /orders/{id}/close-balance`
+    (`ClosePurchaseOrderBalanceCommand`, cuerpo `MotivoRequest`), `GET /matches` (`ListPurchaseMatchesQuery`), `GET
+    /supplier-invoices/{id}/match` (`GetSupplierInvoiceMatchQuery`) y `POST /supplier-invoices/{id}/radian-events/emit`
+    (`EmitRadianEventCommand`, cuerpo `EmitirEventosRadianRequest (EventCodes)`, 202 con `Location` en la lista de eventos, permiso
+    `Inventory.Purchases.EmitRadianEvent`); el ayudante privado `DeClase` arma los filtros de una lista por clase (también la de
+    devoluciones). En `DocumentsEndpoints`, `POST /api/inventory/documents/{id}/cost-impact` (`GetDocumentCostImpactQuery`, sin clave,
+    `Inventory.Costs.Read` en la ruta; el `{Grupo}.Create` y el alcance, en la consulta). En `InventoryReportsEndpoints`, las vistas
+    `purchase-matches` («Cruce de compras a tres vías», archivo `cruce-de-compras`, filtros `from`/`to`, propios `supplier`/`status`) y
+    `method-change-valuation` («Valorizado por cambio de método», archivo `valorizado-cambio-de-metodo`, filtro `asOf`, propio
+    `comparativeFrom`, exige `Inventory.Costs.Read`).
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2211,6 +2224,15 @@ motivo sin `RUN_PERF_TESTS=1`.
 **(nuevos, I5, T785/T786/T834)** `tests/IngenIA365ERP.Application.Tests/Infrastructure/SemillasDeComprasTests` (los tres tipos de I5,
 idempotente sobre una cooperativa con los de I1 a I4) y `tests/IngenIA365ERP.Application.Tests/Inventory/Common/CerrojoDeComprasYCosteoTests`
 (el SQL del cerrojo cubre la recepción contra orden, los costos adicionales, las capas PEPS y el retroactivo sin un paso nuevo).
+**(nuevos, I5, T773/T825)** pruebas de arquitectura: `LosComandosDeInventarioLlevanClave` (+ `SendPurchaseOrderCommand`,
+`ClosePurchaseOrderBalanceCommand`, `EmitRadianEventCommand` en `ComandosConRuta`; `Las_escrituras_de_compras_exigen_la_clave_y_estan_las_rutas_de_I5`,
+`El_impacto_en_costos_es_una_consulta_sin_clave`), `SoloElNumeradorNumera.El_consecutivo_de_los_eventos_RADIAN_solo_lo_escribe_el_NumeradorFiscal`,
+`LasCantidadesYCostosTienenSuPrecision` (+ columnas de `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`,
+`INV_LayerConsumptions`), `ElComercioNoTieneValoresLegalesFijos.El_cruce_y_el_prorrateo_no_escriben_tolerancias_ni_plazos`,
+`LosHechosInmutablesNoSeModifican` (+ `LayerConsumption`; `El_consumo_de_capa_es_un_hecho_y_la_capa_es_proyeccion`),
+`NadieEscribeElKardexFueraDelRegistro.Solo_el_registro_y_la_reconstruccion_escriben_las_capas_y_sus_consumos`,
+`PrincipioXI_ContableImmutable` (+ `Entities/Inventory/Transactions/LayerConsumption`; `Nadie_borra_consumos_de_capa`) y
+`LosParametrosSeLeenEnUnSoloSitio.Los_retroactivos_se_leen_solo_en_el_registro_del_kardex`.
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 

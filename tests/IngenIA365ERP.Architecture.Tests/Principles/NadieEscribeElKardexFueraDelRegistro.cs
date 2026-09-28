@@ -62,6 +62,49 @@ public class NadieEscribeElKardexFueraDelRegistro
         Assert.True(infractores.Count == 0, "El kardex sólo crece y las proyecciones nunca se dan de baja (FR-002):\n  " + string.Join("\n  ", infractores));
     }
 
+    /// <summary>
+    /// I5, T825 (FR-043; data-model §3.5): las capas PEPS (<c>CostLayer</c>, proyección) y sus consumos (<c>LayerConsumption</c>, hecho)
+    /// sólo los escriben <c>RegistroDeKardex</c> y <c>RebuildInventoryProjectionsCommand</c>. Fuera de ellos —y de la propia entidad, que
+    /// declara sus fábricas— nadie las crea (<c>new</c>, <c>CostLayer.Desde</c>), nadie las agrega, adjunta, actualiza ni borra en sus
+    /// conjuntos, y en Application y Persistence nadie mueve lo que queda de una capa ni su costo (<c>Consumir</c>, <c>Reconstruir</c>,
+    /// <c>Revaluar</c>). Un segundo escritor rompería Σ consumos = original − restante, que es lo que compara la integridad.
+    /// </summary>
+    [Fact]
+    public void Solo_el_registro_y_la_reconstruccion_escriben_las_capas_y_sus_consumos()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var declaraciones = new[] { "CostLayer.cs", "LayerConsumption.cs" };
+        var creacion = new Regex(@"\bnew\s+(CostLayer|LayerConsumption)\s*[({]|\bCostLayer\s*\.\s*Desde\s*\(", RegexOptions.Compiled);
+        var enConjunto = new Regex(@"\.(CostLayers|LayerConsumptions)\s*\.\s*(Add|AddRange|AddAsync|AddRangeAsync|Attach|AttachRange|Update|UpdateRange|Remove|RemoveRange|ExecuteUpdate|ExecuteUpdateAsync|ExecuteDelete|ExecuteDeleteAsync)\b", RegexOptions.Compiled);
+        var movimiento = new Regex(@"\.\s*(Consumir|Reconstruir|Revaluar)\s*\(", RegexOptions.Compiled);
+        var infractores = new List<string>();
+        var escritoresVistos = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var archivo in RepoPath.ProductionCSharpFiles())
+        {
+            var nombre = Path.GetFileName(archivo);
+            var texto = FuenteSinComentarios.Leer(archivo);
+            var relativo = Path.GetRelativePath(root, archivo);
+            if (EscritoresAutorizados.Contains(nombre, StringComparer.Ordinal))
+            {
+                if (creacion.IsMatch(texto) || enConjunto.IsMatch(texto) || movimiento.IsMatch(texto)) escritoresVistos.Add(nombre);
+                continue;
+            }
+            if (declaraciones.Contains(nombre, StringComparer.Ordinal)) continue;
+
+            if (creacion.IsMatch(texto)) infractores.Add($"{relativo}: crea una capa o un consumo fuera de RegistroDeKardex");
+            if (enConjunto.IsMatch(texto)) infractores.Add($"{relativo}: escribe INV_CostLayers o INV_LayerConsumptions fuera de RegistroDeKardex");
+            var capaDeLaApp = archivo.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Application{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || archivo.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Persistence{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+            if (capaDeLaApp && movimiento.IsMatch(texto) && Regex.IsMatch(texto, @"\bCostLayers?\b"))
+                infractores.Add($"{relativo}: mueve el restante o el costo de una capa fuera de RegistroDeKardex");
+        }
+
+        Assert.True(escritoresVistos.Contains("RegistroDeKardex.cs"), "RegistroDeKardex ya escribe las capas desde T836: si cambió la forma, actualizá la prueba.");
+        Assert.True(infractores.Count == 0,
+            "Capas PEPS o consumos escritos fuera del registro y la reconstrucción (FR-002, FR-043, T825):\n  " + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void Solo_el_registro_crea_lineas_del_kardex()
     {

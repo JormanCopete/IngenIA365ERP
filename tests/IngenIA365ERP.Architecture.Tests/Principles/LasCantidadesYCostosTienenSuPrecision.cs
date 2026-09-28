@@ -94,6 +94,28 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Inv + "Documents/CountSnapshotLineConfiguration.cs", "CountedQuantity", "Cantidad"),
         (Inv + "Documents/CountSnapshotLineConfiguration.cs", "Difference", "Cantidad"),
         (Inv + "Documents/CountCaptureConfiguration.cs", "Quantity", "Cantidad"),
+        // Compras completas, I5 (T773; data-model §9.6, §9.7): el cruce a tres vías y el reparto de los costos adicionales.
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "OrderedQuantity", "Cantidad"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "ReceivedNotInvoicedQuantity", "Cantidad"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "InvoicedQuantity", "Cantidad"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "OrderedUnitPrice", "PrecioUnitario"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "ReceivedUnitCost", "PrecioUnitario"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "InvoicedUnitPrice", "PrecioUnitario"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "QuantityDifference", "Cantidad"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "PriceDifferenceAmount", "Monto"),
+        (Inv + "Purchasing/PurchaseMatchLineConfiguration.cs", "PriceDifferenceRate", "Tarifa"),
+        (Inv + "Purchasing/LandedCostAllocationConfiguration.cs", "Basis", "Factor"),
+        (Inv + "Purchasing/LandedCostAllocationConfiguration.cs", "AllocatedAmount", "Monto"),
+        (Inv + "Purchasing/LandedCostAllocationConfiguration.cs", "RoundingResidue", "Monto"),
+        (Inv + "Purchasing/LandedCostAllocationConfiguration.cs", "ExistingRatio", "Tarifa"),
+        (Inv + "Purchasing/LandedCostAllocationConfiguration.cs", "ExistingAmount", "Monto"),
+        (Inv + "Purchasing/LandedCostAllocationConfiguration.cs", "SoldAmount", "Monto"),
+        // Costeo avanzado, I5 (T825; data-model §3.5): las capas PEPS y sus consumos.
+        (Inv + "Projections/CostLayerConfiguration.cs", "OriginalQuantity", "Cantidad"),
+        (Inv + "Projections/CostLayerConfiguration.cs", "RemainingQuantity", "Cantidad"),
+        (Inv + "Projections/CostLayerConfiguration.cs", "UnitCost", "CostoUnitario"),
+        (Inv + "Transactions/LayerConsumptionConfiguration.cs", "Quantity", "Cantidad"),
+        (Inv + "Transactions/LayerConsumptionConfiguration.cs", "UnitCost", "CostoUnitario"),
     ];
 
     /// <summary>Espacios de nombres de entidades cuyos decimales tienen que declarar su precisión (T19).</summary>

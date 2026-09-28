@@ -45,6 +45,15 @@ public class DocumentsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Inventory.Documents.View");
 
+        // Feature 012, I5 (T845; api.md §2.3, §9.3; FR-045): el impacto en costos de un borrador retroactivo antes de confirmarlo. Es una
+        // consulta: sin cuerpo, sin clave de operación y sin guardar nada. La ruta exige Inventory.Costs.Read; el {Grupo}.Create del
+        // grupo del documento y el alcance los mira GetDocumentCostImpactQuery (sin ellos, el mismo 404 genérico del documento).
+        group.MapPost("/{id:guid}/cost-impact", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Inventory.Costing.GetDocumentCostImpactQuery(id), ct))
+            .WithName("Inventory_Documents_CostImpact")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(IngenIA365ERP.Application.Inventory.Documents.PermisosDeGrupo.LeerCostos);
+
         // Feature 012, I3 (T632; api.md §20.3): la reimpresión, con la marca «COPIA», de la copia fiscal vigente. Sirve para cualquier
         // grupo; las ventas usan tirilla o carta. Queda auditada (ReprintDocumentCommand) y lleva clave de operación.
         group.MapPost("/{id:guid}/reprint", async (Guid id, SalesEndpoints.EntregaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>

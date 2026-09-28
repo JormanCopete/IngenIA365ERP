@@ -169,6 +169,24 @@ public class InventoryReportsEndpoints : ICarterModule
                 Enumerado<IngenIA365ERP.Domain.Enums.ElectronicInvoicing.ElectronicDocumentStatus>(q, "status"),
                 Enumerado<IngenIA365ERP.Domain.Enums.ElectronicInvoicing.ElectronicDocumentKind>(q, "kind"),
                 bool.TryParse(q["contingency"].ToString(), out var conContingencia) ? conContingencia : null));
+
+        // US13 (I5, T809): el cruce a tres vías por línea de factura. from/to sobre la fecha de la factura; supplier y status (Held,
+        // Approved, Rejected, por nombre o número) propios. Los precios los deja vacíos la consulta sin Inventory.Costs.Read.
+        group.MapVistaDeInventario(
+            new VistaDeInformeDeInventario("purchase-matches", "Cruce de compras a tres vías",
+                "Por línea de factura cruzada contra una orden: lo pedido, lo recibido y lo facturado, el precio pedido y el facturado, las diferencias, la tolerancia y el estado.",
+                "cruce-de-compras", ["from", "to"], ["supplier", "status"]),
+            (f, q) => new PurchaseMatchesReportQuery(f, Id(q, "supplier"), Enumerado<PurchaseMatchStatus>(q, "status")));
+
+        // US16 (I5, T846): el valorizado por promedio ponderado y por PEPS a la fecha del cambio de método (asOf) y al comparativo más
+        // antiguo (comparativeFrom), por grupo contable. Exige además Inventory.Costs.Read (la vista lo declara; la consulta responde el 404).
+        group.MapVistaDeInventario(
+            new VistaDeInformeDeInventario("method-change-valuation", "Valorizado por cambio de método",
+                "Por grupo contable: el valor por promedio ponderado y por PEPS a la fecha del cambio y al período comparativo, con su diferencia.",
+                "valorizado-cambio-de-metodo", ["asOf"], ["comparativeFrom"],
+                RequiredPermission: ValuationReportQueryHandler.PermisoDeCostos),
+            (f, q) => new MethodChangeValuationReportQuery(f,
+                DateOnly.TryParse(q["comparativeFrom"].ToString(), System.Globalization.CultureInfo.InvariantCulture, out var comparativo) ? comparativo : null));
     }
 
     private static Guid? Id(IQueryCollection q, string clave) => Guid.TryParse(q[clave].ToString(), out var id) ? id : null;

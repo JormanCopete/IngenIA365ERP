@@ -35,6 +35,35 @@ public class LosParametrosSeLeenEnUnSoloSitio
         "IApplicationDbContext.cs",
     ];
 
+    /// <summary>
+    /// I5, T825 (FR-045; T42g): la puerta de los retroactivos (<c>Costeo.RetroactivosPermitidos</c> y <c>Costeo.RetroactivosDiasMaximos</c>)
+    /// se lee en un solo sitio, <c>RegistroDeKardex</c> (paso 5 de la confirmación, dentro del cerrojo, por el <c>LectorDeParametros</c>).
+    /// El impacto en costos (<c>GetDocumentCostImpactQuery</c>) la hereda porque corre el mismo registro en modo simulación; si otro archivo
+    /// la leyera, la vista previa y la confirmación podrían decir cosas distintas. Además del catálogo de claves
+    /// (<c>ParametrosDeInventario</c>), ninguna otra fuente nombra las constantes ni la clave como texto.
+    /// </summary>
+    [Fact]
+    public void Los_retroactivos_se_leen_solo_en_el_registro_del_kardex()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var uso = new Regex(@"\bCosteoRetroactivos(Permitidos|DiasMaximos)\b|""Costeo\.Retroactivos(Permitidos|DiasMaximos)""", RegexOptions.Compiled);
+        string[] autorizados = ["ParametrosDeInventario.cs", "RegistroDeKardex.cs"];
+        var lectores = new List<string>();
+        var infractores = new List<string>();
+
+        foreach (var archivo in RepoPath.ProductionCSharpFiles())
+        {
+            if (!uso.IsMatch(FuenteSinComentarios.Leer(archivo))) continue;
+            var nombre = Path.GetFileName(archivo);
+            if (autorizados.Contains(nombre, StringComparer.Ordinal)) lectores.Add(nombre);
+            else infractores.Add($"{Path.GetRelativePath(root, archivo)}: lee la puerta de los retroactivos fuera de RegistroDeKardex");
+        }
+
+        Assert.Contains("RegistroDeKardex.cs", lectores);
+        Assert.True(infractores.Count == 0,
+            "Costeo.RetroactivosPermitidos y Costeo.RetroactivosDiasMaximos se leen en un solo sitio (FR-045, T825):\n  " + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void Solo_el_lector_y_el_comando_tocan_los_parametros()
     {

@@ -40,6 +40,9 @@ public class LosHechosInmutablesNoSeModifican
         // US8, entrega I4 (T671; data-model §18, §26): la versión de un documento electrónico y cada intento ante el canal.
         "ElectronicDocumentVersion",
         "ElectronicDocumentTransmission",
+        // US16, entrega I5 (T825; data-model §3.5): el consumo de una capa PEPS. La capa (CostLayer) es proyección y no está aquí:
+        // la protege NadieEscribeElKardexFueraDelRegistro.
+        "LayerConsumption",
     ];
 
     /// <summary>
@@ -133,6 +136,8 @@ public class LosHechosInmutablesNoSeModifican
             .ToList();
         Assert.Contains("DocumentTaxLines", conjuntos);
         Assert.Contains("InventoryDocuments", conjuntos);
+        // I5 (T825): los consumos de capa son hechos; nadie los borra ni los actualiza en bloque.
+        Assert.Contains("LayerConsumptions", conjuntos);
 
         var infractores = new List<string>();
         foreach (var archivo in RepoPath.ProductionCSharpFiles()
@@ -150,7 +155,27 @@ public class LosHechosInmutablesNoSeModifican
             "Hechos o documentos borrados o actualizados en bloque (Principio XI, T18):\n  " + string.Join("\n  ", infractores));
     }
 
-    private static readonly Regex SetPublico = new(@"public\s+[^;{=]+\{\s*get;\s*set;", RegexOptions.Compiled);
+    /// <summary>
+    /// I5, T825 (FR-043; data-model §3.5): el consumo de capa lleva el marcador, así la guarda del guardado rechaza cualquier cambio o baja
+    /// después de insertarlo; y la capa no, porque es proyección (su restante se mueve con cada salida y la reconstrucción la corrige).
+    /// </summary>
+    [Fact]
+    public void El_consumo_de_capa_es_un_hecho_y_la_capa_es_proyeccion()
+    {
+        var hecho = typeof(IngenIA365ERP.Domain.Common.IHechoInmutable);
+        Assert.True(hecho.IsAssignableFrom(typeof(IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption)),
+            "LayerConsumption tiene que ser IHechoInmutable (T825).");
+        Assert.False(hecho.IsAssignableFrom(typeof(IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer)),
+            "CostLayer es proyección del kardex, no un hecho (data-model §3.5).");
+        var conSetPublico = typeof(IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption)
+            .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+            .Where(p => p.SetMethod is { IsPublic: true }
+                && !p.SetMethod.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.FullName == "System.Runtime.CompilerServices.IsExternalInit"))
+            .Select(p => p.Name).ToList();
+        Assert.True(conSetPublico.Count == 0, "LayerConsumption con set público: " + string.Join(", ", conSetPublico));
+    }
+
+    private static readonly Regex SetPublico =new(@"public\s+[^;{=]+\{\s*get;\s*set;", RegexOptions.Compiled);
 
     [Fact]
     public void Ningun_hecho_expone_un_set_publico()

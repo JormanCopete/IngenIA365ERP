@@ -26,8 +26,28 @@ public class PrincipioXI_ContableImmutable
         "Entities/Approvals/Transactions",
         // Feature 012, I4 (T670; decisiones-transversales §2.18): las versiones y las transmisiones de un documento
         // electrónico son la bitácora ante la DIAN: no se borran.
-        "Entities/ElectronicInvoicing/Transactions"
+        "Entities/ElectronicInvoicing/Transactions",
+        // Feature 012, I5 (T825): el consumo de una capa PEPS es un hecho. Sólo esta entidad del espacio de nombres: el resto de
+        // Entities/Inventory/Transactions lo vigilan LosHechosInmutablesNoSeModifican y NadieEscribeElKardexFueraDelRegistro.
+        "Entities/Inventory/Transactions/LayerConsumption"
     ];
+
+    /// <summary>
+    /// I5, T825: los consumos de capa también por su conjunto, porque el recorrido de arriba sólo ve los archivos que nombran el espacio
+    /// de nombres completo. Nadie borra un consumo: una salida anulada devuelve lo consumido con otro consumo negativo.
+    /// </summary>
+    [Fact]
+    public void Nadie_borra_consumos_de_capa()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var borrado = new Regex(@"\.LayerConsumptions\s*\.\s*(Remove|RemoveRange|ExecuteDelete|ExecuteDeleteAsync)\b", RegexOptions.Compiled);
+        var offenders = RepoPath.ProductionCSharpFiles()
+            .Where(f => borrado.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+
+        Assert.True(offenders.Count == 0, "Consumos de capa borrados (Principio XI, T825):\n  " + string.Join("\n  ", offenders));
+    }
 
     private static readonly Regex RemoveCall = new(
         @"\.(Remove|RemoveRange)\s*\(",
