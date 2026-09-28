@@ -67,7 +67,7 @@ public static class LeyendasDeRepresentacion
 
     private static bool Validado(ElectronicDocumentStatus e) => e is ElectronicDocumentStatus.Validated or ElectronicDocumentStatus.ValidatedWithNotices;
 
-    private static string Nombre(ElectronicDocumentKind tipo) => tipo switch
+    public static string Nombre(ElectronicDocumentKind tipo) => tipo switch
     {
         ElectronicDocumentKind.Invoice => "Factura electrónica de venta",
         ElectronicDocumentKind.CreditNote => "Nota crédito electrónica",

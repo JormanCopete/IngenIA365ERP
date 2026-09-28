@@ -1431,6 +1431,13 @@ versión 1. Su emisión, su estado, su corrección y sus contingencias viven en
 operación o semanal la decide `DocumentoSoporte.Generacion`. Un documento soporte validado no se anula
 (`Inventory.Document.FiscalUseCorrection`): se corrige con su nota de ajuste.
 
+**(nuevo, T748)** La lista admite `?class=SupportDocument|SupportDocumentAdjustmentNote` (por defecto el
+documento soporte) y los filtros de §14.4. `POST /support-documents/weekly` (`Purchases.Create`,
+`Idempotency-Key`, cuerpo `{ upTo? }`) → `[{ supportDocumentPublicId, supplierPersonPublicId,
+receiptPublicIds[] }]` (`GenerateWeeklySupportDocumentsCommand`): con `Semanal`, un borrador por proveedor
+no obligado con las recepciones de la semana sin factura ni documento soporte; con `PorOperacion`, lista
+vacía. El disparo automático el último día hábil sigue pendiente (T742).
+
 ### 14.8 Eventos RADIAN de una factura a crédito — `/purchases/supplier-invoices/{id}/radian-events`
 
 | Ruta | Permiso | Cuerpo / respuesta |

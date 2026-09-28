@@ -27,5 +27,8 @@
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Persistence.Migrations.PostgreSql\IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj" />
     <!-- AuditBootstrapDescriptor + EnvPasswordResolver — smoke tests del parser. -->
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Audit\IngenIA365ERP.Audit.csproj" />
+    <!-- Feature 012, I4 (T668): los adaptadores de facturación electrónica, para vigilar que sólo la raíz de composición los conozca
+         (ElProveedorTecnologicoSoloLoConoceSuAdaptador) y que las credenciales no toquen la base. -->
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.ElectronicInvoicing\IngenIA365ERP.ElectronicInvoicing.csproj" />
   </ItemGroup>
 </Project>

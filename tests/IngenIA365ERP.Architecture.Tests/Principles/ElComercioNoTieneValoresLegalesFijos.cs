@@ -67,6 +67,68 @@ public class ElComercioNoTieneValoresLegalesFijos
         "52374", "52_374", "49799", "49_799", "47065", "47_065", "1414098", "1_414_098",
     ];
 
+    /// <summary>
+    /// T670 (decisiones-transversales §2.18, T10, T40): la facturación electrónica no escribe los valores de la norma —el plazo de
+    /// 48 horas de la contingencia, los 15 segundos de la espera del POS, el 0,90 del aviso de resolución, los 30 días— ni los códigos
+    /// DIAN como literales: los primeros son parámetros <c>EINV</c> con vigencia y los códigos salen de <c>CatalogoDian</c>. Se exceptúa
+    /// el catálogo de claves (<c>ParametrosDeFacturacionElectronica</c>, sus valores son defectos configurables) y el propio catálogo.
+    /// </summary>
+    private static readonly string[] CarpetasDeFacturacionElectronica =
+    [
+        "IngenIA365ERP.Domain/ElectronicInvoicing",
+        "IngenIA365ERP.Application/ElectronicInvoicing",
+    ];
+
+    private static readonly string[] ExceptuadosDeFacturacionElectronica =
+    [
+        "src/Core/IngenIA365ERP.Domain/ElectronicInvoicing/ParametrosDeFacturacionElectronica.cs",
+        "src/Core/IngenIA365ERP.Application/ElectronicInvoicing/Catalogs/CatalogoDian.cs",
+    ];
+
+    private static readonly (Regex Patron, string Que)[] SospechososDeFacturacionElectronica =
+    [
+        (new Regex(@"(?<![\w.])48(?![\w.])", RegexOptions.Compiled), "48 (horas del plazo de contingencia)"),
+        (new Regex(@"(?<![\w.])0\.90?(?![\w])", RegexOptions.Compiled), "0.90 (aviso de resolución)"),
+        (new Regex(@"\b(From|Add)(Seconds|Minutes|Hours|Days)\(\s*(15|30)\s*\)", RegexOptions.Compiled), "15 o 30 como tiempo"),
+        (new Regex(@"new\s+TimeSpan\([^)]*(?<![\w.])(15|30|48)(?![\w.])", RegexOptions.Compiled), "15, 30 o 48 como tiempo"),
+        (new Regex(@"""\d{2}""", RegexOptions.Compiled), "código DIAN como texto (sale de CatalogoDian)"),
+    ];
+
+    [Fact]
+    public void La_facturacion_electronica_no_escribe_plazos_ni_codigos_DIAN()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var infractores = new List<string>();
+        var carpetasRevisadas = 0;
+
+        foreach (var carpeta in CarpetasDeFacturacionElectronica)
+        {
+            var ruta = Path.Combine(root, "src", "Core", carpeta);
+            if (!Directory.Exists(ruta)) continue;
+            carpetasRevisadas++;
+
+            foreach (var archivo in Directory.EnumerateFiles(ruta, "*.cs", SearchOption.AllDirectories))
+            {
+                var relativo = Path.GetRelativePath(root, archivo).Replace('\\', '/');
+                if (ExceptuadosDeFacturacionElectronica.Contains(relativo, StringComparer.OrdinalIgnoreCase)) continue;
+
+                var lineas = FuenteSinComentarios.Leer(archivo).Split('\n');
+                for (var i = 0; i < lineas.Length; i++)
+                {
+                    foreach (var (patron, que) in SospechososDeFacturacionElectronica)
+                        if (patron.IsMatch(lineas[i]))
+                            infractores.Add($"{relativo}:{i + 1}: {que}: {lineas[i].Trim()}");
+                }
+            }
+        }
+
+        Assert.True(carpetasRevisadas == CarpetasDeFacturacionElectronica.Length,
+            "Las carpetas de facturación electrónica existen desde I4: si se movieron, actualizá CarpetasDeFacturacionElectronica.");
+        Assert.True(infractores.Count == 0,
+            "Plazos o códigos DIAN escritos en la facturación electrónica (T670, §2.18): van en parámetros EINV o en CatalogoDian:\n  "
+            + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void El_catalogo_tributario_no_escribe_tarifas_UVT_ni_bases_minimas()
     {

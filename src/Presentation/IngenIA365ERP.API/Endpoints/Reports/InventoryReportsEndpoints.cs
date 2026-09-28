@@ -162,6 +162,13 @@ public class InventoryReportsEndpoints : ICarterModule
             (f, q) => new VoucherRedemptionsReportQuery(f, Id(q, "paymentMeans"), Enumerado<VoucherRedemptionStatus>(q, "status")));
         group.MapVistaDeInventario(DiscountApprovalsReportQueryHandler.Vista, (f, q) => new DiscountApprovalsReportQuery(f, Id(q, "approver")));
         group.MapVistaDeInventario(ImpairmentReportQueryHandler.Vista, (f, _) => new ImpairmentReportQuery(f));
+
+        // US8 (I4, T751): los documentos electrónicos ante la DIAN. status y kind entran por nombre o por número; contingency es true/false.
+        group.MapVistaDeInventario(DianDocumentsReportQueryHandler.Vista,
+            (f, q) => new DianDocumentsReportQuery(f,
+                Enumerado<IngenIA365ERP.Domain.Enums.ElectronicInvoicing.ElectronicDocumentStatus>(q, "status"),
+                Enumerado<IngenIA365ERP.Domain.Enums.ElectronicInvoicing.ElectronicDocumentKind>(q, "kind"),
+                bool.TryParse(q["contingency"].ToString(), out var conContingencia) ? conContingencia : null));
     }
 
     private static Guid? Id(IQueryCollection q, string clave) => Guid.TryParse(q[clave].ToString(), out var id) ? id : null;

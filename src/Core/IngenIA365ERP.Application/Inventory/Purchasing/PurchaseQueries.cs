@@ -146,7 +146,8 @@ public sealed class ListSupplierInvoicesQueryValidator : AbstractValidator<ListS
     {
         RuleFor(x => x.Filtros).NotNull().Must(f => f.From is null || f.To is null || f.From <= f.To).WithMessage("La fecha inicial es posterior a la final.");
         RuleFor(x => x.Filtros.PaymentForm).Must(p => p is null or "Cash" or "Credit").WithMessage("La forma de pago es Cash o Credit.");
-        RuleFor(x => x.Clase).Must(c => c is DocumentClass.SupplierInvoice or DocumentClass.SupplierNote);
+        RuleFor(x => x.Clase).Must(c => c is DocumentClass.SupplierInvoice or DocumentClass.SupplierNote
+            or DocumentClass.SupportDocument or DocumentClass.SupportDocumentAdjustmentNote);
         RuleFor(x => x.Pagina).NotNull();
     }
 }

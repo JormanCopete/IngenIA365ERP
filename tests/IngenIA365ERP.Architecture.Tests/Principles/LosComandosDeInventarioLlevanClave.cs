@@ -100,6 +100,22 @@ public class LosComandosDeInventarioLlevanClave
         "SaveCreditNoteDraftCommand",
         "DeliverSalesDocumentCommand",
         "ReprintDocumentCommand",
+        // I4, US8 (T744–T748; api.md §24, §14.7, §18.3.1): configuración y credencial, resoluciones, casos a/b/c, cambio de canal,
+        // contingencias, factura en lugar del documento equivalente y el documento soporte semanal.
+        "ConfigureEmissionCommand",
+        "VerifyChannelCredentialCommand",
+        "RegisterNumberingResolutionCommand",
+        "UpdateNumberingResolutionCommand",
+        "LinkResolutionToChannelCommand",
+        "CorrectRejectedDocumentCommand",
+        "CreateReplacementDraftCommand",
+        "ReplaceRejectedDocumentCommand",
+        "CancelRejectedDocumentCommand",
+        "TransmitByCurrentChannelCommand",
+        "OpenContingencyCommand",
+        "CloseContingencyCommand",
+        "ReplacePosDocumentWithInvoiceCommand",
+        "GenerateWeeklySupportDocumentsCommand",
     ];
 
     /// <summary>
@@ -135,6 +151,51 @@ public class LosComandosDeInventarioLlevanClave
 
     /// <summary>Consultas enviadas por POST que se llaman <c>*Command</c> (contracts/api.md §2.3), con su ruta. Hoy ninguna.</summary>
     private static readonly Dictionary<string, string> ConsultasPorPost = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Feature 012, I4 (T746; contracts/dian.md §6.1): los dos comandos que hablan con el canal de emisión. No son
+    /// <c>IOperacionIdempotente</c> a propósito: la clave abriría una transacción alrededor de la llamada al canal, que va sola, y el
+    /// registro del resultado en otra. Repetirlos es inocuo por el arrendamiento de la fila, la unicidad del número y la regla del
+    /// ambiguo (consultar antes de reenviar). Sus rutas igual exigen la cabecera <c>Idempotency-Key</c>
+    /// (<see cref="Las_escrituras_de_facturacion_electronica_exigen_la_clave"/>).
+    /// </summary>
+    private static readonly Dictionary<string, string> IdempotentesPorElArrendamiento = new(StringComparer.Ordinal)
+    {
+        ["EmitElectronicDocumentCommand"] = "POST /api/electronic-invoicing/documents/{id}/retry",
+        ["QueryElectronicDocumentStatusCommand"] = "POST /api/electronic-invoicing/documents/{id}/query-status",
+    };
+
+    /// <summary>
+    /// T744–T748 (api.md §24, §14.7): toda escritura de <c>/api/electronic-invoicing</c> (POST o PUT) lleva <c>ConClaveDeOperacion()</c>,
+    /// salvo el enlace de descarga, que es una consulta auditada como la de adjuntos de la 011.
+    /// </summary>
+    [Fact]
+    public void Las_escrituras_de_facturacion_electronica_exigen_la_clave()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var carpeta = Path.Combine(root, "src", "Presentation", "IngenIA365ERP.API", "Endpoints", "ElectronicInvoicing");
+        Assert.True(Directory.Exists(carpeta), "No existe Endpoints/ElectronicInvoicing (T744–T747).");
+        // Cada ruta va desde su .MapX( hasta la siguiente (el mismo corte que LosEndpointsProtegidosExigenPermiso.Tramos).
+        var escritura = new Regex(@"^\.Map(Post|Put)\(\s*""(?<ruta>[^""]*)""", RegexOptions.Compiled);
+        var infractores = new List<string>();
+        var revisadas = 0;
+
+        foreach (var archivo in Directory.EnumerateFiles(carpeta, "*.cs"))
+        {
+            foreach (var tramo in LosEndpointsProtegidosExigenPermiso.Tramos(FuenteSinComentarios.Leer(archivo)))
+            {
+                var m = escritura.Match(tramo);
+                if (!m.Success) continue;
+                revisadas++;
+                if (m.Groups["ruta"].Value.EndsWith("/download-link", StringComparison.Ordinal)) continue;
+                if (!tramo.Contains(".ConClaveDeOperacion()", StringComparison.Ordinal))
+                    infractores.Add($"{Path.GetFileName(archivo)}: {m.Groups["ruta"].Value} sin ConClaveDeOperacion()");
+            }
+        }
+
+        Assert.True(revisadas >= 12, $"Se esperaban al menos 12 escrituras en Endpoints/ElectronicInvoicing; se encontraron {revisadas}.");
+        Assert.True(infractores.Count == 0, "Escrituras de facturación electrónica sin Idempotency-Key (FR-016, T13):\n  " + string.Join("\n  ", infractores));
+    }
 
     /// <summary>
     /// Comandos anteriores a la feature que la reescriben después, con la tarea que los reescribe: los de
@@ -228,7 +289,7 @@ public class LosComandosDeInventarioLlevanClave
                     var resto = m.Groups["resto"].Value;
                     if (!resto.Contains("IRequest", StringComparison.Ordinal)) continue;
                     if (!Regex.IsMatch(codigoDeRutas, $@"\b{Regex.Escape(nombre)}\b")) continue; // sin ruta
-                    if (ConsultasPorPost.ContainsKey(nombre)) continue;
+                    if (ConsultasPorPost.ContainsKey(nombre) || IdempotentesPorElArrendamiento.ContainsKey(nombre)) continue;
 
                     revisados++;
                     var llevaClave = resto.Contains("IOperacionIdempotente", StringComparison.Ordinal);

@@ -5,6 +5,10 @@
     "Gana sobre appsettings.Development.<SistemaOperativo>.json.",
     "Solo hace falta declarar lo que cambia; el resto se hereda."
   ],
+  "ElectronicInvoicing": {
+    "_comentario": "Facturacion electronica en desarrollo: la credencial del canal va en una carpeta local que git ignora (secrets-locales/). Para el canal SIMULADO basta un archivo {tenantPublicId}.SIMULADO.json con cualquier par de valores.",
+    "CredentialsPath": "secrets-locales/facturacion-electronica/"
+  },
   "Infraestructura": {
     "Destinos": {
       "Redis": "Wsl"

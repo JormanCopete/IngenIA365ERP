@@ -17,8 +17,8 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// Purchases</c>) por <see cref="CicloDeDocumentoRutas.MapCicloDeDocumento"/>, con <c>Inventory.Purchases.{View, Create, Confirm,
 /// Void}</c>; los eventos RADIAN con <c>Inventory.Purchases.RegisterRadianEvent</c>. Toda escritura exige
 /// <c>Idempotency-Key</c> (<c>LosComandosDeInventarioLlevanClave</c>); el prellenado desde el XML es una consulta y el archivo no
-/// se guarda. <c>/support-documents</c> (I4), las solicitudes, órdenes, cruce y costos adicionales (I5) y la emisión RADIAN (I5)
-/// no se publican aquí. (nuevo)
+/// se guarda. <c>/support-documents</c> (I4, T748) publica el documento soporte y su nota de ajuste con el mismo ciclo; las solicitudes,
+/// órdenes, cruce y costos adicionales (I5) y la emisión RADIAN (I5) no se publican aquí. (nuevo)
 /// </summary>
 public class PurchasesEndpoints : ICarterModule
 {
@@ -108,6 +108,34 @@ public class PurchasesEndpoints : ICarterModule
             .RequirePermission(Ver);
         devoluciones.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_Returns", conConsultas: false);
 
+        // ------------------------------------------------------------- documento soporte y su nota de ajuste (§14.7, I4) --
+        // T748: el mismo ciclo que la factura del proveedor; la nota de ajuste se crea en esta misma ruta con un tipo de clase
+        // SupportDocumentAdjustmentNote y supportDocumentPublicId. Su estado ante la DIAN vive en /api/electronic-invoicing/documents.
+        var soportes = compras.MapGroup("/support-documents");
+        soportes.MapGet("/", async ([AsParameters] FiltrosDeComprasRequest f, DocumentClass? @class, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListSupplierInvoicesQuery(f.Filtros(), f.Pagina(),
+                    @class == DocumentClass.SupportDocumentAdjustmentNote ? DocumentClass.SupportDocumentAdjustmentNote : DocumentClass.SupportDocument), ct))
+            .WithName("Inventory_Purchases_SupportDocuments_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        soportes.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
+            {
+                var soporte = await sender.Send(new GetPurchaseDocumentQuery(id, DocumentClass.SupportDocument), ct);
+                return soporte.IsSuccess ? soporte : await sender.Send(new GetPurchaseDocumentQuery(id, DocumentClass.SupportDocumentAdjustmentNote), ct);
+            })
+            .WithName("Inventory_Purchases_SupportDocuments_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+        // La generación semanal (DocumentoSoporte.Generacion = Semanal): un borrador por proveedor no obligado con las recepciones de la
+        // semana que no tienen factura ni documento soporte; con PorOperacion no hace nada. (nuevo)
+        soportes.MapPost("/weekly", async (GenerarSemanalRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GenerateWeeklySupportDocumentsCommand(body?.UpTo) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_Purchases_SupportDocuments_Weekly")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Crear);
+        soportes.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_SupportDocuments", conConsultas: false);
+
         // ------------------------------------------------------------------------------ compra directa (§14.3) --
         compras.MapPost("/direct", async (CompraDirectaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
@@ -131,6 +159,9 @@ public class PurchasesEndpoints : ICarterModule
         if (archivo is not null) await archivo.CopyToAsync(memoria, ct);
         return await sender.Send(new PrefillSupplierInvoiceQuery(memoria.ToArray()), ct);
     }
+
+    /// <summary>El cuerpo de <c>POST /support-documents/weekly</c>: hasta qué día de la semana (nulo = hoy). (nuevo)</summary>
+    public sealed record GenerarSemanalRequest(DateOnly? UpTo);
 
     /// <summary>El cuerpo de <c>POST /direct</c> (§14.3): la recepción (el cuerpo de §14.2) y la factura.</summary>
     public sealed record CompraDirectaRequest(Application.Inventory.Documents.SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice);

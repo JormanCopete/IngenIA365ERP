@@ -23,7 +23,10 @@ public class PrincipioXI_ContableImmutable
         // Feature 012 (T019; decisiones-transversales §2.18, T7, T33): los mensajes de integración y sus
         // entregas, y las solicitudes y decisiones de aprobación, son hechos: no se borran.
         "Entities/Integration/Transactions",
-        "Entities/Approvals/Transactions"
+        "Entities/Approvals/Transactions",
+        // Feature 012, I4 (T670; decisiones-transversales §2.18): las versiones y las transmisiones de un documento
+        // electrónico son la bitácora ante la DIAN: no se borran.
+        "Entities/ElectronicInvoicing/Transactions"
     ];
 
     private static readonly Regex RemoveCall = new(

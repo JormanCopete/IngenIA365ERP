@@ -160,6 +160,9 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.UseSetting("Integration:AuditForwarder:Enabled", "false");
             builder.UseSetting("Integration:ScheduledTasks:Enabled", "false");
             builder.UseSetting("Integration:EmailDispatcher:Enabled", "false");
+            // Feature 012, I4 (T749): el procesador de documentos electrónicos también queda registrado sin arrancar; las pruebas conducen
+            // sus pasadas a mano.
+            builder.UseSetting("ElectronicInvoicing:Processor:Enabled", "false");
 
             builder.ConfigureTestServices(services =>
             {
