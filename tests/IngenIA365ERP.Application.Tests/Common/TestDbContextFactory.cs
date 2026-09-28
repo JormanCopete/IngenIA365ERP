@@ -323,6 +323,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem> PriceListItems => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope>();
+
+    // Facturación electrónica DIAN (feature 012, I4, T698)
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting> ElectronicEmissionSettings => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution> DianNumberingResolutions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel> DianResolutionChannels => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent> DianContingencyEvents => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument> ElectronicDocuments => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> ElectronicDocumentVersions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission> ElectronicDocumentTransmissions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission>();
     // Feature 012 (T161): catalogo tributario de Core.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();
@@ -619,6 +628,37 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<CreditLineParameter>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<LendingTransaction>(b => { b.Ignore("RowVersion"); b.HasOne(t => t.CreditLine).WithMany().HasForeignKey(t => t.CreditLineId); });
         modelBuilder.Entity<PendingInstallment>(b => { b.Ignore("RowVersion"); b.HasOne(i => i.CreditLine).WithMany().HasForeignKey(i => i.CreditLineId); });
+
+        // Feature 012, I4 (T698): facturación electrónica. Como en ElectronicDocumentConfiguration: las dos
+        // autorreferencias del documento son relaciones distintas (sin esto la convención las empareja como uno a
+        // uno) y la versión vigente va sin navegación.
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution>(b =>
+        {
+            b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted);
+            b.Ignore(x => x.TieneNumerosEmitidos); b.Ignore(x => x.Agotada); b.Ignore(x => x.Disponibles);
+            b.HasMany(x => x.Channels).WithOne(c => c.Resolution).HasForeignKey(c => c.ResolutionId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.Ignore(x => x.EstaAbierto); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument>(b =>
+        {
+            b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.Ignore(x => x.EsFinal);
+            b.HasOne(x => x.Resolution).WithMany().HasForeignKey(x => x.ResolutionId);
+            b.HasOne(x => x.EmissionSetting).WithMany().HasForeignKey(x => x.EmissionSettingId);
+            b.HasOne(x => x.ContingencyEvent).WithMany().HasForeignKey(x => x.ContingencyEventId);
+            b.HasOne(x => x.CorrectsDocument).WithMany().HasForeignKey(x => x.CorrectsDocumentId);
+            b.HasOne(x => x.WaitsForDocument).WithMany().HasForeignKey(x => x.WaitsForDocumentId);
+            b.HasOne<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion>().WithMany().HasForeignKey(x => x.CurrentVersionId);
+            b.HasMany(x => x.Versions).WithOne(v => v.ElectronicDocument).HasForeignKey(v => v.ElectronicDocumentId);
+            b.HasMany(x => x.Transmissions).WithOne(t => t.ElectronicDocument).HasForeignKey(t => t.ElectronicDocumentId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission>(b =>
+        {
+            b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted);
+            b.HasOne(x => x.Version).WithMany().HasForeignKey(x => x.VersionId);
+        });
     }
 }
 

@@ -277,6 +277,15 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps { get; }
     DbSet<Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes { get; }
 
+    // Feature 012 (T698, I4): facturación electrónica DIAN (COR_Electronic*, COR_Dian*).
+    DbSet<Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting> ElectronicEmissionSettings { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.DianNumberingResolution> DianNumberingResolutions { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.DianResolutionChannel> DianResolutionChannels { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.DianContingencyEvent> DianContingencyEvents { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.ElectronicDocument> ElectronicDocuments { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> ElectronicDocumentVersions { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission> ElectronicDocumentTransmissions { get; }
+
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.
     DbSet<Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions { get; }
