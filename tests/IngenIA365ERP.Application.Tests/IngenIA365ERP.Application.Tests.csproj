@@ -44,5 +44,7 @@
     <!-- Para probar la forma del documento de auditoria (AuditDocumentSchema) sin
          levantar MongoDB: es una funcion pura BsonDocument <-> AuditLogEntry. -->
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.Audit\IngenIA365ERP.Audit.csproj" />
+    <!-- Feature 012, I4 (T683, T684): la batería de conformidad del canal, CanalSimulado, las credenciales en archivo y el circuito. -->
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.ElectronicInvoicing\IngenIA365ERP.ElectronicInvoicing.csproj" />
   </ItemGroup>
 </Project>

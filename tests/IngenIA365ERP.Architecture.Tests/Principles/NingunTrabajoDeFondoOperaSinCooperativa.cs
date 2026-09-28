@@ -30,6 +30,8 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         Path.Combine("src", "Presentation", "IngenIA365ERP.API", "Integration", "DespachadorDeMensajes.cs"),
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.Audit", "Services", "AuditOutboxForwarder.cs"),
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.Storage", "Services", "NotificationEmailDispatcher.cs"),
+        // Feature 012, I4 (T731): el procesador de documentos electrónicos (lo mínimo para que la regla lo reconozca; T672 amplía la prueba).
+        Path.Combine("src", "Infrastructure", "IngenIA365ERP.ElectronicInvoicing", "Processor", "ProcesadorDeDocumentosElectronicos.cs"),
     ];
 
     /// <summary>
