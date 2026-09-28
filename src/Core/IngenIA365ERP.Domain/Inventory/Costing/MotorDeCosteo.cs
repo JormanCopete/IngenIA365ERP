@@ -19,7 +19,7 @@ namespace IngenIA365ERP.Domain.Inventory.Costing;
 ///
 /// <para>
 /// Los documentos con fecha anterior a movimientos ya registrados los valora <see cref="Retroactivo"/> sobre este
-/// mismo motor. PEPS (<see cref="CostMethod.Fifo"/>) llega en I5.
+/// mismo motor; los costos adicionales, <see cref="Costing.Prorrateo"/> (I5). PEPS (<see cref="CostMethod.Fifo"/>) llega en I5.
 /// </para>
 /// </summary>
 public static class MotorDeCosteo
@@ -49,4 +49,12 @@ public static class MotorDeCosteo
     /// </summary>
     public static ResultadoDeCosteo DiferenciaDePrecio(EstadoDeCosto estado, PedidoDeDiferenciaDePrecio pedido, RedondeoDeMontos montos) =>
         Costing.DiferenciaDePrecio.Aplicar(estado, pedido, montos);
+
+    /// <summary>
+    /// El ajuste de costo <c>LandedCost</c> de un documento de costos adicionales sobre la entrada de una línea de recepción (US13,
+    /// T780; FR-046): la porción que le tocó en <see cref="Costing.Prorrateo"/>, partida en existencia y vendido, con
+    /// <c>AffectsEntryId</c> de esa entrada.
+    /// </summary>
+    public static ResultadoDeCosteo CostoAdicional(EstadoDeCosto estado, ReferenciaDeKardex entrada, RepartoDeLinea reparto) =>
+        Costing.Prorrateo.AlKardex(estado, entrada, reparto);
 }

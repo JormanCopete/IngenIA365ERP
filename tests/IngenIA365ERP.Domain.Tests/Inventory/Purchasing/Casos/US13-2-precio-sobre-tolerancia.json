@@ -1,0 +1,56 @@
+{
+  "nombre": "US13-2: precio facturado 2 % mayor con tolerancia de 1 %",
+  "descripcion": "Orden a $1.000; se recibieron 98 y se facturan 98 a $1.020. PriceDifferenceRate = (1.020 - 1.000) / 1.000 = 0,02 > 0,01; la tolerancia en pesos por unidad es 1.000 × 0,01 = $10 y la diferencia es $20: queda retenida por precio y se puede aprobar. PriceDifferenceAmount = 20 × 98 = $1.960. La segunda línea es la prueba independiente de la historia: factura por 100 a $1.020 → retenida por cantidad y por precio.",
+  "tolerancias": {
+    "cantidadPorcentaje": 0,
+    "cantidadValor": 0,
+    "precioPorcentaje": 0.01,
+    "precioValor": 0,
+    "regla": "AmbasCondiciones"
+  },
+  "lineas": [
+    {
+      "id": "L1",
+      "ordenado": 100,
+      "recibidoNoFacturado": 98,
+      "facturado": 98,
+      "precioOrdenado": 1000,
+      "costoRecibido": 1000,
+      "precioFacturado": 1020,
+      "esperado": {
+        "quantityDifference": 0,
+        "priceDifferenceAmount": 1960,
+        "priceDifferenceRate": 0.02,
+        "exceedsTolerance": true,
+        "razones": [ "Price" ],
+        "reasons": "Price",
+        "status": "Held",
+        "aprobable": true,
+        "facturaSobreLoRecibido": false,
+        "toleranciaDePrecio": 10,
+        "toleranceJson": "{\"Compras.ToleranciaCantidadPorcentaje\":0,\"Compras.ToleranciaCantidadValor\":0,\"Compras.ToleranciaPrecioPorcentaje\":0.01,\"Compras.ToleranciaPrecioValor\":0,\"Compras.ReglaDeTolerancia\":\"AmbasCondiciones\"}",
+        "explicacion": [ "Precio de referencia (orden): 1000", "Precio facturado: 1020", "Tolerancia de precio por unidad: 10" ]
+      }
+    },
+    {
+      "id": "L2",
+      "ordenado": 100,
+      "recibidoNoFacturado": 98,
+      "facturado": 100,
+      "precioOrdenado": 1000,
+      "costoRecibido": 1000,
+      "precioFacturado": 1020,
+      "esperado": {
+        "quantityDifference": 2,
+        "priceDifferenceAmount": 2000,
+        "priceDifferenceRate": 0.02,
+        "exceedsTolerance": true,
+        "razones": [ "Quantity", "Price" ],
+        "reasons": "Quantity,Price",
+        "status": "Held",
+        "aprobable": false,
+        "facturaSobreLoRecibido": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "nombre": "Compras.ReglaDeTolerancia = AmbasCondiciones: la diferencia tiene que caber en el porcentaje Y en el valor",
+  "descripcion": "Tolerancia de precio 1 % y $15 por unidad sobre un precio de orden de $1.000: el porcentaje permite $10 y el valor $15; con AmbasCondiciones manda la más estricta, $10. $1.008 (diferencia 8) entra; $1.012 (diferencia 12) cabe en el valor pero no en el porcentaje y queda retenida. Una factura más barata que la orden también es diferencia: $985 (15 menos) queda retenida.",
+  "tolerancias": {
+    "cantidadPorcentaje": 0,
+    "cantidadValor": 0,
+    "precioPorcentaje": 0.01,
+    "precioValor": 15,
+    "regla": "AmbasCondiciones"
+  },
+  "lineas": [
+    {
+      "id": "DENTRO",
+      "ordenado": 10, "recibidoNoFacturado": 10, "facturado": 10,
+      "precioOrdenado": 1000, "costoRecibido": 1000, "precioFacturado": 1008,
+      "esperado": {
+        "quantityDifference": 0, "priceDifferenceAmount": 80, "priceDifferenceRate": 0.008,
+        "exceedsTolerance": false, "razones": [], "reasons": null, "status": null, "aprobable": true,
+        "facturaSobreLoRecibido": false, "toleranciaDePrecio": 10
+      }
+    },
+    {
+      "id": "FUERA",
+      "ordenado": 10, "recibidoNoFacturado": 10, "facturado": 10,
+      "precioOrdenado": 1000, "costoRecibido": 1000, "precioFacturado": 1012,
+      "esperado": {
+        "quantityDifference": 0, "priceDifferenceAmount": 120, "priceDifferenceRate": 0.012,
+        "exceedsTolerance": true, "razones": [ "Price" ], "reasons": "Price", "status": "Held", "aprobable": true,
+        "facturaSobreLoRecibido": false, "toleranciaDePrecio": 10,
+        "toleranceJson": "{\"Compras.ToleranciaCantidadPorcentaje\":0,\"Compras.ToleranciaCantidadValor\":0,\"Compras.ToleranciaPrecioPorcentaje\":0.01,\"Compras.ToleranciaPrecioValor\":15,\"Compras.ReglaDeTolerancia\":\"AmbasCondiciones\"}"
+      }
+    },
+    {
+      "id": "MAS-BARATA",
+      "ordenado": 10, "recibidoNoFacturado": 10, "facturado": 10,
+      "precioOrdenado": 1000, "costoRecibido": 1000, "precioFacturado": 985,
+      "esperado": {
+        "quantityDifference": 0, "priceDifferenceAmount": -150, "priceDifferenceRate": -0.015,
+        "exceedsTolerance": true, "razones": [ "Price" ], "reasons": "Price", "status": "Held", "aprobable": true,
+        "facturaSobreLoRecibido": false, "toleranciaDePrecio": 10
+      }
+    }
+  ]
+}

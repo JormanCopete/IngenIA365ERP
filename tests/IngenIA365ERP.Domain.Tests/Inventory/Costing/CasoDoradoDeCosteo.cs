@@ -76,6 +76,10 @@ public sealed class CasoDoradoDeCosteo
         public bool? SaleDelInventario { get; set; }
         public UnidadJson? Unidad { get; set; }
         public CompraJson? Compra { get; set; }
+
+        /// <summary>I5 (T768): costos adicionales repartidos sobre una entrada ya registrada; el movimiento no mueve cantidad.</summary>
+        public CostoAdicionalJson? CostoAdicional { get; set; }
+
         public EsperadoJson Esperado { get; set; } = new();
 
         public string DocumentoOId => Documento ?? Id;
@@ -104,6 +108,18 @@ public sealed class CasoDoradoDeCosteo
         public bool CooperativaResponsableIva { get; set; } = true;
         public bool TipoIvaNoDescontable { get; set; }
         public VatSaleTreatment TratamientoDeVenta { get; set; } = VatSaleTreatment.Taxed;
+    }
+
+    /// <summary>
+    /// Un costo adicional (flete, seguro) sobre la entrada <see cref="Entrada"/> (su línea, «C1»): se reparte con
+    /// <see cref="Prorrateo"/> (una sola línea: todo a ella) con la existencia del ámbito en ese momento, y entra al kardex por
+    /// <see cref="MotorDeCosteo.CostoAdicional"/>.
+    /// </summary>
+    public sealed class CostoAdicionalJson
+    {
+        public decimal Monto { get; set; }
+        public string Entrada { get; set; } = string.Empty;
+        public LandedCostAllocationMethod Metodo { get; set; } = LandedCostAllocationMethod.Value;
     }
 
     public sealed class ImpuestoJson

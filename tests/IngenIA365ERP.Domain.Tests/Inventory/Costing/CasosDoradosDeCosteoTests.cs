@@ -26,6 +26,13 @@ public class CasosDoradosDeCosteoTests
             nombres.Should().Contain(n => n!.StartsWith(prefijo, StringComparison.Ordinal), $"falta el caso {prefijo}* de I1 (research R10)");
     }
 
+    [Fact]
+    public void Esta_el_caso_10_de_I5()
+    {
+        CasoDoradoDeCosteo.Archivos().Select(Path.GetFileName).Should()
+            .Contain("10-prorrateo-con-parte-vendida.json", "falta el caso 10 «prorrateo con parte vendida» (T768, research R10)");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_motor_coincide_al_peso_con_el_calculo_manual(string archivo)
@@ -58,7 +65,8 @@ public class CasosDoradosDeCosteoTests
                 var cantidad = CantidadBase(m);
                 var movimiento = Movimiento(m, cantidad, estado);
 
-                if (m.Retroactivo) Retroactivo_(m, ambito, estado, movimiento);
+                if (m.CostoAdicional is { } costo) CostoAdicional(m, costo, ambito, estado);
+                else if (m.Retroactivo) Retroactivo_(m, ambito, estado, movimiento);
                 else Normal(m, ambito, estado, movimiento);
             }
 
@@ -141,6 +149,32 @@ public class CasosDoradosDeCosteoTests
             }
             rechazo.Should().BeNull($"el movimiento no debía rechazarse: {rechazo?.Mensaje}");
             return rechazo is not null;
+        }
+
+        /// <summary>
+        /// I5 (T768): el costo adicional se reparte sobre la entrada con <see cref="Prorrateo"/> —una sola línea, con la existencia
+        /// del ámbito para la regla D5— y entra al kardex por <see cref="MotorDeCosteo.CostoAdicional"/>. No mueve cantidad ni
+        /// entra a la historia del ámbito (sus líneas afectan la entrada, no son un movimiento propio).
+        /// </summary>
+        private void CostoAdicional(CasoDoradoDeCosteo.MovimientoJson m, CasoDoradoDeCosteo.CostoAdicionalJson costo, string ambito, EstadoDeCosto estado)
+        {
+            var entrada = Linea(costo.Entrada);
+            var reparto = Prorrateo.Repartir(new PedidoDeProrrateo(costo.Monto, costo.Metodo,
+                [new LineaAProrratear(1, 1, entrada.QuantityBase, entrada.TotalCost, null, null, costo.Metodo == LandedCostAllocationMethod.Manual ? costo.Monto : null, estado.Quantity)],
+                _parametros.Montos, ResiduoDeRedondeo.MayorValor));
+            if (Rechazado(m, reparto.Rechazo is { } r ? new RechazoDeCosteo(r.Codigo, r.Mensaje, 0m, costo.Monto) : null)) return;
+
+            var resultado = MotorDeCosteo.CostoAdicional(estado, ReferenciaDeKardex.A(entrada.Id!.Value), reparto.Lineas.Single());
+            Registrar(m, ambito, resultado.Lineas);
+            _estados[ambito] = resultado.Estado;
+
+            CompararLineas(m.Esperado.Lineas, resultado.Lineas, "línea");
+            if (m.Esperado.AjustesPorDocumento.Count > 0)
+                new[] { (Doc: Nombre(ReferenciaDeKardex.A(entrada.Id!.Value)), EnExistencia: Prorrateo.EnExistencia(resultado), Vendida: Prorrateo.Vendida(resultado)) }
+                    .Should().BeEquivalentTo(m.Esperado.AjustesPorDocumento.Select(d => (Doc: d.Documento, d.EnExistencia, d.Vendida)),
+                        "un AjusteDeCostoReconocido por recepción afectada, separado en existencia y vendido");
+            CompararEstado(m.Esperado.Estado, resultado.Estado);
+            CompararExplicacion(m.Esperado.Explicacion, resultado.Explicacion.Agregar(reparto.Explicacion));
         }
 
         private decimal CantidadBase(CasoDoradoDeCosteo.MovimientoJson m)

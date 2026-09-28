@@ -171,3 +171,17 @@ public enum SupplierInvoiceEventCode { Receipt030 = 30, GoodsReceived032 = 32 }
 
 public enum SupplierInvoiceEventStatus { Pending = 0, RegisteredExternally = 1, Emitted = 2, Rejected = 3, NotApplicable = 4 }
 
+
+// ------------------------------------------------------------------------------ compras de I5 --
+
+/// <summary>
+/// Estado de una línea del cruce a tres vías que excede la tolerancia (<c>INV_PurchaseMatchLines.Status</c>; I5, T776; api.md
+/// §14.9 y §17.1; data-model §9.6). Nulo en la fila si la línea no excede.
+/// </summary>
+public enum PurchaseMatchStatus { Held = 1, Approved = 2, Rejected = 3 }
+
+/// <summary>
+/// Cómo se reparten los costos adicionales entre lo recibido (<c>INV_LandedCostAllocations.AllocationMethod</c>; I5, T776;
+/// api.md §14.9 y §17.1; data-model §9.7): por valor, cantidad, peso, volumen o a mano.
+/// </summary>
+public enum LandedCostAllocationMethod { Value = 1, Quantity = 2, Weight = 3, Volume = 4, Manual = 5 }

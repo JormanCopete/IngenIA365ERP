@@ -224,6 +224,8 @@ public class ClasesDeDocumentoTests
         [
             DocumentClass.PurchaseReceipt, DocumentClass.SupplierInvoice, DocumentClass.SupplierNote, DocumentClass.SupportDocument,
             DocumentClass.SupportDocumentAdjustmentNote, DocumentClass.SupplierReturn,
+            // I5 (T781): los costos adicionales viajan con su compra (FR-075).
+            DocumentClass.LandedCost,
         ]);
         Todas.Where(d => d.Chain == PostingChain.Sales).Select(d => d.Class).Should().BeEquivalentTo(
         [
@@ -233,6 +235,31 @@ public class ClasesDeDocumentoTests
         ]);
         Todas.Where(d => d.Chain == PostingChain.Transfers).Select(d => d.Class).Should().BeEquivalentTo(
             [DocumentClass.TransferDispatch, DocumentClass.TransferReceipt]);
+    }
+
+    [Fact]
+    public void Las_clases_de_compras_de_I5_segun_FR_036()
+    {
+        foreach (var clase in new[] { DocumentClass.PurchaseRequest, DocumentClass.PurchaseOrder })
+        {
+            var d = De(clase);
+            d.Group.Should().Be(DocumentClassGroup.Purchases, $"{clase} es de compras");
+            d.Effect.Should().Be(InventoryEffect.None, $"{clase} no mueve inventario");
+            d.IsFiscal.Should().BeFalse($"{clase} no es fiscal");
+            d.Messages.Should().BeEmpty($"{clase} no emite mensajes");
+            d.Chain.Should().Be(PostingChain.None, $"{clase} no tiene cadena de modo de paso");
+            d.AvailableFrom.Should().Be(EntregaDelComercio.I5);
+            d.ManualCreation.Should().BeTrue();
+        }
+
+        var costos = De(DocumentClass.LandedCost);
+        costos.Group.Should().Be(DocumentClassGroup.Purchases);
+        costos.Effect.Should().Be(InventoryEffect.CostOnly, "sólo costo");
+        costos.IsFiscal.Should().BeFalse();
+        costos.Messages.Should().Equal([AjusteDeCostoReconocido], "un AjusteDeCostoReconocido por documento afectado");
+        costos.Chain.Should().Be(PostingChain.Purchases, "viaja con la cadena de su compra (FR-075, T781)");
+        costos.Warehouses.Should().Be(AdmittedWarehouses.None, "reparte entre recepciones de cualquier bodega");
+        costos.AvailableFrom.Should().Be(EntregaDelComercio.I5);
     }
 
     [Fact]

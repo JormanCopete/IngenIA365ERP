@@ -441,6 +441,8 @@ de `data-model.md`; ninguna columna de enum es `tinyint`). La FK a la unidad de 
 - `SupplierInvoiceEventCode` { Receipt030=30, GoodsReceived032=32 } · `SupplierInvoiceEventStatus`
   { Pending=0, RegisteredExternally=1, Emitted=2, Rejected=3, NotApplicable=4 }
 - `PurchaseMatchStatus` { Held=1, Approved=2, Rejected=3 } (I5, nuevo; data-model §9.6; lo agrega US13, T776)
+- `LandedCostAllocationMethod` { Value=1, Quantity=2, Weight=3, Volume=4, Manual=5 } (I5, nuevo; data-model §9.7, api.md §17.1; lo
+  agrega US13, T776; se guarda por fila en `INV_LandedCostAllocations.AllocationMethod`)
 - `CreditOrigin` { ProvisionalCredit=1, LendingNoResponse=2, Validated=3 } · `PromotionScopeKind` { Product=1,
   Category=2, Segment=3, Channel=4 } · `DayCloseStatus` { Closed=1, Reopened=2 } **(nuevos en §2.5; data-model §26;
   creados en T025)**
@@ -1899,6 +1901,25 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     rango») porque la guardia bloquea antes que el `NumeradorFiscal` (que diría `.Resolution.Exhausted`); la confirmación de oficina
     responde `ConfirmationResultDto` (sin el bloque `electronic` de `SalesConfirmationDto`: se lee de `GET /sales/documents/{id}`); el
     borrador de reemplazo del caso b copia las líneas y no los pagos (los pone quien lo edita). Pruebas: ver §2.18.
+- **I5, dominio de compras (T776–T782, pruebas T766–T768; 2026-09-28) (nuevo)**: enums `PurchaseMatchStatus` y
+    `LandedCostAllocationMethod` (§2.5); entidades `PurchaseMatchLine` (`Registrar`, `AsignarSolicitud`, `Aprobar`, `Rechazar`,
+    `EstaRetenida`, `Aprobable`; `Status` y `ApprovalRequestPublicId` sólo por sus métodos) y `LandedCostAllocation` (`Desde`,
+    `VerificarSuma`; `AllocationMethod` por fila) en `Domain/Entities/Inventory/Purchasing`; el motor puro
+    `Domain/Inventory/Purchasing/CruceDeCompra` con `ReglaDeTolerancia { AmbasCondiciones = 1, CualquieraDeLas = 2 }` (no se guarda:
+    es el valor de `Compras.ReglaDeTolerancia`), `ToleranciasDelCruce` (`Ninguna`, `ComoJson()` = el `ToleranceJson` con las cinco
+    claves del parámetro), `LineaAlCruce`, `ResultadoDelCruce` (`Razones`, `Reasons`, `Status`, `Aprobable`, `FacturaSobreLoRecibido`,
+    `ToleranciaDePrecio`), `PedidoDeRecepcionContraOrden`, `ResultadoDeRecepcionContraOrden`, `CruceDeCompra.{Cruzar, Recepcion,
+    ToleranciaPermitida, ReglaDesde, RazonCantidad = "Quantity", RazonPrecio = "Price", CodigoRecibidoDeMas,
+    CodigoCantidadNoAprobable}`; el reparto puro `Domain/Inventory/Costing/Prorrateo` (`LineaAProrratear`, `PedidoDeProrrateo`,
+    `RepartoDeLinea`, `RechazoDeProrrateo`, `ResultadoDeProrrateo`, `Prorrateo.{Repartir, AlKardex, EnExistencia, Vendida,
+    CodigoBaseFaltante, CodigoManualNoCuadra}`) y `MotorDeCosteo.CostoAdicional` (dos líneas `CostAdjustment` `LandedCost` con
+    `AffectsEntryId`, en el molde de `DiferenciaDePrecio`: lo asignado completo con porción `EnExistencia` y lo vendido con signo
+    contrario y porción `Vendida`; Σ = lo que queda en el ámbito). `ClasesDeDocumento`: `LandedCost` pasa a la cadena `Purchases`
+    (T781); `PurchaseRequest` y `PurchaseOrder` ya estaban como pide FR-036. `CatalogoDeParametros.EntregaVigente` **sigue en I4**: la
+    sube quien cierre I5 con sus e2e (precedente de I4), porque subirla ahora habilita `Costeo.Metodo = Peps` sin el motor PEPS.
+    Configuraciones EF `PurchaseMatchLineConfiguration` y `LandedCostAllocationConfiguration` adelantadas de T783–T784 (lo exige
+    `LasCantidadesYCostosTienenSuPrecision`); `Basis` usa el alias `Factor` (18,6). Sin DbSet ni migración: los pone la sección de
+    persistencia con el par `ComprasYCosteoAvanzado` (T835).
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -1964,6 +1985,9 @@ activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, 
 `Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
 entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US11) → `Inventory.Count.AlreadyOpen` (nuevo, T392: abrir o editar un conteo con foto) y
 `Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina); pagos → `Payments.AmountInvalid` (nuevo, T579: un pago con valor cero o negativo; `ValidadorDePagos`), y `last4` que no son cuatro dígitos responde `Payments.ReferenceInvalid` con `data.field = "last4"`.
+
+Cruce a tres vías (I5, T796; **(nuevo)**): `Inventory.PurchaseMatch.QuantityNotApprovable` (aprobar por excepción una línea retenida
+por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción).
 
 Cierre de las e2e de I4 (T685–T687; **(nuevo)**): `Inventory.DocumentType.ContingencyNotByResolution` (`data.class`: un tipo de contingencia en una clase que no numera por resolución DIAN).
 
@@ -2701,6 +2725,20 @@ estados, enlazado por `ElectronicDocumentPublicId`, por una sola ruta de compras
 /api/inventory/purchases/supplier-invoices/{id}/radian-events/emit` (`{ eventCodes }`, 202; errores
 `Inventory.RadianEvent.OutOfOrder`, `.ReceiptNotConfirmed`, `.DateInvalid`). No se crea tabla de eventos
 en `COR_`.
+
+**T42a · Cruce a tres vías: tolerancias y factura sobre lo recibido (I5, T779, T782, T796; 2026-09-28; a revisar por el dueño).**
+Dos huecos de la spec que el dominio tuvo que cerrar:
+- *La regla de tolerancia* (`Compras.ReglaDeTolerancia`, pregunta E5): una tolerancia en cero **no participa**; con
+  `AmbasCondiciones` la permitida es la **menor** de las configuradas (porcentaje × referencia, valor), con `CualquieraDeLas` la
+  **mayor**, y sin ninguna es cero (el defecto: toda diferencia retiene). Sin esto, `AmbasCondiciones` con sólo el porcentaje
+  configurado no toleraría nada. La tolerancia de **precio** se mide por unidad contra el precio de la orden (sin él, el costo de la
+  recepción) y en valor absoluto: una factura más barata que la orden también retiene. La de **cantidad** se aplica a la recepción
+  contra la orden (Σ recibido ≤ ordenado + tolerancia, FR-049), no a la factura.
+- *Factura por encima de lo recibido con orden* (US13-1 frente a api.md §14.4 y data-model §9.6): se adopta la propuesta de T796.
+  Con orden, la línea se guarda `Held` con razón `Quantity` y esa razón **no se aprueba** (`Inventory.PurchaseMatch.QuantityNotApprovable`,
+  nuevo): sale rechazando o con otra recepción. Sin orden sigue el 422 `Inventory.Purchase.InvoiceExceedsReceived` de I1. Es lo que
+  mejor concilia la spec («queda retenida por cantidad») con data-model («nunca se aprueba por tolerancia»).
+- `Reasons` lista los motivos por los que la línea **se retiene**; una diferencia dentro de la tolerancia (o sin orden) no lleva razón.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

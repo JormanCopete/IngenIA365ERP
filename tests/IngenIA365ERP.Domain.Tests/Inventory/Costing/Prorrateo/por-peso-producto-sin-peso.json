@@ -1,0 +1,18 @@
+{
+  "nombre": "Por peso con productos sin peso: BasisMissing con la lista de productos",
+  "descripcion": "Los productos 11 y 12 no tienen peso (nulo o cero): el reparto por peso no se puede hacer y se rechaza nombrándolos, sin repartir nada.",
+  "monto": 1000,
+  "metodo": "Weight",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "lineas": [
+    { "linea": 1, "producto": 10, "cantidad": 10, "valor": 1000, "peso": 2, "existencia": 10 },
+    { "linea": 2, "producto": 11, "cantidad": 5, "valor": 1000, "existencia": 5 },
+    { "linea": 3, "producto": 12, "cantidad": 5, "valor": 1000, "peso": 0, "existencia": 5 }
+  ],
+  "esperado": {
+    "rechazo": "Inventory.LandedCost.BasisMissing",
+    "productos": [ 11, 12 ],
+    "lineas": []
+  }
+}

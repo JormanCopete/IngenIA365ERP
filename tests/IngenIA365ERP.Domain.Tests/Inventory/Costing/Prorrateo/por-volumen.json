@@ -1,0 +1,19 @@
+{
+  "nombre": "Por volumen: la base es cantidad recibida × volumen unitario del producto",
+  "descripcion": "Línea 1: 4 unidades × 0,25 l = 1 l; línea 2: 2 unidades × 1,5 l = 3 l; total 4 l. $800 × 1 / 4 = 200 y $800 × 3 / 4 = 600.",
+  "monto": 800,
+  "metodo": "Volume",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "lineas": [
+    { "linea": 1, "producto": 10, "cantidad": 4, "valor": 1000, "volumen": 0.25, "existencia": 4 },
+    { "linea": 2, "producto": 11, "cantidad": 2, "valor": 1000, "volumen": 1.5, "existencia": 2 }
+  ],
+  "esperado": {
+    "roundingResidue": 0,
+    "lineas": [
+      { "linea": 1, "basis": 1, "allocated": 200, "residue": 0, "existingRatio": 1, "existing": 200, "sold": 0 },
+      { "linea": 2, "basis": 3, "allocated": 600, "residue": 0, "existingRatio": 1, "existing": 600, "sold": 0 }
+    ]
+  }
+}
