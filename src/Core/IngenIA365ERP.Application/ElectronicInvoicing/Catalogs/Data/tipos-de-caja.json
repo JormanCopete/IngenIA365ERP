@@ -1,0 +1,12 @@
+{
+  "catalogo": "tiposDeCaja",
+  "versiones": [
+    {
+      "vigenteDesde": "2024-01-01",
+      "fuente": "DIAN, Anexo técnico del documento equivalente electrónico v1.0 (Res. 165/2023, compilada en la Res. Única 000227 de 2025): datos de la caja del documento equivalente POS",
+      "porCotejar": true,
+      "notas": "Por cotejar con el anexo del DEE y el proveedor elegido (contracts/dian.md §1): la tabla de tipos de caja. Mientras la lista esté vacía, la caja lleva el código que digitó la cooperativa y el canónico no lo valida contra ella.",
+      "codigos": []
+    }
+  ]
+}

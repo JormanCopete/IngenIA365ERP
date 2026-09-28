@@ -1,0 +1,25 @@
+{
+  "catalogo": "responsabilidades",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tabla de responsabilidades fiscales (casilla 53 del RUT)",
+      "porCotejar": false,
+      "notas": "Las marcas tributarias de la persona (decisiones-transversales T24) se traducen por «marcas»; sin ninguna, «sinResponsabilidad».",
+      "codigos": [
+        { "codigo": "O-13", "nombre": "Gran contribuyente" },
+        { "codigo": "O-15", "nombre": "Autorretenedor" },
+        { "codigo": "O-23", "nombre": "Agente de retención IVA" },
+        { "codigo": "O-47", "nombre": "Régimen simple de tributación" },
+        { "codigo": "R-99-PN", "nombre": "No aplica – Otros" }
+      ],
+      "marcas": {
+        "IsLargeContributor": "O-13",
+        "IsSelfWithholder": "O-15",
+        "IsVatWithholdingAgent": "O-23",
+        "IsSimpleTaxRegime": "O-47"
+      },
+      "sinResponsabilidad": "R-99-PN"
+    }
+  ]
+}

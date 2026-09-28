@@ -264,6 +264,10 @@ public static class DependencyInjection
         // notas, las estrategias de las clases de venta (su anulación no tiene estrategia propia: AnulacionDeVenta), la alerta de venta
         // bajo costo después del guardado y el retiro gravado.
         services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
+        // Feature 012, I4 (T701-T704): el único constructor del canónico y la fuente de Inventario (la plataforma no lee INV_; varias
+        // fuentes pueden convivir y se eligen por SourceModule).
+        services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
+        services.AddScoped<ElectronicInvoicing.Canonical.IFuenteDeDocumentoElectronico, Inventory.Integration.FuenteDeEmisionDeInventario>();
         services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
         services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
         // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,
