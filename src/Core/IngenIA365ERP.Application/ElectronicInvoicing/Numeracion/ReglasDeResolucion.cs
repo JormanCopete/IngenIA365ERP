@@ -67,6 +67,8 @@ public static partial class ReglasDeResolucion
         ElectronicDocumentKind.PosAdjustmentNote => "nota de ajuste del documento equivalente",
         ElectronicDocumentKind.SupportDocument => "documento soporte",
         ElectronicDocumentKind.SupportDocumentAdjustmentNote => "nota de ajuste del documento soporte",
+        ElectronicDocumentKind.RadianEvent030 => "acuse de recibo (030)",
+        ElectronicDocumentKind.RadianEvent032 => "recibo del bien (032)",
         _ => tipo.ToString(),
     };
 

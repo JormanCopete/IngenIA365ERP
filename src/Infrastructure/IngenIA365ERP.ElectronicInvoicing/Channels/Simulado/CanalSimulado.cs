@@ -61,6 +61,8 @@ public sealed class CanalSimulado(IOptions<ElectronicInvoicingOptions> opciones,
         {
             ElectronicDocumentKind.Invoice, ElectronicDocumentKind.CreditNote, ElectronicDocumentKind.DebitNote, ElectronicDocumentKind.PosEquivalent,
             ElectronicDocumentKind.PosAdjustmentNote, ElectronicDocumentKind.SupportDocument, ElectronicDocumentKind.SupportDocumentAdjustmentNote,
+            // I5 (T806): el acuse de recibo y el recibo del bien de una factura del proveedor.
+            ElectronicDocumentKind.RadianEvent030, ElectronicDocumentKind.RadianEvent032,
         },
         AceptaNumeroDelErp: true,
         ContingenciaDelFacturador: true,
@@ -207,23 +209,85 @@ public sealed class CanalSimulado(IOptions<ElectronicInvoicingOptions> opciones,
 
     // ---------------------------------------------------------------------------------------------------- otras --
 
+    /// <summary>
+    /// Los eventos RADIAN 030 y 032 (I5, T806; contracts/dian.md §3.4 y §14.3). Decide por el último dígito de la identificación del
+    /// <b>proveedor</b> de la factura referida, con la misma tabla: 1 <c>Rejected</c> la versión 1 (el reintento, versión 2, se valida);
+    /// 3 <c>InProcess</c> (la primera consulta no lo encuentra y el reenvío se valida); 5 <c>ChannelUnavailable</c> (no responde); cualquier
+    /// otro <c>Validated</c> con CUDE simulado y la respuesta de validación. Recuerda lo recibido por número, así la consulta y el «ya existe»
+    /// responden lo mismo que la emisión.
+    /// </summary>
     public async Task<ResultadoDeCanal> EmitirEventoAsync(EventoRadianCanonico evento, ContextoDeCanal contexto, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(evento);
         ArgumentNullException.ThrowIfNull(contexto);
         var cronometro = Stopwatch.StartNew();
         await EsperarAsync(ct);
-        if (contexto.Environment != DianEnvironment.Testing)
+        if (evento.Environment != DianEnvironment.Testing || contexto.Environment != DianEnvironment.Testing)
             return Invalido(ReglaDeAmbiente, "SIMULADO: el canal simulado sólo admite el ambiente de pruebas.",
                 "El canal simulado no emite en producción.", cronometro);
+        if (!Capacidades.Emite(evento.Kind))
+            return Invalido(ReglaDeTipo, $"SIMULADO: el canal no emite eventos {evento.Kind}.", $"El canal simulado no emite {evento.Kind}.", cronometro);
 
-        var codigo = Hex(SHA384.HashData(Encoding.UTF8.GetBytes(
-            $"{Marca}|{contexto.TenantPublicId:N}|{evento.Environment}|{evento.EventCode}|{evento.Number.Full}|{evento.ReferencedInvoice.Number}")));
-        var respuesta = new ArtefactoDelCanal(TipoDeArtefacto.ApplicationResponse, $"{evento.Number.Full}-evento-{Marca}.xml", "application/xml",
-            Xml("ApplicationResponse", evento.Number.Full, codigo, "Evento RADIAN " + evento.EventCode));
-        return new ResultadoDeCanal(ChannelOutcome.Validated, codigo, "CUDE", null, _reloj.GetUtcNow(), evento.DianDocumentTypeCode, [],
-            [respuesta], Referencia(), "SIM-00", "00", cronometro.ElapsedMilliseconds);
+        var digito = UltimoDigito(evento.Supplier.TaxId);
+        if (digito == 5)
+        {
+            memoria.AnotarCaida(contexto.TenantPublicId, _reloj.GetUtcNow());
+            return ResultadoDeCanal.Sin(ChannelOutcome.ChannelUnavailable, cronometro.ElapsedMilliseconds,
+                new MensajeDelCanal("SIM-CONEXION", TipoDeMensajeDelCanal.Rechazo, "SIMULADO: no se pudo conectar con el canal.",
+                    "No hubo conexión con el canal; se reintenta."));
+        }
+
+        var version = Version(contexto.IdempotencyKey);
+        var registro = memoria.Obtener(contexto.TenantPublicId, evento.Environment, evento.Number.Full);
+        lock (registro.Candado)
+        {
+            registro.Recepciones++;
+            switch (registro.Estado)
+            {
+                case EstadoSimulado.Validado or EstadoSimulado.ValidadoConNotificaciones:
+                    return Resultado(registro, cronometro);
+                case EstadoSimulado.Rechazado when version <= registro.VersionRechazada:
+                    return Resultado(registro, cronometro);
+            }
+
+            if (digito == 3 && !registro.YaQuedoAmbiguo)
+            {
+                registro.YaQuedoAmbiguo = true;
+                registro.Estado = EstadoSimulado.Ambiguo;
+                return ResultadoDeCanal.Sin(ChannelOutcome.InProcess, cronometro.ElapsedMilliseconds,
+                    new MensajeDelCanal("SIM-TIEMPO", TipoDeMensajeDelCanal.Notificacion, "SIMULADO: se agotó el tiempo esperando la respuesta.",
+                        "El canal no respondió a tiempo; se consulta antes de reenviar."));
+            }
+
+            registro.TipoDeCodigo = "CUDE";
+            registro.TipoDian = evento.DianDocumentTypeCode;
+            registro.ReferenciaExterna ??= Referencia();
+            if (digito == 1 && version <= 1)
+            {
+                registro.Estado = EstadoSimulado.Rechazado;
+                registro.VersionRechazada = version;
+                registro.CodigoUnico = null;
+                registro.Artefactos = [ArtefactoDelEvento(evento, null)];
+                registro.Mensajes = [new MensajeDelCanal(ReglaDeRechazo, TipoDeMensajeDelCanal.Rechazo,
+                    "SIMULADO: la factura referida no está registrada en RADIAN (regla de ejemplo).",
+                    "La DIAN rechazó el evento: la factura del proveedor no aparece en RADIAN. Verifique el CUFE y vuelva a emitirlo.")];
+                return Resultado(registro, cronometro);
+            }
+
+            var codigo = Hex(SHA384.HashData(Encoding.UTF8.GetBytes(
+                $"{Marca}|{contexto.TenantPublicId:N}|{evento.Environment}|{evento.EventCode}|{evento.Number.Full}|v{version}|{evento.ReferencedInvoice.UniqueCode}")));
+            registro.Estado = EstadoSimulado.Validado;
+            registro.CodigoUnico = codigo;
+            registro.ValidadoEn = _reloj.GetUtcNow();
+            registro.Artefactos = [ArtefactoDelEvento(evento, codigo)];
+            registro.Mensajes = [];
+            return Resultado(registro, cronometro);
+        }
     }
+
+    private static ArtefactoDelCanal ArtefactoDelEvento(EventoRadianCanonico evento, string? codigo) =>
+        new(TipoDeArtefacto.ApplicationResponse, $"{evento.Number.Full}-evento-{Marca}.xml", "application/xml",
+            Xml("ApplicationResponse", evento.Number.Full, codigo, "Evento RADIAN " + evento.EventCode));
 
     public async Task<ResultadoDeCanal> ProbarAsync(ContextoDeCanal contexto, CancellationToken ct)
     {

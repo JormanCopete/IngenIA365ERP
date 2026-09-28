@@ -128,7 +128,9 @@ public sealed class CatalogoDian
             ContingencyType.Issuer03 when !string.IsNullOrWhiteSpace(entrada.CodigoContingenciaFacturador) => entrada.CodigoContingenciaFacturador!,
             _ => entrada.Codigo,
         };
-        return new TipoDeDocumentoDian(tipo, codigo, entrada.TipoDeOperacion, entrada.CodigoUnico, entrada.PorCotejar);
+        return new TipoDeDocumentoDian(tipo, codigo, entrada.TipoDeOperacion, entrada.CodigoUnico, entrada.PorCotejar,
+            string.IsNullOrWhiteSpace(entrada.CodigoDeEvento) ? null : entrada.CodigoDeEvento,
+            string.IsNullOrWhiteSpace(entrada.PrefijoDeEvento) ? null : entrada.PrefijoDeEvento);
     }
 
     /// <summary>Los tipos de operación que aplican a <paramref name="tipo"/>. (nuevo)</summary>
@@ -337,6 +339,8 @@ public sealed class CatalogoDian
         public string TipoDeOperacion { get; set; } = string.Empty;
         public UniqueCodeKind CodigoUnico { get; set; }
         public bool PorCotejar { get; set; }
+        public string? CodigoDeEvento { get; set; }
+        public string? PrefijoDeEvento { get; set; }
     }
 
     private enum ClaseDeFormaDePago
@@ -348,9 +352,11 @@ public sealed class CatalogoDian
 
 /// <summary>
 /// El tipo de documento DIAN de un <see cref="ElectronicDocumentKind"/> (contracts/dian.md §4.3): código ya elegido según la
-/// contingencia, tipo de operación, código único y si está por cotejar. (nuevo)
+/// contingencia, tipo de operación, código único y si está por cotejar. En los eventos RADIAN (I5, T802) trae además el código del
+/// evento (030, 032) y el prefijo fijo de su numeración propia (<see cref="PrefijoDeEvento"/>). (nuevo)
 /// </summary>
-public sealed record TipoDeDocumentoDian(ElectronicDocumentKind Tipo, string Codigo, string TipoDeOperacion, UniqueCodeKind CodigoUnico, bool PorCotejar);
+public sealed record TipoDeDocumentoDian(ElectronicDocumentKind Tipo, string Codigo, string TipoDeOperacion, UniqueCodeKind CodigoUnico, bool PorCotejar,
+    string? CodigoDeEvento = null, string? PrefijoDeEvento = null);
 
 /// <summary>
 /// Las marcas tributarias de una persona (decisiones-transversales T24) que se traducen a responsabilidades fiscales; los nombres

@@ -17,6 +17,15 @@ public static class ErroresDeFacturacionElectronica
     public const string MissingDataCode = "ElectronicInvoicing.Document.MissingData";
     public const string ReplacementDraftExistsCode = "ElectronicInvoicing.Document.ReplacementDraftExists";
     public const string NotReplacementDraftCode = "ElectronicInvoicing.Document.NotReplacementDraft";
+    public const string NotReadyCode = "ElectronicInvoicing.NotReady";
+
+    /// <summary>
+    /// 422: la guardia bloqueó la emisión (api.md §24.3, §24.7): <c>data.missing[]</c> con qué falta, dónde y con qué permiso; el mismo
+    /// sobre que la venta fiscal (<c>ErroresDeVentas.NotReady</c>), con el mensaje de la plataforma. (nuevo, I5)
+    /// </summary>
+    public static Error NotReady(EvaluacionFiscal evaluacion) => new ErrorConDatos(NotReadyCode,
+        "La cooperativa todavía no puede emitir este documento electrónico: " + string.Join(" ", evaluacion.Motivos.Select(m => m.Message)),
+        new { missing = evaluacion.Motivos.Select(m => new { code = m.Code, message = m.Message, where = m.Where, permission = m.Permission, whoFixes = new { page = m.Page, permission = m.Permission } }).ToList() });
 
     /// <summary>
     /// 422: el documento no tiene un dato que el canónico exige y la confirmación se bloquea (Principio VIII: no se descubre en un

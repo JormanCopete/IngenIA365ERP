@@ -47,6 +47,13 @@ public sealed record NumeroFiscal(
     public string Numero => Prefijo + Consecutivo.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
+/// <summary>El número propio de un evento RADIAN (I5, T802): prefijo fijo por tipo y consecutivo. (nuevo)</summary>
+public sealed record NumeroDeEvento(string Prefijo, long Consecutivo)
+{
+    /// <summary>El número completo, prefijo + consecutivo.</summary>
+    public string Numero => Prefijo + Consecutivo.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
+
 /// <summary>
 /// El <b>único</b> escritor de <c>COR_DianNumberingResolutions.LastIssuedNumber</c> (feature 012, I4, T705; T15, T16; FR-038, FR-065;
 /// contracts/dian.md §9; <c>SoloElNumeradorNumera</c>). Lo llama la confirmación del documento fiscal electrónico <b>después</b> del
@@ -62,8 +69,41 @@ public sealed record NumeroFiscal(
 /// renumera un documento ya numerado. La única excepción es <see cref="ReutilizarNumeroParaReemplazo"/>, la vía del caso b.
 /// </para>
 /// </summary>
-public sealed class NumeradorFiscal(IApplicationDbContext db, ICerrojoDeInventario cerrojo)
+public sealed class NumeradorFiscal(IApplicationDbContext db, ICerrojoDeInventario cerrojo, ICerrojoPorClave? cerrojoPorClave = null)
 {
+    /// <summary>El código del error cuando el catálogo DIAN vigente no trae el prefijo de un evento RADIAN. (nuevo)</summary>
+    public const string EventPrefixMissingCode = "ElectronicInvoicing.Numbering.EventPrefixMissing";
+
+    /// <summary>La clave del candado de la numeración propia de un evento RADIAN: ambiente y prefijo (I5, T802). (nuevo)</summary>
+    public static string ClaveDeEvento(DianEnvironment ambiente, string prefijo) => $"COR_ElectronicDocuments:{ambiente}:{prefijo}";
+
+    /// <summary>
+    /// La numeración propia de los eventos RADIAN 030 y 032 (feature 012, I5, T802; contracts/dian.md §4.3 «la define I5»; T2): prefijo
+    /// <b>fijo por tipo</b> de <see cref="Catalogs.CatalogoDian"/> (<c>prefijoDeEvento</c>, vigente a la fecha) y consecutivo por
+    /// (<c>Environment</c>, <c>Prefix</c>) = el mayor de <c>COR_ElectronicDocuments</c> más uno, <b>bajo el candado</b> de esa pareja, dentro
+    /// de la transacción de quien pide. Sin tabla nueva: el número vive en <c>COR_ElectronicDocuments (Environment, Prefix, Consecutive)</c>,
+    /// cuyo índice único es la última defensa. No consume ninguna resolución (el evento no la tiene). Un evento rechazado que se reintenta
+    /// conserva su número (versión siguiente, como el caso a). (nuevo)
+    /// </summary>
+    public async Task<Result<NumeroDeEvento>> NumerarEventoAsync(ElectronicDocumentKind tipo, DianEnvironment ambiente, DateOnly fecha, CancellationToken ct = default)
+    {
+        if (tipo is not (ElectronicDocumentKind.RadianEvent030 or ElectronicDocumentKind.RadianEvent032))
+            throw new InvalidOperationException($"El tipo {tipo} no es un evento RADIAN: numera con su resolución o su consecutivo propio.");
+        var prefijo = Catalogs.CatalogoDian.Embebido.TipoDeDocumento(tipo, null, fecha)?.PrefijoDeEvento;
+        if (string.IsNullOrWhiteSpace(prefijo))
+            return Result.Failure<NumeroDeEvento>(EventPrefixMissingCode,
+                $"El catálogo DIAN vigente el {fecha:dd/MM/yyyy} no trae el prefijo de la numeración de {tipo}.");
+        prefijo = ReglasDeResolucion.Prefijo(prefijo);
+
+        if (cerrojoPorClave is not null) await cerrojoPorClave.BloquearAsync(ClaveDeEvento(ambiente, prefijo), ct);
+        var guardado = await db.ElectronicDocuments.AsNoTracking()
+            .Where(d => d.Environment == ambiente && d.Prefix == prefijo)
+            .MaxAsync(d => (long?)d.Consecutive, ct) ?? 0;
+        var local = db.ElectronicDocuments.Local.Where(d => d.Environment == ambiente && d.Prefix == prefijo)
+            .Select(d => (long?)d.Consecutive).Max() ?? 0;
+        return Result.Success(new NumeroDeEvento(prefijo, Math.Max(guardado, local) + 1));
+    }
+
     /// <summary>Numera <paramref name="documento"/> (sin número todavía) y le copia prefijo y consecutivo.</summary>
     public async Task<Result<NumeroFiscal>> NumerarDocumentoAsync(InventoryDocument documento, SolicitudDeNumeroFiscal solicitud, CancellationToken ct = default)
     {

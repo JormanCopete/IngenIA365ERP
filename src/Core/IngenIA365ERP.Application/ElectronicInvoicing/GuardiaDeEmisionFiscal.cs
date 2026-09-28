@@ -107,6 +107,12 @@ public sealed class GuardiaDeEmisionFiscal(
     public const string SimulatedInProductionCode = "ElectronicInvoicing.Readiness.SimulatedInProduction";
     public const string ClassNotAllowedCode = "ElectronicInvoicing.Readiness.ClassNotAllowed";
 
+    /// <summary>I5 (T804; api.md §24.7): el canal vigente no ofrece los eventos RADIAN. (nuevo en api.md)</summary>
+    public const string EventsNotSupportedCode = "ElectronicInvoicing.Readiness.EventsNotSupported";
+
+    /// <summary>I5 (T804): la entrega vigente del comercio es anterior a I5; los eventos se siguen registrando por fuera. (nuevo)</summary>
+    public const string EventsNotActiveCode = "ElectronicInvoicing.Readiness.EventsNotActive";
+
     /// <summary>El canal simulado: sólo ambiente de pruebas (contracts/dian.md §3.4).</summary>
     public const string CanalSimulado = "SIMULADO";
 
@@ -262,6 +268,70 @@ public sealed class GuardiaDeEmisionFiscal(
         return motivos.Count > 0
             ? Bloqueada([.. motivos])
             : new EvaluacionFiscal(VeredictoFiscal.Electronic, ClasesElectronicas, [], canal, resolucion);
+    }
+
+    /// <summary>
+    /// El veredicto para emitir un evento RADIAN (030 o 032) a <paramref name="fecha"/> (feature 012, I5, T804; api.md §24.7): la
+    /// configuración vigente, el canal registrado y <b>sus capacidades</b> —sin el tipo, <c>ElectronicInvoicing.Readiness.EventsNotSupported</c>—,
+    /// la credencial verificada, el simulado nunca en producción y los datos del emisor. No mira resoluciones: el evento tiene numeración
+    /// propia (T802). No depende de <c>Dian.ObligadaAFacturar</c>: el adquirente emite eventos aunque no facture. Antes de I5 bloquea con
+    /// <c>ElectronicInvoicing.Readiness.EventsNotActive</c>. (nuevo)
+    /// </summary>
+    public async Task<EvaluacionFiscal> EvaluarEventoAsync(DateOnly fecha, ElectronicDocumentKind tipo, CancellationToken ct)
+    {
+        if (tipo is not (ElectronicDocumentKind.RadianEvent030 or ElectronicDocumentKind.RadianEvent032))
+            throw new ArgumentOutOfRangeException(nameof(tipo), tipo, "Sólo los eventos RADIAN 030 y 032.");
+        if (entregaVigente < EntregaDelComercio.I5)
+            return Bloqueada(Motivo(EventsNotActiveCode,
+                "La emisión de los eventos RADIAN desde el ERP no está activa: regístrelos como emitidos por fuera (portal de la DIAN o del proveedor).",
+                "Compras › Factura del proveedor › Eventos RADIAN", "Inventory.Purchases.RegisterRadianEvent", PaginaDeConfiguracion));
+
+        var configuracion = await db.ElectronicEmissionSettings.AsNoTracking()
+            .Where(s => s.ValidFrom <= fecha && (s.ValidTo == null || s.ValidTo >= fecha))
+            .OrderByDescending(s => s.ValidFrom)
+            .FirstOrDefaultAsync(ct);
+        var codigo = configuracion is null ? null : ReglasDeResolucion.Canal(configuracion.ChannelCode);
+        var registrado = codigo is not null && canales is not null && canales.Codigos.Contains(codigo, StringComparer.OrdinalIgnoreCase);
+        return DecidirEvento(fecha, tipo, configuracion, registrado, registrado ? canales!.Resolver(codigo!).Capacidades : null);
+    }
+
+    /// <summary>La regla pura de <see cref="EvaluarEventoAsync"/>: todo lo que falta, en orden. (nuevo)</summary>
+    public static EvaluacionFiscal DecidirEvento(DateOnly fecha, ElectronicDocumentKind tipo, ElectronicEmissionSetting? cfg, bool canalRegistrado,
+        CapacidadesDelCanal? capacidades)
+    {
+        var motivos = new List<MotivoDeBloqueoFiscal>();
+        if (cfg is null)
+        {
+            motivos.Add(Motivo(NoSettingsCode, $"No hay configuración de emisión electrónica vigente el {fecha:dd/MM/yyyy}.",
+                "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+            return Bloqueada([.. motivos]);
+        }
+
+        var canal = ReglasDeResolucion.Canal(cfg.ChannelCode);
+        if (!cfg.IsEnabled)
+            motivos.Add(Motivo(DisabledCode, "La emisión electrónica está desactivada en la configuración vigente.",
+                "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+        if (cfg.Environment == DianEnvironment.Production && string.Equals(canal, CanalSimulado, StringComparison.OrdinalIgnoreCase))
+            motivos.Add(Motivo(SimulatedInProductionCode, "La configuración vigente usa el canal simulado en producción: no tiene validez fiscal.",
+                "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+        if (!canalRegistrado)
+            motivos.Add(Motivo(ChannelUnknownCode, $"El canal «{canal}» de la configuración vigente no está disponible en esta instalación.",
+                "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+        if (cfg.CredentialVerifiedAt is null)
+            motivos.Add(Motivo(CredentialNotVerifiedCode, $"La credencial del canal {canal} no está verificada.",
+                "Administración › Facturación electrónica › Verificar credencial", PermisoDeConfiguracion, PaginaDeConfiguracion));
+        if (capacidades is not null && !capacidades.Emite(tipo))
+            motivos.Add(Motivo(EventsNotSupportedCode,
+                $"El canal {canal} no emite los eventos RADIAN ({ReglasDeResolucion.Nombre(tipo)}): regístrelos como emitidos por fuera o configure un canal que los emita.",
+                "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+        if (string.IsNullOrWhiteSpace(cfg.IssuerTaxId) || string.IsNullOrWhiteSpace(cfg.IssuerBusinessName)
+            || string.IsNullOrWhiteSpace(cfg.IssuerMunicipalityDaneCode) || string.IsNullOrWhiteSpace(cfg.IssuerEmail))
+            motivos.Add(Motivo(CompanyDataIncompleteCode, "Faltan datos del emisor: NIT, razón social, municipio (DIVIPOLA) o correo.",
+                "Administración › Facturación electrónica", PermisoDeConfiguracion, PaginaDeConfiguracion));
+
+        return motivos.Count > 0
+            ? Bloqueada([.. motivos])
+            : new EvaluacionFiscal(VeredictoFiscal.Electronic, [], [], canal);
     }
 
     /// <summary>

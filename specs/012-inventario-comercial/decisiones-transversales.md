@@ -1981,6 +1981,22 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     la tabla no cambia); errores `ErroresDeCompras.{LandedCostInvoiceNotService, LandedCostInvoiceNotConfirmed, LandedCostExceedsInvoice,
     LandedCostBasisMissing (ProductoSinBase), LandedCostManualNotBalanced}` y la sobrecarga `ReceiptNotConfirmed(receiptPublicId,
     displayNumber)`. Reglas en T42e.
+- **I5, eventos RADIAN emitidos por el ERP (T802–T806, prueba T772; 2026-09-28) (nuevo)**: en la plataforma,
+    `ElectronicInvoicing/Documents/EmitRadianEventCommand` (`IOperacionIdempotente`, validador, `RadianEmissionDto`,
+    `RadianEmissionEventDto`, `ModuloDeCompras = "INV"`) y `ElectronicInvoicing/Documents/CicloDelEventoRadian` (`EsEvento`, `InstanteDe`,
+    `ReconstruirAsync`, `VerificadoAsync`, `CerrarAsync`), inyectado **opcional** en `IntentoAnteElCanal` (parámetro `eventosRadian`);
+    `EventoRadianCanonico` **se mudó** de `Channels` a `Canonical` y ganó `Receipt` (`RecepcionCanonica`), `IssuedBy` y `Origin`;
+    `EntradaDeEventoRadian`, `ProveedorDelEvento`, `NumeracionDelEvento`, `EventoConstruido` y `ConstructorDelCanonico.{ConstruirEventoAsync,
+    ConstruirEvento}`; `NumeradorFiscal.NumerarEventoAsync` con `NumeroDeEvento`, `ClaveDeEvento` y `EventPrefixMissingCode` (el
+    `ICerrojoPorClave` entra **opcional** al numerador); `GuardiaDeEmisionFiscal.{EvaluarEventoAsync, DecidirEvento, EventsNotSupportedCode,
+    EventsNotActiveCode}`; `ErroresDeFacturacionElectronica.NotReady`; en `CatalogoDian`, `TipoDeDocumentoDian.{CodigoDeEvento,
+    PrefijoDeEvento}` (JSON `codigoDeEvento`, `prefijoDeEvento`: `EV030`, `EV032`). El puerto `IFuenteDeDocumentoElectronico` gana
+    `PrepararEventosRadianAsync`, `LeerEventoRadianAsync`, `EnlazarEventoRadianAsync` y `RegistrarResultadoDeEventoRadianAsync` con
+    `EventoRadianPreparado` y `ResultadoDeEventoRadian`. En Compras, `Inventory/Purchasing/EventosRadianDeInventario` (`CodigoDe`, `TipoDe`,
+    `PrepararAsync`, `LeerAsync`, `EnlazarAsync`, `RegistrarResultadoAsync`), inyectado **opcional** en `FuenteDeEmisionDeInventario`
+    (`RadianNotAvailableCode`); en el dominio `TransicionesDeEventoRadian.{PedirEmision, TrasLaRespuesta, CodigoRecepcionSinConfirmar}` y
+    `EventoRadianActual.EnEmision`. `CanalSimulado` declara `RadianEvent030/032` y los emite con su tabla del último dígito. La ruta y la
+    pantalla son de T808 y T815. Reglas en T42f.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2070,6 +2086,14 @@ confirmar, anulada o con el saldo cerrado; `data { lineNumber?, orderPublicId, d
 `Inventory.PurchaseRequest.NotConfirmed` (**nuevo**, no estaba en api.md: una orden desde una solicitud que no está aprobada;
 `data { lineNumber, requestPublicId, displayNumber, status }`). El PDF sin quien lo dibuje responde
 `Inventory.Document.RepresentationUnavailable`, el mismo de la carta de ventas.
+
+Eventos RADIAN emitidos (I5, T804; **(nuevo)**): `Inventory.RadianEvent.ReceiptNotConfirmed` (api.md §14.8 lo nombra; el 032 sin
+recepción confirmada enlazada), `ElectronicInvoicing.Readiness.EventsNotSupported` (api.md §24.7; en `data.missing[]` de
+`ElectronicInvoicing.NotReady`), `ElectronicInvoicing.Readiness.EventsNotActive` (**nuevo**: la entrega vigente es anterior a I5),
+`ElectronicInvoicing.Numbering.EventPrefixMissing` (**nuevo**: el catálogo DIAN vigente no trae el prefijo del evento) e
+`Inventory.RadianEvent.NotAvailable` (**nuevo**, técnico: la fuente se armó sin los eventos). `.AlreadyRegistered` también cubre un
+evento **en emisión** (pendiente con documento electrónico). Un evento sin CUFE de la factura responde
+`ElectronicInvoicing.Document.MissingData` (`referencedInvoice.uniqueCode`) (T42f).
 
 Cierre de las e2e de I4 (T685–T687; **(nuevo)**): `Inventory.DocumentType.ContingencyNotByResolution` (`data.class`: un tipo de contingencia en una clase que no numera por resolución DIAN).
 
@@ -2942,6 +2966,39 @@ Lo que T799/T800 y api.md §14.9 dejaban abierto y la aplicación tuvo que fijar
   recepción con costos adicionales vigentes no se anula (`HasDependents`, T801); la orden de la que viene nunca la bloquea.
 - *Vista*: `allocations[]` lleva además `roundingResidue` por línea; `basis`, `toInventory` y `toCostOfSales` no se ocultan sin
   `Inventory.Costs.Read` (son el reparto de una factura, no el costo del producto) — a revisar si el dueño los quiere ocultos.
+
+**T42f · Eventos RADIAN emitidos por el ERP: numeración, reglas y ciclo (I5, T802–T806; 2026-09-28; a revisar por el dueño).**
+Lo que T802–T805, api.md §14.8/§24.7 y dian.md §4.3/§5.1 dejaban abierto y la aplicación tuvo que fijar:
+- *Numeración propia (T802, la decisión que pedía dian.md §4.3).* Prefijo **fijo por tipo** leído de `CatalogoDian` (`EV030`, `EV032`,
+  marcados «por cotejar») y consecutivo por (`Environment`, `Prefix`) = el mayor de `COR_ElectronicDocuments` más uno, bajo un candado
+  por esa pareja (`ICerrojoPorClave`, `COR_ElectronicDocuments:{ambiente}:{prefijo}`) en la transacción que pide; sin tabla nueva y sin
+  resolución (T2). El índice único `(Environment, Prefix, Consecutive)` es la última defensa. **(dueño)** cotejar con el proveedor
+  tecnológico contratado si él numera el `ApplicationResponse`: si lo hace, el prefijo del catálogo se cambia por dato y el adaptador
+  traduce.
+- *Qué se valida al pedir* (en Compras, `TransicionesDeEventoRadian.PedirEmision`): sólo a crédito y confirmada (`NotApplicable`); un evento
+  hecho **o en emisión** (pendiente con documento electrónico) es `AlreadyRegistered`; el 032 exige el 030 hecho, en emisión o **pedido
+  en la misma solicitud** (`OutOfOrder`) y una recepción **confirmada** enlazada con `InvoiceOfReceipt` (`ReceiptNotConfirmed`); la fecha
+  del evento es hoy y va entre la emisión de la factura y hoy (`DateInvalid`). Con un error no se crea ningún evento. La guardia de eventos
+  no mira resoluciones ni `Dian.ObligadaAFacturar` (el adquirente emite eventos aunque no facture), sí la configuración vigente, el canal y
+  **sus capacidades** (`EventsNotSupported`), la credencial y los datos del emisor; antes de I5 responde `EventsNotActive`.
+- *El documento electrónico del evento.* Uno por (factura, tipo): `SourceModule = INV`, `SourceDocumentPublicId` = el registro de la
+  factura, `SourceDocumentTypeCode` = su tipo, `Kind = RadianEvent030/032`, tipo DIAN 96, sin resolución, `TotalAmount = 0`,
+  contraparte = el proveedor, **canal vigente sellado** (es un documento nuevo, api.md §24.7), `IssuedAt` sin fracciones de segundo
+  (entra al canónico y debe sobrevivir el viaje a la base). El 032 pedido junto con el 030, o con el 030 aún en emisión, **espera** a ése
+  (`WaitsForDocumentId`, el mecanismo de I4): sale después. El canónico lo vuelve a armar el procesador con la entrada que da Compras
+  (`LeerEventoRadianAsync`) y se compara con el SHA-256 de la versión; «quién lo emite» es el nombre de usuario de
+  `RegisteredByUserId`, leído igual al pedir y al volver a armar. Sin CUFE en la factura no hay evento (`MissingData`).
+- *Máquina simplificada* (dian.md §5.1): la misma tabla de transiciones; un «la DIAN no está» deja el evento `Sent` (se consulta), nunca
+  en contingencia 04; sin representación gráfica ni entrega al comprador. Con la respuesta definitiva, `CicloDelEventoRadian.CerrarAsync`
+  le avisa a Compras por el puerto: `Pending → Emitted` (CUDE, fecha del evento, fuente `Erp`) o `→ Rejected`.
+- *Reintento de un rechazado*: pedir otra vez el mismo evento lo deja `Pending` en Compras y, en la plataforma, **el mismo documento con
+  el mismo número** pasa a `Pending` con la versión siguiente (la transición del caso a, motivo `CaseA`, «Reintento del evento RADIAN
+  rechazado») y se atiende la alerta `Dian.DocumentoRechazado` de ese documento. No se crea otro documento: el índice único
+  `(SourceModule, SourceDocumentPublicId, Kind)` lo impide y la numeración no queda con huecos.
+- *La alerta* `Compras.EventosRadianFaltantes`: se atiende sola cuando los dos están hechos (emitidos o registrados por fuera); un
+  rechazado **sigue faltando**, y la revisión diaria ahora lo cuenta junto con los pendientes.
+- *Después del commit* el comando intenta cada evento por el canal (`EmitElectronicDocumentCommand`, en orden); el procesador retoma lo
+  que quede.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

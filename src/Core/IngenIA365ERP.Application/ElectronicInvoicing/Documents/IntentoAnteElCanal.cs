@@ -80,7 +80,8 @@ public sealed class IntentoAnteElCanal(
     ILogger<IntentoAnteElCanal> logger,
     IRegistroDeFallasDelCanal? fallas = null,
     GeneracionDeRepresentacion? representacion = null,
-    EntregaAlComprador? entrega = null)
+    EntregaAlComprador? entrega = null,
+    CicloDelEventoRadian? eventosRadian = null)
 {
     private static readonly JsonSerializerOptions Json = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -206,8 +207,19 @@ public sealed class IntentoAnteElCanal(
         var cooperativa = ConfiguracionDeEmision.Cooperativa(tenant);
         if (cooperativa.IsFailure) return Falla(cooperativa.Error);
 
+        // I5 (T805): los eventos RADIAN van por EmitirEventoAsync con su propio canónico y la máquina simplificada (sin contingencia).
+        var esEvento = CicloDelEventoRadian.EsEvento(documento.Kind);
         DocumentoElectronicoCanonico? canonico = null;
-        if (operacion != TransmissionOperation.QueryStatus)
+        EventoRadianCanonico? eventoRadian = null;
+        if (operacion != TransmissionOperation.QueryStatus && esEvento)
+        {
+            if (eventosRadian is null)
+                return Falla(new Error(ReconstruccionDelCanonico.SourceUnknownCode, $"Esta instalación no emite eventos RADIAN ({documento.Number})."));
+            var verificado = await eventosRadian.VerificadoAsync(documento, version, ct);
+            if (verificado.IsFailure) return Falla(verificado.Error);
+            eventoRadian = verificado.Value;
+        }
+        else if (operacion != TransmissionOperation.QueryStatus)
         {
             var verificado = await artefactos.CanonicoVerificadoAsync(documento, version, ct);
             if (verificado.IsFailure) return Falla(verificado.Error);
@@ -233,8 +245,10 @@ public sealed class IntentoAnteElCanal(
         {
             var referencia = new ReferenciaDeEnvio(documento.Prefix, documento.Consecutive, documento.Environment, documento.UniqueCode,
                 await UltimaReferenciaAsync(documento.Id, ct));
-            enviado = canonico is null ? $"{clave}|{referencia.Numero}|{referencia.UniqueCode}|{referencia.ExternalReference}" : version.CanonicalSha256;
-            resultado = await LlamarAsync(canal, operacion.Value, canonico, referencia, contexto.Value, ct);
+            enviado = canonico is null && eventoRadian is null
+                ? $"{clave}|{referencia.Numero}|{referencia.UniqueCode}|{referencia.ExternalReference}"
+                : version.CanonicalSha256;
+            resultado = await LlamarAsync(canal, operacion.Value, canonico, eventoRadian, referencia, contexto.Value, ct);
         }
         cronometro.Stop();
 
@@ -247,8 +261,10 @@ public sealed class IntentoAnteElCanal(
         };
         var estadoAntes = documento.Status;
         var eventoCerrado = documento.ContingencyEvent is not { EstaAbierto: true };
-        var transicion = documento.AplicarEvento(evento, new RespuestaDelCanal(resultado.Outcome, resultado.TieneCodigoUnico, resultado.TieneRespuestaDeValidacion),
-            ahora, eventoCerrado);
+        // Un evento no tiene contingencia: «la DIAN no está» lo deja enviado (se consulta), nunca en contingencia 04 (dian.md §5.1).
+        var sinContingencia = esEvento && resultado.Outcome == ChannelOutcome.DianUnavailable;
+        var transicion = documento.AplicarEvento(evento, new RespuestaDelCanal(resultado.Outcome, resultado.TieneCodigoUnico && !sinContingencia,
+                resultado.TieneRespuestaDeValidacion), ahora, eventoCerrado);
         if (!transicion.Procede)
         {
             documento.LastOutcome = resultado.Outcome;
@@ -256,7 +272,7 @@ public sealed class IntentoAnteElCanal(
                 documento.Number, estadoAntes, evento, resultado.Outcome, transicion.Motivo);
         }
 
-        if (resultado.TieneCodigoUnico)
+        if (resultado.TieneCodigoUnico && !sinContingencia)
         {
             documento.UniqueCode ??= Recortar(resultado.UniqueCode!, 96);
             documento.UniqueCodeKind ??= TipoDeCodigo(resultado.UniqueCodeKind, documento.Kind);
@@ -326,13 +342,15 @@ public sealed class IntentoAnteElCanal(
     }
 
     private async Task<ResultadoDeCanal> LlamarAsync(ICanalDeEmisionElectronica canal, TransmissionOperation operacion, DocumentoElectronicoCanonico? canonico,
-        ReferenciaDeEnvio referencia, ContextoDeCanal contexto, CancellationToken ct)
+        EventoRadianCanonico? eventoRadian, ReferenciaDeEnvio referencia, ContextoDeCanal contexto, CancellationToken ct)
     {
         try
         {
             return operacion == TransmissionOperation.QueryStatus
                 ? await canal.ConsultarEstadoAsync(referencia, contexto, ct)
-                : await canal.EmitirAsync(canonico!, contexto, ct);
+                : eventoRadian is not null
+                    ? await canal.EmitirEventoAsync(eventoRadian, contexto, ct)
+                    : await canal.EmitirAsync(canonico!, contexto, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
@@ -404,6 +422,13 @@ public sealed class IntentoAnteElCanal(
         if (validado)
             await Seguro("sin validar", () => alertas.AtenderPorProcesoAsync(GuardadoDeArtefactos.ClaveSinValidar(documento.PublicId),
                 "La DIAN validó el documento.", ct));
+
+        // I5 (T805): el evento RADIAN no tiene representación ni entrega; su respuesta definitiva la registra el módulo (Emitted o Rejected).
+        if (CicloDelEventoRadian.EsEvento(documento.Kind))
+        {
+            if (antes != documento.Status && eventosRadian is not null) await eventosRadian.CerrarAsync(documento, ct);
+            return;
+        }
 
         var entregable = validado || (documento.Status == ElectronicDocumentStatus.DianContingency && antes != ElectronicDocumentStatus.DianContingency);
         if (entregable && antes != documento.Status)

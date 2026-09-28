@@ -288,6 +288,10 @@ public static class DependencyInjection
         // fuentes pueden convivir y se eligen por SourceModule).
         services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
         services.AddScoped<ElectronicInvoicing.Canonical.IFuenteDeDocumentoElectronico, Inventory.Integration.FuenteDeEmisionDeInventario>();
+        // Feature 012, I5 (T803–T806): los eventos RADIAN que emite el ERP. Compras los prepara, los enlaza y registra su resultado (por el
+        // puerto de la fuente); la plataforma arma el evento, lo numera (T802) y lo lleva por el procesador con la máquina simplificada.
+        services.AddScoped<Inventory.Purchasing.EventosRadianDeInventario>();
+        services.AddScoped<ElectronicInvoicing.Documents.CicloDelEventoRadian>();
         // Feature 012, I4 (T705, T710): el único escritor de LastIssuedNumber y los prefijos de notas de Inventario (la plataforma no lee
         // INV_: pregunta por el puerto).
         services.AddScoped<ElectronicInvoicing.Numeracion.NumeradorFiscal>();

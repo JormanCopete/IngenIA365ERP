@@ -127,7 +127,9 @@ public static class ErroresDeCompras
         TransicionesDeEventoRadian.CodigoNoAplica => new Error(codigo, "Los eventos RADIAN sólo aplican a una factura a crédito pendiente de ellos."),
         TransicionesDeEventoRadian.CodigoFueraDeOrden => new Error(codigo, "El recibo del bien (032) exige primero el acuse de recibo (030)."),
         TransicionesDeEventoRadian.CodigoFechaInvalida => new Error(codigo, "La fecha del evento va entre la emisión de la factura y hoy."),
-        TransicionesDeEventoRadian.CodigoYaRegistrado => new Error(codigo, "Ese evento ya está registrado o emitido; para cambiar un registro externo, corríjalo."),
+        TransicionesDeEventoRadian.CodigoYaRegistrado => new Error(codigo, "Ese evento ya está registrado, emitido o en emisión; para cambiar un registro externo, corríjalo."),
+        TransicionesDeEventoRadian.CodigoRecepcionSinConfirmar => new Error(codigo,
+            "El recibo del bien (032) exige una recepción confirmada enlazada a la factura del proveedor."),
         _ => new Error(codigo, "El evento RADIAN no se puede registrar."),
     };
 

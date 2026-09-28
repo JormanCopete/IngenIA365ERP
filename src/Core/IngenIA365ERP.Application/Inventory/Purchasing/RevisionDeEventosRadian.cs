@@ -42,7 +42,9 @@ public sealed class RevisionDeEventosRadian(
             .Where(d => d.IsCredit && d.DocumentClass == DocumentClass.SupplierInvoice && d.IssueDate <= limite)
             .Join(db.InventoryDocuments.AsNoTracking(), d => d.DocumentId, x => x.Id, (d, x) => new { Detalle = d, Documento = x })
             .Where(y => y.Documento.Status == DocumentStatus.Confirmed)
-            .Where(y => db.SupplierInvoiceEvents.Any(e => e.DocumentId == y.Documento.Id && e.Status == SupplierInvoiceEventStatus.Pending))
+            // I5 (T805): un evento que el ERP emitió y la DIAN rechazó sigue faltando.
+            .Where(y => db.SupplierInvoiceEvents.Any(e => e.DocumentId == y.Documento.Id
+                && (e.Status == SupplierInvoiceEventStatus.Pending || e.Status == SupplierInvoiceEventStatus.Rejected)))
             .Select(y => new
             {
                 y.Documento.PublicId, y.Documento.Prefix, y.Documento.Number, y.Documento.WarehouseId,
@@ -61,7 +63,7 @@ public sealed class RevisionDeEventosRadian(
                 TiposDeAlerta.EventosRadianFaltantes,
                 $"Factura {p.SupplierPrefix}{p.SupplierNumber} sin eventos RADIAN",
                 string.Format(CultureInfo.InvariantCulture,
-                    "La factura del proveedor {0}{1} (registro {2}), emitida el {3:dd/MM/yyyy} a crédito, sigue sin el acuse de recibo (030) o el recibo del bien (032). Emítalos en el portal y regístrelos en Compras.",
+                    "La factura del proveedor {0}{1} (registro {2}), emitida el {3:dd/MM/yyyy} a crédito, sigue sin el acuse de recibo (030) o el recibo del bien (032). Emítalos desde Compras o, si se emitieron en el portal, regístrelos allí.",
                     p.SupplierPrefix, p.SupplierNumber, numero, p.IssueDate),
                 "InventoryDocument", p.PublicId,
                 p.WarehouseId is int b && publicas.TryGetValue(b, out var bodega) ? bodega : null,
