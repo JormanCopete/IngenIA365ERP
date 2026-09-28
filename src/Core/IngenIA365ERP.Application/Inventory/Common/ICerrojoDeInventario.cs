@@ -26,6 +26,12 @@ public interface ICerrojoDeInventario
 
     /// <summary>Paso 5: la fila de <c>INV_DocumentSequences</c> que va a numerar, en exclusivo y al final.</summary>
     Task BloquearNumeracionAsync(int documentSequenceId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Paso 5 de los documentos fiscales electrónicos (I4, T705): la fila de <c>COR_DianNumberingResolutions</c> que va a numerar, en
+    /// exclusivo y al final, en lugar de la secuencia. La llama sólo <c>NumeradorFiscal</c>. (nuevo)
+    /// </summary>
+    Task BloquearResolucionFiscalAsync(int resolutionId, CancellationToken ct = default);
 }
 
 /// <summary>Cómo se toma <c>INV_Setup</c>: compartido al confirmar, exclusivo al cerrar o reabrir un período. (nuevo)</summary>

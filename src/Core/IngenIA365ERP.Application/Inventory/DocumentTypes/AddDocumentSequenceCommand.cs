@@ -45,6 +45,9 @@ public sealed class AddDocumentSequenceCommandHandler(IApplicationDbContext db, 
         if (ClasesDeDocumento.De(tipo.Class).NumberedBy == NumberedBy.DianResolution) return Falla(InventoryErrors.NumberedByResolution(tipo.Class));
 
         var prefijo = ReglasDeTipoDeDocumento.Prefijo(request.Prefix);
+        // I4 (T710): el prefijo de una nota electrónica no puede ser el de una resolución DIAN (data-model §27 duda 9).
+        var libre = await Integration.PrefijosDeInventario.ValidarPrefijoDeNotaAsync(db, tipo.Class, prefijo, ct);
+        if (libre.IsFailure) return Falla(libre.Error);
 
         // Lo ya emitido con ese prefijo (también en documentos anulados: el número es único por tipo y prefijo).
         var ultimoEmitido = await db.InventoryDocuments.IgnoreQueryFilters()

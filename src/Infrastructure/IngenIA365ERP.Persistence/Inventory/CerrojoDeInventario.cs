@@ -31,6 +31,13 @@ public sealed class CerrojoDeInventario(ApplicationDbContext db, IActorActual ac
         await db.Database.ExecuteSqlRawAsync(sentencia.Sql, sentencia.Parametros, ct);
     }
 
+    public async Task BloquearResolucionFiscalAsync(int resolutionId, CancellationToken ct = default)
+    {
+        ExigirTransaccion();
+        var sentencia = SqlDelCerrojo.ResolucionFiscal(Motor(), resolutionId);
+        await db.Database.ExecuteSqlRawAsync(sentencia.Sql, sentencia.Parametros, ct);
+    }
+
     private DatabaseProvider Motor() => db.Database.ProviderName == ProviderModelConventions.PostgreSqlProviderName
         ? DatabaseProvider.PostgreSql
         : DatabaseProvider.SqlServer;

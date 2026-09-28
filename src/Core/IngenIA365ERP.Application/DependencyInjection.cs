@@ -268,6 +268,10 @@ public static class DependencyInjection
         // fuentes pueden convivir y se eligen por SourceModule).
         services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
         services.AddScoped<ElectronicInvoicing.Canonical.IFuenteDeDocumentoElectronico, Inventory.Integration.FuenteDeEmisionDeInventario>();
+        // Feature 012, I4 (T705, T710): el único escritor de LastIssuedNumber y los prefijos de notas de Inventario (la plataforma no lee
+        // INV_: pregunta por el puerto).
+        services.AddScoped<ElectronicInvoicing.Numeracion.NumeradorFiscal>();
+        services.AddScoped<ElectronicInvoicing.Numeracion.IPrefijosDeModulos, Inventory.Integration.PrefijosDeInventario>();
         services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
         services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
         // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,

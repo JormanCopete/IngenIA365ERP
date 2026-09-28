@@ -96,4 +96,24 @@ public class SoloElNumeradorNumera
         Assert.True(infractores.Count == 0,
             "Consecutivos escritos fuera del numerador (FR-038, T16):\n  " + string.Join("\n  ", infractores));
     }
+
+    /// <summary>
+    /// I4, T705 (FR-066): la vía del caso b que reusa el número del rechazado sin consumir la resolución la invoca sólo
+    /// <c>ReplaceRejectedDocumentCommand</c> (además de su declaración en <c>NumeradorFiscal</c>).
+    /// </summary>
+    [Fact]
+    public void Solo_el_reemplazo_del_caso_b_reutiliza_un_numero_fiscal()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var llamada = new Regex(@"\bReutilizarNumeroParaReemplazo\s*\(", RegexOptions.Compiled);
+        var permitidos = new[] { "NumeradorFiscal.cs", "ReplaceRejectedDocumentCommand.cs" };
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => !permitidos.Contains(Path.GetFileName(f), StringComparer.Ordinal))
+            .Where(f => llamada.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+
+        Assert.True(infractores.Count == 0,
+            "ReutilizarNumeroParaReemplazo llamado fuera del caso b (FR-066, T705):\n  " + string.Join("\n  ", infractores));
+    }
 }

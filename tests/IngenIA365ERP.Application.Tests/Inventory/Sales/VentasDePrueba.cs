@@ -176,7 +176,7 @@ public sealed class VentasDePrueba
 
     public AprobacionDeDescuentos Aprobaciones() => new(Db, K.Motor, K.Actor);
 
-    public ReglasDeConfirmacionDeVenta Reglas() => new(Db, K.Actor, Compras.C.Reloj, K.Lector(), K.Permisos, new GuardiaDeEmisionFiscal(K.Lector()),
+    public ReglasDeConfirmacionDeVenta Reglas() => new(Db, K.Actor, Compras.C.Reloj, K.Lector(), K.Permisos, new GuardiaDeEmisionFiscal(K.Lector(), Db),
         Calculo(), Aprobaciones(), Toque);
 
     /// <summary>Las estrategias de ajustes y de ventas, con la entrega I3.</summary>

@@ -34,7 +34,7 @@ public static class ErroresDeVentas
     /// <summary>La guardia fiscal bloqueó: ninguna venta fiscal confirma hasta completar lo que falta (§24.3).</summary>
     public static Error NotReady(EvaluacionFiscal evaluacion) => new ErrorConDatos(NotReadyCode,
         "La cooperativa todavía no puede emitir documentos de venta: " + string.Join(" ", evaluacion.Motivos.Select(m => m.Message)),
-        new { missing = evaluacion.Motivos.Select(m => new { code = m.Code, message = m.Message, where = m.Where, permission = m.Permission }).ToList() });
+        new { missing = evaluacion.Motivos.Select(m => new { code = m.Code, message = m.Message, where = m.Where, permission = m.Permission, whoFixes = new { page = m.Page, permission = m.Permission } }).ToList() });
 
     /// <summary>Venta de contado a una persona inactiva con <c>Ventas.PersonaInactivaDeContado = Bloquear</c> (§18.2).</summary>
     public static Error PersonInactive(string nombre) => new ErrorConDatos(PersonInactiveCode,

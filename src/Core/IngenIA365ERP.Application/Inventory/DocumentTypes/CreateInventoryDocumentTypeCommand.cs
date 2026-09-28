@@ -82,6 +82,12 @@ public sealed class CreateInventoryDocumentTypeCommandHandler(
         if (canal.IsFailure) return Falla(canal.Error);
 
         var prefijo = ReglasDeTipoDeDocumento.Prefijo(request.Prefix);
+        // I4 (T710): el prefijo de una nota electrónica no puede ser el de una resolución DIAN (data-model §27 duda 9).
+        if (!porResolucion)
+        {
+            var libre = await Integration.PrefijosDeInventario.ValidarPrefijoDeNotaAsync(db, request.Class, prefijo, ct);
+            if (libre.IsFailure) return Falla(libre.Error);
+        }
         var tipo = new InventoryDocumentType
         {
             Code = codigo,

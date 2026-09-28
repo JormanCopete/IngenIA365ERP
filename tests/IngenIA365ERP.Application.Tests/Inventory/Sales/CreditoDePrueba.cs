@@ -121,7 +121,7 @@ public sealed class CreditoDePrueba
     public CreditoEnLaVenta Credito() => new(Db, V.K.Lector(), Cartera);
 
     public ReglasDeConfirmacionDeVenta Reglas() => new(Db, V.K.Actor, V.Compras.C.Reloj, V.K.Lector(), V.K.Permisos,
-        new IngenIA365ERP.Application.ElectronicInvoicing.GuardiaDeEmisionFiscal(V.K.Lector()), V.Calculo(), V.Aprobaciones(), V.Toque, Credito(),
+        new IngenIA365ERP.Application.ElectronicInvoicing.GuardiaDeEmisionFiscal(V.K.Lector(), V.Db), V.Calculo(), V.Aprobaciones(), V.Toque, Credito(),
         new AprobacionDeCredito(Db, Motor, V.K.Actor, EnCurso));
 
     public EfectosDeClase Efectos()
