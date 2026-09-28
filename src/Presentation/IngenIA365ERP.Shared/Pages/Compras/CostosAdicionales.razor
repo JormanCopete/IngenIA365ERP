@@ -1,0 +1,429 @@
+@page "/compras/costos-adicionales"
+@page "/compras/costos-adicionales/nueva"
+@page "/compras/costos-adicionales/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Costos adicionales de compra - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I5, T814 (FR-046, FR-075; contracts/api.md §14.9; data-model §9.7): el flete o el seguro de una compra se reparte entre lo
+   recibido. Se elige la factura del servicio (confirmada; debe traer un renglón de servicio), las recepciones confirmadas que cubre, el
+   monto (por defecto lo que queda sin repartir de esa factura) y el método: por valor, cantidad, peso, volumen o a mano. Cada guardado
+   trae del servidor la vista previa del reparto —una fila por línea de recepción, con el residuo del redondeo visible— y, con
+   Inventory.Costs.Read, la porción que va a inventario (lo que sigue en existencia) y la que va a costo de venta (lo ya vendido).
+   Confirmar ajusta el costo en el kardex sin reescribir nada y emite un «AjusteDeCostoReconocido» por recepción afectada. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    @if (EsLista)
+    {
+        <div class="page-header">
+            <h3>Costos adicionales de compra</h3>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarListaAsync">Actualizar</SfButton>
+                <PermissionGate Required="Inventory.Purchases.Create">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/compras/costos-adicionales/nueva"))">Repartir un flete o seguro</SfButton>
+                </PermissionGate>
+            </div>
+        </div>
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" value="@(_filtro.Status?.ToString() ?? "")" @onchange="@(e => { _filtro.Status = int.TryParse(e.Value?.ToString(), out var s) ? s : null; _filtro.Page = 1; return CargarListaAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" value="@(_filtro.From?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _filtro.From = LeerFecha(e.Value); _filtro.Page = 1; return CargarListaAsync(); })" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" value="@(_filtro.To?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _filtro.To = LeerFecha(e.Value); _filtro.Page = 1; return CargarListaAsync(); })" /></label>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (!_carga.Activa && _filas.Count == 0)
+            {
+                <p class="texto-tenue">No hay costos adicionales con estos filtros.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Número</th><th>Fecha</th><th>Proveedor del servicio</th><th>Estado</th><th class="numero">Monto</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _filas)
+                            {
+                                <tr>
+                                    <td><a href="@($"/compras/costos-adicionales/{d.PublicId}")">@(d.DisplayNumber ?? "(borrador)")</a></td>
+                                    <td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@d.Counterparty?.Name</td>
+                                    <td>@TextosDeInventario.Estado(d.Status)</td>
+                                    <td class="numero">@d.Total?.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" Disabled="@(_filtro.Page <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                    <span class="texto-tenue">Página @_filtro.Page · @_total documento(s)</span>
+                    <SfButton CssClass="e-flat" Disabled="@(_filtro.Page * _filtro.PageSize >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="page-header">
+            <h3>@Titulo</h3>
+            <div class="toolbar">
+                <a class="e-btn e-outline" href="/compras/costos-adicionales">Volver a la lista</a>
+                @if (Editable)
+                {
+                    <PermissionGate Required="Inventory.Purchases.Create">
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-save" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(false))">Calcular el reparto</SfButton>
+                    </PermissionGate>
+                }
+                @if (Puede("Discard")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(false))">Descartar</SfButton> }
+                @if (Puede("Confirm")) { <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_guardado.Activa" OnClick="@ConfirmarAsync">Confirmar</SfButton> }
+                @if (Puede("Void")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(true))">Anular</SfButton> }
+            </div>
+        </div>
+
+        <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Calculando…" : "Cargando…")">
+            <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.Document.PublicId" />
+            @if (_doc?.Document is { Status: 1 })
+            {
+                <p class="aviso aviso-info">En aprobación: queda congelado y sin número; lo confirma la última aprobación.</p>
+            }
+            @if (_doc?.Document.Warnings is { Count: > 0 } avisos)
+            {
+                <div class="aviso aviso-alerta"><b>Lo que hoy impediría confirmarlo:</b><ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul></div>
+            }
+
+            <div class="form-grid">
+                <label class="campo">Tipo *
+                    <select class="e-input" disabled="@(!Editable || _doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => _tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Elija…</option>
+                        @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Fecha <input type="date" class="e-input" disabled="@(!Editable)" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
+                <label class="campo campo-ancho">Factura del flete o del seguro *
+                    <select class="e-input" disabled="@(!Editable)" value="@(_factura?.ToString() ?? "")" @onchange="@(e => _factura = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Elija…</option>
+                        @foreach (var f in _facturas)
+                        {
+                            <option value="@f.Document.PublicId">@f.Document.DisplayNumber · @f.Supplier?.Prefix@f.Supplier?.Number · @f.Document.Counterparty?.Name · @f.Document.Total?.ToString("N2")</option>
+                        }
+                    </select>
+                </label>
+                <label class="campo">Método *
+                    <select class="e-input" disabled="@(!Editable)" @bind="_metodo">
+                        @foreach (var m in MetodosDeReparto.Todos) { <option value="@m.Valor">@m.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Monto a repartir
+                    <input class="e-input numero" type="number" min="0" step="any" disabled="@(!Editable)" placeholder="lo que queda de la factura"
+                           value="@(_monto?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                           @onchange="@(e => _monto = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null)" />
+                </label>
+            </div>
+
+            <h4>Recepciones que cubre</h4>
+            @if (Editable)
+            {
+                @if (_recepciones.Count == 0)
+                {
+                    <p class="texto-tenue">No hay recepciones confirmadas en las bodegas de su alcance.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th></th><th>Recepción</th><th>Fecha</th><th>Proveedor</th><th>Bodega</th><th class="numero">Total</th></tr></thead>
+                            <tbody>
+                                @foreach (var r in _recepciones)
+                                {
+                                    var id = r.Document.PublicId;
+                                    <tr>
+                                        <td><input type="checkbox" checked="@_elegidas.Contains(id)" @onchange="@(e => Alternar(id, e.Value is true))" /></td>
+                                        <td>@r.Document.DisplayNumber</td>
+                                        <td>@r.Document.OperationDate.ToString("dd/MM/yyyy")</td>
+                                        <td>@r.Document.Counterparty?.Name</td>
+                                        <td>@r.Document.Warehouse?.Code</td>
+                                        <td class="numero">@r.Document.Total?.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+            else if (Reparto is { } vistos)
+            {
+                <p>@string.Join(", ", vistos.Allocations.Select(a => a.ReceiptLine.ReceiptDisplayNumber).Distinct())</p>
+            }
+
+            @if (Reparto is { } reparto)
+            {
+                <h4>Reparto @(Editable ? "(vista previa con la existencia de hoy)" : "")</h4>
+                <p class="texto-apoyo">
+                    Factura @(reparto.SupplierInvoice.DisplayNumber) · @MetodosDeReparto.Texto(reparto.Method) · monto @reparto.Amount.ToString("N2")
+                    · queda sin repartir de la factura @reparto.Available.ToString("N2") · residuo del redondeo @reparto.RoundingResidue.ToString("N2")
+                </p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead>
+                            <tr>
+                                <th>Recepción</th><th>Línea</th><th>Producto</th><th class="numero">Base</th><th class="numero">Asignado</th><th class="numero">Residuo</th>
+                                @if (_verCostos) { <th class="numero">A inventario</th><th class="numero">A costo de venta</th> }
+                                @if (EsManual && Editable) { <th class="numero">A mano</th> }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in reparto.Allocations)
+                            {
+                                var linea = a.ReceiptLine.LinePublicId;
+                                <tr>
+                                    <td>@a.ReceiptLine.ReceiptDisplayNumber</td>
+                                    <td>@a.ReceiptLine.LineNumber</td>
+                                    <td>@a.Product.Code · @a.Product.Name</td>
+                                    <td class="numero">@a.Basis.ToString("N4")</td>
+                                    <td class="numero">@a.Allocated.ToString("N2")</td>
+                                    <td class="numero">@(a.RoundingResidue == 0m ? "" : a.RoundingResidue.ToString("N2"))</td>
+                                    @if (_verCostos) { <td class="numero">@a.ToInventory.ToString("N2")</td><td class="numero">@a.ToCostOfSales.ToString("N2")</td> }
+                                    @if (EsManual && Editable)
+                                    {
+                                        <td class="numero">
+                                            <input class="e-input numero" type="number" min="0" step="any" value="@(_manual.TryGetValue(linea, out var m) ? m.ToString(System.Globalization.CultureInfo.InvariantCulture) : "")"
+                                                   @onchange="@(e => { if (decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v)) _manual[linea] = v; else _manual.Remove(linea); })" />
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (!_verCostos)
+                {
+                    <p class="texto-tenue">La porción a inventario y a costo de venta se muestra con el permiso de ver costos (Inventory.Costs.Read).</p>
+                }
+            }
+            else if (_doc is not null)
+            {
+                <p class="texto-tenue">Sin reparto todavía: elija la factura y las recepciones y pulse «Calcular el reparto». Si no se pudo repartir, el porqué está en los avisos.</p>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_anular ? "Anular los costos adicionales" : "Descartar el borrador")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@(_anular ? "Se registra el ajuste contrario: el costo repartido sale de las recepciones y de lo vendido." : "El borrador queda descartado con su motivo; no consume número.")</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarMotivoAsync">Aceptar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    [Inject] private PermisosDelUsuario Permisos { get; set; } = default!;
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new(), _claveMotivo = new();
+    private readonly FiltroDeCompras _filtro = new();
+    private List<ResumenDeDocumentoDto> _filas = [];
+    private long _total;
+    private DocumentoDeCompraDto? _doc;
+    private ResultadoDeValidacionPrevia? _validacion;
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<ResumenDeFacturaDeProveedorDto> _facturas = [];
+    private List<ResumenDeRecepcionDto> _recepciones = [];
+    private readonly HashSet<Guid> _elegidas = [];
+    private readonly Dictionary<Guid, decimal> _manual = [];
+    private Guid? _tipo, _factura;
+    private DateOnly? _fecha;
+    private decimal? _monto;
+    private string _metodo = MetodosDeReparto.Valor;
+    private string? _motivo;
+    private bool _mostrarMotivo, _anular, _cargado, _verCostos;
+
+    private bool EsLista => Id is null && !Nav.Uri.Split('?')[0].EndsWith("/nueva", StringComparison.Ordinal);
+    private string Titulo => _doc is null ? "Repartir costos adicionales" : $"Costos adicionales {_doc.Document.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Document.Status)}";
+    private bool Editable => _doc is null || Puede("Edit");
+    private bool Puede(string accion) => _doc?.Document.AllowedActions.Contains(accion) == true;
+    private bool EsManual => _metodo == MetodosDeReparto.Manual;
+    private CostosAdicionalesDto? Reparto => _doc?.Document.LandedCost;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EsLista)
+        {
+            _doc = null;
+            await CargarListaAsync();
+            return;
+        }
+        if (_cargado && _doc?.Document.PublicId == Id && Id is not null) return;
+        using var carga = _carga.Iniciar();
+        if (!_cargado)
+        {
+            _verCostos = await Permisos.TieneAsync("Inventory.Costs.Read");
+            var tipos = await Inventario.ListarTiposAsync(grupo: 1);
+            _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive && t.Class == ClasesDeCompra.CostosAdicionales)] : [];
+            var facturas = await Compras.ListarFacturasAsync(new FiltroDeCompras { Status = 2, PageSize = 100 });
+            _facturas = facturas.IsSuccess ? [.. facturas.Value!.Items] : [];
+            var recepciones = await Compras.ListarRecepcionesAsync(new FiltroDeCompras { Status = 2, PageSize = 100 });
+            _recepciones = recepciones.IsSuccess ? [.. recepciones.Value!.Items] : [];
+            if (!facturas.IsSuccess || !recepciones.IsSuccess)
+                await Notification.ErrorAsync(facturas.ErrorMessage ?? recepciones.ErrorMessage ?? "No se pudieron consultar las facturas y las recepciones.");
+            _cargado = true;
+        }
+        if (Id is { } id) await CargarAsync(id);
+        else
+        {
+            _doc = null;
+            _tipo = _tipos.FirstOrDefault()?.PublicId;
+            _fecha = DateOnly.FromDateTime(DateTime.Today);
+            _factura = null;
+            _monto = null;
+            _metodo = MetodosDeReparto.Valor;
+            _elegidas.Clear();
+            _manual.Clear();
+        }
+    }
+
+    private async Task CargarListaAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ListarCostosAdicionalesAsync(_filtro);
+        if (!r.IsSuccess)
+        {
+            _filas = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los costos adicionales.");
+            return;
+        }
+        _filas = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _filtro.Page = Math.Max(1, _filtro.Page + paso);
+        await CargarListaAsync();
+    }
+
+    private async Task CargarAsync(Guid id)
+    {
+        var r = await Compras.ObtenerCostosAdicionalesAsync(id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el documento."); return; }
+        _doc = r.Value;
+        var d = _doc.Document;
+        _tipo = d.DocumentType.PublicId;
+        _fecha = d.OperationDate;
+        if (d.LandedCost is { } lc)
+        {
+            _factura = lc.SupplierInvoice.PublicId;
+            _monto = lc.Amount;
+            _metodo = MetodosDeReparto.Todos.FirstOrDefault(m => m.Numero == lc.Method).Valor ?? MetodosDeReparto.Valor;
+            _elegidas.Clear();
+            foreach (var recepcion in lc.Allocations.Select(a => a.ReceiptLine.ReceiptPublicId).Distinct()) _elegidas.Add(recepcion);
+            if (EsManual && _manual.Count == 0)
+                foreach (var a in lc.Allocations) _manual[a.ReceiptLine.LinePublicId] = a.Allocated;
+        }
+    }
+
+    private void Alternar(Guid recepcion, bool elegida)
+    {
+        if (elegida) _elegidas.Add(recepcion);
+        else _elegidas.Remove(recepcion);
+    }
+
+    private BorradorDeCompraRequest Pedido() => new(_tipo!.Value, _fecha, null, null, null, null, null, _doc?.Document.RowVersion, [],
+        SupplierInvoicePublicId: _factura, ReceiptPublicIds: [.. _elegidas], Amount: _monto, Method: _metodo,
+        ManualAllocations: EsManual && _manual.Count > 0 ? [.. _manual.Select(m => new RepartoManualRequest(m.Key, m.Value))] : null);
+
+    private async Task<bool> GuardarAsync(bool silencioso)
+    {
+        if (_tipo is null) { await Notification.WarningAsync("Elija el tipo de documento."); return false; }
+        if (_factura is null || _elegidas.Count == 0) { await Notification.WarningAsync("Elija la factura del flete o del seguro y al menos una recepción."); return false; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.GuardarAsync(ComprasClient.Rutas.CostosAdicionales, _doc?.Document.PublicId, Pedido(), _claveGuardar);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorCode switch
+            {
+                "Inventory.LandedCost.ExceedsInvoice" => $"{r.ErrorMessage} Queda sin repartir: {r.Dato<decimal>("available"):N2}.",
+                "Inventory.LandedCost.ManualNotBalanced" => $"{r.ErrorMessage} Monto {r.Dato<decimal>("amount"):N2}, digitado {r.Dato<decimal>("allocated"):N2}.",
+                "Inventory.LandedCost.BasisMissing" => $"{r.ErrorMessage} Productos: {string.Join(", ", r.Dato<List<string>>("products") ?? [])}.",
+                _ => r.ErrorMessage ?? "No se pudo calcular el reparto.",
+            });
+            return false;
+        }
+        var nueva = _doc is null;
+        await CargarAsync(r.Value.PublicId);
+        if (!silencioso) await Notification.SuccessAsync("Reparto calculado y borrador guardado.");
+        if (nueva) Nav.NavigateTo($"/compras/costos-adicionales/{r.Value.PublicId}", replace: true);
+        return true;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_doc is null) return;
+        if (Editable && !await GuardarAsync(true)) return;
+        if (_validacion is not null && !await _validacion.ValidarAsync()) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.ConfirmarAsync(ComprasClient.Rutas.CostosAdicionales, _doc.Document.PublicId, _doc.Document.RowVersion, _claveConfirmar);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar.");
+            return;
+        }
+        _validacion?.Limpiar();
+        await Notification.SuccessAsync(r.Value.Status == 1 ? "Quedó en aprobación." : $"Costos adicionales {r.Value.DisplayNumber} confirmados.");
+        await CargarAsync(_doc.Document.PublicId);
+    }
+
+    private void AbrirMotivo(bool anular)
+    {
+        _anular = anular;
+        _motivo = null;
+        _mostrarMotivo = true;
+    }
+
+    private async Task AplicarMotivoAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        if (_anular)
+        {
+            var r = await Compras.AnularAsync(ComprasClient.Rutas.CostosAdicionales, _doc.Document.PublicId, _motivo, _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+            await Notification.SuccessAsync($"Anulados con {r.Value?.DisplayNumber}.");
+        }
+        else
+        {
+            var r = await Compras.DescartarAsync(ComprasClient.Rutas.CostosAdicionales, _doc.Document.PublicId, _motivo, _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+            await Notification.SuccessAsync("Borrador descartado.");
+        }
+        _mostrarMotivo = false;
+        await CargarAsync(_doc.Document.PublicId);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

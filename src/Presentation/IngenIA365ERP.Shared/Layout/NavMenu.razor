@@ -199,6 +199,14 @@
             <PermissionGate Required="Inventory.Purchases.View">
                 <NavLink href="/compras/documentos-soporte" class="nav-subitem">Documentos soporte</NavLink>
             </PermissionGate>
+            @* I5 (T816): el ciclo completo —solicitud, orden, cruce a tres vías y costos adicionales—; la vista purchase-matches está en
+               /inventario/informes por el registro de vistas. *@
+            <PermissionGate Required="Inventory.Purchases.View">
+                <NavLink href="/compras/solicitudes" class="nav-subitem">Solicitudes</NavLink>
+                <NavLink href="/compras/ordenes" class="nav-subitem">Órdenes de compra</NavLink>
+                <NavLink href="/compras/cruce" class="nav-subitem">Cruce a tres vías</NavLink>
+                <NavLink href="/compras/costos-adicionales" class="nav-subitem">Costos adicionales</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
         </PermissionGate>
 

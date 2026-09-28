@@ -1,0 +1,92 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject PermisosDelUsuario Permisos
+
+@*
+    Feature 012, I5, US16 (T847; FR-045; contracts/api.md §9.3): el impacto en costos de un borrador con fecha anterior. Las pantallas de
+    recepción, factura de proveedor, ajustes y devoluciones lo ponen junto a su «Confirmar» con el documento, su fecha y su versión. Si el
+    borrador está guardado con una fecha pasada, pregunta al servidor (POST /api/inventory/documents/{id}/cost-impact: una consulta, sin
+    clave, que corre la confirmación en simulación): cuando la fecha es anterior al último movimiento de alguno de sus productos, avisa y
+    ofrece «Ver impacto en costos» con los documentos confirmados que cambiarían de costo, la porción en existencia y la vendida. Si el
+    retroactivo no se admite (parámetro apagado, demasiado antiguo, PEPS), dice por qué antes de confirmar. Sólo con Inventory.Costs.Read. (nuevo)
+*@
+
+<PermissionGate Required="Inventory.Costs.Read">
+    <IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true" Texto="Calculando el impacto en costos…">
+        @if (_rechazo is not null)
+        {
+            <p class="aviso aviso-error" role="alert">@_rechazo</p>
+        }
+        else if (_impacto is { Retroactive: true } impacto)
+        {
+            <div class="aviso aviso-alerta">
+                <p>
+                    La fecha es anterior al último movimiento de alguno de sus productos: al confirmar, el costo de @impacto.Affected.Select(a => a.DocumentPublicId).Distinct().Count()
+                    documento(s) ya confirmado(s) se ajusta con líneas de ajuste retroactivo, sin reescribirlos.
+                </p>
+                <SfButton CssClass="e-flat" OnClick="@(() => _verDetalle = !_verDetalle)">@(_verDetalle ? "Ocultar el impacto" : "Ver impacto en costos")</SfButton>
+                @if (_verDetalle)
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Documento afectado</th><th>Producto</th><th class="numero">A inventario</th><th class="numero">A costo de venta</th></tr></thead>
+                            <tbody>
+                                @foreach (var a in impacto.Affected)
+                                {
+                                    <tr>
+                                        <td>@(a.DisplayNumber ?? "(sin número)")</td>
+                                        <td>@a.Product.Code · @a.Product.Name</td>
+                                        <td class="numero">@a.InventoryAmount.ToString("N2")</td>
+                                        <td class="numero">@a.SoldAmount.ToString("N2")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot><tr><td colspan="2"><b>Total</b></td><td class="numero" colspan="2"><b>@impacto.Total.ToString("N2")</b></td></tr></tfoot>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+    </IndicadorDeCarga>
+</PermissionGate>
+
+@code {
+    /// <summary>El borrador guardado (nulo mientras no se guarda: no hay nada que simular).</summary>
+    [Parameter] public Guid? Documento { get; set; }
+
+    /// <summary>Su fecha de operación: sólo una fecha anterior a hoy puede ser retroactiva.</summary>
+    [Parameter] public DateOnly? Fecha { get; set; }
+
+    /// <summary>Si sigue en borrador: confirmado ya no hay impacto que ver.</summary>
+    [Parameter] public bool Borrador { get; set; }
+
+    /// <summary>La versión del borrador (su <c>rowVersion</c>): al cambiar, se vuelve a preguntar.</summary>
+    [Parameter] public byte[]? Version { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private ImpactoEnCostosDto? _impacto;
+    private string? _rechazo, _clave;
+    private bool _verDetalle, _puede, _permisoLeido;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var clave = $"{Documento}|{Fecha}|{Borrador}|{(Version is null ? "" : Convert.ToBase64String(Version))}";
+        if (clave == _clave) return;
+        _clave = clave;
+        _impacto = null;
+        _rechazo = null;
+        if (Documento is not { } id || !Borrador || Fecha is not { } fecha || fecha >= DateOnly.FromDateTime(DateTime.Today)) return;
+        if (!_permisoLeido)
+        {
+            _puede = await Permisos.TieneAsync("Inventory.Costs.Read");
+            _permisoLeido = true;
+        }
+        if (!_puede) return;
+
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ImpactoEnCostosAsync(id);
+        if (r.IsSuccess) { _impacto = r.Value; return; }
+        // Un retroactivo que no se admite se dice antes de confirmar; lo demás (existencia, validación) lo dirá la confirmación.
+        if (r.ErrorCode?.StartsWith("Inventory.Costing.", StringComparison.Ordinal) == true) _rechazo = r.ErrorMessage;
+    }
+}

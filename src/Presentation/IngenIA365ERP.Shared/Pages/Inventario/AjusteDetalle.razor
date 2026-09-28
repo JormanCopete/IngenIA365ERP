@@ -70,6 +70,8 @@
 
         @* US7 (T539): lo que dijo Contabilidad antes de confirmar, con quién corrige cada hallazgo. *@
         <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.PublicId" />
+        @* I5 (T847): con fecha anterior al último movimiento, el impacto en costos antes de confirmar. *@
+        <ImpactoEnCostos Documento="@_doc?.PublicId" Fecha="@_doc?.OperationDate" Borrador="@(_doc?.Status == 0)" Version="@_doc?.RowVersion" />
 
         <div class="form-grid">
             <label class="campo">Tipo *

@@ -17,7 +17,11 @@
    recibe, fecha, proveedor (buscador y alta con autorización de datos, T46), remisión o guía, municipio de la operación (se propone
    el de la sucursal) y líneas leídas con el lector (SelectorDeProducto: el empaque leído es la unidad)— con la vista previa de
    impuestos que calcula el servidor en cada guardado; confirmada, las líneas con lo que falta facturar y lo devuelto, los vínculos
-   (facturas, devoluciones) y las acciones que el SERVIDOR permite (AllowedActions). *@
+   (facturas, devoluciones) y las acciones que el SERVIDOR permite (AllowedActions).
+   I5 (T815, FR-049; api.md §14.9): con el proveedor elegido se puede recibir contra una de sus órdenes confirmadas —las líneas pendientes
+   por recibir llegan con su orderLinePublicId y el precio de la orden—, y «Recibir contra esta orden» de /compras/ordenes abre esta
+   pantalla con ?order= prellenada. Lo recibido de más sólo entra dentro de la tolerancia (lo decide el servidor). I5 (T847): con fecha
+   anterior, el impacto en costos antes de confirmar. *@
 <PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -39,6 +43,7 @@
     <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
         @* US7 (T539): lo que dijo Contabilidad antes de confirmar, con quién corrige cada hallazgo. *@
         <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.Document.PublicId" />
+        <ImpactoEnCostos Documento="@_doc?.Document.PublicId" Fecha="@_doc?.Document.OperationDate" Borrador="@(_doc?.Document.Status == 0)" Version="@_doc?.Document.RowVersion" />
         @if (_doc?.Document is { Status: 1 })
         {
             <p class="aviso aviso-info">En aprobación: queda congelada y sin número; la confirma la última aprobación.</p>
@@ -73,6 +78,18 @@
         @if (Editable)
         {
             <div class="info-card">
+                @if (_proveedor is not null)
+                {
+                    <div class="toolbar">
+                        <label class="campo">Orden del proveedor
+                            <select class="e-input" value="@(_orden?.ToString() ?? "")" @onchange="@(e => _orden = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)" @onfocus="@CargarOrdenesAsync">
+                                <option value="">Sin orden</option>
+                                @foreach (var o in _ordenes) { <option value="@o.PublicId">@o.DisplayNumber · @o.OperationDate.ToString("dd/MM/yyyy") · @o.Warehouse?.Code</option> }
+                            </select>
+                        </label>
+                        <SfButton CssClass="e-outline" Disabled="@(_orden is null)" OnClick="@(() => TraerOrdenAsync(_orden!.Value))">Recibir lo pendiente de la orden</SfButton>
+                    </div>
+                }
                 <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
             </div>
         }
@@ -81,7 +98,7 @@
             <table class="data-grid">
                 <thead>
                     <tr>
-                        <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th class="numero">Precio</th><th class="numero">Descuento</th>
+                        <th>#</th><th>Producto</th><th>Unidad</th><th>Orden</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th class="numero">Precio</th><th class="numero">Descuento</th>
                         @if (_doc?.Document.Lines.Any(l => l.UnitCost is not null) == true) { <th class="numero">Costo unitario</th> }
                         @if (_doc?.LineBalances.Count > 0) { <th class="numero">Por facturar</th><th class="numero">Devuelto</th> }
                         @if (Editable) { <th></th> }
@@ -98,6 +115,7 @@
                             <td>@(indice + 1)</td>
                             <td>@l.Producto</td>
                             <td>@l.Unidad</td>
+                            <td>@l.Orden</td>
                             <td class="numero">@CampoNumero(l.Cantidad, v => l.Cantidad = v)</td>
                             <td class="numero">@guardada?.QuantityBase.ToString("N4")</td>
                             <td class="numero">@CampoNumero(l.Precio, v => l.Precio = v)</td>
@@ -153,13 +171,23 @@
         public decimal Cantidad { get; set; } = 1m;
         public decimal Precio { get; set; }
         public decimal Descuento { get; set; }
+        public Guid? OrderLinePublicId { get; set; }
+        public string? Orden { get; set; }
     }
 
     [Parameter] public Guid? Id { get; set; }
 
+    /// <summary>I5 (T812, T815): la orden confirmada contra la que se recibe («Recibir contra esta orden»).</summary>
+    [SupplyParameterFromQuery(Name = "order")] public Guid? OrdenDeLaQuery { get; set; }
+
+    /// <summary><c>DocumentLinkKind.FromOrder</c>: la línea de la recepción viene de una línea de la orden.</summary>
+    private const int VinculoDesdeOrden = 2;
+
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new(), _claveMotivo = new();
     private DocumentoDeCompraDto? _doc;
+    private List<ResumenDeDocumentoDto> _ordenes = [];
+    private Guid? _orden, _proveedorDeLasOrdenes;
     private ResultadoDeValidacionPrevia? _validacion;
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
@@ -194,7 +222,49 @@
             _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
             _fecha = DateOnly.FromDateTime(DateTime.Today);
             _lineas = [];
+            if (OrdenDeLaQuery is { } orden) await TraerOrdenAsync(orden);
         }
+    }
+
+    /// <summary>Las órdenes confirmadas del proveedor elegido (se piden al abrir la lista, una vez por proveedor).</summary>
+    private async Task CargarOrdenesAsync()
+    {
+        if (_proveedor is null || _proveedorDeLasOrdenes == _proveedor.PublicId) return;
+        _proveedorDeLasOrdenes = _proveedor.PublicId;
+        var r = await Compras.ListarOrdenesAsync(new FiltroDeCompras { SupplierPersonPublicId = _proveedor.PublicId, Status = 2, PageSize = 100 });
+        _ordenes = r.IsSuccess ? [.. r.Value!.Items] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las órdenes del proveedor.");
+    }
+
+    /// <summary>
+    /// Las líneas de la orden con lo pendiente por recibir, en su unidad y a su precio, enlazadas por <c>orderLinePublicId</c>; el proveedor
+    /// y la bodega de la orden si la recepción todavía no los tiene. Una orden con el saldo cerrado ya no admite recepciones.
+    /// </summary>
+    private async Task TraerOrdenAsync(Guid id)
+    {
+        var r = await Compras.ObtenerOrdenAsync(id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la orden."); return; }
+        var o = r.Value;
+        if (o.Plan?.BalanceClosedAt is not null) { await Notification.WarningAsync($"La orden {o.Document.DisplayNumber} tiene el saldo cerrado: ya no admite recepciones."); return; }
+        _proveedor ??= SelectorDeProveedor.Desde(o.Document.Counterparty);
+        _bodega ??= o.Document.Warehouse?.PublicId;
+        await CargarOrdenesAsync();
+        _orden = id;
+        var agregadas = 0;
+        foreach (var l in o.Document.Lines.OrderBy(x => x.LineNumber))
+        {
+            var pendiente = o.PendingLines?.FirstOrDefault(p => p.LinePublicId == l.LinePublicId)?.PendingToReceive ?? 0m;
+            if (pendiente <= 0m || _lineas.Any(x => x.OrderLinePublicId == l.LinePublicId)) continue;
+            _lineas.Add(new LineaForm
+            {
+                ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code,
+                Cantidad = l.Factor == 0m ? pendiente : Math.Round(pendiente / l.Factor, 4), Precio = l.UnitPrice ?? 0m, Descuento = l.DiscountAmount ?? 0m,
+                OrderLinePublicId = l.LinePublicId, Orden = o.Document.DisplayNumber,
+            });
+            agregadas++;
+        }
+        if (agregadas == 0) await Notification.InfoAsync($"La orden {o.Document.DisplayNumber} no tiene nada pendiente por recibir.");
+        else if (_doc is not null) await GuardarAsync(true);
     }
 
     private async Task CargarAsync(Guid id)
@@ -219,6 +289,8 @@
         {
             LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
             UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Precio = l.UnitPrice ?? 0m, Descuento = l.DiscountAmount ?? 0m,
+            OrderLinePublicId = l.Links.FirstOrDefault(v => v.Kind == VinculoDesdeOrden)?.LinePublicId,
+            Orden = l.Links.FirstOrDefault(v => v.Kind == VinculoDesdeOrden)?.DisplayNumber,
         }).ToList();
     }
 
@@ -258,7 +330,8 @@
 
     private BorradorDeCompraRequest Pedido() => new(_tipo!.Value, _fecha, _bodega, _proveedor?.PublicId,
         string.IsNullOrWhiteSpace(_remision) ? null : _remision, null, string.IsNullOrWhiteSpace(_notas) ? null : _notas, _doc?.Document.RowVersion,
-        _lineas.Select(l => new LineaDeCompraRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null)).ToList(),
+        _lineas.Select(l => new LineaDeCompraRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null,
+            OrderLinePublicId: l.OrderLinePublicId)).ToList(),
         OperationMunicipalityDaneCode: string.IsNullOrWhiteSpace(_municipio) ? null : _municipio.Trim());
 
     private async Task<bool> GuardarAsync(bool silencioso)

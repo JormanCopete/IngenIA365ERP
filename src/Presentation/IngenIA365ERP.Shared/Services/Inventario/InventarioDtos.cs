@@ -254,6 +254,9 @@ public sealed record DocumentoDeInventarioDto
 
     /// <summary>US9 (T352): la foto tributaria del confirmado, o la vista previa del borrador de compras.</summary>
     public IReadOnlyList<RenglonDeImpuestoDto> TaxLines { get; init; } = [];
+
+    /// <summary>I5 (T810): en un documento de costos adicionales, la factura del flete, el método y el reparto (<c>landedCost</c>, §14.9).</summary>
+    public IngenIA365ERP.Shared.Models.Compras.CostosAdicionalesDto? LandedCost { get; init; }
 }
 
 /// <summary>Un vínculo del documento con otro (<c>DocumentLinkDto</c>, §9.2). <c>Kind</c> es <c>DocumentLinkKind</c>. (nuevo, US9)</summary>

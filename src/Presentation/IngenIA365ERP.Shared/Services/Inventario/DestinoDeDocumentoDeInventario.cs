@@ -11,6 +11,10 @@ public static class DestinoDeDocumentoDeInventario
     /// <summary>La ruta del documento de clase <paramref name="clase"/>, o nula si su clase no tiene pantalla de detalle.</summary>
     public static string? Documento(int clase, Guid id) => clase switch
     {
+        // I5 (T811, T812, T814): la solicitud, la orden y los costos adicionales abren su detalle de Compras.
+        1 => $"/compras/solicitudes/{id}",
+        2 => $"/compras/ordenes/{id}",
+        8 => $"/compras/costos-adicionales/{id}",
         3 => $"/compras/recepciones/{id}",
         4 => $"/compras/facturas-proveedor/{id}",
         // I4 (T757): el documento soporte y su nota de ajuste abren su detalle de Compras.

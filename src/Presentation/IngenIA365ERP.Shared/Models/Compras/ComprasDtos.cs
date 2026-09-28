@@ -5,9 +5,12 @@ namespace IngenIA365ERP.Shared.Models.Compras;
 // Los DTO espejo de compras (feature 012, US9, T352; contracts/api.md §14). Los enums llegan como número (EnumPorNombreONumero)
 // y se mandan por nombre o número; sólo PublicId (Principio VI). (nuevos)
 
-/// <summary>Las clases de compras de I1 (<c>DocumentClass</c>).</summary>
+/// <summary>Las clases de compras (<c>DocumentClass</c>): las de I1 y, desde I5, solicitud, orden y costos adicionales.</summary>
 public static class ClasesDeCompra
 {
+    public const int Solicitud = 1;
+    public const int Orden = 2;
+    public const int CostosAdicionales = 8;
     public const int Recepcion = 3;
     public const int Factura = 4;
     public const int Nota = 5;
@@ -53,7 +56,9 @@ public sealed record LineaDeCompraRequest(
     Guid? ReceiptLinePublicId = null,
     Guid? InvoiceLinePublicId = null,
     decimal? Amount = null,
-    bool? AffectsCost = null);
+    bool? AffectsCost = null,
+    Guid? OrderLinePublicId = null,
+    Guid? RequestLinePublicId = null);
 
 /// <summary>El borrador de un documento de compras (§14.2, §14.4–§14.6): el del ciclo común más lo propio de compras.</summary>
 public sealed record BorradorDeCompraRequest(
@@ -71,7 +76,15 @@ public sealed record BorradorDeCompraRequest(
     Guid? SupplierInvoicePublicId = null,
     string? NoteKind = null,
     Guid? CostCenterPublicId = null,
-    string? CorrectionConceptCode = null);
+    string? CorrectionConceptCode = null,
+    DateOnly? NeededBy = null,
+    Guid? RequestedByPersonPublicId = null,
+    DateOnly? ExpectedDate = null,
+    string? PaymentTerms = null,
+    IReadOnlyList<Guid>? ReceiptPublicIds = null,
+    decimal? Amount = null,
+    string? Method = null,
+    IReadOnlyList<RepartoManualRequest>? ManualAllocations = null);
 
 /// <summary>La factura de la compra directa: su tipo y el documento del proveedor (§14.3).</summary>
 public sealed record FacturaDeCompraDirectaRequest(Guid DocumentTypePublicId, DocumentoDelProveedorRequest Supplier);
@@ -101,7 +114,10 @@ public sealed record DocumentoDeCompraDto(
     IReadOnlyList<EventoRadianDto> RadianEvents,
     IReadOnlyList<SaldoDeLineaDeRecepcionDto> LineBalances,
     string? OperationMunicipalityDaneCode,
-    IReadOnlyList<AjusteDeCostoDeAnulacionDto>? CostAdjustments = null);
+    IReadOnlyList<AjusteDeCostoDeAnulacionDto>? CostAdjustments = null,
+    PlanDeCompraDto? Plan = null,
+    IReadOnlyList<PendienteDeLineaDeCompraDto>? PendingLines = null,
+    IReadOnlyList<LineaDelCruceDto>? Match = null);
 
 /// <summary>Una fila de la lista de recepciones: con lo que falta facturar y lo devuelto.</summary>
 public sealed record ResumenDeRecepcionDto(ResumenDeDocumentoDto Document, decimal PendingToInvoice, decimal Returned);

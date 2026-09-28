@@ -50,6 +50,7 @@ public sealed class KardexReportQueryHandler(
         new("Valor salida", TipoDeColumna.Moneda),
         new("Saldo (valor)", TipoDeColumna.Moneda),
         new("Costo promedio", TipoDeColumna.Costo),
+        new("Capas consumidas", TipoDeColumna.Texto),
         new("Documento", TipoDeColumna.Texto, "_documento"),
         new("Producto", TipoDeColumna.Texto, "_producto"),
         new("Bodega", TipoDeColumna.Texto, "_bodega"),
@@ -147,11 +148,12 @@ public sealed class KardexReportQueryHandler(
         var bodegas = await db.Warehouses.AsNoTracking().Where(w => bodegaIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, w => new { w.Code, w.PublicId }, ct);
         var ubicacionIds = hechos.Select(k => k.LocationId).Distinct().ToList();
         var ubicaciones = await db.WarehouseLocations.AsNoTracking().Where(l => ubicacionIds.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => l.Code, ct);
+        var capas = await CapasConsumidasAsync(enRango.Where(k => mostrados.Contains(k.Id) && k.Kind == KardexEntryKind.Exit).Select(k => k.Id).ToList(), conCostos, ct);
 
         var filas = new List<FilaExportable>
         {
             new([desde.AddDays(-1), null, "Saldo inicial", null, null, null, null, null, null, SaldoCantidad(), null, null, null,
-                conCostos ? SaldoValor() : null, conCostos ? PromedioVisible() : null, null, producto.PublicId.ToString(), null], Resaltada: true),
+                conCostos ? SaldoValor() : null, conCostos ? PromedioVisible() : null, null, null, producto.PublicId.ToString(), null], Resaltada: true),
         };
 
         foreach (var k in enRango)
@@ -177,6 +179,7 @@ public sealed class KardexReportQueryHandler(
                 conCostos && k.TotalCost < 0m ? -k.TotalCost : null,
                 conCostos ? SaldoValor() : null,
                 conCostos ? ambitos.GetValueOrDefault(k.CostScopeWarehouseId).Promedio : null,
+                capas.GetValueOrDefault(k.Id),
                 d?.PublicId.ToString(),
                 producto.PublicId.ToString(),
                 bodega?.PublicId.ToString(),
@@ -189,6 +192,25 @@ public sealed class KardexReportQueryHandler(
         var subtitulo = $"{producto.Code} · {producto.Name} · del {desde:yyyy-MM-dd} al {hasta:yyyy-MM-dd}"
             + (bodegaFiltro is int bfi && bodegas.TryGetValue(bfi, out var bb) ? $" · bodega {bb.Code}" : string.Empty);
         return Result.Success(new TablaExportable("Kardex", subtitulo, Columnas, filas, null, notas));
+    }
+
+    /// <summary>
+    /// I5, US16 (T849; data-model §3.5): por cada salida mostrada, las capas PEPS que consumió —«10 × 1.000,00 (capa del 05/09/2026)»—, de
+    /// <c>INV_LayerConsumptions</c>, en el orden en que se consumieron. El costo de la capa sólo con <c>Inventory.Costs.Read</c>. En
+    /// promedio ponderado no hay consumos y la columna queda vacía. (nuevo)
+    /// </summary>
+    private async Task<Dictionary<long, string>> CapasConsumidasAsync(IReadOnlyList<long> salidas, bool conCostos, CancellationToken ct)
+    {
+        if (salidas.Count == 0) return [];
+        var consumos = await (from c in db.LayerConsumptions.AsNoTracking()
+                              join capa in db.CostLayers.AsNoTracking() on c.LayerId equals capa.Id
+                              where salidas.Contains(c.ExitKardexEntryId)
+                              orderby c.Id
+                              select new { c.ExitKardexEntryId, c.Quantity, c.UnitCost, capa.OperationDate })
+            .ToListAsync(ct);
+        var colombia = CultureInfo.GetCultureInfo("es-CO");
+        return consumos.GroupBy(c => c.ExitKardexEntryId).ToDictionary(g => g.Key, g => string.Join("; ", g.Select(c =>
+            $"{c.Quantity.ToString("#,##0.######", colombia)}{(conCostos ? $" × {c.UnitCost.ToString("N2", colombia)}" : string.Empty)} (capa del {c.OperationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)})")));
     }
 
     /// <summary>El tipo y el motivo de una línea del kardex, en palabras.</summary>

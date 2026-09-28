@@ -732,7 +732,7 @@ Administración.
 | Inventario | `/inventario/tablero` | I6 |
 | Compras | `/compras/recepciones`, `/compras/recepciones/{id:guid}`, `/compras/compra-directa`, `/compras/facturas-proveedor`, `/compras/facturas-proveedor/{id:guid}`, `/compras/notas-proveedor`, `/compras/devoluciones` | I1 |
 | Compras | `/compras/documentos-soporte`, `/compras/documentos-soporte/nuevo`, `/compras/documentos-soporte/{id:guid}` (nuevas, T757) | I4 |
-| Compras | `/compras/solicitudes`, `/compras/ordenes`, `/compras/cruce`, `/compras/costos-adicionales` | I5 |
+| Compras | `/compras/solicitudes`, `/compras/ordenes`, `/compras/cruce`, `/compras/costos-adicionales`; de paso, sin enlace de menú: `/compras/solicitudes/nueva`, `/compras/solicitudes/{id:guid}`, `/compras/ordenes/nueva` (`?request=`), `/compras/ordenes/{id:guid}`, `/compras/costos-adicionales/nueva`, `/compras/costos-adicionales/{id:guid}`; `/compras/recepciones/nueva?order=` (T811–T815) | I5 |
 | Ventas | `/ventas/vendedores`, `/ventas/canales` | I1 |
 | Ventas | `/ventas/documentos`, `/ventas/documentos/{id:guid}`, `/ventas/facturas/nueva`, `/ventas/notas-credito/nueva`, `/ventas/puntos-de-venta`, `/ventas/listas-de-precios`, `/ventas/listas-de-precios/{id:guid}`, `/ventas/topes-de-descuento`, `/ventas/informes?vista=` | I3 |
 | Ventas | `/ventas/documentos-electronicos`, `/ventas/contingencias-dian` | I4 |
@@ -2025,6 +2025,20 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `purchase-matches` («Cruce de compras a tres vías», archivo `cruce-de-compras`, filtros `from`/`to`, propios `supplier`/`status`) y
     `method-change-valuation` («Valorizado por cambio de método», archivo `valorizado-cambio-de-metodo`, filtro `asOf`, propio
     `comparativeFrom`, exige `Inventory.Costs.Read`).
+- **I5, Shared (T810–T816, T847–T849; 2026-09-28) (nuevo)**: el parcial `Services/Compras/ComprasClient.Completas.cs`
+    (`ListarSolicitudesAsync`, `ObtenerSolicitudAsync`, `ListarOrdenesAsync`, `ObtenerOrdenAsync`, `DescargarOrdenEnPdfAsync`,
+    `EnviarOrdenAsync`, `CerrarSaldoDeOrdenAsync`, `ListarCruceAsync`, `CruceDeFacturaAsync`, `ListarCostosAdicionalesAsync`,
+    `ObtenerCostosAdicionalesAsync`, `EmitirEventosRadianAsync`) y las rutas `ComprasClient.Rutas.{Solicitudes, Ordenes, Cruce,
+    CostosAdicionales}`; `Services/Inventario/InventarioClient.Costeo.cs` (`ImpactoEnCostosAsync`, `ImpactoEnCostosDto`,
+    `DocumentoAfectadoDto`); los DTO espejo de `Models/Compras/ComprasDtos.Completas.cs` (`PlanDeCompraDto`, `PendienteDeLineaDeCompraDto`,
+    `LineaDelCruceDto`, `FacturaDelCruceDto`, `CostosAdicionalesDto`, `RepartoDeCostoAdicionalDto`, `LineaDeRecepcionDelRepartoDto`,
+    `RepartoManualRequest`, `EnviarOrdenRequest`, `CerrarSaldoRequest`, `EmitirEventosRadianRequest`, `EmisionRadianDto`,
+    `EventoRadianEmitidoDto`) con los textos `EstadosDelCruce` y `MetodosDeReparto`; `ClasesDeCompra.{Solicitud, Orden,
+    CostosAdicionales}`; `DocumentoDeInventarioDto.LandedCost`; los campos de I5 en `BorradorDeCompraRequest`/`LineaDeCompraRequest` y
+    `DocumentoDeCompraDto.{Plan, PendingLines, Match}`. Pantallas `Pages/Compras/{Solicitudes, Ordenes, Cruce, CostosAdicionales}.razor`;
+    componentes `Components/Inventario/ImpactoEnCostos.razor` y `Components/Inventario/CambioDeMetodoDialog.razor`. En la vista
+    `kardex` (`KardexReportQuery`) la columna visible **«Capas consumidas»** (índice 15, antes de las ocultas). Temas del manual
+    `compras-solicitudes`, `compras-ordenes`, `compras-cruce`, `compras-costos-adicionales` e `inventario-costeo-avanzado`. Reglas en T42h.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2233,6 +2247,11 @@ idempotente sobre una cooperativa con los de I1 a I4) y `tests/IngenIA365ERP.App
 `NadieEscribeElKardexFueraDelRegistro.Solo_el_registro_y_la_reconstruccion_escriben_las_capas_y_sus_consumos`,
 `PrincipioXI_ContableImmutable` (+ `Entities/Inventory/Transactions/LayerConsumption`; `Nadie_borra_consumos_de_capa`) y
 `LosParametrosSeLeenEnUnSoloSitio.Los_retroactivos_se_leen_solo_en_el_registro_del_kardex`.
+**(nuevos, I5 Shared, T810–T816, T847–T849)** `tests/IngenIA365ERP.Architecture.Tests/Principles/LasPantallasDeComprasCompletasEstanEnElMenu`
+(las cuatro pantallas con `PermissionGate`, `IndicadorDeCarga` y su enlace del menú; recepción contra orden, pestaña del cruce y emisión
+RADIAN en la factura; `ImpactoEnCostos` en las cuatro pantallas; el diálogo del cambio de método desde Parámetros; las capas en el kardex
+y los filtros propios en los informes), `tests/IngenIA365ERP.Shared.Tests/Inventario/ComprasCompletasClientTests` (rutas, clave sólo en
+las escrituras, sin `Authorization`) y `tests/IngenIA365ERP.Application.Tests/Inventory/Kardex/KardexConCapasTests`.
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 
@@ -3083,6 +3102,24 @@ a revisar por el dueño y la contadora).** Lo que T836–T844, api.md §7/§9.3/
   no crea capas ni consumos (nacen con su línea).
 - *Valorizado (T844).* Una fila por grupo contable y fecha (`asOf`, por defecto hoy, y `comparativeFrom`), con el grupo del producto a cada
   fecha y como corte del sistema anterior la fecha de su primer saldo inicial.
+
+**T42h · Pantallas de compras completas y costeo avanzado (I5, T810–T816, T847–T849; 2026-09-28; a revisar por el dueño).**
+- *Fecha propuesta del cambio de método (T848).* La tarea pide «el primer día del próximo período abierto», pero T42g/T841 no admiten una
+  vigencia futura. El diálogo propone el día siguiente al último período cerrado (sin cierres, el primer día del mes de arranque del
+  inventario o, sin él, el del mes en curso), nunca después de hoy; si el servidor responde `Parameters.RequiresPeriodStart` con
+  `earliestAllowed`, la ofrece, y si esa fecha no ha llegado lo dice («regístrelo ese día»). El acta se pide siempre y es obligatoria
+  sólo si la clave la exige (`Costeo.CambioExigeActa`, `RequiresLegalSource`). Parámetros ya no abre «Nueva vigencia» para
+  `Costeo.Metodo` ni `Costeo.Ambito`: sólo «Cambiar…» con `Inventory.Costing.Manage`.
+- *Cuándo se ve el impacto (T847).* La pantalla no sabe cuál es el último movimiento de cada producto; el componente pregunta a
+  `cost-impact` (una consulta) cada vez que el borrador guardado tiene fecha anterior a hoy y la persona tiene `Inventory.Costs.Read`, y
+  sólo muestra el aviso con «Ver impacto en costos» si el servidor dice `retroactive = true`. Si la puerta del retroactivo lo rechaza
+  (`Inventory.Costing.*`) lo dice antes de confirmar; los demás rechazos los dice la confirmación.
+- *Capas en el kardex (T849).* Mostrarlas exigía que el informe las trajera: se tocó `KardexReportQuery` (fuera de la sección Shared, lo
+  mínimo) con una columna visible más; los índices de las columnas existentes no cambian.
+- *Solicitud y emisión.* «Enviar a aprobación» es la confirmación del ciclo común (la política del tipo decide si queda en aprobación).
+  «Emitir acuse y recibo» manda los eventos en estado pendiente o rechazado, en orden 030 → 032; el servidor sigue siendo quien valida.
+- *Informes.* En `purchase-matches` el filtro «status» son los estados del cruce (retenida, aprobada, rechazada), no los del documento;
+  al cambiar de vista se limpian `status` y `supplier`.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

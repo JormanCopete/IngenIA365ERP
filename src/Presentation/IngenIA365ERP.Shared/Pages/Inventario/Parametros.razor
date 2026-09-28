@@ -10,7 +10,8 @@
 @* Feature 012, T430 (FR-012, US12-3; contracts/api.md §7): cada clave del catálogo con su valor vigente, de dónde sale (una
    vigencia o el defecto), sus excepciones por ámbito y lo programado. Nada se edita en su sitio: un cambio es una vigencia
    nueva desde una fecha, con motivo, y la anterior queda en el historial. El modo de paso a contabilidad se registra por
-   cadena; dejar sin paso un tipo fiscal pide confirmarlo con la lista de tipos. *@
+   cadena; dejar sin paso un tipo fiscal pide confirmarlo con la lista de tipos. I5 (T848): Costeo.Metodo y Costeo.Ambito se cambian por
+   su propio diálogo (CambioDeMetodoDialog), que propone la fecha, pide justificación y acta y advierte que no se deshace. *@
 <PermissionGate Required="Inventory.Parameters.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -44,7 +45,16 @@
                             <td>
                                 <SfButton CssClass="e-flat e-small" OnClick="@(() => VerHistorialAsync(parametro))">Historial</SfButton>
                                 <PermissionGate Required="Inventory.Parameters.Manage">
-                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirNueva(parametro))">Nueva vigencia</SfButton>
+                                    @if (EsDeMetodo(parametro))
+                                    {
+                                        <PermissionGate Required="Inventory.Costing.Manage">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirCambioDeMetodo(parametro))">Cambiar…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                    else
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirNueva(parametro))">Nueva vigencia</SfButton>
+                                    }
                                 </PermissionGate>
                             </td>
                         </tr>
@@ -155,6 +165,7 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+<CambioDeMetodoDialog @bind-Visible="_mostrarCambioDeMetodo" Parametro="@_deMetodo" OnRegistrado="@CambioDeMetodoRegistradoAsync" />
 </PermissionGate>
 
 @code {
@@ -170,6 +181,24 @@
     private int _ambito;
     private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
     private IReadOnlyList<TipoFiscalDto>? _tiposFiscales;
+    private ParametroDto? _deMetodo;
+    private bool _mostrarCambioDeMetodo;
+
+    /// <summary>El método y el ámbito de costeo tienen su propio diálogo (T848).</summary>
+    private static bool EsDeMetodo(ParametroDto p) => p.Key is "Costeo.Metodo" or "Costeo.Ambito";
+
+    private void AbrirCambioDeMetodo(ParametroDto p)
+    {
+        _deMetodo = p;
+        _mostrarCambioDeMetodo = true;
+    }
+
+    private async Task CambioDeMetodoRegistradoAsync(DateOnly desde)
+    {
+        _ = desde;
+        await CargarAsync();
+        if (_deMetodo is { } p && _elegido?.Key == p.Key) await VerHistorialAsync(p);
+    }
 
     protected override async Task OnInitializedAsync()
     {
