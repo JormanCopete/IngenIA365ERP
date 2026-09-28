@@ -233,6 +233,9 @@ public static class DependencyInjection
         // vinculos, las reglas de la recepcion contra orden y el modelo de la orden en PDF (lo dibuja la API: IOrdenDeCompraEnPdf).
         services.AddScoped<Inventory.Purchasing.PendientesDeCompra>();
         services.AddScoped<Inventory.Purchasing.Common.RecepcionContraOrden>();
+        // I5 (T794-T796): el cruce a tres vías de la factura del proveedor y la decisión de sus excepciones (SourceType PurchaseMatchLine).
+        services.AddScoped<Inventory.Purchasing.CruceATresVias>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Purchasing.DecisionDeCruce>();
         services.AddScoped<Inventory.Purchasing.ModeloDeOrdenDeCompra>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeSolicitudDeCompra>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeOrdenDeCompra>();

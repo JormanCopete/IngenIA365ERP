@@ -230,8 +230,12 @@ public sealed class GetPurchaseDocumentQueryHandler(
             ? await ConsultasDeCompras.SaldosDeRecepcionAsync(vinculos, documento.Lines.ToList(), ct)
             : [];
         var (plan, pendientesDeLinea) = await PlanAsync(documento, ct);
+        // I5 (T797): el cruce a tres vías de la factura, si se cruzó contra una orden.
+        var cruce = documento.Class == DocumentClass.SupplierInvoice
+            ? await Consultas.GetSupplierInvoiceMatchQueryHandler.DeFacturaAsync(db, vista, documento.Id, ct)
+            : [];
         return Result.Success(new PurchaseDocumentDto(detalle, ConsultasDeCompras.Info(proveedor), eventos, saldos, documento.OperationMunicipalityDaneCode,
-            await AjustesDeCostoAsync(documento, ct), plan, pendientesDeLinea));
+            await AjustesDeCostoAsync(documento, ct), plan, pendientesDeLinea, cruce.Count == 0 ? null : cruce));
     }
 
     /// <summary>

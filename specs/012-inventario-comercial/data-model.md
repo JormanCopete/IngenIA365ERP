@@ -2853,7 +2853,7 @@ remiten a ella. El `Module` es siempre `Inventory`:
 | `DiscountOverCap` | `DocumentLineDiscount` | regla fija de un nivel: `Inventory.Discounts.Authorize` y tope del aprobador ≥ el descuento; si la cooperativa registra una política para el sujeto, rige la política | el cajero que lo pidió |
 | `ProvisionalCredit` | `DocumentPayment` | regla fija de un nivel: `Inventory.Sales.SellOnCredit` con monto máximo ≥ el valor a crédito (o política del sujeto) | el cajero (T32) |
 | `TransferDiscrepancy` | `TransferDiscrepancy` | la política del tipo del documento que la resuelve (el que crea `ResolveTransferDiscrepancyCommand`: recepción hacia el origen o el destino, baja desde el tránsito o ajuste positivo); sin política, un nivel con `Inventory.Transfers.Approve` | quien despachó, quien recibió y quien propone la resolución |
-| `PurchaseMatchException` (I5) | `PurchaseMatchLine` | la política del tipo de la factura del proveedor | quien registró la factura |
+| `PurchaseMatchException` (I5) | `PurchaseMatchLine` | la política del sujeto para el tipo de la factura del proveedor; sin política, un nivel con `Inventory.Purchases.Approve` (api.md §14.9; decisiones-transversales T42d) | quien registró la factura |
 
 ---
 

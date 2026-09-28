@@ -160,6 +160,16 @@ public static class ErroresDeCompras
         $"Línea {lineNumber}: se recibe más de lo ordenado fuera de la tolerancia (ordenado {ordered}, recibido con ésta {received}, tolerancia {tolerance}).",
         new { lineNumber, ordered, received, tolerance });
 
+    /// <summary>
+    /// Aprobar por excepción una línea del cruce retenida por cantidad: facturar más de lo recibido no se aprueba; sale rechazando la
+    /// factura o registrando otra recepción (T796, decisiones-transversales §3 T42a). (nuevo)
+    /// </summary>
+    public static Error QuantityNotApprovable(int lineNumber, decimal receivedNotInvoiced, decimal invoiced) => new ErrorConDatos(
+        CruceDeCompra.CodigoCantidadNoAprobable,
+        $"Línea {lineNumber}: se factura más de lo recibido ({invoiced} sobre {receivedNotInvoiced}); eso no se aprueba por excepción. " +
+        "Rechace la factura para corregirla o registre la recepción que falta.",
+        new { lineNumber, receivedNotInvoiced, invoiced });
+
     /// <summary>Enviar al proveedor una orden que no está confirmada (T791). (nuevo)</summary>
     public static Error OrderNotConfirmed(DocumentStatus status) => new ErrorConDatos("Inventory.PurchaseOrder.NotConfirmed",
         $"Sólo se envía al proveedor una orden confirmada; ésta está {InventoryErrors.Estado(status)}.",

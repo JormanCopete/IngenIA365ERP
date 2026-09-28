@@ -1488,7 +1488,7 @@ lineNumber, ordered, received, tolerance }`).
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
-| `GET /purchases/matches?status=&supplierPersonPublicId=&page=&pageSize=` | Purchases.View | `PagedResult<PurchaseMatchLineDto { publicId, supplierInvoice { publicId, displayNumber, supplierNumber }, lineNumber, product, ordered, received, invoiced, orderPrice, receiptPrice, invoicePrice, quantityVariance, priceVariance, reasons: [Quantity, Price], status: Held \| Approved \| Rejected, approvalRequestPublicId? }>` |
+| `GET /purchases/matches?status=&supplierPersonPublicId=&page=&pageSize=` | Purchases.View | `PagedResult<PurchaseMatchLineDto { publicId, supplierInvoice { publicId, displayNumber, supplierNumber }, lineNumber, product, ordered, received, invoiced, orderPrice, receiptPrice, invoicePrice, quantityVariance, priceVariance, reasons: [Quantity, Price], status: Held \| Approved \| Rejected, approvalRequestPublicId?, exceedsTolerance, tolerance }>` (precios nulos sin `Inventory.Costs.Read`; `exceedsTolerance` y `tolerance` **(nuevos)**, T42d) |
 | `GET /purchases/supplier-invoices/{id}/match` | Purchases.View | el cruce de esa factura, línea por línea |
 
 Al confirmar una factura contra recepciones con orden, `CruceDeCompra` compara por línea lo ordenado, lo

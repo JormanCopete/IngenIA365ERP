@@ -119,6 +119,9 @@ public sealed class ComprasDePrueba
     /// <summary>Las reglas de la recepción contra orden (I5, T789).</summary>
     public RecepcionContraOrden ContraOrden() => new(C.Db, Pendientes(), K.Lector());
 
+    /// <summary>El cruce a tres vías de la factura del proveedor (I5, T794), con el motor de aprobaciones de prueba.</summary>
+    public CruceATresVias Cruce() => new(C.Db, K.Motor, K.Lector(), Vinculos(), C.Reloj);
+
     public EfectosDeClase Efectos()
     {
         var registro = K.Registro();
@@ -132,7 +135,7 @@ public sealed class ComprasDePrueba
             new EfectoDeAjustePositivo(registro, reversion, emision, maestros, K.Permisos, C.Db),
             new EfectoDeAjusteNegativo(registro, reversion, emision, maestros, K.Permisos, C.Db),
             new EfectoRecepcionDeCompra(registro, reversion, emision, maestros, Calculo(), C.Db, ContraOrden()),
-            new EfectoFacturaDeProveedor(registro, emision, maestros, Calculo(), vinculos, diferencias, C.Db),
+            new EfectoFacturaDeProveedor(registro, emision, maestros, Calculo(), vinculos, diferencias, C.Db, Cruce()),
             new EfectoNotaDeProveedor(registro, emision, maestros, Calculo(), vinculos, diferencias, C.Db),
             new EfectoDevolucionAProveedor(registro, reversion, emision, maestros, vinculos, C.Db),
             new EfectoDeSolicitudDeCompra(maestros),

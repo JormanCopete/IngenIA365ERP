@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Application.Inventory.Kardex;
+using IngenIA365ERP.Application.Inventory.Purchasing;
 using IngenIA365ERP.Application.Inventory.Purchasing.Common;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Purchasing;
@@ -28,7 +29,13 @@ namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 /// <item>a crédito nacen el 030 y el 032 en <c>Pending</c>; de contado, <c>NotApplicable</c>;</item>
 /// <item>emite <c>FacturaProveedorRegistrada</c> v1 (sin costo) y copia el modo de su recepción (derivado,
 /// <see cref="OrigenesDelModoAsync"/>);</item>
-/// <item>anularla (el <b>registro</b>) reversa sus diferencias de precio, libera su número y no toca los eventos.</item>
+/// <item>anularla (el <b>registro</b>) reversa sus diferencias de precio, libera su número y no toca los eventos;</item>
+/// <item>I5 (T794, T796): si alguna recepción enlazada viene de una orden, <see cref="CruceATresVias"/> cruza cada línea contra lo
+/// ordenado y lo recibido en el paso 2; en un intento nuevo da de baja las filas del anterior, y en el paso de aprobaciones
+/// (<see cref="AprobacionPropiaAsync"/>, también en la reentrada) escribe <c>INV_PurchaseMatchLines</c> y pide una aprobación por línea
+/// retenida: la factura queda <c>PendingApproval</c> sin número hasta que <see cref="DecisionDeCruce"/> apruebe la última. Con orden,
+/// facturar más de lo recibido no responde 422: queda retenido por cantidad. Sin <c>cruce</c> (el documento soporte,
+/// que no se cruza) sigue el cruce de dos vías de I1.</item>
 /// </list>
 /// </summary>
 public class EfectoFacturaDeProveedor(
@@ -38,7 +45,8 @@ public class EfectoFacturaDeProveedor(
     CalculoTributarioDeCompra calculo,
     VinculosDeCompra vinculos,
     DiferenciasDePrecioDeCompra diferencias,
-    IApplicationDbContext db) : EfectoDeClaseBase
+    IApplicationDbContext db,
+    CruceATresVias? cruce = null) : EfectoDeClaseBase
 {
     private sealed record Preparado(
         CalculoDeCompra Calculo,
@@ -48,6 +56,7 @@ public class EfectoFacturaDeProveedor(
 
     private readonly Dictionary<Guid, Preparado> _preparados = [];
     private readonly Dictionary<Guid, IReadOnlyList<DiferenciaDePrecioRegistrada>> _registradas = [];
+    private readonly Dictionary<Guid, IReadOnlyList<LineaCruzada>> _cruces = [];
 
     public override DocumentClass Clase => DocumentClass.SupplierInvoice;
 
@@ -103,6 +112,15 @@ public class EfectoFacturaDeProveedor(
         var recepciones = await ReglasDeFacturaAsync(documento, ct);
         if (recepciones.IsFailure) return Result.Failure(recepciones.Error);
 
+        // I5 (T794): el cruce a tres vías, sin escribir; un intento nuevo da de baja las filas del anterior.
+        if (cruce is not null)
+        {
+            var cruzadas = await cruce.CruzarAsync(documento, ct);
+            if (cruzadas.IsFailure) return Result.Failure(cruzadas.Error);
+            if (documento.Status == DocumentStatus.Draft) await cruce.DarDeBajaAnterioresAsync(documento, ct);
+            _cruces[documento.PublicId] = cruzadas.Value;
+        }
+
         var calculado = await calculo.CalcularAsync(documento, contexto.Tipo, ct);
         if (calculado.IsFailure) return Result.Failure(calculado.Error);
         CalculoTributarioDeCompra.AplicarTotales(documento, calculado.Value.Totales);
@@ -121,6 +139,15 @@ public class EfectoFacturaDeProveedor(
     }
 
     public override decimal MontoParaAprobar(ContextoDeEfecto contexto) => contexto.Documento.Total;
+
+    /// <summary>
+    /// I5 (T794): las filas del cruce y una aprobación por línea retenida (<c>PurchaseMatchException</c>). Nula sin orden o sin nada
+    /// retenido.
+    /// </summary>
+    public override Task<Result<Domain.Entities.Approvals.ApprovalRequest?>> AprobacionPropiaAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        cruce is not null && !contexto.EsAnulacion && _cruces.TryGetValue(contexto.Documento.PublicId, out var cruzadas)
+            ? cruce.SolicitarAsync(contexto.Documento, contexto.Tipo, cruzadas, ct)
+            : Task.FromResult(Result.Success<Domain.Entities.Approvals.ApprovalRequest?>(null));
 
     public override PedidoDeCerrojo Cerrojo(ContextoDeEfecto contexto) =>
         _preparados.TryGetValue(contexto.Documento.PublicId, out var p)
@@ -225,7 +252,9 @@ public class EfectoFacturaDeProveedor(
         }
 
         var consumo = await vinculos.ConsumoAsync(lineasDeRecepcion.Keys.ToList(), documento.Id, ct);
-        foreach (var grupo in vivas.Where(l => porLinea.ContainsKey(l.Id)).GroupBy(l => porLinea[l.Id].SourceLineId))
+        // I5 (T796): contra una recepción que viene de una orden, facturar de más no es un 422: lo retiene el cruce por cantidad.
+        var conOrden = cruce is null ? new Dictionary<int, int>() : await cruce.OrdenDeLasRecepcionesAsync(lineasDeRecepcion.Keys.ToList(), ct);
+        foreach (var grupo in vivas.Where(l => porLinea.ContainsKey(l.Id)).GroupBy(l => porLinea[l.Id].SourceLineId).Where(g => !conOrden.ContainsKey(g.Key)))
         {
             var origen = lineasDeRecepcion[grupo.Key];
             var hecho = consumo.GetValueOrDefault(grupo.Key) ?? new ConsumoDeRecepcion(0m, 0m);

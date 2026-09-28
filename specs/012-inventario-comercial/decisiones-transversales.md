@@ -1960,6 +1960,15 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `PurchaseDocumentDto.{Plan, PendingLines}` con `PurchasePlanInfoDto` y `PurchasePendingLineDto`; evento de auditoría
     `Inventory.PurchaseOrder.Sent` (`AuditEventTypes.InventoryPurchaseOrderSent`). API: `Reports/PurchaseOrderReport` y
     `PurchaseOrderPdfRenderer` (registrado en `Program.cs`). `PosicionDeReposicion` ya llena «por recibir». Reglas en T42c.
+- **I5, Application del cruce a tres vías (T794–T798, prueba T770; 2026-09-28) (nuevo)**: `Inventory/Purchasing/CruceATresVias`
+    (`LineaCruzada`; `OrdenDeLasRecepcionesAsync`, `CruzarAsync`, `VivasAsync`, `DarDeBajaAnterioresAsync`, `SolicitarAsync`,
+    `PrecioPorUnidadBase`, `Monto`, `Huella`), inyectado **opcional** en `EfectoFacturaDeProveedor` (el documento soporte no lo recibe:
+    no se cruza) y usado por su `AprobacionPropiaAsync`; `Inventory/Purchasing/DecisionDeCruce` (`IFuenteDeAprobacion` +
+    `IFuenteConAprobador` de `SourceType = PurchaseMatchLine`); `ErroresDeCompras.QuantityNotApprovable`; la regla fija del sujeto
+    `PurchaseMatchException` en `EvaluadorDePolitica.ReglaFija` (un nivel con `Inventory.Purchases.Approve`); consultas
+    `Inventory/Purchasing/Consultas/{ListPurchaseMatchesQuery, GetSupplierInvoiceMatchQuery}` con `PurchaseMatchLineDto`,
+    `PurchaseMatchInvoiceDto` y `ConsultasDelCruce` (`Visibles`, `DtosAsync`); `PurchaseDocumentDto.Match`; la vista
+    `Inventory/Reports/PurchaseMatchesReportQuery` (`purchase-matches`; la ruta la registra T809). Reglas en T42d.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2031,7 +2040,9 @@ a otro ya registrado del ámbito con PEPS vigente; `Retroactivo.CodigoRequierePr
 de T838 (`Inventory.Costing.RetroactiveNotAllowed`, `.RetroactiveTooOld`) los publica la aplicación.
 
 Cruce a tres vías (I5, T796; **(nuevo)**): `Inventory.PurchaseMatch.QuantityNotApprovable` (aprobar por excepción una línea retenida
-por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción).
+por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción). Lo publica `DecisionDeCruce` en cualquier
+nivel (la decisión no queda), con `data { lineNumber, receivedNotInvoiced, invoiced }`, y la confirmación de la factura si la política
+vigente no pidiera aprobación para esa línea (T42d).
 
 Solicitudes y órdenes (I5, T787–T792; **(nuevo)** los que api.md §14.9 nombra sin definir): `Inventory.Purchase.OrderFromOtherSupplier`
 (`data { lineNumber, orderPublicId, displayNumber }`), `Inventory.PurchaseOrder.NotOpen` (ahora también recibir contra una orden sin
@@ -2855,6 +2866,32 @@ Lo que api.md §14.9 pide en el cuerpo y data-model no ubicaba (sin columnas nue
 - Una orden en borrador o en aprobación **no** cuenta como «por recibir» (sólo `Confirmed` sin saldo cerrado); cerrada o anulada,
   `pendingToReceive` = 0. El PDF calcula los impuestos a la fecha de la orden (estimados; sin retenciones) y no guarda foto
   tributaria: la foto la guarda la factura del proveedor.
+
+**T42d · Cruce a tres vías en la confirmación y decisión de sus excepciones (I5, T794–T798; 2026-09-28; a revisar por el dueño).**
+Lo que T794/T795 y api.md §14.9 dejaban abierto y la aplicación tuvo que fijar:
+- *Cuándo se cruza.* Sólo si alguna recepción enlazada a la factura viene de una orden (vínculo `FromOrder`); entonces se escriben
+  filas para **todas** las líneas enlazadas a recepciones (las de recepciones sin orden, en dos vías, nunca retienen). Sin orden no se
+  escribe nada y todo sigue como en I1 (E6). El documento soporte no se cruza (T794 nombra sólo `SupplierInvoice`).
+- *Dónde, en el flujo.* El cálculo va en el paso 2 (`ValidarAsync`, sin escribir); las filas y las solicitudes, en el paso de
+  aprobaciones como **aprobación propia de la clase** (`AprobacionPropiaAsync`, el mismo punto que el crédito provisional de I3),
+  **después** de la política del tipo (`DocumentConfirmation`): si el tipo pide aprobación, el cruce se escribe al reentrar con esa
+  aprobación. Un intento nuevo (la factura en borrador) da de baja lógica las filas del anterior y cancela sus solicitudes pendientes;
+  la reentrada reutiliza las del intento en curso.
+- *Una solicitud por línea retenida*, con la política del sujeto `PurchaseMatchException` para el tipo de la factura o, sin ella, la
+  **regla fija** de un nivel con `Inventory.Purchases.Approve` (api.md §14.9; se agregó a `EvaluadorDePolitica.ReglaFija`, data-model
+  §21 actualizado). El **monto** que evalúa la política es `|PriceDifferenceAmount| + round(QuantityDifference × precio facturado)`; el
+  alcance, la bodega de la recepción; la huella, la fila del cruce con la factura. Si la política vigente no pide aprobación para ese
+  monto, la excepción de precio pasa sola (`Approved`) y la de cantidad responde `QuantityNotApprovable`.
+- *Precios comparados*: el neto de descuento por unidad base (`NetAmount / QuantityBase`, 6 decimales) de la orden, la recepción y la
+  factura; los impuestos que van al costo no entran al cruce (sí a la diferencia de precio que se reconoce, como en E6).
+- *Decisión* (`DecisionDeCruce`): la aprobación marca la línea `Approved`; mientras quede otra `Held` la factura sigue en
+  `PendingApproval`; la última reentra por el flujo canónico en la transacción del aprobador y la diferencia de precio se reconoce
+  con la misma regla de E6 (kardex `CostAdjustment` `PriceDifference` sobre lo que sigue en existencia, lo vendido va al costo de
+  ventas del mensaje, un `AjusteDeCostoReconocido` por recepción). Rechazar **o retirar** una línea la marca `Rejected`, devuelve la
+  factura a borrador y cancela las demás solicitudes del cruce de esa factura; las filas quedan como historia hasta el siguiente intento.
+- *Consultas*: `PurchaseMatchLineDto` agrega `exceedsTolerance` y `tolerance` (el `ToleranceJson`) **(nuevos)** para que la pantalla del
+  cruce muestre la tolerancia usada; precios y diferencia de precio nulos sin `Inventory.Costs.Read`, en las consultas y en la vista
+  `purchase-matches`, cuyo rango de fechas (el común, el mes en curso sin fechas) filtra por la fecha de la factura.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

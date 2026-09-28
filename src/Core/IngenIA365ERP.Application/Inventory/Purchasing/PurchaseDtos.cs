@@ -34,7 +34,8 @@ public sealed record ReceiptLineBalanceDto(Guid LinePublicId, int LineNumber, de
 
 /// <summary>
 /// El detalle de un documento de compras: el genérico (<see cref="InventoryDocumentDto"/>) más lo propio de la clase —el
-/// documento del proveedor y sus eventos RADIAN, o los saldos por línea de una recepción—.
+/// documento del proveedor y sus eventos RADIAN, o los saldos por línea de una recepción— y, en una factura cruzada contra una
+/// orden, su cruce a tres vías (<see cref="Match"/>, api.md §14.9, T797; nulo si no se cruzó).
 /// </summary>
 public sealed record PurchaseDocumentDto(
     InventoryDocumentDto Document,
@@ -44,7 +45,8 @@ public sealed record PurchaseDocumentDto(
     string? OperationMunicipalityDaneCode,
     IReadOnlyList<AjusteDeCostoDeAnulacionDto>? CostAdjustments = null,
     PurchasePlanInfoDto? Plan = null,
-    IReadOnlyList<PurchasePendingLineDto>? PendingLines = null);
+    IReadOnlyList<PurchasePendingLineDto>? PendingLines = null,
+    IReadOnlyList<Consultas.PurchaseMatchLineDto>? Match = null);
 
 /// <summary>
 /// Lo propio de una solicitud o una orden en su detalle (I5, T787, T792; api.md §14.9): para cuándo se necesita (<c>neededBy</c>) o la
