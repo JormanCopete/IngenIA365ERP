@@ -28,7 +28,8 @@ public sealed class FuenteDeEmisionDeInventario(
     IActorActual actorActual,
     IDateTimeService reloj,
     ILectorDeParametros parametros,
-    ConfirmacionDeDocumento confirmacion) : IFuenteDeDocumentoElectronico
+    ConfirmacionDeDocumento confirmacion,
+    RechazoFiscalEnCurso? rechazoEnCurso = null) : IFuenteDeDocumentoElectronico
 {
     /// <summary>El módulo fuente que se sella en <c>COR_ElectronicDocuments.SourceModule</c>.</summary>
     public const string Modulo = "INV";
@@ -316,6 +317,9 @@ public sealed class FuenteDeEmisionDeInventario(
         db.DocumentLinks.Add(new DocumentLink { SourceDocument = original, TargetDocument = anulacion, Kind = DocumentLinkKind.Voids });
         await db.SaveChangesAsync(ct);
 
+        // T724/T725: la anulación de la venta admite la clase fiscal, pone fiscalCase y ajusta el crédito con VoidingByDianRejection.
+        rechazoEnCurso?.AnularSinEfectoFiscal(anulacion.PublicId, caso);
+
         var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(anulacion.PublicId, GrupoEsperado: null), ct);
         if (confirmada.IsFailure) return Result.Failure<AnulacionSinEfectoFiscal>(confirmada.Error);
         return Result.Success(new AnulacionSinEfectoFiscal(anulacion.PublicId, confirmada.Value.DisplayNumber));
@@ -323,8 +327,10 @@ public sealed class FuenteDeEmisionDeInventario(
 
     // ------------------------------------------------------------------------------------------ caso b: confirmar --
 
-    public async Task<Result<ReemplazoConfirmado>> ConfirmarReemplazoAsync(Guid rejectedSourceDocumentPublicId, Guid replacementDocumentPublicId, CancellationToken ct)
+    public async Task<Result<ReemplazoConfirmado>> ConfirmarReemplazoAsync(Guid rejectedSourceDocumentPublicId, Guid replacementDocumentPublicId,
+        Action<InventoryDocument> asignarNumeroFiscal, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(asignarNumeroFiscal);
         var par = await db.DocumentLinks.AsNoTracking()
             .Where(l => l.Kind == DocumentLinkKind.ReplacementOf && !l.IsDeleted)
             .Join(db.InventoryDocuments.AsNoTracking(), l => l.SourceDocumentId, o => o.Id, (l, o) => new { l, Original = o })
@@ -336,8 +342,89 @@ public sealed class FuenteDeEmisionDeInventario(
             || par.Status is not (DocumentStatus.Draft or DocumentStatus.PendingApproval))
             return Result.Failure<ReemplazoConfirmado>(ErroresDeFacturacionElectronica.NotReplacementDraft());
 
+        // El mismo número del rechazado, por la vía exclusiva del caso b (la numeración de la confirmación no vuelve a numerar un documento
+        // que ya lo tiene); la venta de reemplazo ajusta el crédito del rechazado con Replacement en vez de registrar uno nuevo.
+        var reemplazo = await db.InventoryDocuments.FirstAsync(d => d.PublicId == replacementDocumentPublicId, ct);
+        asignarNumeroFiscal(reemplazo);
+        rechazoEnCurso?.Reemplazar(replacementDocumentPublicId, rejectedSourceDocumentPublicId);
+
         var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(replacementDocumentPublicId, GrupoEsperado: null), ct);
         if (confirmada.IsFailure) return Result.Failure<ReemplazoConfirmado>(confirmada.Error);
         return Result.Success(new ReemplazoConfirmado(replacementDocumentPublicId, confirmada.Value.DisplayNumber));
     }
+
+    // ------------------------------------------------------------------------------------------ caso a: la contraparte --
+
+    public async Task<Result<FotoFiscalDeEntrada?>> ContraparteDelMaestroAsync(Guid sourceDocumentPublicId, CancellationToken ct)
+    {
+        var d = await db.InventoryDocuments.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == sourceDocumentPublicId && !x.IsDeleted, ct);
+        if (d is null) return Result.Failure<FotoFiscalDeEntrada?>(InventoryErrors.DocumentNotFound());
+        if (d.CounterpartyPersonId is not int personaId) return Result.Success<FotoFiscalDeEntrada?>(null);
+
+        var persona = await db.People.AsNoTracking().FirstAsync(p => p.Id == personaId, ct);
+        var vigente = await db.DocumentPartySnapshots.AsNoTracking().Where(f => f.DocumentId == d.Id && !f.IsDeleted)
+            .Select(f => (int?)f.Version).MaxAsync(ct) ?? 0;
+        var foto = Foto(FotoDeLaContraparte.De(d, persona)) with { Version = vigente + 1 };
+        return Result.Success<FotoFiscalDeEntrada?>(foto);
+    }
+
+    public async Task<Result> RegistrarVersionDeContraparteAsync(Guid sourceDocumentPublicId, FotoFiscalDeEntrada foto, string motivo, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(foto);
+        if (string.IsNullOrWhiteSpace(motivo)) throw new ArgumentException("La versión nueva de la copia fiscal exige el motivo.", nameof(motivo));
+
+        var d = await db.InventoryDocuments.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == sourceDocumentPublicId && !x.IsDeleted, ct);
+        if (d is null || d.CounterpartyPersonId is not int personaId) return Result.Failure(InventoryErrors.DocumentNotFound());
+        var vigente = await db.DocumentPartySnapshots.AsNoTracking().Where(f => f.DocumentId == d.Id && !f.IsDeleted)
+            .Select(f => (int?)f.Version).MaxAsync(ct) ?? 0;
+        if (foto.Version != vigente + 1)
+            throw new InvalidOperationException(
+                $"La copia fiscal del documento {d.PublicId} va en la versión {vigente}: la nueva es la {vigente + 1}, no la {foto.Version}.");
+
+        // Lo que la copia guarda y la entrada no lleva (nombres, ciudad, marcas de renta) sale del maestro, como en la confirmación.
+        var persona = await db.People.AsNoTracking().FirstAsync(p => p.Id == personaId, ct);
+        var delMaestro = FotoDeLaContraparte.De(d, persona);
+        var razon = motivo.Trim();
+        db.DocumentPartySnapshots.Add(new DocumentPartySnapshot
+        {
+            DocumentId = d.Id,
+            Version = foto.Version,
+            PersonId = personaId,
+            DianOrganizationType = foto.OrganizationType,
+            DianIdTypeCode = foto.IdTypeCode,
+            TaxId = foto.TaxId,
+            CheckDigit = foto.CheckDigit,
+            LegalName = foto.LegalName,
+            FirstName = delMaestro.FirstName,
+            LastName = delMaestro.LastName,
+            Address = foto.Address,
+            MunicipalityDaneCode = foto.MunicipalityDaneCode,
+            CityName = delMaestro.CityName,
+            DepartmentName = delMaestro.DepartmentName,
+            CountryCode = foto.CountryCode,
+            Email = foto.Email,
+            Phone = foto.Phone,
+            DianResponsibilities = foto.Responsibilities,
+            DianTaxSchemeCode = foto.TaxSchemeCode,
+            IsVatResponsible = foto.IsVatResponsible,
+            IsLargeContributor = foto.IsLargeContributor,
+            IsSelfWithholder = foto.IsSelfWithholder,
+            IsVatWithholdingAgent = foto.IsVatWithholdingAgent,
+            IsSimpleTaxRegime = foto.IsSimpleTaxRegime,
+            IsIncomeTaxFiler = delMaestro.IsIncomeTaxFiler,
+            WithholdingExempt = delMaestro.WithholdingExempt,
+            IcaWithholdingExempt = delMaestro.IcaWithholdingExempt,
+            CiiuCode = foto.CiiuCode,
+            ChangeReason = razon.Length <= 300 ? razon : razon[..300],
+        });
+        return Result.Success();
+    }
+
+    // ------------------------------------------------------------------------------------------ casos b y c: permiso --
+
+    public string PermisoDeConfirmar(ElectronicDocumentKind tipo) =>
+        (tipo is ElectronicDocumentKind.SupportDocument or ElectronicDocumentKind.SupportDocumentAdjustmentNote
+            ? PermisosDeGrupo.De(DocumentClassGroup.Purchases)
+            : PermisosDeGrupo.De(DocumentClassGroup.Sales)).Confirm!;
 }
+

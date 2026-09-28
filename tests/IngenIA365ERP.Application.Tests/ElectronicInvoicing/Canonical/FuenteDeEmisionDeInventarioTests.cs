@@ -144,10 +144,53 @@ public class FuenteDeEmisionDeInventarioTests
         e.Db.InventoryDocuments.Add(suelto);
         await e.Db.SaveChangesAsync();
 
-        var r = await e.Fuente.ConfirmarReemplazoAsync(e.Factura.PublicId, suelto.PublicId, default);
+        var r = await e.Fuente.ConfirmarReemplazoAsync(e.Factura.PublicId, suelto.PublicId, _ => { }, default);
 
         r.IsFailure.Should().BeTrue();
         r.Error.Code.Should().Be(ErroresDeFacturacionElectronica.NotReplacementDraftCode);
+    }
+
+    // ------------------------------------------------------------------------------------------ caso a (T722) --
+
+    [Fact]
+    public async Task La_contraparte_del_maestro_sale_con_la_version_siguiente_y_registrarla_la_agrega_con_su_motivo()
+    {
+        await using var e = await EscenarioAsync();
+        e.Db.People.Add(new IngenIA365ERP.Domain.Entities.Core.Person
+        {
+            Id = 42, FirstName = "ANA", LastName = "PÉREZ", TaxId = "16000111", Email = "facturas.ana@correo.co", Status = "A", CreatedBy = "test",
+        });
+        await e.Db.SaveChangesAsync();
+
+        var r = await e.Fuente.ContraparteDelMaestroAsync(e.Factura.PublicId, default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var foto = r.Value!;
+        foto.Version.Should().Be(3, "la vigente es la 2");
+        foto.TaxId.Should().Be("16000111");
+        foto.Email.Should().Be("facturas.ana@correo.co");
+
+        (await e.Fuente.RegistrarVersionDeContraparteAsync(e.Factura.PublicId, foto, "El correo estaba mal", default)).IsSuccess.Should().BeTrue();
+        await e.Db.SaveChangesAsync();
+
+        var leida = await e.Fuente.LeerAsync(e.Factura.PublicId, default);
+        var vigente = leida.Value.Contrapartes.MaxBy(f => f.Version)!;
+        vigente.Should().Be(foto, "la copia registrada se lee igual: el canónico que se reconstruya da los mismos bytes");
+        (await e.Db.DocumentPartySnapshots.SingleAsync(s => s.Version == 3)).ChangeReason.Should().Be("El correo estaba mal");
+
+        var otra = () => e.Fuente.RegistrarVersionDeContraparteAsync(e.Factura.PublicId, foto, "otra vez", default);
+        await otra.Should().ThrowAsync<InvalidOperationException>("la versión tiene que ser la siguiente a la vigente");
+    }
+
+    [Fact]
+    public async Task El_permiso_de_confirmar_es_el_de_ventas_o_el_de_compras_segun_el_tipo()
+    {
+        await using var e = await EscenarioAsync();
+
+        e.Fuente.PermisoDeConfirmar(ElectronicDocumentKind.Invoice).Should().Be("Inventory.Sales.Confirm");
+        e.Fuente.PermisoDeConfirmar(ElectronicDocumentKind.PosEquivalent).Should().Be("Inventory.Sales.Confirm");
+        e.Fuente.PermisoDeConfirmar(ElectronicDocumentKind.SupportDocument).Should().Be("Inventory.Purchases.Confirm");
+        e.Fuente.PermisoDeConfirmar(ElectronicDocumentKind.SupportDocumentAdjustmentNote).Should().Be("Inventory.Purchases.Confirm");
     }
 
     // ------------------------------------------------------------------------------------------ escenario --

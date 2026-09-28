@@ -1,4 +1,6 @@
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 
 namespace IngenIA365ERP.Application.ElectronicInvoicing.Canonical;
 
@@ -37,7 +39,33 @@ public interface IFuenteDeDocumentoElectronico
     /// canónico de su módulo. El número fiscal que toma lo decide la numeración de la plataforma (la vía exclusiva del
     /// reemplazo); la fuente no numera. Corre dentro de la transacción de quien llama. (nuevo)
     /// </summary>
-    Task<Result<ReemplazoConfirmado>> ConfirmarReemplazoAsync(Guid rejectedSourceDocumentPublicId, Guid replacementDocumentPublicId, CancellationToken ct);
+    /// <param name="asignarNumeroFiscal">
+    /// La vía exclusiva del caso b (<c>NumeradorFiscal.ReutilizarNumeroParaReemplazo</c>, que sólo invoca
+    /// <c>ReplaceRejectedDocumentCommand</c>): la fuente la aplica al borrador antes de confirmarlo, así el reemplazo sale con el mismo
+    /// número del rechazado sin consumir la resolución. (nuevo, T724)
+    /// </param>
+    Task<Result<ReemplazoConfirmado>> ConfirmarReemplazoAsync(Guid rejectedSourceDocumentPublicId, Guid replacementDocumentPublicId,
+        Action<InventoryDocument> asignarNumeroFiscal, CancellationToken ct);
+
+    /// <summary>
+    /// Caso a (T722): la contraparte del documento tal como está <b>hoy</b> en el maestro de personas, en la forma de la copia fiscal y
+    /// con la versión siguiente a la vigente. Nula si el documento no tiene persona (consumidor final): no hay qué corregir. No guarda.
+    /// (nuevo)
+    /// </summary>
+    Task<Result<FotoFiscalDeEntrada?>> ContraparteDelMaestroAsync(Guid sourceDocumentPublicId, CancellationToken ct);
+
+    /// <summary>
+    /// Caso a (T722): agrega la versión <paramref name="foto"/> de la copia fiscal del documento, con su motivo (la única excepción de
+    /// FR-005/SC-013; antes y después quedan en la versión electrónica y en la auditoría). La versión tiene que ser la siguiente a la
+    /// vigente. Corre dentro de la transacción de quien llama y no guarda. (nuevo)
+    /// </summary>
+    Task<Result> RegistrarVersionDeContraparteAsync(Guid sourceDocumentPublicId, FotoFiscalDeEntrada foto, string motivo, CancellationToken ct);
+
+    /// <summary>
+    /// Casos b y c (T724, T725): el permiso de confirmar de la clase del documento, que se exige además de
+    /// <c>ElectronicInvoicing.Documents.Correct</c> porque anular y reemplazar son operaciones del módulo dueño. (nuevo)
+    /// </summary>
+    string PermisoDeConfirmar(ElectronicDocumentKind tipo);
 }
 
 /// <summary>Por qué se anula sin efecto fiscal: caso b (se reemplaza) o caso c (se cancela). (nuevo)</summary>

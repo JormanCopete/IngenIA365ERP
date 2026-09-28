@@ -30,8 +30,16 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 /// de hoy: una reclasificación posterior no cambia lo que dice el mensaje de un documento anterior.
 /// </para>
 /// </summary>
-public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.CreditosAprobadosEnCurso? creditosEnCurso = null)
+public sealed class EmisionDeInventario(
+    IApplicationDbContext db,
+    Sales.CreditosAprobadosEnCurso? creditosEnCurso = null,
+    RechazoFiscalEnCurso? rechazoEnCurso = null)
 {
+    /// <summary>
+    /// El caso fiscal de una anulación sin efecto fiscal por un rechazo de la DIAN (T724, T725), o nulo si es una anulación corriente.
+    /// </summary>
+    public ElectronicInvoicing.Canonical.CasoFiscalDeAnulacion? CasoFiscalDe(Guid anulacionPublicId) => rechazoEnCurso?.CasoDe(anulacionPublicId);
+
     /// <summary>Las propiedades de un contenido que son importes o cantidades: las que la anulación invierte (§6.9).</summary>
     public static readonly IReadOnlySet<string> ImportesYCantidades = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -438,10 +446,11 @@ public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.Creditos
     /// <c>Return</c> si devuelve mercancía y <c>CreditNote</c> si no; una nota que reintegra sólo por medios de contado no emite nada. En una
     /// anulación (<paramref name="reintegros"/> nulo), todo el valor financiado en negativo, clase <c>Voiding</c>. Cada uno nombra la
     /// <c>VentaACreditoRegistrada</c> que ajusta y conserva su sello; sin ella (una venta anterior a la entrega) no hay qué ajustar.
-    /// <c>VoidingByDianRejection</c> y <c>Replacement</c> los emite I4.
+    /// I4 (T724, T725): la anulación sin efecto fiscal de un rechazo de la DIAN ajusta con <paramref name="claseDeAnulacion"/>
+    /// <c>VoidingByDianRejection</c>; el reemplazo del caso b ajusta con <c>Replacement</c> (<see cref="CreditoDeLaVentaAsync"/>).
     /// </summary>
     public async Task<IReadOnlyList<AjusteDeVentaACreditoV1>> AjustesDeVentaACreditoAsync(InventoryDocument documento, InventoryDocument original,
-        IReadOnlyList<DocumentPayment>? reintegros, CancellationToken ct)
+        IReadOnlyList<DocumentPayment>? reintegros, CancellationToken ct, string? claseDeAnulacion = null)
     {
         var creditos = await db.DocumentPayments.AsNoTracking()
             .Where(p => p.DocumentId == original.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
@@ -452,7 +461,7 @@ public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.Creditos
             .Where(m => m.OriginPublicId == original.PublicId && m.Type == VentaACreditoRegistradaV1.Type)
             .Select(m => new { m.PublicId, m.OriginEventKey }).ToListAsync(ct);
 
-        var clase = reintegros is null ? "Voiding" : documento.ReturnsGoods ? "Return" : "CreditNote";
+        var clase = reintegros is null ? claseDeAnulacion ?? "Voiding" : documento.ReturnsGoods ? "Return" : "CreditNote";
         var ajustes = new List<AjusteDeVentaACreditoV1>();
         foreach (var p in creditos)
         {
@@ -476,6 +485,64 @@ public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.Creditos
             });
         }
         return ajustes;
+    }
+
+    /// <summary>
+    /// Lo que una venta le dice a Cartera por su parte a crédito: una <c>VentaACreditoRegistrada</c> por pago de crédito (I3, T656) o, si la
+    /// venta es el reemplazo del caso b de un rechazo de la DIAN (I4, T724; mensajes.md §8.2 y §9 punto 8), un <c>AjusteDeVentaACredito</c>
+    /// <c>Replacement</c> por pago, con el valor nuevo en positivo y sus condiciones, sobre la venta a crédito del rechazado que la anulación
+    /// sin efecto fiscal dejó en cero. Un pago de crédito del reemplazo sin par en el rechazado (el rechazado no tenía ese crédito o su venta a
+    /// crédito no se registró) se registra como venta a crédito nueva.
+    /// </summary>
+    public async Task<IReadOnlyList<object>> CreditoDeLaVentaAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
+    {
+        if (rechazoEnCurso?.ReemplazaA(documento.PublicId) is not { } rechazadoPublicId)
+            return [.. await VentasACreditoAsync(documento, pagos, ct)];
+
+        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.EsCredito).OrderBy(p => p.LineNumber).ToList();
+        if (creditos.Count == 0) return [];
+
+        var rechazado = await db.InventoryDocuments.AsNoTracking().FirstAsync(d => d.PublicId == rechazadoPublicId, ct);
+        var delRechazado = await db.DocumentPayments.AsNoTracking()
+            .Where(p => p.DocumentId == rechazado.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
+                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit))
+            .OrderBy(p => p.LineNumber).ToListAsync(ct);
+        var registradas = await db.IntegrationMessages.AsNoTracking()
+            .Where(m => m.OriginPublicId == rechazado.PublicId && m.Type == VentaACreditoRegistradaV1.Type)
+            .Select(m => new { m.PublicId, m.OriginEventKey }).ToListAsync(ct);
+
+        var contenidos = new List<object>();
+        var sinPar = new List<DocumentPayment>();
+        var usados = new HashSet<int>();
+        foreach (var p in creditos)
+        {
+            var par = delRechazado.FirstOrDefault(o => !usados.Contains(o.Id) && o.PaymentMeansId == p.PaymentMeansId)
+                ?? delRechazado.FirstOrDefault(o => !usados.Contains(o.Id));
+            var mensaje = par is null
+                ? null
+                : registradas.FirstOrDefault(m => m.OriginEventKey == IngenIA365ERP.Application.Common.Integration.ClavesDeEvento.ConfirmacionPor(par.PublicId));
+            if (par is null || mensaje is null)
+            {
+                sinPar.Add(p);
+                continue;
+            }
+            usados.Add(par.Id);
+            contenidos.Add(new AjusteDeVentaACreditoV1
+            {
+                AdjustmentClass = "Replacement",
+                Amount = p.Amount,
+                OriginalMessageId = mensaje.PublicId,
+                OriginalCreditPaymentPublicId = par.PublicId,
+                OriginalDocument = Referencia(rechazado),
+                PaymentMeansCode = p.MeansCode,
+                Terms = CondicionesDelCredito(p, documento.OperationDate),
+                Reason = documento.Reason,
+                // El mismo sello del original: nunca cambia dentro de una cadena.
+                AccountsReceivableRecordedBy = par.AccountsReceivableRecordedBy ?? Sales.CreditoEnLaVenta.Contabilidad,
+            });
+        }
+        if (sinPar.Count > 0) contenidos.AddRange(await VentasACreditoAsync(documento, sinPar, ct));
+        return contenidos;
     }
 
     /// <summary>Las condiciones del pago de crédito en la forma de §8.1 (días; la periodicidad por nombre).</summary>
@@ -744,7 +811,8 @@ public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.Creditos
     /// anular allá: vacío.
     /// </summary>
     public async Task<IReadOnlyList<object>> AnulacionAsync(
-        InventoryDocument anulacion, InventoryDocument original, IReadOnlyList<DiferenciaDeCostoDeAnulacion> diferencias, CancellationToken ct)
+        InventoryDocument anulacion, InventoryDocument original, IReadOnlyList<DiferenciaDeCostoDeAnulacion> diferencias, CancellationToken ct,
+        string? fiscalCase = null)
     {
         var mensajes = await db.IntegrationMessages.AsNoTracking()
             .Where(m => m.OriginPublicId == original.PublicId && m.OriginEventKey == IngenIA365ERP.Application.Common.Integration.ClavesDeEvento.Confirmacion)
@@ -760,6 +828,7 @@ public sealed class EmisionDeInventario(IApplicationDbContext db, Sales.Creditos
             new DocumentoAnuladoV1
             {
                 Reason = anulacion.Reason ?? string.Empty,
+                FiscalCase = fiscalCase,
                 VoidedDocument = referencia,
                 VoidedDocumentTypeCode = tipoOriginal,
                 VoidedContents = mensajes.Select(m => new VoidedContentV1

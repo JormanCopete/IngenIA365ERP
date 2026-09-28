@@ -32,7 +32,9 @@ public sealed class AnulacionDeVenta(
     public async Task<Result> ValidarAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
         var original = contexto.Original!;
-        if (!ClasesDeDocumento.SeAnulaConAnulacion(original.Class)) return Result.Failure(ErroresDeVentas.FiscalUseCorrection(original.Class));
+        // I4 (T724, T725): un fiscal electrónico rechazado por la DIAN se anula sin efecto fiscal (casos b y c); cualquier otro, con su nota.
+        if (!ClasesDeDocumento.SeAnulaConAnulacion(original.Class) && emision.CasoFiscalDe(contexto.Documento.PublicId) is null)
+            return Result.Failure(ErroresDeVentas.FiscalUseCorrection(original.Class));
         var movimientos = await reversion.MovimientosAsync(contexto.Documento, original, ct);
         if (movimientos.Count == 0) return Result.Success();
         var preparado = await registro.PrepararAsync(contexto.Documento, movimientos, ct);
@@ -65,9 +67,13 @@ public sealed class AnulacionDeVenta(
     public async Task<IReadOnlyList<object>> MensajesAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
         var diferencias = _revertidos.TryGetValue(contexto.Documento.PublicId, out var hecha) ? hecha.Diferencias : [];
-        var contenidos = new List<object>(await emision.AnulacionAsync(contexto.Documento, contexto.Original!, diferencias, ct));
+        // I4 (T724, T725): sin efecto fiscal, DocumentoAnulado lleva fiscalCase y el crédito se ajusta con VoidingByDianRejection.
+        var caso = emision.CasoFiscalDe(contexto.Documento.PublicId);
+        var contenidos = new List<object>(await emision.AnulacionAsync(contexto.Documento, contexto.Original!, diferencias, ct,
+            caso is { } c ? RechazoFiscalEnCurso.Texto(c) : null));
         // I3 (T656): anular una venta a crédito ajusta todo su crédito en Cartera (Voiding).
-        contenidos.AddRange(await emision.AjustesDeVentaACreditoAsync(contexto.Documento, contexto.Original!, null, ct));
+        contenidos.AddRange(await emision.AjustesDeVentaACreditoAsync(contexto.Documento, contexto.Original!, null, ct,
+            caso is null ? null : "VoidingByDianRejection"));
         return contenidos;
     }
 }

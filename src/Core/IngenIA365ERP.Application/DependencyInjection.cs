@@ -293,6 +293,10 @@ public static class DependencyInjection
         services.AddScoped<ElectronicInvoicing.Documents.IntentoAnteElCanal>();
         services.AddScoped<ElectronicInvoicing.Documents.AlertasDeFacturacionElectronica>();
         services.AddScoped<ElectronicInvoicing.Documents.IConsultaDeFuenteElectronica, Inventory.Integration.ConsultaDeEmisionDeInventario>();
+        // Feature 012, I4 (T722-T726): los casos a, b y c de un rechazo (la marca de la anulación sin efecto fiscal y del reemplazo que
+        // leen los efectos de la venta) y las contingencias.
+        services.AddScoped<Inventory.Integration.RechazoFiscalEnCurso>();
+        services.AddScoped<ElectronicInvoicing.Documents.CasosDeRechazo>();
         services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
         services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
         // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,

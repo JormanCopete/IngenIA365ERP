@@ -54,6 +54,38 @@ public sealed class ContingenciaDeLaDian(IApplicationDbContext db, ILectorDePara
         return (evento, nuevo);
     }
 
+    /// <summary>
+    /// Abre una contingencia 03 (falla el facturador, su conexión o su proveedor; contracts/dian.md §7.2) en <paramref name="canal"/>: la
+    /// declara una persona (<c>OpenContingencyCommand</c>) o el circuito del canal (<c>CircuitoDeCanal</c>, T730, con el proceso). Un solo
+    /// evento 03 abierto por canal (<c>ElectronicInvoicing.Contingency.AlreadyOpen</c>). No guarda; quien llama levanta la alerta con
+    /// <see cref="AvisarAperturaAsync"/> después de guardar. (nuevo, T726)
+    /// </summary>
+    public async Task<Common.Models.Result<DianContingencyEvent>> AbrirDeFacturacionAsync(string canal, DateTime inicio, QuienDeclara quien, string motivo,
+        CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(canal);
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        var abierta = await db.DianContingencyEvents
+            .Where(e => e.Type == ContingencyType.Issuer03 && e.Status == ContingencyEventStatus.Open && e.ChannelCode == canal)
+            .Select(e => (Guid?)e.PublicId)
+            .FirstOrDefaultAsync(ct);
+        if (abierta is { } ya) return Common.Models.Result.Failure<DianContingencyEvent>(ErroresDeContingencias.AlreadyOpen(ya));
+
+        var evento = new DianContingencyEvent
+        {
+            Type = ContingencyType.Issuer03,
+            ChannelCode = canal,
+            StartedAt = inicio,
+            DetectedByKind = quien.Kind,
+            DetectedByUserId = quien.UserId,
+            DetectedByName = Recortar(quien.Name, 150),
+            Reason = Recortar(motivo.Trim(), 500),
+            Status = ContingencyEventStatus.Open,
+        };
+        db.DianContingencyEvents.Add(evento);
+        return Common.Models.Result.Success(evento);
+    }
+
     /// <summary>Levanta <c>Dian.ContingenciaAbierta</c> por el evento (una por evento). Después de guardar.</summary>
     public Task AvisarAperturaAsync(DianContingencyEvent evento, CancellationToken ct) =>
         alertas.LevantarAsync(new AlertaALevantar(

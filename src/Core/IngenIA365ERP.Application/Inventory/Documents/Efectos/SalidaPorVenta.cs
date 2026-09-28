@@ -115,7 +115,8 @@ public abstract class SalidaPorVenta(
         var contenidos = new List<object> { await emision.VentaFacturadaAsync(documento, impuestos, pagos, ct) };
         if (filas.Count > 0) contenidos.Add(await emision.CostoDeVentaAsync(documento, filas, ct));
         // I3 (T656): una VentaACreditoRegistrada por pago de crédito, hacia Cartera (cada una su propio evento).
-        contenidos.AddRange(await emision.VentasACreditoAsync(documento, pagos, ct));
+        // I4 (T724): el reemplazo del caso b ajusta el crédito del rechazado (Replacement) en vez de registrar uno nuevo.
+        contenidos.AddRange(await emision.CreditoDeLaVentaAsync(documento, pagos, ct));
         return contenidos;
     }
 

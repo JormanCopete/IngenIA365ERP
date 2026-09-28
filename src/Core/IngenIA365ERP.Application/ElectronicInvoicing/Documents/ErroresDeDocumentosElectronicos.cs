@@ -53,4 +53,41 @@ public static class ErroresDeDocumentosElectronicos
         new(ContingencyNotOpenCode, $"No hay una contingencia de facturación abierta en el canal {canal}: el documento no se numera en contingencia.");
 
     public static Error ArtifactNotFound() => new(ArtifactNotFoundCode, "Ese archivo del documento electrónico no existe.");
+
+    // ------------------------------------------------------------------------------------ casos a, b y c (T722–T725) --
+
+    /// <summary>Caso a con la huella económica distinta: se sigue por el caso b (contracts/dian.md §8.2; api.md §24.5).</summary>
+    public const string EconomicFootprintChangedCode = "ElectronicInvoicing.Document.EconomicFootprintChanged";
+
+    /// <summary>
+    /// 422, no 404 (api.md §1.2, §2.9): reemplazar o cancelar exige además el permiso de confirmar de la clase del documento, que depende del
+    /// documento y no de la ruta. (nuevo, T724)
+    /// </summary>
+    public const string ClassPermissionRequiredCode = "ElectronicInvoicing.Document.ClassPermissionRequired";
+
+    public static Error EconomicFootprintChanged(IReadOnlyList<string> campos) =>
+        new ErrorConDatos(EconomicFootprintChangedCode,
+            $"La corrección cambia lo económico del documento ({string.Join(", ", campos)}): no se corrige, se reemplaza. " +
+            "Cree el borrador de reemplazo, ajústelo y confírmelo con el mismo número.",
+            new { fields = campos });
+
+    public static Error ClassPermissionRequired(string permiso) =>
+        new ErrorConDatos(ClassPermissionRequiredCode,
+            $"Reemplazar o cancelar este documento anula el documento del ERP: exige también el permiso {permiso}.",
+            new { permissionCode = permiso });
+
+    /// <summary>El veredicto de la máquina de estados que no procede, como error de la aplicación.</summary>
+    public static Error DeLaTransicion(ResultadoDeTransicion transicion) =>
+        new ErrorConDatos(transicion.Codigo!, Mensaje(transicion.Codigo!, transicion.Motivo), new { status = transicion.Hacia });
+
+    private static string Mensaje(string codigo, string? motivo) => codigo switch
+    {
+        TransicionesDelDocumentoElectronico.CodigoEsperaRespuesta =>
+            "El documento se envió y la DIAN todavía no responde: consulte su estado antes de corregirlo, reemplazarlo o cancelarlo.",
+        TransicionesDelDocumentoElectronico.CodigoNoRechazado =>
+            "Sólo un documento rechazado se corrige, se reemplaza o se cancela.",
+        TransicionesDelDocumentoElectronico.CodigoRechazoSinConfirmar =>
+            "Reemplazar o cancelar exige el rechazo confirmado: use «Consultar a la DIAN» y vuelva a intentarlo.",
+        _ => motivo ?? "El documento no admite esa operación en su estado.",
+    };
 }
