@@ -34,7 +34,7 @@ public static class ErroresDeVentas
     /// <summary>La guardia fiscal bloqueó: ninguna venta fiscal confirma hasta completar lo que falta (§24.3).</summary>
     public static Error NotReady(EvaluacionFiscal evaluacion) => new ErrorConDatos(NotReadyCode,
         "La cooperativa todavía no puede emitir documentos de venta: " + string.Join(" ", evaluacion.Motivos.Select(m => m.Message)),
-        new { missing = evaluacion.Motivos.Select(m => new { code = m.Code, message = m.Message, where = m.Where, permission = m.Permission }).ToList() });
+        new { missing = evaluacion.Motivos.Select(m => new { code = m.Code, message = m.Message, where = m.Where, permission = m.Permission, whoFixes = new { page = m.Page, permission = m.Permission } }).ToList() });
 
     /// <summary>Venta de contado a una persona inactiva con <c>Ventas.PersonaInactivaDeContado = Bloquear</c> (§18.2).</summary>
     public static Error PersonInactive(string nombre) => new ErrorConDatos(PersonInactiveCode,
@@ -68,9 +68,38 @@ public static class ErroresDeVentas
     /// <summary>Un fiscal emitido no se anula con documento contrario: se corrige con su nota (FR-066, §18.2).</summary>
     public static Error FiscalUseCorrection(DocumentClass originClass)
     {
-        var correccion = originClass == DocumentClass.PosEquivalentDocument ? DocumentClass.PosAdjustmentNote : DocumentClass.CreditNote;
+        var (correccion, ruta) = originClass switch
+        {
+            DocumentClass.PosEquivalentDocument => (DocumentClass.PosAdjustmentNote, RutaDeNotas),
+            DocumentClass.SupportDocument => (DocumentClass.SupportDocumentAdjustmentNote, RutaDeDocumentosSoporte),
+            _ => (DocumentClass.CreditNote, RutaDeNotas),
+        };
         return new ErrorConDatos(FiscalUseCorrectionCode,
             "Un documento fiscal emitido no se anula con un documento contrario: se corrige con su nota de anulación total.",
-            new { correctionClass = correccion.ToString(), route = RutaDeNotas, totalVoid = true });
+            new { correctionClass = correccion.ToString(), route = ruta, totalVoid = true });
     }
+
+    /// <summary>La ruta del documento soporte y su nota de ajuste (§14.7).</summary>
+    public const string RutaDeDocumentosSoporte = "/api/inventory/purchases/support-documents";
+
+    /// <summary>
+    /// Un fiscal <b>rechazado</b> por la DIAN no está expedido: no se anula ni se corrige con nota, se resuelve por los casos a, b y c de §24.5
+    /// (<c>data.route</c> al documento electrónico). (nuevo, I4 T738)
+    /// </summary>
+    public static Error FiscalUseCorrectionRejected(Guid electronicDocumentPublicId) => new ErrorConDatos(FiscalUseCorrectionCode,
+        "La DIAN rechazó el documento: no está expedido. Se corrige, se reemplaza o se cancela desde Documentos electrónicos.",
+        new
+        {
+            route = $"/api/electronic-invoicing/documents/{electronicDocumentPublicId}",
+            cases = new[] { "correct", "replacement-draft", "replace", "cancel" },
+        });
+
+    /// <summary>
+    /// El documento se envió a la DIAN y no tiene respuesta: ni se anula ni se corrige hasta saberla (se consulta con
+    /// <c>query-status</c>). (nuevo, I4 T738)
+    /// </summary>
+    public static Error AwaitingResponse(Guid electronicDocumentPublicId) => new ErrorConDatos(
+        IngenIA365ERP.Domain.ElectronicInvoicing.TransicionesDelDocumentoElectronico.CodigoEsperaRespuesta,
+        "El documento se envió a la DIAN y todavía no tiene respuesta: consulte su estado antes de corregirlo.",
+        new { status = "Sent", electronicDocumentPublicId });
 }

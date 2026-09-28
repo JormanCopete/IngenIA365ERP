@@ -244,7 +244,7 @@ public sealed class ImportPointsOfSaleCommandHandler(IApplicationDbContext db, E
                 ? await db.CardTerminals.FirstOrDefaultAsync(t => t.Id == dt, ct)
                 : null;
             var r = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, existente,
-                new DatosDeCaja(codigo, nombre, bodega, datafono, formato, pedidos, existente?.DianCashRegisterPlate, null, activa), obligada, ahora, ct);
+                new DatosDeCaja(codigo, nombre, bodega, datafono, formato, pedidos, existente?.DianCashRegisterPlate, null, activa, existente?.DianCashRegisterTypeCode), obligada, ahora, ct);
             if (r.IsFailure)
             {
                 Error(fila, r.Error);

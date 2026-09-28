@@ -34,7 +34,8 @@ public sealed record CreateInventoryDocumentTypeCommand(
     bool AllowsFutureDate,
     string? Prefix,
     long? FirstNumber,
-    DateOnly? ValidFrom)
+    DateOnly? ValidFrom,
+    bool IsContingency = false)
     : IRequest<Result<DocumentTypeDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -71,6 +72,9 @@ public sealed class CreateInventoryDocumentTypeCommandHandler(
         var clase = ClasesDeDocumento.De(request.Class);
         var porResolucion = clase.NumberedBy == NumberedBy.DianResolution;
         if (porResolucion && request.FirstNumber is not null) return Falla(InventoryErrors.NumberedByResolution(request.Class));
+        // I4 (cierre de las e2e): el tipo de contingencia del facturador (data-model §5.8) numera con la resolución Contingency; sólo lo
+        // admite una clase numerada por resolución. Hasta entonces ningún comando lo escribía y la 03 no tenía con qué numerar.
+        if (request.IsContingency && !porResolucion) return Falla(InventoryErrors.ContingencyNotByResolution(request.Class));
 
         var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
         var existente = await db.InventoryDocumentTypes.Where(t => t.Code == codigo).Select(t => t.Name).FirstOrDefaultAsync(ct);
@@ -82,12 +86,19 @@ public sealed class CreateInventoryDocumentTypeCommandHandler(
         if (canal.IsFailure) return Falla(canal.Error);
 
         var prefijo = ReglasDeTipoDeDocumento.Prefijo(request.Prefix);
+        // I4 (T710): el prefijo de una nota electrónica no puede ser el de una resolución DIAN (data-model §27 duda 9).
+        if (!porResolucion)
+        {
+            var libre = await Integration.PrefijosDeInventario.ValidarPrefijoDeNotaAsync(db, request.Class, prefijo, ct);
+            if (libre.IsFailure) return Falla(libre.Error);
+        }
         var tipo = new InventoryDocumentType
         {
             Code = codigo,
             Name = request.Name.Trim(),
             Class = request.Class,
             FiscalPrefix = porResolucion && prefijo.Length > 0 ? prefijo : null,
+            IsContingency = request.IsContingency,
             RequiresCounterparty = request.RequiresCounterparty,
             RequiresCostCenter = request.RequiresCostCenter,
             RequiresReason = request.RequiresReason,

@@ -38,6 +38,19 @@ public static class PermissionAuthorizationExtensions
     }
 
     /// <summary>
+    /// Marca el endpoint como abierto a quien tenga <b>alguno</b> de los permisos de <paramref name="alguno"/> (OR); sin ninguno, el mismo
+    /// 404. Para las rutas cuyo permiso real lo decide el handler sobre el recurso (feature 012, I4, T746: la regla del dueño del adjunto).
+    /// </summary>
+    public static RouteHandlerBuilder RequirePermission(this RouteHandlerBuilder builder, AlgunPermiso alguno)
+    {
+        ArgumentNullException.ThrowIfNull(alguno);
+        if (alguno.Codigos.Length == 0) throw new ArgumentException("Hace falta al menos un permiso.", nameof(alguno));
+        builder.WithMetadata(alguno);
+        builder.AddEndpointFilter<AlgunPermisoFilter>();
+        return builder;
+    }
+
+    /// <summary>
     /// Exige un segundo permiso sólo cuando la petición pide un archivo (<c>?format=xlsx|pdf|docx</c>).
     /// Feature 009 E2: los informes contables viven en una sola ruta por vista y el contrato separa
     /// <c>Reports.View</c> (pantalla) de <c>Reports.Export</c> (descarga). Se encadena después de

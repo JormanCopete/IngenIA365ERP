@@ -403,6 +403,15 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope>();
 
+    // === Facturación electrónica DIAN (feature 012, I4, T698) ===
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting> ElectronicEmissionSettings => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution> DianNumberingResolutions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel> DianResolutionChannels => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent> DianContingencyEvents => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument> ElectronicDocuments => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> ElectronicDocumentVersions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission> ElectronicDocumentTransmissions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission>();
+
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<CertificateEntry> CertificateEntries => Set<CertificateEntry>();

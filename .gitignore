@@ -286,3 +286,6 @@ speckit.constitution.md
 # puertos movidos y credenciales de servicios instalados a mano.
 appsettings.*.local.json
 !appsettings.*.local.json.ejemplo
+
+# Feature 012, I4 (T749): credenciales locales de facturacion electronica en desarrollo (ElectronicInvoicing:CredentialsPath).
+secrets-locales/

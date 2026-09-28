@@ -37,7 +37,54 @@ public class LosHechosInmutablesNoSeModifican
         // US7, entrega I2 (T476, T479): el intento de entrega y el recibo contable de un mensaje de Inventario.
         "IntegrationDeliveryAttempt",
         "InventoryPosting",
+        // US8, entrega I4 (T671; data-model §18, §26): la versión de un documento electrónico y cada intento ante el canal.
+        "ElectronicDocumentVersion",
+        "ElectronicDocumentTransmission",
     ];
+
+    /// <summary>
+    /// T671 (data-model §18, §26): las propiedades que un hecho admite escribir una sola vez (nulo → valor, <c>[EscrituraUnica]</c>).
+    /// En la versión de un documento electrónico son exactamente los cuatro artefactos, que llegan después de numerar; la transmisión no
+    /// admite ninguna.
+    /// </summary>
+    private static readonly Dictionary<Type, string[]> EscrituraUnicaAdmitida = new()
+    {
+        [typeof(IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion)] =
+        [
+            "CanonicalAttachmentPublicId", "SignedXmlAttachmentPublicId", "AttachedDocumentAttachmentPublicId", "GraphicPdfAttachmentPublicId",
+        ],
+        [typeof(IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission)] = [],
+    };
+
+    [Fact]
+    public void La_version_y_la_transmision_electronicas_son_hechos_con_escritura_unica_solo_en_los_artefactos()
+    {
+        var infractores = new List<string>();
+        foreach (var (tipo, admitidas) in EscrituraUnicaAdmitida)
+        {
+            if (!typeof(IngenIA365ERP.Domain.Common.IHechoInmutable).IsAssignableFrom(tipo))
+                infractores.Add($"{tipo.Name} no es IHechoInmutable");
+
+            var conEscrituraUnica = tipo.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.IsDefined(typeof(IngenIA365ERP.Domain.Common.EscrituraUnicaAttribute), inherit: true))
+                .Select(p => p.Name)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+            if (!conEscrituraUnica.SequenceEqual(admitidas.OrderBy(n => n, StringComparer.Ordinal)))
+                infractores.Add($"{tipo.Name}: [EscrituraUnica] en {{{string.Join(", ", conEscrituraUnica)}}}; se admite sólo {{{string.Join(", ", admitidas)}}}");
+
+            foreach (var p in tipo.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                         .Where(p => p.DeclaringType == tipo && p.SetMethod is { IsPublic: true }))
+            {
+                var esInit = p.SetMethod!.ReturnParameter.GetRequiredCustomModifiers()
+                    .Any(m => m.FullName == "System.Runtime.CompilerServices.IsExternalInit");
+                if (!esInit) infractores.Add($"{tipo.Name}.{p.Name} tiene set público");
+            }
+        }
+
+        Assert.True(infractores.Count == 0,
+            "Los hechos del documento electrónico sólo admiten nulo → valor en sus artefactos (T671, Principio XI):\n  " + string.Join("\n  ", infractores));
+    }
 
     /// <summary>
     /// T117 (T18): la guarda de <c>ApplicationDbContext.SaveChangesAsync</c> no tiene lista que mantener —cubre a todo

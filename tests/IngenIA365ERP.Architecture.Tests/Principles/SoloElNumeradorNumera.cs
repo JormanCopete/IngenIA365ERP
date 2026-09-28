@@ -96,4 +96,41 @@ public class SoloElNumeradorNumera
         Assert.True(infractores.Count == 0,
             "Consecutivos escritos fuera del numerador (FR-038, T16):\n  " + string.Join("\n  ", infractores));
     }
+
+    /// <summary>
+    /// I4, T705 (FR-066): la vía del caso b que reusa el número del rechazado sin consumir la resolución la invoca sólo
+    /// <c>ReplaceRejectedDocumentCommand</c> (además de su declaración en <c>NumeradorFiscal</c>).
+    /// </summary>
+    [Fact]
+    public void LastIssuedNumber_solo_lo_escribe_el_NumeradorFiscal()
+    {
+        // T671 (data-model §18, §26): el consecutivo de una resolución DIAN lo escribe un único archivo —no basta el nombre: la ruta
+        // completa—. La entidad lo inicializa en RangeFrom − 1 dentro de su propio setter (sin «.», así que no cuenta).
+        var root = RepoPath.FindRepoRoot();
+        const string autorizado = "src/Core/IngenIA365ERP.Application/ElectronicInvoicing/Numeracion/NumeradorFiscal.cs";
+        var escritura = new Regex(@"\.LastIssuedNumber\s*(=(?!=)|\+=|-=|\+\+|--)|(\+\+|--)\s*\w+\.LastIssuedNumber\b", RegexOptions.Compiled);
+        var escritores = RepoPath.ProductionCSharpFiles()
+            .Where(f => escritura.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+            .ToList();
+
+        Assert.True(escritores.Count == 1 && escritores[0] == autorizado,
+            "DianNumberingResolution.LastIssuedNumber lo escribe sólo NumeradorFiscal (T671). Lo escriben:\n  " + string.Join("\n  ", escritores));
+    }
+
+    [Fact]
+    public void Solo_el_reemplazo_del_caso_b_reutiliza_un_numero_fiscal()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var llamada = new Regex(@"\bReutilizarNumeroParaReemplazo\s*\(", RegexOptions.Compiled);
+        var permitidos = new[] { "NumeradorFiscal.cs", "ReplaceRejectedDocumentCommand.cs" };
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => !permitidos.Contains(Path.GetFileName(f), StringComparer.Ordinal))
+            .Where(f => llamada.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+
+        Assert.True(infractores.Count == 0,
+            "ReutilizarNumeroParaReemplazo llamado fuera del caso b (FR-066, T705):\n  " + string.Join("\n  ", infractores));
+    }
 }

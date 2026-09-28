@@ -130,6 +130,21 @@ public class DocumentTypeCommandsTests
     }
 
     [Fact]
+    public async Task El_tipo_de_contingencia_es_solo_de_una_clase_numerada_por_resolucion()
+    {
+        // I4 (cierre de las e2e, T686): el tipo del rol de contingencia del facturador numera con la resolución Contingency.
+        var r = await CrearAsync(Alta(DocumentClass.SalesInvoice, codigo: "CFE", prefijo: "CFE", primero: null) with { IsContingency = true });
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        r.Value.IsContingency.Should().BeTrue();
+        r.Value.Prefix.Should().Be("CFE");
+        (await _db.InventoryDocumentTypes.SingleAsync(t => t.Code == "CFE")).IsContingency.Should().BeTrue();
+
+        var nota = await CrearAsync(Alta(DocumentClass.CreditNote, codigo: "NCX", prefijo: "NCX") with { IsContingency = true });
+        nota.Error.Code.Should().Be("Inventory.DocumentType.ContingencyNotByResolution");
+        (await CrearAsync(Alta(DocumentClass.SalesInvoice, codigo: "FEN", prefijo: "FEN", primero: null))).Value.IsContingency.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Cada_marca_vale_solo_en_su_clase()
     {
         (await CrearAsync(Alta(retiroGravado: true))).Error.Code.Should().Be("Inventory.DocumentType.FlagNotApplicable");
@@ -292,8 +307,9 @@ public class DocumentTypeCommandsTests
 
         r.Value.Should().HaveCount(34);
         r.Value.Single(c => c.Class == DocumentClass.PositiveAdjustment).Operable.Should().BeTrue();
-        // Desde I3 las ventas son operables (EntregaVigente = I3); el documento soporte sigue esperando a I4.
-        r.Value.Single(c => c.Class == DocumentClass.SupportDocument).Operable.Should().BeFalse();
+        // Desde I4 (EntregaVigente = I4) el documento soporte es operable; la orden de compra sigue esperando a I5.
+        r.Value.Single(c => c.Class == DocumentClass.SupportDocument).Operable.Should().BeTrue();
+        r.Value.Single(c => c.Class == DocumentClass.PurchaseOrder).Operable.Should().BeFalse();
         r.Value.Single(c => c.Class == DocumentClass.SalesInvoice).Should().BeEquivalentTo(new
         {
             Operable = true, IsFiscal = true, NumberedBy = Domain.Inventory.Documents.NumberedBy.DianResolution,

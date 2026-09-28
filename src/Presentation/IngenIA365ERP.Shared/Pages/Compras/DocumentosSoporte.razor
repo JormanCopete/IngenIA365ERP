@@ -1,0 +1,175 @@
+@page "/compras/documentos-soporte"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Documentos soporte - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I4 (T757; FR-062, FR-065; contracts/api.md §14.7): los documentos soporte de las compras a proveedores no obligados a
+   facturar y sus notas de ajuste. Desde aquí se abre cada uno (borrador con el proveedor, las recepciones enlazadas, impuestos y
+   retenciones, confirmar y su estado ante la DIAN) y, con la generación semanal de la cooperativa, se preparan de una vez los borradores
+   de la semana por proveedor. Un enlace de la bandeja de documentos electrónicos llega con «?documento=» y abre el detalle. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Documentos soporte</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Purchases.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/compras/documentos-soporte/nuevo"))">Nuevo documento soporte</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@AbrirSemanal">Generar los de la semana</SfButton>
+            </PermissionGate>
+            <a class="e-btn e-flat" href="/ventas/documentos-electronicos">Documentos electrónicos</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Mostrar
+            <select class="e-input" value="@(_notas ? "notas" : "soportes")" @onchange="@(e => { _notas = e.Value?.ToString() == "notas"; return BuscarAsync(); })">
+                <option value="soportes">Documentos soporte</option>
+                <option value="notas">Notas de ajuste</option>
+            </select>
+        </label>
+        <label class="campo campo-largo">Proveedor <SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@CambiarProveedorAsync" /></label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+            </select>
+        </label>
+        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay @(_notas ? "notas de ajuste" : "documentos soporte") con estos filtros.</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Tipo</th><th>Fecha</th><th>Proveedor</th><th class="numero">Total</th><th>Estado</th></tr></thead>
+                <tbody>
+                    @foreach (var f in _filas)
+                    {
+                        <tr>
+                            <td><a href="@($"/compras/documentos-soporte/{f.Document.PublicId}")">@(f.Document.DisplayNumber ?? "(borrador)")</a></td>
+                            <td>@f.Document.DocumentType.Code · @f.Document.DocumentType.Name</td>
+                            <td>@f.Document.OperationDate.ToString("dd/MM/yyyy")</td>
+                            <td>@f.Document.Counterparty?.Name</td>
+                            <td class="numero">@f.Document.Total?.ToString("N2")</td>
+                            <td>@TextosDeInventario.Estado(f.Document.Status)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+            <span class="texto-tenue">Página @_pagina · @_total documento(s)</span>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarSemanal" Header="Generar los documentos soporte de la semana" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Generando…">
+                <p class="texto-apoyo">Un borrador por proveedor no obligado con las recepciones de la semana que no tienen factura ni documento soporte. Sólo
+                    aplica si la cooperativa genera el documento soporte semanalmente; los borradores se revisan y confirman uno a uno.</p>
+                <label class="campo">Hasta (vacío: hoy) <input type="date" class="e-input" value="@(_hastaSemanal?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hastaSemanal = LeerFecha(e.Value))" /></label>
+                @if (_generados is { } g)
+                {
+                    @if (g.Count == 0) { <p class="texto-tenue">No había recepciones sin documento de proveedores no obligados.</p> }
+                    <ul>@foreach (var d in g) { <li><a href="@($"/compras/documentos-soporte/{d.SupportDocumentPublicId}")">Borrador con @d.ReceiptPublicIds.Count recepción(es)</a></li> }</ul>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GenerarAsync">Generar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarSemanal = false)">Cerrar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveSemanal = new();
+    private List<ResumenDeFacturaDeProveedorDto> _filas = [];
+    private List<DocumentoSoporteSemanalDto>? _generados;
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private int? _estado;
+    private DateOnly? _desde, _hasta, _hastaSemanal;
+    private bool _notas, _mostrarSemanal;
+    private int _pagina = 1;
+    private long _total;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // La bandeja de documentos electrónicos enlaza el documento comercial con «?documento=»: se abre su detalle.
+        if (Documento is { } id) { Nav.NavigateTo($"/compras/documentos-soporte/{id}", replace: true); return; }
+        await CargarAsync();
+    }
+
+    private Task CambiarProveedorAsync(PersonSearchPicker.PersonSearchItem? proveedor)
+    {
+        _proveedor = proveedor;
+        return BuscarAsync();
+    }
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ListarDocumentosSoporteAsync(new FiltroDeCompras
+        {
+            SupplierPersonPublicId = _proveedor?.PublicId, Status = _estado, From = _desde, To = _hasta, Page = _pagina, PageSize = TamanoDePagina,
+        }, _notas);
+        if (!r.IsSuccess || r.Value is null) { _filas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los documentos soporte."); return; }
+        _filas = [.. r.Value.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private void AbrirSemanal()
+    {
+        _generados = null;
+        _hastaSemanal = null;
+        _mostrarSemanal = true;
+    }
+
+    private async Task GenerarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.GenerarDocumentosSoporteSemanalesAsync(_hastaSemanal, _claveSemanal);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron generar los borradores."); return; }
+        _generados = [.. r.Value];
+        if (_generados.Count > 0) await Notification.SuccessAsync($"{_generados.Count} borrador(es) de documento soporte.");
+        await CargarAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

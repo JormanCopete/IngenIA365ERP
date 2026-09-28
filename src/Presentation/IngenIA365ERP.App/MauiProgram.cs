@@ -80,6 +80,8 @@ namespace IngenIA365ERP.App
             // Feature 012, I3 (T633, T634): Ventas y medios de pago (misma salvedad: CentralAuthClient, verificacion de MAUI) y la impresion
             // nativa de la tirilla, porque el WebView de Android no admite window.print.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Ventas.VentasClient>();
+            // Feature 012, I4 (T752): facturación electrónica (configuración, resoluciones, documentos, contingencias).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.FacturacionElectronica.FacturacionElectronicaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
             builder.Services.AddSingleton<IImpresionDeDocumentos, ImpresionNativa>();
             // Feature 012, US7 (T532): el lado contable de la integración con Inventario; misma salvedad (CentralAuthClient, verificacion de MAUI).

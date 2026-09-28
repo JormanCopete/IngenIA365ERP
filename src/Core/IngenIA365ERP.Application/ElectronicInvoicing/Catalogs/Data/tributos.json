@@ -1,0 +1,24 @@
+{
+  "catalogo": "tributos",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tabla de tributos",
+      "porCotejar": false,
+      "notas": "El esquema tributario de una parte es «esquemaResponsableIva» si es responsable de IVA y «esquemaNoResponsableIva» si no. Los códigos de impuesto de COR_TaxDefinitions.DianTaxCode tienen que estar aquí.",
+      "codigos": [
+        { "codigo": "01", "nombre": "IVA" },
+        { "codigo": "02", "nombre": "Impuesto al consumo departamental" },
+        { "codigo": "03", "nombre": "ICA" },
+        { "codigo": "04", "nombre": "Impuesto nacional al consumo (INC)" },
+        { "codigo": "05", "nombre": "Retención sobre el IVA" },
+        { "codigo": "06", "nombre": "Retención sobre la renta" },
+        { "codigo": "07", "nombre": "Retención sobre el ICA" },
+        { "codigo": "22", "nombre": "Impuesto nacional al consumo de bolsa plástica" },
+        { "codigo": "ZZ", "nombre": "No aplica" }
+      ],
+      "esquemaResponsableIva": "01",
+      "esquemaNoResponsableIva": "ZZ"
+    }
+  ]
+}

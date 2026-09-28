@@ -73,4 +73,22 @@ public static class AttachmentPolicy
         "text/plain",
         "text/csv"
     };
+
+    /// <summary>
+    /// Feature 012, I4 (T717, T41; contracts/dian.md §12): los tipos que sólo admite lo que <b>genera un módulo</b>
+    /// (<c>UploadAttachmentCommand</c>): el canónico (JSON), el XML firmado, el <c>ApplicationResponse</c> y el
+    /// <c>AttachedDocument</c> (XML o ZIP) de un documento electrónico. Las subidas de personas no cambian: siguen con
+    /// <see cref="AllowedMimeTypes"/>. (nuevo)
+    /// </summary>
+    public static readonly IReadOnlySet<string> ModuleGeneratedMimeTypes = new HashSet<string>(
+        StringComparer.OrdinalIgnoreCase)
+    {
+        "application/xml",
+        "application/zip",
+        "application/json",
+    };
+
+    /// <summary>¿Lo admite lo que genera un módulo? Los de personas más <see cref="ModuleGeneratedMimeTypes"/>. (nuevo)</summary>
+    public static bool AdmiteGeneradoPorModulo(string? contentType) =>
+        contentType is not null && (AllowedMimeTypes.Contains(contentType) || ModuleGeneratedMimeTypes.Contains(contentType));
 }

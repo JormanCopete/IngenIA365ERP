@@ -47,7 +47,8 @@ public abstract class SalidaPorVenta(
         var reglasDeVenta = await reglas.ValidarVentaAsync(contexto, ct);
         if (reglasDeVenta.IsFailure) return reglasDeVenta;
 
-        var movimientos = Movimientos(contexto.Documento, productos.Value);
+        // I4 (T739): la factura que reemplaza al documento equivalente no escribe kardex: la salida ya la hizo el original (ReplacementOf).
+        var movimientos = reglas.EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento) ? [] : Movimientos(contexto.Documento, productos.Value);
         if (movimientos.Count == 0) return Result.Success();
         var preparado = await registro.PrepararAsync(contexto.Documento, movimientos, ct);
         if (preparado.IsFailure) return Result.Failure(preparado.Error);
@@ -115,7 +116,8 @@ public abstract class SalidaPorVenta(
         var contenidos = new List<object> { await emision.VentaFacturadaAsync(documento, impuestos, pagos, ct) };
         if (filas.Count > 0) contenidos.Add(await emision.CostoDeVentaAsync(documento, filas, ct));
         // I3 (T656): una VentaACreditoRegistrada por pago de crédito, hacia Cartera (cada una su propio evento).
-        contenidos.AddRange(await emision.VentasACreditoAsync(documento, pagos, ct));
+        // I4 (T724): el reemplazo del caso b ajusta el crédito del rechazado (Replacement) en vez de registrar uno nuevo.
+        contenidos.AddRange(await emision.CreditoDeLaVentaAsync(documento, pagos, ct));
         return contenidos;
     }
 

@@ -2331,6 +2331,7 @@ fila; las versiones van aparte.
 | `EmailSentAt` | datetime, nullable | |
 | `CurrentVersionId` | int, nullable, FK `COR_ElectronicDocumentVersions` | |
 | `CorrectsDocumentId` | int, nullable, FK self | notas y notas de ajuste: el documento que corrigen |
+| `WaitsForDocumentId` | int, nullable, FK self | **(nuevo, T693)** el documento que debe quedar validado antes de transmitir éste: la nota sobre un original en contingencia y la factura de `invoice-instead` tras su nota de ajuste (FR-066, api.md §18.3.1) |
 | `RejectedBy` | int, nullable (`RejectedBy`: `Dian=1`, `Channel=2`) | |
 | `RejectionReason` | nvarchar(500), nullable | motivo del caso c |
 | `CancelledByUserId` | int, nullable, FK `SEC_Users` | responsable del caso c |

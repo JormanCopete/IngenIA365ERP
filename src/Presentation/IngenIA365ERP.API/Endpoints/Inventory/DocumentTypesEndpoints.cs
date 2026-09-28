@@ -46,7 +46,7 @@ public class DocumentTypesEndpoints : ICarterModule
                     body.RequiresCounterparty, body.RequiresCostCenter, body.RequiresReason, body.RequiresExternalReference,
                     body.WarehousePublicIds, body.SalesChannelPublicId,
                     body.IsTaxableWithdrawal ?? false, body.VatNonDeductible ?? false, body.AllowsFutureDate ?? false,
-                    body.Prefix, body.FirstNumber, body.ValidFrom)
+                    body.Prefix, body.FirstNumber, body.ValidFrom, body.IsContingency ?? false)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
@@ -127,7 +127,8 @@ public class DocumentTypesEndpoints : ICarterModule
         bool? AllowsFutureDate,
         string? Prefix,
         long? FirstNumber,
-        DateOnly? ValidFrom);
+        DateOnly? ValidFrom,
+        bool? IsContingency = null);
 
     /// <summary>La edición (§8): sin código, clase, prefijo, primer número ni vigencia.</summary>
     public sealed record EditarTipoRequest(

@@ -1,0 +1,305 @@
+@page "/admin/facturacion-electronica"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
+@using IngenIA365ERP.Shared.Services.Http
+@using static IngenIA365ERP.Shared.Services.FacturacionElectronica.TextosDeFacturacionElectronica
+@inject FacturacionElectronicaClient Facturacion
+@inject INotificationService Notification
+
+<PageTitle>Facturación electrónica - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I4 (T753; FR-063, FR-064, FR-095; contracts/api.md §24.1, §24.3; contracts/dian.md §10): la configuración de emisión de la
+   cooperativa —vigencia actual e historial, una vigencia nueva con motivo que cierra la anterior la víspera—, los canales registrados en
+   la instalación con sus capacidades, el estado de la credencial del canal («Verificar credencial»: la credencial nunca viaja, vive en el
+   secreto del ambiente) y la preparación para emitir con lo que falta y quién lo corrige. Cambiar de canal no toca documentos ni
+   pantallas: cada documento sigue por el canal con que se numeró. *@
+<PermissionGate Required="ElectronicInvoicing.Settings.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Facturación electrónica</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@(_carga.Activa || _cargaPreparacion.Activa)" OnClick="@CargarTodoAsync">Actualizar</SfButton>
+            <PermissionGate Required="ElectronicInvoicing.Settings.Manage">
+                <SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || _config?.Current is null)" OnClick="@VerificarAsync">Verificar credencial</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@(_config is null)" OnClick="@AbrirVigencia">Nueva vigencia</SfButton>
+            </PermissionGate>
+            <a class="e-btn e-flat" href="/maestros/resoluciones-dian">Resoluciones</a>
+            <a class="e-btn e-flat" href="/ventas/documentos-electronicos">Documentos electrónicos</a>
+            <a class="e-btn e-flat" href="/manual/facturacion-electronica">Ayuda</a>
+        </div>
+    </div>
+
+    <h4>Preparación para emitir</h4>
+    <IndicadorDeCarga Cargando="@_cargaPreparacion.Activa" Texto="Revisando la preparación…">
+        @if (_preparacion is { } p)
+        {
+            <div class="aviso @(p.Verdict == VeredictoBloqueado ? "aviso-alerta" : "aviso-ok")">
+                <b>@Veredicto(p.Verdict)</b> · al @p.AsOf.ToString("dd/MM/yyyy") · @(p.Obligated ? "obligada a facturar electrónicamente" : "no obligada a la fecha")
+                @if (p.Channel is { } c) { <span> · canal @c.ChannelCode (@Modo(c.Mode), @Ambiente(c.Environment))</span> }
+                @if (p.OpenContingency is { } oc) { <span> · <a href="/ventas/contingencias-dian">contingencia @TipoDeContingencia(oc.Type) abierta</a></span> }
+            </div>
+            @if (p.Missing.Count > 0)
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Qué falta</th><th>Dónde se corrige</th><th>Con qué permiso</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in p.Missing)
+                        {
+                            <tr>
+                                <td>@m.Message</td>
+                                <td>@if (m.WhoFixes.Page is { } pagina) { <a href="@pagina">@pagina</a> }</td>
+                                <td>@m.WhoFixes.Permission</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            @if (p.Resolutions.Count > 0)
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Resolución</th><th>Prefijo</th><th>Estado</th><th class="numero">Consumido</th><th class="numero">Días por vencer</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in p.Resolutions)
+                        {
+                            <tr><td>@TipoDeResolucion(r.Kind)</td><td>@r.Prefix</td><td>@EstadoDeResolucion(r.Status)</td><td class="numero">@r.ConsumedFraction.ToString("P0")</td><td class="numero">@r.DaysToExpire</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_config is { } cfg)
+        {
+            <h4>Vigencia actual</h4>
+            @if (cfg.Current is { } v)
+            {
+                <div class="form-grid">
+                    <div class="kpi-card"><span class="label">Modo</span><span>@Modo(v.Mode)</span></div>
+                    <div class="kpi-card"><span class="label">Canal</span><span>@NombreDelCanal(v.ChannelCode)</span></div>
+                    <div class="kpi-card"><span class="label">Ambiente</span><span>@Ambiente(v.Environment)</span></div>
+                    <div class="kpi-card"><span class="label">Emisión</span><span>@(v.IsEnabled ? "Activa" : "Desactivada")</span></div>
+                    <div class="kpi-card"><span class="label">Correo al comprador</span><span>@EntregaDeCorreo(v.EmailDeliveryBy)</span></div>
+                    <div class="kpi-card"><span class="label">Vigente</span><span>desde @v.ValidFrom.ToString("dd/MM/yyyy")@(v.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : "")</span></div>
+                    <div class="kpi-card"><span class="label">Software</span><span>@(v.SoftwareId ?? "—")@(v.TestSetId is { } t ? $" · set {t}" : "")@(v.TestSetAcceptedAt is { } a ? $" · aceptado {a.ToLocalTime():dd/MM/yyyy}" : "")</span></div>
+                    <div class="kpi-card"><span class="label">Emisor</span><span>@v.IssuerBusinessName · NIT @v.IssuerTaxId-@v.IssuerCheckDigit · @v.IssuerMunicipalityDaneCode · @v.IssuerEmail</span></div>
+                </div>
+            }
+            else
+            {
+                <p class="aviso aviso-info">Todavía no hay una configuración de emisión vigente: registre la primera con «Nueva vigencia».</p>
+            }
+
+            <h4>Credencial del canal</h4>
+            <div class="info-card">
+                <div>Clave en el secreto del ambiente: <code>@(cfg.Credential.Key ?? "—")</code> · @(cfg.Credential.Configured ? "presente" : "no está en el secreto")</div>
+                <div>@(cfg.Credential.VerifiedAt is { } va ? $"Verificada el {va.ToLocalTime():dd/MM/yyyy HH:mm}" : "Sin verificar: la emisión no arranca hasta verificarla.")</div>
+                <p class="texto-tenue">La credencial no se escribe ni se guarda en el ERP: la carga soporte en el secreto del ambiente. Aquí sólo se prueba.</p>
+                @if (_verificacion is { } ver)
+                {
+                    <div class="aviso @(ver.Verified ? "aviso-ok" : "aviso-alerta")">
+                        @(ver.Verified ? "La credencial respondió bien." : $"La credencial no pasó la prueba ({ver.Outcome}).")
+                        @if (ver.Messages.Count > 0) { <ul>@foreach (var m in ver.Messages) { <li>@(m.Translation ?? m.Text)</li> }</ul> }
+                    </div>
+                }
+            </div>
+
+            <h4>Canales de la instalación</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Canal</th><th>Documentos</th><th>Eventos</th><th>Número del ERP</th><th>Asíncrono</th><th>PDF propio</th><th>Envía correo</th><th>Consulta rangos</th><th>Contingencia 03</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in cfg.AvailableChannels)
+                        {
+                            <tr>
+                                <td>@c.ChannelCode · @c.Name</td>
+                                <td>@string.Join(", ", c.Capabilities.DocumentKinds.Select(TipoPorNombre))</td>
+                                <td>@(c.Capabilities.Events.Count == 0 ? "—" : string.Join(", ", c.Capabilities.Events.Select(TipoPorNombre)))</td>
+                                <td>@SiNo(c.Capabilities.AcceptsErpNumber)</td><td>@SiNo(c.Capabilities.IsAsync)</td><td>@SiNo(c.Capabilities.ReturnsPdf)</td>
+                                <td>@SiNo(c.Capabilities.CanSendEmail)</td><td>@SiNo(c.Capabilities.QueriesNumberingRanges)</td><td>@SiNo(c.Capabilities.IssuerContingency)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <h4>Historial de vigencias</h4>
+            @if (cfg.History.Count == 0)
+            {
+                <p class="texto-tenue">Sin vigencias anteriores.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Desde</th><th>Hasta</th><th>Modo</th><th>Canal</th><th>Ambiente</th><th>Activa</th><th>Motivo</th><th>Registró</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in cfg.History.OrderByDescending(x => x.ValidFrom))
+                            {
+                                <tr>
+                                    <td>@h.ValidFrom.ToString("dd/MM/yyyy")</td><td>@h.ValidTo?.ToString("dd/MM/yyyy")</td><td>@Modo(h.Mode)</td><td>@h.ChannelCode</td>
+                                    <td>@Ambiente(h.Environment)</td><td>@SiNo(h.IsEnabled)</td><td>@h.Reason</td><td>@h.CreatedByName</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarVigencia" Header="Nueva vigencia de la configuración" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">La vigencia actual se cierra la víspera de la fecha nueva. Lo ya numerado sigue por el canal con que se numeró.</p>
+                <div class="form-grid">
+                    <label class="campo">Modo *
+                        <select class="e-input" @bind="_f.Modo">@foreach (var (v, t) in Modos) { <option value="@v">@t</option> }</select>
+                    </label>
+                    <label class="campo">Canal *
+                        <select class="e-input" @bind="_f.Canal">
+                            @foreach (var c in _config?.AvailableChannels ?? []) { <option value="@c.ChannelCode">@c.ChannelCode · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Ambiente *
+                        <select class="e-input" @bind="_f.Ambiente">@foreach (var (v, t) in Ambientes) { <option value="@v">@t</option> }</select>
+                    </label>
+                    <label class="campo">Software (software propio) <input class="e-input" @bind="_f.Software" maxlength="36" /></label>
+                    <label class="campo">Set de pruebas <input class="e-input" @bind="_f.SetDePruebas" maxlength="36" /></label>
+                    <label class="campo">Correo al comprador
+                        <select class="e-input" @bind="_f.Correo">@foreach (var (v, t) in EntregasDeCorreo) { <option value="@v">@t</option> }</select>
+                    </label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_f.Desde.ToString("yyyy-MM-dd")" @onchange="@(e => _f.Desde = LeerFecha(e.Value) ?? _f.Desde)" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.Activa" /> Emisión activa</label>
+                    <label class="campo">NIT del emisor <input class="e-input" @bind="_f.Nit" maxlength="15" /></label>
+                    <label class="campo">DV <input class="e-input" @bind="_f.Dv" maxlength="1" /></label>
+                    <label class="campo campo-ancho">Razón social <input class="e-input" @bind="_f.RazonSocial" maxlength="200" /></label>
+                    <label class="campo campo-ancho">Dirección <input class="e-input" @bind="_f.Direccion" maxlength="150" /></label>
+                    <label class="campo">Municipio (DIVIPOLA) <input class="e-input" @bind="_f.Municipio" maxlength="5" /></label>
+                    <label class="campo">Correo del emisor <input class="e-input" type="email" @bind="_f.CorreoEmisor" maxlength="150" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" maxlength="500" /></label>
+                </div>
+                @if (_kindsSinResolucion.Count > 0)
+                {
+                    <p class="aviso aviso-alerta">Faltan resoluciones vigentes asociadas al canal para: @string.Join(", ", _kindsSinResolucion.Select(TipoPorNombre)). <a href="/maestros/resoluciones-dian">Ir a Resoluciones</a></p>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_f.Motivo) || string.IsNullOrWhiteSpace(_f.Canal))" OnClick="@GuardarVigenciaAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVigencia = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class FormularioDeVigencia
+    {
+        public int Modo { get; set; } = 1;
+        public string Canal { get; set; } = "";
+        public int Ambiente { get; set; } = 2;
+        public string? Software { get; set; }
+        public string? SetDePruebas { get; set; }
+        public int Correo { get; set; } = 1;
+        public bool Activa { get; set; } = true;
+        public DateOnly Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? Nit { get; set; }
+        public string? Dv { get; set; }
+        public string? RazonSocial { get; set; }
+        public string? Direccion { get; set; }
+        public string? Municipio { get; set; }
+        public string? CorreoEmisor { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaPreparacion = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveVigencia = new(), _claveVerificar = new();
+    private ConfiguracionDeEmisionDto? _config;
+    private PreparacionDianDto? _preparacion;
+    private VerificacionDeCredencialDto? _verificacion;
+    private FormularioDeVigencia _f = new();
+    private List<string> _kindsSinResolucion = [];
+    private bool _mostrarVigencia;
+
+    protected override Task OnInitializedAsync() => CargarTodoAsync();
+
+    private async Task CargarTodoAsync() => await Task.WhenAll(CargarAsync(), CargarPreparacionAsync());
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Facturacion.ConfiguracionAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la configuración."); return; }
+        _config = r.Value;
+    }
+
+    private async Task CargarPreparacionAsync()
+    {
+        using var carga = _cargaPreparacion.Iniciar();
+        var r = await Facturacion.PreparacionAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la preparación."); return; }
+        _preparacion = r.Value;
+    }
+
+    private async Task VerificarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Facturacion.VerificarCredencialAsync(null, _claveVerificar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo verificar la credencial."); return; }
+        _verificacion = r.Value;
+        await CargarTodoAsync();
+    }
+
+    private void AbrirVigencia()
+    {
+        var actual = _config?.Current;
+        _f = new FormularioDeVigencia
+        {
+            Modo = actual?.Mode ?? 1, Canal = actual?.ChannelCode ?? _config?.AvailableChannels.FirstOrDefault()?.ChannelCode ?? "",
+            Ambiente = actual?.Environment ?? 2, Software = actual?.SoftwareId, SetDePruebas = actual?.TestSetId, Correo = actual?.EmailDeliveryBy ?? 1,
+            Activa = actual?.IsEnabled ?? true, Desde = DateOnly.FromDateTime(DateTime.Today.AddDays(1)),
+            Nit = actual?.IssuerTaxId, Dv = actual?.IssuerCheckDigit, RazonSocial = actual?.IssuerBusinessName, Direccion = actual?.IssuerAddress,
+            Municipio = actual?.IssuerMunicipalityDaneCode, CorreoEmisor = actual?.IssuerEmail,
+        };
+        _kindsSinResolucion = [];
+        _mostrarVigencia = true;
+    }
+
+    private async Task GuardarVigenciaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_f.Motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var request = new ConfiguracionDeEmisionRequest(
+            Nombre(NombresDeModo, _f.Modo)!, _f.Canal, Nombre(NombresDeAmbiente, _f.Ambiente)!, Limpio(_f.Software), Limpio(_f.SetDePruebas),
+            Nombre(NombresDeEntregaDeCorreo, _f.Correo)!, _f.Activa, _f.Desde, _f.Motivo.Trim(), Limpio(_f.Nit), Limpio(_f.Dv), Limpio(_f.RazonSocial),
+            Limpio(_f.Direccion), Limpio(_f.Municipio), Limpio(_f.CorreoEmisor));
+        var r = await Facturacion.ConfigurarAsync(request, _claveVigencia);
+        if (!r.IsSuccess)
+        {
+            _kindsSinResolucion = [.. r.Dato<List<string>>("kinds") ?? []];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la vigencia.");
+            return;
+        }
+        _mostrarVigencia = false;
+        await Notification.SuccessAsync("Vigencia registrada. Verifique la credencial del canal antes de emitir.");
+        await CargarTodoAsync();
+    }
+
+    private string NombreDelCanal(string codigo) =>
+        _config?.AvailableChannels.FirstOrDefault(c => c.ChannelCode == codigo) is { } c ? $"{c.ChannelCode} · {c.Name}" : codigo;
+
+    private static string TipoPorNombre(string nombre) =>
+        NombresDeTipoDeDocumento.FirstOrDefault(p => p.Value == nombre) is { Value: not null } p ? TipoDeDocumento(p.Key)
+        : NombresDeTipoDeResolucion.FirstOrDefault(q => q.Value == nombre) is { Value: not null } q ? TipoDeResolucion(q.Key) : nombre;
+
+    private static string SiNo(bool valor) => valor ? "Sí" : "No";
+
+    private static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

@@ -73,7 +73,7 @@ public sealed record DirectPurchaseResultDto(
     IReadOnlyList<AvisoDto> Warnings);
 
 /// <summary>La factura de la compra directa: su tipo y el documento del proveedor (§14.3).</summary>
-public sealed record DirectPurchaseInvoiceRequest(Guid DocumentTypePublicId, SupplierDocumentRequest Supplier);
+public sealed record DirectPurchaseInvoiceRequest(Guid DocumentTypePublicId, SupplierDocumentRequest? Supplier);
 
 /// <summary>El cuerpo de registrar un evento RADIAN hecho por fuera (§14.8); <see cref="Correct"/> corrige uno ya registrado. (nuevo)</summary>
 public sealed record RegistrarEventoRadianRequest(SupplierInvoiceEventCode EventCode, DateOnly Date, string Source, string? Cude = null, string? Notes = null, bool Correct = false);

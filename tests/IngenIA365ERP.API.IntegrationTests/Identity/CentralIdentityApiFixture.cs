@@ -70,6 +70,13 @@ public class CentralIdentityApiFixture : IAsyncLifetime
         .Build();
 
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
+
+    /// <summary>
+    /// El directorio de credenciales de facturación electrónica de este host (<c>ElectronicInvoicing:CredentialsPath</c>, feature 012, I4):
+    /// temporal, uno por fixture; se borra al cerrar.
+    /// </summary>
+    public string DirectorioDeCredenciales { get; } =
+        Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "ingenia-fe-cred-" + Guid.NewGuid().ToString("N"))).FullName;
     public CapturingEmailSender Emails { get; } = new();
 
     /// <summary>Lo que una subclase necesita levantado antes que el host (un almacén, por ejemplo).</summary>
@@ -160,6 +167,12 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.UseSetting("Integration:AuditForwarder:Enabled", "false");
             builder.UseSetting("Integration:ScheduledTasks:Enabled", "false");
             builder.UseSetting("Integration:EmailDispatcher:Enabled", "false");
+            // Feature 012, I4 (T749): el procesador de documentos electrónicos también queda registrado sin arrancar; las pruebas conducen
+            // sus pasadas a mano.
+            builder.UseSetting("ElectronicInvoicing:Processor:Enabled", "false");
+            // Las credenciales de los canales (contracts/dian.md §11): un directorio temporal por fixture en lugar del Secret montado.
+            // Las e2e de I4 escriben ahí {tenantPublicId}.{canal}.json (T685).
+            builder.UseSetting("ElectronicInvoicing:CredentialsPath", DirectorioDeCredenciales);
 
             builder.ConfigureTestServices(services =>
             {
@@ -180,6 +193,10 @@ public class CentralIdentityApiFixture : IAsyncLifetime
                     && d.ImplementationType == typeof(IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion.DestinoContabilidad)).ToList();
                 foreach (var d in destinos) services.Remove(d);
                 services.AddScoped<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes, Integration.DestinoContabilidadConDoble>();
+
+                // Feature 012, I4 (T687): un segundo canal, PRUEBA, para ensayar el cambio de canal con vigencia sobre el simulado.
+                services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.Channels.ICanalDeEmisionElectronica>(sp =>
+                    new ElectronicInvoicing.CanalDePruebaE2E(sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Channels.Simulado.CanalSimulado>()));
             });
 
             ConfigurarHost(builder);
@@ -407,6 +424,8 @@ public class CentralIdentityApiFixture : IAsyncLifetime
         Factory?.Dispose();
         try { if (_carpetaDeLlaves is not null && Directory.Exists(_carpetaDeLlaves)) Directory.Delete(_carpetaDeLlaves, recursive: true); }
         catch (IOException) { /* el SO puede tener el archivo abierto un instante más: queda en la carpeta temporal */ }
+        try { if (Directory.Exists(DirectorioDeCredenciales)) Directory.Delete(DirectorioDeCredenciales, recursive: true); }
+        catch (IOException) { /* queda en la carpeta temporal */ }
         await Task.WhenAll(
             ((DotNet.Testcontainers.Containers.IContainer)_db).DisposeAsync().AsTask(),
             _mongo.DisposeAsync().AsTask(),

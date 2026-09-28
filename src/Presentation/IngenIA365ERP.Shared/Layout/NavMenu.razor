@@ -195,6 +195,10 @@
             <NavLink href="/compras/facturas-proveedor" class="nav-subitem">Facturas de proveedor</NavLink>
             <NavLink href="/compras/notas-proveedor" class="nav-subitem">Notas de proveedor</NavLink>
             <NavLink href="/compras/devoluciones" class="nav-subitem">Devoluciones</NavLink>
+            @* I4 (T759): el documento soporte y su nota de ajuste. *@
+            <PermissionGate Required="Inventory.Purchases.View">
+                <NavLink href="/compras/documentos-soporte" class="nav-subitem">Documentos soporte</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
         </PermissionGate>
 
@@ -205,6 +209,13 @@
             </PermissionGate>
             <PermissionGate Required="Inventory.Sales.Create">
                 <NavLink href="/ventas/facturas/nueva" class="nav-subitem">Nueva factura</NavLink>
+            </PermissionGate>
+            @* I4 (T759): la bandeja de documentos electrónicos ante la DIAN y las contingencias. *@
+            <PermissionGate Required="ElectronicInvoicing.Documents.View">
+                <NavLink href="/ventas/documentos-electronicos" class="nav-subitem">Documentos electrónicos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="ElectronicInvoicing.Contingencies.View">
+                <NavLink href="/ventas/contingencias-dian" class="nav-subitem">Contingencias DIAN</NavLink>
             </PermissionGate>
             <PermissionGate Required="Inventory.PointsOfSale.View">
                 <NavLink href="/ventas/puntos-de-venta" class="nav-subitem">Puntos de venta</NavLink>
@@ -315,6 +326,10 @@
             <PermissionGate Required="Core.PaymentMeans.View">
                 <NavLink href="/maestros/medios-de-pago" class="nav-subitem">Medios de pago</NavLink>
             </PermissionGate>
+            @* I4 (T759): las resoluciones de numeración de la DIAN. *@
+            <PermissionGate Required="ElectronicInvoicing.Resolutions.View">
+                <NavLink href="/maestros/resoluciones-dian" class="nav-subitem">Resoluciones DIAN</NavLink>
+            </PermissionGate>
             <NavLink href="/maestros/empresas" class="nav-subitem">Empresas</NavLink>
             <NavLink href="/maestros/centros-costo" class="nav-subitem">Centros de Costo</NavLink>
             <NavLink href="/maestros/secciones" class="nav-subitem">Secciones</NavLink>
@@ -361,6 +376,10 @@
             <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
             <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
+            @* I4 (T759): la configuración de emisión electrónica, su canal y su credencial. *@
+            <PermissionGate Required="ElectronicInvoicing.Settings.View">
+                <NavLink href="/admin/facturacion-electronica" class="nav-subitem">Facturación electrónica</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
         }
 

@@ -90,6 +90,18 @@ public class SalesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .ConClaveDeOperacion()
             .RequirePermission(Ver);
+
+        // §18.3.1 (I4, T748): el comprador pide factura cuando el documento equivalente POS ya se expidió. Una sola acción: la nota de ajuste
+        // de anulación total y la factura con los mismos pagos, en una transacción.
+        group.MapPost("/{id:guid}/invoice-instead", async (Guid id, FacturaEnLugarRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ReplacePosDocumentWithInvoiceCommand(id, body.BuyerPersonPublicId, body.Reason ?? string.Empty, body.ExpectedAmountDue)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Inventory_Sales_Documents_InvoiceInstead")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Confirmar);
     }
 
     private static void Facturas(IEndpointRouteBuilder app)
@@ -209,6 +221,9 @@ public class SalesEndpoints : ICarterModule
 
     /// <summary><c>POST …/deliver</c> y <c>/reprint</c>: formato (tirilla o carta), si se manda por correo y a cuál.</summary>
     public sealed record EntregaRequest(CashRegisterPrintFormat? Format, bool? SendEmail, string? Email, string? Reason);
+
+    /// <summary><c>POST …/invoice-instead</c> (§18.3.1): a nombre de quién va la factura, el motivo y lo que la persona vio a pagar. (nuevo)</summary>
+    public sealed record FacturaEnLugarRequest(Guid BuyerPersonPublicId, string? Reason, decimal ExpectedAmountDue);
 
     /// <summary><c>POST …/confirm</c>: lo que la persona vio a pagar y, si la tiene, la versión leída.</summary>
     public sealed record ConfirmarVentaRequest(decimal? ExpectedAmountDue, byte[]? RowVersion);

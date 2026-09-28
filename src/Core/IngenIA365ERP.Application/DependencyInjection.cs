@@ -35,6 +35,9 @@ public static class DependencyInjection
             //     que la auditoria del comando quede dentro de la transaccion y una repeticion no la
             //     dispare otra vez. Orden: Validation -> Logging -> Idempotency -> Audit ->
             //     ReintentoPorConcurrencia -> Performance.
+            // 2a) Feature 012, I4 (T734, T736): lo anotado para después del commit (el canónico de un documento electrónico, la espera
+            //     en línea del POS) corre al volver de la transacción de Idempotency, sólo en la petición más externa y si terminó bien.
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(Common.Persistence.TrasElCommitBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(AuditBehavior<,>));
             // 3b) Feature 009: reintento ante ConcurrencyConflictException para los requests marcados
@@ -220,6 +223,9 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoRecepcionDeCompra>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoFacturaDeProveedor>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeProveedor>();
+        // I4 (T740): el documento soporte y su nota de ajuste, sobre el modelo de la factura y la nota del proveedor.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeDocumentoSoporte>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDeAjusteDeDocumentoSoporte>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDevolucionAProveedor>();
         services.AddScoped<Inventory.Documents.IConfirmacionEncadenada, Inventory.Purchasing.CompraDirectaEncadenada>();
         services.AddScoped<Inventory.Purchasing.LectorDeFacturaUbl>();
@@ -264,6 +270,49 @@ public static class DependencyInjection
         // notas, las estrategias de las clases de venta (su anulación no tiene estrategia propia: AnulacionDeVenta), la alerta de venta
         // bajo costo después del guardado y el retiro gravado.
         services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
+        services.AddScoped<Common.Persistence.TareasTrasElCommit>();
+        // Feature 012, I4 (T701-T704): el único constructor del canónico y la fuente de Inventario (la plataforma no lee INV_; varias
+        // fuentes pueden convivir y se eligen por SourceModule).
+        services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
+        services.AddScoped<ElectronicInvoicing.Canonical.IFuenteDeDocumentoElectronico, Inventory.Integration.FuenteDeEmisionDeInventario>();
+        // Feature 012, I4 (T705, T710): el único escritor de LastIssuedNumber y los prefijos de notas de Inventario (la plataforma no lee
+        // INV_: pregunta por el puerto).
+        services.AddScoped<ElectronicInvoicing.Numeracion.NumeradorFiscal>();
+        services.AddScoped<ElectronicInvoicing.Numeracion.IPrefijosDeModulos, Inventory.Integration.PrefijosDeInventario>();
+        // Feature 012, I4 (T711-T721): el registro del documento electrónico en la confirmación, el intento contra el canal sellado
+        // (emitir, consultar, transmitir contingencia) con sus artefactos, la contingencia 04, la representación, la entrega al comprador,
+        // la bandeja (con el alcance que decide cada fuente) y las alertas DIAN de la tarea einvoicing.alerts. Las esperas entre intentos
+        // son técnicas (ElectronicInvoicing:Retries, contracts/dian.md §6.3): estos son los defectos del contrato; T728 los lee de la sección.
+        services.AddSingleton(new ElectronicInvoicing.Documents.EsperasDeReintento(
+            [TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5),
+             TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(60)],
+            TimeSpan.FromHours(1), TimeSpan.FromMinutes(2)));
+        // Sin canales ni credenciales registrados (T728, T729 los agregan en AddElectronicInvoicing, que se llama después y manda), el
+        // contenedor se arma igual: la validación de desarrollo exige poder construir cada manejador.
+        services.TryAddScoped<ElectronicInvoicing.Channels.ICanalesDeEmision, ElectronicInvoicing.Channels.SinCanalesRegistrados>();
+        services.TryAddScoped<ElectronicInvoicing.Channels.ICredencialesDeCanal, ElectronicInvoicing.Channels.SinCredencialesConfiguradas>();
+        services.AddScoped<ElectronicInvoicing.Documents.RegistroDeDocumentoElectronico>();
+        services.AddScoped<ElectronicInvoicing.Documents.IReconstruccionDelCanonico, ElectronicInvoicing.Documents.ReconstruccionDelCanonico>();
+        services.AddScoped<ElectronicInvoicing.Documents.GuardadoDeArtefactos>();
+        services.AddScoped<ElectronicInvoicing.Contingencies.ContingenciaDeLaDian>();
+        services.AddScoped<ElectronicInvoicing.Documents.GeneracionDeRepresentacion>();
+        services.AddScoped<ElectronicInvoicing.Documents.EntregaAlComprador>();
+        services.AddScoped<ElectronicInvoicing.Documents.IntentoAnteElCanal>();
+        services.AddScoped<ElectronicInvoicing.Documents.AlertasDeFacturacionElectronica>();
+        services.AddScoped<ElectronicInvoicing.Documents.IConsultaDeFuenteElectronica, Inventory.Integration.ConsultaDeEmisionDeInventario>();
+        // Feature 012, I4 (T722-T726): los casos a, b y c de un rechazo (la marca de la anulación sin efecto fiscal y del reemplazo que
+        // leen los efectos de la venta) y las contingencias.
+        services.AddScoped<Inventory.Integration.RechazoFiscalEnCurso>();
+        services.AddScoped<ElectronicInvoicing.Documents.CasosDeRechazo>();
+        // Feature 012, I4 (T734-T738): el flujo fiscal de la confirmación (guardia y contingencia, numeración por resolución, registro del
+        // documento electrónico y subida del canónico después del commit), la espera en línea del POS y el estado electrónico que leen las
+        // ventas (anular, notas, entrega).
+        services.AddScoped<Inventory.Integration.EmisionFiscalDeLaConfirmacion>();
+        services.AddScoped<Inventory.Pos.EsperaEnLineaDelPos>();
+        services.AddScoped<Inventory.Sales.TrasladoDeVentaEnCurso>();
+        services.AddScoped<Inventory.Sales.SaveCreditNoteDraftCommandHandler>();
+        services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Purchasing.PropuestaDeDocumentoSoporte>();
+        services.AddScoped<Inventory.Documents.IPasoFiscalDeConfirmacion>(sp => sp.GetRequiredService<Inventory.Integration.EmisionFiscalDeLaConfirmacion>());
         services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
         services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
         // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,

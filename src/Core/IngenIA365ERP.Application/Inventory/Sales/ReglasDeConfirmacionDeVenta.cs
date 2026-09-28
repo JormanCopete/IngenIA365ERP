@@ -57,8 +57,15 @@ public sealed class ReglasDeConfirmacionDeVenta(
     AprobacionDeDescuentos aprobaciones,
     IToqueDeSesionDeCaja toque,
     CreditoEnLaVenta? credito = null,
-    AprobacionDeCredito? aprobacionDeCredito = null)
+    AprobacionDeCredito? aprobacionDeCredito = null,
+    TrasladoDeVentaEnCurso? traslado = null)
 {
+    /// <summary>¿Es la factura de <c>invoice-instead</c> (T739), que no cobra, no saca mercancía y copia impuestos y totales?</summary>
+    public bool EsFacturaEnLugarDelDocumentoEquivalente(InventoryDocument documento) => traslado?.DeLaFactura(documento.PublicId) is not null;
+
+    /// <summary>¿Es la nota que anula el documento equivalente sin reintegrar (T739)?</summary>
+    public bool EsNotaSinReintegro(InventoryDocument documento) => traslado?.DeLaNota(documento.PublicId) is not null;
+
     public const string PermisoOtroMedio = "Inventory.Sales.RefundOtherMeans";
 
     private readonly Dictionary<Guid, IReadOnlyList<DocumentTaxLine>> _foto = [];
@@ -85,6 +92,14 @@ public sealed class ReglasDeConfirmacionDeVenta(
         var documento = contexto.Documento;
         var fiscal = await FiscalAsync(contexto, ct);
         if (fiscal is not null) return Result.Failure(fiscal);
+
+        // I4 (T739): la factura que reemplaza al documento equivalente lleva sus impuestos, totales y pagos tal cual (no se recalcula ni se
+        // cobra otra vez).
+        if (traslado?.DeLaFactura(documento.PublicId) is { } documentoEquivalente)
+        {
+            _foto[documento.PublicId] = await TrasladoDeVentaEnCurso.ImpuestosCopiadosAsync(db, documento, documentoEquivalente, ct);
+            return Result.Success();
+        }
 
         var aprobados = await aprobaciones.ExigirAprobadosAsync(documento, ct);
         if (aprobados.IsFailure) return aprobados;
@@ -118,7 +133,8 @@ public sealed class ReglasDeConfirmacionDeVenta(
     /// </summary>
     public async Task<Result<Domain.Entities.Approvals.ApprovalRequest?>> AprobacionDeCreditoAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
-        if (aprobacionDeCredito is null) return Result.Success<Domain.Entities.Approvals.ApprovalRequest?>(null);
+        if (aprobacionDeCredito is null || EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento))
+            return Result.Success<Domain.Entities.Approvals.ApprovalRequest?>(null);
         var pagos = await PagosAsync(contexto.Documento, PaymentDirection.Received, ct);
         return await aprobacionDeCredito.SolicitarAsync(contexto.Documento, pagos, ct);
     }
@@ -130,6 +146,13 @@ public sealed class ReglasDeConfirmacionDeVenta(
         EscribirImpuestos(documento);
 
         var pagos = await PagosAsync(documento, PaymentDirection.Received, ct);
+        if (EsFacturaEnLugarDelDocumentoEquivalente(documento))
+        {
+            // Los pagos trasladados no redimen bonos (el del documento equivalente sigue redimido) ni tocan la caja.
+            var vencimientos = pagos.Where(p => ClasesDeMedio.EsCredito(p.MeansClass) && p.FinalDueDate is not null).Select(p => p.FinalDueDate!.Value).ToList();
+            if (vencimientos.Count > 0 && documento.DueDate is null) documento.DueDate = vencimientos.Max();
+            return Result.Success();
+        }
         var medios = await MediosAsync(pagos, ct);
         foreach (var pago in pagos.Where(p => medios.TryGetValue(p.PaymentMeansId, out var m) && m.UniqueReference && p.NormalizedReference is not null))
         {
@@ -171,6 +194,10 @@ public sealed class ReglasDeConfirmacionDeVenta(
         if (original is null || original.Status != DocumentStatus.Confirmed) return Result.Failure(ErroresDeVentas.CreditNoteOriginInvalid());
         if (NotasDeVenta.ClaseDeNota(original.Class) is not { } esperada) return Result.Failure(ErroresDeVentas.CreditNoteOriginInvalid());
         if (esperada != nota.Class) return Result.Failure(ErroresDeVentas.CreditNoteClassMismatch(original.Class, esperada));
+        // I4 (T738): sobre un original enviado sin respuesta no hay nota; sobre uno rechazado tampoco (no está expedido: casos a, b y c).
+        // Sobre uno en contingencia sí: su transmisión espera a la del original (WaitsForDocumentId, EmisionFiscalDeLaConfirmacion).
+        if (await Integration.EstadoElectronicoDeInventario.CorreccionImpedidaAsync(db, original.PublicId, ct) is { } impedida)
+            return Result.Failure(impedida);
 
         var excedido = await NotasDeVenta.ExcesoAsync(db, original, nota, ct);
         if (excedido is not null) return Result.Failure(excedido);
@@ -180,6 +207,8 @@ public sealed class ReglasDeConfirmacionDeVenta(
         CalculoTributarioDeVenta.AplicarTotales(nota, calculado.Value.Totales);
         _foto[nota.PublicId] = CalculoTributarioDeVenta.Foto(nota, calculado.Value.Renglones);
 
+        // I4 (T739): la nota que anula el documento equivalente para la factura no reintegra (los pagos pasan a la factura).
+        if (EsNotaSinReintegro(nota)) return Result.Success();
         var reintegros = await PagosAsync(nota, PaymentDirection.Refunded, ct);
         return await ValidarReintegrosAsync(nota, original, reintegros, ct);
     }

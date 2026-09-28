@@ -112,7 +112,8 @@ public sealed record CreateCashRegisterCommand(
     CashRegisterPrintFormat PrintFormat,
     IReadOnlyList<CashRegisterDocumentTypeInput> DocumentTypes,
     string? DianCashRegisterPlate = null,
-    byte? PrintCopies = null)
+    byte? PrintCopies = null,
+    string? DianCashRegisterTypeCode = null)
     : IRequest<Result<CashRegisterDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -134,6 +135,7 @@ public sealed class CreateCashRegisterCommandValidator : AbstractValidator<Creat
             t.RuleFor(y => y.DocumentTypePublicId).NotEmpty();
         });
         RuleFor(x => x.DianCashRegisterPlate).MaximumLength(ReglasDePuntoDeVenta.LargoDePlaca);
+        RuleFor(x => x.DianCashRegisterTypeCode).MaximumLength(10);
         RuleFor(x => x.PrintCopies).InclusiveBetween((byte)1, (byte)5).When(x => x.PrintCopies is not null);
     }
 }
@@ -146,7 +148,7 @@ public sealed class CreateCashRegisterCommandHandler(IApplicationDbContext db, I
         var punto = await PuntosDelAlcance.BuscarAsync(db, alcance, request.PointOfSalePublicId, ct);
         if (punto is null) return Result.Failure<CashRegisterDto>(ErroresDePuntoDeVenta.PointOfSaleNotFound());
         var datos = await ReferenciasDeLaCaja.ResolverAsync(db, request.Code, request.Name, request.WarehousePublicId, request.DefaultCardTerminalPublicId,
-            request.PrintFormat, request.DocumentTypes, request.DianCashRegisterPlate, request.PrintCopies, true, ct);
+            request.PrintFormat, request.DocumentTypes, request.DianCashRegisterPlate, request.PrintCopies, true, ct, request.DianCashRegisterTypeCode);
         if (datos.IsFailure) return Result.Failure<CashRegisterDto>(datos.Error);
         var obligada = await ReglasDePuntoDeVenta.ObligadaAFacturarAsync(parametros, reloj.HoyLocal, ct);
         var caja = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, null, datos.Value, obligada, reloj.UtcNow, ct);
@@ -167,7 +169,8 @@ public sealed record UpdateCashRegisterCommand(
     IReadOnlyList<CashRegisterDocumentTypeInput> DocumentTypes,
     string? DianCashRegisterPlate = null,
     byte? PrintCopies = null,
-    bool IsActive = true)
+    bool IsActive = true,
+    string? DianCashRegisterTypeCode = null)
     : IRequest<Result<CashRegisterDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -189,6 +192,7 @@ public sealed class UpdateCashRegisterCommandValidator : AbstractValidator<Updat
             t.RuleFor(y => y.DocumentTypePublicId).NotEmpty();
         });
         RuleFor(x => x.DianCashRegisterPlate).MaximumLength(ReglasDePuntoDeVenta.LargoDePlaca);
+        RuleFor(x => x.DianCashRegisterTypeCode).MaximumLength(10);
         RuleFor(x => x.PrintCopies).InclusiveBetween((byte)1, (byte)5).When(x => x.PrintCopies is not null);
     }
 }
@@ -203,7 +207,7 @@ public sealed class UpdateCashRegisterCommandHandler(IApplicationDbContext db, I
         var caja = await db.CashRegisters.FirstOrDefaultAsync(c => c.PublicId == request.CashRegisterPublicId && c.PointOfSaleId == punto.Id && !c.IsDeleted, ct);
         if (caja is null) return Result.Failure<CashRegisterDto>(ErroresDePuntoDeVenta.CashRegisterNotFound());
         var datos = await ReferenciasDeLaCaja.ResolverAsync(db, caja.Code, request.Name, request.WarehousePublicId, request.DefaultCardTerminalPublicId,
-            request.PrintFormat, request.DocumentTypes, request.DianCashRegisterPlate, request.PrintCopies, request.IsActive, ct);
+            request.PrintFormat, request.DocumentTypes, request.DianCashRegisterPlate, request.PrintCopies, request.IsActive, ct, request.DianCashRegisterTypeCode);
         if (datos.IsFailure) return Result.Failure<CashRegisterDto>(datos.Error);
         var obligada = await ReglasDePuntoDeVenta.ObligadaAFacturarAsync(parametros, reloj.HoyLocal, ct);
         var r = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, caja, datos.Value, obligada, reloj.UtcNow, ct);
@@ -300,7 +304,7 @@ public static class ReferenciasDeLaCaja
 {
     public static async Task<Result<DatosDeCaja>> ResolverAsync(
         IApplicationDbContext db, string codigo, string nombre, Guid bodegaId, Guid? datafonoId, CashRegisterPrintFormat formato,
-        IReadOnlyList<CashRegisterDocumentTypeInput> tipos, string? placa, byte? copias, bool activa, CancellationToken ct)
+        IReadOnlyList<CashRegisterDocumentTypeInput> tipos, string? placa, byte? copias, bool activa, CancellationToken ct, string? tipoDeCaja = null)
     {
         var bodega = await db.Warehouses.FirstOrDefaultAsync(w => w.PublicId == bodegaId && !w.IsDeleted, ct);
         if (bodega is null) return Result.Failure<DatosDeCaja>(WarehouseErrors.WarehouseNotFound());
@@ -319,7 +323,7 @@ public static class ReferenciasDeLaCaja
             if (!encontrados.TryGetValue(t.DocumentTypePublicId, out var tipo)) return Result.Failure<DatosDeCaja>(InventoryErrors.DocumentTypeNotFound());
             pares.Add((t.Role, tipo));
         }
-        return Result.Success(new DatosDeCaja(codigo, nombre, bodega, datafono, formato, pares, placa, copias, activa));
+        return Result.Success(new DatosDeCaja(codigo, nombre, bodega, datafono, formato, pares, placa, copias, activa, tipoDeCaja));
     }
 }
 
@@ -374,7 +378,8 @@ public static class VistaDePuntosDeVenta
                 tipos.Where(t => t.CashRegisterId == c.Id).OrderBy(t => t.Role)
                     .Select(t => new CashRegisterDocumentTypeDto(t.Role, t.DocumentType!.PublicId, t.DocumentType.Code, t.DocumentType.Class, t.DocumentType.FiscalPrefix))
                     .ToList(),
-                sesion is null ? null : new CashRegisterOpenSessionDto(sesion.PublicId, sesion.CashierName, sesion.OpenedAt));
+                sesion is null ? null : new CashRegisterOpenSessionDto(sesion.PublicId, sesion.CashierName, sesion.OpenedAt),
+                c.DianCashRegisterTypeCode);
         }).ToList();
     }
 }

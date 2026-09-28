@@ -1,0 +1,413 @@
+@page "/compras/documentos-soporte/nuevo"
+@page "/compras/documentos-soporte/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject InventarioClient Inventario
+@inject FacturacionElectronicaClient Facturacion
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Documento soporte - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I4 (T757; FR-062; contracts/api.md §14.7; contracts/dian.md §4): el documento soporte de una compra a un proveedor no
+   obligado a facturar —el proveedor, las recepciones que cubre (lo que falta por facturar) y los servicios sin recepción—, con impuestos
+   y retenciones (vista previa en el borrador, foto al confirmar) y su nota de ajuste, que siempre disminuye y corrige línea por línea.
+   Confirmar numera con la resolución del documento soporte y transmite por el canal vigente; el estado ante la DIAN se ve abajo y en la
+   bandeja de documentos electrónicos. Lo decide el servidor: un proveedor obligado a facturar no admite documento soporte. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/compras/documentos-soporte">Volver a la lista</a>
+            @if (Editable)
+            {
+                <PermissionGate Required="Inventory.Purchases.Create">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-save" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(false))">Guardar</SfButton>
+                </PermissionGate>
+            }
+            @if (Puede("Discard")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(false))">Descartar</SfButton> }
+            @if (Puede("Confirm")) { <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_guardado.Activa" OnClick="@ConfirmarAsync">Confirmar</SfButton> }
+            @if (Puede("Void")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(true))">Anular</SfButton> }
+            @if (_doc is { Document.Status: 2 } && !EsNota)
+            {
+                <PermissionGate Required="Inventory.Purchases.Create">
+                    <a class="e-btn e-outline" href="@($"/compras/documentos-soporte/nuevo?corrige={_doc.Document.PublicId}")">Nota de ajuste</a>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.Document.PublicId" />
+        @if (_doc?.Document.Warnings is { Count: > 0 } avisos)
+        {
+            <div class="aviso aviso-alerta"><b>Lo que hoy impediría confirmarlo:</b><ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul></div>
+        }
+
+        <div class="form-grid">
+            <label class="campo">Tipo *
+                <select class="e-input" disabled="@(!Editable || _doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => _tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                    @foreach (var t in Tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                </select>
+            </label>
+            <label class="campo campo-ancho">Proveedor no obligado * <SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@CambiarProveedorAsync" Deshabilitado="@(!Editable || EsNota)" /></label>
+            <label class="campo">Fecha <input type="date" class="e-input" disabled="@(!Editable)" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
+            <label class="campo">Municipio de la operación (DANE) <input class="e-input" disabled="@(!Editable)" @bind="_municipio" maxlength="5" placeholder="el de la bodega" /></label>
+            @if (EsNota)
+            {
+                <label class="campo">Corrige a <span>@(_corregido?.Document.DisplayNumber ?? "—")</span></label>
+                <label class="campo">Concepto de corrección (código DIAN) <input class="e-input" disabled="@(!Editable)" @bind="_concepto" maxlength="4" /></label>
+                <label class="campo campo-ancho">Motivo <input class="e-input" disabled="@(!Editable)" @bind="_motivoNota" maxlength="500" /></label>
+            }
+        </div>
+
+        @if (Editable && !EsNota && _proveedor is not null)
+        {
+            <div class="info-card">
+                <label class="campo">Recepción del proveedor
+                    <select class="e-input" value="@(_recepcion?.ToString() ?? "")" @onchange="@(e => _recepcion = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        <option value="">Elija…</option>
+                        @foreach (var r in _recepciones) { <option value="@r.Document.PublicId">@r.Document.DisplayNumber · @r.Document.OperationDate.ToString("dd/MM/yyyy") · por facturar @r.PendingToInvoice.ToString("N2")</option> }
+                    </select>
+                </label>
+                <SfButton CssClass="e-outline" Disabled="@(_recepcion is null)" OnClick="@TraerRecepcionAsync">Traer lo pendiente de la recepción</SfButton>
+                <SelectorDeProducto Etiqueta="Agregar un servicio sin recepción" Elegido="@AgregarServicioAsync" />
+            </div>
+        }
+
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                @if (EsNota)
+                {
+                    <thead><tr><th>Línea del documento soporte</th><th class="numero">Cantidad</th><th class="numero">Valor de la nota</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _lineas)
+                        {
+                            <tr>
+                                <td>@l.Producto</td>
+                                <td class="numero">@l.Cantidad.ToString("N4")</td>
+                                <td class="numero">@if (Editable) { <input class="e-input numero" type="number" min="0" step="any" @bind="l.Valor" /> } else { @l.Valor.ToString("N2") }</td>
+                            </tr>
+                        }
+                    </tbody>
+                }
+                else
+                {
+                    <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th>Recepción</th><th class="numero">Cantidad</th><th class="numero">Precio</th><th class="numero">Descuento</th>@if (Editable) { <th></th> }</tr></thead>
+                    <tbody>
+                        @for (var i = 0; i < _lineas.Count; i++)
+                        {
+                            var indice = i;
+                            var l = _lineas[i];
+                            <tr>
+                                <td>@(indice + 1)</td>
+                                <td>@l.Producto</td>
+                                <td>@l.Unidad</td>
+                                <td>@(l.Recepcion ?? "Servicio")</td>
+                                <td class="numero">@if (Editable) { <input class="e-input numero" type="number" min="0" step="any" @bind="l.Cantidad" /> } else { @l.Cantidad.ToString("N4") }</td>
+                                <td class="numero">@if (Editable) { <input class="e-input numero" type="number" min="0" step="any" @bind="l.Precio" /> } else { @l.Precio.ToString("N2") }</td>
+                                <td class="numero">@if (Editable) { <input class="e-input numero" type="number" min="0" step="any" @bind="l.Descuento" /> } else { @l.Descuento.ToString("N2") }</td>
+                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
+                            </tr>
+                        }
+                    </tbody>
+                }
+            </table>
+        </div>
+
+        <ImpuestosDeCompra Renglones="@(_doc?.Document.TaxLines ?? [])" Totales="@_doc?.Document.Totals" />
+    </IndicadorDeCarga>
+
+    @if (_doc is { Document.Status: 2 })
+    {
+        <h4>Estado ante la DIAN</h4>
+        <IndicadorDeCarga Cargando="@_cargaElectronico.Activa" Texto="Consultando el estado electrónico…">
+            @if (_electronico is { } e)
+            {
+                <div class="aviso @TextosDeFacturacionElectronica.ClaseDeEstado(e.Status)">
+                    @TextosDeFacturacionElectronica.TipoDeDocumento(e.Kind) @e.Number · <b>@TextosDeFacturacionElectronica.Estado(e.Status)</b>
+                    @if (e.UniqueCode is { } codigo) { <span> · @TextosDeFacturacionElectronica.CodigoUnico(e.UniqueCodeKind) @codigo</span> }
+                    @if (e.LastMessage is { } m) { <div>@m</div> }
+                    <div><a href="@($"/ventas/documentos-electronicos?documento={e.ElectronicDocumentPublicId}")">Ver en la bandeja de documentos electrónicos</a></div>
+                </div>
+            }
+            else if (!_cargaElectronico.Activa)
+            {
+                <p class="texto-tenue">@(_sinPermisoElectronico ? "El estado ante la DIAN se consulta en la bandeja de documentos electrónicos." : "Todavía no hay documento electrónico registrado para este documento.")</p>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_anular ? "Anular" : "Descartar el borrador")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@(_anular ? "Se crea el documento contrario con su propia fecha. Un documento soporte validado por la DIAN se corrige con su nota de ajuste." : "El borrador queda descartado con su motivo; no consume número.")</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarMotivoAsync">Aceptar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class LineaForm
+    {
+        public Guid? LinePublicId { get; set; }
+        public Guid ProductPublicId { get; set; }
+        public string Producto { get; set; } = "";
+        public Guid UnitPublicId { get; set; }
+        public string Unidad { get; set; } = "";
+        public Guid? ReceiptLinePublicId { get; set; }
+        public Guid? InvoiceLinePublicId { get; set; }
+        public string? Recepcion { get; set; }
+        public decimal Cantidad { get; set; } = 1m;
+        public decimal Precio { get; set; }
+        public decimal Descuento { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    [Parameter] public Guid? Id { get; set; }
+
+    /// <summary>La nota de ajuste se abre desde un documento soporte confirmado: <c>?corrige={id}</c>.</summary>
+    [SupplyParameterFromQuery(Name = "corrige")] public Guid? Corrige { get; set; }
+
+    /// <summary><c>DocumentLinkKind.InvoiceOfReceipt</c> (el documento soporte cubre la recepción como una factura).</summary>
+    private const int VinculoFacturaDeRecepcion = 6;
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaElectronico = new();
+    private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new(), _claveMotivo = new();
+    private DocumentoDeCompraDto? _doc, _corregido;
+    private DocumentoElectronicoDto? _electronico;
+    private ResultadoDeValidacionPrevia? _validacion;
+    private List<TipoDeDocumentoDto> _tiposSoporte = [], _tiposNota = [];
+    private List<ResumenDeRecepcionDto> _recepciones = [];
+    private List<LineaForm> _lineas = [];
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private Guid? _tipo, _recepcion;
+    private DateOnly? _fecha;
+    private string? _municipio, _motivo, _concepto, _motivoNota;
+    private bool _mostrarMotivo, _anular, _cargado, _sinPermisoElectronico;
+
+    private bool EsNota => _doc?.Document.Class == ClasesDeCompra.NotaDeAjusteDeSoporte || (_doc is null && Corrige is not null);
+    private List<TipoDeDocumentoDto> Tipos => EsNota ? _tiposNota : _tiposSoporte;
+    private string Titulo => _doc is null
+        ? (EsNota ? "Nota de ajuste del documento soporte" : "Nuevo documento soporte")
+        : $"{(EsNota ? "Nota de ajuste" : "Documento soporte")} {_doc.Document.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Document.Status)}";
+    private bool Editable => _doc is null || Puede("Edit");
+    private bool Puede(string accion) => _doc?.Document.AllowedActions.Contains(accion) == true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_cargado && _doc?.Document.PublicId == Id && Id is not null) return;
+        using var carga = _carga.Iniciar();
+        if (!_cargado)
+        {
+            var tipos = await Inventario.ListarTiposAsync(grupo: 1);
+            var activos = tipos.IsSuccess ? (tipos.Value ?? []).Where(t => t.IsActive).ToList() : [];
+            _tiposSoporte = [.. activos.Where(t => t.Class == ClasesDeCompra.DocumentoSoporte)];
+            _tiposNota = [.. activos.Where(t => t.Class == ClasesDeCompra.NotaDeAjusteDeSoporte)];
+            _cargado = true;
+        }
+        if (Id is { } id)
+        {
+            await CargarAsync(id);
+            return;
+        }
+        _doc = null;
+        _electronico = null;
+        _lineas = [];
+        _fecha = DateOnly.FromDateTime(DateTime.Today);
+        if (Corrige is { } corregido) await PrepararNotaAsync(corregido);
+        _tipo = Tipos.FirstOrDefault()?.PublicId;
+    }
+
+    /// <summary>La nota de ajuste parte del documento soporte que corrige: su proveedor y sus líneas, por valor.</summary>
+    private async Task PrepararNotaAsync(Guid corregido)
+    {
+        var r = await Compras.ObtenerDocumentoSoporteAsync(corregido);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el documento soporte."); return; }
+        _corregido = r.Value;
+        _proveedor = SelectorDeProveedor.Desde(r.Value.Document.Counterparty);
+        _lineas = r.Value.Document.Lines.OrderBy(l => l.LineNumber).Select(l => new LineaForm
+        {
+            InvoiceLinePublicId = l.LinePublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", Cantidad = l.Quantity,
+        }).ToList();
+    }
+
+    private async Task CargarAsync(Guid id)
+    {
+        var r = await Compras.ObtenerDocumentoSoporteAsync(id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el documento soporte."); return; }
+        var doc = r.Value;
+        _doc = doc;
+        var d = doc.Document;
+        _tipo = d.DocumentType.PublicId;
+        _fecha = d.OperationDate;
+        _proveedor = SelectorDeProveedor.Desde(d.Counterparty);
+        _municipio = doc.OperationMunicipalityDaneCode;
+        _lineas = d.Lines.OrderBy(l => l.LineNumber).Select(l => new LineaForm
+        {
+            LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
+            UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Precio = l.UnitPrice ?? 0m, Descuento = l.DiscountAmount ?? 0m,
+            ReceiptLinePublicId = l.Links.FirstOrDefault(v => v.Kind == VinculoFacturaDeRecepcion)?.LinePublicId,
+            Recepcion = l.Links.FirstOrDefault(v => v.Kind == VinculoFacturaDeRecepcion)?.DisplayNumber,
+            // En la nota, la línea apunta a la del documento soporte que corrige y su valor es el de la línea.
+            InvoiceLinePublicId = d.Class == ClasesDeCompra.NotaDeAjusteDeSoporte ? l.Links.FirstOrDefault()?.LinePublicId : null,
+            Valor = d.Class == ClasesDeCompra.NotaDeAjusteDeSoporte ? l.LineSubtotal ?? 0m : 0m,
+        }).ToList();
+        if (d.Class == ClasesDeCompra.NotaDeAjusteDeSoporte && _corregido is null
+            && d.Lines.SelectMany(l => l.Links).FirstOrDefault() is { } vinculo)
+        {
+            var corregido = await Compras.ObtenerDocumentoSoporteAsync(vinculo.DocumentPublicId);
+            if (corregido.IsSuccess) _corregido = corregido.Value;
+        }
+        await CargarRecepcionesAsync();
+        if (d.Status == 2) await CargarElectronicoAsync(d);
+    }
+
+    /// <summary>El documento electrónico del documento soporte: la bandeja por su número, el que tiene a éste como origen.</summary>
+    private async Task CargarElectronicoAsync(DocumentoDeInventarioDto d)
+    {
+        _electronico = null;
+        if (!await Permisos.TieneAsync("ElectronicInvoicing.Documents.View")) { _sinPermisoElectronico = true; return; }
+        using var carga = _cargaElectronico.Iniciar();
+        var tipo = EsNota ? "SupportDocumentAdjustmentNote" : "SupportDocument";
+        var r = await Facturacion.DocumentosAsync(new FiltroDeDocumentosElectronicos { Kind = tipo, Number = d.DisplayNumber, PageSize = 20 });
+        if (r.IsSuccess && r.Value is not null) _electronico = r.Value.Items.FirstOrDefault(x => x.Source.DocumentPublicId == d.PublicId);
+    }
+
+    private async Task CambiarProveedorAsync(PersonSearchPicker.PersonSearchItem? proveedor)
+    {
+        _proveedor = proveedor;
+        await CargarRecepcionesAsync();
+    }
+
+    private async Task CargarRecepcionesAsync()
+    {
+        _recepciones = [];
+        if (_proveedor is null || !Editable || EsNota) return;
+        var r = await Compras.ListarRecepcionesAsync(new FiltroDeCompras { SupplierPersonPublicId = _proveedor.PublicId, Status = 2, PageSize = 100 });
+        _recepciones = r.IsSuccess ? [.. r.Value!.Items.Where(x => x.PendingToInvoice > 0m)] : [];
+    }
+
+    /// <summary>Las líneas de la recepción con lo que falta por cubrir, en su unidad y a su precio.</summary>
+    private async Task TraerRecepcionAsync()
+    {
+        if (_recepcion is not { } id) return;
+        var r = await Compras.ObtenerRecepcionAsync(id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la recepción."); return; }
+        foreach (var l in r.Value.Document.Lines.OrderBy(x => x.LineNumber))
+        {
+            var pendiente = r.Value.LineBalances.FirstOrDefault(s => s.LinePublicId == l.LinePublicId)?.PendingToInvoice ?? 0m;
+            if (pendiente <= 0m || _lineas.Any(x => x.ReceiptLinePublicId == l.LinePublicId)) continue;
+            _lineas.Add(new LineaForm
+            {
+                ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code,
+                ReceiptLinePublicId = l.LinePublicId, Recepcion = r.Value.Document.DisplayNumber,
+                Cantidad = l.Factor == 0m ? pendiente : Math.Round(pendiente / l.Factor, 4), Precio = l.UnitPrice ?? 0m,
+            });
+        }
+    }
+
+    private async Task AgregarServicioAsync(ProductoElegido elegido)
+    {
+        var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
+        if (!producto.IsSuccess || producto.Value is null) return;
+        var p = producto.Value;
+        _lineas.Add(new LineaForm { ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = p.BaseUnit.PublicId, Unidad = p.BaseUnit.Code });
+    }
+
+    private BorradorDeCompraRequest Pedido()
+    {
+        var municipio = string.IsNullOrWhiteSpace(_municipio) ? null : _municipio.Trim();
+        if (EsNota)
+        {
+            var corrige = _corregido?.Document.PublicId ?? Corrige;
+            return new BorradorDeCompraRequest(_tipo!.Value, _fecha, null, _proveedor?.PublicId, null, _motivoNota, null, _doc?.Document.RowVersion,
+                _lineas.Where(l => l.Valor > 0m).Select(l => new LineaDeCompraRequest(l.LinePublicId, Guid.Empty, Guid.Empty, 0m,
+                    InvoiceLinePublicId: l.InvoiceLinePublicId, Amount: l.Valor)).ToList(),
+                OperationMunicipalityDaneCode: municipio, SupplierInvoicePublicId: corrige, NoteKind: "Credit",
+                CorrectionConceptCode: string.IsNullOrWhiteSpace(_concepto) ? null : _concepto.Trim());
+        }
+        return new BorradorDeCompraRequest(_tipo!.Value, _fecha, null, _proveedor?.PublicId, null, null, null, _doc?.Document.RowVersion,
+            _lineas.Select(l => new LineaDeCompraRequest(l.LinePublicId, l.ReceiptLinePublicId is null ? l.ProductPublicId : Guid.Empty,
+                l.ReceiptLinePublicId is null ? l.UnitPublicId : Guid.Empty, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null,
+                ReceiptLinePublicId: l.ReceiptLinePublicId)).ToList(),
+            OperationMunicipalityDaneCode: municipio);
+    }
+
+    private async Task<bool> GuardarAsync(bool silencioso)
+    {
+        if (_tipo is null) { await Notification.WarningAsync(EsNota ? "No hay un tipo de nota de ajuste del documento soporte activo." : "No hay un tipo de documento soporte activo."); return false; }
+        if (_proveedor is null) { await Notification.WarningAsync("Elija el proveedor."); return false; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.GuardarAsync(ComprasClient.Rutas.DocumentosSoporte, _doc?.Document.PublicId, Pedido(), _claveGuardar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el borrador."); return false; }
+        var nuevo = _doc is null;
+        await CargarAsync(r.Value.PublicId);
+        if (!silencioso) await Notification.SuccessAsync("Borrador guardado.");
+        if (nuevo) Nav.NavigateTo($"/compras/documentos-soporte/{r.Value.PublicId}", replace: true);
+        return true;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_doc is null) return;
+        if (Editable && !await GuardarAsync(true)) return;
+        if (_validacion is not null && !await _validacion.ValidarAsync()) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.ConfirmarAsync(ComprasClient.Rutas.DocumentosSoporte, _doc.Document.PublicId, _doc.Document.RowVersion, _claveConfirmar);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar.");
+            return;
+        }
+        _validacion?.Limpiar();
+        await Notification.SuccessAsync(r.Value.Status == 1 ? "Quedó en aprobación." : $"{r.Value.DisplayNumber} confirmado; se transmite a la DIAN.");
+        await CargarAsync(_doc.Document.PublicId);
+    }
+
+    private void AbrirMotivo(bool anular)
+    {
+        _anular = anular;
+        _motivo = null;
+        _mostrarMotivo = true;
+    }
+
+    private async Task AplicarMotivoAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        if (_anular)
+        {
+            var r = await Compras.AnularAsync(ComprasClient.Rutas.DocumentosSoporte, _doc.Document.PublicId, _motivo.Trim(), _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+            await Notification.SuccessAsync($"Anulado con {r.Value?.DisplayNumber}.");
+        }
+        else
+        {
+            var r = await Compras.DescartarAsync(ComprasClient.Rutas.DocumentosSoporte, _doc.Document.PublicId, _motivo.Trim(), _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+            await Notification.SuccessAsync("Borrador descartado.");
+        }
+        _mostrarMotivo = false;
+        await CargarAsync(_doc.Document.PublicId);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

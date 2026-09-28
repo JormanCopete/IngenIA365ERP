@@ -75,7 +75,8 @@ public class PointsOfSaleEndpoints : ICarterModule
             {
                 var result = await sender.Send(new CreateCashRegisterCommand(
                     id, body.Code ?? string.Empty, body.Name ?? string.Empty, body.WarehousePublicId ?? Guid.Empty, body.DefaultCardTerminalPublicId,
-                    body.PrintFormat ?? CashRegisterPrintFormat.Ticket80, body.DocumentTypes ?? [], body.DianCashRegisterPlate, body.PrintCopies)
+                    body.PrintFormat ?? CashRegisterPrintFormat.Ticket80, body.DocumentTypes ?? [], body.DianCashRegisterPlate, body.PrintCopies,
+                    body.DianCashRegisterTypeCode)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
@@ -92,7 +93,7 @@ public class PointsOfSaleEndpoints : ICarterModule
                 await sender.Send(new UpdateCashRegisterCommand(
                     id, registerId, body.Name ?? string.Empty, body.WarehousePublicId ?? Guid.Empty, body.DefaultCardTerminalPublicId,
                     body.PrintFormat ?? CashRegisterPrintFormat.Ticket80, body.DocumentTypes ?? [], body.DianCashRegisterPlate, body.PrintCopies,
-                    body.IsActive ?? true)
+                    body.IsActive ?? true, body.DianCashRegisterTypeCode)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -139,7 +140,8 @@ public class PointsOfSaleEndpoints : ICarterModule
     /// <summary>El cuerpo de una caja (§20.1). La edición ignora el código.</summary>
     public sealed record CajaRequest(
         string? Code, string? Name, Guid? WarehousePublicId, Guid? DefaultCardTerminalPublicId, CashRegisterPrintFormat? PrintFormat,
-        IReadOnlyList<CashRegisterDocumentTypeInput>? DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool? IsActive);
+        IReadOnlyList<CashRegisterDocumentTypeInput>? DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool? IsActive,
+        string? DianCashRegisterTypeCode = null);
 
     /// <summary>Los tres conjuntos de la disponibilidad de un medio (§22.3).</summary>
     public sealed record DisponibilidadRequest(

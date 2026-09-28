@@ -9,6 +9,8 @@ using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.ElectronicInvoicing;
+using IngenIA365ERP.Application.ElectronicInvoicing.Settings;
+using IngenIA365ERP.Domain.ElectronicInvoicing;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Pos;
@@ -135,16 +137,10 @@ public sealed class OpenCashSessionCommandHandler(
             if (request.OpeningBase is { } indicada && indicada != baseDeApertura) avisos.Add(ErroresDeCaja.BaseDiffers(indicada, baseDeApertura));
         }
 
-        // (5) El aviso fiscal temprano.
-        var tiposDeVenta = caja.DocumentTypes.Select(t => t.DocumentType).OfType<InventoryDocumentType>()
-            .Where(t => ClasesDeDocumento.De(t.Class).Group == DocumentClassGroup.Sales).ToList();
-        foreach (var tipo in tiposDeVenta)
-        {
-            var evaluacion = await guardia.EvaluarAsync(fecha, tipo, caja, ct);
-            if (evaluacion.Veredicto != VeredictoFiscal.Blocked) continue;
-            avisos.Add(ReglasDelDocumento.ComoAviso(ErroresDeVentas.NotReady(evaluacion)));
-            break;
-        }
+        // (5) El aviso fiscal temprano (I4, T737; contracts/dian.md §10.4): la guardia para cada rol de venta de la caja —no los de
+        // contingencia, que sólo se usan con una 03 abierta—, con todos los faltantes sin repetir en un solo aviso; y, como aviso aparte, el
+        // tipo del rol de contingencia que le falte a un rol de venta electrónico. Nunca bloquea la apertura.
+        avisos.AddRange(await AvisosFiscalesAsync(caja, fecha, ct));
 
         var sesion = new CashSession
         {
@@ -195,6 +191,33 @@ public sealed class OpenCashSessionCommandHandler(
                 sesion.IsBlindCount, sesion.ExclusiveCashier }, ct, entidad: AuditoriaDelPuntoDeVenta.EntidadSesionDeCaja);
         await db.SaveChangesAsync(ct);
         return Result.Success(new OpenCashSessionResultDto(await sesiones.DtoAsync(sesion, ct), ingreso, avisos));
+    }
+
+    /// <summary>Los avisos fiscales de la apertura (T737): <c>ElectronicInvoicing.NotReady</c> con <c>data.missing[]</c> y los tipos de contingencia que faltan.</summary>
+    private async Task<IReadOnlyList<AvisoDto>> AvisosFiscalesAsync(CashRegister caja, DateOnly fecha, CancellationToken ct)
+    {
+        var roles = caja.DocumentTypes.Where(t => !t.IsDeleted).ToList();
+        var tiposDeVenta = roles
+            .Where(r => r.Role is not (CashRegisterDocumentRole.PosSaleContingency or CashRegisterDocumentRole.InvoiceContingency))
+            .Select(r => r.DocumentType).OfType<InventoryDocumentType>()
+            .Where(t => ClasesDeDocumento.De(t.Class).Group == DocumentClassGroup.Sales)
+            .DistinctBy(t => t.Id).ToList();
+        var motivos = new List<MotivoDeBloqueoFiscal>();
+        foreach (var tipo in tiposDeVenta)
+        {
+            var evaluacion = await guardia.EvaluarAsync(fecha, tipo, caja, ct);
+            if (evaluacion.Veredicto == VeredictoFiscal.Blocked) motivos.AddRange(evaluacion.Motivos);
+        }
+        var avisos = new List<AvisoDto>();
+        if (motivos.Count > 0)
+            avisos.Add(ReglasDelDocumento.ComoAviso(ErroresDeVentas.NotReady(new EvaluacionFiscal(VeredictoFiscal.Blocked, [],
+                motivos.DistinctBy(m => (m.Code, m.Message)).ToList()))));
+
+        var leido = await parametros.LeerComoAsync<bool>(ParametrosDeFacturacionElectronica.Modulo, ParametrosDeFacturacionElectronica.ObligadaAFacturar, fecha, ct: ct);
+        var obligada = leido.IsFailure || leido.Value;
+        foreach (var falta in GetDianReadinessQueryHandler.ContingenciaDeLaCaja(roles, obligada))
+            avisos.Add(new AvisoDto(falta.Code, falta.Message, new { whoFixes = falta.WhoFixes }));
+        return avisos;
     }
 
     private async Task<string> TextoAsync(string clave, string defecto, DateOnly fecha, ParameterScopeKind ambito, int ambitoId, CancellationToken ct)

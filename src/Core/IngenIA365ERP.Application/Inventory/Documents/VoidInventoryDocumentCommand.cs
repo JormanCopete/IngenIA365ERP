@@ -74,9 +74,14 @@ public sealed class VoidInventoryDocumentCommandHandler(
         if (original.Status != DocumentStatus.Confirmed) return Falla(InventoryErrors.NotConfirmed(original.Status));
         // I3 (T610, FR-066): de las ventas sólo el comprobante y la nota no electrónicos se anulan con documento contrario; un fiscal
         // electrónico se corrige con su nota de anulación total (data.route).
-        if (ClasesDeDocumento.De(original.Class).Group == DocumentClassGroup.Sales && !ClasesDeDocumento.SeAnulaConAnulacion(original.Class))
+        // I4 (T738, T741): según su estado electrónico, enviado sin respuesta espera la respuesta y rechazado va a los casos a, b y c.
+        var emitido = ClasesDeDocumento.De(original.Class).FiscalDirection == FiscalDirection.Emitted;
+        var ventaNoAnulable = ClasesDeDocumento.De(original.Class).Group == DocumentClassGroup.Sales && !ClasesDeDocumento.SeAnulaConAnulacion(original.Class);
+        if ((emitido || ventaNoAnulable) && await Integration.EstadoElectronicoDeInventario.CorreccionImpedidaAsync(db, original.PublicId, ct) is { } impedida)
+            return Falla(impedida);
+        if (ventaNoAnulable || original.Class == DocumentClass.SupportDocument)
             return Falla(Sales.ErroresDeVentas.FiscalUseCorrection(original.Class));
-        if (ClasesDeDocumento.De(original.Class).FiscalDirection == FiscalDirection.Emitted) return Falla(InventoryErrors.FiscalUseCorrection());
+        if (emitido) return Falla(InventoryErrors.FiscalUseCorrection());
 
         var dependientes = await db.DocumentLinks.AsNoTracking()
             .Where(l => l.SourceDocumentId == original.Id && l.Kind != DocumentLinkKind.Voids)
@@ -95,12 +100,36 @@ public sealed class VoidInventoryDocumentCommandHandler(
         if (tipo is null) return Falla(InventoryErrors.DocumentClassNotAvailable(DocumentClass.Voiding));
 
         // El contrario: su propia fecha, las bodegas, la contraparte y las líneas del original; el costo lo pone la reversión.
+        var anulacion = ContrarioDe(original, tipo, request.OperationDate ?? reloj.HoyLocal, usuario, request.Reason);
+        db.InventoryDocuments.Add(anulacion);
+        db.DocumentLinks.Add(new DocumentLink { SourceDocument = original, TargetDocument = anulacion, Kind = DocumentLinkKind.Voids });
+
+        // Guardar el borrador del contrario da su Id (lo necesita la referencia del original); la transacción es la misma.
+        await db.SaveChangesAsync(ct);
+
+        var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(anulacion.PublicId, GrupoEsperado: null), ct);
+        if (confirmada.IsFailure) return Falla(confirmada.Error);
+
+        var r = confirmada.Value;
+        return Result.Success(new VoidResultDto(anulacion.PublicId, r.DisplayNumber, r.Status, anulacion.OperationDate,
+            r.Status == DocumentStatus.Confirmed ? await AjustesDeCostoAsync(anulacion.Id, ct) : null,
+            r.Messages?.ToList()));
+    }
+
+    /// <summary>
+    /// El documento contrario (<c>Voiding</c>) de <paramref name="original"/>: su propia fecha, las bodegas, la contraparte, los
+    /// totales y las líneas del original; el costo lo pone la reversión. Sin guardar ni vincular: lo comparten esta anulación y la
+    /// anulación sin efecto fiscal de los casos b y c de un rechazo de la DIAN (<c>FuenteDeEmisionDeInventario</c>, feature 012 I4,
+    /// T704). (nuevo)
+    /// </summary>
+    internal static InventoryDocument ContrarioDe(InventoryDocument original, InventoryDocumentType tipo, DateOnly fecha, int usuario, string motivo)
+    {
         var anulacion = new InventoryDocument
         {
             Class = DocumentClass.Voiding,
             DocumentTypeId = tipo.Id,
             DocumentType = tipo,
-            OperationDate = request.OperationDate ?? reloj.HoyLocal,
+            OperationDate = fecha,
             CreatedByUserId = usuario,
             WarehouseId = original.WarehouseId,
             DestinationWarehouseId = original.DestinationWarehouseId,
@@ -112,7 +141,7 @@ public sealed class VoidInventoryDocumentCommandHandler(
             SalesChannelId = original.SalesChannelId,
             Currency = original.Currency,
             ExchangeRate = original.ExchangeRate,
-            Reason = request.Reason.Trim(),
+            Reason = motivo.Trim(),
             VoidsDocumentId = original.Id,
             Subtotal = original.Subtotal,
             DiscountTotal = original.DiscountTotal,
@@ -148,19 +177,7 @@ public sealed class VoidInventoryDocumentCommandHandler(
                 Description = linea.Description,
             });
         }
-        db.InventoryDocuments.Add(anulacion);
-        db.DocumentLinks.Add(new DocumentLink { SourceDocument = original, TargetDocument = anulacion, Kind = DocumentLinkKind.Voids });
-
-        // Guardar el borrador del contrario da su Id (lo necesita la referencia del original); la transacción es la misma.
-        await db.SaveChangesAsync(ct);
-
-        var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(anulacion.PublicId, GrupoEsperado: null), ct);
-        if (confirmada.IsFailure) return Falla(confirmada.Error);
-
-        var r = confirmada.Value;
-        return Result.Success(new VoidResultDto(anulacion.PublicId, r.DisplayNumber, r.Status, anulacion.OperationDate,
-            r.Status == DocumentStatus.Confirmed ? await AjustesDeCostoAsync(anulacion.Id, ct) : null,
-            r.Messages?.ToList()));
+        return anulacion;
     }
 
     /// <summary>

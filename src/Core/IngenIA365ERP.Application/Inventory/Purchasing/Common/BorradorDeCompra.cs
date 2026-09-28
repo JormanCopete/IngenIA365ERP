@@ -18,6 +18,12 @@ namespace IngenIA365ERP.Application.Inventory.Purchasing.Common;
 public sealed class ContextoDeCompraDirecta
 {
     public bool PermiteRecepcionPendiente { get; set; }
+
+    /// <summary>
+    /// Hay una compra directa en curso en esta petición: la recepción no propone su documento soporte (T741), porque la compra directa arma su
+    /// propio documento —factura del proveedor o soporte— en la misma operación. (nuevo, I4)
+    /// </summary>
+    public bool EnCurso { get; set; }
 }
 
 /// <summary>
@@ -54,11 +60,14 @@ public sealed class BorradorDeCompra(
         InventoryDocumentType tipo, SaveInventoryDraftRequest pedido, InventoryDocument? existente, CancellationToken ct)
     {
         var clase = tipo.Class;
-        var esFactura = clase == DocumentClass.SupplierInvoice;
-        var esNota = clase == DocumentClass.SupplierNote;
+        // I4 (T740): el documento soporte se arma como la factura (contra sus recepciones) y su nota de ajuste como la nota del proveedor
+        // (contra el documento soporte), sin documento del proveedor: los numera la cooperativa.
+        var esSoporte = clase is DocumentClass.SupportDocument or DocumentClass.SupportDocumentAdjustmentNote;
+        var esFactura = clase is DocumentClass.SupplierInvoice or DocumentClass.SupportDocument;
+        var esNota = clase is DocumentClass.SupplierNote or DocumentClass.SupportDocumentAdjustmentNote;
         var esDevolucion = clase == DocumentClass.SupplierReturn;
 
-        if (pedido.Supplier is not null && !esFactura && !esNota) return Falla(ErroresDeCompras.CampoNoAdmitido("supplier", clase));
+        if (pedido.Supplier is not null && (esSoporte || (!esFactura && !esNota))) return Falla(ErroresDeCompras.CampoNoAdmitido("supplier", clase));
         if ((pedido.SupplierInvoicePublicId is not null || pedido.NoteKind is not null) && !esNota)
             return Falla(ErroresDeCompras.CampoNoAdmitido(pedido.NoteKind is null ? "supplierInvoicePublicId" : "noteKind", clase));
         if (pedido.OperationMunicipalityDaneCode is not null && esDevolucion)
@@ -85,7 +94,9 @@ public sealed class BorradorDeCompra(
             var fuente = await db.InventoryDocumentLines.AsNoTracking().Include(x => x.Document)
                 .FirstOrDefaultAsync(x => x.PublicId == origen && !x.IsDeleted, ct);
             if (fuente?.Document is null) return Falla(InventoryErrors.DocumentNotFound());
-            var claseEsperada = esNota ? DocumentClass.SupplierInvoice : DocumentClass.PurchaseReceipt;
+            var claseEsperada = esNota
+                ? (clase == DocumentClass.SupportDocumentAdjustmentNote ? DocumentClass.SupportDocument : DocumentClass.SupplierInvoice)
+                : DocumentClass.PurchaseReceipt;
             if (fuente.Document.Class != claseEsperada)
                 return Falla(esNota ? ErroresDeCompras.NoteLineRequired(numero) : esDevolucion ? ErroresDeCompras.ReturnReceiptLineRequired(numero)
                     : ErroresDeCompras.GoodsWithoutReceipt(numero, string.Empty));
@@ -143,12 +154,14 @@ public sealed class BorradorDeCompra(
         switch (clase)
         {
             case DocumentClass.SupplierInvoice:
+            case DocumentClass.SupportDocument:
             {
                 var r = await FacturaAsync(documento, vivas, avisos, ct);
                 if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
                 break;
             }
             case DocumentClass.SupplierNote:
+            case DocumentClass.SupportDocumentAdjustmentNote:
             {
                 var r = await NotaAsync(documento, pedido, vivas, avisos, ct);
                 if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
@@ -277,12 +290,17 @@ public sealed class BorradorDeCompra(
     private async Task<Result<(IReadOnlyList<Domain.Taxes.RenglonTributario>? Original, Dictionary<int, int>? LineaOriginal)>> NotaAsync(
         InventoryDocument documento, SaveInventoryDraftRequest pedido, List<InventoryDocumentLine> vivas, List<Error> avisos, CancellationToken ct)
     {
+        // La nota de ajuste del documento soporte (I4, T740) corrige un SupportDocument (supportDocumentPublicId viaja en el mismo campo) y
+        // siempre disminuye: es crédito.
+        var deSoporte = documento.Class == DocumentClass.SupportDocumentAdjustmentNote;
+        var corregida = deSoporte ? DocumentClass.SupportDocument : DocumentClass.SupplierInvoice;
         if (pedido.SupplierInvoicePublicId is not { } facturaId)
-            return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(InventoryErrors.FieldRequired("supplierInvoice"));
-        if (pedido.NoteKind is not ("Credit" or "Debit"))
+            return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(InventoryErrors.FieldRequired(deSoporte ? "supportDocumentPublicId" : "supplierInvoice"));
+        var claseDeNota = deSoporte ? pedido.NoteKind ?? "Credit" : pedido.NoteKind;
+        if (claseDeNota is not ("Credit" or "Debit") || (deSoporte && claseDeNota != "Credit"))
             return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(new Error("Validation.Invalid", "La clase de la nota es Credit o Debit."));
 
-        var factura = await db.InventoryDocuments.Include(d => d.Lines).FirstOrDefaultAsync(d => d.PublicId == facturaId && d.Class == DocumentClass.SupplierInvoice, ct);
+        var factura = await db.InventoryDocuments.Include(d => d.Lines).FirstOrDefaultAsync(d => d.PublicId == facturaId && d.Class == corregida, ct);
         if (factura is null) return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(InventoryErrors.DocumentNotFound());
         var numero = VistaDeDocumentos.NumeroVisible(factura.Prefix, factura.Number);
         if (factura.Status != DocumentStatus.Confirmed)
@@ -310,6 +328,9 @@ public sealed class BorradorDeCompra(
             }
         }
         await vinculos.ReemplazarAsync(documento, DocumentLinkKind.NoteOf, pares, ct);
+        // La nota de ajuste del DS es electrónica: lleva el concepto de corrección del catálogo DIAN (sin él, la confirmación responde
+        // ElectronicInvoicing.Document.MissingData). (I4, T740)
+        if (deSoporte) documento.CorrectionConceptCode = string.IsNullOrWhiteSpace(pedido.CorrectionConceptCode) ? null : pedido.CorrectionConceptCode.Trim();
         documento.WarehouseId = factura.WarehouseId;
         documento.BranchId = factura.BranchId;
         documento.Subtotal = vivas.Sum(l => l.GrossAmount);
@@ -319,7 +340,7 @@ public sealed class BorradorDeCompra(
         var numeros = factura.Lines.ToDictionary(l => l.Id, l => l.LineNumber);
         var renglones = CalculoTributarioDeCompra.DesdeLaFoto(foto, numeros);
 
-        if (pedido.NoteKind == "Credit")
+        if (claseDeNota == "Credit")
         {
             var restante = await vinculos.RestanteDeFacturaAsync(factura, documento.Id, ct);
             var neto = vivas.Sum(l => l.NetAmount);

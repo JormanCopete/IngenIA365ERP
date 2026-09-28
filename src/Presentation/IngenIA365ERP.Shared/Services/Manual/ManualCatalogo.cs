@@ -1239,6 +1239,32 @@ public static class ManualCatalogo
             ["Permiso Inventory.Reports.View."],
             ["ventas-oficina", "ventas-caja"], [], TipoDeTema.Proceso));
 
+        // Feature 012, I4 (T753–T759): facturación electrónica ante la DIAN.
+        t.Add(Proceso("facturacion-electronica", "Facturación electrónica ante la DIAN", Modulos.Ventas, "/admin/facturacion-electronica",
+            "Toda factura, nota crédito, documento equivalente POS y documento soporte se numera con una resolución vigente, lleva su código único y QR, se transmite por el canal configurado y se entrega al comprador después de validarse. Las contingencias no detienen la venta.",
+            [
+                P("Administración → Facturación electrónica", "La vigencia de la configuración (modo, canal, ambiente, software y correo al comprador), los canales de la instalación y la preparación para emitir con lo que falta y quién lo corrige. La credencial no se escribe aquí: la carga soporte en el secreto del ambiente y aquí sólo se verifica.", "/admin/facturacion-electronica", "Abrir Configuración"),
+                P("Maestros → Resoluciones DIAN", "Registre cada resolución (factura, documento equivalente, documento soporte y contingencia) con su prefijo, rango y vigencia, y asóciela al canal desde una fecha. Con números emitidos sólo se retira.", "/maestros/resoluciones-dian", "Abrir Resoluciones"),
+                P("Ventas → Documentos electrónicos", "La bandeja con el estado de cada documento, sus versiones, transmisiones y mensajes traducidos. «Reintentar ahora» y «Consultar a la DIAN»; un rechazo se corrige por el caso a (datos de la contraparte, sin cambio económico), el caso b (reemplazo con el mismo número) o el caso c (anulación sin reemplazo).", "/ventas/documentos-electronicos", "Abrir la bandeja"),
+                P("Ventas → Contingencias DIAN", "La 03 la declara una persona (o el circuito del canal) y la 04 sólo el canal. Al cerrar se fija el plazo de transmisión; las constancias se adjuntan al evento y la bitácora se exporta.", "/ventas/contingencias-dian", "Abrir Contingencias"),
+                P("Anular o pedir factura", "Un documento validado se anula con su nota total desde el detalle de la venta, en una sola confirmación; sobre un documento equivalente POS, «Pedir factura» emite la nota de ajuste y la factura a nombre del comprador."),
+            ],
+            ["factura electronica", "dian", "cufe", "cude", "resolucion", "contingencia", "rechazo", "canal", "documento equivalente", "nota credito"],
+            ["Permiso ElectronicInvoicing.Settings.View; para configurar, ElectronicInvoicing.Settings.Manage; resoluciones, ElectronicInvoicing.Resolutions.Manage; corregir rechazos, ElectronicInvoicing.Documents.Correct."],
+            ["ventas-oficina", "ventas-pos", "compras-documentos-soporte"], ["/ventas/documentos-electronicos", "/ventas/contingencias-dian", "/maestros/resoluciones-dian"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-documentos-soporte", "Documento soporte", Modulos.Compras, "/compras/documentos-soporte",
+            "La compra a un proveedor no obligado a facturar se soporta con el documento soporte electrónico, que la cooperativa numera con su resolución y transmite a la DIAN; se corrige con su nota de ajuste.",
+            [
+                P("Compras → Documentos soporte", "Lista de documentos soporte y de sus notas de ajuste, con filtros por proveedor, estado y fechas.", "/compras/documentos-soporte", "Abrir Documentos soporte"),
+                P("Nuevo documento soporte", "Proveedor no obligado, las recepciones que cubre (lo que falta por facturar) y los servicios sin recepción. Guardar calcula impuestos y retenciones; confirmar numera y transmite.", "/compras/documentos-soporte/nuevo", "Nuevo documento soporte"),
+                P("Generar los de la semana", "Si la cooperativa genera el documento soporte semanalmente, prepara un borrador por proveedor con las recepciones de la semana."),
+                P("Nota de ajuste", "Desde un documento soporte confirmado: valor por línea y el concepto de corrección; siempre disminuye."),
+            ],
+            ["documento soporte", "no obligado", "nota de ajuste", "cuds", "compras"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create; confirmar, Inventory.Purchases.Confirm."],
+            ["compras-facturas-proveedor", "facturacion-electronica"], ["/compras/documentos-soporte/{Id}"], TipoDeTema.Proceso));
+
         // -------------------------------------------------------------------- Nómina --
         t.Add(Proceso("empleados", "Empleados", Modulos.Nomina, "/nomina/empleados",
             "Las personas vinculadas laboralmente: contrato, cargo, salario, afiliaciones (EPS, ARL, pensión, cesantías) y cuenta de pago.",

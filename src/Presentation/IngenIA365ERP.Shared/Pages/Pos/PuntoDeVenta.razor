@@ -139,6 +139,8 @@
                     }
                 </div>
             </div>
+            @* I4 (T758): las ventas de esta sesión que esperan la validación de la DIAN, para imprimirlas o enviarlas al validarse. *@
+            <PendientesDeEntrega @ref="_pendientes" Sesion="@SesionId" Formato="@FormatoDeTirilla" />
         }
     </IndicadorDeCarga>
 </div>
@@ -232,6 +234,7 @@
         _claveRecuperar = new(), _claveDescartar = new(), _claveCobro = new(), _claveEntrega = new(), _claveReimpresion = new();
     private DotNetObjectReference<PuntoDeVenta>? _referencia;
     private SesionDeCajaDto? _sesion;
+    private PendientesDeEntrega? _pendientes;
     private CajaDto? _caja;
     private VentaDelPosDto? _venta;
     private ResultadoDeCobroDto? _resultado;
@@ -645,6 +648,8 @@
         _modo = Modo.Entregada;
         _venta = null;
         if (tirilla is not null) await ImprimirAsync();
+        // I4 (T758): sin tirilla la venta quedó pendiente de entrega (la validación no llegó en la espera del POS).
+        else if (_pendientes is not null) await _pendientes.ActualizarAsync();
     }
 
     private int FormatoDeTirilla => _caja?.PrintFormat is 58 ? 58 : 80;

@@ -141,6 +141,8 @@ public static class DependencyInjection
         services.AddScoped<Application.Inventory.Common.ICerrojoPorClave, Inventory.CerrojoPorClave>();
         // Feature 012 (I3, T606): el toque de la sesion de caja antes del cerrojo del cobro (UPDATE ... WHERE Status = Open).
         services.AddScoped<Application.Inventory.Common.IToqueDeSesionDeCaja, Inventory.ToqueDeSesionDeCaja>();
+        // Feature 012 (I4, T712): el arrendamiento por fila de COR_ElectronicDocuments (UPDATE ... WHERE LeaseUntil < ahora AND NextAttemptAt <= ahora).
+        services.AddScoped<Application.ElectronicInvoicing.Documents.IArrendamientoDeDocumentoElectronico, ElectronicInvoicing.ArrendamientoDeDocumentosElectronicos>();
         // Feature 009 (FR-011): donde esta parametrizada una cuenta, recorriendo las tablas de siete modulos.
         services.AddScoped<Application.Accounting.Accounts.IAccountReferenceFinder, Services.AccountReferenceFinder>();
         services.AddScoped<TenantSchemaService>();

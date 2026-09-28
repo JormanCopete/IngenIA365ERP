@@ -32,6 +32,9 @@ public static class SqlDelCerrojo
     public const string TablaDetalles = "INV_StockDetails";
     public const string TablaSecuencias = "INV_DocumentSequences";
 
+    /// <summary>La resolución DIAN que numera un documento fiscal electrónico (I4, T705). (nuevo)</summary>
+    public const string TablaResoluciones = "COR_DianNumberingResolutions";
+
     private const string Esquema = "dbo";
 
     /// <summary>Las sentencias de los pasos 1 a 4, en el orden en que se ejecutan.</summary>
@@ -100,6 +103,10 @@ public static class SqlDelCerrojo
     /// <summary>La sentencia del paso 5: la fila de numeración, exclusiva y al final.</summary>
     public static SentenciaDelCerrojo Numeracion(DatabaseProvider motor, int documentSequenceId) =>
         new(TablaSecuencias, new Dialecto(motor).Bloquear(TablaSecuencias, [documentSequenceId], exclusivo: true), []);
+
+    /// <summary>La sentencia del paso 5 de un documento fiscal electrónico: la fila de la resolución, exclusiva y al final (T705). (nuevo)</summary>
+    public static SentenciaDelCerrojo ResolucionFiscal(DatabaseProvider motor, int resolutionId) =>
+        new(TablaResoluciones, new Dialecto(motor).Bloquear(TablaResoluciones, [resolutionId], exclusivo: true), []);
 
     private static List<int> Ordenados(IEnumerable<int> ids) => ids.Distinct().Order().ToList();
 

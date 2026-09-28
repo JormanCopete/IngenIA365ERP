@@ -99,6 +99,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeA
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
 // Feature 012, I3 (T633, T634): Ventas (POS, caja, precios, documentos), medios de pago de Core e impresión de la tirilla con pos.js.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Ventas.VentasClient>();
+// Feature 012, I4 (T752): facturación electrónica (configuración, resoluciones, documentos, contingencias).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.FacturacionElectronica.FacturacionElectronicaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).

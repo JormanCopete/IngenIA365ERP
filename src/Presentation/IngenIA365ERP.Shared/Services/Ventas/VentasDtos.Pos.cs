@@ -41,7 +41,8 @@ public sealed record CajaDto(
     byte PrintCopies,
     bool IsActive,
     IReadOnlyList<TipoDeCajaDto> DocumentTypes,
-    SesionAbiertaDeCajaDto? OpenSession);
+    SesionAbiertaDeCajaDto? OpenSession,
+    string? DianCashRegisterTypeCode = null);
 
 public sealed record PuntoCreadoDto(Guid PointOfSalePublicId);
 
@@ -55,7 +56,8 @@ public sealed record TipoDeCajaRequest(string Role, Guid DocumentTypePublicId);
 
 /// <summary>El cuerpo de una caja (§20.1): <c>printFormat</c> por nombre (<c>Ticket58</c>, <c>Ticket80</c>, <c>Letter</c>).</summary>
 public sealed record CajaRequest(string? Code, string Name, Guid WarehousePublicId, Guid? DefaultCardTerminalPublicId, string PrintFormat,
-    IReadOnlyList<TipoDeCajaRequest> DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool IsActive);
+    IReadOnlyList<TipoDeCajaRequest> DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool IsActive,
+    string? DianCashRegisterTypeCode = null);
 
 // ----------------------------------------------------------------------------------------- la venta --
 
@@ -263,6 +265,12 @@ public sealed record EntregaRequest(string Format, bool? SendEmail = null, strin
 public sealed record EntregaDeVentaDto(Guid DocumentPublicId, int Format, bool Copy, TirillaDto? Ticket, string? FileName, bool EmailSent)
 {
     public IngenIA365ERP.Shared.Services.Nomina.ArchivoDescargado? Archivo { get; init; }
+
+    /// <summary>
+    /// I4 (T758; §20.3): la carta de un documento electrónico no viaja como archivo sino como el enlace firmado de 60 s a su representación
+    /// gráfica guardada. (nuevo)
+    /// </summary>
+    public IngenIA365ERP.Shared.Services.Adjuntos.EnlaceDeDescargaDto? Link { get; init; }
 }
 
 // ------------------------------------------------------------------------------ aprobador en persona --

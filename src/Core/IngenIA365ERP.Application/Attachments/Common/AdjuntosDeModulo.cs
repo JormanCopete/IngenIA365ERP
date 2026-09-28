@@ -72,6 +72,26 @@ public static class AdjuntosDeModulo
     private const string VerCatalogo = "Inventory.Catalog.View";
     private const string AdministrarCatalogo = "Inventory.Catalog.Manage";
 
+    /// <summary>
+    /// Feature 012, I4 (T717, T41; contracts/dian.md §12; FR-068): los artefactos de factura, notas, DEE y su nota (canónico, XML firmado,
+    /// <c>AttachedDocument</c>, <c>ApplicationResponse</c>, PDF). Los genera la facturación electrónica: se leen con <c>Inventory.Sales.View</c>,
+    /// no se borran ni reciben subidas. El <c>OwnerEntityPublicId</c> es el del documento electrónico.
+    /// </summary>
+    public const string DocumentoElectronicoDeVenta = "ElectronicSalesDocument";
+
+    /// <summary>Los del documento soporte y su nota (y los eventos RADIAN de I5): <c>Inventory.Purchases.View</c>, igual que los de venta.</summary>
+    public const string DocumentoElectronicoDeCompra = "ElectronicPurchaseDocument";
+
+    /// <summary>
+    /// Las constancias y evidencias de un evento de contingencia 03/04: se leen con <c>ElectronicInvoicing.Contingencies.View</c>, <b>admiten</b>
+    /// subidas de personas con <c>ElectronicInvoicing.Contingencies.Declare</c> sobre un evento que exista, y no se borran (son la evidencia
+    /// ante la DIAN).
+    /// </summary>
+    public const string EventoDeContingencia = "DianContingencyEvent";
+
+    private const string VerContingencias = "ElectronicInvoicing.Contingencies.View";
+    private const string DeclararContingencias = "ElectronicInvoicing.Contingencies.Declare";
+
     private const string LeerComprobantes = "Accounting.Vouchers.View";
     private const string EscribirComprobantes = "Accounting.Vouchers.Create";
 
@@ -81,6 +101,8 @@ public static class AdjuntosDeModulo
         ["EmploymentTermination"] = new("Payroll.Settlements.View", Borrable: false, "el documento para firma de la liquidación definitiva"),
         ["BankDisbursementFile"] = new("Payroll.Disbursement.View", Borrable: false, "el archivo de dispersión bancaria que se entregó al banco"),
         ["PilaGeneration"] = new("Payroll.Pila.View", Borrable: false, "la planilla PILA tal como se generó y se cargó en el operador"),
+        [DocumentoElectronicoDeVenta] = new("Inventory.Sales.View", Borrable: false, "un archivo de un documento electrónico de venta ante la DIAN"),
+        [DocumentoElectronicoDeCompra] = new("Inventory.Purchases.View", Borrable: false, "un archivo de un documento electrónico de compra ante la DIAN"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
@@ -99,6 +121,7 @@ public static class AdjuntosDeModulo
             Comprobante => LeerComprobantes,
             ProductoDeInventario => VerCatalogo,
             SoporteDeAjuste => VerAjustes,
+            EventoDeContingencia => VerContingencias,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -139,6 +162,13 @@ public static class AdjuntosDeModulo
                 ? null
                 : AjusteBloqueado();
         }
+        if (ownerEntityType == EventoDeContingencia)
+        {
+            if (!await permisos.HasPermissionAsync(DeclararContingencias, ct)
+                || !await db.DianContingencyEvents.AnyAsync(e => e.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Evento de contingencia no encontrado.");
+            return null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -159,6 +189,11 @@ public static class AdjuntosDeModulo
     {
         if (De(ownerEntityType) is { Borrable: false } regla)
             return NoBorrable(regla);
+        // Las constancias de una contingencia son la evidencia ante la DIAN: se conservan con el evento (T717).
+        if (ownerEntityType == EventoDeContingencia)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es evidencia de una contingencia ante la DIAN: se conserva con el evento y no se puede borrar.",
+                new { ownerEntityType });
         // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
         if (ownerEntityType == ProductoDeInventario)
             return permisos is not null && await permisos.HasPermissionAsync(AdministrarCatalogo, ct)

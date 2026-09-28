@@ -1,0 +1,96 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Ventas
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
+@inject VentasClient Ventas
+@inject IImpresionDeDocumentos Impresion
+@inject INotificationService Notification
+
+@* Feature 012, I4 (T758; FR-063, SC-004; contracts/api.md §20.2, §20.3): las ventas de la sesión de caja cuya entrega espera la validación
+   de la DIAN (la espera en línea del POS se cumplió sin respuesta). La caja siguió vendiendo; cuando cada una se valida (o sale en
+   contingencia) se imprime su tirilla o se envía por correo desde aquí. Antes de eso el servidor responde que todavía no es entregable. (nuevo) *@
+@if (Sesion != Guid.Empty)
+{
+    <div class="info-card">
+        <div class="toolbar">
+            <b>Pendientes de entrega (@_filas.Count)</b>
+            <SfButton CssClass="e-flat" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@ActualizarAsync">Actualizar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@(_carga.Activa || _entrega.Activa)" Texto="@(_entrega.Activa ? "Entregando…" : "Cargando…")" Compacto="true">
+            @if (_filas.Count == 0)
+            {
+                <p class="texto-tenue">No hay ventas esperando la validación.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Venta</th><th class="numero">Total</th><th>Ante la DIAN</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var d in _filas)
+                        {
+                            var estado = TextosDeFacturacionElectronica.EstadoPorNombre(d.ElectronicStatus);
+                            var entregable = estado is { } valor && AccionesDelDocumentoElectronico.Entregable(valor);
+                            <tr>
+                                <td>@d.Numero</td>
+                                <td class="numero">@d.Total.ToString("N0")</td>
+                                <td>@(estado is { } e ? TextosDeFacturacionElectronica.Estado(e) : "Pendiente")</td>
+                                <td>
+                                    <SfButton CssClass="e-flat" Disabled="@(_entrega.Activa || !entregable)" OnClick="@(() => ImprimirAsync(d))">Imprimir</SfButton>
+                                    <SfButton CssClass="e-flat" Disabled="@(_entrega.Activa || !entregable)" OnClick="@(() => EnviarAsync(d))">Enviar por correo</SfButton>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </div>
+}
+
+@code {
+    /// <summary>La sesión de caja abierta (su <c>PublicId</c>).</summary>
+    [Parameter] public Guid Sesion { get; set; }
+
+    /// <summary>El formato de tirilla de la caja (58 u 80).</summary>
+    [Parameter] public int Formato { get; set; } = 80;
+
+    private const int FormatoCarta = 216;
+
+    private readonly EstadoDeCarga _carga = new(), _entrega = new();
+    private List<ResumenDeVentaDto> _filas = [];
+    private Guid _cargada;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Sesion != Guid.Empty && Sesion != _cargada) await ActualizarAsync();
+    }
+
+    /// <summary>Vuelve a consultar la lista (la pantalla lo llama después de cada venta que quedó pendiente).</summary>
+    public async Task ActualizarAsync()
+    {
+        if (Sesion == Guid.Empty) return;
+        _cargada = Sesion;
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { CashSession = Sesion, PendingDelivery = true, PageSize = 50 });
+        if (!r.IsSuccess || r.Value is null) { _filas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas pendientes de entrega."); return; }
+        _filas = [.. r.Value.Items];
+        StateHasChanged();
+    }
+
+    private async Task ImprimirAsync(ResumenDeVentaDto d)
+    {
+        using var entrega = _entrega.Iniciar();
+        var r = await Ventas.EntregarAsync(d.DocumentPublicId, new EntregaRequest(TextosDeVentas.NombreDeFormato(Formato)), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.WarningAsync(r.ErrorMessage ?? "Todavía no se puede entregar."); return; }
+        if (r.Value.Ticket is { } tirilla) await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(tirilla), d.Numero);
+        await ActualizarAsync();
+    }
+
+    private async Task EnviarAsync(ResumenDeVentaDto d)
+    {
+        using var entrega = _entrega.Iniciar();
+        var r = await Ventas.EntregarAsync(d.DocumentPublicId, new EntregaRequest(TextosDeVentas.NombreDeFormato(FormatoCarta), SendEmail: true), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.WarningAsync(r.ErrorMessage ?? "Todavía no se puede entregar."); return; }
+        if (r.Value.EmailSent) await Notification.SuccessAsync($"{d.Numero} enviada por correo.");
+        await ActualizarAsync();
+    }
+}

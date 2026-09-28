@@ -50,11 +50,13 @@
       "formasDePago": [
         {
           "codigo": "1",
-          "nombre": "Contado"
+          "nombre": "Contado",
+          "clase": "Cash"
         },
         {
           "codigo": "2",
-          "nombre": "Crédito"
+          "nombre": "Crédito",
+          "clase": "Credit"
         }
       ]
     }

@@ -70,6 +70,16 @@ public class CerrojoDeInventarioSqlTests
     }
 
     [Fact]
+    public void La_resolucion_fiscal_se_bloquea_en_exclusivo_al_final_como_la_secuencia()
+    {
+        // I4, T705: el NumeradorFiscal bloquea la fila de COR_DianNumberingResolutions en el lugar de la secuencia.
+        SqlDelCerrojo.ResolucionFiscal(DatabaseProvider.PostgreSql, 9).Sql
+            .Should().Be("SELECT \"Id\" FROM \"dbo\".\"COR_DianNumberingResolutions\" WHERE \"Id\" IN (9) ORDER BY \"Id\" FOR UPDATE;");
+        SqlDelCerrojo.ResolucionFiscal(DatabaseProvider.SqlServer, 9).Sql
+            .Should().Be("SELECT [Id] FROM [dbo].[COR_DianNumberingResolutions] WITH (UPDLOCK, ROWLOCK, HOLDLOCK) WHERE [Id] IN (9) ORDER BY [Id];");
+    }
+
+    [Fact]
     public void Abrir_un_conteo_toma_las_bodegas_en_exclusivo_en_los_dos_motores()
     {
         var pedido = new PedidoDeCerrojo { Bodegas = [7, 3], BodegasEnExclusivo = true };

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Enums.Dian;
 using IngenIA365ERP.Domain.Enums.Payroll;
 
 namespace IngenIA365ERP.Domain.Entities.Payroll.ElectronicPayroll;

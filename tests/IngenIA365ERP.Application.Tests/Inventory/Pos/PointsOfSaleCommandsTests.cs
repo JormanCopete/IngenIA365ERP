@@ -127,6 +127,22 @@ public class PointsOfSaleCommandsTests
     }
 
     [Fact]
+    public async Task La_caja_guarda_su_placa_y_su_tipo_de_caja_DIAN()
+    {
+        // I4 (cierre de las e2e, T686): el documento equivalente POS pide la placa y el tipo de caja; hasta entonces el tipo no lo escribía nadie.
+        var e = await EscenarioAsync();
+        var punto = (await CrearPuntoAsync(e)).Value;
+
+        var r = await new CreateCashRegisterCommandHandler(e.C.Db, _alcance, new LectorDeParametros(e.C.Db), e.C.Reloj).Handle(
+            new CreateCashRegisterCommand(punto.PointOfSalePublicId, "CJ09", "Caja 9", e.Bodega.PublicId, null, CashRegisterPrintFormat.Ticket80,
+                [Rol(e, CashRegisterDocumentRole.PosSale, DocumentClass.PosEquivalentDocument)], "PLACA-9", DianCashRegisterTypeCode: " pos "), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        r.Value.DianCashRegisterPlate.Should().Be("PLACA-9");
+        r.Value.DianCashRegisterTypeCode.Should().Be("POS");
+    }
+
+    [Fact]
     public async Task La_venta_POS_de_una_cooperativa_obligada_es_electronica_y_la_de_una_no_obligada_no()
     {
         var e = await EscenarioAsync();

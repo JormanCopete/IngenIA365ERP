@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 
 namespace IngenIA365ERP.Application.ElectronicInvoicing.Catalogs;
 
@@ -15,7 +16,10 @@ namespace IngenIA365ERP.Application.ElectronicInvoicing.Catalogs;
 /// <para>
 /// Lo consumen I1 e I3 antes de I4: <c>dianUnitCode</c> de las unidades (T214), el consumidor final (T587), el medio de
 /// pago (T590) y el concepto de corrección de las notas (T612); la copia fiscal de la contraparte
-/// (<c>FotoDeLaContraparte</c>) traduce aquí el tipo de identificación. T702 (US8) lo amplía sin recrearlo. (nuevo)
+/// (<c>FotoDeLaContraparte</c>) traduce aquí el tipo de identificación. T702 (US8, I4) lo amplía sin recrearlo con tipos de
+/// documento (y su código en contingencia, tipo de operación y código único), tipos de operación, responsabilidades (desde las
+/// marcas tributarias), tributos y esquema tributario, tipos de persona, formas de pago por clase y tipos de caja del DEE; los
+/// códigos 20, 94 y 95 van marcados «por cotejar». (nuevo)
 /// </para>
 /// </summary>
 public sealed class CatalogoDian
@@ -104,6 +108,102 @@ public sealed class CatalogoDian
     public ConceptoDeCorreccionDian? ConceptoDeCorreccion(ClaseDeNotaDian clase, string? codigo, DateOnly fecha) =>
         string.IsNullOrWhiteSpace(codigo) ? null : ConceptosDeCorreccion(clase, fecha).FirstOrDefault(c => c.Codigo == codigo.Trim());
 
+    // ------------------------------------------------------------------------------------------ I4 (T702) --
+
+    /// <summary>Los tipos de documento DIAN vigentes (01, 03, 04, 05, 20, 91, 92, 94, 95, 96…). (nuevo)</summary>
+    public IReadOnlyList<CodigoDian> TiposDeDocumento(DateOnly fecha) => Codigos(Catalogos.TiposDeDocumento, fecha);
+
+    /// <summary>
+    /// El tipo de documento DIAN de un <see cref="ElectronicDocumentKind"/> a la fecha (contracts/dian.md §4.3): código según la
+    /// contingencia (04 si la DIAN no está, 03 al transmitir la de papel), tipo de operación y código único. Nulo si el catálogo no
+    /// lo trae. (nuevo)
+    /// </summary>
+    public TipoDeDocumentoDian? TipoDeDocumento(ElectronicDocumentKind tipo, ContingencyType? contingencia, DateOnly fecha)
+    {
+        var entrada = Vigente(Catalogos.TiposDeDocumento, fecha)?.PorTipo.FirstOrDefault(t => t.Tipo == tipo);
+        if (entrada is null) return null;
+        var codigo = contingencia switch
+        {
+            ContingencyType.Dian04 when !string.IsNullOrWhiteSpace(entrada.CodigoContingenciaDian) => entrada.CodigoContingenciaDian!,
+            ContingencyType.Issuer03 when !string.IsNullOrWhiteSpace(entrada.CodigoContingenciaFacturador) => entrada.CodigoContingenciaFacturador!,
+            _ => entrada.Codigo,
+        };
+        return new TipoDeDocumentoDian(tipo, codigo, entrada.TipoDeOperacion, entrada.CodigoUnico, entrada.PorCotejar);
+    }
+
+    /// <summary>Los tipos de operación que aplican a <paramref name="tipo"/>. (nuevo)</summary>
+    public IReadOnlyList<CodigoDian> TiposDeOperacion(ElectronicDocumentKind tipo, DateOnly fecha) =>
+        Vigente(Catalogos.TiposDeOperacion, fecha)?.Codigos.Where(c => c.Tipos.Contains(tipo)).Select(c => c.ComoCodigo()).ToList() ?? [];
+
+    /// <summary>Las responsabilidades fiscales vigentes (O-13, O-15, O-23, O-47, R-99-PN). (nuevo)</summary>
+    public IReadOnlyList<CodigoDian> Responsabilidades(DateOnly fecha) => Codigos(Catalogos.Responsabilidades, fecha);
+
+    /// <summary>
+    /// Las responsabilidades que corresponden a las marcas tributarias de una persona (T24), en el orden del catálogo; sin
+    /// ninguna marca, la de «no aplica». Vacía sin catálogo vigente. (nuevo)
+    /// </summary>
+    public IReadOnlyList<string> ResponsabilidadesDe(MarcasTributarias marcas, DateOnly fecha)
+    {
+        ArgumentNullException.ThrowIfNull(marcas);
+        var version = Vigente(Catalogos.Responsabilidades, fecha);
+        if (version?.Marcas is null) return [];
+        var activas = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (marca, codigo) in version.Marcas)
+            if (marcas.Tiene(marca)) activas.Add(codigo);
+        if (activas.Count == 0)
+            return string.IsNullOrWhiteSpace(version.SinResponsabilidad) ? [] : [version.SinResponsabilidad!];
+        return version.Codigos.Select(c => c.Codigo).Where(activas.Contains).ToList();
+    }
+
+    /// <summary>Los tributos vigentes (01 IVA, 04 INC, 06 retención en la fuente…, ZZ). (nuevo)</summary>
+    public IReadOnlyList<CodigoDian> Tributos(DateOnly fecha) => Codigos(Catalogos.Tributos, fecha);
+
+    /// <summary>El tributo de <paramref name="codigo"/> (<c>COR_TaxDefinitions.DianTaxCode</c>) o nulo. (nuevo)</summary>
+    public CodigoDian? Tributo(string? codigo, DateOnly fecha) => Buscar(Catalogos.Tributos, codigo, fecha);
+
+    public bool EsTributoValido(string? codigo, DateOnly fecha) => Tributo(codigo, fecha) is not null;
+
+    /// <summary>El esquema tributario de una parte: el del IVA si es responsable, «no aplica» si no. Nulo sin catálogo. (nuevo)</summary>
+    public string? EsquemaTributarioDe(bool responsableDeIva, DateOnly fecha)
+    {
+        var version = Vigente(Catalogos.Tributos, fecha);
+        return responsableDeIva ? version?.EsquemaResponsableIva : version?.EsquemaNoResponsableIva;
+    }
+
+    /// <summary>El código DIAN del tipo de persona: jurídica o natural. Nulo sin catálogo. (nuevo)</summary>
+    public string? TipoDePersonaDe(bool juridica, DateOnly fecha)
+    {
+        var version = Vigente(Catalogos.TiposDePersona, fecha);
+        return juridica ? version?.Juridica : version?.Natural;
+    }
+
+    /// <summary>El tipo de identificación de una persona jurídica (el emisor se identifica con NIT). Nulo sin catálogo. (nuevo)</summary>
+    public string? IdentificacionDeJuridica(DateOnly fecha) => Vigente(Catalogos.TiposDePersona, fecha)?.IdentificacionDeJuridica;
+
+    /// <summary>El país (ISO 3166) de una parte nacional sin país en su dirección. Nulo sin catálogo. (nuevo)</summary>
+    public string? PaisPorDefecto(DateOnly fecha) => Vigente(Catalogos.TiposDePersona, fecha)?.PaisPorDefecto;
+
+    /// <summary>La forma de pago DIAN de contado o de crédito. (nuevo)</summary>
+    public CodigoDian? FormaDePago(bool credito, DateOnly fecha)
+    {
+        var clase = credito ? ClaseDeFormaDePago.Credit : ClaseDeFormaDePago.Cash;
+        return Vigente(Catalogos.MediosDePago, fecha)?.FormasDePago.FirstOrDefault(f => f.Clase == clase)?.ComoCodigo();
+    }
+
+    /// <summary>Los tipos de caja del DEE POS (por cotejar: la lista puede venir vacía). (nuevo)</summary>
+    public IReadOnlyList<CodigoDian> TiposDeCaja(DateOnly fecha) => Codigos(Catalogos.TiposDeCaja, fecha);
+
+    /// <summary>¿Es válido el tipo de caja? Con la lista vigente vacía (tabla por cotejar) acepta cualquier código no vacío. (nuevo)</summary>
+    public bool EsTipoDeCajaValido(string? codigo, DateOnly fecha)
+    {
+        if (string.IsNullOrWhiteSpace(codigo)) return false;
+        return TiposDeCaja(fecha).Count == 0 || Buscar(Catalogos.TiposDeCaja, codigo, fecha) is not null;
+    }
+
+    /// <summary>¿El código está marcado «por cotejar» en su catálogo vigente? (nuevo)</summary>
+    public bool EstaPorCotejar(string catalogo, string codigo, DateOnly fecha) =>
+        Vigente(catalogo, fecha)?.Codigos.FirstOrDefault(c => string.Equals(c.Codigo, codigo, StringComparison.OrdinalIgnoreCase))?.PorCotejar ?? false;
+
     // ------------------------------------------------------------------------------------------ comunes --
 
     /// <summary>De dónde sale la versión vigente de un catálogo y si está por cotejar (para las alertas de alistamiento).</summary>
@@ -175,6 +275,12 @@ public sealed class CatalogoDian
         public const string MediosDePago = "mediosDePago";
         public const string TiposDeIdentificacion = "tiposDeIdentificacion";
         public const string ConceptosDeCorreccion = "conceptosDeCorreccion";
+        public const string TiposDeDocumento = "tiposDeDocumento";
+        public const string TiposDeOperacion = "tiposDeOperacion";
+        public const string Responsabilidades = "responsabilidades";
+        public const string Tributos = "tributos";
+        public const string TiposDePersona = "tiposDePersona";
+        public const string TiposDeCaja = "tiposDeCaja";
     }
 
     // ------------------------------------------------------------------------------------------ el archivo --
@@ -196,6 +302,15 @@ public sealed class CatalogoDian
         public List<CodigoEnArchivo> FormasDePago { get; set; } = [];
         public Dictionary<string, string>? TraduccionIdType { get; set; }
         public ConsumidorFinalDian? ConsumidorFinal { get; set; }
+        public List<TipoEnArchivo> PorTipo { get; set; } = [];
+        public Dictionary<string, string>? Marcas { get; set; }
+        public string? SinResponsabilidad { get; set; }
+        public string? EsquemaResponsableIva { get; set; }
+        public string? EsquemaNoResponsableIva { get; set; }
+        public string? Juridica { get; set; }
+        public string? Natural { get; set; }
+        public string? IdentificacionDeJuridica { get; set; }
+        public string? PaisPorDefecto { get; set; }
 
         public bool CubreA(DateOnly fecha) => fecha >= VigenteDesde && (VigenteHasta is null || fecha <= VigenteHasta);
     }
@@ -206,9 +321,51 @@ public sealed class CatalogoDian
         public string Nombre { get; set; } = string.Empty;
         public bool EsAnulacion { get; set; }
         public List<ClaseDeNotaDian> AplicaA { get; set; } = [];
+        public List<ElectronicDocumentKind> Tipos { get; set; } = [];
+        public bool PorCotejar { get; set; }
+        public ClaseDeFormaDePago? Clase { get; set; }
 
         public CodigoDian ComoCodigo() => new(Codigo, Nombre);
     }
+
+    private sealed class TipoEnArchivo
+    {
+        public ElectronicDocumentKind Tipo { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string? CodigoContingenciaDian { get; set; }
+        public string? CodigoContingenciaFacturador { get; set; }
+        public string TipoDeOperacion { get; set; } = string.Empty;
+        public UniqueCodeKind CodigoUnico { get; set; }
+        public bool PorCotejar { get; set; }
+    }
+
+    private enum ClaseDeFormaDePago
+    {
+        Cash = 1,
+        Credit = 2,
+    }
+}
+
+/// <summary>
+/// El tipo de documento DIAN de un <see cref="ElectronicDocumentKind"/> (contracts/dian.md §4.3): código ya elegido según la
+/// contingencia, tipo de operación, código único y si está por cotejar. (nuevo)
+/// </summary>
+public sealed record TipoDeDocumentoDian(ElectronicDocumentKind Tipo, string Codigo, string TipoDeOperacion, UniqueCodeKind CodigoUnico, bool PorCotejar);
+
+/// <summary>
+/// Las marcas tributarias de una persona (decisiones-transversales T24) que se traducen a responsabilidades fiscales; los nombres
+/// son los de las columnas de <c>COR_People</c> y de la copia fiscal, los mismos que usa el catálogo. (nuevo)
+/// </summary>
+public sealed record MarcasTributarias(bool IsLargeContributor, bool IsSelfWithholder, bool IsVatWithholdingAgent, bool IsSimpleTaxRegime)
+{
+    public bool Tiene(string marca) => marca switch
+    {
+        nameof(IsLargeContributor) => IsLargeContributor,
+        nameof(IsSelfWithholder) => IsSelfWithholder,
+        nameof(IsVatWithholdingAgent) => IsVatWithholdingAgent,
+        nameof(IsSimpleTaxRegime) => IsSimpleTaxRegime,
+        _ => false,
+    };
 }
 
 /// <summary>Un código de un catálogo DIAN con su nombre. (nuevo)</summary>

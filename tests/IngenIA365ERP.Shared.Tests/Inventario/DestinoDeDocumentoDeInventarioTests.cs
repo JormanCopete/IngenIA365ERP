@@ -22,6 +22,8 @@ public class DestinoDeDocumentoDeInventarioTests
     [InlineData(19, "/inventario/conteos/")]
     [InlineData(3, "/compras/recepciones/")]
     [InlineData(4, "/compras/facturas-proveedor/")]
+    [InlineData(6, "/compras/documentos-soporte/")]
+    [InlineData(7, "/compras/documentos-soporte/")]
     [InlineData(26, "/ventas/documentos/")]
     [InlineData(28, "/ventas/documentos/")]
     [InlineData(29, "/ventas/documentos/")]

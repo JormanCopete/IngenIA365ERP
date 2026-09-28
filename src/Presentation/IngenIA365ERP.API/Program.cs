@@ -11,6 +11,7 @@ using IngenIA365ERP.Application;
 using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
 using IngenIA365ERP.Caching.Services;
+using IngenIA365ERP.ElectronicInvoicing;
 using IngenIA365ERP.Identity;
 using IngenIA365ERP.Identity.CentralIdentity;
 using IngenIA365ERP.Identity.Seed;
@@ -226,6 +227,9 @@ try
     // Feature 012 (T954, US17): la revision diaria de reorden y quiebre, desde Integration:ReorderReview:StartHour.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Inventory.Replenishment.TareaDeRevisionDeReorden(new TimeOnly(Math.Clamp(integracion.ReorderReview.StartHour, 0, 23), 0)));
+    // Feature 012 (T721, I4): las alertas DIAN que dependen del tiempo (sin validar, plazo de contingencia, resoluciones por agotar o vencer).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.ElectronicInvoicing.Documents.TareaDeAlertasDeFacturacionElectronica>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
@@ -355,6 +359,16 @@ try
     // Application layer DI registration (MediatR, FluentValidation, Mapster)
     builder.Services.AddApplicationServices();
 
+    // Feature 012, I4 (T749; contracts/dian.md §2, §11; T40, T47): la facturacion electronica. UNICO sitio que conoce el ensamblado de los
+    // adaptadores (ElProveedorTecnologicoSoloLoConoceSuAdaptador). Va despues de AddApplicationServices porque reemplaza sus defectos
+    // (sin canales, sin credenciales, esperas del contrato) por los de la seccion ElectronicInvoicing. El procesador de fondo se arranca
+    // aqui y solo aqui, esperando DatabaseReadiness; ElectronicInvoicing:Processor:Enabled = false lo deja registrado sin arrancar (la
+    // fixture de pruebas conduce las pasadas a mano).
+    builder.Services.AddElectronicInvoicing(builder.Configuration,
+        sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady);
+    if (builder.Configuration.GetValue("ElectronicInvoicing:Processor:Enabled", true))
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Processor.ProcesadorDeDocumentosElectronicos>());
+
     // Feature 002 — opciones del flujo de identidad central
     // (URL base del frontend para el enlace de invitaciones, lifetime, etc.).
     builder.Services.Configure<IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions>(
@@ -390,6 +404,8 @@ try
     // Feature 012 (I3, T626): el comprobante no electrónico en carta y los documentos de caja (arqueo y comprobante de movimiento).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.IRepresentacionDeVentaEnPdf, IngenIA365ERP.API.Reports.SalesDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();
+    // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.IRepresentacionGraficaRenderer, IngenIA365ERP.API.Reports.RepresentacionGraficaRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 

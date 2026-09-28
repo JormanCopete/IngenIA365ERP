@@ -65,7 +65,8 @@ public sealed class VistaDeTiposDeDocumento(
                     politica.Levels.OrderBy(l => l.Order).Select(l => new NivelDePoliticaDelTipoDto(l.Order, l.Threshold, l.PermissionCode)).ToList()),
                 await ModoDePasoAsync(t, clase, hoy, ct),
                 t.IsSeeded, t.IsActive,
-                conHistorial ? propias : null));
+                conHistorial ? propias : null,
+                t.IsContingency));
         }
         return resultado;
     }

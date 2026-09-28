@@ -30,7 +30,32 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         Path.Combine("src", "Presentation", "IngenIA365ERP.API", "Integration", "DespachadorDeMensajes.cs"),
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.Audit", "Services", "AuditOutboxForwarder.cs"),
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.Storage", "Services", "NotificationEmailDispatcher.cs"),
+        // Feature 012, I4 (T731, T672): el procesador de documentos electrónicos. Pasa por IEjecutorEnCooperativa, escribe sólo con
+        // EmitElectronicDocumentCommand y lo arranca sólo API/Program.cs (Procesador_de_documentos_electronicos_arranca_solo_desde_Program).
+        Path.Combine("src", "Infrastructure", "IngenIA365ERP.ElectronicInvoicing", "Processor", "ProcesadorDeDocumentosElectronicos.cs"),
     ];
+
+    [Fact]
+    public void Procesador_de_documentos_electronicos_arranca_solo_desde_Program()
+    {
+        // T672 (SC-014, T47): AddElectronicInvoicing registra el procesador como singleton y nada más; el AddHostedService que lo arranca
+        // está en API/Program.cs y en ningún otro archivo (el DbMigrator, en particular, nunca lo arranca).
+        var root = RepoPath.FindRepoRoot();
+        var arranque = new Regex(@"\bAddHostedService\b[^;]*\bProcesadorDeDocumentosElectronicos\b", RegexOptions.Compiled | RegexOptions.Singleline);
+        var arrancan = RepoPath.ProductionCSharpFiles()
+            .Where(f => arranque.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+
+        Assert.True(arrancan.Count == 1 && string.Equals(arrancan[0], ProgramDeLaApi, StringComparison.OrdinalIgnoreCase),
+            "ProcesadorDeDocumentosElectronicos se arranca sólo con AddHostedService en API/Program.cs (T47, T749). Lo arrancan:\n  "
+            + string.Join("\n  ", arrancan));
+
+        var procesador = FuenteSinComentarios.Leer(Path.Combine(root, "src", "Infrastructure", "IngenIA365ERP.ElectronicInvoicing", "Processor",
+            "ProcesadorDeDocumentosElectronicos.cs"));
+        Assert.Contains("IEjecutorEnCooperativa", procesador);
+        Assert.Contains("EmitElectronicDocumentCommand", procesador);
+    }
 
     /// <summary>
     /// Servicios alojados existentes que no operan por cooperativa, por nombre de tipo y con su motivo.

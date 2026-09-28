@@ -12,7 +12,8 @@ namespace IngenIA365ERP.Persistence.DbContext;
 /// <see cref="ApplicationDbContext.SaveChangesAsync(CancellationToken)"/> antes que los interceptores (el de borrado
 /// lógico todavía no convirtió un <c>Deleted</c> en <c>Modified</c>):
 /// <list type="bullet">
-/// <item>todo <see cref="IHechoInmutable"/> sólo se inserta: un <c>Modified</c> o <c>Deleted</c> se rechaza;</item>
+/// <item>todo <see cref="IHechoInmutable"/> sólo se inserta: un <c>Deleted</c> se rechaza, y un <c>Modified</c> también salvo
+/// que toda propiedad modificada lleve <see cref="EscrituraUnicaAttribute"/> y su valor original sea nulo (T691);</item>
 /// <item>un <see cref="IInmutableTrasConfirmar"/> cuyo estado <b>original</b> ya lo fija (confirmado o anulado) sólo
 /// cambia <see cref="IInmutableTrasConfirmar.PropiedadesMutablesTrasConfirmar"/>, y su estado sólo de <c>Confirmed</c> a
 /// <c>Voided</c>; no se borra;</item>
@@ -79,8 +80,8 @@ public static class GuardaDeInmutabilidad
                 case IHechoInmutable:
                     if (entrada.State == EntityState.Deleted)
                         throw new ImmutableEntityModifiedException(tipo, null, "es un hecho: no se borra.");
-                    var cambiada = entrada.Properties.FirstOrDefault(p => p.IsModified);
-                    throw new ImmutableEntityModifiedException(tipo, cambiada?.Metadata.Name, "es un hecho: sólo se inserta.");
+                    RevisarHecho(entrada, tipo);
+                    break;
 
                 case IInmutableTrasConfirmar:
                     RevisarDocumento(entrada, tipo);
@@ -92,6 +93,26 @@ public static class GuardaDeInmutabilidad
             }
         }
         return lineas;
+    }
+
+    /// <summary>
+    /// Un hecho modificado sólo pasa si toda propiedad modificada lleva <see cref="EscrituraUnicaAttribute"/> y su valor
+    /// original es nulo (nulo → valor, T691); la primera que no cumpla se nombra en la excepción.
+    /// </summary>
+    private static void RevisarHecho(EntityEntry entrada, string tipo)
+    {
+        var modificadas = entrada.Properties.Where(p => p.IsModified).ToList();
+        if (modificadas.Count == 0)
+            throw new ImmutableEntityModifiedException(tipo, null, "es un hecho: sólo se inserta.");
+
+        foreach (var propiedad in modificadas)
+        {
+            var escrituraUnica = propiedad.Metadata.PropertyInfo?.IsDefined(typeof(EscrituraUnicaAttribute), inherit: true) == true;
+            if (!escrituraUnica)
+                throw new ImmutableEntityModifiedException(tipo, propiedad.Metadata.Name, "es un hecho: sólo se inserta.");
+            if (propiedad.OriginalValue is not null)
+                throw new ImmutableEntityModifiedException(tipo, propiedad.Metadata.Name, "es de escritura única: ya tiene valor.");
+        }
     }
 
     private static void RevisarDocumento(EntityEntry entrada, string tipo)

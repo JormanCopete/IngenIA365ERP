@@ -124,7 +124,45 @@ public sealed record DocumentoDeVentaDto(
     byte[]? RowVersion)
 {
     public string Numero => Number is { } n ? $"{Prefix}{n}" : "(borrador)";
+
+    /// <summary>El bloque <c>electronic</c> tipado (I4, T758): nulo si el documento no es electrónico.</summary>
+    public ElectronicoDeLaVentaDto? Electronico => ElectronicoDeLaVentaDto.Desde(Electronic);
 }
+
+/// <summary>
+/// El bloque <c>electronic</c> de la venta y del cobro (feature 012, I4, T758; api.md §18.2, §20.2): el documento electrónico, su estado
+/// (<c>ElectronicDocumentStatus</c>), el código único y el QR, la contingencia, si ya se entrega y si quedó pendiente de entrega, y los
+/// mensajes traducidos. (nuevo)
+/// </summary>
+public sealed record ElectronicoDeLaVentaDto(
+    Guid ElectronicDocumentPublicId,
+    int Kind,
+    int Status,
+    string? UniqueCode,
+    string? QrContent,
+    int? ContingencyType,
+    long WaitedMs,
+    bool Deliverable,
+    bool PendingDelivery,
+    IReadOnlyList<IngenIA365ERP.Shared.Services.FacturacionElectronica.MensajeDelCanalDto>? Messages)
+{
+    private static readonly JsonSerializerOptions Opciones = new(JsonSerializerDefaults.Web);
+
+    /// <summary>Lee el bloque tal como llega en <c>electronic</c>; nulo si no viene o no se entiende.</summary>
+    public static ElectronicoDeLaVentaDto? Desde(JsonElement? bloque)
+    {
+        if (bloque is not { ValueKind: JsonValueKind.Object } json) return null;
+        try { return json.Deserialize<ElectronicoDeLaVentaDto>(Opciones); }
+        catch (JsonException) { return null; }
+    }
+}
+
+/// <summary><c>POST …/invoice-instead</c> (§18.3.1, I4): a nombre de quién va la factura, el motivo y lo que la persona vio a pagar. (nuevo)</summary>
+public sealed record FacturaEnLugarRequest(Guid BuyerPersonPublicId, string Reason, decimal ExpectedAmountDue);
+
+/// <summary>La nota de ajuste de anulación total y la factura que la reemplaza, hechas en una transacción. (nuevo)</summary>
+public sealed record FacturaEnLugarDelDocumentoEquivalenteDto(Guid AdjustmentNotePublicId, string? AdjustmentNoteNumber, Guid InvoicePublicId,
+    string? InvoiceNumber, IReadOnlyList<JsonElement>? Messages);
 
 /// <summary>Los filtros de <c>GET /sales/documents</c> (§18.1); <see cref="Class"/> y <see cref="Status"/> son números del dominio.</summary>
 public sealed class FiltroDeVentas

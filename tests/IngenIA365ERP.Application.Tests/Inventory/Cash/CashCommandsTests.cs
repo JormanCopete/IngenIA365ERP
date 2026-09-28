@@ -75,7 +75,7 @@ public class CashCommandsTests
 
     private ArqueoDeLaSesion Arqueos() => new(Db, V.Compras.C.Reloj, Sesiones(), V.Confirmacion());
 
-    private OpenCashSessionCommandHandler Abrir() => new(Db, K.Actor, V.Compras.C.Reloj, K.Alcance, K.Lector(), _cerrojo, new GuardiaDeEmisionFiscal(K.Lector()),
+    private OpenCashSessionCommandHandler Abrir() => new(Db, K.Actor, V.Compras.C.Reloj, K.Alcance, K.Lector(), _cerrojo, new GuardiaDeEmisionFiscal(K.Lector(), Db),
         Sesiones(), V.Confirmacion(), _auditoria);
 
     private CloseCashSessionCommandHandler Cerrar() => new(Db, K.Actor, V.Compras.C.Reloj, Sesiones(), Arqueos(), V.Toque, V.Confirmacion(), _auditoria);
