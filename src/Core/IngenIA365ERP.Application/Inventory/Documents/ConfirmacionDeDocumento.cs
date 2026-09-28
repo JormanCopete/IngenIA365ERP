@@ -63,9 +63,13 @@ public sealed class ConfirmacionDeDocumento(
     IEnumerable<IPasoDeValidacionPrevia> validacionesPrevias,
     Counts.BloqueoPorConteo? bloqueoPorConteo = null,
     Replenishment.AvisoDeReposicionAlConfirmar? avisoDeReposicion = null,
-    MensajesDelDocumento? mensajesDelDocumento = null)
+    MensajesDelDocumento? mensajesDelDocumento = null,
+    IEnumerable<IAvisoAlConfirmar>? avisosAlConfirmar = null)
 {
     private readonly MensajesDelDocumento _mensajes = mensajesDelDocumento ?? new MensajesDelDocumento(db, parametros);
+
+    /// <summary>El número con que la validación previa evalúa un documento que todavía no lo tiene (sólo en lo evaluado, nunca se emite).</summary>
+    public const string NumeroProvisionalDeLaValidacion = "PORNUMERAR";
 
     public async Task<Result<ConfirmationResultDto>> ConfirmarAsync(PedidoDeConfirmacion pedido, CancellationToken ct)
     {
@@ -114,8 +118,10 @@ public sealed class ConfirmacionDeDocumento(
         if (reglas.IsFailure) return Falla(reglas.Error);
 
         // --------------------------------------------------------------------------------------- 2. aprobación --
-        if (!pedido.PorAprobacion)
+        // I3 (T618): la diferencia de arqueo dentro de la tolerancia se confirma sin aprobación y el cajero nunca la aprueba.
+        if (!pedido.PorAprobacion && !await efecto.OmiteAprobacionAsync(contexto, ct))
         {
+            var excluidos = await efecto.ExcluidosDeLaAprobacionAsync(contexto, ct);
             var grupo = VistaDeDocumentos.GrupoDe(documento.Class, original?.Class);
             var permisoLimitado = PermisosDeGrupo.De(grupo).PermisoLimitado;
             var monto = efecto.MontoParaAprobar(contexto);
@@ -135,7 +141,7 @@ public sealed class ConfirmacionDeDocumento(
                     monto,
                     documento.OperationDate,
                     documento.CreatedByUserId,
-                    [documento.CreatedByUserId],
+                    [documento.CreatedByUserId, .. excluidos.Where(u => u != documento.CreatedByUserId)],
                     Huella(documento),
                     permisoLimitado), ct);
                 if (solicitud.IsFailure) return Falla(solicitud.Error);
@@ -152,6 +158,24 @@ public sealed class ConfirmacionDeDocumento(
                         new AprobacionPedidaDto(pendiente.PublicId, evaluacion.Value.Evaluacion.NivelForzado ? "AmountLimit" : "Policy", niveles),
                         null, null, []));
                 }
+            }
+        }
+
+        // I3 (T655): la aprobación propia de la clase (el crédito provisional), también en la reentrada de la última aprobación del tipo.
+        if (original is null)
+        {
+            var propia = await efecto.AprobacionPropiaAsync(contexto, ct);
+            if (propia.IsFailure) return Falla(propia.Error);
+            if (propia.Value is { } pendientePropia)
+            {
+                if (documento.Status == DocumentStatus.Draft) documento.EnviarAAprobacion();
+                await db.SaveChangesAsync(ct);
+                var nivelesPropios = pendientePropia.NivelesRequeridos()
+                    .Select(n => new NivelPedidoDto(n.Order, n.Threshold, n.PermissionCode, n.Order == pendientePropia.CurrentLevel ? "Pending" : "Waiting"))
+                    .ToList();
+                return Result.Success(new ConfirmationResultDto(
+                    documento.PublicId, documento.Status, null, null, documento.OperationDate, null, null,
+                    new AprobacionPedidaDto(pendientePropia.PublicId, "Policy", nivelesPropios), null, null, []));
             }
         }
 
@@ -181,6 +205,10 @@ public sealed class ConfirmacionDeDocumento(
             if (provisionales.Count > 0)
             {
                 var origenDeEmision = await _mensajes.OrigenAsync(documento, tipo, bodega?.Code, ct);
+                // El número se da después (paso 4): lo evaluado lleva uno provisional, para que la cuenta que exige documento cruce del
+                // propio documento (el crédito provisional: FV + número de la venta) se evalúe como quedará (e2e T650, 2026-09-27).
+                if (string.IsNullOrEmpty(origenDeEmision.Number))
+                    origenDeEmision = origenDeEmision with { Number = $"{documento.Prefix}{NumeroProvisionalDeLaValidacion}" };
                 var solicitudes = MensajesDelDocumento.Solicitudes(origenDeEmision, original, origenes, provisionales,
                     new ModoDeEntrega.Sellado(DeliveryMode.Online), PrevalidationOutcome.NotApplicable);
                 var sobres = MensajesDelDocumento.Sobres(solicitudes, actor.CentralUserId, actor.Name, new DateTimeOffset(reloj.UtcNow, TimeSpan.Zero));
@@ -226,6 +254,8 @@ public sealed class ConfirmacionDeDocumento(
         // US17 (T953): con el kardex ya escrito, las salidas que dejaron la posición en o bajo el punto de reorden avisan en
         // warnings[] y levantan Inventario.Reorden / Inventario.Quiebre en esta misma transacción. Nunca bloquea.
         IReadOnlyList<AvisoDto> avisos = avisoDeReposicion is null ? [] : await avisoDeReposicion.AvisarAsync(documento, ct);
+        // I3 (T611): los avisos de la clase después del guardado (la venta bajo costo con «Alertar»); nunca bloquean.
+        foreach (var aviso in avisosAlConfirmar ?? []) avisos = [.. avisos, .. await aviso.AvisarAsync(documento, ct)];
         if (validacion.Outcome == PrevalidationOutcome.NoResponse) avisos = [.. validacion.Warnings, .. avisos];
 
         var mensajes = await vista.TieneAsync(PermisosDeGrupo.VerMensajes, ct)

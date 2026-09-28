@@ -1,0 +1,180 @@
+{
+  "nombre": "Una lista vencida, inactiva o que todavia no empieza no participa",
+  "descripcion": "CLI5 vencio el 30/09, SEGA esta inactiva y CAN2 empieza el 02/10: el 01/10 gana SUC3. El 02/10 ya participa CAN2 (vigencia inclusiva en los dos extremos).",
+  "listas": [
+    {
+      "id": 1,
+      "codigo": "CLI5",
+      "persona": 5,
+      "segmento": null,
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": "2026-09-30",
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 900
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "codigo": "SEGA",
+      "persona": null,
+      "segmento": "A",
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": false,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 950
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "codigo": "CAN2",
+      "persona": null,
+      "segmento": null,
+      "canal": 2,
+      "sucursal": null,
+      "desde": "2026-10-02",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 970
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "codigo": "SUC3",
+      "persona": null,
+      "segmento": null,
+      "canal": null,
+      "sucursal": 3,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 980
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "codigo": "GENERAL",
+      "persona": null,
+      "segmento": null,
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 1000
+        }
+      ]
+    }
+  ],
+  "consultas": [
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": 2,
+        "sucursal": 3,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 980,
+        "lista": "SUC3",
+        "dimensiones": [
+          "Branch"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "SUC3",
+          "GENERAL"
+        ]
+      }
+    },
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": 2,
+        "sucursal": 3,
+        "fecha": "2026-10-02"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 970,
+        "lista": "CAN2",
+        "dimensiones": [
+          "Channel"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "CAN2",
+          "SUC3",
+          "GENERAL"
+        ]
+      }
+    },
+    {
+      "contexto": {
+        "persona": 5,
+        "segmento": "A",
+        "canal": 2,
+        "sucursal": 3,
+        "fecha": "2026-09-30"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 900,
+        "lista": "CLI5",
+        "dimensiones": [
+          "Person"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "CLI5",
+          "SUC3",
+          "GENERAL"
+        ]
+      }
+    }
+  ]
+}

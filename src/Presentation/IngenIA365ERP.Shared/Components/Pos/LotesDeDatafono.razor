@@ -1,0 +1,50 @@
+@using IngenIA365ERP.Shared.Services.Ventas
+
+@* Feature 012, I3 (T641; FR-099, FR-100; contracts/api.md §21.2): el arqueo de las tarjetas por lote de cada datáfono —número de lote,
+   total y cantidad de pagos del cierre del datáfono— con lo esperado al lado si el arqueo no es ciego. (nuevo) *@
+<div class="lotes-datafono">
+    <table class="data-grid">
+        <thead><tr><th>Datáfono</th><th class="numero">Esperado</th><th class="numero">Pagos</th><th>Lote *</th><th class="numero">Total del lote</th><th class="numero">Cantidad</th></tr></thead>
+        <tbody>
+            @foreach (var lote in Lotes)
+            {
+                var l = lote;
+                var esperado = Datafonos.FirstOrDefault(d => d.CardTerminalPublicId == l.CardTerminalPublicId);
+                <tr>
+                    <td>@(esperado?.Code ?? "—")@(esperado?.AcquirerCode is { } a ? $" · {a}" : "")</td>
+                    <td class="numero">@(esperado?.Expected?.ToString("N0") ?? "—")</td>
+                    <td class="numero">@esperado?.PaymentsCount</td>
+                    <td><input class="e-input" maxlength="20" value="@l.BatchNumber" @onchange="@(e => Fijar(() => l.BatchNumber = e.Value?.ToString() ?? ""))" /></td>
+                    <td class="numero"><input class="e-input numero" type="number" min="0" step="any" value="@l.Total.ToString(System.Globalization.CultureInfo.InvariantCulture)" @onchange="@(e => Fijar(() => l.Total = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : 0m))" /></td>
+                    <td class="numero"><input class="e-input numero" type="number" min="0" step="1" value="@l.Count" @onchange="@(e => Fijar(() => l.Count = int.TryParse(e.Value?.ToString(), out var n) ? n : 0))" /></td>
+                </tr>
+            }
+        </tbody>
+        <tfoot><tr><th>Total</th><th></th><th></th><th></th><th class="numero">@Lotes.Sum(l => l.Total).ToString("N0")</th><th></th></tr></tfoot>
+    </table>
+</div>
+
+@code {
+    /// <summary>Lo esperado por datáfono (vacío o con nulos en arqueo ciego).</summary>
+    [Parameter] public IReadOnlyList<DatafonoEsperadoDto> Datafonos { get; set; } = [];
+
+    /// <summary>Un lote por datáfono; la pantalla los arma con los datáfonos de la sesión.</summary>
+    [Parameter, EditorRequired] public List<LoteForm> Lotes { get; set; } = [];
+
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    private Task Fijar(System.Action accion)
+    {
+        accion();
+        return Cambio.InvokeAsync();
+    }
+
+    /// <summary>El lote que se digita.</summary>
+    public sealed class LoteForm
+    {
+        public Guid CardTerminalPublicId { get; set; }
+        public string BatchNumber { get; set; } = "";
+        public decimal Total { get; set; }
+        public int Count { get; set; }
+    }
+}

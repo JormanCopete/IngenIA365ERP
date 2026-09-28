@@ -64,21 +64,46 @@ public sealed class EfectoDeAjusteNegativo(
 }
 
 /// <summary>
-/// <c>InternalConsumption</c>: salida con centro de costo (lo exige la clase en las reglas comunes). Un tipo de <b>retiro
-/// gravado</b> (<c>IsTaxableWithdrawal</c>) necesita la lista de precios general de I3: hasta entonces
+/// <c>InternalConsumption</c>: salida con centro de costo (lo exige la clase en las reglas comunes). Un tipo de <b>retiro gravado</b>
+/// (<c>IsTaxableWithdrawal</c>, I3, T615) lleva además base a la lista de precios general vigente e IVA del producto
+/// (<see cref="RetiroGravado"/>): sin precio → <c>Inventory.Price.NotFound</c>; el mensaje sale con operación <c>RetiroGravado</c> y su
+/// bloque de base e IVA. Sin <see cref="RetiroGravado"/> registrado (un anfitrión sin I3), el retiro gravado responde
 /// <c>Inventory.Adjustment.TaxableWithdrawalNotAvailable</c>. (nuevo)
 /// </summary>
 public sealed class EfectoDeConsumoInterno(
     RegistroDeKardex registro, ReversionDeKardex reversion, EmisionDeInventario emision, IMaestrosDelDocumento maestros,
-    IPermissionChecker permisos, IApplicationDbContext db)
+    IPermissionChecker permisos, IApplicationDbContext db, RetiroGravado? retiroGravado = null)
     : EfectoDeSalidaPorAjuste(registro, reversion, emision, maestros, permisos, db)
 {
+    private readonly Dictionary<Guid, IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.TaxableWithdrawalV1> _gravados = [];
+
     public override DocumentClass Clase => DocumentClass.InternalConsumption;
 
     protected override IEnumerable<Error> ReglasPropias(ContextoDeEfecto contexto)
     {
-        if (contexto.Tipo.IsTaxableWithdrawal) yield return InventoryErrors.AdjustmentTaxableWithdrawalNotAvailable();
+        if (contexto.Tipo.IsTaxableWithdrawal && retiroGravado is null) yield return InventoryErrors.AdjustmentTaxableWithdrawalNotAvailable();
     }
+
+    public override async Task<Result> ValidarAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        var comun = await base.ValidarAsync(contexto, ct);
+        if (comun.IsFailure || contexto.EsAnulacion || !contexto.Tipo.IsTaxableWithdrawal || retiroGravado is null) return comun;
+        var gravado = await retiroGravado.CalcularAsync(contexto.Documento, ct);
+        if (gravado.IsFailure) return Result.Failure(gravado.Error);
+        _gravados[contexto.Documento.PublicId] = gravado.Value;
+        return Result.Success();
+    }
+
+    public override async Task<IReadOnlyList<object>> MensajesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        ConBaseEIva(contexto, await base.MensajesAsync(contexto, ct));
+
+    public override async Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        ConBaseEIva(contexto, await base.MensajesProvisionalesAsync(contexto, ct));
+
+    private IReadOnlyList<object> ConBaseEIva(ContextoDeEfecto contexto, IReadOnlyList<object> contenidos) =>
+        !contexto.EsAnulacion && _gravados.TryGetValue(contexto.Documento.PublicId, out var gravado)
+            ? contenidos.Select(c => c is IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AjusteInventarioAprobadoV1 a ? a with { TaxableWithdrawal = gravado } : c).ToList()
+            : contenidos;
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Approvals;
+using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -61,7 +62,7 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         [DocumentClass.NegativeAdjustment] = ("CONN", "Ajuste de conteo (faltante)"),
     };
 
-    /// <summary>Código y nombre del tipo sembrado de cada clase de I1.</summary>
+    /// <summary>Código y nombre del tipo sembrado de cada clase de I1, y de las dos de caja de I3 (T588).</summary>
     public static readonly IReadOnlyDictionary<DocumentClass, (string Codigo, string Nombre)> Sembrados = new Dictionary<DocumentClass, (string, string)>
     {
         [DocumentClass.PurchaseReceipt] = ("REC", "Recepción de compra"),
@@ -79,6 +80,10 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         [DocumentClass.PhysicalCount] = ("CON", "Conteo físico"),
         [DocumentClass.CostAdjustment] = ("AJC", "Ajuste de costo"),
         [DocumentClass.Voiding] = ("ANU", "Anulación"),
+        // I3 (T588): los dos tipos de caja que CloseCashSessionCommand usa sin intervención. Los códigos son propuesta: el dueño
+        // los confirma con la contadora (quickstart.md §2.5). Se siembran cuando la entrega vigente llega a I3 (Operable).
+        [DocumentClass.CashMovement] = ("MC", "Movimiento de caja"),
+        [DocumentClass.CashCountDifference] = ("DA", "Diferencia de arqueo"),
     };
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)
@@ -105,7 +110,14 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
     public static readonly DateOnly VigenciaDeLaSemilla = new(2000, 1, 1);
 
     /// <summary>La semilla sobre cualquier contexto de la cooperativa (probable con InMemory).</summary>
-    public static async Task<int> AplicarAsync(IApplicationDbContext db, CancellationToken ct)
+    public static Task<int> AplicarAsync(IApplicationDbContext db, CancellationToken ct) =>
+        AplicarAsync(db, CatalogoDeParametros.EntregaVigente, ct);
+
+    /// <summary>
+    /// La semilla con las clases operables en <paramref name="entrega"/> (T588: las pruebas siembran los tipos de caja de I3 antes de
+    /// que la entrega vigente del despliegue llegue a I3).
+    /// </summary>
+    public static async Task<int> AplicarAsync(IApplicationDbContext db, EntregaDelComercio entrega, CancellationToken ct)
     {
         var desde = VigenciaDeLaSemilla;
         var existentes = (await db.InventoryDocumentTypes.IgnoreQueryFilters().Select(t => t.Code).ToListAsync(ct))
@@ -114,7 +126,7 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         var insertadas = 0;
         InventoryDocumentType? saldoInicial = null;
         InventoryDocumentType? recepcionDeTraslado = null;
-        foreach (var clase in ClasesDeDocumento.Todas.Where(c => c.Operable()))
+        foreach (var clase in ClasesDeDocumento.Todas.Where(c => c.Operable(entrega)))
         {
             if (!Sembrados.TryGetValue(clase.Class, out var sembrado)) continue;
             if (existentes.Contains(sembrado.Codigo))
@@ -131,7 +143,7 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
                 Code = sembrado.Codigo,
                 Name = sembrado.Nombre,
                 Class = clase.Class,
-                RequiresReason = clase.Class is DocumentClass.WriteOff or DocumentClass.Voiding,
+                RequiresReason = clase.Class is DocumentClass.WriteOff or DocumentClass.Voiding or DocumentClass.CashMovement,
                 RequiresCounterparty = clase.Group == DocumentClassGroup.Purchases,
                 AllWarehouses = true,
                 IsSeeded = true,

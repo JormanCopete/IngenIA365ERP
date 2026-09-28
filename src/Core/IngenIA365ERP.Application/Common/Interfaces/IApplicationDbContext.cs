@@ -246,6 +246,36 @@ public interface IApplicationDbContext
     // US11 (T391): la foto y las capturas de los conteos físicos (INV_CountSnapshotLines, INV_CountCaptures).
     DbSet<Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines { get; }
     DbSet<Domain.Entities.Inventory.Documents.CountCapture> CountCaptures { get; }
+    // Feature 012 (T585, I3): medios de pago de Core, punto de venta y caja, precios y satélites de la venta. INV_UserPointOfSaleScopes
+    // se lee y escribe solo por IAsignacionesDePuntoDeVenta; las redenciones de bonos, sólo al confirmar la venta.
+    DbSet<Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans { get; }
+    DbSet<Domain.Entities.Core.Payments.CardNetwork> CardNetworks { get; }
+    DbSet<Domain.Entities.Core.Payments.CardAcquirer> CardAcquirers { get; }
+    DbSet<Domain.Entities.Core.Payments.CardTerminal> CardTerminals { get; }
+    DbSet<Domain.Entities.Core.Payments.CashDenomination> CashDenominations { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PointOfSale> PointsOfSale { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashRegister> CashRegisters { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashSession> CashSessions { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashMovementDetail> CashMovementDetails { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCount> CashCounts { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountLine> CashCountLines { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountDenomination> CashCountDenominations { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountTerminalBatch> CashCountTerminalBatches { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountReferenceCheck> CashCountReferenceChecks { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashDocumentLine> CashDocumentLines { get; }
+    DbSet<Domain.Entities.Inventory.Pos.DayClose> DayCloses { get; }
+    DbSet<Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines { get; }
+    DbSet<Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments { get; }
+    DbSet<Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions { get; }
+    DbSet<Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PriceList> PriceLists { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PriceListItem> PriceListItems { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps { get; }
+    DbSet<Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes { get; }
 
     // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
     // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.

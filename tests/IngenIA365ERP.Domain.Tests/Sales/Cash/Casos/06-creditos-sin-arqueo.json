@@ -1,0 +1,120 @@
+{
+  "nombre": "Los créditos no se arquean: contado = esperado",
+  "descripcion": "Dos ventas a crédito de asociado (120.000 y 80.000). Aunque se mande un contado distinto, el método None cuenta lo esperado y no hay diferencia.",
+  "sesion": 1,
+  "tratamientoDelFaltante": "ShortageToCashier",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 6,
+      "codigo": "CRED",
+      "clase": "AssociateCredit",
+      "arqueo": "None",
+      "tolerancia": 0
+    }
+  ],
+  "base": {
+    "medio": "EF",
+    "valor": 0
+  },
+  "pagos": [
+    {
+      "medio": "CRED",
+      "valor": 120000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    },
+    {
+      "medio": "CRED",
+      "valor": 80000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    },
+    {
+      "medio": "EF",
+      "valor": 5000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 0,
+      "ventas": 5000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 5000,
+      "pagos": 1,
+      "datafonos": null,
+      "referencias": null
+    },
+    {
+      "medio": "CRED",
+      "base": 0,
+      "ventas": 200000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 200000,
+      "pagos": 2,
+      "datafonos": null,
+      "referencias": null
+    }
+  ],
+  "total": 205000,
+  "conteo": [
+    {
+      "medio": "EF",
+      "contado": 5000,
+      "motivo": null
+    },
+    {
+      "medio": "CRED",
+      "contado": 1,
+      "motivo": null
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "EF",
+        "contado": 5000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      },
+      {
+        "medio": "CRED",
+        "contado": 200000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      }
+    ],
+    "totalEsperado": 205000,
+    "totalContado": 205000,
+    "totalDiferencia": 0,
+    "montoAAprobar": 0,
+    "lineasDelDocumento": [],
+    "sinMotivo": []
+  }
+}

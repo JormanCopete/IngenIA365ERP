@@ -34,6 +34,9 @@ public class LaJuncionDeRolesNoTieneBorradoLogico
     /// <summary>El parametro del primer lambda de la cadena: `.Where(ur =&gt; ...` -&gt; `ur`.</summary>
     private static readonly Regex Parametro = new(@"\(\s*(\w+)\s*=>", RegexOptions.Compiled);
 
+    /// <summary>Una consulta en sintaxis de consulta sobre la junción, hasta el punto y coma: `from ur in db.UserRoles …;`.</summary>
+    private static readonly Regex DeConsulta = new(@"from\s+(\w+)\s+in\s+[\w.]*UserRoles\b[^;]*", RegexOptions.Compiled);
+
     /// <summary>Propiedades que <c>UserRole</c> tiene en C# pero el modelo no mapea.</summary>
     private static IReadOnlyList<string> NoMapeadas()
     {
@@ -94,6 +97,19 @@ public class LaJuncionDeRolesNoTieneBorradoLogico
                              Regex.IsMatch(sentencia, $@"\b{Regex.Escape(parametro)}\.{Regex.Escape(p)}\b")))
                 {
                     var linea = texto[..desde].Count(c => c == '\n') + 1;
+                    infractores.Add($"{Path.GetRelativePath(raiz, archivo)}:{linea} filtra por UserRole.{prohibida}");
+                }
+            }
+
+            // La sintaxis de consulta (`from ur in db.UserRoles … where !ur.IsDeleted`) no tiene lambda: la variable de rango es
+            // la que se liga. El 2026-09-27 TopesDeDescuento la usaba y toda venta respondía 500 al precificar.
+            foreach (Match consulta in DeConsulta.Matches(texto))
+            {
+                var rango = consulta.Groups[1].Value;
+                foreach (var prohibida in prohibidas.Where(p =>
+                             Regex.IsMatch(consulta.Value, $@"\b{Regex.Escape(rango)}\.{Regex.Escape(p)}\b")))
+                {
+                    var linea = texto[..consulta.Index].Count(c => c == '\n') + 1;
                     infractores.Add($"{Path.GetRelativePath(raiz, archivo)}:{linea} filtra por UserRole.{prohibida}");
                 }
             }

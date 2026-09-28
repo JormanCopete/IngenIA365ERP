@@ -68,10 +68,38 @@ public class ParametrosConVigenciaTests(CentralIdentityApiFixture fx)
         (await InventarioE2E.FallaAsync(sinPermiso, "Parameters.PermissionRequired")).GetProperty("data").ToString().Should().Contain("Inventory.Costing.Manage");
     }
 
-    [Fact(Skip = "En I1 no hay tipos fiscales operables (ventas, documento soporte y sus notas llegan con I3 e I4), así que dejar sin paso "
-        + "una cadena no alcanza ninguno y la regla Inventory.PostingMode.FiscalRequiresConfirmation no se dispara por HTTP. La prueba "
-        + "la tiene ReglasDePlataformaDeInventarioTests (Application); la e2e se escribe con I3.")]
-    public void NoPasa_en_la_cadena_de_ventas_exige_confirmar_los_tipos_fiscales()
+    /// <summary>
+    /// Desde I3 hay tipos fiscales operables (la factura de venta): dejar sin paso la cadena de ventas los nombra y exige la
+    /// confirmación explícita (<c>Inventory.PostingMode.FiscalRequiresConfirmation</c>, FR-075, quickstart §2.6); con ella, se
+    /// registra. Hasta I3 la prueba estaba omitida porque ningún tipo fiscal alcanzaba la regla por HTTP.
+    /// </summary>
+    [Fact]
+    public async Task NoPasa_en_la_cadena_de_ventas_exige_confirmar_los_tipos_fiscales()
     {
+        var esc = await EscenarioDeInventario.PrepararAsync(fx, "parametros");
+        using var http = fx.CreateClient();
+        var hoy = InventarioE2E.HoyEnColombia;
+        var mMas2 = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(2);
+
+        var alta = await InventarioE2E.MandarAsync(http, esc.Admin, HttpMethod.Post, "/api/inventory/document-types", new
+        {
+            code = "FVE", name = "Factura electrónica de venta", @class = "SalesInvoice",
+            requiresCounterparty = true, requiresCostCenter = false, requiresReason = false, requiresExternalReference = false,
+        });
+        alta.StatusCode.Should().Be(System.Net.HttpStatusCode.Created, await alta.Content.ReadAsStringAsync());
+
+        var sinConfirmar = await InventarioE2E.FallaAsync(await InventarioE2E.MandarAsync(http, esc.Admin, HttpMethod.Post,
+            $"{Parametros}/Contabilidad.ModoDePaso/versions", new
+            {
+                scopeKind = "DocumentType", chain = "Sales", value = "NoPasa", validFrom = mMas2.ToString("yyyy-MM-dd"), reason = "Ventas sin contabilidad",
+            }), "Inventory.PostingMode.FiscalRequiresConfirmation");
+        sinConfirmar.GetProperty("data").GetProperty("fiscalDocumentTypes").EnumerateArray()
+            .Select(t => t.GetProperty("code").GetString()).Should().Contain("FVE");
+
+        await InventarioE2E.ExitoAsync(http, esc.Admin, HttpMethod.Post, $"{Parametros}/Contabilidad.ModoDePaso/versions", new
+        {
+            scopeKind = "DocumentType", chain = "Sales", value = "NoPasa", validFrom = mMas2.ToString("yyyy-MM-dd"), reason = "Ventas sin contabilidad",
+            confirmFiscalWithoutPosting = true,
+        });
     }
 }

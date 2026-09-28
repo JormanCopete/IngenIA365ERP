@@ -1,0 +1,206 @@
+@page "/ventas/listas-de-precios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Listas de precios - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T638; FR-053; contracts/api.md §19.1, plantilla 12): las listas de precios. Cada lista tiene un ámbito —cliente,
+   segmento, canal y sucursal, en cualquier combinación; sin ninguno es la lista general— y una vigencia; gana la más específica vigente
+   a la fecha, y a igual especificidad la más reciente. El ámbito, el código y si el precio incluye impuestos no cambian: otra
+   combinación es otra lista. Todo cambio pide motivo. *@
+<PermissionGate Required="Inventory.Prices.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Listas de precios</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Prices.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva lista</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Plantilla 12</SfButton>
+            <a class="e-btn e-flat" href="/ventas/topes-de-descuento">Topes de descuento</a>
+        </div>
+    </div>
+
+    @if (_mostrarPlantilla)
+    {
+        <div class="info-card">
+            <h4>Plantilla 12 · Listas de precios</h4>
+            <ImportarPlantilla RutaBase="@VentasClient.Rutas.Listas" PermisoDeDescarga="Inventory.Prices.View" PermisoDeImportacion="Inventory.Prices.Manage"
+                               Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+
+    <div class="toolbar">
+        <label class="campo">Buscar <input class="e-input" @bind="_buscar" @bind:after="BuscarAsync" placeholder="código o nombre" /></label>
+        <label class="campo">Vigentes al <input type="date" class="e-input" value="@(_al?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _al = Fecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo-check"><input type="checkbox" @bind="_inactivas" @bind:after="BuscarAsync" /> Incluir inactivas</label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _listas.Count == 0)
+        {
+            <p class="texto-tenue">No hay listas con estos filtros.</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Ámbito</th><th class="numero">Especificidad</th><th>Incluye impuestos</th><th>Vigencia</th><th class="numero">Precios</th><th>Estado</th></tr></thead>
+                <tbody>
+                    @foreach (var l in _listas)
+                    {
+                        <tr>
+                            <td><a href="@($"/ventas/listas-de-precios/{l.PriceListPublicId}")">@l.Code</a></td>
+                            <td>@l.Name</td><td>@Ambito(l.Scope)</td><td class="numero">@l.Specificity</td><td>@(l.IncludesTaxes ? "Sí" : "No")</td>
+                            <td>@l.ValidFrom.ToString("dd/MM/yyyy")@(l.ValidTo is { } h ? $" – {h:dd/MM/yyyy}" : "")</td>
+                            <td class="numero">@l.ItemCount</td><td>@(l.IsActive ? "Activa" : "Inactiva")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+            <span class="texto-tenue">Página @_pagina · @_total lista(s)</span>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarNueva" Header="Nueva lista de precios" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="listas-de-precios" @bind-Value="_codigo" Obligatorio="true" />
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombre" maxlength="100" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_incluyeImpuestos" /> El precio incluye impuestos</label>
+                    <label class="campo">Vigente desde * <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = Fecha(e.Value))" /></label>
+                    <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = Fecha(e.Value))" /></label>
+                </div>
+                <h4>Ámbito (vacío = lista general)</h4>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Cliente
+                        <PersonSearchPicker @bind-Selected="_cliente" ShowHelpText="false" Compacto="true" />
+                    </label>
+                    <label class="campo">Segmento <input class="e-input" @bind="_segmento" maxlength="40" /></label>
+                    <label class="campo">Canal
+                        <select class="e-input" value="@(_canal?.ToString() ?? "")" @onchange="@(e => _canal = Id(e.Value))">
+                            <option value="">Todos</option>
+                            @foreach (var c in _canales) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Sucursal
+                        <select class="e-input" value="@(_sucursal?.ToString() ?? "")" @onchange="@(e => _sucursal = Id(e.Value))">
+                            <option value="">Todas</option>
+                            @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Code · @s.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="500" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CrearAsync">Crear</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _clave = new();
+    private List<ListaDePreciosDto> _listas = [];
+    private List<CanalDeVentaDto> _canales = [];
+    private List<SucursalContableDto> _sucursales = [];
+    private string? _buscar;
+    private DateOnly? _al;
+    private bool _inactivas, _mostrarPlantilla, _mostrarNueva;
+    private int _pagina = 1;
+    private long _total;
+
+    private string? _codigo, _nombre, _segmento, _notas, _motivo;
+    private bool _incluyeImpuestos = true;
+    private DateOnly? _desde, _hasta;
+    private Guid? _canal, _sucursal;
+    private PersonSearchPicker.PersonSearchItem? _cliente;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var canales = await Inventario.ListarCanalesAsync();
+            _canales = canales.IsSuccess ? [.. canales.Value ?? []] : [];
+            var sucursales = await Inventario.ListarSucursalesAsync();
+            _sucursales = sucursales.IsSuccess ? [.. sucursales.Value ?? []] : [];
+        }
+        await CargarAsync();
+    }
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarListasAsync(_buscar, _inactivas ? null : true, _al, _pagina, TamanoDePagina);
+        if (!r.IsSuccess) { _listas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las listas."); return; }
+        _listas = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private string Ambito(AmbitoDeListaDto a)
+    {
+        var partes = new List<string>();
+        if (a.PersonName is { } p) partes.Add($"cliente {p}");
+        if (!string.IsNullOrWhiteSpace(a.Segment)) partes.Add($"segmento {a.Segment}");
+        if (a.SalesChannelPublicId is { } c) partes.Add($"canal {_canales.FirstOrDefault(x => x.PublicId == c)?.Code}");
+        if (a.BranchPublicId is { } s) partes.Add($"sucursal {_sucursales.FirstOrDefault(x => x.PublicId == s)?.Name}");
+        return partes.Count == 0 ? "General" : string.Join(" · ", partes);
+    }
+
+    private void Nueva()
+    {
+        _codigo = null; _nombre = null; _segmento = null; _notas = null; _motivo = null; _incluyeImpuestos = true; _desde = DateOnly.FromDateTime(DateTime.Today);
+        _hasta = null; _canal = null; _sucursal = null; _cliente = null;
+        _mostrarNueva = true;
+    }
+
+    private async Task CrearAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre) || _desde is null || string.IsNullOrWhiteSpace(_motivo))
+        {
+            await Notification.WarningAsync("Complete código, nombre, vigencia y motivo.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var ambito = new AmbitoDeListaRequest(_cliente?.PublicId, string.IsNullOrWhiteSpace(_segmento) ? null : _segmento.Trim(), _canal, _sucursal);
+        var r = await Ventas.GuardarListaAsync(null, new ListaDePreciosRequest(_codigo, _nombre.Trim(), _incluyeImpuestos, ambito, _desde, _hasta, true, _motivo.Trim(),
+            string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la lista."); return; }
+        _mostrarNueva = false;
+        Nav.NavigateTo($"/ventas/listas-de-precios/{r.Value}");
+    }
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

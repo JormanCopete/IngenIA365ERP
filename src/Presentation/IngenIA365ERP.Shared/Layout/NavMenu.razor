@@ -1,4 +1,6 @@
 @inject NavigationManager Navigation
+@inject IngenIA365ERP.Shared.Services.Ventas.VentasClient Ventas
+@inject IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario Permisos
 
 <div class="nav-menu">
     <div class="brand">
@@ -197,6 +199,23 @@
         </PermissionGate>
 
         <NavMenuGroup Icon="e-grid-view" Title="Ventas" Expanded="SidebarOpen">
+            @* I3 (T644): las ventas de oficina, los puntos de venta, los precios y los informes de ventas. *@
+            <PermissionGate Required="Inventory.Sales.View">
+                <NavLink href="/ventas/documentos" class="nav-subitem">Documentos de venta</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Sales.Create">
+                <NavLink href="/ventas/facturas/nueva" class="nav-subitem">Nueva factura</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.PointsOfSale.View">
+                <NavLink href="/ventas/puntos-de-venta" class="nav-subitem">Puntos de venta</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Prices.View">
+                <NavLink href="/ventas/listas-de-precios" class="nav-subitem">Listas de precios</NavLink>
+                <NavLink href="/ventas/topes-de-descuento" class="nav-subitem">Topes de descuento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reports.View">
+                <NavLink href="/ventas/informes" class="nav-subitem">Informes de ventas</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Catalog.View">
                 <NavLink href="/ventas/canales" class="nav-subitem">Canales de venta</NavLink>
             </PermissionGate>
@@ -205,6 +224,24 @@
                 <NavLink href="/ventas/vendedores" class="nav-subitem">Vendedores</NavLink>
             </PermissionGate>
         </NavMenuGroup>
+
+        @* I3 (T644, T645): el punto de venta y la caja. «Vender en el POS» se oculta cuando la sesión abierta del usuario es de un punto
+           que cobra en oficina (FR-058). *@
+        <PermissionGate Required="Inventory.CashSessions.View" AnyOf="@(new[] { "Inventory.CashSessions.View", "Inventory.Pos.Sell" })">
+        <NavMenuGroup Icon="e-grid-view" Title="Punto de venta" Expanded="SidebarOpen">
+            @if (!_sesionSinPos)
+            {
+                <PermissionGate Required="Inventory.Pos.Sell">
+                    <NavLink href="/pos" class="nav-subitem" Match="NavLinkMatch.All">Vender en el POS</NavLink>
+                </PermissionGate>
+            }
+            <PermissionGate Required="Inventory.CashSessions.View">
+                <NavLink href="/pos/sesiones" class="nav-subitem">Sesiones de caja</NavLink>
+                <NavLink href="/pos/movimientos-de-caja" class="nav-subitem">Movimientos de caja</NavLink>
+                <NavLink href="/pos/cierre-del-dia" class="nav-subitem">Cierre del día</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+        </PermissionGate>
 
         <NavMenuGroup Icon="e-people" Title="Nomina" Expanded="SidebarOpen">
             <NavLink href="/nomina/empleados" class="nav-subitem">Empleados</NavLink>
@@ -274,6 +311,10 @@
             <NavLink href="/maestros/bancos" class="nav-subitem">Bancos</NavLink>
             <NavLink href="/maestros/formatos-bancarios" class="nav-subitem">Formatos bancarios</NavLink>
             <NavLink href="/maestros/impuestos" class="nav-subitem">Impuestos y retenciones</NavLink>
+            @* I3 (T644): el catálogo de medios de pago de Core (franquicias, adquirentes, datáfonos y denominaciones). *@
+            <PermissionGate Required="Core.PaymentMeans.View">
+                <NavLink href="/maestros/medios-de-pago" class="nav-subitem">Medios de pago</NavLink>
+            </PermissionGate>
             <NavLink href="/maestros/empresas" class="nav-subitem">Empresas</NavLink>
             <NavLink href="/maestros/centros-costo" class="nav-subitem">Centros de Costo</NavLink>
             <NavLink href="/maestros/secciones" class="nav-subitem">Secciones</NavLink>
@@ -366,6 +407,8 @@
     private bool _isTenantAdmin;
     private bool _isMaster;
     private string _activeTenantId = "";
+    private string? _cooperativaRevisada;
+    private bool _sesionSinPos;
 
     /// <summary>
     /// Hay cooperativa activa en el token. Es lo que decide si se muestran las
@@ -380,5 +423,20 @@
         _isTenantAdmin = bool.TryParse(user.FindFirst("tenant_admin")?.Value, out var admin) && admin;
         _isMaster = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var master) && master;
         _activeTenantId = user.FindFirst("active_tenant_id")?.Value ?? "";
+        await RevisarSesionDeCajaAsync();
+    }
+
+    /// <summary>
+    /// T645 (FR-058): si la sesión abierta del usuario es de un punto sin POS, «Vender en el POS» no se ofrece (ese punto cobra en
+    /// oficina). Se pregunta una vez por cooperativa y sólo a quien ve sesiones de caja; si la consulta falla, el enlace queda.
+    /// </summary>
+    private async Task RevisarSesionDeCajaAsync()
+    {
+        if (!_tieneCooperativa || _cooperativaRevisada == _activeTenantId) return;
+        _cooperativaRevisada = _activeTenantId;
+        _sesionSinPos = false;
+        if (!await Permisos.TieneAsync("Inventory.CashSessions.View")) return;
+        var r = await Ventas.MiSesionAbiertaAsync();
+        _sesionSinPos = r is { IsSuccess: true, Value.PointOfSale.PosEnabled: false };
     }
 }

@@ -1,0 +1,18 @@
+@* Feature 012, I3 (T639; FR-059, SC-008): los atajos del punto de venta, siempre a la vista. Las teclas las reserva pos.js mientras el
+   POS está montado; esto sólo las recuerda. (nuevo) *@
+<div class="pos-atajos" aria-label="Atajos de teclado">
+    @foreach (var (tecla, accion) in Atajos)
+    {
+        <span><kbd>@tecla</kbd> @accion</span>
+    }
+</div>
+
+@code {
+    /// <summary>Las teclas del POS y lo que hacen (FR-059).</summary>
+    public static readonly IReadOnlyList<(string Tecla, string Accion)> Atajos =
+    [
+        ("F2", "buscar"), ("F3", "cantidad"), ("F4", "cliente"), ("F6", "vendedor"), ("F7", "descuento"), ("F8", "suspender"),
+        ("F9", "recuperar"), ("F10", "cobrar"), ("Supr", "quitar línea"), ("Esc", "volver"), ("3*", "multiplica"),
+        ("Ctrl+Alt+M", "movimiento de caja"), ("Ctrl+Alt+C", "cerrar caja"), ("Ctrl+Alt+R", "reimprimir"), ("Ctrl+Alt+D", "descartar venta"),
+    ];
+}

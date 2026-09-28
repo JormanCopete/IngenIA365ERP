@@ -476,7 +476,7 @@ public class ImportacionComunTests
     }
 
     [Fact]
-    public async Task La_lista_dice_que_puede_descargar_e_importar_quien_pregunta_y_que_se_importa_despues()
+    public async Task La_lista_dice_que_puede_descargar_e_importar_quien_pregunta()
     {
         var permisos = Substitute.For<ICurrentUserPermissions>();
         permisos.ListAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyCollection<string>>(
@@ -490,11 +490,14 @@ public class ImportacionComunTests
         (productos.CanDownload, productos.CanImport, productos.Note).Should().Be((true, true, null));
         var impuestos = lista.Single(p => p.Number == 1);
         (impuestos.CanDownload, impuestos.CanImport).Should().Be((false, false));
+        // T600: con I3 las plantillas 10 a 13 ya importan (según permisos) y la 16 ya se descarga; ninguna dice «se importa con…».
         var puntos = lista.Single(p => p.Number == 10);
-        (puntos.CanDownload, puntos.CanImport).Should().Be((true, false));
-        puntos.Note.Should().Be("Se importa con I3.");
+        (puntos.CanDownload, puntos.CanImport, puntos.Note).Should().Be((true, true, null));
+        var listas = lista.Single(p => p.Number == 12);
+        (listas.CanDownload, listas.CanImport, listas.Note).Should().Be((false, false, null), "sin Inventory.Prices.* no puede, pero la ruta ya existe");
         var matriz = lista.Single(p => p.Number == 16);
-        matriz.CanDownload.Should().BeFalse();
-        matriz.Note.Should().Contain("I2");
+        matriz.CanDownload.Should().BeFalse("sin Accounting.InventoryRules.View");
+        matriz.Note.Should().BeNull();
+        lista.Should().OnlyContain(p => p.Note == null);
     }
 }

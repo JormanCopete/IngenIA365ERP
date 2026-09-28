@@ -1,0 +1,43 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject PersonasClient Personas
+@inject PermisosDelUsuario Permisos
+
+@* Feature 012, I3 (T639, T616; FR-011, T46): el comprador de la venta. Se busca en el maestro de personas (PersonSearchPicker compacto)
+   y, si no existe, se crea en el diálogo compartido de personas en modo compacto, con el aviso de privacidad vigente y la decisión del
+   titular (CapturarAutorizacion, canal «Pos»): el POS no escribe personas. Quitarlo vuelve al consumidor final. Sin Core.People.Create
+   no ofrece el alta. (nuevo) *@
+<PersonSearchPicker Selected="@Seleccionado" SelectedChanged="@CambiarAsync" ShowHelpText="false" Compacto="true" OnCleared="@QuitarAsync"
+                    Placeholder="Documento o nombre del comprador (vacío: consumidor final)" PermitirCrear="@_puedeCrear" OnCrearPersona="@AbrirAlta"
+                    TextoSinResultados="@(_puedeCrear ? "No existe: créelo con su autorización de datos." : "Pida que lo registren en Maestros › Personas.")" />
+<PersonaDialog @bind-Visible="_mostrarAlta" DocumentoInicial="@_documentoInicial" CapturarAutorizacion="true" CanalDeAutorizacion="Pos" Compacto="true"
+               OnGuardado="@PersonaCreadaAsync" />
+
+@code {
+    [Parameter] public PersonSearchPicker.PersonSearchItem? Seleccionado { get; set; }
+
+    /// <summary>La persona elegida; nulo es el consumidor final.</summary>
+    [Parameter] public EventCallback<PersonSearchPicker.PersonSearchItem?> SeleccionadoChanged { get; set; }
+
+    private bool _puedeCrear, _mostrarAlta;
+    private string? _documentoInicial;
+
+    protected override async Task OnInitializedAsync() => _puedeCrear = await Permisos.TieneAsync("Core.People.Create");
+
+    private Task CambiarAsync(PersonSearchPicker.PersonSearchItem? persona) => SeleccionadoChanged.InvokeAsync(persona);
+
+    private Task QuitarAsync() => SeleccionadoChanged.InvokeAsync(null);
+
+    private void AbrirAlta(string termino)
+    {
+        _documentoInicial = termino.All(char.IsDigit) ? termino : null;
+        _mostrarAlta = true;
+    }
+
+    private async Task PersonaCreadaAsync(Guid publicId)
+    {
+        _mostrarAlta = false;
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } p)
+            await SeleccionadoChanged.InvokeAsync(new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible });
+    }
+}

@@ -51,3 +51,13 @@ public interface IAntesDeConfirmarPorAprobacion
 {
     Task<Result> PrepararAsync(Guid documentoPublicId, CancellationToken ct);
 }
+
+/// <summary>
+/// Un aviso que la confirmación da <b>después</b> de su guardado, en la misma transacción (feature 012, I3, T611): la alerta de venta bajo
+/// costo con <c>Ventas.BajoCosto = Alertar</c>. Levanta sus alertas (que guardan solas) y devuelve lo que va a <c>warnings[]</c>. Nunca
+/// bloquea; mira la clase del documento para saber si le toca. (nuevo)
+/// </summary>
+public interface IAvisoAlConfirmar
+{
+    Task<IReadOnlyList<AvisoDto>> AvisarAsync(Domain.Entities.Inventory.Documents.InventoryDocument documento, CancellationToken ct);
+}

@@ -1,0 +1,167 @@
+@page "/pos/sesiones/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+@inject IImpresionDeDocumentos Impresion
+
+<PageTitle>Sesión de caja - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T641, T645; FR-058, FR-099, FR-100; contracts/api.md §21.1–§21.3, §20.3): el detalle de una sesión de caja —punto,
+   caja, cajero, base, ventas—, lo que queda pendiente antes de cerrar (ventas suspendidas, en borrador y pendientes de entrega, que se
+   entregan desde aquí), sus movimientos de caja y, cerrada, el arqueo por medio con su diferencia y el informe en PDF. «Ir al POS» sólo
+   aparece si el punto vende en el POS. *@
+<PermissionGate Required="Inventory.CashSessions.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_detalle is { } d ? $"Sesión de la caja {d.Session.CashRegister.Code} · {TextosDeVentas.EstadoDeSesion(d.Session.Status)}" : "Sesión de caja")</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/pos/sesiones">Volver a las sesiones</a>
+            @if (_detalle?.Session is { } s)
+            {
+                @if (s.Status == TextosDeVentas.SesionAbierta)
+                {
+                    @if (s.PointOfSale.PosEnabled)
+                    {
+                        <PermissionGate Required="Inventory.Pos.Sell"><a class="e-btn e-primary" href="/pos">Ir al POS</a></PermissionGate>
+                    }
+                    <PermissionGate Required="Inventory.CashMovements.Create"><a class="e-btn e-outline" href="@($"/pos/movimientos-de-caja?sesion={s.CashSessionPublicId}")">Movimiento de caja</a></PermissionGate>
+                    <PermissionGate Required="Inventory.CashSessions.Close"><a class="e-btn e-outline" href="@($"/pos/sesiones/{s.CashSessionPublicId}/cierre")">Cerrar la caja</a></PermissionGate>
+                }
+                else
+                {
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@DescargarArqueoAsync">Informe del arqueo</SfButton>
+                }
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_detalle is { } det)
+        {
+            var s = det.Session;
+            <div class="form-grid">
+                <div class="kpi-card"><span class="label">Punto</span><span>@s.PointOfSale.Code · @s.PointOfSale.Name</span></div>
+                <div class="kpi-card"><span class="label">Cajero</span><span>@s.Cashier.Name</span></div>
+                <div class="kpi-card"><span class="label">Fecha operativa</span><span>@s.OperatingDate.ToString("dd/MM/yyyy")</span></div>
+                <div class="kpi-card"><span class="label">Base</span><span>@s.OpeningBase.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="label">Ventas</span><span>@s.SalesCount · @s.SalesTotal.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="label">Abierta / cerrada</span><span>@s.OpenedAt.ToLocalTime().ToString("dd/MM HH:mm") / @(s.ClosedAt?.ToLocalTime().ToString("dd/MM HH:mm") ?? "—")</span></div>
+            </div>
+            @if (det.SuspendedDrafts + det.OpenDrafts + det.PendingDeliveries > 0)
+            {
+                <p class="aviso aviso-alerta">Pendiente: @det.SuspendedDrafts suspendida(s), @det.OpenDrafts en borrador, @det.PendingDeliveries por entregar.</p>
+            }
+            @if (s.DifferenceDocument is { } dif)
+            {
+                <p>Diferencia de arqueo: @(dif.Number ?? "(en aprobación)") · @TextosDeInventario.Estado(dif.Status)</p>
+            }
+
+            @if (_pendientes.Count > 0)
+            {
+                <h4>Ventas pendientes de entrega</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Cliente</th><th class="numero">Total</th><th>Estado electrónico</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _pendientes)
+                        {
+                            var venta = p;
+                            <tr><td>@p.Numero</td><td>@p.CounterpartyName</td><td class="numero">@p.Total.ToString("N0")</td><td>@p.ElectronicStatus</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => EntregarAsync(venta.DocumentPublicId))">Entregar</SfButton></td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @if (det.Count is { Count: > 0 } arqueo)
+            {
+                <h4>Arqueo</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th><th class="numero">Tolerancia</th><th>Tratamiento</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in arqueo)
+                        {
+                            <tr><td>@l.PaymentMeansCode</td><td class="numero">@l.Expected.ToString("N0")</td><td class="numero">@l.Counted.ToString("N0")</td>
+                                <td class="numero">@l.Difference.ToString("N0")</td><td class="numero">@l.Tolerance.ToString("N0")</td>
+                                <td>@(l.WithinTolerance ? "Dentro de la tolerancia" : TextosDeVentas.TratamientoDeDiferencia(l.Treatment))</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <h4>Movimientos de caja</h4>
+            @if (det.Movements.Count == 0)
+            {
+                <p class="texto-tenue">Sin movimientos.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Clase</th><th>Medio</th><th>Destino</th><th class="numero">Valor</th><th>Motivo</th><th>Estado</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in det.Movements)
+                        {
+                            <tr><td>@(m.Number ?? "(borrador)")</td><td>@TextosDeVentas.ClaseDeMovimiento(m.Kind)</td>
+                                <td>@m.SourcePaymentMeansCode@(m.TargetPaymentMeansCode is { } t ? $" → {t}" : "")</td>
+                                <td>@TextosDeVentas.DestinoDeMovimiento(m.Destination)@(m.DestinationCashRegisterCode is { } c ? $" {c}" : "")</td>
+                                <td class="numero">@m.Amount.ToString("N0")</td><td>@m.Reason</td><td>@TextosDeInventario.Estado(m.Status)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            @if (_tirilla is not null)
+            {
+                <TirillaDeVenta Tirilla="@_tirilla" />
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private readonly ClaveDeOperacion _claveEntrega = new();
+    private DetalleDeSesionDto? _detalle;
+    private List<ResumenDeVentaDto> _pendientes = [];
+    private TirillaDto? _tirilla;
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ObtenerSesionAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la sesión."); return; }
+        _detalle = r.Value;
+        if (r.Value.PendingDeliveries > 0)
+        {
+            var p = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { CashSession = Id, PendingDelivery = true, PageSize = 50 });
+            _pendientes = p.IsSuccess ? [.. p.Value!.Items] : [];
+        }
+        else _pendientes = [];
+    }
+
+    private async Task EntregarAsync(Guid documento)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.EntregarAsync(documento, new EntregaRequest(TextosDeVentas.NombreDeFormato(80)), _claveEntrega);
+        if (!r.IsSuccess || r.Value?.Ticket is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "Todavía no se puede entregar."); return; }
+        _tirilla = r.Value.Ticket;
+        await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(_tirilla), "Tirilla");
+        await CargarAsync();
+    }
+
+    private async Task DescargarArqueoAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.DescargarArqueoAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el informe del arqueo."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+}

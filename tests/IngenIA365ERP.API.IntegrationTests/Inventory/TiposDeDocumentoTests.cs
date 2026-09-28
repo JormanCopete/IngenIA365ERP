@@ -69,7 +69,9 @@ public class TiposDeDocumentoTests(CentralIdentityApiFixture fx)
 
         clases.Should().HaveCount(34);
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("PositiveAdjustment")).GetProperty("operable").GetBoolean().Should().BeTrue();
-        clases.Single(c => c.GetProperty("class").GetInt32() == Numero("SalesInvoice")).GetProperty("operable").GetBoolean().Should().BeFalse();
+        // Desde I3 (EntregaVigente = I3) la factura de venta es operable; el documento soporte espera a I4.
+        clases.Single(c => c.GetProperty("class").GetInt32() == Numero("SalesInvoice")).GetProperty("operable").GetBoolean().Should().BeTrue();
+        clases.Single(c => c.GetProperty("class").GetInt32() == Numero("SupportDocument")).GetProperty("operable").GetBoolean().Should().BeFalse();
     }
 
     [Fact]

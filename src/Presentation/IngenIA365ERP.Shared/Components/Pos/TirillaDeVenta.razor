@@ -1,0 +1,15 @@
+@using IngenIA365ERP.Shared.Services.Ventas
+
+@* Feature 012, I3 (T639; contracts/api.md §20.2 TicketDto): la tirilla de la venta en pantalla, al ancho del papel (58 u 80 mm), con el
+   mismo cuerpo que se imprime (HtmlDeTirilla). Al imprimir desde la pantalla sólo sale la tirilla (@media print en componentes.css);
+   el POS imprime por IImpresionDeDocumentos. De la tarjeta sólo aparecen los últimos cuatro dígitos. (nuevo) *@
+@if (Tirilla is { } t)
+{
+    <div class="tirilla @(t.Format == 58 ? "tirilla-58" : "tirilla-80")" role="document" aria-label="Tirilla de la venta">
+        @((MarkupString)HtmlDeTirilla.Cuerpo(t))
+    </div>
+}
+
+@code {
+    [Parameter] public TirillaDto? Tirilla { get; set; }
+}

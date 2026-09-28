@@ -22,6 +22,10 @@ public class DestinoDeDocumentoDeInventarioTests
     [InlineData(19, "/inventario/conteos/")]
     [InlineData(3, "/compras/recepciones/")]
     [InlineData(4, "/compras/facturas-proveedor/")]
+    [InlineData(26, "/ventas/documentos/")]
+    [InlineData(28, "/ventas/documentos/")]
+    [InlineData(29, "/ventas/documentos/")]
+    [InlineData(31, "/ventas/documentos/")]
     public void Cada_clase_con_pantalla_abre_la_suya(int clase, string prefijo)
     {
         DestinoDeDocumentoDeInventario.Documento(clase, Id).Should().Be(prefijo + Id);
@@ -31,7 +35,7 @@ public class DestinoDeDocumentoDeInventarioTests
     [InlineData(15)]
     [InlineData(17)]
     [InlineData(34)]
-    [InlineData(26)]
+    [InlineData(24)]
     public void Una_clase_sin_pantalla_de_detalle_no_tiene_destino(int clase)
     {
         DestinoDeDocumentoDeInventario.Documento(clase, Id).Should().BeNull();

@@ -1,0 +1,356 @@
+@page "/pos/movimientos-de-caja"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject MediosDePagoClient Medios
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Movimientos de caja - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T641; FR-099, FR-100, US5-10; contracts/api.md §21.3): los movimientos de caja de una sesión —retiro parcial a la caja
+   fuerte, traslado a otra caja, retiro para consignar, ingreso de base y reclasificación de un pago entre medios (Visa → Mastercard, sin
+   tocar la venta)—. Son documentos del grupo Caja: se guardan en borrador y al confirmarlos, si su política lo pide, quedan en aprobación
+   sin número. Cada uno tiene su comprobante en PDF con las firmas. Anular crea el documento contrario (Inventory.CashMovements.Approve). *@
+<PermissionGate Required="Inventory.CashSessions.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Movimientos de caja</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/pos/sesiones">Sesiones</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            @if (_sesion is not null)
+            {
+                <PermissionGate Required="Inventory.CashMovements.Create">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nuevo">Nuevo movimiento</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_sesion is { } s)
+        {
+            <p class="texto-apoyo">Sesión de la caja @s.CashRegister.Code (@s.PointOfSale.Name) de @s.Cashier.Name · @TextosDeVentas.EstadoDeSesion(s.Status)</p>
+        }
+        else if (!_carga.Activa)
+        {
+            <p class="texto-tenue">Sin una sesión elegida se ven los movimientos de todo el alcance; para registrar uno, abra su caja.</p>
+        }
+        @if (!_carga.Activa && _movimientos.Count == 0)
+        {
+            <p class="texto-tenue">No hay movimientos.</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Clase</th><th>Medio</th><th>Destino</th><th class="numero">Valor</th><th>Motivo</th><th>Registró</th><th>Aprobó</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _movimientos)
+                    {
+                        var mov = m;
+                        <tr>
+                            <td>@(m.Number ?? "(borrador)")</td><td>@TextosDeVentas.ClaseDeMovimiento(m.Kind)</td>
+                            <td>@m.SourcePaymentMeansCode@(m.TargetPaymentMeansCode is { } t ? $" → {t}" : "")</td>
+                            <td>@TextosDeVentas.DestinoDeMovimiento(m.Destination)@(m.DestinationCashRegisterCode is { } c ? $" {c}" : "")</td>
+                            <td class="numero">@m.Amount.ToString("N0")</td><td>@m.Reason</td><td>@m.CreatedByName</td><td>@m.ApprovedByName</td>
+                            <td>@TextosDeInventario.Estado(m.Status)</td>
+                            <td>
+                                @if (m.Status == 0)
+                                {
+                                    <PermissionGate Required="Inventory.CashMovements.Create">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => ConfirmarAsync(mov.DocumentPublicId))">Confirmar</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirMotivo(mov.DocumentPublicId, anular: false))">Descartar</SfButton>
+                                    </PermissionGate>
+                                }
+                                @if (m.Status == 2)
+                                {
+                                    <SfButton CssClass="e-flat" IconCss="e-icons e-download" title="Comprobante con firmas" OnClick="@(() => ComprobanteAsync(mov.DocumentPublicId))" />
+                                    <PermissionGate Required="Inventory.CashMovements.Approve">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirMotivo(mov.DocumentPublicId, anular: true))">Anular</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarNuevo" Header="Nuevo movimiento de caja" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Clase *
+                        <select class="e-input" value="@_clase" @onchange="@(e => _clase = int.TryParse(e.Value?.ToString(), out var c) ? c : 1)">
+                            @foreach (var (v, t) in TextosDeVentas.ClasesDeMovimiento) { <option value="@v">@t</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Medio *
+                        <select class="e-input" value="@(_medio?.ToString() ?? "")" @onchange="@(e => _medio = Id(e.Value))">
+                            <option value="">Elija…</option>
+                            @foreach (var m in _medios) { <option value="@m.PaymentMeansPublicId">@m.Code · @m.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Valor * <input class="e-input numero" type="number" min="0" step="any" @bind="_valor" /></label>
+                    @if (_clase is 1 or 2 or 3)
+                    {
+                        <label class="campo">Destino
+                            <select class="e-input" value="@(DestinoPorClase)" disabled>
+                                <option value="@DestinoPorClase">@TextosDeVentas.DestinoDeMovimiento(DestinoPorClase)</option>
+                            </select>
+                        </label>
+                    }
+                    @if (_clase == 2)
+                    {
+                        <label class="campo">Caja destino *
+                            <select class="e-input" value="@(_cajaDestino?.ToString() ?? "")" @onchange="@(e => _cajaDestino = Id(e.Value))">
+                                <option value="">Elija…</option>
+                                @foreach (var c in _cajas.Where(x => x.CashRegisterPublicId != _sesion?.CashRegister.PublicId)) { <option value="@c.CashRegisterPublicId">@c.Code · @c.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    @if (_clase == 3)
+                    {
+                        <label class="campo">Banco de la consignación
+                            <select class="e-input" value="@(_banco?.ToString() ?? "")" @onchange="@(e => _banco = Id(e.Value))">
+                                <option value="">—</option>
+                                @foreach (var b in _bancos) { <option value="@b.PublicId">@b.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    @if (_clase == 5)
+                    {
+                        <label class="campo">Pasa al medio *
+                            <select class="e-input" value="@(_medioDestino?.ToString() ?? "")" @onchange="@(e => _medioDestino = Id(e.Value))">
+                                <option value="">Elija…</option>
+                                @foreach (var m in _medios.Where(x => x.PaymentMeansPublicId != _medio)) { <option value="@m.PaymentMeansPublicId">@m.Code · @m.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Venta del pago
+                            <select class="e-input" value="@(_ventaDelPago?.ToString() ?? "")" @onchange="@(e => ElegirVentaAsync(e.Value))">
+                                <option value="">Elija…</option>
+                                @foreach (var v in _ventasDeLaSesion) { <option value="@v.DocumentPublicId">@v.Numero · @v.Total.ToString("N0")</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Pago que se reclasifica *
+                            <select class="e-input" value="@(_pago?.ToString() ?? "")" @onchange="@(e => _pago = Id(e.Value))">
+                                <option value="">Elija…</option>
+                                @foreach (var p in _pagosDeLaVenta) { <option value="@p.DocumentPaymentPublicId">@p.MeansCode · @p.Amount.ToString("N0")@(p.Last4 is { } l ? $" ****{l}" : "")</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Referencia nueva <input class="e-input" @bind="_referencia" maxlength="40" /></label>
+                        <label class="campo">Autorización nueva <input class="e-input" @bind="_autorizacion" maxlength="20" /></label>
+                    }
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoMovimiento" maxlength="300" /></label>
+                </div>
+                @if (_clase is 1 or 2 or 3 or 4 && _denominaciones.Count > 0)
+                {
+                    <details>
+                        <summary>Contar por denominaciones</summary>
+                        <ConteoPorDenominaciones Denominaciones="@_denominaciones" Cantidades="@_conteo" TotalChanged="@(t => _valor = t)" />
+                    </details>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(confirmar: true))">Guardar y confirmar</SfButton>
+                    <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(confirmar: false))">Guardar borrador</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarNuevo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_anular ? "Anular el movimiento" : "Descartar el borrador")" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="300" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarMotivoAsync">Aceptar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class BancoItem
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    [SupplyParameterFromQuery(Name = "sesion")] public Guid? SesionPedida { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new(), _claveMotivo = new();
+    private SesionDeCajaDto? _sesion;
+    private List<MovimientoDeCajaDto> _movimientos = [];
+    private List<MedioDePagoDto> _medios = [];
+    private List<CajaDto> _cajas = [];
+    private List<DenominacionDto> _denominaciones = [];
+    private List<BancoItem> _bancos = [];
+    private List<ResumenDeVentaDto> _ventasDeLaSesion = [];
+    private List<PagoDelDocumentoDto> _pagosDeLaVenta = [];
+    private readonly Dictionary<Guid, int> _conteo = [];
+    private bool _mostrarNuevo, _mostrarMotivo, _anular;
+    private int _clase = 1;
+    private Guid? _medio, _medioDestino, _cajaDestino, _banco, _pago, _ventaDelPago, _documento;
+    private decimal _valor;
+    private string? _motivoMovimiento, _referencia, _autorizacion, _motivo;
+
+    private int DestinoPorClase => _clase switch { 2 => 2, 3 => 3, _ => 1 };
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            if (SesionPedida is { } pedida)
+            {
+                var d = await Ventas.ObtenerSesionAsync(pedida);
+                _sesion = d.IsSuccess ? d.Value?.Session : null;
+            }
+            else
+            {
+                var mia = await Ventas.MiSesionAbiertaAsync();
+                _sesion = mia.IsSuccess ? mia.Value : null;
+            }
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarMovimientosAsync(sesion: _sesion?.CashSessionPublicId, tamano: 100);
+        if (!r.IsSuccess) { _movimientos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los movimientos."); return; }
+        _movimientos = [.. r.Value!.Items];
+    }
+
+    private async Task Nuevo()
+    {
+        _clase = 1; _medio = null; _medioDestino = null; _cajaDestino = null; _banco = null; _pago = null; _ventaDelPago = null; _valor = 0m;
+        _motivoMovimiento = null; _referencia = null; _autorizacion = null; _conteo.Clear(); _pagosDeLaVenta = [];
+        _mostrarNuevo = true;
+        using var carga = _guardado.Iniciar();
+        if (_medios.Count == 0)
+        {
+            var medios = await Medios.ListarAsync(activos: true);
+            _medios = medios.IsSuccess ? [.. medios.Value ?? []] : [];
+            var denominaciones = await Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
+            _denominaciones = denominaciones.IsSuccess ? [.. denominaciones.Value ?? []] : [];
+            try
+            {
+                _bancos = await Http.GetListAsync<BancoItem>("/api/core/banks?pageSize=500") ?? [];
+            }
+            catch (HttpRequestException ex)
+            {
+                _bancos = [];
+                await Notification.WarningAsync($"No se pudieron consultar los bancos: {ex.Message}");
+            }
+        }
+        if (_sesion is not null && _cajas.Count == 0)
+        {
+            var cajas = await Ventas.ListarCajasAsync(_sesion.PointOfSale.PointOfSalePublicId);
+            _cajas = cajas.IsSuccess ? [.. cajas.Value ?? []] : [];
+        }
+        if (_sesion is not null)
+        {
+            var ventas = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { CashSession = _sesion.CashSessionPublicId, Status = 2, PageSize = 100 });
+            _ventasDeLaSesion = ventas.IsSuccess ? [.. ventas.Value!.Items] : [];
+        }
+        _medio = _medios.FirstOrDefault(m => m.Class == TextosDeVentas.MedioEfectivo)?.PaymentMeansPublicId;
+    }
+
+    private async Task ElegirVentaAsync(object? valor)
+    {
+        _ventaDelPago = Id(valor);
+        _pago = null;
+        _pagosDeLaVenta = [];
+        if (_ventaDelPago is not { } venta) return;
+        var r = await Ventas.ObtenerDocumentoAsync(venta);
+        _pagosDeLaVenta = r.IsSuccess ? [.. r.Value!.Payments.Where(p => p.Direction == 1)] : [];
+    }
+
+    private async Task GuardarAsync(bool confirmar)
+    {
+        if (_sesion is null || _medio is not { } medio || _valor <= 0m || string.IsNullOrWhiteSpace(_motivoMovimiento))
+        {
+            await Notification.WarningAsync("Elija el medio y escriba el valor y el motivo.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var request = new MovimientoDeCajaRequest(
+            _sesion.CashSessionPublicId, TextosDeVentas.NombreDeClaseDeMovimiento(_clase), medio, _valor, _motivoMovimiento.Trim(),
+            TargetPaymentMeansPublicId: _clase == 5 ? _medioDestino : null,
+            Destination: _clase is 1 or 2 or 3 ? TextosDeVentas.NombreDeDestino(DestinoPorClase) : null,
+            DestinationCashRegisterPublicId: _clase == 2 ? _cajaDestino : null,
+            Denominations: _conteo.Count > 0 ? _conteo.Select(p => new ConteoDeDenominacionRequest(p.Key, p.Value)).ToList() : null,
+            ReclassifiedPaymentPublicId: _clase == 5 ? _pago : null,
+            TargetReference: _clase == 5 && !string.IsNullOrWhiteSpace(_referencia) ? _referencia.Trim() : null,
+            TargetAuthorizationCode: _clase == 5 && !string.IsNullOrWhiteSpace(_autorizacion) ? _autorizacion.Trim() : null,
+            DepositBankPublicId: _clase == 3 ? _banco : null);
+        var r = await Ventas.GuardarMovimientoAsync(null, request, _claveGuardar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el movimiento."); return; }
+        _mostrarNuevo = false;
+        if (confirmar) await ConfirmarAsync(r.Value.DocumentPublicId);
+        else { await Notification.SuccessAsync("Borrador guardado."); await CargarAsync(); }
+    }
+
+    private async Task ConfirmarAsync(Guid id)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.ConfirmarMovimientoAsync(id, null, _claveConfirmar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el movimiento."); await CargarAsync(); return; }
+        if (r.Value.Status == 1) await Notification.InfoAsync("Quedó en aprobación: lo confirma quien tenga el permiso de su política.");
+        else await Notification.SuccessAsync($"Movimiento {r.Value.DisplayNumber} confirmado.");
+        await CargarAsync();
+    }
+
+    private void AbrirMotivo(Guid id, bool anular)
+    {
+        _documento = id;
+        _anular = anular;
+        _motivo = null;
+        _mostrarMotivo = true;
+    }
+
+    private async Task AplicarMotivoAsync()
+    {
+        if (_documento is not { } id || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        if (_anular)
+        {
+            var r = await Ventas.AnularMovimientoAsync(id, _motivo.Trim(), _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+            await Notification.SuccessAsync($"Anulado con {r.Value?.DisplayNumber}.");
+        }
+        else
+        {
+            var r = await Ventas.DescartarMovimientoAsync(id, _motivo.Trim(), _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+            await Notification.SuccessAsync("Borrador descartado.");
+        }
+        _mostrarMotivo = false;
+        await CargarAsync();
+    }
+
+    private async Task ComprobanteAsync(Guid id)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.DescargarComprobanteDeMovimientoAsync(id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el comprobante."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+}

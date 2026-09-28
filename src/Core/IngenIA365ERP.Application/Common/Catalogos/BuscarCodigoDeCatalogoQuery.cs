@@ -84,6 +84,14 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "impuestos" => db.TaxDefinitions.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "tarifas" => db.TaxRates.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).OrderByDescending(e => e.ValidFrom).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "conceptos-de-retencion" => db.WithholdingConcepts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Medios de pago de Core y puntos de venta (feature 012, I3, T590, T593): el código no cambia una vez creado (T27).
+        "medios-de-pago" => db.PaymentMeans.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "franquicias" => db.CardNetworks.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "adquirentes" => db.CardAcquirers.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "puntos-de-venta" => db.PointsOfSale.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Listas de precios (feature 012, I3, T597; data-model §14): el código no cambia (otra vigencia es otra lista).
+        "listas-de-precios" => db.PriceLists.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        "cajas" => db.CashRegisters.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         "ciudades" => db.Cities.AsNoTracking().Where(e => !e.IsDeleted && e.LegacyCode == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         _ => null,
     };

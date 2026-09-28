@@ -29,7 +29,7 @@ public sealed class FactDeRendimientoAttribute : FactAttribute
 /// productos con código de barras, <c>GET /api/inventory/products/search</c> responde por código, código de barras, nombre y
 /// referencia con p95 menor a un segundo. Los productos se siembran por la plantilla 6 (una sola aplicación de 50.000 filas,
 /// el mismo camino que la cooperativa). Sin <c>RUN_PERF_TESTS=1</c> se reporta omitida (<see cref="FactDeRendimientoAttribute"/>).
-/// US5 (fases 13–14) agrega aquí el caso de <c>/pos/lookup</c>.
+/// US5 (T568) agrega aquí el caso de <c>GET /api/inventory/pos/lookup</c>: la lectura exacta por código de barras en el POS.
 ///
 /// <para>
 /// Cooperativa aislada «busqueda50k».
@@ -80,6 +80,76 @@ public class BusquedaDeProductos50kTests(CentralIdentityApiFixture fx)
             var p95 = tiempos[(int)Math.Ceiling(tiempos.Count * 0.95) - 1];
             p95.Should().BeLessThan(1000, $"búsqueda por {nombre}: p95 {p95:N0} ms sobre {Productos:N0} productos (SC-009)");
         }
+    }
+
+    /// <summary>
+    /// T568 (US5, SC-009, T43): con los mismos 50.000 productos, la lectura exacta del lector en el POS
+    /// (<c>GET /api/inventory/pos/lookup</c>) responde con p95 menor a un segundo. Cien productos al azar llevan precio en la lista
+    /// general (la lectura trae el precio); la búsqueda recorre el índice de los 50.000 códigos. Cooperativa aislada «lookup50k».
+    /// </summary>
+    [FactDeRendimiento]
+    public async Task La_lectura_del_POS_sobre_50000_productos_responde_con_p95_menor_a_un_segundo()
+    {
+        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, "lookup50k");
+        using var http = fx.CreateClient();
+        http.Timeout = TimeSpan.FromMinutes(20);
+        var t = coop.TokenAdmin;
+
+        await ImportarAsync(http, t, "/api/inventory/accounting-groups", Libro("Datos", ["codigo", "nombre"], [["ABARROTES", "Abarrotes"]]));
+        await ImportarAsync(http, t, "/api/inventory/product-categories", Libro("Datos", ["codigo", "nombre"], [["GENERAL", "General"]]));
+        await ImportarAsync(http, t, "/api/inventory/products", LibroDeProductos());
+
+        // Un punto con su caja y una sesión abierta del administrador; la bodega activa desde el mes antepasado.
+        var tipos = (await InventarioE2E.GetAsync(http, t, "/api/inventory/warehouse-types")).EnumerateArray().ToList();
+        var bodega = (await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, "/api/inventory/warehouses", new
+        {
+            code = "PV1", name = "Punto de venta 1", branchPublicId = coop.SucursalPrincipal,
+            warehouseTypePublicId = tipos.Single(w => w.GetProperty("code").GetString() == "PUNTOVENTA").GetProperty("publicId").GetGuid(),
+            transitWarehouse = new { code = "TR1", name = "Tránsito" },
+        })).GetProperty("warehouse").GetProperty("publicId").GetGuid();
+        var corte = EscenarioDeInventario.CortePorDefecto;
+        await EscenarioDeInventario.ActivarAsync(http, t, bodega, corte);
+        var desde = corte.AddDays(1);
+        await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, "/api/inventory/parameters/EINV/Dian.ObligadaAFacturar/versions", new
+        {
+            scopeKind = "None", value = "false", validFrom = desde.ToString("yyyy-MM-dd"), reason = "Ensayo sin facturación electrónica",
+        });
+        var rv = await EscenarioDeVentas.TipoAsync(http, t, "RV", "Comprobante de venta", "NonElectronicSalesReceipt", desde);
+        var canal = (await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, "/api/inventory/sales-channels", new { code = "MOSTRADOR", name = "Mostrador" }))
+            .GetProperty("publicId").GetGuid();
+        var punto = await EscenarioDeVentas.PuntoAsync(http, t, "PV1", "Punto uno", coop.SucursalPrincipal, canal, bodega, posHabilitado: true);
+        var caja = await EscenarioDeVentas.CajaAsync(http, t, punto, "CJ1", "Caja 1", bodega, null, [("PosSale", rv)]);
+        var sesion = await EscenarioDeVentas.AbrirAsync(http, t, caja);
+
+        var aleatorio = new Random(20260927);
+        var conPrecio = Enumerable.Range(0, Consultas).Select(_ => aleatorio.Next(1, Productos + 1)).Distinct().ToList();
+        var productos = new List<object>();
+        foreach (var i in conPrecio)
+        {
+            var id = (await InventarioE2E.GetAsync(http, t, $"/api/inventory/products/search?q=PRD{i:00000}")).GetProperty("exact").GetProperty("publicId").GetGuid();
+            var detalle = await InventarioE2E.GetAsync(http, t, $"/api/inventory/products/{id}");
+            productos.Add(new { productPublicId = id, unitPublicId = detalle.GetProperty("baseUnit").GetProperty("publicId").GetGuid(), price = 1_000m + i });
+        }
+        var lista = (await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, "/api/inventory/price-lists", new
+        {
+            code = "GENERAL", name = "Lista general", includesTaxes = true, scope = new { }, validFrom = desde.ToString("yyyy-MM-dd"), reason = "SC-009",
+        })).GetProperty("priceListPublicId").GetGuid();
+        await InventarioE2E.ExitoAsync(http, t, HttpMethod.Put, $"/api/inventory/price-lists/{lista}/items", new { items = productos, reason = "SC-009" });
+
+        var tiempos = new List<double>(conPrecio.Count);
+        foreach (var i in conPrecio)
+        {
+            var peticion = new HttpRequestMessage(HttpMethod.Get, $"/api/inventory/pos/lookup?code=770{i:0000000000}&cashSession={sesion}");
+            peticion.Headers.Authorization = new AuthenticationHeaderValue("Bearer", t);
+            var reloj = Stopwatch.StartNew();
+            var resp = await http.SendAsync(peticion);
+            reloj.Stop();
+            resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+            tiempos.Add(reloj.Elapsed.TotalMilliseconds);
+        }
+        tiempos.Sort();
+        var p95 = tiempos[(int)Math.Ceiling(tiempos.Count * 0.95) - 1];
+        p95.Should().BeLessThan(1000, $"lectura del POS: p95 {p95:N0} ms sobre {Productos:N0} productos (SC-009)");
     }
 
     private static byte[] LibroDeProductos()

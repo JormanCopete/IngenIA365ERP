@@ -86,6 +86,11 @@ public class InventoryDocumentConfiguration : IEntityTypeConfiguration<Inventory
             .HasDatabaseName("IX_INV_Documents_DestinationWarehouseId")
             .HasFilter("[DestinationWarehouseId] IS NOT NULL");
         builder.HasIndex(e => e.CounterpartyPersonId).HasDatabaseName("IX_INV_Documents_CounterpartyPersonId");
+        // I3 (T583; data-model §5.1): los borradores y las ventas de una sesión de caja. Las FK de punto, caja y sesión las
+        // declaran sus configuraciones (Pos/).
+        builder.Property(e => e.IsSuspended).HasDefaultValue(false);
+        builder.Property(e => e.SuspendedLabel).HasMaxLength(60);
+        builder.HasIndex(e => e.CashSessionId).HasDatabaseName("IX_INV_Documents_CashSessionId").HasFilter("[CashSessionId] IS NOT NULL");
         builder.HasIndex(e => new { e.Status, e.OperationDate }).HasDatabaseName("IX_INV_Documents_Status_OperationDate");
 
         builder.Property(e => e.RowVersion).IsRowVersion();

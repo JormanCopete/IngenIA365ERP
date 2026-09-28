@@ -72,6 +72,10 @@ public sealed class VoidInventoryDocumentCommandHandler(
                 anulacionPrevia is null ? null : VistaDeDocumentos.NumeroVisible(anulacionPrevia.Prefix, anulacionPrevia.Number)));
         }
         if (original.Status != DocumentStatus.Confirmed) return Falla(InventoryErrors.NotConfirmed(original.Status));
+        // I3 (T610, FR-066): de las ventas sólo el comprobante y la nota no electrónicos se anulan con documento contrario; un fiscal
+        // electrónico se corrige con su nota de anulación total (data.route).
+        if (ClasesDeDocumento.De(original.Class).Group == DocumentClassGroup.Sales && !ClasesDeDocumento.SeAnulaConAnulacion(original.Class))
+            return Falla(Sales.ErroresDeVentas.FiscalUseCorrection(original.Class));
         if (ClasesDeDocumento.De(original.Class).FiscalDirection == FiscalDirection.Emitted) return Falla(InventoryErrors.FiscalUseCorrection());
 
         var dependientes = await db.DocumentLinks.AsNoTracking()

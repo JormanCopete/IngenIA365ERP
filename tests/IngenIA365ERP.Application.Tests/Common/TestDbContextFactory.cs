@@ -294,6 +294,35 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture> CountCaptures => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>();
+    // Feature 012 (T585, I3): medios de pago, punto de venta y caja, precios y satélites de la venta.
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans => Set<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork> CardNetworks => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer> CardAcquirers => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal> CardTerminals => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination> CashDenominations => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale> PointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister> CashRegisters => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession> CashSessions => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashMovementDetail> CashMovementDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashMovementDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount> CashCounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine> CashCountLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountDenomination> CashCountDenominations => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountTerminalBatch> CashCountTerminalBatches => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountTerminalBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountReferenceCheck> CashCountReferenceChecks => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountReferenceCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashDocumentLine> CashDocumentLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashDocumentLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose> DayCloses => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList> PriceLists => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem> PriceListItems => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope>();
     // Feature 012 (T161): catalogo tributario de Core.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate>();

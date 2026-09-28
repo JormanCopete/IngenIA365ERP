@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Application.Tests.Inventory.Integration;
 /// </summary>
 public class DimensionesDeInventarioTests
 {
-    private static DimensionesDeInventario Dimensiones(KardexDePrueba k) => new(k.C.Db, k.Lector());
+    private static DimensionesDeInventario Dimensiones(KardexDePrueba k) => new(k.C.Db, k.Lector(), k.C.Reloj);
 
     [Fact]
     public async Task El_catalogo_trae_los_codigos_vivos_de_cada_dimension()
@@ -34,8 +34,28 @@ public class DimensionesDeInventarioTests
         transito.BranchPublicId.Should().Be(k.Sucursal.PublicId);
         catalogo.AdjustmentCauses.Select(c => c.Code).Should().Contain("MERMA");
         catalogo.DocumentTypes.Select(t => t.Code).Should().Contain(["AJP", "AJN", "CI", "BAJ"]).And.NotContain("ENS");
-        catalogo.PointsOfSale.Should().BeEmpty("los puntos de venta llegan con I3 (T622)");
-        catalogo.PaymentMeans.Should().BeNull("el catálogo de medios de pago no existe todavía");
+        catalogo.PointsOfSale.Should().BeEmpty("la cooperativa no tiene puntos de venta");
+        catalogo.PaymentMeans.Should().NotBeNull("desde I3 (T622) Inventario publica los medios: vacío, no «desconocido»").And.BeEmpty();
+    }
+
+    [Fact]
+    public async Task Desde_I3_publica_los_puntos_activos_y_los_medios_activos_y_vigentes_con_su_clase()
+    {
+        var v = await Sales.VentasDePrueba.CrearAsync();
+        v.Transferencia.IsActive = false;
+        v.Bono.ValidTo = new DateOnly(2026, 6, 30);
+        v.Db.PointsOfSale.Add(new Domain.Entities.Inventory.Pos.PointOfSale
+        {
+            Code = "PV9", Name = "Cerrado", BranchId = v.K.Sucursal.Id, SalesChannelId = v.Punto.SalesChannelId, DefaultWarehouseId = v.K.Principal.Id, IsActive = false,
+        });
+        await v.Db.SaveChangesAsync();
+
+        var catalogo = await new DimensionesDeInventario(v.Db, v.K.Lector(), v.Compras.C.Reloj).CatalogoAsync(default);
+
+        catalogo.PointsOfSale.Select(p => p.Code).Should().Equal("PV1");
+        catalogo.PaymentMeans!.Select(m => (m.Code, m.Class)).Should().BeEquivalentTo(
+            [("EFECTIVO", Domain.Enums.Core.PaymentMeansClass.Cash), ("VISA", Domain.Enums.Core.PaymentMeansClass.CreditCard)],
+            "la transferencia está inactiva y el bono venció el 30 de junio");
     }
 
     [Fact]

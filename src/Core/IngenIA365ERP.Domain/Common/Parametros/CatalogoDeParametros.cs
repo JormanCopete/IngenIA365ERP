@@ -16,7 +16,7 @@ public static class CatalogoDeParametros
     /// La entrega del comercio en producción en esta versión del programa. Los valores disponibles desde una
     /// posterior (<c>Peps</c>, I5) responden <c>Parameters.ValueNotAllowed</c>; la sube la entrega que los habilita.
     /// </summary>
-    public const EntregaDelComercio EntregaVigente = EntregaDelComercio.I1;
+    public const EntregaDelComercio EntregaVigente = EntregaDelComercio.I3;
 
     public static IReadOnlyList<string> Modulos { get; } =
         [ParametrosDeInventario.Modulo, ParametrosTributarios.Modulo, ParametrosDeFacturacionElectronica.Modulo];

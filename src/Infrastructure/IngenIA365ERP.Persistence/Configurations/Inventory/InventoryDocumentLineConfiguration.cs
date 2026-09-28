@@ -28,6 +28,7 @@ public class InventoryDocumentLineConfiguration : IEntityTypeConfiguration<Inven
         builder.Property(e => e.QuantityBase).Cantidad().IsRequired();
         builder.Property(e => e.RoundingQuantity).Cantidad().IsRequired();
         builder.Property(e => e.UnitPrice).PrecioUnitario().IsRequired();
+        builder.Property(e => e.ListPrice).PrecioUnitario(); // I3 (T584); la FK de PriceListId la declara PriceListConfiguration
         builder.Property(e => e.ListPriceIncludesTaxes).HasDefaultValue(false).IsRequired();
         builder.Property(e => e.GrossAmount).Monto().IsRequired();
         builder.Property(e => e.DiscountAmount).Monto().IsRequired();

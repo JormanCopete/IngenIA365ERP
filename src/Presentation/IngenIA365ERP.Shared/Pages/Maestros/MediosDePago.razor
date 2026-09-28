@@ -1,0 +1,613 @@
+@page "/maestros/medios-de-pago"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject MediosDePagoClient Medios
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Medios de pago - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T636; FR-056, FR-096–FR-101; contracts/api.md §22.1–§22.3, plantilla 11): el catálogo de medios de pago de Core con
+   sus pestañas —medios, franquicias, adquirentes, datáfonos de cobro y denominaciones—. El medio dice cómo se captura (referencia y
+   su tipo, vueltas, parcial, referencia única), cómo se arquea (denominaciones, lote del datáfono, referencias o nada) y con qué
+   tolerancia, la comisión esperada, los valores del crédito y dónde se ofrece: en todos los puntos, canales y tipos, o sólo en los
+   elegidos. Editar un medio pide el motivo (queda en su historia). Nunca se pide ni se guarda un número de tarjeta. *@
+<PermissionGate Required="Core.PaymentMeans.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Medios de pago</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarPestanaAsync">Actualizar</SfButton>
+            <PermissionGate Required="Core.PaymentMeans.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nuevo">@TextoNuevo</SfButton>
+            </PermissionGate>
+            @if (_pestana == Pestana.Medios)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Plantilla 11</SfButton>
+            }
+        </div>
+    </div>
+
+    <div class="toolbar" role="tablist">
+        @foreach (var p in Enum.GetValues<Pestana>())
+        {
+            var pestana = p;
+            <SfButton CssClass="@(pestana == _pestana ? "e-primary" : "e-flat")" OnClick="@(() => CambiarPestanaAsync(pestana))">@Titulo(pestana)</SfButton>
+        }
+    </div>
+
+    @if (_mostrarPlantilla && _pestana == Pestana.Medios)
+    {
+        <div class="info-card">
+            <h4>Plantilla 11 · Medios de pago</h4>
+            <ImportarPlantilla RutaBase="@MediosDePagoClient.RutaDeMedios"
+                               PermisoDeDescarga="Core.PaymentMeans.View"
+                               PermisoDeImportacion="Core.PaymentMeans.Manage"
+                               Aplicado="@(_ => CargarPestanaAsync())" />
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            @switch (_pestana)
+            {
+                case Pestana.Medios:
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Clase</th><th>Tecla</th><th>Referencia</th><th>Arqueo</th><th class="numero">Tolerancia</th><th>Dónde se ofrece</th><th>Vigencia</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var m in _medios)
+                            {
+                                var medio = m;
+                                <tr>
+                                    <td>@m.Code</td><td>@m.Name</td><td>@TextosDeVentas.ClaseDeMedio(m.Class)</td><td>@m.QuickKey</td>
+                                    <td>@(m.RequiresReference ? TextosDeVentas.TipoDeReferencia(m.ReferenceKind) : "No pide")</td>
+                                    <td>@TextosDeVentas.FormaDeArqueo(m.CountMethod)</td>
+                                    <td class="numero">@m.ToleranceAmount.ToString("N0")</td>
+                                    <td>@Donde(m)</td>
+                                    <td>@m.ValidFrom.ToString("dd/MM/yyyy")@(m.ValidTo is { } h ? $" – {h:dd/MM/yyyy}" : "")</td>
+                                    <td>@(m.IsActive ? "Activo" : "Inactivo")</td>
+                                    <td>
+                                        <PermissionGate Required="Core.PaymentMeans.Manage">
+                                            <SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarMedioAsync(medio))" />
+                                        </PermissionGate>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    break;
+                case Pestana.Franquicias:
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var f in _franquicias)
+                            {
+                                var fila = f;
+                                <tr><td>@f.Code</td><td>@f.Name</td><td>@TextosDeVentas.TipoDeTarjeta(f.CardKind)</td><td>@(f.IsActive ? "Activa" : "Inactiva")</td>
+                                    <td><PermissionGate Required="Core.PaymentMeans.Manage"><SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarSimple(fila.CardNetworkPublicId, fila.Code, fila.Name, fila.IsActive, tipo: fila.CardKind))" /></PermissionGate></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    break;
+                case Pestana.Adquirentes:
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var a in _adquirentes)
+                            {
+                                var fila = a;
+                                <tr><td>@a.Code</td><td>@a.Name</td><td>@(a.IsActive ? "Activo" : "Inactivo")</td>
+                                    <td><PermissionGate Required="Core.PaymentMeans.Manage"><SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarSimple(fila.CardAcquirerPublicId, fila.Code, fila.Name, fila.IsActive))" /></PermissionGate></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    break;
+                case Pestana.Datafonos:
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Adquirente</th><th>Serial</th><th>Descripción</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _datafonos)
+                            {
+                                var fila = d;
+                                <tr><td>@d.Code</td><td>@d.CardAcquirerCode</td><td>@d.Serial</td><td>@d.Description</td><td>@(d.IsActive ? "Activo" : "Inactivo")</td>
+                                    <td><PermissionGate Required="Core.PaymentMeans.Manage"><SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarSimple(fila.CardTerminalPublicId, fila.Code, fila.Description ?? "", fila.IsActive, adquirente: fila.CardAcquirerPublicId, serial: fila.Serial))" /></PermissionGate></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    break;
+                case Pestana.Denominaciones:
+                    <table class="data-grid">
+                        <thead><tr><th>Tipo</th><th class="numero">Valor</th><th class="numero">Orden</th><th>Vigencia</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _denominaciones.OrderBy(x => x.DisplayOrder))
+                            {
+                                var fila = d;
+                                <tr><td>@TextosDeVentas.TipoDeDenominacion(d.Kind)</td><td class="numero">@d.Value.ToString("N0")</td><td class="numero">@d.DisplayOrder</td>
+                                    <td>@d.ValidFrom.ToString("dd/MM/yyyy")@(d.ValidTo is { } h ? $" – {h:dd/MM/yyyy}" : "")</td><td>@(d.IsActive ? "Vigente" : "Retirada")</td>
+                                    <td><PermissionGate Required="Core.PaymentMeans.Manage"><SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Editar" OnClick="@(() => EditarDenominacion(fila))" /></PermissionGate></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                    break;
+            }
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+@* ---------------------------------------------------------------------------------- el medio --*@
+<SfDialog @bind-Visible="_mostrarMedio" Header="@(_medioId is null ? "Nuevo medio de pago" : "Editar medio de pago")" Width="860px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="medios-de-pago" @bind-Value="_m.Code" Obligatorio="true" Readonly="@(_medioId is not null)" EditandoPublicId="@_medioId" />
+                    <label class="campo">Nombre * <input class="e-input" @bind="_m.Name" maxlength="80" /></label>
+                    <label class="campo">Clase *
+                        <select class="e-input" disabled="@(_medioId is not null)" value="@_m.Class" @onchange="@(e => _m.Class = e.Value?.ToString() ?? "Cash")">
+                            @foreach (var (v, t) in TextosDeVentas.ClasesDeMedio) { <option value="@TextosDeVentas.NombreDeClaseDeMedio(v)">@t</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Tecla rápida <input class="e-input" @bind="_m.QuickKey" maxlength="10" placeholder="F1, 1, E…" /></label>
+                    <label class="campo">Orden <input class="e-input numero" type="number" @bind="_m.DisplayOrder" /></label>
+                    <label class="campo">Código DIAN del medio * <input class="e-input" @bind="_m.DianPaymentMeansCode" maxlength="3" /></label>
+                    @if (EsTarjeta)
+                    {
+                        <label class="campo">Franquicia
+                            <select class="e-input" value="@(_m.CardNetworkPublicId?.ToString() ?? "")" @onchange="@(e => _m.CardNetworkPublicId = Id(e.Value))">
+                                <option value="">—</option>
+                                @foreach (var f in _franquicias.Where(x => x.IsActive)) { <option value="@f.CardNetworkPublicId">@f.Code · @f.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Adquirente
+                            <select class="e-input" value="@(_m.CardAcquirerPublicId?.ToString() ?? "")" @onchange="@(e => _m.CardAcquirerPublicId = Id(e.Value))">
+                                <option value="">—</option>
+                                @foreach (var a in _adquirentes.Where(x => x.IsActive)) { <option value="@a.CardAcquirerPublicId">@a.Code · @a.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    @if (_m.Class is "Transfer" or "BankDeposit")
+                    {
+                        <label class="campo">Banco
+                            <select class="e-input" value="@(_m.BankPublicId?.ToString() ?? "")" @onchange="@(e => _m.BankPublicId = Id(e.Value))">
+                                <option value="">—</option>
+                                @foreach (var b in _bancos) { <option value="@b.PublicId">@b.Name</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Cuenta destino <input class="e-input" @bind="_m.DestinationAccountNumber" maxlength="30" /></label>
+                    }
+                </div>
+
+                <h4>Captura</h4>
+                <div class="form-grid">
+                    <label class="campo-check"><input type="checkbox" @bind="_m.RequiresReference" /> Pide referencia</label>
+                    @if (_m.RequiresReference)
+                    {
+                        <label class="campo">Tipo de referencia
+                            <select class="e-input" value="@(_m.ReferenceKind ?? "")" @onchange="@(e => _m.ReferenceKind = Texto(e.Value))">
+                                <option value="">—</option>
+                                @foreach (var (v, t) in TextosDeVentas.TiposDeReferencia) { <option value="@TextosDeVentas.NombreDeTipoDeReferencia(v)">@t</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Largo mínimo <input class="e-input numero" type="number" @bind="_m.ReferenceMinLength" /></label>
+                        <label class="campo">Largo máximo <input class="e-input numero" type="number" @bind="_m.ReferenceMaxLength" /></label>
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="_m.AllowsChange" /> Da vueltas</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_m.AllowsPartial" /> Admite pago parcial</label>
+                    <label class="campo-check"><input type="checkbox" checked="@(_m.UniqueReference == true)" @onchange="@(e => _m.UniqueReference = e.Value is true)" /> Referencia única (bono)</label>
+                </div>
+
+                <h4>Arqueo</h4>
+                <div class="form-grid">
+                    <label class="campo">Cómo se arquea
+                        <select class="e-input" value="@(_m.CountMethod ?? "")" @onchange="@(e => _m.CountMethod = Texto(e.Value))">
+                            <option value="">El de su clase</option>
+                            @foreach (var (v, t) in TextosDeVentas.FormasDeArqueo) { <option value="@TextosDeVentas.NombreDeFormaDeArqueo(v)">@t</option> }
+                        </select>
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_m.RequiresTerminalBatchAtClose" /> Exige el lote del datáfono al cerrar</label>
+                    <label class="campo">Tolerancia <input class="e-input numero" type="number" min="0" step="any" @bind="_m.ToleranceAmount" /></label>
+                    <label class="campo">Comisión esperada (fracción) <input class="e-input numero" type="number" min="0" step="any" @bind="_m.ExpectedCommissionRate" /></label>
+                    <label class="campo">Comisión fija <input class="e-input numero" type="number" min="0" step="any" @bind="_m.ExpectedCommissionFixed" /></label>
+                </div>
+
+                @if (EsCredito)
+                {
+                    <h4>Crédito</h4>
+                    <div class="form-grid">
+                        <label class="campo">Plazo (días) <input class="e-input numero" type="number" min="1" @bind="_credito.TermDays" /></label>
+                        <label class="campo">Plazo máximo (días) <input class="e-input numero" type="number" min="1" @bind="_credito.MaxTermDays" /></label>
+                        <label class="campo">Cuotas por defecto <input class="e-input numero" type="number" min="1" @bind="_credito.DefaultInstallments" /></label>
+                        <label class="campo">Cuotas máximas <input class="e-input numero" type="number" min="1" @bind="_credito.MaxInstallments" /></label>
+                        <label class="campo">Periodicidad (días) <input class="e-input numero" type="number" min="1" @bind="_credito.PeriodicityDays" /></label>
+                        <label class="campo">Línea sugerida <input class="e-input" @bind="_credito.SuggestedLineCode" maxlength="20" /></label>
+                    </div>
+                    <p class="texto-tenue">Hasta que Cartera responda en línea, el crédito es provisional: el POS lo acepta con los montos de quien vende y queda por validar.</p>
+                }
+
+                <h4>Dónde se ofrece</h4>
+                <div class="form-grid">
+                    <label class="campo-check"><input type="checkbox" @bind="_m.OfferedAtAllPoints" /> En todos los puntos</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_m.OfferedOnAllChannels" /> En todos los canales</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_m.OfferedForAllDocumentTypes" /> Para todos los tipos de venta</label>
+                </div>
+                @if (!_m.OfferedAtAllPoints)
+                {
+                    <p class="texto-apoyo">Puntos donde se ofrece:</p>
+                    <div class="form-grid">
+                        @foreach (var p in _puntos) { var id = p.PointOfSalePublicId; <label class="campo-check"><input type="checkbox" checked="@_dispPuntos.Contains(id)" @onchange="@(e => Marcar(_dispPuntos, id, e.Value))" /> @p.Code · @p.Name</label> }
+                    </div>
+                }
+                @if (!_m.OfferedOnAllChannels)
+                {
+                    <p class="texto-apoyo">Canales donde se ofrece:</p>
+                    <div class="form-grid">
+                        @foreach (var c in _canales) { var id = c.PublicId; <label class="campo-check"><input type="checkbox" checked="@_dispCanales.Contains(id)" @onchange="@(e => Marcar(_dispCanales, id, e.Value))" /> @c.Code · @c.Name</label> }
+                    </div>
+                }
+                @if (!_m.OfferedForAllDocumentTypes)
+                {
+                    <p class="texto-apoyo">Tipos de venta que lo admiten:</p>
+                    <div class="form-grid">
+                        @foreach (var t in _tiposDeVenta) { var id = t.PublicId; <label class="campo-check"><input type="checkbox" checked="@_dispTipos.Contains(id)" @onchange="@(e => Marcar(_dispTipos, id, e.Value))" /> @t.Code · @t.Name</label> }
+                    </div>
+                }
+
+                <div class="form-grid">
+                    <label class="campo">Vigente desde * <input type="date" class="e-input" value="@_m.ValidFrom.ToString("yyyy-MM-dd")" @onchange="@(e => _m.ValidFrom = Fecha(e.Value) ?? _m.ValidFrom)" /></label>
+                    <label class="campo">Hasta <input type="date" class="e-input" value="@(_m.ValidTo?.ToString("yyyy-MM-dd"))" @onchange="@(e => _m.ValidTo = Fecha(e.Value))" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_m.IsActive" /> Activo</label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_m.Notes" maxlength="500" /></label>
+                    @if (_medioId is not null)
+                    {
+                        <label class="campo campo-ancho">Motivo del cambio * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarMedioAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMedio = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* --------------------------------------------------------- franquicia, adquirente, datáfono, denominación --*@
+<SfDialog @bind-Visible="_mostrarSimple" Header="@Titulo(_pestana)" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_pestana == Pestana.Denominaciones)
+                    {
+                        <label class="campo">Tipo
+                            <select class="e-input" disabled="@(_simpleId is not null)" value="@_tipoDeDenominacion" @onchange="@(e => _tipoDeDenominacion = int.TryParse(e.Value?.ToString(), out var v) ? v : 1)">
+                                @foreach (var (v, t) in TextosDeVentas.TiposDeDenominacion) { <option value="@v">@t</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Valor * <input class="e-input numero" type="number" min="1" disabled="@(_simpleId is not null)" @bind="_valor" /></label>
+                        <label class="campo">Orden <input class="e-input numero" type="number" @bind="_orden" /></label>
+                        <label class="campo">Vigente desde <input type="date" class="e-input" disabled="@(_simpleId is not null)" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = Fecha(e.Value))" /></label>
+                        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = Fecha(e.Value))" /></label>
+                    }
+                    else
+                    {
+                        @if (_pestana == Pestana.Datafonos)
+                        {
+                            <label class="campo">Código * <input class="e-input" @bind="_codigo" maxlength="10" disabled="@(_simpleId is not null)" /></label>
+                        }
+                        else
+                        {
+                            <CampoCodigo Catalogo="@CatalogoDeCodigo" @bind-Value="_codigo" Obligatorio="true" Readonly="@(_simpleId is not null)" EditandoPublicId="@_simpleId" />
+                        }
+                        <label class="campo">@(_pestana == Pestana.Datafonos ? "Descripción" : "Nombre *") <input class="e-input" @bind="_nombre" maxlength="100" /></label>
+                        @if (_pestana == Pestana.Franquicias)
+                        {
+                            <label class="campo">Tipo de tarjeta
+                                <select class="e-input" value="@_tipoDeTarjeta" @onchange="@(e => _tipoDeTarjeta = int.TryParse(e.Value?.ToString(), out var v) ? v : 3)">
+                                    @foreach (var (v, t) in TextosDeVentas.TiposDeTarjeta) { <option value="@v">@t</option> }
+                                </select>
+                            </label>
+                        }
+                        @if (_pestana == Pestana.Datafonos)
+                        {
+                            <label class="campo">Adquirente *
+                                <select class="e-input" value="@(_adquirente?.ToString() ?? "")" @onchange="@(e => _adquirente = Id(e.Value))">
+                                    <option value="">Elija…</option>
+                                    @foreach (var a in _adquirentes) { <option value="@a.CardAcquirerPublicId">@a.Code · @a.Name</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Serial <input class="e-input" @bind="_serial" maxlength="40" /></label>
+                        }
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="_activo" /> Activo</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarSimpleAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarSimple = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private enum Pestana { Medios, Franquicias, Adquirentes, Datafonos, Denominaciones }
+
+    private sealed class BancoItem
+    {
+        public Guid PublicId { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveMedio = new(), _claveDisponibilidad = new(), _claveSimple = new();
+    private Pestana _pestana = Pestana.Medios;
+    private List<MedioDePagoDto> _medios = [];
+    private List<FranquiciaDto> _franquicias = [];
+    private List<AdquirenteDto> _adquirentes = [];
+    private List<DatafonoDto> _datafonos = [];
+    private List<DenominacionDto> _denominaciones = [];
+    private List<PuntoDeVentaDto> _puntos = [];
+    private List<CanalDeVentaDto> _canales = [];
+    private List<TipoDeDocumentoDto> _tiposDeVenta = [];
+    private List<BancoItem> _bancos = [];
+    private bool _mostrarPlantilla, _mostrarMedio, _mostrarSimple, _catalogosCargados;
+
+    // El medio
+    private Guid? _medioId;
+    private MedioDePagoRequest _m = new();
+    private CreditoForm _credito = new();
+    private string? _motivo;
+    private HashSet<Guid> _dispPuntos = [], _dispCanales = [], _dispTipos = [];
+
+    // Los catálogos simples
+    private Guid? _simpleId, _adquirente;
+    private string? _codigo, _nombre, _serial;
+    private bool _activo = true;
+    private int _tipoDeTarjeta = 3, _tipoDeDenominacion = 1;
+    private decimal _valor;
+    private short _orden;
+    private DateOnly? _desde, _hasta;
+
+    private sealed class CreditoForm
+    {
+        public short? TermDays { get; set; }
+        public short? MaxTermDays { get; set; }
+        public short? MaxInstallments { get; set; }
+        public short? DefaultInstallments { get; set; }
+        public short? PeriodicityDays { get; set; }
+        public string? SuggestedLineCode { get; set; }
+    }
+
+    private bool EsTarjeta => _m.Class is "CreditCard" or "DebitCard";
+    private bool EsCredito => _m.Class is "AssociateCredit" or "CustomerCredit";
+
+    private string TextoNuevo => _pestana switch
+    {
+        Pestana.Medios => "Nuevo medio",
+        Pestana.Franquicias => "Nueva franquicia",
+        Pestana.Adquirentes => "Nuevo adquirente",
+        Pestana.Datafonos => "Nuevo datáfono",
+        _ => "Nueva denominación",
+    };
+
+    private string CatalogoDeCodigo => _pestana switch
+    {
+        Pestana.Franquicias => "franquicias",
+        _ => "adquirentes",
+    };
+
+    private static string Titulo(Pestana p) => p switch
+    {
+        Pestana.Medios => "Medios",
+        Pestana.Franquicias => "Franquicias",
+        Pestana.Adquirentes => "Adquirentes",
+        Pestana.Datafonos => "Datáfonos de cobro",
+        _ => "Denominaciones",
+    };
+
+    protected override async Task OnInitializedAsync() => await CargarPestanaAsync();
+
+    private async Task CambiarPestanaAsync(Pestana p)
+    {
+        _pestana = p;
+        _mostrarPlantilla = false;
+        await CargarPestanaAsync();
+    }
+
+    private async Task CargarPestanaAsync()
+    {
+        using var carga = _carga.Iniciar();
+        switch (_pestana)
+        {
+            case Pestana.Medios:
+                _medios = await Lista(await Medios.ListarAsync(), "los medios de pago");
+                await CatalogosAsync();
+                break;
+            case Pestana.Franquicias:
+                _franquicias = await Lista(await Medios.FranquiciasAsync(), "las franquicias");
+                break;
+            case Pestana.Adquirentes:
+                _adquirentes = await Lista(await Medios.AdquirentesAsync(), "los adquirentes");
+                break;
+            case Pestana.Datafonos:
+                _datafonos = await Lista(await Medios.DatafonosAsync(), "los datáfonos");
+                _adquirentes = await Lista(await Medios.AdquirentesAsync(), "los adquirentes");
+                break;
+            case Pestana.Denominaciones:
+                _denominaciones = await Lista(await Medios.DenominacionesAsync(), "las denominaciones");
+                break;
+        }
+    }
+
+    /// <summary>Lo que necesita el formulario del medio: franquicias, adquirentes, puntos, canales, tipos de venta y bancos.</summary>
+    private async Task CatalogosAsync()
+    {
+        if (_catalogosCargados) return;
+        _franquicias = await Lista(await Medios.FranquiciasAsync(), "las franquicias");
+        _adquirentes = await Lista(await Medios.AdquirentesAsync(), "los adquirentes");
+        _puntos = await Lista(await Ventas.ListarPuntosAsync(activos: true), "los puntos de venta");
+        _canales = await Lista(await Inventario.ListarCanalesAsync(), "los canales");
+        _tiposDeVenta = (await Lista(await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas), "los tipos de venta")).Where(t => t.IsActive).ToList();
+        try
+        {
+            _bancos = await Http.GetListAsync<BancoItem>("/api/core/banks?pageSize=500") ?? [];
+        }
+        catch (HttpRequestException ex)
+        {
+            _bancos = [];
+            await Notification.WarningAsync($"No se pudieron consultar los bancos: {ex.Message}");
+        }
+        _catalogosCargados = true;
+    }
+
+    private async Task<List<T>> Lista<T>(ResultadoDeInventario<IReadOnlyList<T>> r, string que)
+    {
+        if (r.IsSuccess) return [.. r.Value ?? []];
+        await Notification.ErrorAsync(r.ErrorMessage ?? $"No se pudieron consultar {que}.");
+        return [];
+    }
+
+    private string Donde(MedioDePagoDto m)
+    {
+        if (m.OfferedAtAllPoints && m.OfferedOnAllChannels && m.OfferedForAllDocumentTypes) return "En todo";
+        var partes = new List<string>();
+        if (!m.OfferedAtAllPoints) partes.Add("puntos elegidos");
+        if (!m.OfferedOnAllChannels) partes.Add("canales elegidos");
+        if (!m.OfferedForAllDocumentTypes) partes.Add("tipos elegidos");
+        return "Sólo en " + string.Join(", ", partes);
+    }
+
+    private void Nuevo()
+    {
+        if (_pestana == Pestana.Medios)
+        {
+            _medioId = null;
+            _m = new MedioDePagoRequest { ValidFrom = DateOnly.FromDateTime(DateTime.Today), DianPaymentMeansCode = "10" };
+            _credito = new();
+            _motivo = null;
+            _dispPuntos = []; _dispCanales = []; _dispTipos = [];
+            _mostrarMedio = true;
+            return;
+        }
+        _simpleId = null; _codigo = null; _nombre = null; _serial = null; _adquirente = null; _activo = true; _tipoDeTarjeta = 3;
+        _tipoDeDenominacion = 1; _valor = 0m; _orden = 0; _desde = DateOnly.FromDateTime(DateTime.Today); _hasta = null;
+        _mostrarSimple = true;
+    }
+
+    private async Task EditarMedioAsync(MedioDePagoDto m)
+    {
+        using var carga = _carga.Iniciar();
+        await CatalogosAsync();
+        _medioId = m.PaymentMeansPublicId;
+        _m = new MedioDePagoRequest
+        {
+            Code = m.Code, Name = m.Name, DisplayOrder = m.DisplayOrder, QuickKey = m.QuickKey, Class = TextosDeVentas.NombreDeClaseDeMedio(m.Class),
+            CardNetworkPublicId = m.CardNetworkPublicId, CardAcquirerPublicId = m.CardAcquirerPublicId, BankPublicId = m.BankPublicId,
+            DestinationAccountNumber = m.DestinationAccountNumber, DestinationAccountType = m.DestinationAccountType, RequiresReference = m.RequiresReference,
+            ReferenceKind = m.ReferenceKind is { } rk ? TextosDeVentas.NombreDeTipoDeReferencia(rk) : null, ReferenceMinLength = m.ReferenceMinLength,
+            ReferenceMaxLength = m.ReferenceMaxLength, AllowsChange = m.AllowsChange, AllowsPartial = m.AllowsPartial, UniqueReference = m.UniqueReference,
+            CountMethod = TextosDeVentas.NombreDeFormaDeArqueo(m.CountMethod), RequiresTerminalBatchAtClose = m.RequiresTerminalBatchAtClose,
+            ToleranceAmount = m.ToleranceAmount, ExpectedCommissionRate = m.ExpectedCommissionRate, ExpectedCommissionFixed = m.ExpectedCommissionFixed,
+            DianPaymentMeansCode = m.DianPaymentMeansCode, OfferedAtAllPoints = m.OfferedAtAllPoints, OfferedOnAllChannels = m.OfferedOnAllChannels,
+            OfferedForAllDocumentTypes = m.OfferedForAllDocumentTypes, IsActive = m.IsActive, ValidFrom = m.ValidFrom, ValidTo = m.ValidTo, Notes = m.Notes,
+        };
+        var c = m.CreditDefaults;
+        _credito = new CreditoForm
+        {
+            TermDays = c?.TermDays, MaxTermDays = c?.MaxTermDays, MaxInstallments = c?.MaxInstallments, DefaultInstallments = c?.DefaultInstallments,
+            PeriodicityDays = c?.PeriodicityDays, SuggestedLineCode = c?.SuggestedLineCode,
+        };
+        _motivo = null;
+        var disp = await Medios.DisponibilidadAsync(m.PaymentMeansPublicId);
+        _dispPuntos = disp.IsSuccess ? [.. disp.Value!.PointOfSalePublicIds] : [];
+        _dispCanales = disp.IsSuccess ? [.. disp.Value!.SalesChannelPublicIds] : [];
+        _dispTipos = disp.IsSuccess ? [.. disp.Value!.DocumentTypePublicIds] : [];
+        _mostrarMedio = true;
+    }
+
+    private async Task GuardarMedioAsync()
+    {
+        if (_medioId is not null && string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo del cambio."); return; }
+        if (EsCredito)
+        {
+            if (_credito.TermDays is not > 0 || _credito.MaxInstallments is not > 0 || _credito.PeriodicityDays is not > 0)
+            {
+                await Notification.WarningAsync("El crédito necesita plazo, cuotas máximas y periodicidad.");
+                return;
+            }
+            _m.CreditDefaults = new CreditoPorDefectoRequest(_credito.TermDays.Value, _credito.MaxInstallments.Value, _credito.PeriodicityDays.Value,
+                string.IsNullOrWhiteSpace(_credito.SuggestedLineCode) ? null : _credito.SuggestedLineCode.Trim(), _credito.MaxTermDays, _credito.DefaultInstallments);
+        }
+        else _m.CreditDefaults = null;
+        if (!EsTarjeta) { _m.CardNetworkPublicId = null; _m.CardAcquirerPublicId = null; }
+
+        using var guardado = _guardado.Iniciar();
+        var r = await Medios.GuardarAsync(_medioId, _m, _motivo, _claveMedio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el medio."); return; }
+
+        var conjuntos = new DisponibilidadRequest(
+            _m.OfferedAtAllPoints ? [] : [.. _dispPuntos], _m.OfferedOnAllChannels ? [] : [.. _dispCanales], _m.OfferedForAllDocumentTypes ? [] : [.. _dispTipos]);
+        if (!_m.OfferedAtAllPoints || !_m.OfferedOnAllChannels || !_m.OfferedForAllDocumentTypes || _medioId is not null)
+        {
+            var d = await Medios.FijarDisponibilidadAsync(r.Value, conjuntos, _claveDisponibilidad);
+            if (!d.IsSuccess) await Notification.WarningAsync(d.ErrorMessage ?? "El medio se guardó, pero no dónde se ofrece.");
+        }
+        _mostrarMedio = false;
+        await Notification.SuccessAsync("Medio de pago guardado.");
+        await CargarPestanaAsync();
+    }
+
+    private void EditarSimple(Guid id, string codigo, string nombre, bool activo, int tipo = 3, Guid? adquirente = null, string? serial = null)
+    {
+        _simpleId = id; _codigo = codigo; _nombre = nombre; _activo = activo; _tipoDeTarjeta = tipo; _adquirente = adquirente; _serial = serial;
+        _mostrarSimple = true;
+    }
+
+    private void EditarDenominacion(DenominacionDto d)
+    {
+        _simpleId = d.CashDenominationPublicId; _tipoDeDenominacion = d.Kind; _valor = d.Value; _orden = d.DisplayOrder; _desde = d.ValidFrom; _hasta = d.ValidTo;
+        _activo = d.IsActive;
+        _mostrarSimple = true;
+    }
+
+    private async Task GuardarSimpleAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        (bool Ok, string? Error) r = _pestana switch
+        {
+            Pestana.Franquicias => Res(await Medios.GuardarFranquiciaAsync(_simpleId,
+                new FranquiciaRequest(_codigo, _nombre ?? "", TextosDeVentas.NombreDeTipoDeTarjeta(_tipoDeTarjeta), _activo), _claveSimple)),
+            Pestana.Adquirentes => Res(await Medios.GuardarAdquirenteAsync(_simpleId, new AdquirenteRequest(_codigo, _nombre ?? "", null, _activo), _claveSimple)),
+            Pestana.Datafonos => _adquirente is { } a
+                ? Res(await Medios.GuardarDatafonoAsync(_simpleId, new DatafonoRequest(_codigo, a, Texto(_serial), Texto(_nombre), _activo), _claveSimple))
+                : (false, "Elija el adquirente del datáfono."),
+            _ => Res(await Medios.GuardarDenominacionAsync(_simpleId, new DenominacionRequest(TextosDeVentas.NombreDeTipoDeDenominacion(_tipoDeDenominacion), _valor,
+                _desde, _hasta, _orden, _activo, null), _claveSimple)),
+        };
+        if (!r.Ok) { await Notification.ErrorAsync(r.Error ?? "No se pudo guardar."); return; }
+        _mostrarSimple = false;
+        await Notification.SuccessAsync("Guardado.");
+        await CargarPestanaAsync();
+    }
+
+    private static (bool, string?) Res<T>(ResultadoDeInventario<T> r) => (r.IsSuccess, r.ErrorMessage);
+
+    private static void Marcar(HashSet<Guid> conjunto, Guid id, object? valor)
+    {
+        if (valor is true) conjunto.Add(id);
+        else conjunto.Remove(id);
+    }
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+
+    private static string? Texto(object? valor) => string.IsNullOrWhiteSpace(valor?.ToString()) ? null : valor.ToString()!.Trim();
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

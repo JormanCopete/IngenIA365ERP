@@ -7,7 +7,7 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Documents;
 /// documentos diarios de 10 líneas quedan más de cien años antes del tope. La cantidad va siempre positiva (el signo
 /// lo pone la clase). Al confirmar sólo se escriben <see cref="UnitCost"/>/<see cref="TotalCost"/> de las salidas y la
 /// <see cref="LocationId"/> por defecto, en la misma transacción; después la línea es tan fija como su documento
-/// (lo hace cumplir <c>ApplicationDbContext.SaveChangesAsync</c>). <c>ListPrice</c>/<c>PriceListId</c> los agrega I3.
+/// (lo hace cumplir <c>ApplicationDbContext.SaveChangesAsync</c>). <c>ListPrice</c>/<c>PriceListId</c> los agregó I3 (T577).
 /// </summary>
 public class InventoryDocumentLine : AuditableEntity
 {
@@ -33,6 +33,12 @@ public class InventoryDocumentLine : AuditableEntity
     public decimal RoundingQuantity { get; set; }
 
     public decimal UnitPrice { get; set; }
+
+    /// <summary>Precio de la lista aplicada, tal como está en la lista (I3, T577; FR-053).</summary>
+    public decimal? ListPrice { get; set; }
+
+    /// <summary><c>INV_PriceLists</c>: la lista que resolvió <c>ResolutorDeListaDePrecios</c> (I3).</summary>
+    public int? PriceListId { get; set; }
 
     /// <summary>Copia de <c>INV_PriceLists.IncludesTaxes</c> de la lista aplicada; se usa desde I3.</summary>
     public bool ListPriceIncludesTaxes { get; set; }

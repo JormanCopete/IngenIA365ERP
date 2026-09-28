@@ -29,7 +29,9 @@ public sealed record SaveInventoryDraftRequest(
     Guid? SupplierPersonPublicId = null,
     SupplierDocumentRequest? Supplier = null,
     Guid? SupplierInvoicePublicId = null,
-    string? NoteKind = null)
+    string? NoteKind = null,
+    IngenIA365ERP.Application.Inventory.Sales.DatosDeVentaDelBorrador? Sales = null,
+    IngenIA365ERP.Application.Inventory.Cash.DatosDeMovimientoDeCaja? CashMovement = null)
 {
     /// <summary>La contraparte: la del ciclo común o, en compras, el proveedor (<c>supplierPersonPublicId</c>, api.md §14).</summary>
     public Guid? Contraparte => CounterpartyPersonPublicId ?? SupplierPersonPublicId;

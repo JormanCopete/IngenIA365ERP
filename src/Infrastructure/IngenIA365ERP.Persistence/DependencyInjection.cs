@@ -137,6 +137,10 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         // Feature 012 (T15, T138): el cerrojo pesimista de la confirmacion, con el SQL de cada motor sobre el propio contexto.
         services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
+        // Feature 012 (I3, T597): el candado por clave (ambito de una lista de precios, rol de un tope) dentro de la transaccion.
+        services.AddScoped<Application.Inventory.Common.ICerrojoPorClave, Inventory.CerrojoPorClave>();
+        // Feature 012 (I3, T606): el toque de la sesion de caja antes del cerrojo del cobro (UPDATE ... WHERE Status = Open).
+        services.AddScoped<Application.Inventory.Common.IToqueDeSesionDeCaja, Inventory.ToqueDeSesionDeCaja>();
         // Feature 009 (FR-011): donde esta parametrizada una cuenta, recorriendo las tablas de siete modulos.
         services.AddScoped<Application.Accounting.Accounts.IAccountReferenceFinder, Services.AccountReferenceFinder>();
         services.AddScoped<TenantSchemaService>();
@@ -200,6 +204,11 @@ public static class DependencyInjection
         // Feature 012, entrega I2 (T485): el tipo de comprobante y el cruce por defecto de cada operación de Inventario (Order 84).
         // No hace nada hasta que la base tenga IntegracionContableDeInventario (T486), que crea su tabla.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.InventoryVoucherMappingsSeeder>();
+        // Feature 012, entrega I3 (T587): billetes y monedas (Order 85), el medio EFECTIVO (86) y la persona «Consumidor final» (87).
+        // No hacen nada hasta que la base tenga VentasYPuntoDeVenta (T586).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CashDenominationsSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DefaultPaymentMeansSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ConsumidorFinalSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.

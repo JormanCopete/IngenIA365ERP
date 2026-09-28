@@ -1,0 +1,733 @@
+@page "/pos"
+@layout PosLayout
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject IImpresionDeDocumentos Impresion
+@inject INotificationService Notification
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Punto de venta - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T640, T645; FR-019, FR-054, FR-058, FR-059, SC-004, SC-008; contracts/api.md §20.2–§20.3): la venta en el punto de
+   venta, sin ratón. El campo de lectura está siempre enfocado: Enter lee el código exacto (de barras, de empaque o de producto), «3*»
+   multiplica y un código desconocido abre la búsqueda. Cada lectura es UNA petición y la venta vive en el servidor desde la primera,
+   ligada a la sesión abierta del usuario, que se busca al arrancar. La caja del equipo se recuerda en localStorage (con try/catch; decide
+   el servidor). Tres pasos: cobrar (F10 abre el panel), confirmar (F10 otra vez) y entregar la tirilla. Un descuento sobre el tope o una
+   política dejan la venta esperando: se consulta cada 2 s o decide el aprobador presente. Un punto sin POS cobra en oficina (FR-058). *@
+<PermissionGate Required="Inventory.Pos.Sell" MostrarAviso="true">
+<div class="pos-barra">
+    <span class="pos-marca">Punto de venta</span>
+    <span class="pos-contexto">
+        @if (_sesion is { } s)
+        {
+            @($"{s.PointOfSale.Code} · {s.PointOfSale.Name} — caja {s.CashRegister.Code} — {s.Cashier.Name} — {s.OperatingDate:dd/MM/yyyy}")
+        }
+    </span>
+    @if (_venta?.Customer is { } cliente)
+    {
+        <span>Cliente: @cliente.Name</span>
+    }
+    @if (_venta?.Salesperson is { } vendedor)
+    {
+        <span>Vendedor: @vendedor.Name</span>
+    }
+    <a class="e-btn e-flat" href="/pos/sesiones">Caja</a>
+</div>
+
+<div class="pos-contenido">
+    <IndicadorDeCarga Cargando="@_arranque.Activa" Texto="Buscando su sesión de caja…">
+        @if (_sinPos)
+        {
+            <div class="aviso aviso-info">
+                <p>El punto @(_sesion?.PointOfSale.Name) no vende en el POS: cobra en oficina.</p>
+                <a class="e-btn e-primary" href="/ventas/documentos">Ir a las ventas de oficina</a>
+            </div>
+        }
+        else if (!_arranque.Activa && _sesion is null)
+        {
+            <div class="aviso aviso-alerta">
+                <p>No tiene una sesión de caja abierta. Abra la caja para vender.</p>
+                <a class="e-btn e-primary" href="/pos/sesiones">Abrir la caja</a>
+            </div>
+        }
+        else if (_sesion is not null)
+        {
+            @if (_avisoCaja is not null)
+            {
+                <p class="aviso aviso-info">@_avisoCaja</p>
+            }
+            <div class="pos-venta">
+                <div>
+                    <div class="pos-lectura">
+                        <label class="campo campo-ancho">
+                            @(_modo == Modo.Cobrando ? "Tecla del medio de pago" : "Lectura")
+                            @if (_multiplicador is { } x) { <span class="pos-multiplicador"> × @x.ToString("0.####")</span> }
+                            <input id="pos-lectura" class="e-input" autocomplete="off" @bind="_lectura" @bind:event="oninput" @onkeydown="@AlPulsarAsync"
+                                   disabled="@(_modo is Modo.Esperando)" placeholder="@(_modo == Modo.Cobrando ? "Tecla rápida del medio y Enter" : "Lea el código o escriba 3* y lea")" />
+                        </label>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…" Compacto="true">
+                        @if (_venta is { Lines.Count: > 0 } v)
+                        {
+                            <LineasDeVenta Lineas="@v.Lines" @bind-Elegida="_elegida" Ultima="@v.LastLine?.LinePublicId" />
+                        }
+                        else if (_modo is Modo.Vendiendo)
+                        {
+                            <p class="texto-tenue">Lea el primer producto para empezar la venta.</p>
+                        }
+                        @if (_venta?.Warnings is { Count: > 0 } avisos)
+                        {
+                            <ul class="aviso aviso-alerta">@foreach (var a in avisos) { <li>@a.Message</li> }</ul>
+                        }
+                        @if (_venta is { PendingApprovals.Count: > 0 } pendiente && _modo == Modo.Vendiendo)
+                        {
+                            <AprobacionEnCaja VentaId="@pendiente.DraftPublicId" Pendientes="@pendiente.PendingApprovals" Resuelta="@AprobacionResueltaAsync" />
+                        }
+                    </IndicadorDeCarga>
+                </div>
+
+                <div>
+                    @if (_modo == Modo.Entregada && _resultado is { } res)
+                    {
+                        <div class="pos-total">
+                            <div class="pos-renglon"><span>Venta</span><span>@res.Prefix@res.Number</span></div>
+                            <div class="pos-renglon"><span>Total</span><span class="pos-a-pagar">@res.Total.ToString("N0")</span></div>
+                            @if (res.Change > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@res.Change.ToString("N0")</span></div> }
+                        </div>
+                        @if (_tirilla is not null)
+                        {
+                            <TirillaDeVenta Tirilla="@_tirilla" />
+                        }
+                        else
+                        {
+                            <p class="aviso aviso-info">La venta quedó confirmada; su entrega espera la validación. Queda en «pendientes de entrega» de la caja.</p>
+                        }
+                        <div class="toolbar">
+                            @if (_tirilla is not null) { <SfButton CssClass="e-outline" OnClick="@ImprimirAsync">Imprimir</SfButton> }
+                            <SfButton CssClass="e-primary" OnClick="@NuevaVenta">Nueva venta (Enter)</SfButton>
+                        </div>
+                    }
+                    else if (_modo == Modo.Esperando && _resultado is { } espera)
+                    {
+                        <AprobacionEnCaja VentaId="@espera.DocumentPublicId" SolicitudDelDocumento="@espera.ApprovalRequestPublicId"
+                                          Pendientes="@(_venta?.PendingApprovals ?? [])" Resuelta="@CobroAprobadoAsync" />
+                    }
+                    else
+                    {
+                        <div class="pos-total">
+                            <div class="pos-renglon"><span>Subtotal</span><span>@(_venta?.Totals.Subtotal.ToString("N0") ?? "0")</span></div>
+                            <div class="pos-renglon"><span>Descuentos</span><span>@(_venta?.Totals.DiscountTotal.ToString("N0") ?? "0")</span></div>
+                            <div class="pos-renglon"><span>Impuestos</span><span>@(_venta?.Totals.TaxTotal.ToString("N0") ?? "0")</span></div>
+                            <div class="pos-renglon"><span>A pagar</span><span class="pos-a-pagar">@(_venta?.Totals.AmountDue.ToString("N0") ?? "0")</span></div>
+                        </div>
+                        @if (_modo == Modo.Cobrando && _venta is { } cobrar)
+                        {
+                            <PanelDeCobro @ref="_panel" Cobro="@_cobro" Medios="@cobrar.AvailablePaymentMeans" Cambio="@StateHasChanged"
+                                          Cliente="@(cobrar.Customer.IsFinalConsumer ? null : cobrar.Customer.PersonPublicId)" PuntoDeVenta="@_sesion?.PointOfSale.PointOfSalePublicId"
+                                          TipoDeDocumento="@cobrar.DocumentType.PublicId" Fecha="@cobrar.OperationDate" />
+                            <div class="toolbar">
+                                <SfButton CssClass="e-primary" Disabled="@(_trabajo.Activa || _cobro.Problema() is not null)" OnClick="@CobrarAsync">Confirmar (F10)</SfButton>
+                                <SfButton CssClass="e-outline" OnClick="@VolverAVender">Volver (Esc)</SfButton>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<AtajosDelPos />
+
+@* ------------------------------------------------------------------------------------ diálogos --*@
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@TituloDelDialogo" Width="620px" IsModal="true" ShowCloseIcon="true" Closed="@EnfocarLecturaAsync">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…">
+                @switch (_dialogo)
+                {
+                    case Dialogo.Buscar:
+                        <SelectorDeProducto Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" />
+                        break;
+                    case Dialogo.Cantidad:
+                        <label class="campo">Cantidad <input id="pos-dialogo" class="e-input numero" type="number" min="0" step="any" @bind="_cantidad" /></label>
+                        <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@CambiarCantidadAsync">Aplicar</SfButton></div>
+                        break;
+                    case Dialogo.Cliente:
+                        <ClienteDelPos Seleccionado="@_cliente" SeleccionadoChanged="@CambiarClienteAsync" />
+                        <label class="campo-check"><input type="checkbox" checked="@(_venta?.DocumentType.Role == TextosDeVentas.RolFacturaAPedido)" @onchange="@(e => CambiarRolAsync(e.Value is true))" /> El comprador pide factura</label>
+                        break;
+                    case Dialogo.Vendedor:
+                        <label class="campo">Vendedor
+                            <select class="e-input" @onchange="@(e => CambiarVendedorAsync(e.Value?.ToString()))">
+                                <option value="">Sin vendedor</option>
+                                @foreach (var v in _vendedores) { <option value="@v.SalespersonPublicId" selected="@(_venta?.Salesperson?.SalespersonPublicId == v.SalespersonPublicId)">@v.Person.Name</option> }
+                            </select>
+                        </label>
+                        break;
+                    case Dialogo.Descuento:
+                        <label class="campo-check"><input type="radio" name="alcance" checked="@_descuentoDeLinea" @onchange="@(() => _descuentoDeLinea = true)" /> A la línea elegida</label>
+                        <label class="campo-check"><input type="radio" name="alcance" checked="@(!_descuentoDeLinea)" @onchange="@(() => _descuentoDeLinea = false)" /> Al total</label>
+                        <div class="form-grid">
+                            <label class="campo">Porcentaje <input id="pos-dialogo" class="e-input numero" type="number" min="0" max="100" step="any" @bind="_porcentaje" /></label>
+                            <label class="campo">o valor <input class="e-input numero" type="number" min="0" step="any" @bind="_valorDescuento" /></label>
+                            @if (_descuentoDeLinea)
+                            {
+                                <label class="campo">Precio digitado <input class="e-input numero" type="number" min="0" step="any" @bind="_precio" /></label>
+                                <label class="campo-check"><input type="checkbox" @bind="_volverAlPrecioDeLista" /> Volver al precio de la lista</label>
+                            }
+                        </div>
+                        <p class="texto-tenue">Sobre su tope, la línea queda esperando la aprobación de alguien con un tope suficiente.</p>
+                        <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@AplicarDescuentoAsync">Aplicar</SfButton></div>
+                        break;
+                    case Dialogo.Suspender:
+                        <label class="campo campo-ancho">Rótulo <input id="pos-dialogo" class="e-input" @bind="_rotulo" maxlength="60" placeholder="Para reconocerla al recuperarla" /></label>
+                        <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@SuspenderAsync">Suspender</SfButton></div>
+                        break;
+                    case Dialogo.Recuperar:
+                        @if (_suspendidas.Count == 0)
+                        {
+                            <p class="texto-tenue">No hay ventas suspendidas en este punto.</p>
+                        }
+                        <table class="data-grid">
+                            <tbody>
+                                @foreach (var s in _suspendidas)
+                                {
+                                    var suspendida = s;
+                                    <tr><td>@s.Suspended?.Label</td><td>@s.Suspended?.SuspendedByName</td><td>@s.Suspended?.SuspendedAt?.ToLocalTime().ToString("HH:mm")</td>
+                                        <td class="numero">@s.Lines línea(s) · @s.Total.ToString("N0")</td>
+                                        <td><SfButton CssClass="e-primary" OnClick="@(() => RecuperarAsync(suspendida.DraftPublicId))">Recuperar</SfButton></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                        break;
+                    case Dialogo.Descartar:
+                        <label class="campo campo-ancho">Motivo * <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" /></label>
+                        <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_motivo)" OnClick="@DescartarAsync">Descartar la venta</SfButton></div>
+                        break;
+                    case Dialogo.Reimprimir:
+                        <label class="campo campo-ancho">Motivo de la copia <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" /></label>
+                        <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@ReimprimirAsync">Reimprimir (COPIA)</SfButton></div>
+                        break;
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private enum Modo { Vendiendo, Cobrando, Esperando, Entregada }
+
+    private enum Dialogo { Ninguno, Buscar, Cantidad, Cliente, Vendedor, Descuento, Suspender, Recuperar, Descartar, Reimprimir }
+
+    private readonly EstadoDeCarga _arranque = new(), _trabajo = new();
+    private readonly ClaveDeOperacion _claveAbrir = new(), _claveLectura = new(), _claveCabecera = new(), _claveLinea = new(), _claveSuspender = new(),
+        _claveRecuperar = new(), _claveDescartar = new(), _claveCobro = new(), _claveEntrega = new(), _claveReimpresion = new();
+    private DotNetObjectReference<PuntoDeVenta>? _referencia;
+    private SesionDeCajaDto? _sesion;
+    private CajaDto? _caja;
+    private VentaDelPosDto? _venta;
+    private ResultadoDeCobroDto? _resultado;
+    private TirillaDto? _tirilla;
+    private PanelDeCobro? _panel;
+    private CobroDelPos _cobro = new(0m);
+    private Modo _modo = Modo.Vendiendo;
+    private Dialogo _dialogo = Dialogo.Ninguno;
+    private bool _mostrarDialogo, _sinPos, _montado, _descuentoDeLinea = true, _volverAlPrecioDeLista;
+    private string? _lectura, _avisoCaja, _rotulo, _motivo;
+    private decimal? _multiplicador, _cantidad, _porcentaje, _valorDescuento, _precio;
+    private Guid? _elegida, _ultimoDocumento;
+    private PersonSearchPicker.PersonSearchItem? _cliente;
+    private List<VendedorDto> _vendedores = [];
+    private List<ResumenDeVentaPosDto> _suspendidas = [];
+
+    private string TituloDelDialogo => _dialogo switch
+    {
+        Dialogo.Buscar => "Buscar producto (F2)",
+        Dialogo.Cantidad => "Cantidad (F3)",
+        Dialogo.Cliente => "Cliente (F4)",
+        Dialogo.Vendedor => "Vendedor (F6)",
+        Dialogo.Descuento => "Descuento (F7)",
+        Dialogo.Suspender => "Suspender la venta (F8)",
+        Dialogo.Recuperar => "Recuperar una venta (F9)",
+        Dialogo.Descartar => "Descartar la venta",
+        Dialogo.Reimprimir => "Reimprimir la última venta",
+        _ => "",
+    };
+
+    private Guid SesionId => _sesion?.CashSessionPublicId ?? Guid.Empty;
+
+    // ------------------------------------------------------------------------------------ arranque --
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _arranque.Iniciar();
+        var sesion = await Ventas.MiSesionAbiertaAsync();
+        if (!sesion.IsSuccess) { await Notification.ErrorAsync(sesion.ErrorMessage ?? "No se pudo consultar su sesión de caja."); return; }
+        _sesion = sesion.Value;
+        if (_sesion is null) return;
+        if (!_sesion.PointOfSale.PosEnabled) { _sinPos = true; return; }
+
+        var punto = await Ventas.ObtenerPuntoAsync(_sesion.PointOfSale.PointOfSalePublicId);
+        _caja = punto.IsSuccess ? punto.Value?.CashRegisters?.FirstOrDefault(c => c.CashRegisterPublicId == _sesion.CashRegister.PublicId) : null;
+
+        var borradores = await Ventas.VentasDelPosAsync(sesion: SesionId);
+        if (borradores.IsSuccess && borradores.Value?.FirstOrDefault(b => b.Suspended is null) is { } abierta)
+            await CargarVentaAsync(abierta.DraftPublicId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_sesion is null || _sinPos || _montado) return;
+        _montado = true;
+        _referencia = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("ingeniaPos.montar", _referencia, "pos-lectura");
+            await RecordarCajaAsync();
+        }
+        catch (JSException ex)
+        {
+            await Notification.WarningAsync($"El teclado del POS no se pudo preparar ({ex.Message}); use los botones y el campo de lectura.");
+        }
+    }
+
+    /// <summary>
+    /// La caja del equipo en localStorage: si la recordada no es la de la sesión, se avisa (decide el servidor: la sesión abierta del
+    /// usuario manda) y se recuerda la de la sesión.
+    /// </summary>
+    private async Task RecordarCajaAsync()
+    {
+        if (_sesion is null) return;
+        var recordada = await JS.InvokeAsync<string?>("ingeniaPos.leerCaja");
+        var actual = _sesion.CashRegister.PublicId.ToString();
+        if (!string.IsNullOrEmpty(recordada) && recordada != actual)
+        {
+            _avisoCaja = $"Este equipo tenía otra caja; su sesión abierta es de la caja {_sesion.CashRegister.Code} y es la que se usa.";
+            StateHasChanged();
+        }
+        await JS.InvokeAsync<bool>("ingeniaPos.guardarCaja", actual);
+    }
+
+    private async Task CargarVentaAsync(Guid id)
+    {
+        var r = await Ventas.ObtenerVentaAsync(id);
+        if (r.IsSuccess && r.Value is { } venta) Mostrar(venta);
+    }
+
+    private void Mostrar(VentaDelPosDto venta)
+    {
+        _venta = venta;
+        _elegida = venta.LastLine?.LinePublicId ?? venta.Lines.OrderBy(l => l.LineNumber).LastOrDefault()?.LinePublicId;
+        _cliente = venta.Customer is { IsFinalConsumer: false, PersonPublicId: { } p }
+            ? new PersonSearchPicker.PersonSearchItem { PublicId = p, FullName = venta.Customer.Name }
+            : null;
+    }
+
+    // --------------------------------------------------------------------------------- el teclado --
+
+    /// <summary>Lo que avisa pos.js: una tecla reservada.</summary>
+    [JSInvokable]
+    public Task Tecla(string tecla) => InvokeAsync(async () =>
+    {
+        if (_sesion is null || _sinPos) return;
+        if (_modo == Modo.Cobrando && _panel is not null && await _panel.TeclaRapidaAsync(tecla)) { StateHasChanged(); return; }
+        switch (tecla)
+        {
+            case "Escape": await EscapeAsync(); break;
+            case "F10":
+                if (_modo == Modo.Cobrando) await CobrarAsync();
+                else if (_modo == Modo.Vendiendo) await EmpezarACobrarAsync();
+                break;
+            case "F2": if (_modo == Modo.Vendiendo) await AbrirAsync(Dialogo.Buscar); break;
+            case "F3": if (_modo == Modo.Vendiendo && LineaElegida is { } l) { _cantidad = l.Quantity; await AbrirAsync(Dialogo.Cantidad); } break;
+            case "F4": if (_modo == Modo.Vendiendo && _venta is not null) await AbrirAsync(Dialogo.Cliente); break;
+            case "F6": if (_modo == Modo.Vendiendo && _venta is not null) { await VendedoresAsync(); await AbrirAsync(Dialogo.Vendedor); } break;
+            case "F7": if (_modo == Modo.Vendiendo && _venta is not null) { _porcentaje = null; _valorDescuento = null; _precio = null; _volverAlPrecioDeLista = false; _descuentoDeLinea = LineaElegida is not null; await AbrirAsync(Dialogo.Descuento); } break;
+            case "F8": if (_modo == Modo.Vendiendo && _venta is not null) { _rotulo = null; await AbrirAsync(Dialogo.Suspender); } break;
+            case "F9": if (_modo == Modo.Vendiendo && _venta is null) { await SuspendidasAsync(); await AbrirAsync(Dialogo.Recuperar); } break;
+            case "Delete": if (_modo == Modo.Vendiendo) await QuitarLineaAsync(); break;
+            case "Ctrl+Alt+M": Nav.NavigateTo("/pos/movimientos-de-caja"); break;
+            case "Ctrl+Alt+C": Nav.NavigateTo($"/pos/sesiones/{SesionId}/cierre"); break;
+            case "Ctrl+Alt+R": if (_ultimoDocumento is not null) { _motivo = null; await AbrirAsync(Dialogo.Reimprimir); } break;
+            case "Ctrl+Alt+D": if (_venta is not null && _modo == Modo.Vendiendo) { _motivo = null; await AbrirAsync(Dialogo.Descartar); } break;
+        }
+        StateHasChanged();
+    });
+
+    /// <summary>Lo que avisa pos.js: una ráfaga del lector que cayó fuera del campo de lectura.</summary>
+    [JSInvokable]
+    public Task Lector(string texto) => InvokeAsync(async () =>
+    {
+        if (_modo != Modo.Vendiendo || _mostrarDialogo) return;
+        _lectura = texto;
+        await LeerLoEscritoAsync();
+        StateHasChanged();
+    });
+
+    private LineaDelPosDto? LineaElegida => _venta?.Lines.FirstOrDefault(l => l.LinePublicId == _elegida);
+
+    private async Task AlPulsarAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "ArrowUp" || e.Key == "ArrowDown") { MoverEleccion(e.Key == "ArrowUp" ? -1 : 1); return; }
+        if (e.Key != "Enter") return;
+        if (_modo == Modo.Entregada) { NuevaVenta(); return; }
+        if (_modo == Modo.Cobrando)
+        {
+            var tecla = _lectura?.Trim();
+            _lectura = null;
+            if (!string.IsNullOrEmpty(tecla) && _panel is not null && !await _panel.TeclaRapidaAsync(tecla))
+                await Notification.WarningAsync($"«{tecla}» no es la tecla de ningún medio disponible.");
+            return;
+        }
+        await LeerLoEscritoAsync();
+    }
+
+    private void MoverEleccion(int paso)
+    {
+        if (_venta is not { Lines.Count: > 0 } v) return;
+        var lineas = v.Lines.OrderBy(l => l.LineNumber).ToList();
+        var i = lineas.FindIndex(l => l.LinePublicId == _elegida);
+        _elegida = lineas[Math.Clamp(i < 0 ? lineas.Count - 1 : i + paso, 0, lineas.Count - 1)].LinePublicId;
+    }
+
+    // ------------------------------------------------------------------------------------ vender --
+
+    private async Task LeerLoEscritoAsync()
+    {
+        var lectura = LecturaDelPos.Interpretar(_lectura).ConMultiplicador(_multiplicador);
+        _lectura = null;
+        if (lectura.Error is { } error) { await Notification.WarningAsync(error); return; }
+        if (lectura.EsSoloMultiplicador) { _multiplicador = lectura.Cantidad; return; }
+        if (lectura.Codigo is not { } codigo) return;
+        _multiplicador = null;
+        await LeerCodigoAsync(codigo, lectura.Cantidad);
+    }
+
+    private async Task LeerCodigoAsync(string codigo, decimal? cantidad)
+    {
+        using var trabajo = _trabajo.Iniciar();
+        var r = _venta is null
+            ? await Ventas.AbrirVentaAsync(new AbrirVentaRequest(SesionId, new PrimeraLecturaRequest(codigo, cantidad)), _claveAbrir)
+            : await Ventas.LeerAsync(_venta.DraftPublicId, new LecturaRequest(codigo, Quantity: cantidad), _claveLectura);
+        if (r.IsSuccess && r.Value is { } venta) { Mostrar(venta); return; }
+        switch (r.ErrorCode)
+        {
+            case "Inventory.Product.NotFound":
+                await Notification.WarningAsync($"«{codigo}» no es un código conocido: búsquelo.");
+                await AbrirAsync(Dialogo.Buscar);
+                break;
+            case "Inventory.Pos.NotEnabled":
+                _sinPos = true;
+                break;
+            default:
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el producto.");
+                break;
+        }
+    }
+
+    private async Task ProductoElegidoAsync(ProductoElegido elegido)
+    {
+        _mostrarDialogo = false;
+        var codigo = elegido.Empaque is not null ? elegido.Producto.MatchedBarcode ?? elegido.Producto.Code : elegido.Producto.Code;
+        var cantidad = _multiplicador;
+        _multiplicador = null;
+        await LeerCodigoAsync(codigo, cantidad);
+    }
+
+    private async Task CambiarCantidadAsync()
+    {
+        if (_venta is null || LineaElegida is not { } linea || _cantidad is not > 0) return;
+        await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(Quantity: _cantidad));
+    }
+
+    private async Task AplicarDescuentoAsync()
+    {
+        if (_venta is null) return;
+        var descuento = _porcentaje is > 0 ? new DescuentoRequest(Percent: _porcentaje / 100m) : _valorDescuento is > 0 ? new DescuentoRequest(Amount: _valorDescuento) : null;
+        if (_descuentoDeLinea && LineaElegida is { } linea)
+        {
+            await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(UnitPrice: _volverAlPrecioDeLista ? null : _precio, Discount: descuento,
+                ClearUnitPrice: _volverAlPrecioDeLista ? true : null));
+            return;
+        }
+        await CambiarCabeceraAsync(new CabeceraDeVentaRequest(DocumentDiscount: descuento ?? new DescuentoRequest(Percent: 0m)));
+    }
+
+    private async Task CambiarLineaAsync(Guid linea, LineaRequest request)
+    {
+        if (_venta is null) return;
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.CambiarLineaAsync(_venta.DraftPublicId, linea, request, _claveLinea);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar la línea."); return; }
+        Mostrar(r.Value);
+        _elegida = linea;
+        _mostrarDialogo = false;
+    }
+
+    private async Task QuitarLineaAsync()
+    {
+        if (_venta is null || LineaElegida is not { } linea) return;
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.QuitarLineaAsync(_venta.DraftPublicId, linea.LinePublicId, _claveLinea);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo quitar la línea."); return; }
+        Mostrar(r.Value);
+    }
+
+    private async Task<bool> CambiarCabeceraAsync(CabeceraDeVentaRequest request)
+    {
+        if (_venta is null) return false;
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.CambiarCabeceraAsync(_venta.DraftPublicId, request, _claveCabecera);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar la venta."); return false; }
+        Mostrar(r.Value);
+        _mostrarDialogo = false;
+        return true;
+    }
+
+    private Task CambiarClienteAsync(PersonSearchPicker.PersonSearchItem? persona) =>
+        CambiarCabeceraAsync(persona is null ? new CabeceraDeVentaRequest(ClearCustomer: true) : new CabeceraDeVentaRequest(CustomerPersonPublicId: persona.PublicId));
+
+    private Task CambiarRolAsync(bool factura) =>
+        CambiarCabeceraAsync(new CabeceraDeVentaRequest(Role: TextosDeVentas.NombreDeRolDeCaja(factura ? TextosDeVentas.RolFacturaAPedido : TextosDeVentas.RolVentaPos)));
+
+    private Task CambiarVendedorAsync(string? valor) =>
+        CambiarCabeceraAsync(Guid.TryParse(valor, out var v) ? new CabeceraDeVentaRequest(SalespersonPublicId: v) : new CabeceraDeVentaRequest(ClearSalesperson: true));
+
+    private async Task VendedoresAsync()
+    {
+        if (_vendedores.Count > 0) return;
+        var r = await Inventario.VendedoresAsync(null, conRetirados: false, 1, 200);
+        _vendedores = r.IsSuccess ? [.. r.Value!.Items.Where(v => v.IsActive)] : [];
+        if (!r.IsSuccess) await Notification.WarningAsync(r.ErrorMessage ?? "No se pudieron consultar los vendedores.");
+    }
+
+    private async Task SuspendidasAsync()
+    {
+        if (_sesion is null) return;
+        var r = await Ventas.VentasDelPosAsync(punto: _sesion.PointOfSale.PointOfSalePublicId, suspendidas: true);
+        _suspendidas = r.IsSuccess ? [.. r.Value ?? []] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas suspendidas.");
+    }
+
+    private async Task SuspenderAsync()
+    {
+        if (_venta is null) return;
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.SuspenderAsync(_venta.DraftPublicId, string.IsNullOrWhiteSpace(_rotulo) ? null : _rotulo.Trim(), _claveSuspender);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo suspender la venta."); return; }
+        _mostrarDialogo = false;
+        await Notification.InfoAsync("Venta suspendida: se recupera con F9 en cualquier caja del punto.");
+        NuevaVenta();
+    }
+
+    private async Task RecuperarAsync(Guid id)
+    {
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.RecuperarAsync(id, SesionId, _claveRecuperar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo recuperar la venta."); return; }
+        _mostrarDialogo = false;
+        Mostrar(r.Value);
+    }
+
+    private async Task DescartarAsync()
+    {
+        if (_venta is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.DescartarVentaAsync(_venta.DraftPublicId, _motivo.Trim(), _claveDescartar);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar la venta."); return; }
+        _mostrarDialogo = false;
+        NuevaVenta();
+    }
+
+    private async Task AprobacionResueltaAsync(VentaDelPosDto venta)
+    {
+        Mostrar(venta);
+        await Notification.InfoAsync("Los descuentos pendientes ya se decidieron.");
+        StateHasChanged();
+    }
+
+    // ------------------------------------------------------------------------------------ cobrar --
+
+    private async Task EmpezarACobrarAsync()
+    {
+        if (_venta is not { Lines.Count: > 0 } venta) return;
+        if (venta.PendingApprovals.Any(p => p.Status == "Pending")) { await Notification.WarningAsync("Hay descuentos esperando aprobación."); return; }
+        _cobro = new CobroDelPos(venta.Totals.AmountDue);
+        _modo = Modo.Cobrando;
+        await ReservarTeclasRapidasAsync(venta.AvailablePaymentMeans.Select(m => m.QuickKey).OfType<string>().Where(k => k.Length is 2 or 3 && k[0] == 'F'));
+    }
+
+    private async Task ReservarTeclasRapidasAsync(IEnumerable<string> teclas)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("ingeniaPos.reservar", teclas.ToArray());
+        }
+        catch (JSException ex)
+        {
+            await Notification.WarningAsync($"Las teclas rápidas no quedaron reservadas ({ex.Message}); use los botones de los medios.");
+        }
+    }
+
+    private void VolverAVender()
+    {
+        _modo = Modo.Vendiendo;
+        _ = ReservarTeclasRapidasAsync([]);
+    }
+
+    private async Task CobrarAsync()
+    {
+        if (_venta is null || _modo != Modo.Cobrando) return;
+        if (_cobro.Problema() is { } problema) { await Notification.WarningAsync(problema); return; }
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.CobrarAsync(_venta.DraftPublicId, new CobroRequest(_cobro.Pedido(SesionId), _venta.Totals.AmountDue, null), _claveCobro);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            switch (r.ErrorCode)
+            {
+                case "Inventory.Document.TotalChanged":
+                    await Notification.WarningAsync("El total cambió: revise la venta y cobre de nuevo.");
+                    await CargarVentaAsync(_venta.DraftPublicId);
+                    VolverAVender();
+                    break;
+                case "Inventory.Discount.ApprovalPending":
+                    await Notification.WarningAsync(r.ErrorMessage ?? "Hay descuentos esperando aprobación.");
+                    await CargarVentaAsync(_venta.DraftPublicId);
+                    VolverAVender();
+                    break;
+                default:
+                    await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cobrar.");
+                    break;
+            }
+            return;
+        }
+        _resultado = r.Value;
+        _ultimoDocumento = r.Value.DocumentPublicId;
+        _ = ReservarTeclasRapidasAsync([]);
+        foreach (var aviso in r.Value.Warnings) await Notification.InfoAsync(aviso.Message);
+        if (r.Value.Status == 1)
+        {
+            _modo = Modo.Esperando;
+            return;
+        }
+        await EntregarAsync(r.Value.Ticket);
+    }
+
+    private async Task CobroAprobadoAsync(VentaDelPosDto venta)
+    {
+        if (venta.Status == 2)
+        {
+            using var trabajo = _trabajo.Iniciar();
+            var entrega = await Ventas.EntregarAsync(venta.DraftPublicId, new EntregaRequest(TextosDeVentas.NombreDeFormato(FormatoDeTirilla)), _claveEntrega);
+            if (!entrega.IsSuccess) await Notification.WarningAsync(entrega.ErrorMessage ?? "La venta quedó confirmada; la tirilla se entrega desde las ventas pendientes de entrega.");
+            await EntregarAsync(entrega.Value?.Ticket);
+        }
+        else
+        {
+            Mostrar(venta);
+            _modo = Modo.Vendiendo;
+            await Notification.WarningAsync("La aprobación se rechazó: la venta volvió a borrador para corregirla.");
+        }
+        StateHasChanged();
+    }
+
+    private async Task EntregarAsync(TirillaDto? tirilla)
+    {
+        _tirilla = tirilla;
+        _modo = Modo.Entregada;
+        _venta = null;
+        if (tirilla is not null) await ImprimirAsync();
+    }
+
+    private int FormatoDeTirilla => _caja?.PrintFormat is 58 ? 58 : 80;
+
+    private async Task ImprimirAsync()
+    {
+        if (_tirilla is null) return;
+        if (!await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(_tirilla), $"{_tirilla.Document.ClassLabel} {_tirilla.Document.Prefix}{_tirilla.Document.Number}"))
+            await Notification.WarningAsync("No se pudo abrir la impresión en este equipo: la tirilla está en pantalla.");
+    }
+
+    private async Task ReimprimirAsync()
+    {
+        if (_ultimoDocumento is not { } documento) return;
+        using var trabajo = _trabajo.Iniciar();
+        var r = await Ventas.ReimprimirAsync(documento, new EntregaRequest(TextosDeVentas.NombreDeFormato(FormatoDeTirilla), Reason: string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim()),
+            _claveReimpresion);
+        if (!r.IsSuccess || r.Value?.Ticket is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reimprimir."); return; }
+        _mostrarDialogo = false;
+        _tirilla = r.Value.Ticket;
+        await ImprimirAsync();
+    }
+
+    private void NuevaVenta()
+    {
+        _venta = null;
+        _resultado = null;
+        _tirilla = null;
+        _cliente = null;
+        _modo = Modo.Vendiendo;
+        _ = EnfocarLecturaAsync();
+    }
+
+    // --------------------------------------------------------------------------------- diálogos --
+
+    private async Task AbrirAsync(Dialogo dialogo)
+    {
+        _dialogo = dialogo;
+        _mostrarDialogo = true;
+        StateHasChanged();
+        await Task.Delay(50);
+        await Enfocar("pos-dialogo");
+    }
+
+    private async Task EscapeAsync()
+    {
+        if (_mostrarDialogo) { _mostrarDialogo = false; return; }
+        if (_modo == Modo.Cobrando) { VolverAVender(); return; }
+        if (_modo == Modo.Entregada) { NuevaVenta(); return; }
+        _multiplicador = null;
+        _lectura = null;
+        await EnfocarLecturaAsync();
+    }
+
+    private Task EnfocarLecturaAsync() => Enfocar("pos-lectura");
+
+    private async Task Enfocar(string id)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("ingeniaPos.enfocar", id);
+        }
+        catch (JSException ex)
+        {
+            // Sin pos.js no hay a dónde mover el foco; el campo se puede tocar igual.
+            _avisoCaja ??= $"El foco automático no está disponible ({ex.Message}).";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_montado)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("ingeniaPos.desmontar");
+            }
+            catch (JSDisconnectedException)
+            {
+                // El circuito ya se cerró: no queda teclado que desmontar.
+                _montado = false;
+            }
+        }
+        _referencia?.Dispose();
+    }
+}

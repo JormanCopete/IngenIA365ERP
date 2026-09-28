@@ -125,6 +125,27 @@ public class AutorizacionAlCrearTests
     }
 
     [Fact]
+    public async Task Sin_politica_publicada_un_alta_levanta_la_alerta_una_vez()
+    {
+        // Feature 012, I3 (T616, T46): la alerta Personas.SinPoliticaDeDatos a quien registra consentimientos, una por alta.
+        var d = new PersonasTestData();
+        var alertas = new IngenIA365ERP.Application.Tests.Inventory.Purchasing.AlertasDePrueba();
+        var altas = new IngenIA365ERP.Application.Core.People.Services.AltaConAutorizacion(d.Db, d.Personas,
+            new AutorizacionDeDatos(d.Db, d.User, d.Clock, d.Auditoria, alertas));
+
+        var r = await new CreatePersonCommandHandler(altas).Handle(
+            Alta(new AutorizacionAlCrear(DecisionDeAutorizacion.Accepted, null, "Pos")), CancellationToken.None);
+        var sinAutorizacion = await new CreatePersonCommandHandler(altas).Handle(Alta(null, "1023456790"), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        sinAutorizacion.IsSuccess.Should().BeTrue(sinAutorizacion.Error.Message);
+        var alerta = alertas.Levantadas.Should().ContainSingle("sólo el alta con autorización y sin política la levanta").Subject;
+        alerta.TypeCode.Should().Be(IngenIA365ERP.Application.Common.Alerts.TiposDeAlerta.SinPoliticaDeDatos);
+        alerta.EntityPublicId.Should().Be(r.Value);
+        alerta.RecipientPermissions.Should().Equal(AutorizacionDeDatos.PermisoDeConsentimiento);
+    }
+
+    [Fact]
     public async Task Vigente_devuelve_la_ultima_decision_por_PublicId()
     {
         var d = new PersonasTestData();

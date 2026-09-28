@@ -130,6 +130,20 @@ public class IdempotencyBehaviorTests
     }
 
     [Fact]
+    public void La_huella_no_cambia_con_la_escala_de_un_decimal()
+    {
+        // En memoria la línea trae 2m y 10000m; leída de la base trae 2.0000m y 10000.000000m (la escala de la columna). Con la escala
+        // en la huella, un descuento aprobado nunca coincidía con la línea releída y el cobro respondía ApprovalPending (e2e T569,
+        // 2026-09-27). Sigue distinguiendo valores distintos.
+        var enMemoria = HuellaDeOperacion.Calcular("DocumentLineDiscount", new { Quantity = 2m, UnitPrice = 10000m, Amount = 2400m });
+        var releida = HuellaDeOperacion.Calcular("DocumentLineDiscount", new { Quantity = 2.0000m, UnitPrice = 10000.000000m, Amount = 2400.00m });
+        var otra = HuellaDeOperacion.Calcular("DocumentLineDiscount", new { Quantity = 2.0001m, UnitPrice = 10000m, Amount = 2400m });
+
+        enMemoria.Should().Be(releida);
+        enMemoria.Should().NotBe(otra);
+    }
+
+    [Fact]
     public void La_huella_respeta_el_orden_de_los_arreglos()
     {
         var a = HuellaDeOperacion.Calcular("Doc", new { lines = new[] { 1, 2 } });

@@ -1,0 +1,94 @@
+{
+  "nombre": "WithdrawalToRegister suma en la sesión destino",
+  "descripcion": "El mismo movimiento visto desde la sesión 2: entran 80.000 al efectivo. El movimiento de la sesión 3 hacia la 1 no le toca.",
+  "sesion": 2,
+  "tratamientoDelFaltante": "ShortageToCashier",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "base": {
+    "medio": "EF",
+    "valor": 50000
+  },
+  "pagos": [
+    {
+      "medio": "EF",
+      "valor": 10000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "WithdrawalToRegister",
+      "medio": "EF",
+      "valor": 80000,
+      "confirmado": true,
+      "medioDestino": null,
+      "sesionOrigen": 1,
+      "sesionDestino": 2,
+      "datafonoOrigen": null,
+      "datafonoDestino": null
+    },
+    {
+      "tipo": "WithdrawalToRegister",
+      "medio": "EF",
+      "valor": 30000,
+      "confirmado": true,
+      "medioDestino": null,
+      "sesionOrigen": 3,
+      "sesionDestino": 1,
+      "datafonoOrigen": null,
+      "datafonoDestino": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 50000,
+      "ventas": 10000,
+      "devoluciones": 0,
+      "entradas": 80000,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 140000,
+      "pagos": 1,
+      "datafonos": null,
+      "referencias": null
+    }
+  ],
+  "total": 140000,
+  "conteo": [
+    {
+      "medio": "EF",
+      "contado": 140000,
+      "motivo": null
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "EF",
+        "contado": 140000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      }
+    ],
+    "totalEsperado": 140000,
+    "totalContado": 140000,
+    "totalDiferencia": 0,
+    "montoAAprobar": 0,
+    "lineasDelDocumento": [],
+    "sinMotivo": []
+  }
+}

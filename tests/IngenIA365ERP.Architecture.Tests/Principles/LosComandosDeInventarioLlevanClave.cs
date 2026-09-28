@@ -53,6 +53,75 @@ public class LosComandosDeInventarioLlevanClave
         "CapturePhysicalCountCommand",
         "ClosePhysicalCountCommand",
         "GenerateCountAdjustmentCommand",
+        // I3, US5 (T562): medios de pago de Core (§22.1–§22.2), su disponibilidad y los puntos y cajas (§20.1, §22.3), precios y
+        // topes (§19), la venta en el POS (§20.2), la caja (§21), las notas de venta (§18.3) y la entrega (§20.3).
+        "CreatePaymentMeansCommand",
+        "UpdatePaymentMeansCommand",
+        "DeletePaymentMeansCommand",
+        "ImportPaymentMeansCommand",
+        "CreateCardNetworkCommand",
+        "UpdateCardNetworkCommand",
+        "DeleteCardNetworkCommand",
+        "CreateCardAcquirerCommand",
+        "UpdateCardAcquirerCommand",
+        "DeleteCardAcquirerCommand",
+        "CreateCardTerminalCommand",
+        "UpdateCardTerminalCommand",
+        "DeleteCardTerminalCommand",
+        "CreateCashDenominationCommand",
+        "UpdateCashDenominationCommand",
+        "DeleteCashDenominationCommand",
+        "SetPaymentMeansAvailabilityCommand",
+        "CreatePointOfSaleCommand",
+        "UpdatePointOfSaleCommand",
+        "CreateCashRegisterCommand",
+        "UpdateCashRegisterCommand",
+        "ImportPointsOfSaleCommand",
+        "CreatePriceListCommand",
+        "UpdatePriceListCommand",
+        "SetPriceListItemsCommand",
+        "ImportPriceListsCommand",
+        "CreateDiscountCapCommand",
+        "ImportDiscountCapsCommand",
+        "CreatePosDraftCommand",
+        "UpdatePosDraftCommand",
+        "AddPosLineCommand",
+        "UpdatePosLineCommand",
+        "RemovePosLineCommand",
+        "SuspendPosDraftCommand",
+        "ResumePosDraftCommand",
+        "DiscardPosDraftCommand",
+        "CheckoutPosDraftCommand",
+        "OpenCashSessionCommand",
+        "CloseCashSessionCommand",
+        "RecountCashSessionCommand",
+        "ExecuteDayCloseCommand",
+        "ReopenDayCloseCommand",
+        "SaveCreditNoteDraftCommand",
+        "DeliverSalesDocumentCommand",
+        "ReprintDocumentCommand",
+    ];
+
+    /// <summary>
+    /// Los comandos que se hacen desde una caja (contracts/api.md §18, «Canal pos»; T36, T562): la venta en el POS (§20.2) y la
+    /// sesión de caja (§21.1–§21.2). Implementan además <c>IOperacionDePuntoDeVenta</c>, así la auditoría los registra con canal
+    /// <c>pos</c>. Quedan fuera, a propósito, el cierre del día y su reapertura (un acto del supervisor sobre el punto, no sobre una
+    /// sesión) y los movimientos de caja, que se guardan por el ciclo común de documentos (<c>SaveInventoryDraftCommand</c>).
+    /// </summary>
+    private static readonly string[] ComandosDePuntoDeVenta =
+    [
+        "CreatePosDraftCommand",
+        "UpdatePosDraftCommand",
+        "AddPosLineCommand",
+        "UpdatePosLineCommand",
+        "RemovePosLineCommand",
+        "SuspendPosDraftCommand",
+        "ResumePosDraftCommand",
+        "DiscardPosDraftCommand",
+        "CheckoutPosDraftCommand",
+        "OpenCashSessionCommand",
+        "CloseCashSessionCommand",
+        "RecountCashSessionCommand",
     ];
 
     /// <summary>Carpetas de <c>src/Core/IngenIA365ERP.Application</c> cuyos comandos con ruta llevan clave. Una que no existe todavía cuenta como vacía.</summary>
@@ -101,6 +170,37 @@ public class LosComandosDeInventarioLlevanClave
 
         Assert.True(infractores.Count == 0,
             "Comandos con ruta sin clave de idempotencia (FR-016):\n  " + string.Join("\n  ", infractores));
+    }
+
+    [Fact]
+    public void Los_comandos_del_POS_y_de_la_caja_se_auditan_con_canal_pos()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var fuentes = RepoPath.ProductionCSharpFiles().Select(f => (Archivo: f, Texto: File.ReadAllText(f))).ToList();
+        var infractores = new List<string>();
+
+        foreach (var comando in ComandosDePuntoDeVenta)
+        {
+            var declaracion = new Regex($@"\b(record|class)\s+{Regex.Escape(comando)}\b[^{{;]*", RegexOptions.Compiled);
+            var encontrada = fuentes
+                .Select(f => (f.Archivo, Match: declaracion.Match(f.Texto)))
+                .FirstOrDefault(x => x.Match.Success);
+
+            if (encontrada.Archivo is null)
+            {
+                infractores.Add($"{comando}: no se encontró su declaración (si se renombró, actualizá ComandosDePuntoDeVenta)");
+                continue;
+            }
+
+            var relativo = Path.GetRelativePath(root, encontrada.Archivo);
+            if (!encontrada.Match.Value.Contains("IOperacionIdempotente", StringComparison.Ordinal))
+                infractores.Add($"{relativo}: {comando} no implementa IOperacionIdempotente");
+            if (!encontrada.Match.Value.Contains("IOperacionDePuntoDeVenta", StringComparison.Ordinal))
+                infractores.Add($"{relativo}: {comando} no implementa IOperacionDePuntoDeVenta");
+        }
+
+        Assert.True(infractores.Count == 0,
+            "Comandos del punto de venta sin clave o sin canal pos (T13, T36):\n  " + string.Join("\n  ", infractores));
     }
 
     [Fact]

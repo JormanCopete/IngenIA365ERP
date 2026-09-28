@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Enums.Approvals;
 
 namespace IngenIA365ERP.Application.Common.Approvals;
 
@@ -32,6 +33,17 @@ public interface IFuenteDeAprobacion
 
     /// <summary>Lo que la bandeja muestra de cada fuente (clase, tipo, número, bodega, resumen, pantalla).</summary>
     Task<IReadOnlyDictionary<Guid, OrigenDeAprobacionDto>> DescribirAsync(IReadOnlyCollection<Guid> sourcePublicIds, CancellationToken ct);
+}
+
+/// <summary>
+/// Una fuente que necesita saber <b>quién</b> aprueba y cómo (feature 012, I3, T602; nuevo): el descuento sobre el tope lo aprueba
+/// alguien con un tope suficiente (contracts/api.md §19.3) y la línea guarda la copia del aprobador y del método. El motor la llama
+/// en cada aprobación de un nivel, antes de registrarla: si falla, la decisión no queda. Lo que escriba en las entidades lo guarda
+/// el mismo <c>SaveChanges</c> del motor.
+/// </summary>
+public interface IFuenteConAprobador
+{
+    Task<Result> AlAprobarElNivelAsync(ApprovalRequest solicitud, int aprobadorUserId, ApprovalMethod metodo, bool esElUltimo, CancellationToken ct);
 }
 
 /// <summary>

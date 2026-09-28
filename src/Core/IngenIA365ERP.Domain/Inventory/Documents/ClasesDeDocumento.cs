@@ -47,6 +47,23 @@ public enum AdmittedWarehouses
 }
 
 /// <summary>
+/// Lo que la cabecera de una clase exige además de lo común (feature 012, I3, T581; data-model §14 y §15). (nuevo)
+/// </summary>
+[Flags]
+public enum HeaderRequirements
+{
+    None = 0,
+    /// <summary><c>PointOfSaleId</c>.</summary>
+    PointOfSale = 1,
+    /// <summary><c>CashRegisterId</c>.</summary>
+    CashRegister = 2,
+    /// <summary><c>CashSessionId</c> de una sesión abierta.</summary>
+    CashSession = 4,
+    /// <summary><c>Reason</c> obligatorio.</summary>
+    Reason = 8,
+}
+
+/// <summary>
 /// Lo que una clase de documento es y hace (FR-036, T17). El tipo sólo elige su clase y la parametriza; nada de esto
 /// es columna de nada. (nuevo)
 /// </summary>
@@ -64,6 +81,7 @@ public enum AdmittedWarehouses
 /// <param name="ManualCreation">¿Tiene alta manual por su ruta? No: el ajuste de costo (lo genera el sistema) y la anulación (la crea <c>…/void</c>).</param>
 /// <param name="AvailableFrom">Entrega en que la clase se vuelve operable (decisiones-transversales §5).</param>
 /// <param name="Description">Efecto en palabras, para <c>GET /document-types/classes</c>.</param>
+/// <param name="Header">Lo que exige su cabecera (punto, caja, sesión, motivo); I3, T581.</param>
 public sealed record DescripcionDeClase(
     DocumentClass Class,
     DocumentClassGroup? Group,
@@ -77,7 +95,8 @@ public sealed record DescripcionDeClase(
     bool RequiresCostCenter,
     bool ManualCreation,
     EntregaDelComercio AvailableFrom,
-    string Description)
+    string Description,
+    HeaderRequirements Header = HeaderRequirements.None)
 {
     public bool IsFiscal => FiscalDirection is not null;
 
@@ -110,6 +129,36 @@ public static class ClasesDeDocumento
     public const string DiferenciaDeArqueoAprobada = "DiferenciaDeArqueoAprobada";
     public const string SaldoInicialCargado = "SaldoInicialCargado";
 
+    // Los dos mensajes a Cartera (§2.6, destino Lending): no dependen de la clase sino de que la venta tenga un pago de clase
+    // crédito, por eso no van en Messages sino en MensajesACartera.
+    public const string VentaACreditoRegistrada = "VentaACreditoRegistrada";
+    public const string AjusteDeVentaACredito = "AjusteDeVentaACredito";
+
+    /// <summary>Las ventas que registran un crédito a Cartera cuando llevan un pago de clase crédito (FR-062).</summary>
+    private static readonly HashSet<DocumentClass> VentasConCredito =
+    [
+        DocumentClass.SalesInvoice, DocumentClass.SalesInvoiceFromShipments, DocumentClass.PosEquivalentDocument,
+        DocumentClass.NonElectronicSalesReceipt,
+    ];
+
+    /// <summary>Lo que ajusta una venta a crédito: sus notas y su anulación (§2.6 <c>AjusteDeVentaACredito</c>).</summary>
+    private static readonly HashSet<DocumentClass> AjustesDeVenta =
+    [
+        DocumentClass.NonElectronicSalesNote, DocumentClass.CreditNote, DocumentClass.PosAdjustmentNote, DocumentClass.DebitNote,
+        DocumentClass.Voiding,
+    ];
+
+    /// <summary>
+    /// Las ventas que se anulan con un <see cref="DocumentClass.Voiding"/> (data-model §14): el comprobante y la nota no
+    /// electrónicos, la remisión, el pedido (libera la reserva) y la cotización. Un fiscal emitido se corrige con su nota
+    /// (FR-066).
+    /// </summary>
+    private static readonly HashSet<DocumentClass> VentasAnulables =
+    [
+        DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote, DocumentClass.Shipment, DocumentClass.SalesOrder,
+        DocumentClass.SalesQuote,
+    ];
+
     private const AdmittedWarehouses Operativa = AdmittedWarehouses.Operational;
     private const AdmittedWarehouses SinBodega = AdmittedWarehouses.None;
 
@@ -141,6 +190,28 @@ public static class ClasesDeDocumento
         var otro => otro,
     };
 
+    /// <summary>
+    /// ¿Se anula con su documento contrario? No una anulación, ni un fiscal emitido (se corrige con su nota:
+    /// <c>Inventory.Document.FiscalUseCorrection</c>), ni una diferencia de arqueo (se recuenta antes de confirmarla); de las
+    /// ventas, sólo las de <see cref="VentasAnulables"/>. (I3, T581)
+    /// </summary>
+    public static bool SeAnulaConAnulacion(DocumentClass claseDelOriginal)
+    {
+        var d = Catalogo[claseDelOriginal];
+        if (claseDelOriginal is DocumentClass.Voiding or DocumentClass.CashCountDifference) return false;
+        if (d.FiscalDirection == FiscalDirection.Emitted) return false;
+        return d.Group != DocumentClassGroup.Sales || VentasAnulables.Contains(claseDelOriginal);
+    }
+
+    /// <summary>
+    /// Los mensajes a Cartera de una clase cuando el documento lleva (o ajusta) un pago de clase crédito: la venta registra
+    /// <see cref="VentaACreditoRegistrada"/> por pago de crédito; sus notas y su anulación, <see cref="AjusteDeVentaACredito"/>.
+    /// </summary>
+    public static IReadOnlyList<string> MensajesACartera(DocumentClass clase) =>
+        VentasConCredito.Contains(clase) ? [VentaACreditoRegistrada]
+        : AjustesDeVenta.Contains(clase) ? [AjusteDeVentaACredito]
+        : [];
+
     /// <summary>Las clases de un grupo, en el orden de su número (la anulación no pertenece a ninguno).</summary>
     public static IReadOnlyList<DocumentClass> DelGrupo(DocumentClassGroup grupo) =>
         Todas.Where(d => d.Group == grupo).Select(d => d.Class).ToList();
@@ -151,9 +222,13 @@ public static class ClasesDeDocumento
 
         void C(DocumentClass clase, DocumentClassGroup? grupo, InventoryEffect efecto, FiscalDirection? fiscal, string[] mensajes,
             PostingChain cadena, EntregaDelComercio desde, AdmittedWarehouses bodegas, string descripcion,
-            NumberedBy numera = NumberedBy.Sequence, bool centroDeCosto = false, bool altaManual = true, bool soloConDevolucion = false) =>
+            NumberedBy numera = NumberedBy.Sequence, bool centroDeCosto = false, bool altaManual = true, bool soloConDevolucion = false,
+            HeaderRequirements cabecera = HeaderRequirements.None) =>
             d.Add(clase, new DescripcionDeClase(clase, grupo, efecto, soloConDevolucion, fiscal, mensajes, cadena, numera, bodegas,
-                centroDeCosto, altaManual, desde, descripcion));
+                centroDeCosto, altaManual, desde, descripcion, cabecera));
+
+        // I3 (T581): la caja y el documento equivalente POS llevan punto, caja y sesión; el movimiento, además, su motivo.
+        const HeaderRequirements DeCaja = HeaderRequirements.PointOfSale | HeaderRequirements.CashRegister | HeaderRequirements.CashSession;
 
         const DocumentClassGroup Compras = DocumentClassGroup.Purchases;
         const DocumentClassGroup Ajustes = DocumentClassGroup.Adjustments;
@@ -215,9 +290,10 @@ public static class ClasesDeDocumento
 
         // ---- caja ----
         C(DocumentClass.CashMovement, Caja, InventoryEffect.None, null, [MovimientoDeCajaRegistrado], PostingChain.None, I3, SinBodega,
-            "Ninguno: retiro parcial o ingreso de base.");
+            "Ninguno: retiro parcial, ingreso de base o reclasificación entre medios de pago.",
+            cabecera: DeCaja | HeaderRequirements.Reason);
         C(DocumentClass.CashCountDifference, Caja, InventoryEffect.None, null, [DiferenciaDeArqueoAprobada], PostingChain.None, I3, SinBodega,
-            "Ninguno: diferencia de arqueo aprobada.");
+            "Ninguno: diferencia de arqueo aprobada.", altaManual: false, cabecera: DeCaja);
 
         // ---- ventas ----
         C(DocumentClass.SalesQuote, Ventas, InventoryEffect.None, null, [], PostingChain.None, I6, Operativa,
@@ -231,7 +307,7 @@ public static class ClasesDeDocumento
         C(DocumentClass.SalesInvoiceFromShipments, Ventas, InventoryEffect.None, FiscalDirection.Emitted, [VentaFacturada],
             PostingChain.Sales, I6, SinBodega, "Ninguno: factura lo que ya salió por remisiones.", numera: NumberedBy.DianResolution);
         C(DocumentClass.PosEquivalentDocument, Ventas, InventoryEffect.Exit, FiscalDirection.Emitted, [VentaFacturada, CostoDeVentaReconocido],
-            PostingChain.Sales, I3, Operativa, "Salida por la venta en el punto de venta.", numera: NumberedBy.DianResolution);
+            PostingChain.Sales, I3, Operativa, "Salida por la venta en el punto de venta.", numera: NumberedBy.DianResolution, cabecera: DeCaja);
         C(DocumentClass.NonElectronicSalesReceipt, Ventas, InventoryEffect.Exit, null, [VentaFacturada, CostoDeVentaReconocido],
             PostingChain.Sales, I3, Operativa, "Salida por la venta (cooperativa no obligada a facturar electrónicamente).");
         C(DocumentClass.NonElectronicSalesNote, Ventas, InventoryEffect.Entry, null, [NotaCreditoEmitida, DevolucionRegistrada],
@@ -246,7 +322,7 @@ public static class ClasesDeDocumento
         // ---- anulación ----
         C(DocumentClass.Voiding, null, InventoryEffect.Both, null, [DocumentoAnulado, AjusteDeCostoReconocido], PostingChain.None, I1,
             AdmittedWarehouses.Operational | AdmittedWarehouses.NotActivated,
-            "El contrario del original, al costo del original, en su propia fecha.", altaManual: false);
+            "El contrario del original, al costo del original, en su propia fecha.", altaManual: false, cabecera: HeaderRequirements.Reason);
 
         return d;
     }

@@ -172,6 +172,9 @@ public static class DependencyInjection
         // para inactivar y para la busqueda la informa IExistenciasParaElCatalogo: sin kardex hasta que US2 registre la real.
         services.AddScoped<Inventory.Warehouses.VistaDeBodegas>();
         services.AddScoped<Common.Interfaces.Security.IAsignacionesDeBodega, Inventory.Security.Scopes.AsignacionesDeBodegaEnBase>();
+        // Feature 012, I3 (T596): el alcance por punto de venta sobre INV_UserPointOfSaleScopes, en lugar de la vacia que la API
+        // registra con TryAdd (SinAsignacionesDePuntoDeVenta).
+        services.AddScoped<Common.Interfaces.Security.IAsignacionesDePuntoDeVenta, Inventory.Security.Scopes.AsignacionesDePuntoDeVentaEnBase>();
         // Feature 012 (US2, T251-T258): el kardex. RegistroDeKardex es el unico escritor del kardex y sus proyecciones (con la
         // reconstruccion); las estrategias de ajuste (Scoped: recuerdan lo preparado por documento) se registran por clase; la
         // existencia real reemplaza a ExistenciasSinKardex; PosicionDeReposicion es el unico lector de la posicion de reposicion.
@@ -246,6 +249,49 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();
         services.AddScoped<Inventory.DocumentTypes.VistaDeTiposDeDocumento>();
+        // Feature 012 (I3, T601, T602): la precificación de las líneas de venta y la aprobación de los descuentos sobre el tope, con
+        // su fuente (SourceType DocumentLineDiscount), que exige al aprobador un tope suficiente y le copia aprobador y método.
+        services.AddScoped<Inventory.Sales.PrecificacionDeVenta>();
+        services.AddScoped<Inventory.Pricing.AprobacionDeDescuentos>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Pricing.FuenteDeAprobacionDeDescuento>();
+        // Feature 012, I3 (T603-T607): el borrador del POS, los pagos del documento, la tirilla, la entrega y los eventos de riesgo.
+        services.AddScoped<Inventory.Pos.BorradorDelPos>();
+        services.AddScoped<Inventory.Pos.IAuditoriaDelPuntoDeVenta, Inventory.Pos.AuditoriaDelPuntoDeVenta>();
+        services.AddScoped<Inventory.Sales.RegistroDePagos>();
+        services.AddScoped<Inventory.Sales.ConstructorDeTirilla>();
+        services.AddScoped<Inventory.Sales.EntregaDeDocumentos>();
+        // Feature 012, I3 (T608-T615): la guardia fiscal (versión mínima de I3), el borrador y las reglas de las ventas de oficina, las
+        // notas, las estrategias de las clases de venta (su anulación no tiene estrategia propia: AnulacionDeVenta), la alerta de venta
+        // bajo costo después del guardado y el retiro gravado.
+        services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
+        services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
+        services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
+        // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,
+        // las consultas a Cartera responden CarteraNoHabilitada (la entrega IC, T661, registra la real). El crédito dentro del pago, su
+        // aprobación (SourceType DocumentPayment, Subject ProvisionalCredit) y la marca de lo que se está aprobando en la petición.
+        services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Common.Integration.Lending.ConsultasDeCarteraNoHabilitada>();
+        services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
+        services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
+        services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Sales.FuenteDeAprobacionDeCredito>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Sales.BorradorDeVenta>();
+        services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Sales.AlertaDeVentaBajoCosto>();
+        services.AddScoped<Inventory.Documents.Efectos.AnulacionDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.RetiroGravado>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoFacturaDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDocumentoEquivalentePos>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoComprobanteDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaCreditoDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeAjustePos>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeVentaNoElectronica>();
+        // I3 (T617-T620): la caja. El grupo Cash por el ciclo común (borrador del movimiento, sus dos estrategias) y los servicios que
+        // comparten las sesiones, el arqueo y los movimientos.
+        services.AddScoped<Inventory.Cash.SesionesDeCaja>();
+        services.AddScoped<Inventory.Cash.ReglasDeMovimientoDeCaja>();
+        services.AddScoped<Inventory.Cash.ArqueoDeLaSesion>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Cash.BorradorDeMovimientoDeCaja>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Cash.EfectoMovimientoDeCaja>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Cash.EfectoDiferenciaDeArqueo>();
         // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
         services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();

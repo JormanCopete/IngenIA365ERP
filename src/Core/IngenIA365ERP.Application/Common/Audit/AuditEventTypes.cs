@@ -163,6 +163,29 @@ public static class AuditEventTypes
     // La verificacion de integridad del kardex (US2, T258): una consulta que deja su resultado (filtros, filas
     // revisadas, incidentes y la alerta). La reconstruccion la audita el AuditBehavior (es un comando).
     public const string InventoryIntegrityVerified = "Inventory.Integrity.Verified";
+    // Las acciones de riesgo del POS (US5, T603, T606, T607; T50, F13): quitar una linea, descuento, precio manual,
+    // suspender, recuperar, descartar, cobrar, entregar y reimprimir. Canal pos, dentro de la transaccion del comando
+    // (AuditoriaDelPuntoDeVenta). Las lecturas del lector no emiten evento propio.
+    public const string InventoryPosLineRemoved = "Inventory.Pos.LineRemoved";
+    public const string InventoryPosDiscountApplied = "Inventory.Pos.DiscountApplied";
+    public const string InventoryPosPriceOverridden = "Inventory.Pos.PriceOverridden";
+    public const string InventoryPosSuspended = "Inventory.Pos.Suspended";
+    public const string InventoryPosResumed = "Inventory.Pos.Resumed";
+    public const string InventoryPosDiscarded = "Inventory.Pos.Discarded";
+    public const string InventoryPosCheckout = "Inventory.Pos.Checkout";
+    public const string InventoryDocumentDelivered = "Inventory.Document.Delivered";
+    public const string InventoryDocumentReprinted = "Inventory.Document.Reprinted";
+
+    // Feature 012, I3 (T617-T620): la caja. Abrir y cerrar la sesion, recontar tras un rechazo (con antes y despues), cerrar y
+    // reabrir el dia (con motivo). Dentro de la transaccion del comando (AuditoriaDelPuntoDeVenta).
+    public const string InventoryCashSessionOpened = "Inventory.CashSession.Opened";
+    public const string InventoryCashSessionClosed = "Inventory.CashSession.Closed";
+    public const string InventoryCashSessionRecounted = "Inventory.CashSession.Recounted";
+    public const string InventoryDayCloseExecuted = "Inventory.DayClose.Executed";
+    public const string InventoryDayCloseReopened = "Inventory.DayClose.Reopened";
+
+    // Feature 012, I3 (T612): el reintegro de una nota por un medio que no fue de la venta (Inventory.Sales.RefundOtherMeans).
+    public const string InventorySalesRefundOtherMeans = "Inventory.Sales.RefundOtherMeans";
 
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el

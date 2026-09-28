@@ -161,6 +161,14 @@ public sealed class MotorDeAprobaciones(
         }
 
         var siguiente = solicitud.NivelesRequeridos().FirstOrDefault(n => n.Order > nivel.Order);
+
+        // I3 (T602): la fuente que necesita saber quién aprueba (el tope suficiente de un descuento) decide antes de registrar.
+        if (fuente is IFuenteConAprobador conAprobador)
+        {
+            var admitido = await conAprobador.AlAprobarElNivelAsync(solicitud, decisor, metodo, siguiente is null, ct);
+            if (admitido.IsFailure) return Result.Failure<DecisionResultDto>(admitido.Error);
+        }
+
         if (siguiente is not null)
         {
             Registrar(solicitud, nivel, decisor, nombre, metodo, decision, ahora);

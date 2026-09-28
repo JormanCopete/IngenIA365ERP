@@ -43,7 +43,8 @@ public static class ReglasDelDocumento
 
         // US11 (T395, T398): el conteo físico no lleva líneas de documento —su foto y sus capturas son satélites— y su anulación
         // tampoco (copia las del original).
-        var sinLineas = documento.Class == DocumentClass.PhysicalCount || (esAnulacion && claseDelOriginal == DocumentClass.PhysicalCount);
+        // I3 (T619): la caja tampoco —el movimiento lleva su satélite y la diferencia de arqueo sus líneas por medio—, ni su anulación.
+        var sinLineas = SinLineasDeProducto(documento.Class) || (esAnulacion && claseDelOriginal is { } delOriginal && SinLineasDeProducto(delOriginal));
         if (vivas.Count == 0 && !sinLineas) errores.Add(InventoryErrors.Empty());
         if (vivas.Count > InventoryDocument.MaxLineas) errores.Add(InventoryErrors.TooManyLines());
 
@@ -89,6 +90,10 @@ public static class ReglasDelDocumento
 
         return errores;
     }
+
+    /// <summary>¿La clase no lleva líneas de producto? El conteo físico y las de caja (movimiento y diferencia de arqueo).</summary>
+    private static bool SinLineasDeProducto(DocumentClass clase) =>
+        clase == DocumentClass.PhysicalCount || ClasesDeDocumento.De(clase).Group == DocumentClassGroup.Cash;
 
     /// <summary>El aviso de un error, para <c>warnings[]</c>.</summary>
     public static AvisoDto ComoAviso(Error error) => new(error.Code, error.Message, (error as ErrorConDatos)?.Data);

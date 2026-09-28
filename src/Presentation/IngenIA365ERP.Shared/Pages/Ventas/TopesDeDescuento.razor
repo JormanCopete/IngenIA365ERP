@@ -1,0 +1,142 @@
+@page "/ventas/topes-de-descuento"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Topes de descuento - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T638; FR-054; contracts/api.md §19.3, plantilla 13): el descuento máximo por línea y por total de cada rol, con
+   vigencia. Quien vende con un descuento sobre su tope deja la línea esperando la aprobación de alguien con un tope suficiente, desde
+   su bandeja o en persona en la caja. A quien tiene varios roles le aplica el mayor. Un tope nuevo abre una vigencia; el anterior se
+   conserva en la historia. *@
+<PermissionGate Required="Inventory.Prices.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Topes de descuento</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.DiscountCaps.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nuevo">Nuevo tope</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Plantilla 13</SfButton>
+        </div>
+    </div>
+
+    @if (_mostrarPlantilla)
+    {
+        <div class="info-card">
+            <h4>Plantilla 13 · Topes de descuento</h4>
+            <ImportarPlantilla RutaBase="@VentasClient.Rutas.Topes" PermisoDeDescarga="Inventory.Prices.View" PermisoDeImportacion="Inventory.DiscountCaps.Manage"
+                               Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_mio is { } m)
+        {
+            <p class="texto-apoyo">Su tope hoy: @Porcentaje(m.MaxLinePercent) por línea y @Porcentaje(m.MaxDocumentPercent) por total@(m.FromRoles.Count > 0 ? $" (de {string.Join(", ", m.FromRoles.Select(r => r.RoleName))})" : "").</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Rol</th><th class="numero">Por línea</th><th class="numero">Por total</th><th>Vigencia</th></tr></thead>
+                <tbody>
+                    @foreach (var t in _topes.OrderBy(x => x.RoleName).ThenByDescending(x => x.ValidFrom))
+                    {
+                        <tr><td>@t.RoleCode · @t.RoleName</td><td class="numero">@Porcentaje(t.MaxLinePercent)</td><td class="numero">@Porcentaje(t.MaxDocumentPercent)</td>
+                            <td>@t.ValidFrom.ToString("dd/MM/yyyy")@(t.ValidTo is { } h ? $" – {h:dd/MM/yyyy}" : "")</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarNuevo" Header="Nuevo tope de descuento" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Rol *
+                        <select class="e-input" value="@(_rol?.ToString() ?? "")" @onchange="@(e => _rol = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija…</option>
+                            @foreach (var r in _roles) { <option value="@r.PublicId">@r.Code · @r.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Por línea (%) * <input class="e-input numero" type="number" min="0" max="100" step="any" @bind="_linea" /></label>
+                    <label class="campo">Por total (%) * <input class="e-input numero" type="number" min="0" max="100" step="any" @bind="_total" /></label>
+                    <label class="campo">Vigente desde * <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = Fecha(e.Value))" /></label>
+                    <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = Fecha(e.Value))" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CrearAsync">Crear</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNuevo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _clave = new();
+    private List<TopeDeDescuentoDto> _topes = [];
+    private List<RolDeCooperativaDto> _roles = [];
+    private MiTopeDto? _mio;
+    private bool _mostrarPlantilla, _mostrarNuevo;
+    private Guid? _rol;
+    private decimal _linea, _total;
+    private DateOnly? _desde, _hasta;
+    private string? _motivo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var roles = await Inventario.RolesAsync();
+            _roles = roles.IsSuccess ? [.. roles.Value!.Items.Where(r => r.IsActive)] : [];
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarTopesAsync();
+        if (!r.IsSuccess) { _topes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los topes."); return; }
+        _topes = [.. r.Value ?? []];
+        var mio = await Ventas.MiTopeAsync();
+        _mio = mio.IsSuccess ? mio.Value : null;
+    }
+
+    private void Nuevo()
+    {
+        _rol = null; _linea = 0m; _total = 0m; _desde = DateOnly.FromDateTime(DateTime.Today); _hasta = null; _motivo = null;
+        _mostrarNuevo = true;
+    }
+
+    private async Task CrearAsync()
+    {
+        if (_rol is null || _desde is null || string.IsNullOrWhiteSpace(_motivo) || _linea is < 0 or > 100 || _total is < 0 or > 100)
+        {
+            await Notification.WarningAsync("Elija el rol, los porcentajes (0 a 100), la vigencia y el motivo.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.CrearTopeAsync(new TopeRequest(_rol.Value, _linea / 100m, _total / 100m, _desde.Value, _hasta, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el tope."); return; }
+        _mostrarNuevo = false;
+        await Notification.SuccessAsync("Tope creado.");
+        await CargarAsync();
+    }
+
+    private static string Porcentaje(decimal fraccion) => (fraccion * 100m).ToString("0.##") + " %";
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

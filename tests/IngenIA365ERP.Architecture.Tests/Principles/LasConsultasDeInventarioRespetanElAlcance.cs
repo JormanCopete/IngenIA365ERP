@@ -72,7 +72,49 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "GetIntegrationMessageQueryHandler",
         "MessagesReportQueryHandler",
         "AccountingBatchesReportQueryHandler",
+        // Fase 13, US5 (I3; T613): la lista y el detalle de los documentos de venta (por la bodega o el punto de venta).
+        "ListSalesDocumentsQueryHandler",
+        "GetSalesDocumentQueryHandler",
+        // Fase 14, US6 (I3; T657): el crédito de una venta (su pestaña «Crédito»), por la vista del documento.
+        "GetSalesDocumentCreditQueryHandler",
+        // I3 (T623, T624): las vistas de ventas y caja y los indicios de deterioro.
+        "SalesBySessionReportQueryHandler",
+        "SalesByRegisterReportQueryHandler",
+        "SalesByPaymentMeansReportQueryHandler",
+        "CashSessionReportQueryHandler",
+        "DayCloseReportQueryHandler",
+        "CardPaymentsReportQueryHandler",
+        "CashMovementsReportQueryHandler",
+        "CashDifferencesReportQueryHandler",
+        "VoucherRedemptionsReportQueryHandler",
+        "DiscountApprovalsReportQueryHandler",
+        "ImpairmentReportQueryHandler",
+        // I3, US5 (T562): puntos, cajas y disponibilidad de un medio (por punto); la venta en el POS (por el punto de la sesión o de
+        // la venta, en BorradorDelPos); sesiones, esperado, movimientos, cierres del día y sus PDF (por punto, en SesionesDeCaja).
+        // Precios y topes no filtran: son catálogos de la cooperativa, sin bodega ni punto (como los vendedores).
+        "ListPointsOfSaleQueryHandler",
+        "GetPointOfSaleQueryHandler",
+        "ListCashRegistersQueryHandler",
+        "GetPaymentMeansAvailabilityQueryHandler",
+        "LookupPosProductQueryHandler",
+        "GetPosDraftQueryHandler",
+        "ListPosDraftsQueryHandler",
+        "ListCashSessionsQueryHandler",
+        "GetCashSessionQueryHandler",
+        "GetCashSessionExpectedQueryHandler",
+        "ListCashMovementsQueryHandler",
+        "GetCashMovementQueryHandler",
+        "ListDayClosesQueryHandler",
+        "GetDayCloseQueryHandler",
+        "GetCashCountReportQueryHandler",
+        "GetCashMovementReceiptQueryHandler",
     ];
+
+    /// <summary>
+    /// Servicios de Application que aplican el alcance por encargo del handler (T562): un handler que recibe uno de ellos en su
+    /// constructor lo aplica sin nombrar <c>IAlcanceDeInventario</c>. La prueba exige que cada uno sí lo nombre.
+    /// </summary>
+    private static readonly string[] AplicadoresDeAlcance = ["SesionesDeCaja", "BorradorDelPos"];
 
     [Fact]
     public void Cada_consulta_de_inventario_aplica_el_alcance()
@@ -88,11 +130,29 @@ public class LasConsultasDeInventarioRespetanElAlcance
 
             if (archivo is null)
                 infractores.Add($"{consulta}: no se encontró su declaración (si se renombró, actualizá ConsultasDeInventario)");
-            else if (!texto.Contains("IAlcanceDeInventario", StringComparison.Ordinal))
+            else if (!texto.Contains("IAlcanceDeInventario", StringComparison.Ordinal) && !RecibeUnAplicador(texto, consulta))
                 infractores.Add($"{Path.GetRelativePath(root, archivo)}: {consulta} no aplica IAlcanceDeInventario");
+        }
+
+        foreach (var aplicador in AplicadoresDeAlcance)
+        {
+            var declaracion = new Regex($@"\bclass\s+{Regex.Escape(aplicador)}\b", RegexOptions.Compiled);
+            var (archivo, texto) = fuentes.FirstOrDefault(f => declaracion.IsMatch(f.Texto));
+            if (archivo is null)
+                infractores.Add($"{aplicador}: no se encontró su declaración (si se renombró, actualizá AplicadoresDeAlcance)");
+            else if (!texto.Contains("IAlcanceDeInventario", StringComparison.Ordinal))
+                infractores.Add($"{Path.GetRelativePath(root, archivo)}: {aplicador} no aplica IAlcanceDeInventario");
         }
 
         Assert.True(infractores.Count == 0,
             "Consultas de inventario sin alcance de bodega o punto (T35):\n  " + string.Join("\n  ", infractores));
+    }
+
+    /// <summary>¿El constructor primario del handler recibe uno de <see cref="AplicadoresDeAlcance"/>?</summary>
+    private static bool RecibeUnAplicador(string texto, string handler)
+    {
+        var constructor = Regex.Match(texto, $@"\bclass\s+{Regex.Escape(handler)}\s*\((?<parametros>[^)]*)\)");
+        return constructor.Success
+            && AplicadoresDeAlcance.Any(a => Regex.IsMatch(constructor.Groups["parametros"].Value, $@"\b{Regex.Escape(a)}\b"));
     }
 }

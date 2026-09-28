@@ -1,0 +1,174 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject WebAuthnInterop Passkeys
+@inject INotificationService Notification
+@implements IAsyncDisposable
+
+@* Feature 012, I3 (T639; FR-010, FR-054, US5-3; contracts/api.md §15.2, §20.2): la espera de una aprobación en la caja —un descuento
+   sobre el tope, la política del tipo o un crédito provisional—. Consulta la venta cada 2 s (GET /pos/drafts/{id}) hasta que se decide
+   en la bandeja del aprobador, o deja que el aprobador PRESENTE decida aquí con SU identidad: su correo, luego su passkey (webauthn.js) o
+   un código TOTP de un solo uso. Nunca se pide ni se guarda una contraseña, y una prueba fallida es un error de negocio
+   (Approvals.Presence.Invalid), no de sesión: la del cajero no se toca. (nuevo) *@
+<div class="info-card" aria-live="polite">
+    <h4>Esperando aprobación</h4>
+    @foreach (var p in Pendientes)
+    {
+        <p>@p.Subject@(p.LineNumber is { } n ? $" (línea {n})" : "") · @p.Status</p>
+    }
+    <p class="texto-tenue">Se consulta cada 2 segundos. El aprobador puede decidir desde su bandeja o aquí, en persona.</p>
+
+    @if (!_enPersona)
+    {
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@(() => _enPersona = true)">Aprobar en persona</SfButton>
+        </div>
+    }
+    else
+    {
+        <IndicadorDeCarga Cargando="@_decidiendo.Activa" Texto="Verificando…" Compacto="true">
+            <div class="form-grid">
+                <label class="campo">Solicitud
+                    <select class="e-input" value="@(_solicitud?.ToString() ?? "")" @onchange="@(e => _solicitud = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                        @foreach (var p in Pendientes) { <option value="@p.ApprovalRequestPublicId">@p.Subject</option> }
+                    </select>
+                </label>
+                <label class="campo">Correo del aprobador * <input class="e-input" type="email" autocomplete="off" @bind="_correo" /></label>
+                @if (_desafio is null)
+                {
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_correo) || _solicitud is null)" OnClick="@PedirDesafioAsync">Continuar</SfButton>
+                }
+                else
+                {
+                    @if (_desafio.Methods.Contains("Totp"))
+                    {
+                        <label class="campo">Código de su autenticador <input class="e-input" inputmode="numeric" autocomplete="one-time-code" maxlength="8" @bind="_totp" /></label>
+                    }
+                    <label class="campo campo-ancho">Motivo (obligatorio para rechazar) <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                    <div class="toolbar">
+                        @if (_desafio.Methods.Contains("Passkey") && _desafio.PublicKeyOptions is not null)
+                        {
+                            <SfButton CssClass="e-primary" OnClick="@(() => DecidirAsync("Approve", conPasskey: true))">Aprobar con su llave</SfButton>
+                        }
+                        @if (_desafio.Methods.Contains("Totp"))
+                        {
+                            <SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_totp)" OnClick="@(() => DecidirAsync("Approve", conPasskey: false))">Aprobar con el código</SfButton>
+                        }
+                        <SfButton CssClass="e-outline" Disabled="@string.IsNullOrWhiteSpace(_motivo)" OnClick="@(() => DecidirAsync("Reject", conPasskey: _desafio.PublicKeyOptions is not null && string.IsNullOrWhiteSpace(_totp)))">Rechazar</SfButton>
+                        <SfButton CssClass="e-flat" OnClick="@Cancelar">Cancelar</SfButton>
+                    </div>
+                }
+            </div>
+        </IndicadorDeCarga>
+    }
+</div>
+
+@code {
+    /// <summary>La venta (o el documento de venta del POS) que espera.</summary>
+    [Parameter, EditorRequired] public Guid VentaId { get; set; }
+
+    /// <summary>Las solicitudes que espera; con la venta ya en aprobación por la política o el crédito, la de <see cref="SolicitudDelDocumento"/>.</summary>
+    [Parameter] public IReadOnlyList<AprobacionPendienteDelPosDto> Pendientes { get; set; } = [];
+
+    /// <summary>La solicitud del documento (el cobro quedó en aprobación): se espera a que la venta deje de estar en aprobación.</summary>
+    [Parameter] public Guid? SolicitudDelDocumento { get; set; }
+
+    /// <summary>La venta cambió: ya no espera (confirmada, devuelta a borrador o con todos sus descuentos decididos).</summary>
+    [Parameter] public EventCallback<VentaDelPosDto> Resuelta { get; set; }
+
+    private readonly EstadoDeCarga _decidiendo = new();
+    private readonly ClaveDeOperacion _claveDesafio = new(), _claveDecision = new();
+    private CancellationTokenSource? _parar;
+    private bool _enPersona;
+    private Guid? _solicitud;
+    private string? _correo, _totp, _motivo;
+    private DesafioDePresenciaDto? _desafio;
+
+    protected override void OnParametersSet()
+    {
+        _solicitud ??= SolicitudDelDocumento ?? Pendientes.FirstOrDefault()?.ApprovalRequestPublicId;
+        if (_parar is null)
+        {
+            _parar = new CancellationTokenSource();
+            _ = ConsultarCadaDosSegundosAsync(_parar.Token);
+        }
+    }
+
+    private async Task ConsultarCadaDosSegundosAsync(CancellationToken ct)
+    {
+        using var reloj = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        try
+        {
+            while (await reloj.WaitForNextTickAsync(ct))
+            {
+                var r = await Ventas.ObtenerVentaAsync(VentaId, ct);
+                if (!r.IsSuccess || r.Value is not { } venta) continue;
+                var sigueEsperando = venta.Status == 1 || venta.PendingApprovals.Any(p => p.Status == "Pending");
+                if (sigueEsperando) continue;
+                await InvokeAsync(() => Resuelta.InvokeAsync(venta));
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // La pantalla se cerró o la aprobación se resolvió: dejar de consultar es lo esperado.
+            return;
+        }
+    }
+
+    private async Task PedirDesafioAsync()
+    {
+        if (_solicitud is not { } solicitud || string.IsNullOrWhiteSpace(_correo)) return;
+        using var d = _decidiendo.Iniciar();
+        var r = await Ventas.DesafioDePresenciaAsync(solicitud, _correo.Trim(), _claveDesafio);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo preparar la aprobación en persona."); return; }
+        _desafio = r.Value;
+    }
+
+    private async Task DecidirAsync(string decision, bool conPasskey)
+    {
+        if (_solicitud is not { } solicitud || _desafio is null) return;
+        using var d = _decidiendo.Iniciar();
+        string? asercion = null;
+        if (conPasskey)
+        {
+            var firma = await Passkeys.FirmarAsync(_desafio.PublicKeyOptions!);
+            if (!firma.Ok)
+            {
+                if (firma.Motivo != MotivosWebAuthn.Cancelado) await Notification.ErrorAsync(firma.Mensaje ?? "No se pudo usar la llave del aprobador.");
+                return;
+            }
+            asercion = firma.RespuestaJson;
+        }
+        var detalle = await Inventario.AprobacionAsync(solicitud);
+        var huella = detalle.IsSuccess ? detalle.Value?.ContentSha256 : null;
+        var r = await Ventas.DecidirEnPersonaAsync(solicitud, new DecisionEnPersonaRequest(decision, string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim(),
+            conPasskey ? "InPersonPasskey" : "InPersonTotp", new PresenciaRequest(_desafio.ChallengePublicId, asercion, conPasskey ? null : _totp?.Trim()), huella),
+            _claveDecision);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la decisión.");
+            if (r.ErrorCode is "Approvals.Presence.Expired" or "Approvals.Presence.TotpReused") _desafio = null;
+            return;
+        }
+        await Notification.SuccessAsync(decision == "Approve" ? "Aprobado por el aprobador presente." : "Rechazado por el aprobador presente.");
+        Cancelar();
+    }
+
+    private void Cancelar()
+    {
+        _enPersona = false;
+        _desafio = null;
+        _totp = null;
+        _motivo = null;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _parar?.Cancel();
+        _parar?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

@@ -898,7 +898,7 @@ JSON embebidos versionados (T40), no semillas.
     guardan), el record struct `ValorInterpretado(Admitido, Texto, Valor)`, `DefinicionDeParametro` (`Modulo`, `Clave`,
     `Descripcion`, `Tipo`, `ValoresAdmitidos`, `ValoresDesde`, `DefectoSeguro`, `AmbitosAdmitidos`, `PermisoAdicional`,
     `SelladoAlConfirmar`, `ExigeFuenteLegal`, `DisponibleDesde`, `AdmiteVacio`, `Minimo`, `Maximo`, `Patron`;
-    `Interpretar(texto, entrega)`, `Admitidos(entrega)`, `AdmiteAmbito`) y `CatalogoDeParametros` (`EntregaVigente` = I1,
+    `Interpretar(texto, entrega)`, `Admitidos(entrega)`, `AdmiteAmbito`) y `CatalogoDeParametros` (`EntregaVigente` = I1; **I3 desde el cierre de las e2e de I3, 2026-09-27**,
     `Modulos`, `Todas`, `Buscar(modulo, clave)`); constantes de clave y de permiso en los tres catálogos
     (`ParametrosDeInventario.PermisoDeCosteo`, `ParametrosTributarios.Permiso`, `ParametrosDeFacturacionElectronica.Permiso`);
     `ParameterVersion.VigenteEn(fecha)`; índice `UK_COR_ParameterVersions_Module_Key_Scope_ValidFrom`. En
@@ -1599,6 +1599,267 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
   - **(nuevo, cierre de I1, T443)** `EjecutorDeImportacion.Deshacer` suelta las altas de la última a la primera y cada una después
     de sus dependientes (`SoltarConSusDependientes`): la revisión de una bodega nueva con ubicaciones nuevas respondía 500.
 
+  - **(nuevo, I3 dominio, T571–T581)** Motores puros de ventas y caja en `Domain/Sales`:
+    `Sales/Pricing/ResolutorDeListaDePrecios` (+ `DimensionDePrecio` { Person=1, Segment=2, Channel=3, Branch=4 } —no se guarda:
+    es el `matchedDimensions` de §19.2—, `PrecioDeLista`, `ListaDePreciosCandidata`, `ContextoDePrecio`, `CandidataDePrecio`,
+    `PrecioResuelto` y `AmbitoDeLista.{Clave, Dimensiones, NormalizarSegmento, ClaveGeneral}`, que arma `ScopeKey` y
+    `DimensionCount`); `Sales/Pricing/TopeDeDescuento.{Efectivo, PorPrecioDigitado, PorPorcentaje, PorValor, SuperaTopeDeLinea,
+    PorTotal}` (+ `TopeDeRol`, `TopeDelUsuario`, `DescuentoDeLinea`, `DescuentoPorTotal`); `Sales/Payments/ValidadorDePagos`
+    (+ `MedioDePagoCopia`, `PagoPropuesto`, `PedidoDeCobro`, `ErrorDePago`, `PagoValidado`, `ResultadoDeCobro`,
+    `PareceNumeroDeTarjeta`, `NormalizarReferencia`), `Sales/Payments/DisponibilidadDeMedio` (+ `MedioOfrecible`, `CasoDeCobro`),
+    `Sales/Payments/ClasesDeMedio.{EsCredito, EsTarjeta, PuedeDarVueltas, ArqueoPorDefecto}` (lo único que el código sabe de la
+    clase de un medio); `Sales/Cash/CalculadoraDeEsperado` (+ `MedioDeArqueo`, `PagoDeLaSesion`, `MovimientoDeCaja`,
+    `BaseDeApertura`, `PedidoDeEsperado`, `EsperadoPorMedio`, `EsperadoPorDatafono`, `ReferenciaParaCotejo`,
+    `EsperadoDeLaSesion`) y `Sales/Cash/EvaluadorDeArqueo` (+ `ConteoDeMedio`, `LineaDeArqueo`, `LineaDeDiferencia`,
+    `ResultadoDeArqueo`, `TratamientoDelFaltanteDesde`). Casos dorados en `Domain.Tests/Sales/{Pricing,Cash}/Casos`.
+    En `ClasesDeDocumento`: `HeaderRequirements` [Flags] { None=0, PointOfSale=1, CashRegister=2, CashSession=4, Reason=8 } (no
+    se guarda) como `DescripcionDeClase.Header`; `SeAnulaConAnulacion(clase)` y `MensajesACartera(clase)` con las constantes
+    `VentaACreditoRegistrada`/`AjusteDeVentaACredito`; `CashCountDifference` sin alta manual (la crea el cierre). Columnas:
+    `INV_CashCounts.Status` e `INV_CashCountLines.Status` (int `DocumentStatus`, copia del estado del documento de diferencia,
+    para que la guarda de `IInmutableTrasConfirmar` fije el arqueo); en `INV_Documents` las de I3 de data-model §5.1
+    (`PointOfSaleId`, `CashRegisterId`, `CashSessionId`, `IsSuspended`, `SuspendedAt`, `SuspendedLabel`) y en `INV_DocumentLines`
+    `ListPrice`/`PriceListId`, que ninguna tarea agregaba. Métodos de entidad: `CashSession.Cerrar`, `CashCount.Fijar`,
+    `DayClose.Reabrir`, `DayCloseLine.Clave`, `VoucherRedemption.Liberar`, `PriceList.FijarAmbito`,
+    `DocumentPayment.CopiarDelMedio`, `PaymentMeans.ComisionEsperada`, `CashRegisterDocumentType.ClasesDelRol`.
+
+  - **(nuevo, I3 persistencia, T585–T589)** `Application/Inventory/Common/ColisionesDeVenta` con `IndiceDelBono`, `IndiceDeLaCaja`,
+    `IndiceDelCajero`, `IndiceDelCierreDelDia`, `Indice(ex)`, `Es(ex)`, `TraducirAsync(db, ex, DatosDeLaColision, ct)` y las
+    comprobaciones previas `BonoUsadoAsync`, `CajaOcupadaAsync`, `CajeroOcupadoAsync`, `DiaCerradoAsync` (el mismo error antes y
+    después de la carrera); `DatosDeLaColision(Bonos, CashRegisterId, CashierUserId, PointOfSaleId, OperatingDate)` es lo que el
+    comando sabe de lo que intentó escribir. `CatalogoDian.IdTypeDe(codigoDian, fecha)`, la traducción inversa de
+    `TipoDeIdentificacionDe` (la forma más corta: «13» → «C»). Semillas: `CashDenominationsSeeder.{Denominaciones,
+    TieneLaMigracionAsync}` (las tres de I3 esperan a `VentasYPuntoDeVenta`), `DefaultPaymentMeansSeeder.{CodigoEfectivo,
+    CodigoDianSugerido}`, `ConsumidorFinalSeeder.NombreVisible`; `InventoryDocumentTypesSeeder.AplicarAsync(db, entrega, ct)` y en
+    `Sembrados` `CashMovement` → `MC` «Movimiento de caja» (con motivo) y `CashCountDifference` → `DA` «Diferencia de arqueo»,
+    que se siembran cuando la entrega vigente llega a I3.
+
+  - **(nuevo, I3 medios y puntos, T590–T596)** En `Application/Core/PaymentMeans`: `ReglasDeMedioDePago.{AplicarAsync,
+    Combinacion, ArqueoDe, PagosAsync, DuplicadoAsync}` y sus reglas de `data.rule` (`ChangeOnlyInCash`, `CreditNotPhysicallyCounted`,
+    `CashMustBeCounted`, `CardRequiresNetwork`, `CardRequiresAcquirer`, `NetworkOnlyForCards`, `NetworkKindMismatch`,
+    `ReferenceKindRequired`, `ReferenceLengthRange`, `BankRequired`, `AccountRequiresBank`, `CreditDefaultsRequired`,
+    `CreditDefaultsOnlyForCredit`, `CreditDefaultsRange`, `DianCodeUnknown`, `ValidityRange`, `QuickKeyTaken`, `CommissionRange`,
+    `ToleranceRange`), `DatosDeMedio`, `ReferenciasDelMedio`, `PaymentMeansInput`, `CreditDefaultsInput`, `CreditDefaultsDto`,
+    `PaymentMeansDto`, `PaymentMeansAvailabilityDto`, `PaymentMeansErrors`, `VistaDeMediosDePago`, `PaymentMeansInputValidator`;
+    `ReglasDeTarjetas`, `VistaDeTarjetas`, `CardNetworkDto`, `CardAcquirerDto`, `CardTerminalDto`, `CashDenominationDto` y los
+    comandos y consultas `{Create,Update,Delete}{CardNetwork,CardAcquirer,CardTerminal,CashDenomination}Command`,
+    `List{CardNetworks,CardAcquirers,CardTerminals,CashDenominations}Query`, `Get{CardNetwork,CardAcquirer,CardTerminal,
+    CashDenomination}Query` (`CreateCashDenominationCommand.RetiresPublicId` cierra la vigencia de la retirada);
+    `PlantillaDeMediosDePago` (plantilla 11, con `ReferenciaPorDefecto`) e `ImportPaymentMeansCommand`. En
+    `Application/Inventory/Pos`: `ReglasDePuntoDeVenta.{AltaDePuntoAsync, ActualizarPuntoAsync, AplicarCajaAsync, ClasesAdmitidas,
+    ObligadaAFacturarAsync, FormatoDe}`, `DatosDePunto`, `DatosDeCaja`, `ErroresDePuntoDeVenta`, `CashRegisterPrintFormat`
+    { Ticket58=58, Ticket80=80, Letter=216 } (el ancho en mm que guarda `INV_CashRegisters.ReceiptWidthMm`; no es columna nueva),
+    `PointOfSaleDto`, `CashRegisterDto`, `CashRegisterDocumentTypeDto`, `CashRegisterOpenSessionDto`, `CashRegisterDocumentTypeInput`,
+    `ListCashRegistersQuery`, `PuntosDelAlcance`, `ReferenciasDelPunto`, `ReferenciasDeLaCaja`, `VistaDePuntosDeVenta`,
+    `DisponibilidadDeMedioEnBase.{LeerAsync, ReemplazarAsync}`, `GetPaymentMeansAvailabilityQuery`; en `Application/Inventory/Imports`
+    `PlantillaDePuntosDeVenta` (plantilla 10). Errores: `Core.PaymentMeans.NotFound`, `Core.CardNetwork.NotFound`,
+    `Core.CardAcquirer.NotFound`, `Core.CardTerminal.NotFound`, `Core.CashDenomination.{NotFound, InUse}`, `Core.Bank.NotFound`,
+    `Inventory.CashRegister.{NotFound, RoleDuplicate, RoleRequired, TransitWarehouse}`, `Inventory.PointOfSale.WarehouseBranchMismatch`.
+    Slugs de `CampoCodigo`: `medios-de-pago`, `franquicias`, `adquirentes`, `puntos-de-venta`, `cajas`. `FiltroDeAlcance` ve una venta
+    por su bodega **o** su punto (T35, FR-009).
+
+  - **(nuevo, I3 precios y descuentos, T597–T602)** En `Application/Inventory/Pricing`: `ReglasDeListaDePrecios.{AltaAsync,
+    ActualizarAsync, AmbitoBloqueado, AplicarPrecio, AplicarPrecioAsync, UnidadAdmitida, UnidadAdmitidaAsync, PreciosVivosAsync,
+    SegmentosAsync, SegmentoDeAsync, SeCruzan}` con `DatosDeLista`, `PrecioPedido`, `CambioDePrecio` { Created, Updated, Unchanged };
+    `CreatePriceListCommand`, `UpdatePriceListCommand` (con `Code`, `IncludesTaxes` y `Scope` opcionales sólo para `ScopeLocked`),
+    `SetPriceListItemsCommand`, `ListPriceListsQuery`, `GetPriceListQuery`, `ReferenciasDeLista`, `VistaDeListasDePrecios`;
+    `ResolvePriceQuery`, `ResolucionDePrecios.{CandidatasAsync, ResolverAsync, GeneralAsync}`, `PrecioResueltoConListas`;
+    `CreateDiscountCapCommand`, `ListDiscountCapsQuery`, `GetMyDiscountCapQuery`, `ReglasDeTopesDeDescuento.AltaAsync` con `DatosDeTope`,
+    `TopesDeDescuento.DelUsuarioAsync`; DTO `PriceListScopeInput`, `PriceListScopeDto`, `PriceListDto`, `PriceListItemDto`,
+    `PriceListDetailDto`, `PriceListItemInput`, `PriceListItemsResultDto`, `PriceCandidateDto`, `ResolvedPriceListDto`, `ResolvedPriceDto`,
+    `DiscountCapDto` (con `RoleCode`), `DiscountCapRoleDto`, `MyDiscountCapDto`; `AprobacionDeDescuentos.{Huella, SolicitarAsync,
+    LineasSinAprobarAsync, ExigirAprobadosAsync, EnlazarSolicitudesAsync}` y `FuenteDeAprobacionDeDescuento` (SourceType
+    `DocumentLineDiscount`); `ErroresDePrecios`. En `Application/Inventory/Sales`: `PrecificacionDeVenta.{PrecificarAsync, AplicarALinea}`
+    con `LineaAPrecificar`, `PrecioFijado`, `PedidoDePrecificacion`, `DescuentoCalculado`, `LineaPrecificada`, `TotalesDeVenta`,
+    `VentaPrecificada`. En `Application/Inventory/Imports`: `PlantillaDeListasDePrecios` + `ImportPriceListsCommand` (plantilla 12) y
+    `PlantillaDeTopesDeDescuento` + `ImportDiscountCapsCommand` (plantilla 13); `PlantillasQueSeImportanConI3` se retiró;
+    `CatalogoDePlantillas.EntregaConstruida` (= I3) decide `canDownload`/`canImport` de `GET /api/inventory/templates`, aparte de
+    `CatalogoDeParametros.EntregaVigente`. Plataforma: `Application/Inventory/Common/ICerrojoPorClave` + `ClavesDeCerrojo.{AmbitoDeLista,
+    TopeDelRol}` (implementación `Persistence/Inventory/CerrojoPorClave`: `sp_getapplock` / `pg_advisory_xact_lock`, sin transacción no
+    bloquea) y `Application/Common/Approvals/IFuenteConAprobador.AlAprobarElNivelAsync` (el motor la llama en cada aprobación antes de
+    registrarla). Errores: `Inventory.PriceList.{NotFound, ProductNotPriceable, UnitNotForSale}`, `Inventory.DiscountCap.RoleNotFound`,
+    `Inventory.Discount.CapInsufficient`; aviso de importación `Import.Product.Inactive`. Slug de `CampoCodigo`: `listas-de-precios`. Los
+    topes de `/discount-caps` (`maxLinePercent`, `maxDocumentPercent`) viajan como **fracción**, como toda tarifa (§2.6 de api.md).
+
+  - **(nuevo, I3 POS, T603–T607)** En `Application/Inventory/Pos`: `BorradorDelPos.{UsuarioAsync, SesionAbiertaAsync, SesionDeLaVentaAsync,
+    VentaAsync, TipoDelRol, ConsumidorFinalAsync, EsConsumidorFinalAsync, LeerAsync, Multiplicador, AgregarAsync, CambiarCantidadAsync,
+    PrecificarAsync, EnlazarAprobacionesAsync, RetirarAprobacionesAsync, QuitarLineaAsync, DtoAsync, MediosAsync, OfreciblesAsync,
+    Nombre}` con `SesionDelPos`, `CambioDeLinea`, `ProductoLeido`; los comandos `CreatePosDraftCommand` (`PosFirstLineInput`),
+    `UpdatePosDraftCommand` (con `ClearSalesperson`), `AddPosLineCommand`, `UpdatePosLineCommand` (con `ClearUnitPrice`),
+    `RemovePosLineCommand`, `SuspendPosDraftCommand`, `ResumePosDraftCommand`, `DiscardPosDraftCommand`, `CheckoutPosDraftCommand` y las
+    consultas `LookupPosProductQuery`, `GetPosDraftQuery`, `ListPosDraftsQuery`; DTO `PosDiscountInput` (`percent` como fracción),
+    `PosRefDto`, `PosLookupDto`, `PosDocumentTypeDto`, `PosCustomerDto`, `PosSalespersonDto`, `PosLineDiscountDto`,
+    `PosLineDiscountApprovalDto`, `PosLineTaxDto`, `PosLineDto`, `PosTotalsDto`, `PosDocumentDiscountDto`, `PosPaymentMeansDto`,
+    `PosCardTerminalDto`, `PosCreditDefaultsDto`, `PosSuspendedDto`, `PosPendingApprovalDto`, `PosDraftDto`, `PosDraftSummaryDto`,
+    `CheckoutResultDto`, `CashSessionPointOfSaleDto` (el `pointOfSale` de `CashSessionDto`, con `posEnabled`); `ErroresDelPos`;
+    `IAuditoriaDelPuntoDeVenta` + `AuditoriaDelPuntoDeVenta` (evento con nombre en `COR_AuditOutbox` dentro de la transacción del
+    comando, canal `pos` para `IOperacionDePuntoDeVenta`; `ExisteAsync` dice si ya hubo primera entrega en un formato). Los comandos del
+    POS sobre una venta llevan `CashSessionPublicId { init; }` sólo como marca de canal: la sesión la toma el servidor de la venta. En
+    `Application/Inventory/Sales`: `DocumentPaymentInput`, `PaymentCreditInput`, `LugarDeCobro`, `PagosRegistrados`,
+    `RegistroDePagos.{RegistrarAsync, Bonos, ErrorDePago}` (lo reutiliza la venta de oficina, T608), `ConstructorDeTirilla.{ConstruirAsync,
+    Etiqueta}` con `TirillaOptions.AmbienteDePruebas` (la API lo fija en `!IsProduction()`), `TicketDto` y sus partes
+    (`TicketHeaderDto`, `TicketDocumentDto`, `TicketPartyDto`, `TicketLineDto`, `TicketTaxDto`, `TicketWithholdingDto`,
+    `TicketTotalsDto`, `TicketPaymentDto`, `TicketElectronicDto`), `DeliverSalesDocumentCommand`, `ReprintDocumentCommand`,
+    `EntregaDeDocumentos`, `EntregaDto` y el puerto `IRepresentacionDeVentaEnPdf` (lo implementa la API con `SalesDocumentReport`, T626).
+    Plataforma: `Application/Inventory/Common/IToqueDeSesionDeCaja` (implementación `Persistence/Inventory/ToqueDeSesionDeCaja`,
+    `ExecuteUpdateAsync … WHERE Status = Open`; la usa también el cierre de sesión, T618). Eventos de auditoría
+    `Inventory.Pos.{LineRemoved, DiscountApplied, PriceOverridden, Suspended, Resumed, Discarded, Checkout}` e
+    `Inventory.Document.{Delivered, Reprinted}` (`AuditEventTypes`). Errores: `Inventory.Sales.SalespersonInvalid`,
+    `Inventory.Product.NotFound`, `Inventory.Pos.{DraftNotFound, LineNotFound, RoleNotConfigured, CustomerNotFound}`,
+    `Inventory.Document.{EmailRequired, RepresentationUnavailable}`. Decisiones: una línea que no cambió se vuelve a medir por el
+    **valor** de sus descuentos y la que cambió de cantidad por su **fracción**; las filas de descuento iguales se **conservan** (su
+    `PublicId` es la fuente de la aprobación); el descuento por total se conserva en pesos; la primera entrega se sabe por el evento
+    `Inventory.Document.Delivered` con su `Format` (en I3 no hay columna; I4 usa `COR_ElectronicDocuments.DeliveredAt`).
+- **I3, ventas y notas de oficina (T608–T616) (nuevo)**: en `Application/ElectronicInvoicing`, `GuardiaDeEmisionFiscal` con
+    `EvaluarAsync(fecha, tipoDeDocumento, caja?)` y la regla pura `Evaluar(obligada, clase)`, `VeredictoFiscal { Electronic,
+    NonElectronic, Blocked }`, `EvaluacionFiscal { Veredicto, ClasesAdmitidas, Motivos, Canal?, Resolucion? }` y `MotivoDeBloqueoFiscal`
+    (motivo de I3 `ElectronicInvoicing.I4NotActive`). En `Application/Inventory/Sales`: `SalesDraftInput`, `SalesLineInput`,
+    `SalesDiscountInput` (`percent` es **fracción**, como en el POS) con `ComoBorrador()`; `DatosDeVentaDelBorrador`, que viaja en
+    `SaveInventoryDraftRequest.Sales` (sólo lo admite el grupo `Sales`); `BorradorDeVenta : IBorradorDeGrupo`;
+    `ReglasDeConfirmacionDeVenta.{TotalCambioAsync, ValidarVentaAsync, AlConfirmarVentaAsync, ValidarNotaAsync, AlConfirmarNotaAsync,
+    ImpuestosDeAsync, PagosDeAsync, MedioNoDisponibleAsync, PermisoOtroMedio}`; `CalculoTributarioDeVenta` (el motor en perspectiva de
+    venta sobre las líneas ya precificadas; la base excluye el residuo de una lista con impuestos); `AlertaDeVentaBajoCosto :
+    IAvisoAlConfirmar`; `CreditNoteDraftInput`, `CreditNoteLineInput`, `SaveCreditNoteDraftCommand`; `NotasDeVenta.{ClaseDeNota, EsNota,
+    OriginalDeAsync, RestantesAsync, ExcesoAsync, ImpuestosAsync}`; `ErroresDeVentas`; `ListSalesDocumentsQuery`,
+    `GetSalesDocumentQuery` y sus DTO (`SalesDocumentSummaryDto`, `SalesPaymentSummaryDto`, `SalesDocumentDto`, `SalesCounterpartyDto`,
+    `SalesLineDto`, `SalesLineDiscountDto`, `SalesDiscountApprovalDto`, `SalesTaxDto`, `SalesTotalsDto`, `DocumentPaymentDto`,
+    `SalesMessageDto`, `SalesLinksDto`, `SalesIssueDto`). En `Documents/Efectos`: `SalidaPorVenta` (`EfectoFacturaDeVenta`,
+    `EfectoDocumentoEquivalentePos`, `EfectoComprobanteDeVenta`), `DevolucionDeCliente` (`EfectoNotaCreditoDeVenta`,
+    `EfectoNotaDeAjustePos`, `EfectoNotaDeVentaNoElectronica`), `AnulacionDeVenta` (la anulación no tiene estrategia propia),
+    `ReglasDeLineasDeVenta` y `RetiroGravado` (T615). En el ciclo común: `IAvisoAlConfirmar` (aviso después del guardado de la
+    confirmación), `ConfirmInventoryDocumentCommand.ExpectedAmountDue { init; }` y el parámetro opcional
+    `EfectosDeClase(…, entregaVigente)` para probar una entrega posterior sin subir la del despliegue. En `EmisionDeInventario`:
+    `VentaFacturadaAsync`, `CostoDeVentaAsync`, `NotaCreditoAsync`, `DevolucionDeClienteAsync`, `MovimientoDeCajaAsync`,
+    `DiferenciaDeArqueoAsync`. Evento de auditoría `Inventory.Sales.RefundOtherMeans`. Errores nuevos:
+    `Inventory.CreditNote.{OriginInvalid, CorrectionConceptRequired}`; `Inventory.Document.FiscalUseCorrection` lleva `data {
+    correctionClass, route, totalVoid }` en ventas. Decisiones: la nota **deriva** de la venta que corrige (copia su modo y la nombra
+    como relacionada); lo que queda por acreditar es cantidad = original − `ReturnOf` vivos y valor = neto original − `NoteOf` vivos; los
+    reintegros por defecto van por los medios de la venta en proporción (residuo al mayor); las reglas de venta las llaman las
+    estrategias, así rigen igual en oficina y en el cobro del POS.
+- **I3, caja (T617–T620, prueba T555) (nuevo)**: en `Application/Inventory/Cash`: `SesionesDeCaja.{VeTodasAsync, UsuarioAsync,
+    VisibleAsync, VisiblesAsync, EfectivoAsync, EsperadoAsync, MovimientosAsync, EsperadoDtoAsync, DtoAsync, DtosAsync, Referencia,
+    ClasesDeVenta, PermisoVerTodas}`; `OpenCashSessionCommand`, `ListCashSessionsQuery`, `GetCashSessionQuery`, `MovimientosDelSistema.{CrearAsync,
+    DenominacionesAsync}`; `GetCashSessionExpectedQuery`, `CloseCashSessionCommand`, `RecountCashSessionCommand`, `CashCountInputValidator`,
+    `ArqueoDeLaSesion.{EvaluarAsync, EscribirAsync, DiferenciaAsync, ReemplazarDiferenciaAsync, Lineas}` con `ConteoPreparado`;
+    `CashMovementInput.ComoBorrador(tipoPorDefecto)`, `DatosDeMovimientoDeCaja` (viaja en `SaveInventoryDraftRequest.CashMovement`, sólo
+    lo admite el grupo `Cash`), `TiposDeCaja.PorDefectoAsync`, `ReglasDeMovimientoDeCaja.{EsRetiro, Campos, DestinoAsync, ExcesoAsync}`,
+    `BorradorDeMovimientoDeCaja : IBorradorDeGrupo`, las estrategias `EfectoMovimientoDeCaja` y `EfectoDiferenciaDeArqueo`,
+    `ListCashMovementsQuery`, `GetCashMovementQuery`, `VistaDeMovimientosDeCaja`; `ExecuteDayCloseCommand`, `ReopenDayCloseCommand`,
+    `ListDayClosesQuery`, `GetDayCloseQuery`, `VistaDeCierresDelDia`; `ErroresDeCaja`; DTO `DenominationCountInput`, `TerminalBatchInput`,
+    `ReferenceCheckInput`, `CashCountInput`, `ClosingWithdrawalInput`, `CashSessionCashierDto`, `CashDocumentRefDto`, `CashSessionDto`,
+    `OpenCashSessionResultDto`, `CashCountLineDto`, `CashSessionDetailDto`, `CashExpectedMeansDto`, `CashExpectedTerminalDto`,
+    `CashExpectedReferenceDto`, `CashExpectedLineDto`, `CashSessionExpectedDto`, `CashSessionBatchDto`, `CloseCashSessionResultDto`,
+    `CashMovementDto`, `DayCloseDto`, `DayCloseLineDto`, `DayCloseCardDto`, `DayCloseSessionDto`, `DayCloseDetailDto`,
+    `BorradorAbiertoDto`, `MovimientoPendienteDto`, `SesionAbiertaDto`. En el ciclo común: `IEfectoDeClase.{OmiteAprobacionAsync,
+    ExcluidosDeLaAprobacionAsync}` (con implementación por defecto; la diferencia de arqueo dentro de la tolerancia no pasa por la política y
+    el cajero nunca la aprueba), `ReglasDelDocumento` no exige líneas a las clases de caja; `MensajesDelDocumento.ModoDeEntregaAsync` sella
+    `BatchScopeKey = CashSession:{publicId}` con el disparador `CierreDeTurno`; `ClavesDeCerrojo.PuntoDeVenta` (el candado del punto que
+    serializa abrir sesión y cerrar el día); `IAuditoriaDelPuntoDeVenta.AnotarAsync(…, entidad)` con
+    `AuditoriaDelPuntoDeVenta.{EntidadDocumento, EntidadSesionDeCaja, EntidadCierreDelDia}`. Eventos de auditoría
+    `Inventory.CashSession.{Opened, Closed, Recounted}` e `Inventory.DayClose.{Executed, Reopened}`. Errores nuevos:
+    `Inventory.CashSession.{NotFound, BaseRequired, CashMeansMissing}`, `Inventory.CashMovement.Invalid` (`data.field`),
+    `Inventory.DayClose.{NotFound, NotClosed}`. Decisiones: el fondo fijo de una caja es la base de su sesión anterior (la primera toma lo
+    indicado); el lote `CashSessionClose` lo crea el cierre en su transacción con el molde del lote del cierre de período (no por
+    `OrderIntegrationBatchCommand`, que es manual); el tope de un retiro es lo esperado del medio o, ya contada la sesión, lo contado; el
+    reconteo que cuadra descarta el documento de diferencia; el esperado cuenta los pagos de documentos confirmados (una venta anulada deja
+    de contar).
+- **I3, contabilidad por medio de pago e informes (T621–T626, pruebas T558–T559) (nuevo)**: en
+    `Application/Inventory/Integration/DimensionesDeInventario` los puntos de venta activos y los medios de pago activos y vigentes con su
+    clase (`CatalogoDeDimensionesDto.PaymentMeans` deja de ser nulo desde I3). En `InventoryRulesCompletenessQueryHandler`:
+    `MediosSinCuenta` (una fila por punto no cubierto cuando las reglas del medio son sólo de puntos concretos), `DimensionesInexistentes`
+    y los avisos `RuleWithUnknownPaymentMeans`, `RuleWithUnknownPointOfSale` (`AvisoMedioInexistente`, `AvisoPuntoInexistente`; no suman al
+    resumen). En `Application/Inventory/Reports`: `DatosDeVentasYCaja.{ClasesDeVenta, ClasesDeDevolucion, FiltrosAsync, DocumentosAsync,
+    ClientesAsync, AprobadoresAsync, Estado, Tratamiento, TipoDeMovimiento, Destino, Rango}`, `FiltrosDeCaja`, y las consultas
+    `SalesBySessionReportQuery`, `SalesByRegisterReportQuery`, `SalesByPaymentMeansReportQuery`, `CashSessionReportQuery`,
+    `DayCloseReportQuery`, `CardPaymentsReportQuery`, `CashMovementsReportQuery`, `CashDifferencesReportQuery`,
+    `VoucherRedemptionsReportQuery`, `DiscountApprovalsReportQuery` (cada handler con su `Vista`); en `Reports/Vistas`,
+    `ImpairmentReportQuery` (motivo `MotivoCostoSobreVnr`). En `Application/Inventory/Cash/DocumentosDeCaja`: el puerto
+    `IDocumentosDeCajaEnPdf.{Arqueo, ComprobanteDeMovimiento}`, `GetCashCountReportQuery`, `GetCashMovementReceiptQuery`, `EncabezadoDeCaja`
+    y los modelos `CashCountReportModel`, `CashMovementReceiptModel`, `EmpresaDeCajaDto`, `DenominacionContadaDto`, `LoteDeArqueoDto`,
+    `ReferenciaDeArqueoDto`, `LineaDeArqueoDto`. En la API: `SalesDocumentReport` + `SalesDocumentPdfRenderer` (implementa
+    `IRepresentacionDeVentaEnPdf`), `CashCountReport`, `CashMovementReceiptReport` y `DocumentosDeCajaPdfRenderer`. Decisiones: una venta
+    de oficina cuenta en la sesión donde se arquean sus pagos; el esperado de una sesión con arqueo ciego no sale en el informe mientras
+    esté abierta, salvo con `CashSessions.ViewAll`; el valor neto realizable del deterioro es el precio general sin IVA menos los gastos de
+    venta.
+- **I3, API y pruebas de arquitectura (T627–T632, T560–T562) (nuevo)**: módulos Carter `API/Endpoints/Inventory/{PosEndpoints,
+    CashEndpoints, SalesEndpoints}` (nuevos) y los que I1 dejó sólo con la plantilla, ampliados: `Core/PaymentMeansEndpoints` (medios,
+    `/api/core/card-networks`, `/card-acquirers`, `/card-terminals`, `/cash-denominations`), `Inventory/PointsOfSaleEndpoints` (puntos,
+    cajas y `/api/inventory/payment-means/{id}/availability`) e `Inventory/PricingEndpoints` (listas, `/prices/resolve`, topes); la
+    reimpresión `POST /api/inventory/documents/{id}/reprint` en `DocumentsEndpoints`. Las plantillas 10 a 13 importan (la de la e2e pasa a
+    `Las_plantillas_10_a_13_se_descargan_vacias_y_se_importan_desde_I3`); `?withData` sigue siendo 404 (no tienen consulta de datos).
+    Application: `GetDefaultCashMovementTypeQuery` (el tipo de movimiento por defecto, para que la ruta no toque la base) y
+    `OpenCashSessionCommand`, `CloseCashSessionCommand`, `RecountCashSessionCommand` implementan `IOperacionDePuntoDeVenta` (canal `pos`;
+    la apertura con sesión vacía porque todavía no existe). Pruebas: `LosPagosNoGuardanElNumeroDeTarjeta` (entidades, DTO, entradas y
+    parámetros posicionales de las carpetas de pago, `Last4` `char(4)` en las dos instantáneas, `ValidadorDePagos.PareceNumeroDeTarjeta`);
+    `LosComandosDeInventarioLlevanClave.ComandosDePuntoDeVenta` con `Los_comandos_del_POS_y_de_la_caja_se_auditan_con_canal_pos` (fuera,
+    a propósito, el cierre del día y los movimientos de caja); `LasConsultasDeInventarioRespetanElAlcance.AplicadoresDeAlcance`
+    (`SesionesDeCaja`, `BorradorDelPos`: un handler que los recibe aplica el alcance por ellos). Decisiones: los `POST`/`PUT` de facturas,
+    notas y movimientos responden con el detalle de la consulta (`SalesDocumentDto`, `CashMovementDto`) y, si ésta falla, con lo que devolvió
+    el guardado; `deliver` y `reprint` devuelven la carta como `application/pdf` y la tirilla como JSON; el `PUT` de un medio lee el
+    `PaymentMeansInput` y el `reason` del mismo cuerpo.
+- **I3, Shared web y app (T633–T645, T561) (nuevo)**: clientes tipados `Shared/Services/Core/MediosDePagoClient` (medios, franquicias,
+    adquirentes, datáfonos, denominaciones y la disponibilidad de `/api/inventory/payment-means/{id}/availability`) y
+    `Shared/Services/Ventas/VentasClient` con parciales `.Pos` (puntos, cajas, la venta del POS y el aprobador presente: `presence-challenge` y
+    `decide` con `InPersonPasskey`/`InPersonTotp`), `.Caja`, `.Precios` y `.Documentos` (la entrega devuelve `EntregaDeVentaDto` con la tirilla o
+    el PDF en `Archivo`), sobre `EnvioDeVentas` (el envío común: sin sesión no sale nada, sin `Authorization` propia, `Idempotency-Key` de la
+    operación de pantalla); DTO espejo en `VentasDtos.{Pos,Caja,Precios,Documentos}` y `MediosDePagoDtos` (enums `int` al leer, nombre al
+    mandar). `TextosDeVentas` (etiquetas y nombres de `PaymentMeansClass`, `CardKind`, `PaymentReferenceKind`, `CashCountMethod`,
+    `CashDenominationKind`, `CashRegisterDocumentRole`, `CashRegisterPrintFormat`, `CashSessionStatus`, `CashMovementKind`,
+    `CashMovementDestination`, `CashDifferenceTreatment`, `DayCloseStatus`, `PaymentDirection`, `CreditOrigin`, `VoucherRedemptionStatus`;
+    constantes `GrupoDeVentas`, `GrupoDeCaja`, `ClasesDeVenta`, `ClasesDeNota`), fijado por `TextosDeVentasTests` (Architecture). Modelos
+    puros: `LecturaDelPos` («3*» multiplica; el multiplicador solo espera la lectura siguiente), `CobroDelPos`/`PagoEnCobro` (falta, sobra,
+    vueltas; la tecla del medio agrega un pago por lo que falta; de la tarjeta sólo `Last4` de cuatro dígitos), `HtmlDeTirilla` (la tirilla
+    en HTML a 58/80 mm; la carta a 190), `MediosDeOficina` (los medios del panel de cobro en oficina desde el catálogo de Core) y
+    `VistasDeVentas` (las once vistas de `/ventas/informes`). Impresión: `Shared/Services/IImpresionDeDocumentos` con
+    `ImpresionEnElNavegador` (`wwwroot/js/pos.js`, iframe oculto) y `App/Services/ImpresionNativa` (MAUI: la tirilla a la hoja de compartir,
+    porque el WebView de Android no admite `window.print`). `pos.js` es el global `window.ingeniaPos` (`montar`, `desmontar`, `reservar` las
+    teclas rápidas F de los medios mientras se cobra, `enfocar`, `imprimir`, `leerCaja`/`guardarCaja` con try/catch). Layout
+    `Shared/Layout/PosLayout` (sin barra lateral, con `AvisoDeVencimientoDeSesion` y `RegistroDeAccesos`); componentes
+    `Shared/Components/Pos/{LineasDeVenta, PanelDeCobro, AtajosDelPos, ClienteDelPos, AprobacionEnCaja, TirillaDeVenta, ConteoPorDenominaciones,
+    LotesDeDatafono}`; pantallas `/maestros/medios-de-pago`, `/ventas/puntos-de-venta`, `/ventas/listas-de-precios` (+ `/{id}`),
+    `/ventas/topes-de-descuento`, `/pos` (con `PosLayout`), `/pos/sesiones` (+ `/{id}`, `/{id}/cierre`), `/pos/movimientos-de-caja`,
+    `/pos/cierre-del-dia`, `/ventas/documentos` (+ `/{id}`), `/ventas/facturas/nueva` (`?documento=` edita el borrador),
+    `/ventas/notas-credito/nueva` (`?origen=` o `?documento=`) y `/ventas/informes`. «Pos» entra a `ModulosMigrados`. Menú: grupo
+    **Punto de venta** y enlaces de I3 en **Ventas** y **Maestros Core**; «Vender en el POS» se oculta si la sesión abierta del usuario es de un
+    punto sin POS (FR-058). `DestinoDeDocumentoDeInventario` abre las ventas y notas de I3 en `/ventas/documentos/{id}`. Siete temas de ayuda
+    `ventas-*` en `ManualCatalogo`.
+- **I3, crédito provisional (T646–T660; IC, T661–T667, sigue bloqueada por D-02) (nuevo)**: en `Application/Common/Integration/Lending`
+    el puerto `IConsultasDeCartera` (exactamente `EstadoCrediticioAsync(ConsultaCrediticia)` y `EstadoDeValidacionAsync(messagePublicId)`,
+    con `EstadoCrediticioDto`, `LineaDeCreditoDto`, `EstadoDeValidacionDto` y `EstadosDeValidacion`, provisionales y no persistidos), la marca
+    `CarteraNoHabilitada` (un `EstadoCrediticioDto` con `LendingEnabled = false` y el texto «Pendiente: el destino aún no está disponible
+    (IC)») y la implementación por defecto `ConsultasDeCarteraNoHabilitada`, registrada en `Application/DependencyInjection`. En
+    `Application/Common/Approvals`, `LimitesDePermisoPorUsuario` (el monto máximo de un permiso para cualquier usuario y el mayor de la
+    cooperativa sin contar a los excluidos; `LimitesPorPermiso` de la API delega en él). En `Application/Inventory/Sales`:
+    `EvaluateSaleCreditQuery` (+ `SaleCreditEvaluationDto`, `CreditPersonDto`, `CreditReasonDto`, `CreditApprovalDto`,
+    `CreditApprovalLevelDto`, `CreditDefaultsDto` —con `MaxTermDays` y `DefaultInstallments` además de los de §23.1— y `LendingStatusDto`);
+    `CreditoEnLaVenta` (elegibilidad `ElegibilidadDeCredito`, condiciones `CondicionesDeCredito`, sello `SelloAsync`) que llama
+    `ReglasDeConfirmacionDeVenta.ValidarVentaAsync`, así rige igual en la factura y en el cobro del POS; `AprobacionDeCredito` con su fuente
+    `FuenteDeAprobacionDeCredito` (`SourceType = DocumentPayment`, `IFuenteConAprobador`: el aprobador del nivel `Inventory.Sales.SellOnCredit`
+    necesita monto ≥ lo financiado) y la marca de petición `CreditosAprobadosEnCurso` (+ `AprobacionEnCurso`); `ErroresDeCredito` (`Inventory.Credit.TermsOutOfRange` y `.MeansNotCredit` son nuevos; `AmountExceedsLimit` con el texto del crédito);
+    `GetSalesDocumentCreditQuery` (+ `SalesDocumentCreditDto`, `CreditPaymentDto`, `CreditPaymentApprovalDto`, `LendingMessageDto`,
+    `LendingValidationDto`). El ciclo común gana `IEfectoDeClase.AprobacionPropiaAsync` (la aprobación propia de la clase, consultada en el
+    paso 2 y en la reentrada de la última aprobación; `SalidaPorVenta` la usa para el crédito) y, en esa reentrada, las reglas de venta validan
+    las sesiones de los pagos que siguen abiertas, no las del aprobador. `EmisionDeInventario.VentasACreditoAsync` y
+    `.AjustesDeVentaACreditoAsync` (+ `CondicionesDelCredito`); `MensajesDelDocumento.Solicitudes` emite cada `VentaACreditoRegistrada` y
+    cada `AjusteDeVentaACredito` como su propio evento (`Confirmation:{pago:N}`; el ajuste con la venta como relacionada y dependiente de su
+    cadena). Rutas `POST /api/inventory/sales/credit-evaluations` (`Inventory.Sales.SellOnCredit`, sin `Idempotency-Key`) y
+    `GET /api/inventory/sales/documents/{id}/credit` (`Inventory.Sales.View`). En Contabilidad, el error
+    `Accounting.InventoryRule.CreditAccountRequirements` (la cuenta del medio de crédito no exige tercero y documento cruce; lo corrige el plan
+    de cuentas). Shared: `VentasClient.EvaluarCreditoAsync`/`ObtenerCreditoAsync`, DTO espejo en `VentasDtos.Documentos`
+    (`EvaluacionDeCreditoRequest`, `EvaluacionDeCreditoDto`, `CreditoDeLaVentaDto`…), la evaluación en `PanelDeCobro` (parámetros `Cliente`,
+    `PuntoDeVenta`, `TipoDeDocumento`, `Fecha`) y la pestaña «Crédito» de `/ventas/documentos/{id}`.
+- **I3, cierre de las e2e (T563–T570, T650; 2026-09-27) (nuevo)**: `CatalogoDeParametros.EntregaVigente` sube a **I3** (las clases de venta y de
+    caja se operan en la aplicación; la semilla de tipos siembra además `MC` y `DA`; las ventas no se siembran: sus tipos los crea la
+    cooperativa). Correcciones que las e2e destaparon y sus nombres: `Core/PaymentMeans/ReglasDeFormaDelMedio.Definir(InlineValidator, conCodigo)`
+    reemplaza al validador `PaymentMeansInputValidator(bool)` (Carter y `AddValidatorsFromAssembly` registran todo `IValidator`, también los
+    internos, y la API no arrancaba); `ConfirmacionDeDocumento.NumeroProvisionalDeLaValidacion` («PORNUMERAR»: el número con que la validación
+    previa evalúa un documento todavía sin número, para que el cruce `FV` + número del crédito provisional se evalúe como quedará);
+    `HuellaDeOperacion` escribe los números **sin escala** (una entidad en memoria y releída dan la misma huella: el descuento y el crédito
+    aprobados no coincidían con la línea releída); la nota de venta se enlaza sólo con `NoteOf` (el `ReturnOf` duplicaba el par de líneas del
+    índice único `UK_INV_DocumentLineLinks_SourceLine_TargetLine`; la devolución la dice `ReturnsGoods`); `EmisionDeInventario.Invertido`
+    invierte también el `amount` de los pagos (mensajes.md §3); `SesionesDeCaja.MovimientosAsync` da a la reclasificación el datáfono del pago
+    corregido; `ToqueDeSesionDeCaja` pone al día el token de concurrencia de la sesión seguida; la completitud cuenta sólo la regla
+    `MedioDePago` de la operación `Venta`; `TopesDeDescuento` sin filtrar la junción de roles por `IsDeleted`.
+
 ### 2.17 Códigos de error principales (familias)
 
 `Operation.KeyRequired` (400), `Operation.KeyReused` (422) y cabecera `Idempotent-Replayed: true` ·
@@ -1661,11 +1922,13 @@ nota va contra una factura confirmada del mismo proveedor, línea por línea); t
 activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, o fuera del alcance) y
 `Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
 entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US11) → `Inventory.Count.AlreadyOpen` (nuevo, T392: abrir o editar un conteo con foto) y
-`Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina).
+`Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina); pagos → `Payments.AmountInvalid` (nuevo, T579: un pago con valor cero o negativo; `ValidadorDePagos`), y `last4` que no son cuatro dígitos responde `Payments.ReferenceInvalid` con `data.field = "last4"`.
 
 ### 2.18 Pruebas con nombre fijo
 
 **Arquitectura nuevas** (`tests/IngenIA365ERP.Architecture.Tests/Principles`):
+**(nuevo, 2026-09-27)** `LosValidadoresSeConstruyenPorInyeccion` (ningún `IValidator` de Application pide un valor que el contenedor
+no sabe dar) y, en `LaJuncionDeRolesNoTieneBorradoLogico`, también la sintaxis de consulta (`from ur in db.UserRoles …`).
 `InventarioNoConoceContabilidadNiCartera` (ArchUnit + regex + lista exacta de
 `IContabilidadParaInventario`/`IConsultasDeCartera`: la comprobación de FR-014),
 `NingunTrabajoDeFondoOperaSinCooperativa` (todo `BackgroundService` con `ISender` pasa por
@@ -1716,7 +1979,11 @@ EntregaGarantizadaTests, IdempotenciaDeOperacionesTests, LotesProgramadosTests}`
 `Inventory/{ConcurrenciaDeExistenciasTests, CompraDirectaTests, TrasladoEnDosPasosTests,
 ConteoYAjusteTests, CierreDePeriodoTests, SaldoInicialYActivacionTests}`,
 `Accounting/{ContabilizacionPorMensajesTests, ContabilizacionDeVentasPorMensajesTests}` (la segunda en I3: los casos de I2 que necesitan ventas), `Ventas/{VentaPosCompletaTests, BonoUnicoConcurrenteTests,
-UnaSesionPorCajaTests, BusquedaDeProductos50kTests, CreditoProvisionalTests}`,
+UnaSesionPorCajaTests, BusquedaDeProductos50kTests, CreditoProvisionalTests, CierreDeCajaPorMedioTests}` (**(nuevo, T563–T570, T650)** con los
+ayudantes `Ventas/EscenarioDeVentas` —la cooperativa de ventas de quickstart §5.1 sobre `EscenarioDeInventario`: no obligada a facturar,
+`RV`/`NV`, `MOSTRADOR`, PV1 con `CJ1`/`CJ2`, los seis medios con franquicias, adquirentes y datáfonos, la lista `GENERAL`, `cajero.1`,
+`cajero.2` y `supervisor` con sus topes y montos— y `Ventas/ContabilidadDeVentasE2E` —la misma con la contabilidad iniciada y las cuentas y
+reglas de la venta—; `VentaPosCompletaTests.cs` lleva además la clase `CadaPagoLlegaASuCuentaTests`, T567, en su propia cooperativa),
 `Security/{AprobacionMultinivelTests, AlcancePorBodegaTests, IntegridadDeAuditoriaTests}`,
 `ElectronicInvoicing/DocumentosElectronicosTests` (con `CanalSimulado`). Las de volumen (SC-001 al pie
 de la letra, 50.000 productos, SC-020) reportan **Skip explícito** sin `RUN_PERF_TESTS=1`, nunca un

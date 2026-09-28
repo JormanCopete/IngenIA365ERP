@@ -77,6 +77,11 @@ namespace IngenIA365ERP.App
             // Feature 012, T429: la verificación de integridad de la auditoría (pestaña «Integridad» de la consola).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compras.ComprasClient>();
+            // Feature 012, I3 (T633, T634): Ventas y medios de pago (misma salvedad: CentralAuthClient, verificacion de MAUI) y la impresion
+            // nativa de la tirilla, porque el WebView de Android no admite window.print.
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Ventas.VentasClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
+            builder.Services.AddSingleton<IImpresionDeDocumentos, ImpresionNativa>();
             // Feature 012, US7 (T532): el lado contable de la integración con Inventario; misma salvedad (CentralAuthClient, verificacion de MAUI).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();

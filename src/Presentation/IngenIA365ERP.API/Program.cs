@@ -166,6 +166,9 @@ try
     // Feature 012 (T317, api.md §13.3): activar una bodega sin la comparación contable (antes de I2) sólo fuera de producción.
     builder.Services.Configure<IngenIA365ERP.Application.Inventory.GoLive.PuestaEnMarchaOptions>(o =>
         o.PermitirActivacionSinComparacion = !builder.Environment.IsProduction());
+    // Feature 012 (I3, T607): fuera de produccion toda tirilla dice «SIN VALIDEZ FISCAL» (quickstart §5.13).
+    builder.Services.Configure<IngenIA365ERP.Application.Inventory.Sales.TirillaOptions>(o =>
+        o.AmbienteDePruebas = !builder.Environment.IsProduction());
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
@@ -384,6 +387,9 @@ try
     // Feature 010 (US3): el documento de liquidación definitiva para firma, también con QuestPDF.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.ISettlementDocumentRenderer, IngenIA365ERP.API.Reports.SettlementDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Accounting.Documents.IVoucherPdfRenderer, IngenIA365ERP.API.Reports.VoucherPdfRenderer>();
+    // Feature 012 (I3, T626): el comprobante no electrónico en carta y los documentos de caja (arqueo y comprobante de movimiento).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.IRepresentacionDeVentaEnPdf, IngenIA365ERP.API.Reports.SalesDocumentPdfRenderer>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 

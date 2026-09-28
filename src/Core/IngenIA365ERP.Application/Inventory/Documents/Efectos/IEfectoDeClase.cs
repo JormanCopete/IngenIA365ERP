@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Documents;
@@ -99,6 +100,28 @@ public interface IEfectoDeClase
     /// </summary>
     Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         contexto.EsAnulacion ? MensajesDeAnulacionAsync(contexto, ct) : MensajesAsync(contexto, ct);
+
+    /// <summary>
+    /// ¿La confirmación se salta la política del tipo? (feature 012, I3, T618; T50). Sólo la diferencia de arqueo con todas sus
+    /// líneas dentro de la tolerancia del medio: se confirma con su motivo y sin aprobación. Por defecto, no. (nuevo)
+    /// </summary>
+    Task<bool> OmiteAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(false);
+
+    /// <summary>
+    /// Los usuarios (<c>SEC_Users.Id</c>) que no pueden aprobar el documento además de quien lo creó (feature 012, I3, T618; T50): el
+    /// cajero de la sesión en una diferencia de arqueo, aunque la cierre un supervisor. Por defecto, ninguno. (nuevo)
+    /// </summary>
+    Task<IReadOnlyCollection<int>> ExcluidosDeLaAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyCollection<int>>([]);
+
+    /// <summary>
+    /// Una aprobación propia de la clase, además de la del tipo (feature 012, I3, T655; T32): la del crédito provisional de una venta
+    /// (<c>Subject = ProvisionalCredit</c>, <c>SourceType = DocumentPayment</c>). La consulta el flujo canónico en el paso 2 —y en la
+    /// reentrada de la última aprobación, porque la del tipo pudo aprobarse antes—: una solicitud pendiente deja el documento
+    /// <c>PendingApproval</c> sin número. Nula si no hace falta o ya está aprobada. Por defecto, ninguna. (nuevo)
+    /// </summary>
+    Task<Result<ApprovalRequest?>> AprobacionPropiaAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult(Result.Success<ApprovalRequest?>(null));
 }
 
 /// <summary>
@@ -140,4 +163,12 @@ public abstract class EfectoDeClaseBase : IEfectoDeClase
 
     public virtual Task<IReadOnlyList<object>> MensajesProvisionalesAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         contexto.EsAnulacion ? MensajesDeAnulacionAsync(contexto, ct) : MensajesAsync(contexto, ct);
+
+    public virtual Task<bool> OmiteAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(false);
+
+    public virtual Task<IReadOnlyCollection<int>> ExcluidosDeLaAprobacionAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyCollection<int>>([]);
+
+    public virtual Task<Result<ApprovalRequest?>> AprobacionPropiaAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
+        Task.FromResult(Result.Success<ApprovalRequest?>(null));
 }
