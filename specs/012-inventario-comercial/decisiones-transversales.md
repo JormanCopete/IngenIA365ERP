@@ -804,7 +804,7 @@ Sin destinatario activo: se enruta a los titulares de `CompanyAdmin` y se marca 
 | 77 | `InventoryUnitsSeeder` | `Data/inventario-unidades.json` (con código Rec. 20) | I1 |
 | 78 | `WarehouseTypesSeeder` | principal, punto de venta, averías, cuarentena, tránsito | I1 |
 | 79 | `AdjustmentCausesSeeder` | causas de FR-037 + reclamación al transportador | I1 |
-| 80 | `InventoryDocumentTypesSeeder` | un tipo por defecto por clase de I1 (incluido `Voiding`) con su secuencia | I1 |
+| 80 | `InventoryDocumentTypesSeeder` | un tipo por defecto por clase de I1 (incluido `Voiding`) con su secuencia; en I3 `MC` y `DA`; en I5 (T785) `SOC` solicitud de compra (sin contraparte obligatoria), `ORC` orden de compra y `CAD` costos adicionales de compra (nuevo; códigos propuestos, los confirma el dueño con la contadora), idempotente por código | I1 |
 | 81 | `TaxCatalogSeeder` | `Data/impuestos-co.json` (IVA 19/5/exento/excluido, INC, bolsas por unidad, ReteFuente por concepto en UVT, ReteIVA; ReteICA sin semilla), «pendiente de validar por la contadora» | I1 |
 | 82 | `DivipolaSeeder` | `Data/divipola.json` → `COR_Cities.DaneCode` | I1 |
 | 83 | `AlertTypesSeeder` | los tipos de §2.13 con permisos destinatarios por defecto | I1 |
@@ -827,7 +827,7 @@ JSON embebidos versionados (T40), no semillas.
 | I2 | `IntegracionContableDeInventario` | aditiva | `COR_IntegrationDeliveryAttempts`, `COR_IntegrationBatches`, `COR_IntegrationBatchCounters`, `ACC_InventoryPostingRules`, `ACC_InventoryVoucherMappings`, `ACC_InventoryPostings`, `ACC_AccountTaxRates.Rate` (9,6). |
 | I3 | `VentasYPuntoDeVenta` | aditiva | `COR_PaymentMeans`, `COR_Card*`, `COR_CashDenominations`, tablas `INV_` de I3. |
 | I4 | `DocumentosElectronicos` | aditiva | `COR_ElectronicEmissionSettings`, `COR_DianNumberingResolutions`, `COR_DianResolutionChannels`, `COR_ElectronicDocuments`, `COR_ElectronicDocumentVersions`, `COR_ElectronicDocumentTransmissions`, `COR_DianContingencyEvents`. |
-| I5 | `ComprasYCosteoAvanzado` | aditiva | `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`, `INV_LayerConsumptions`; columnas `BalanceClosedAt`, `BalanceClosedByUserId`, `BalanceClosedReason` en `INV_Documents`. |
+| I5 | `ComprasYCosteoAvanzado` | aditiva | `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`, `INV_LayerConsumptions`; columnas `BalanceClosedAt`, `BalanceClosedByUserId` (FK `SEC_Users`, `IX_INV_Documents_BalanceClosedByUserId`), `BalanceClosedReason` y `ExpectedDate` (data-model §5.1, I5; la necesitan la solicitud y la orden de T787/T790 y no se puede sumar después sin otra migración) en `INV_Documents`. Generada el 2026-09-28 (T835); `AllocationMethod` **no** va en `INV_Documents` (vive por fila en `INV_LandedCostAllocations`, T778). |
 | I6 | `ComercioAmpliado` | aditiva | variantes, componentes, lotes, series, reservas, promociones. |
 
 ### 2.16 Componentes con nombre fijo
@@ -1935,6 +1935,15 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `Projections/CostLayerConfiguration` y `Transactions/LayerConsumptionConfiguration` adelantadas de T833 (lo exige
     `LasCantidadesYCostosTienenSuPrecision`); sin DbSet ni migración (T835). `ParametrosDeInventario` ya declaraba `Peps` desde I5 y las
     dos claves de retroactivos (T832); `CatalogoDeParametros.EntregaVigente` **sigue en I4** hasta el cierre de I5. Reglas en T42b.
+- **I5, persistencia (T785, T835; verificación del cerrojo T786/T834; 2026-09-28) (nuevo)**: DbSets `PurchaseMatchLines`,
+    `LandedCostAllocations`, `CostLayers` y `LayerConsumptions` en `IApplicationDbContext`, `ApplicationDbContext` y el contexto de
+    pruebas; columnas `InventoryDocument.ExpectedDate` (editable en borrador) y `BalanceClosedAt`/`BalanceClosedByUserId`/
+    `BalanceClosedReason` (`private set`: las escribe sólo el cierre del saldo, T792, que además debe sumarlas a
+    `IInmutableTrasConfirmar.PropiedadesMutablesTrasConfirmar`, porque la orden ya está confirmada); `InventoryDocumentTypesSeeder`
+    siembra `SOC`, `ORC` y `CAD` cuando la entrega vigente llega a I5. El cerrojo **no cambia**: la orden y la factura del flete entran
+    como `DocumentosDeOrigen`, las capas PEPS las protege la fila exclusiva de `INV_CostStates` y el retroactivo pasa en el pedido los
+    estados de costo y las existencias de todos los productos que recalcula (lo arma la aplicación, T836–T838). Par
+    `ComprasYCosteoAvanzado` (T835).
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2102,6 +2111,9 @@ aislada por caso) sobre `EscenarioDeFacturacionElectronica` (`PrepararAsync(fx, 
 `CentralIdentityApiFixture.DirectorioDeCredenciales` (`ElectronicInvoicing:CredentialsPath` temporal por fixture). El volumen de 30
 emisiones a la vez (`Treinta_emisiones_a_la_vez_responden_con_p95_de_a_lo_sumo_5_segundos`) es `[FactDeRendimiento]`: omitida con su
 motivo sin `RUN_PERF_TESTS=1`.
+**(nuevos, I5, T785/T786/T834)** `tests/IngenIA365ERP.Application.Tests/Infrastructure/SemillasDeComprasTests` (los tres tipos de I5,
+idempotente sobre una cooperativa con los de I1 a I4) y `tests/IngenIA365ERP.Application.Tests/Inventory/Common/CerrojoDeComprasYCosteoTests`
+(el SQL del cerrojo cubre la recepción contra orden, los costos adicionales, las capas PEPS y el retroactivo sin un paso nuevo).
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 

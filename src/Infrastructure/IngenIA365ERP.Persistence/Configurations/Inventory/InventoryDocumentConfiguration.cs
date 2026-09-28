@@ -93,6 +93,12 @@ public class InventoryDocumentConfiguration : IEntityTypeConfiguration<Inventory
         builder.HasIndex(e => e.CashSessionId).HasDatabaseName("IX_INV_Documents_CashSessionId").HasFilter("[CashSessionId] IS NOT NULL");
         builder.HasIndex(e => new { e.Status, e.OperationDate }).HasDatabaseName("IX_INV_Documents_Status_OperationDate");
 
+        // I5 (T835; data-model §5.1 y §9.8): la fecha esperada de la solicitud y la orden, y el cierre del saldo de la orden.
+        builder.Property(e => e.ExpectedDate);
+        builder.Property(e => e.BalanceClosedAt);
+        builder.Property(e => e.BalanceClosedReason).HasMaxLength(500);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.BalanceClosedByUserId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(e => e.RowVersion).IsRowVersion();
 
         // Audit

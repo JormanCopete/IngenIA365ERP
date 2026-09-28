@@ -19,8 +19,8 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Documents;
 /// <see cref="Prefix"/> y <see cref="Number"/> los asigna sólo <c>Numerador</c> (o <c>NumeradorFiscal</c>, I4); lo vigila
 /// <c>SoloElNumeradorNumera</c>. Las FK hacia bodegas, ubicaciones, productos, unidades, canales y causas son
 /// columnas <c>int</c> sin navegación: las declara la configuración de esas entidades (US1). Las columnas de I3
-/// (punto, caja, sesión, suspensión) y de I5 (<c>AllocationMethod</c>, <c>BalanceClosed*</c>, <c>ExpectedDate</c>) las
-/// agrega su entrega.
+/// (punto, caja, sesión, suspensión) y de I5 (<c>BalanceClosed*</c>, <c>ExpectedDate</c>) las agrega su entrega; el método
+/// de reparto de los costos adicionales no vive aquí sino en cada fila de <c>INV_LandedCostAllocations</c> (T778).
 /// </para>
 /// </summary>
 public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
@@ -131,6 +131,24 @@ public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
     public DateTime? CountSnapshotAt { get; set; }
     public long? CountSnapshotKardexEntryId { get; set; }
     public byte? CountRound { get; set; }
+
+    // ---- solicitud y orden de compra (I5, T835; data-model §5.1 y §9.8) ----
+
+    /// <summary>Solicitud: para cuándo se necesita (<c>neededBy</c>); orden: la entrega esperada (<c>expectedDate</c>).</summary>
+    public DateOnly? ExpectedDate { get; set; }
+
+    /// <summary>
+    /// Sólo <c>PurchaseOrder</c>: el saldo pendiente de recibir se cerró (decisión del dueño, data-model §9.8). Desde ese
+    /// instante la orden no admite recepciones y su saldo deja de contar como «por recibir». Lo escribe sólo el cierre
+    /// del saldo (<c>ClosePurchaseOrderBalanceCommand</c>, T792), sobre una orden ya confirmada.
+    /// </summary>
+    public DateTime? BalanceClosedAt { get; private set; }
+
+    /// <summary><c>SEC_Users.Id</c> de quien cerró el saldo de la orden.</summary>
+    public int? BalanceClosedByUserId { get; private set; }
+
+    /// <summary>El motivo, obligatorio, del cierre del saldo de la orden.</summary>
+    public string? BalanceClosedReason { get; private set; }
 
     // ---- nacen en I1 y se usan después (§14) ----
     public DateOnly? ValidUntil { get; set; }

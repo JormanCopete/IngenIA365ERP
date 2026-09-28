@@ -373,6 +373,11 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture> CountCaptures => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>();
+    // Feature 012, I5 (T835): cruce a tres vías, reparto de costos adicionales, capas PEPS y sus consumos.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine> PurchaseMatchLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer> CostLayers => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption>();
     // Feature 012 (T585, I3): medios de pago de Core, punto de venta y caja, precios y satélites de la venta (VentasYPuntoDeVenta).
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans => Set<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork> CardNetworks => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork>();
