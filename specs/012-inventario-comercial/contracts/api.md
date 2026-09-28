@@ -725,6 +725,7 @@ guarda vigencias. Leer un valor en el servidor es sólo `LectorDeParametros` (T2
 | `Parameters.KeyNotFound` | 404 | clave inexistente en el catálogo del módulo | |
 | `Parameters.ValueNotAllowed` · `.ScopeNotAllowed` | 422 | valor o ámbito fuera de lo admitido | `{ allowed[] }` |
 | `Parameters.Overlaps` · `.ValidFromInClosedPeriod` · `.RequiresPeriodStart` · `.PermissionRequired` | 422 | ver reglas | |
+| `Inventory.Costing.MethodChangeInFuture` **(nuevo, I5, T841)** · `Parameters.LegalSourceRequired` **(nuevo, I5, T842)** | 422 | `Costeo.Metodo`/`Costeo.Ambito` con `validFrom` futuro (el cambio no se programa: se registra el día que empieza o después, sin movimientos desde ese día); con `Costeo.CambioExigeActa` y sin `legalSource` | `{ key, validFrom, today }` · `{ key }` |
 | `Inventory.PostingMode.ChainMismatch` · `.FiscalRequiresConfirmation` | 422 | FR-075 | ver reglas |
 
 ## 8. Tipos de documento — `/api/inventory/document-types` (`DocumentTypesEndpoints.cs`, I1)

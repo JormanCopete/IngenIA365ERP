@@ -50,8 +50,9 @@ public static class MotorDeCosteo
     /// El ajuste de costo <c>PriceDifference</c> de una factura o nota del proveedor sobre una entrada (US9, T341): partido
     /// entre existencia y vendido (<see cref="Costing.DiferenciaDePrecio"/>).
     /// </summary>
-    public static ResultadoDeCosteo DiferenciaDePrecio(EstadoDeCosto estado, PedidoDeDiferenciaDePrecio pedido, RedondeoDeMontos montos) =>
-        Costing.DiferenciaDePrecio.Aplicar(estado, pedido, montos);
+    public static ResultadoDeCosteo DiferenciaDePrecio(EstadoDeCosto estado, PedidoDeDiferenciaDePrecio pedido, RedondeoDeMontos montos,
+        CostMethod metodo = CostMethod.WeightedAverage) =>
+        Costing.DiferenciaDePrecio.Aplicar(estado, pedido, montos, metodo);
 
     /// <summary>
     /// El ajuste de costo <c>LandedCost</c> de un documento de costos adicionales sobre la entrada de una línea de recepción (US13,
@@ -83,6 +84,7 @@ public static class MotorDeCosteo
         return new ImpactoEnCostos(retroactivo, resultado.PorDocumento, resultado.Ajustes.Sum(a => a.TotalCost), resultado, resultado.Rechazo);
     }
 
-    public static ResultadoDeCosteo CostoAdicional(EstadoDeCosto estado, ReferenciaDeKardex entrada, RepartoDeLinea reparto) =>
-        Costing.Prorrateo.AlKardex(estado, entrada, reparto);
+    public static ResultadoDeCosteo CostoAdicional(EstadoDeCosto estado, ReferenciaDeKardex entrada, RepartoDeLinea reparto,
+        CostMethod metodo = CostMethod.WeightedAverage, RedondeoDeMontos montos = RedondeoDeMontos.Centavo) =>
+        Costing.Prorrateo.AlKardex(estado, entrada, reparto, metodo, montos);
 }

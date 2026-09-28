@@ -574,6 +574,7 @@ confirmar.
 | INV | `Costeo.Ambito` | `Cooperativa`, `Bodega` | Cooperativa | None (misma regla) | I1 |
 | INV | `Costeo.RetroactivosPermitidos` | bool | false (no rige para el saldo inicial de una bodega `NotActivated` ni para los ajustes de un conteo aprobado: T18) | None | I5 |
 | INV | `Costeo.RetroactivosDiasMaximos` | int | 0 | None | I5 |
+| INV | `Costeo.CambioExigeActa` **(nuevo, T842; a confirmar por el dueño)** | bool | false | None | I5 |
 | INV | `Existencias.StockNegativoPermitido` | bool | false | None, Warehouse | I1 |
 | INV | `Redondeo.Montos` | `Centavo`, `Peso` | Centavo | None | I1 |
 | INV | `Redondeo.Residuo` | `MayorValor`, `UltimaLinea` | MayorValor | None | I1 |
@@ -1997,6 +1998,20 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     (`RadianNotAvailableCode`); en el dominio `TransicionesDeEventoRadian.{PedirEmision, TrasLaRespuesta, CodigoRecepcionSinConfirmar}` y
     `EventoRadianActual.EnEmision`. `CanalSimulado` declara `RadianEvent030/032` y los emite con su tabla del último dígito. La ruta y la
     pantalla son de T808 y T815. Reglas en T42f.
+- **I5, costeo en la aplicación (T836–T844; 2026-09-28) (nuevo)**: en `RegistroDeKardex` el parámetro de constructor `entrega`
+    (`EntregaDelComercio`, por defecto la vigente, como `EfectosDeClase`), `Simular()`/`Simulado` con `ImpactoDelBorrador`
+    (`EsRetroactivo`, `PorAmbito`) e `ImpactoPorAmbito` y el código interno `CodigoSimulacionTerminada`
+    (`Inventory.Costing.SimulationDone`, nunca llega a la pantalla), `TomarAjustesRetroactivos(documento)`, `RegistrarCambioDeMetodoAsync`
+    con `LineaDeCambioDeMetodo` y `CerrojoDelCambio`, `RestantePorEntradaAsync` (T843), y la escritura PEPS privada `EscribirCapas`; en
+    `ConfirmacionDeDocumento` los parámetros opcionales `registroDeKardex` y `emisionDeInventario` (T839); `Inventory/Costing/
+    GetDocumentCostImpactQuery` (+ `CostImpactDto`, `CostImpactAffectedDto`, `CostImpactProductDto`) y `Inventory/Costing/
+    CambioDeMetodoDeCosteo`, que implementa el gancho de plataforma `Common/Parameters/IEfectoDeAltaDeParametro` (corre dentro de
+    `AddParameterVersionCommandHandler`, que gana `efectosDeAlta` y `entrega`); `LectorDeParametros` gana el parámetro `entrega`;
+    `ReglasDePlataformaDeInventario` gana `reloj`; `Inventory/Reports/MethodChangeValuationReportQuery`; en el dominio
+    `Peps.{ProporcionEnExistencia, CapaDe, AjusteSobreEntrada}`, `CostLayer.{EntryKardexEntry, Revaluar, Desde(…, KardexEntry, …)}`
+    (`UnitCost` pasa a `private set`), `LayerConsumption.{ExitKardexEntry, Layer}` (navegaciones sin columnas nuevas) y el parámetro
+    `metodo` en `DiferenciaDePrecio.Aplicar`, `Prorrateo.AlKardex`, `MotorDeCosteo.DiferenciaDePrecio` y `MotorDeCosteo.CostoAdicional`;
+    `ResultadoDeVerificacion.CostLayers`. Clave `Costeo.CambioExigeActa` (§2.8). Reglas en T42g.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2065,7 +2080,11 @@ entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US1
 
 Costeo avanzado (I5, T829; **(nuevo)**): `Inventory.Costing.RetroactiveRequiresWeightedAverage` (D6: un documento con fecha anterior
 a otro ya registrado del ámbito con PEPS vigente; `Retroactivo.CodigoRequierePromedioPonderado`, antes de calcular nada). Los otros dos
-de T838 (`Inventory.Costing.RetroactiveNotAllowed`, `.RetroactiveTooOld`) los publica la aplicación.
+de T838 (`Inventory.Costing.RetroactiveNotAllowed`, `.RetroactiveTooOld`) los publica la aplicación. Desde la aplicación (T838, T841,
+T842; **(nuevo)**): `Inventory.Costing.RetroactiveTooOld` (`data { maxDays, earliestAllowed, operationDate }`), el mismo
+`.RetroactiveRequiresWeightedAverage` con `data { lineNumber, productCode }` (también si hay PEPS o un cambio de método después de la
+fecha), `Inventory.Costing.MethodChangeInFuture` (`data { key, validFrom, today }`: el cambio de método o de ámbito no se programa) y
+`Parameters.LegalSourceRequired` (`data { key }`: `Costeo.CambioExigeActa` y sin `legalSource`).
 
 Cruce a tres vías (I5, T796; **(nuevo)**): `Inventory.PurchaseMatch.QuantityNotApprovable` (aprobar por excepción una línea retenida
 por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción). Lo publica `DecisionDeCruce` en cualquier
@@ -2999,6 +3018,49 @@ Lo que T802–T805, api.md §14.8/§24.7 y dian.md §4.3/§5.1 dejaban abierto y
   rechazado **sigue faltando**, y la revisión diaria ahora lo cuenta junto con los pendientes.
 - *Después del commit* el comando intenta cada evento por el canal (`EmitElectronicDocumentCommand`, en orden); el procesador retoma lo
   que quede.
+
+**T42g · Costeo avanzado en la aplicación: retroactivo general, PEPS escrito, cambio de método y valorizado (I5, T836–T844; 2026-09-28;
+a revisar por el dueño y la contadora).** Lo que T836–T844, api.md §7/§9.3/§27 y data-model §3.5 dejaban abierto:
+- *Dónde vive la puerta del retroactivo (T838).* No en el paso 1 de la confirmación, que no conoce el ámbito de costo de cada movimiento,
+  sino en `RegistroDeKardex` (paso 5, dentro del cerrojo), donde ya se detectaba el retroactivo de I1: mismo lugar, mismo orden. El
+  período cerrado lo sigue rechazando el paso 1 (`Inventory.Period.Closed`). El orden es: PEPS vigente, o PEPS o un cambio de método
+  **después** de la fecha del documento → `.RetroactiveRequiresWeightedAverage` (también para las dos excepciones de I1, T42b); las dos
+  excepciones de I1 pasan; `Costeo.RetroactivosPermitidos` apagado → `.RetroactiveNotAllowed` (el código de I1); fecha anterior a
+  hoy − `Costeo.RetroactivosDiasMaximos` → `.RetroactiveTooOld`. **`RetroactivosDiasMaximos = 0` significa «sólo hoy»**, no «sin
+  límite» (defecto seguro). La puerta rige sólo con la entrega vigente en I5 o después: hasta el cierre de I5 se comporta como en I1.
+- *Mensajes del retroactivo (T839).* La confirmación (no cada estrategia) toma del registro los ajustes `Retroactive` del documento y agrega
+  un `AjusteDeCostoReconocido` por documento afectado, fechado en la salida afectada y con el destino del mensaje de ése; si la clase ya
+  los armó (saldo inicial, ajuste de conteo), no se duplican.
+- *`cost-impact` (T840).* Corre las reglas de la clase y **su efecto real** con el registro en modo simulación: calcula todo —incluidos los
+  rechazos de la puerta y de existencia— y, en lugar de escribir, deja `SimularImpacto` por ámbito y termina; la consulta descarta lo que el
+  efecto tocó (`DescartarCambios`). Por eso muestra exactamente lo que escribirá la confirmación. Un documento que no pasa por el kardex
+  (sólo costo) responde `retroactive = false`.
+- *PEPS escrito (T836).* Una `INV_CostLayers` por capa nueva (también la que nace consumida), un `INV_LayerConsumptions` por consumo —el de
+  la anulación, con cantidad negativa y bajo la línea de la anulación— y lo que queda de cada capa sale del estado final del ámbito. Las
+  capas se enlazan a su línea por navegación (`CostLayer.EntryKardexEntry`, `LayerConsumption.ExitKardexEntry/Layer`): no hay columnas
+  nuevas. La salida del tránsito todavía no nombra su línea de despacho (el efecto no le pasa origen): consume en orden PEPS y la diferencia
+  queda como `VoidDifference` sin `AffectsEntryId`; afinarlo es tocar `EfectoRecepcionDeTraslado` (pendiente).
+- *Cambio de método o de ámbito (T841).* **No se programa**: `validFrom` tiene que ser hoy o antes (además del primer día de un período
+  abierto sin movimientos desde ese día), porque la capa única y el reparto por bodega salen de la existencia real de ese día
+  (`Inventory.Costing.MethodChangeInFuture`). El documento `CostAdjustment` del sistema (el primer tipo activo de la clase, numerado,
+  fechado en `validFrom`, en la primera sucursal, con el motivo y el acta en sus notas) se guarda como borrador dentro de la transacción del
+  alta, se escribe y se confirma. Método: una línea `MethodChange` sin cantidad por ámbito con existencia o valor (T42b). Ámbito: la
+  existencia de cada bodega y ubicación pasa del ámbito anterior al nuevo con un par de líneas `MethodChange` **con cantidad** (salida del
+  anterior, entrada al nuevo) al costo vigente del anterior, el centavo del reparto en la última; así Σ del kardex por ámbito sigue igual a
+  `INV_CostStates` y la existencia por bodega no cambia. Con PEPS cada ámbito nuevo abre su capa única. Las capas del régimen anterior se
+  cierran (restante 0 sin consumos: la verificación no lo cuenta como diferencia).
+- *El acta (T842, decisión a confirmar).* Se adopta la propuesta: clave `Costeo.CambioExigeActa` (bool, defecto `false`, `Inventory.Costing.Manage`);
+  con `true`, sin `legalSource` → `Parameters.LegalSourceRequired`. La alternativa (acta siempre opcional) es borrar la clave.
+- *PEPS en la diferencia de precio y los costos adicionales (T843, D5; la contadora valida).* La porción en existencia es lo que queda de
+  **la capa de esa recepción** (restante / original); se suma a esa capa (su costo unitario pasa a `round6((valor + porción) / restante)`) y
+  lo demás va a costo de venta. El centavo que ese costo no alcanza a dar va en una línea del mismo motivo, en existencia, para que Σ capas
+  = valor del ámbito. Si la capa ya se agotó (la anulación de unos costos adicionales después de vender), todo va a lo vendido. Caso dorado
+  `peps-prorrateo`.
+- *Integridad (T837).* La verificación compara, por capa, restante contra original − Σ consumos, y por ámbito PEPS con existencia no
+  negativa, Σ `round(restante × costo)` contra `CostState.Value` (tipo `CostLayer`). La reconstrucción rehace el restante desde los consumos;
+  no crea capas ni consumos (nacen con su línea).
+- *Valorizado (T844).* Una fila por grupo contable y fecha (`asOf`, por defecto hoy, y `comparativeFrom`), con el grupo del producto a cada
+  fecha y como corte del sistema anterior la fecha de su primer saldo inicial.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

@@ -64,7 +64,9 @@ public sealed class ConfirmacionDeDocumento(
     Counts.BloqueoPorConteo? bloqueoPorConteo = null,
     Replenishment.AvisoDeReposicionAlConfirmar? avisoDeReposicion = null,
     MensajesDelDocumento? mensajesDelDocumento = null,
-    IEnumerable<IAvisoAlConfirmar>? avisosAlConfirmar = null)
+    IEnumerable<IAvisoAlConfirmar>? avisosAlConfirmar = null,
+    Kardex.RegistroDeKardex? registroDeKardex = null,
+    EmisionDeInventario? emisionDeInventario = null)
 {
     private readonly MensajesDelDocumento _mensajes = mensajesDelDocumento ?? new MensajesDelDocumento(db, parametros);
 
@@ -244,6 +246,16 @@ public sealed class ConfirmacionDeDocumento(
         original?.MarcarAnulado(documento.Id);
 
         var contenidos = original is null ? await efecto.MensajesAsync(contexto, ct) : await efecto.MensajesDeAnulacionAsync(contexto, ct);
+
+        // US16 (T839; FR-045, FR-075; mensajes.md §6.10): el retroactivo general de cualquier clase deja, además del mensaje propio del
+        // documento, un AjusteDeCostoReconocido por documento afectado, con effectiveDate = la fecha de la salida afectada y el destino del
+        // mensaje de ése. Las clases que ya los arman (el saldo inicial y el ajuste de conteo, I1) no se duplican.
+        if (registroDeKardex is not null && emisionDeInventario is not null)
+        {
+            var pendientes = registroDeKardex.TomarAjustesRetroactivos(documento);
+            if (pendientes.Count > 0 && !contenidos.OfType<AjusteDeCostoReconocidoV1>().Any(c => c.Reason == KardexReason.Retroactive))
+                contenidos = [.. contenidos, .. await emisionDeInventario.AjustesRetroactivosAsync(new Kardex.RegistroHecho([]) { AjustesRetroactivos = pendientes }, ct)];
+        }
         if (contenidos.Count > 0)
         {
             var origenDeEmision = await _mensajes.OrigenAsync(documento, tipo, bodega?.Code, ct);

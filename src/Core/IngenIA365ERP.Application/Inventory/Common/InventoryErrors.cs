@@ -189,6 +189,37 @@ public static class InventoryErrors
             "Un documento con fecha anterior cambiaría el costo ya registrado: use una fecha igual o posterior.",
             new { lineNumber, productCode, laterMovement = new { documentPublicId = laterDocumentPublicId, displayNumber = laterDocumentNumber, operationDate = laterOperationDate } });
 
+    /// <summary>
+    /// US16, T838 (nuevo): el documento es retroactivo, <c>Costeo.RetroactivosPermitidos</c> lo admite, pero su fecha está más atrás que
+    /// <c>Costeo.RetroactivosDiasMaximos</c> días desde hoy.
+    /// </summary>
+    public static Error RetroactiveTooOld(int maxDays, DateOnly earliestAllowed, DateOnly operationDate) =>
+        new ErrorConDatos("Inventory.Costing.RetroactiveTooOld",
+            $"La fecha {operationDate:yyyy-MM-dd} deja movimientos posteriores y está más atrás de lo que admite la cooperativa ({maxDays} días): " +
+            $"la primera fecha admitida es el {earliestAllowed:yyyy-MM-dd}.",
+            new { maxDays, earliestAllowed, operationDate });
+
+    /// <summary>
+    /// US16, T838 (nuevo, D6): con PEPS vigente —o con PEPS o un cambio de método después de la fecha del documento— no se admite un
+    /// documento con fecha anterior a otro movimiento del mismo producto y ámbito: el motor no reinserta capas en el pasado.
+    /// </summary>
+    public static Error RetroactiveRequiresWeightedAverage(int lineNumber, string productCode) =>
+        new ErrorConDatos("Inventory.Costing.RetroactiveRequiresWeightedAverage",
+            $"Línea {lineNumber}: {productCode} se costea por PEPS (o cambió de método después de esa fecha), y con PEPS no se registran " +
+            "documentos con fecha anterior a otros movimientos: use una fecha igual o posterior al último movimiento.",
+            new { lineNumber, productCode });
+
+    /// <summary>
+    /// US16, T841 (nuevo; decisiones-transversales T42g): <c>Costeo.Metodo</c> o <c>Costeo.Ambito</c> con <c>validFrom</c> futuro. El
+    /// cambio se registra el primer día del período en que empieza (o después, mientras no haya movimientos desde ese día): la capa única y
+    /// los estados del ámbito nuevo salen de la existencia real a esa fecha.
+    /// </summary>
+    public static Error MethodChangeInFuture(string key, DateOnly validFrom, DateOnly today) =>
+        new ErrorConDatos("Inventory.Costing.MethodChangeInFuture",
+            $"«{key}» se registra el primer día del período en que empieza a regir ({validFrom:yyyy-MM-dd}), no antes: el cambio se calcula " +
+            "con la existencia de ese día.",
+            new { key, validFrom, today });
+
     // ------------------------------------------------------------------------ modo de paso (US3) --
 
     /// <summary>Un tipo de documento como lo nombran los errores del modo de paso.</summary>

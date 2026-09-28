@@ -99,7 +99,7 @@ public sealed class VerifyInventoryIntegrityQueryHandler(
         }
 
         var informe = new IntegrityReportDto(reloj.UtcNow,
-            new IntegrityCheckedDto(resultado.StockBalances, resultado.StockDetails, resultado.CostStates, 0), incidentes, alerta);
+            new IntegrityCheckedDto(resultado.StockBalances, resultado.StockDetails, resultado.CostStates, resultado.CostLayers), incidentes, alerta);
         await auditoria.EmitAsync(AuditEventTypes.InventoryIntegrityVerified, "InventoryIntegrity", null, null,
             new { productos = request.ProductPublicIds, bodegas = request.WarehousePublicIds, informe.Checked, incidentes = incidentes.Count, alerta }, ct);
         return Result.Success(informe);

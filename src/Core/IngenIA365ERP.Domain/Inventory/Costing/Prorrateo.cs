@@ -172,8 +172,24 @@ public static class Prorrateo
     /// <c>AffectsEntryId</c> de su entrada, partidas en existencia y vendido. La cantidad del ámbito no cambia; su valor sube lo que
     /// quedó en existencia.
     /// </summary>
-    public static ResultadoDeCosteo AlKardex(EstadoDeCosto estado, ReferenciaDeKardex entrada, RepartoDeLinea reparto)
+    /// <param name="metodo">
+    /// Con PEPS (I5, T843; D5) la porción en existencia —que la aplicación calculó con lo que queda de la capa de esa entrada— se suma
+    /// al costo de esa capa (<see cref="Peps.AjusteSobreEntrada"/>) con <paramref name="montos"/>.
+    /// </param>
+    public static ResultadoDeCosteo AlKardex(EstadoDeCosto estado, ReferenciaDeKardex entrada, RepartoDeLinea reparto,
+        CostMethod metodo = CostMethod.WeightedAverage, RedondeoDeMontos montos = RedondeoDeMontos.Centavo)
     {
+        if (metodo == CostMethod.Fifo)
+        {
+            ArgumentNullException.ThrowIfNull(reparto);
+            if (reparto.ExistingAmount + reparto.SoldAmount != reparto.AllocatedAmount)
+                throw new ArgumentException("La porción en existencia más la vendida es lo asignado.", nameof(reparto));
+            var explicacionPeps = new ExplicacionDeCosto { Resumen = "Costos adicionales sobre la entrada de la recepción (FR-046), con PEPS." }
+                .Paso("Asignado a la línea", reparto.AllocatedAmount)
+                .Paso("Proporción en existencia (capa restante / original)", reparto.ExistingRatio);
+            return Peps.AjusteSobreEntrada(estado, entrada, KardexReason.LandedCost, reparto.AllocatedAmount, reparto.ExistingAmount, montos, explicacionPeps);
+        }
+
         ArgumentNullException.ThrowIfNull(estado);
         ArgumentNullException.ThrowIfNull(entrada);
         ArgumentNullException.ThrowIfNull(reparto);

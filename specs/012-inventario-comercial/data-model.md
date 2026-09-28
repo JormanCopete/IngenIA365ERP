@@ -652,6 +652,7 @@ no admitido es `Parameters.ValueNotAllowed`, nunca el defecto.
 | INV | `Costeo.Ambito` | `Cooperativa`, `Bodega` | Cooperativa | None (misma regla) | I1 | 042 |
 | INV | `Costeo.RetroactivosPermitidos` | bool | false | None | I5 | 045 (no alcanza al saldo inicial de una bodega no activa ni a los ajustes de conteo, §3.1) |
 | INV | `Costeo.RetroactivosDiasMaximos` | int | 0 | None | I5 | 045 |
+| INV | `Costeo.CambioExigeActa` **(nuevo, T842; a confirmar)** | bool | false | None | I5 | 043 (con `true`, cambiar `Costeo.Metodo`/`Costeo.Ambito` exige `legalSource`: `Parameters.LegalSourceRequired`) |
 | INV | `Existencias.StockNegativoPermitido` | bool | false | None, Warehouse | I1 | 034 |
 | INV | `Redondeo.Montos` | `Centavo`, `Peso` | Centavo | None | I1 | 017 |
 | INV | `Redondeo.Residuo` | `MayorValor`, `UltimaLinea` | MayorValor | None | I1 | 017 |

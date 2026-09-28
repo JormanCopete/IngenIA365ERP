@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Entities.Inventory.Projections;
 
 namespace IngenIA365ERP.Domain.Entities.Inventory.Transactions;
 
@@ -17,8 +18,14 @@ public class LayerConsumption : AuditableEntityLong, IHechoInmutable
     /// <summary>La línea del kardex que consume (la salida) o devuelve (la anulación, con cantidad negativa).</summary>
     public long ExitKardexEntryId { get; init; }
 
+    /// <summary>La línea que consume, cuando se escribe en la misma unidad de trabajo (sin Id todavía; T836). No agrega columnas.</summary>
+    public KardexEntry? ExitKardexEntry { get; init; }
+
     /// <summary>La capa (<c>INV_CostLayers</c>).</summary>
     public long LayerId { get; init; }
+
+    /// <summary>La capa, cuando nace en la misma unidad de trabajo (sin Id todavía; T836). No agrega columnas.</summary>
+    public CostLayer? Layer { get; init; }
 
     /// <summary>Positiva al consumir; negativa al devolver.</summary>
     public decimal Quantity { get; init; }

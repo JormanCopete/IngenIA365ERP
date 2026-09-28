@@ -1,0 +1,77 @@
+{
+  // T843 (D5, D6; decisiones-transversales T42g): con PEPS la porción en existencia de unos costos adicionales (o de una diferencia de
+  // precio) sobre una recepción es lo que queda de SU capa (restante / original) y se suma al costo de esa capa; lo que ya salió de ella
+  // va al costo de lo vendido. Las otras capas no cambian, y Σ valor de las capas sigue siendo el valor del ámbito.
+  "nombre": "PEPS: costos adicionales sobre la capa de la recepción",
+  "descripcion": "C1 10 × 1.000 (01/09), C2 10 × 1.300 (02/09). V1 vende 12 el 03/09: C1 10 (10.000) + C2 2 (2.600). Queda C2 8 × 1.300 = 10.400. F1: flete de 1.000 sobre C2; su capa conserva 8 de 10 (0,8): 800 a la capa (8 × 1.400 = 11.200) y 200 a lo vendido. F2: flete de 300 sobre C1, cuya capa ya se agotó: todo a lo vendido, el ámbito no cambia. V2 vende 1 a 1.400 (queda 7 × 1.400 = 9.800). F3: 13 sobre C2 con 7 de 10 (0,7): 9,10 a la capa (9.809,10 / 7 = 1.401,3) y 3,90 a lo vendido. V3 vende 7 a 1.401,3: el ámbito queda en cero.",
+  "parametros": { "metodo": "Fifo", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "C1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "C2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -12,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -12, "costoUnitario": 1050, "costoTotal": -12600 } ],
+        "capas": [ { "capa": "C2", "original": 10, "restante": 8, "costoUnitario": 1300 } ]
+      }
+    },
+    {
+      "id": "F1", "documento": "CAD-1", "fecha": "2026-09-04", "clase": "LandedCost", "bodega": "PRINCIPAL", "cantidad": 0,
+      "costoAdicional": { "monto": 1000, "entrada": "C2", "metodo": "Value" },
+      "esperado": {
+        "lineas": [
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": 1000, "afecta": "C2", "porcion": "EnExistencia" },
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": -200, "afecta": "C2", "porcion": "Vendida" }
+        ],
+        "ajustesPorDocumento": [ { "documento": "C2", "enExistencia": 800, "vendida": 200 } ],
+        "capas": [ { "capa": "C2", "original": 10, "restante": 8, "costoUnitario": 1400 } ],
+        "estado": { "cantidad": 8, "valor": 11200, "promedio": 1400 },
+        "explicacion": [ "PEPS", "Costo unitario nuevo de la capa: 1400" ]
+      }
+    },
+    {
+      "id": "F2", "documento": "CAD-2", "fecha": "2026-09-05", "clase": "LandedCost", "bodega": "PRINCIPAL", "cantidad": 0,
+      "costoAdicional": { "monto": 300, "entrada": "C1", "metodo": "Value" },
+      "esperado": {
+        "lineas": [
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": 300, "afecta": "C1", "porcion": "EnExistencia" },
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": -300, "afecta": "C1", "porcion": "Vendida" }
+        ],
+        "ajustesPorDocumento": [ { "documento": "C1", "enExistencia": 0, "vendida": 300 } ],
+        "capas": [ { "capa": "C2", "original": 10, "restante": 8, "costoUnitario": 1400 } ],
+        "estado": { "cantidad": 8, "valor": 11200, "promedio": 1400 }
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-06", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -1,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -1, "costoUnitario": 1400, "costoTotal": -1400 } ],
+        "consumos": [ { "salida": "V2", "capa": "C2", "cantidad": 1, "costoUnitario": 1400 } ],
+        "estado": { "cantidad": 7, "valor": 9800, "promedio": 1400 }
+      }
+    },
+    {
+      "id": "F3", "documento": "CAD-3", "fecha": "2026-09-07", "clase": "LandedCost", "bodega": "PRINCIPAL", "cantidad": 0,
+      "costoAdicional": { "monto": 13, "entrada": "C2", "metodo": "Value" },
+      "esperado": {
+        "lineas": [
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": 13, "afecta": "C2", "porcion": "EnExistencia" },
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": -3.9, "afecta": "C2", "porcion": "Vendida" }
+        ],
+        "ajustesPorDocumento": [ { "documento": "C2", "enExistencia": 9.1, "vendida": 3.9 } ],
+        "capas": [ { "capa": "C2", "original": 10, "restante": 7, "costoUnitario": 1401.3 } ],
+        "estado": { "cantidad": 7, "valor": 9809.1, "promedio": 1401.3 }
+      }
+    },
+    {
+      "id": "V3", "documento": "FV-3", "fecha": "2026-09-08", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -7,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -7, "costoUnitario": 1401.3, "costoTotal": -9809.1 } ],
+        "capas": [],
+        "estado": { "cantidad": 0, "valor": 0, "promedio": 1300 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 0, "valor": 0, "promedio": 1300 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 0 } ]
+}

@@ -196,6 +196,8 @@ public sealed class CostosAdicionalesDeCompra(IApplicationDbContext db, ILectorD
         var productos = lineas.Select(l => l.Entrada.ProductId).Distinct().ToList();
         var estados = (await db.CostStates.Where(c => productos.Contains(c.ProductId)).ToListAsync(ct))
             .GroupBy(c => (c.ProductId, c.ScopeWarehouseId)).ToDictionary(g => g.Key, g => g.First().Quantity);
+        // T843: con PEPS la existencia de la regla D5 es lo que queda de la capa de cada recepción (restante / original), no la del ámbito.
+        var restantes = await registro.RestantePorEntradaAsync(fecha, lineas.Select(l => l.Entrada).ToList(), ct);
 
         var aRepartir = lineas.Select(l => new LineaAProrratear(
             l.LineaDeRecepcion.Id,
@@ -205,7 +207,9 @@ public sealed class CostosAdicionalesDeCompra(IApplicationDbContext db, ILectorD
             l.Peso,
             l.Volumen,
             manuales.TryGetValue(l.LineaDeRecepcion.Id, out var digitado) ? digitado : (metodo == LandedCostAllocationMethod.Manual ? 0m : null),
-            Math.Max(0m, estados.GetValueOrDefault((l.Entrada.ProductId, p.AmbitoDe(l.Entrada.WarehouseId)))))).ToList();
+            restantes is not null
+                ? restantes.GetValueOrDefault(l.Entrada.Id)
+                : Math.Max(0m, estados.GetValueOrDefault((l.Entrada.ProductId, p.AmbitoDe(l.Entrada.WarehouseId)))))).ToList();
 
         var resultado = Prorrateo.Repartir(new PedidoDeProrrateo(monto, metodo, aRepartir, p.Montos, Redondeo.ResiduoDesde(residuo.Value.Texto)));
         if (resultado.Rechazo is not { } rechazo) return Result.Success(resultado);

@@ -42,6 +42,7 @@ public class CasosDoradosDeCosteoTests
                      "09-compra-retroactiva-antes-de-tres-ventas.json", "11-peps-dos-capas.json", "16-valorizado-por-dos-metodos.json",
                      "peps-devolucion-de-cliente.json", "peps-devolucion-a-proveedor.json", "peps-anulacion-de-salida.json",
                      "peps-traslado-ambito-bodega.json", "peps-negativo-y-regularizacion.json", "peps-cambio-de-metodo.json",
+                     "peps-prorrateo.json",
                  })
             nombres.Should().Contain(archivo, "los casos dorados de US16 (T818–T821, research R10)");
     }
@@ -210,16 +211,22 @@ public class CasosDoradosDeCosteoTests
         private void CostoAdicional(CasoDoradoDeCosteo.MovimientoJson m, CasoDoradoDeCosteo.CostoAdicionalJson costo, string ambito, EstadoDeCosto estado)
         {
             var entrada = Linea(costo.Entrada);
+            // T843: con PEPS la existencia de la regla D5 es lo que queda de la capa de esa entrada, no la del ámbito.
+            var metodo = Parametros(ambito).Metodo;
+            var existencia = metodo == CostMethod.Fifo
+                ? Peps.CapaDe(estado, ReferenciaDeKardex.A(entrada.Id!.Value))?.RemainingQuantity ?? 0m
+                : estado.Quantity;
             var reparto = Prorrateo.Repartir(new PedidoDeProrrateo(costo.Monto, costo.Metodo,
-                [new LineaAProrratear(1, 1, entrada.QuantityBase, entrada.TotalCost, null, null, costo.Metodo == LandedCostAllocationMethod.Manual ? costo.Monto : null, estado.Quantity)],
+                [new LineaAProrratear(1, 1, entrada.QuantityBase, entrada.TotalCost, null, null, costo.Metodo == LandedCostAllocationMethod.Manual ? costo.Monto : null, existencia)],
                 _parametros.Montos, ResiduoDeRedondeo.MayorValor));
             if (Rechazado(m, reparto.Rechazo is { } r ? new RechazoDeCosteo(r.Codigo, r.Mensaje, 0m, costo.Monto) : null)) return;
 
-            var resultado = MotorDeCosteo.CostoAdicional(estado, ReferenciaDeKardex.A(entrada.Id!.Value), reparto.Lineas.Single());
+            var resultado = MotorDeCosteo.CostoAdicional(estado, ReferenciaDeKardex.A(entrada.Id!.Value), reparto.Lineas.Single(), metodo, _parametros.Montos);
             Registrar(m, ambito, resultado.Lineas);
             _estados[ambito] = resultado.Estado;
 
             CompararLineas(m.Esperado.Lineas, resultado.Lineas, "línea");
+            CompararCapas(m.Esperado.Capas, resultado.Estado);
             if (m.Esperado.AjustesPorDocumento.Count > 0)
                 new[] { (Doc: Nombre(ReferenciaDeKardex.A(entrada.Id!.Value)), EnExistencia: Prorrateo.EnExistencia(resultado), Vendida: Prorrateo.Vendida(resultado)) }
                     .Should().BeEquivalentTo(m.Esperado.AjustesPorDocumento.Select(d => (Doc: d.Documento, d.EnExistencia, d.Vendida)),

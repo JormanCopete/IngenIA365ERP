@@ -68,6 +68,87 @@ public static class Peps
         return new ResultadoDeCosteo([cero], sinCapas, explicacion);
     }
 
+    // --------------------------------------------------------------- ajuste sobre una entrada (T843, D5) --
+
+    /// <summary>
+    /// La porción de una entrada que sigue en existencia en PEPS (I5, T843; D5): lo que queda de <b>su</b> capa,
+    /// <c>RemainingQuantity / OriginalQuantity</c> (a lo sumo 1). Sin capa viva (se agotó o nunca la tuvo), cero: todo ya se vendió o
+    /// consumió. La usan la diferencia de precio y los costos adicionales en lugar de la existencia del ámbito del promedio.
+    /// </summary>
+    public static decimal ProporcionEnExistencia(EstadoDeCosto estado, ReferenciaDeKardex entrada)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        var capa = estado.Capas.FirstOrDefault(c => c.Es(entrada));
+        return capa is null || capa.OriginalQuantity <= 0m ? 0m : Math.Min(1m, capa.RemainingQuantity / capa.OriginalQuantity);
+    }
+
+    /// <summary>La capa viva de una entrada (nula si ya se agotó).</summary>
+    public static CapaDeCosto? CapaDe(EstadoDeCosto estado, ReferenciaDeKardex entrada)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return estado.Capas.FirstOrDefault(c => c.Es(entrada));
+    }
+
+    /// <summary>
+    /// Un ajuste de costo sobre una entrada con PEPS (I5, T843; D5, D6; decisiones-transversales T42b): la diferencia de precio o los
+    /// costos adicionales. <paramref name="total"/> es lo que costó de más (o de menos) esa entrada; <paramref name="enExistencia"/>, la
+    /// porción que sigue en <b>su</b> capa (<see cref="ProporcionEnExistencia"/>); lo demás ya salió y va a lo vendido. Deja las mismas
+    /// líneas que el promedio —el total sobre la entrada (<see cref="PorcionDelAjuste.EnExistencia"/>) y, si algo ya salió, lo vendido con
+    /// signo contrario (<see cref="PorcionDelAjuste.Vendida"/>)— y <b>suma lo que quedó a la capa</b>: su costo unitario pasa a
+    /// <c>round6((valor de la capa + en existencia) / restante)</c>. Si ese costo no da el valor exacto al centavo, la diferencia va en una
+    /// tercera línea del mismo motivo, también en existencia, para que Σ valor de las capas siga siendo el valor del ámbito. Las otras capas
+    /// no cambian. (nuevo)
+    /// </summary>
+    public static ResultadoDeCosteo AjusteSobreEntrada(
+        EstadoDeCosto estado, ReferenciaDeKardex entrada, KardexReason motivo, decimal total, decimal enExistencia, RedondeoDeMontos montos,
+        ExplicacionDeCosto explicacion)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        ArgumentNullException.ThrowIfNull(entrada);
+        ArgumentNullException.ThrowIfNull(explicacion);
+        if (total == 0m) return new ResultadoDeCosteo([], estado, explicacion.Nota("Regla", "Nada que ajustar: no hay línea."));
+
+        var capas = estado.Capas.ToList();
+        var i = capas.FindIndex(c => c.Es(entrada));
+        if (i < 0 && enExistencia != 0m)
+        {
+            // Con PEPS lo que queda en existencia de una entrada es su capa: si ya se agotó (la anulación de unos costos adicionales
+            // después de venderla), todo va a lo vendido.
+            explicacion.Nota("Capa agotada", "La capa de la entrada ya no tiene existencia: todo el ajuste va al costo de lo vendido.");
+            enExistencia = 0m;
+        }
+
+        var vendida = total - enExistencia;
+        var lineas = new List<LineaDeKardexPropuesta>
+        {
+            new() { Kind = KardexEntryKind.CostAdjustment, Reason = motivo, QuantityBase = 0m, UnitCost = 0m, TotalCost = total, AffectsEntry = entrada, Porcion = PorcionDelAjuste.EnExistencia },
+        };
+        if (vendida != 0m)
+            lineas.Add(new LineaDeKardexPropuesta { Kind = KardexEntryKind.CostAdjustment, Reason = motivo, QuantityBase = 0m, UnitCost = 0m, TotalCost = -vendida, AffectsEntry = entrada, Porcion = PorcionDelAjuste.Vendida });
+
+        var residuo = 0m;
+        if (i >= 0 && enExistencia != 0m)
+        {
+            var capa = capas[i];
+            var objetivo = capa.Valor(montos) + enExistencia;
+            var costo = Math.Max(0m, Redondeo.CostoUnitario(objetivo / capa.RemainingQuantity));
+            var nueva = capa with { UnitCost = costo };
+            residuo = nueva.Valor(montos) - objetivo;
+            capas[i] = nueva;
+            explicacion.Paso(Etiqueta(capa), capa.RemainingQuantity).Paso("Costo unitario nuevo de la capa", costo);
+            if (residuo != 0m)
+            {
+                lineas.Add(new LineaDeKardexPropuesta { Kind = KardexEntryKind.CostAdjustment, Reason = motivo, QuantityBase = 0m, UnitCost = costo, TotalCost = residuo, AffectsEntry = entrada, Porcion = PorcionDelAjuste.EnExistencia });
+                explicacion.Paso("Residuo contra el valor de la capa", residuo);
+            }
+        }
+
+        explicacion.Paso("En existencia", enExistencia).Paso("Vendida o consumida", vendida)
+            .Nota("Regla PEPS", "Lo que queda de la capa de esa entrada suma a su costo; lo que ya salió de ella va al costo de lo vendido.");
+        var nuevo = EstadoDeCosto.Con(estado.Quantity, estado.Value + enExistencia + residuo, estado.LastUnitCost, estado.SalidasEnNegativo) with { Capas = capas };
+        return new ResultadoDeCosteo(lineas, nuevo, explicacion);
+    }
+
     // ------------------------------------------------------------------------------------------------ entrada --
 
     private static ResultadoDeCosteo Entrada(EstadoDeCosto estado, MovimientoDeCosto mov, ParametrosDeCosteo p)

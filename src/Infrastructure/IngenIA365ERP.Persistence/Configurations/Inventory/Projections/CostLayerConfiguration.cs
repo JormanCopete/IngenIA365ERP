@@ -34,7 +34,7 @@ public class CostLayerConfiguration : IEntityTypeConfiguration<CostLayer>
         builder.Property(e => e.UnitCost).CostoUnitario().IsRequired();
 
         builder.HasOne<Product>().WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<KardexEntry>().WithMany().HasForeignKey(e => e.EntryKardexEntryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.EntryKardexEntry).WithMany().HasForeignKey(e => e.EntryKardexEntryId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.EntryKardexEntryId).IsUnique().HasDatabaseName("UK_INV_CostLayers_EntryKardexEntryId");
         builder.HasIndex(e => new { e.ProductId, e.ScopeWarehouseId, e.OperationDate, e.EntryKardexEntryId })

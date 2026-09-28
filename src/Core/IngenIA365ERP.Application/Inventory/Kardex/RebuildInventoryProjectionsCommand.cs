@@ -76,7 +76,7 @@ public sealed class RebuildInventoryProjectionsCommandHandler(
             costos += c;
         }
 
-        return Result.Success(new RebuildResultDto(reloj.UtcNow, new RebuildRowsDto(existencias, detalles, costos, 0),
+        return Result.Success(new RebuildResultDto(reloj.UtcNow, new RebuildRowsDto(existencias, detalles, costos, _capas),
             await CorreccionesAsync(correcciones, ct)));
     }
 
@@ -186,9 +186,31 @@ public sealed class RebuildInventoryProjectionsCommandHandler(
             huerfana.AverageCost = huerfana.LastUnitCost;
         }
 
+        // --------------------------------------------------------------------- capas PEPS (I5, T837) --
+        // Lo que queda de cada capa es su original menos Σ de sus consumos (data-model §3.5). Una capa cerrada por un cambio de método
+        // (restante 0 sin consumos) sigue cerrada. Las capas y los consumos no se crean aquí: nacen con su entrada y su salida.
+        var capas = await db.CostLayers.Where(c => c.ProductId == producto && (bodegas == null || c.ScopeWarehouseId == 0 || bodegas.Contains(c.ScopeWarehouseId))).ToListAsync(ct);
+        if (capas.Count > 0)
+        {
+            var ids = capas.Select(c => c.Id).ToList();
+            var consumido = await db.LayerConsumptions.AsNoTracking().Where(c => ids.Contains(c.LayerId))
+                .GroupBy(c => c.LayerId).Select(g => new { g.Key, Cantidad = g.Sum(c => c.Quantity) }).ToDictionaryAsync(x => x.Key, x => x.Cantidad, ct);
+            foreach (var capa in capas.Where(c => c.RemainingQuantity != 0m))
+            {
+                var esperado = Math.Clamp(capa.OriginalQuantity - consumido.GetValueOrDefault(capa.Id), 0m, capa.OriginalQuantity);
+                if (capa.RemainingQuantity == esperado) continue;
+                var bodega = capa.ScopeWarehouseId == 0 ? (int?)null : capa.ScopeWarehouseId;
+                correcciones.Add((TiposDeIncidente.CostLayer, producto, bodega, "RemainingQuantity", capa.RemainingQuantity, esperado));
+                capa.Reconstruir(esperado);
+            }
+        }
+        _capas += capas.Count;
+
         await db.SaveChangesAsync(ct);
         return (existentes.Count, detallesExistentes.Count, costosExistentes.Count);
     }
+
+    private int _capas;
 
     private async Task<IReadOnlyList<RebuildCorrectionDto>> CorreccionesAsync(
         List<(string Kind, int ProductId, int? WarehouseId, string Field, decimal Before, decimal After)> correcciones, CancellationToken ct)

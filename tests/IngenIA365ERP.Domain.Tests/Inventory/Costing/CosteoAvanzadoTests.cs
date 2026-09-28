@@ -230,4 +230,42 @@ public class CosteoAvanzadoTests
         dias.PermisoAdicional.Should().Be("Inventory.Costing.Manage");
         dias.Interpretar("-1", EntregaDelComercio.I5).Admitido.Should().BeFalse("los días no son negativos");
     }
+
+    // ------------------------------------------------------------------ T843: PEPS en la diferencia de precio --
+
+    [Fact]
+    public void Con_PEPS_la_diferencia_de_precio_suma_a_la_capa_de_su_recepcion_lo_que_queda_de_ella()
+    {
+        // C1 (Id 1) 10 × 1.000 ya agotada; C2 (Id 2) 10 × 1.300 con 4 restantes: 5.200 en el ámbito.
+        var c2 = new CapaDeCosto(ReferenciaDeKardex.A(2), new DateOnly(2026, 9, 2), 10m, 4m, 1300m);
+        var estado = EstadoDeCosto.Con(4m, 5200m, 1300m) with { Capas = [c2] };
+
+        // La factura de C2 cuesta 500 más: 4/10 = 0,4 sigue en la capa (200) y 300 ya se vendió.
+        var r = MotorDeCosteo.DiferenciaDePrecio(estado, new PedidoDeDiferenciaDePrecio(ReferenciaDeKardex.A(2), 10m, 500m), RedondeoDeMontos.Centavo, CostMethod.Fifo);
+
+        r.Lineas.Select(l => (l.Reason, l.TotalCost, l.Porcion)).Should().Equal(
+            (KardexReason.PriceDifference, 500m, PorcionDelAjuste.EnExistencia), (KardexReason.PriceDifference, -300m, PorcionDelAjuste.Vendida));
+        r.Estado.Value.Should().Be(5400m);
+        r.Estado.Capas.Should().ContainSingle().Which.UnitCost.Should().Be(1350m, "(5.200 + 200) / 4");
+        r.Estado.Capas.Sum(c => c.Valor(RedondeoDeMontos.Centavo)).Should().Be(r.Estado.Value);
+
+        // La de C1, cuya capa ya se agotó: todo a lo vendido y el ámbito no cambia.
+        var agotada = MotorDeCosteo.DiferenciaDePrecio(estado, new PedidoDeDiferenciaDePrecio(ReferenciaDeKardex.A(1), 10m, 100m), RedondeoDeMontos.Centavo, CostMethod.Fifo);
+        agotada.Valor.Should().Be(0m);
+        agotada.Estado.Value.Should().Be(5200m);
+    }
+
+    [Fact]
+    public void Con_PEPS_el_centavo_que_no_da_el_costo_nuevo_de_la_capa_va_en_una_linea_del_mismo_motivo()
+    {
+        // 3 restantes de 3 a 1.000: sumar 100 da 3.100 / 3 = 1.033,333333 → 3.100,00 al centavo; con 10 da 1.003,333333 → 3.010,00.
+        var capa = new CapaDeCosto(ReferenciaDeKardex.A(7), new DateOnly(2026, 9, 2), 3m, 3m, 1000m);
+        var estado = EstadoDeCosto.Con(3m, 3000m, 1000m) with { Capas = [capa] };
+
+        var r = IngenIA365ERP.Domain.Inventory.Costing.Peps.AjusteSobreEntrada(estado, ReferenciaDeKardex.A(7), KardexReason.LandedCost, 0.01m, 0.01m, RedondeoDeMontos.Centavo, new ExplicacionDeCosto());
+
+        r.Estado.Capas.Sum(c => c.Valor(RedondeoDeMontos.Centavo)).Should().Be(r.Estado.Value, "las capas siguen valiendo lo del ámbito");
+        r.Lineas.Should().OnlyContain(l => l.Reason == KardexReason.LandedCost);
+        r.Valor.Should().Be(r.Estado.Value - 3000m);
+    }
 }

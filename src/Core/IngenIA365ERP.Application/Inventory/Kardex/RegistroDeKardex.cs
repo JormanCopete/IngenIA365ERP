@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Projections;
 using IngenIA365ERP.Domain.Entities.Inventory.Transactions;
@@ -87,6 +88,29 @@ public sealed record CostoAdicionalPedido(InventoryDocumentLine Linea, KardexEnt
 /// <summary>Un costo adicional ya escrito: lo que quedó en existencia, lo que pasó a costo de venta y sus filas. (nuevo)</summary>
 public sealed record CostoAdicionalRegistrado(CostoAdicionalPedido Pedido, decimal EnExistencia, decimal Vendida, IReadOnlyList<KardexEntry> Lineas);
 
+/// <summary>
+/// El impacto en costos de un borrador (US16, T840; FR-045; api.md §9.3): si es retroactivo y, por cada (producto, ámbito) que
+/// recalcula, lo que devolvió <see cref="MotorDeCosteo.SimularImpacto"/> —el mismo cálculo que hará la confirmación—. Lo deja el
+/// registro en modo simulación (<see cref="RegistroDeKardex.Simular"/>), sin escribir nada. (nuevo)
+/// </summary>
+public sealed record ImpactoDelBorrador(bool EsRetroactivo, IReadOnlyList<ImpactoPorAmbito> PorAmbito)
+{
+    public static ImpactoDelBorrador Ninguno { get; } = new(false, []);
+}
+
+/// <summary>El impacto de un (producto, ámbito) del borrador. (nuevo)</summary>
+public sealed record ImpactoPorAmbito(int ProductId, int ScopeWarehouseId, ImpactoEnCostos Impacto);
+
+/// <summary>
+/// Una línea <c>MethodChange</c> que pide el cambio de método o de ámbito de costeo (US16, T836, T841): la línea del documento
+/// <c>CostAdjustment</c> del sistema (una por producto), la bodega y ubicación donde se anota, el ámbito, la cantidad que mueve entre
+/// ámbitos (0 en un cambio de método; −/+ en uno de ámbito: sale del anterior y entra al nuevo), el costo, el valor y, a PEPS, la capa
+/// única que abre (la de <c>MotorDeCosteo.CambiarMetodo</c>). (nuevo)
+/// </summary>
+public sealed record LineaDeCambioDeMetodo(
+    InventoryDocumentLine Linea, int WarehouseId, int LocationId, int Ambito, decimal QuantityBase, decimal UnitCost, decimal TotalCost,
+    CapaDeCosto? Capa = null);
+
 /// <summary>Lo que dejó el registro de un documento. (nuevo)</summary>
 public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 {
@@ -119,8 +143,8 @@ public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 /// </para>
 /// <para>
 /// <b>Retroactivo</b> (US3, T285; FR-045, T18): un documento que deja un movimiento con fecha anterior a otro ya registrado
-/// del mismo producto y ámbito se rechaza con <c>Inventory.Costing.RetroactiveNotAllowed</c> nombrando el posterior —siempre
-/// hasta I5, sin mirar <c>Costeo.RetroactivosPermitidos</c>—, salvo las dos clases exentas de I1 (<see cref="EsExentoAsync"/>):
+/// del mismo producto y ámbito se rechaza con <c>Inventory.Costing.RetroactiveNotAllowed</c> nombrando el posterior —hasta I5
+/// sin mirar <c>Costeo.RetroactivosPermitidos</c>; desde I5 con la puerta de T838 (parámetro, días máximos y D6, T42g)—, salvo las dos clases exentas de I1 (<see cref="EsExentoAsync"/>):
 /// el saldo inicial de una bodega <c>NotActivated</c> (y su anulación) y los ajustes de un conteo (<c>CountAdjustmentOf</c>).
 /// Para ellas el ámbito se recalcula con <see cref="Retroactivo.Insertar"/> desde el estado a la fecha del documento y la
 /// historia posterior (índice <c>(ProductId, CostScopeWarehouseId, OperationDate, Id)</c>): las líneas <c>Retroactive</c> van
@@ -129,8 +153,42 @@ public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 /// <c>Inventory.Stock.Insufficient</c>.
 /// </para>
 /// </summary>
-public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametros parametros, IDateTimeService reloj)
+public sealed class RegistroDeKardex(
+    IApplicationDbContext db,
+    ILectorDeParametros parametros,
+    IDateTimeService reloj,
+    EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente)
 {
+    /// <summary>El código con que termina un registro en modo simulación (nunca llega a la pantalla: lo consume la consulta).</summary>
+    public const string CodigoSimulacionTerminada = "Inventory.Costing.SimulationDone";
+
+    private bool _simulando;
+    private readonly Dictionary<InventoryDocument, List<AjusteRetroactivoRegistrado>> _retroactivosSinEmitir = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// US16 (T840): la próxima llamada a <see cref="RegistrarAsync"/> calcula todo —disponibilidad, puerta del retroactivo, el
+    /// retroactivo con <see cref="MotorDeCosteo.SimularImpacto"/>— y, en lugar de escribir, deja el resultado en <see cref="Simulado"/> y
+    /// termina con <see cref="CodigoSimulacionTerminada"/>. Así <c>cost-impact</c> corre el mismo efecto de la clase que la confirmación.
+    /// </summary>
+    public void Simular()
+    {
+        _simulando = true;
+        Simulado = null;
+    }
+
+    /// <summary>Lo que dejó la simulación; nulo si el efecto no llegó al registro.</summary>
+    public ImpactoDelBorrador? Simulado { get; private set; }
+
+    /// <summary>
+    /// US16 (T839): los ajustes <c>Retroactive</c> que dejó el registro de <paramref name="documento"/> y que todavía no se emitieron; la
+    /// confirmación los toma una vez, después de los mensajes de la clase, y arma un <c>AjusteDeCostoReconocido</c> por documento afectado.
+    /// </summary>
+    public IReadOnlyList<AjusteRetroactivoRegistrado> TomarAjustesRetroactivos(InventoryDocument documento)
+    {
+        if (!_retroactivosSinEmitir.Remove(documento, out var lista)) return [];
+        return lista;
+    }
+
     // ------------------------------------------------------------------------------ validación previa (I2) --
 
     /// <summary>
@@ -233,14 +291,48 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         var detalles = (await db.StockDetails.Where(s => productos.Contains(s.ProductId) && bodegas.Contains(s.WarehouseId) && s.LotId == null).ToListAsync(ct))
             .ToDictionary(s => (s.ProductId, s.WarehouseId, s.LocationId));
 
+        // PEPS (I5, T836): las capas vivas de los productos, seguidas (las protege la fila de INV_CostStates de su ámbito, ya bloqueada),
+        // y las de los consumos que devuelve la anulación de una salida (aunque ya estén agotadas).
+        var capasPorEntrada = new Dictionary<long, CostLayer>();
+        var consumosDelOrigen = new Dictionary<long, IReadOnlyList<ConsumoDeCapa>>();
+        if (p.Metodo == CostMethod.Fifo)
+        {
+            foreach (var capa in await db.CostLayers.Where(c => productos.Contains(c.ProductId) && c.RemainingQuantity > 0m).ToListAsync(ct))
+                capasPorEntrada[capa.EntryKardexEntryId] = capa;
+            var salidasAnuladas = movimientos.Where(m => m.EsAnulacion && m.QuantityBase > 0m && m.Origen is { Id: > 0 }).Select(m => m.Origen!.Id).Distinct().ToList();
+            if (salidasAnuladas.Count > 0)
+            {
+                var consumos = await db.LayerConsumptions.AsNoTracking().Where(c => salidasAnuladas.Contains(c.ExitKardexEntryId)).OrderBy(c => c.Id).ToListAsync(ct);
+                var deLasCapas = consumos.Select(c => c.LayerId).Distinct().ToList();
+                foreach (var capa in await db.CostLayers.Where(c => deLasCapas.Contains(c.Id)).ToListAsync(ct))
+                    capasPorEntrada.TryAdd(capa.EntryKardexEntryId, capa);
+                var porId = capasPorEntrada.Values.ToDictionary(c => c.Id);
+                foreach (var grupo in consumos.GroupBy(c => c.ExitKardexEntryId))
+                    consumosDelOrigen[grupo.Key] = grupo.Where(c => porId.ContainsKey(c.LayerId)).Select(c =>
+                    {
+                        var capa = porId[c.LayerId];
+                        return new ConsumoDeCapa(ReferenciaDeKardex.A(grupo.Key),
+                            new CapaDeCosto(ReferenciaDeKardex.A(capa.EntryKardexEntryId), capa.OperationDate, capa.OriginalQuantity, 0m, c.UnitCost),
+                            c.Quantity, c.UnitCost, Redondeo.Monto(c.Quantity * c.UnitCost, p.Montos));
+                    }).ToList();
+            }
+        }
+
         // --------------------------------------------------------------------- retroactivo (US3, T285) --
         var retro = await AmbitosRetroactivosAsync(documento, movimientos, p, ct);
-        if (retro.IsFailure) return Result.Failure<RegistroHecho>(retro.Error);
+        if (retro.IsFailure)
+        {
+            _simulando = false;
+            return Result.Failure<RegistroHecho>(retro.Error);
+        }
         var ambitosRetroactivos = retro.Value;
         var retroactivos = new List<(MovimientoDeKardex Mov, int Ubicacion, int Ambito)>();
 
         // ------------------------------------------------------------------ primera pasada: en memoria --
-        var estados = costos.ToDictionary(c => c.Key, c => new EstadoDeCosto(c.Value.Quantity, c.Value.Value, c.Value.AverageCost, c.Value.LastUnitCost));
+        var estados = costos.ToDictionary(c => c.Key, c => new EstadoDeCosto(c.Value.Quantity, c.Value.Value, c.Value.AverageCost, c.Value.LastUnitCost)
+        {
+            Capas = CapasDe(capasPorEntrada.Values, c.Key.ProductId, c.Key.ScopeWarehouseId),
+        });
         var fisicos = existencias.ToDictionary(e => e.Key, e => (Fisico: e.Value.Physical, Reservado: e.Value.Reserved));
         var porUbicacion = detalles.ToDictionary(d => d.Key, d => d.Value.Quantity);
         var plan = new List<(MovimientoDeKardex Mov, int Ubicacion, int Ambito, ResultadoDeCosteo Costo)>(movimientos.Count);
@@ -289,7 +381,11 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                 mismoAmbitoQueSuSalida = previa.Ambito == ambito;
             }
             var costo = MotorDeCosteo.Aplicar(estado,
-                new MovimientoDeCosto(m.QuantityBase, valoracion, costoQueTrae, origen, m.EsAnulacion),
+                new MovimientoDeCosto(m.QuantityBase, valoracion, costoQueTrae, origen, m.EsAnulacion)
+                {
+                    OperationDate = documento.OperationDate,
+                    ConsumosDelOrigen = m.EsAnulacion && m.Origen is { Id: > 0 } o && consumosDelOrigen.TryGetValue(o.Id, out var devueltos) ? devueltos : [],
+                },
                 new ParametrosDeCosteo(p.Metodo, p.Montos, negativo));
             if (!costo.Admitido)
             {
@@ -306,14 +402,32 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         }
 
         var recalculados = new List<(MovimientoDeKardex Primero, int Ambito, ResultadoRetroactivo Resultado, IReadOnlyDictionary<long, KardexEntry> Afectadas)>();
+        var impactos = new List<ImpactoPorAmbito>();
         foreach (var grupo in retroactivos.GroupBy(r => (r.Mov.Linea.ProductId, r.Ambito)))
         {
             var deLaClave = grupo.ToList();
             var (pedido, afectadas) = await PedidoRetroactivoAsync(documento, grupo.Key.ProductId, grupo.Key.Ambito, deLaClave.Select(r => r.Mov).ToList(),
                 new ParametrosDeCosteo(p.Metodo, p.Montos, deLaClave.All(r => p.NegativoPermitido(r.Mov.WarehouseId))), ct);
-            var resultado = Retroactivo.Insertar(pedido);
+            ResultadoRetroactivo resultado;
+            if (_simulando)
+            {
+                // T840: el mismo cálculo que la confirmación, por la puerta de la simulación.
+                var impacto = MotorDeCosteo.SimularImpacto(pedido);
+                impactos.Add(new ImpactoPorAmbito(grupo.Key.ProductId, grupo.Key.Ambito, impacto));
+                resultado = impacto.Resultado;
+            }
+            else
+            {
+                resultado = Retroactivo.Insertar(pedido);
+            }
             if (!resultado.Admitido)
             {
+                // D6: con PEPS no hay retroactivo, tampoco para las dos excepciones de I1 (T42b).
+                if (resultado.Rechazo!.Codigo == Retroactivo.CodigoRequierePromedioPonderado)
+                {
+                    _simulando = false;
+                    return Result.Failure<RegistroHecho>(await RequierePromedioAsync(deLaClave[0].Mov, ct));
+                }
                 faltantes.Add((deLaClave[0].Mov, deLaClave[0].Ubicacion, resultado.Rechazo!.Disponible, false));
                 continue;
             }
@@ -323,7 +437,18 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         }
 
         if (faltantes.Count > 0)
+        {
+            _simulando = false;
             return Result.Failure<RegistroHecho>(await ErrorDeExistenciaAsync(faltantes, sugerencia, ct));
+        }
+
+        if (_simulando)
+        {
+            // T840: nada se escribe; la consulta lee el impacto y no guarda lo que el efecto haya tocado en el seguimiento.
+            _simulando = false;
+            Simulado = new ImpactoDelBorrador(impactos.Any(i => i.Impacto.EsRetroactivo), impactos);
+            return Result.Failure<RegistroHecho>(new Error(CodigoSimulacionTerminada, "Simulación del impacto en costos: no se escribió nada."));
+        }
 
         // ------------------------------------------------------------------------ segunda pasada: escribir --
         var ahora = reloj.UtcNow;
@@ -404,6 +529,16 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                 }
                 ajustesRetroactivos.Add(new AjusteRetroactivoRegistrado((int)porDocumento.DocumentId, porDocumento.EnExistencia, porDocumento.Vendida, filas));
             }
+        }
+
+        // PEPS (T836): las capas que nacieron, los consumos y lo que queda de cada capa según el estado final del ámbito.
+        if (p.Metodo == CostMethod.Fifo)
+            EscribirCapas(plan.Select(x => (x.Mov.Linea.ProductId, x.Ambito, x.Costo)).ToList(), estados, capasPorEntrada, propuestas, documento.OperationDate);
+
+        if (ajustesRetroactivos.Count > 0)
+        {
+            if (!_retroactivosSinEmitir.TryGetValue(documento, out var pendientes)) _retroactivosSinEmitir[documento] = pendientes = [];
+            pendientes.AddRange(ajustesRetroactivos);
         }
 
         // Proyecciones: el estado final de cada ámbito, la existencia de cada bodega y ubicación tocada.
@@ -516,9 +651,11 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                 db.CostStates.Add(fila);
                 costos[(entrada.ProductId, ambito)] = fila;
             }
-            var estado = new EstadoDeCosto(fila.Quantity, fila.Value, fila.AverageCost, fila.LastUnitCost);
+            var capas = p.Metodo == CostMethod.Fifo ? await CapasVivasAsync(entrada.ProductId, ambito, ct) : [];
+            var estado = new EstadoDeCosto(fila.Quantity, fila.Value, fila.AverageCost, fila.LastUnitCost) { Capas = CapasDe(capas, entrada.ProductId, ambito) };
             var resultado = MotorDeCosteo.DiferenciaDePrecio(estado,
-                new PedidoDeDiferenciaDePrecio(ReferenciaDeKardex.A(entrada.Id), pedida.CantidadFacturada, pedida.Diferencia), p.Montos);
+                new PedidoDeDiferenciaDePrecio(ReferenciaDeKardex.A(entrada.Id), pedida.CantidadFacturada, pedida.Diferencia), p.Montos, p.Metodo);
+            Revaluar(capas, resultado.Estado);
 
             var filas = new List<KardexEntry>(resultado.Lineas.Count);
             foreach (var propuesta in resultado.Lineas)
@@ -609,8 +746,10 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                 db.CostStates.Add(fila);
                 costos[(entrada.ProductId, ambito)] = fila;
             }
-            var estado = new EstadoDeCosto(fila.Quantity, fila.Value, fila.AverageCost, fila.LastUnitCost);
-            var resultado = MotorDeCosteo.CostoAdicional(estado, ReferenciaDeKardex.A(entrada.Id), pedido.Reparto);
+            var capas = p.Metodo == CostMethod.Fifo ? await CapasVivasAsync(entrada.ProductId, ambito, ct) : [];
+            var estado = new EstadoDeCosto(fila.Quantity, fila.Value, fila.AverageCost, fila.LastUnitCost) { Capas = CapasDe(capas, entrada.ProductId, ambito) };
+            var resultado = MotorDeCosteo.CostoAdicional(estado, ReferenciaDeKardex.A(entrada.Id), pedido.Reparto, p.Metodo, p.Montos);
+            Revaluar(capas, resultado.Estado);
 
             var filas = new List<KardexEntry>(resultado.Lineas.Count);
             foreach (var propuesta in resultado.Lineas)
@@ -647,6 +786,31 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         return Result.Success<IReadOnlyList<CostoAdicionalRegistrado>>(hechos);
     }
 
+    /// <summary>Las capas vivas de un ámbito, seguidas (T843): la diferencia de precio y los costos adicionales cambian su costo.</summary>
+    private async Task<List<CostLayer>> CapasVivasAsync(int producto, int ambito, CancellationToken ct) =>
+        await db.CostLayers.Where(c => c.ProductId == producto && c.ScopeWarehouseId == ambito && c.RemainingQuantity > 0m).ToListAsync(ct);
+
+    /// <summary>T843: el costo nuevo de la capa que ajustó el motor (lo demás no cambia).</summary>
+    private static void Revaluar(IReadOnlyList<CostLayer> capas, EstadoDeCosto estado)
+    {
+        foreach (var capa in estado.Capas)
+            if (capa.Entrada.EntryId is { } id && capas.FirstOrDefault(c => c.EntryKardexEntryId == id) is { } entidad && entidad.UnitCost != capa.UnitCost)
+                entidad.Revaluar(capa.UnitCost);
+    }
+
+    /// <summary>
+    /// T843: lo que queda en existencia de cada entrada con PEPS —su capa restante— para la regla D5 del reparto de costos adicionales;
+    /// sin capa viva, cero (ya salió todo). Nulo si el método vigente a <paramref name="fecha"/> no es PEPS.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, decimal>?> RestantePorEntradaAsync(DateOnly fecha, IReadOnlyList<KardexEntry> entradas, CancellationToken ct)
+    {
+        var leidos = await LeerParametrosAsync(fecha, entradas.Select(e => e.WarehouseId).Distinct().ToList(), ct);
+        if (leidos.IsFailure || leidos.Value.Metodo != CostMethod.Fifo) return null;
+        var ids = entradas.Select(e => e.Id).ToList();
+        var restantes = await db.CostLayers.Where(c => ids.Contains(c.EntryKardexEntryId)).ToDictionaryAsync(c => c.EntryKardexEntryId, c => c.RemainingQuantity, ct);
+        return ids.Distinct().ToDictionary(id => id, id => restantes.GetValueOrDefault(id));
+    }
+
     // ------------------------------------------------------------------------------------ retroactivo --
 
     /// <summary>
@@ -662,18 +826,52 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
         var posteriores = (await db.KardexEntries.AsNoTracking()
                 .Where(k => productos.Contains(k.ProductId) && k.OperationDate > fecha)
                 .GroupBy(k => new { k.ProductId, k.CostScopeWarehouseId })
-                .Select(g => new { g.Key.ProductId, g.Key.CostScopeWarehouseId, Fecha = g.Min(k => k.OperationDate) })
+                .Select(g => new
+                {
+                    g.Key.ProductId,
+                    g.Key.CostScopeWarehouseId,
+                    Fecha = g.Min(k => k.OperationDate),
+                    ConPeps = g.Any(k => k.CostMethod == CostMethod.Fifo || k.Reason == KardexReason.MethodChange),
+                })
                 .ToListAsync(ct))
             .Where(x => claves.Contains((x.ProductId, x.CostScopeWarehouseId)))
             .ToList();
         if (posteriores.Count == 0) return Result.Success(new HashSet<(int, int)>());
 
-        if (await EsExentoAsync(documento, ct))
-            return Result.Success(posteriores.Select(x => (x.ProductId, x.CostScopeWarehouseId)).ToHashSet());
-
         var primero = movimientos.First(m => posteriores.Any(x => x.ProductId == m.Linea.ProductId && x.CostScopeWarehouseId == p.AmbitoDe(m.WarehouseId)));
         var ambito = p.AmbitoDe(primero.WarehouseId);
+        var admitidos = posteriores.Select(x => (x.ProductId, x.CostScopeWarehouseId)).ToHashSet();
+
+        // D6 (T838, I5): con PEPS vigente, o con PEPS o un cambio de método después de la fecha, no hay retroactivo; tampoco para las dos
+        // excepciones de I1, porque el motor no sabe reinsertar capas en el pasado (T42b).
+        if (entrega >= EntregaDelComercio.I5 && (p.Metodo == CostMethod.Fifo || posteriores.Any(x => x.ConPeps)))
+        {
+            var conPeps = p.Metodo == CostMethod.Fifo ? primero
+                : movimientos.First(m => posteriores.Any(x => x.ConPeps && x.ProductId == m.Linea.ProductId && x.CostScopeWarehouseId == p.AmbitoDe(m.WarehouseId)));
+            return Result.Failure<HashSet<(int, int)>>(await RequierePromedioAsync(conPeps, ct));
+        }
+
+        if (await EsExentoAsync(documento, ct)) return Result.Success(admitidos);
+
         var fechaPosterior = posteriores.First(x => x.ProductId == primero.Linea.ProductId && x.CostScopeWarehouseId == ambito).Fecha;
+
+        // US16 (T838): desde I5 el retroactivo general, con el parámetro y sus días máximos a la fecha de operación (FR-045). El
+        // período cerrado ya lo rechazó el paso 1 (Inventory.Period.Closed).
+        if (entrega >= EntregaDelComercio.I5)
+        {
+            var permitidos = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.CosteoRetroactivosPermitidos, fecha, ct: ct);
+            if (permitidos.IsFailure) return Result.Failure<HashSet<(int, int)>>(permitidos.Error);
+            if (permitidos.Value.Como<bool>())
+            {
+                var dias = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.CosteoRetroactivosDiasMaximos, fecha, ct: ct);
+                if (dias.IsFailure) return Result.Failure<HashSet<(int, int)>>(dias.Error);
+                var maximo = dias.Value.Como<int>();
+                var primeraAdmitida = reloj.HoyLocal.AddDays(-maximo);
+                return fecha < primeraAdmitida
+                    ? Result.Failure<HashSet<(int, int)>>(InventoryErrors.RetroactiveTooOld(maximo, primeraAdmitida, fecha))
+                    : Result.Success(admitidos);
+            }
+        }
         var posterior = await db.KardexEntries.AsNoTracking()
             .Where(k => k.ProductId == primero.Linea.ProductId && k.CostScopeWarehouseId == ambito && k.OperationDate == fechaPosterior)
             .OrderBy(k => k.Id)
@@ -772,6 +970,159 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
                     m.Origen is null ? null : new ReferenciaDeKardex(m.Origen.Id == 0 ? null : m.Origen.Id, null), m.EsAnulacion))).ToList(),
             parametrosDeCosteo);
         return (pedido, principales.ToDictionary(k => k.Id));
+    }
+
+    // ------------------------------------------------------------------------------------------ PEPS (T836) --
+
+    /// <summary>Las capas vivas de un ámbito como las pide el motor, en orden PEPS <c>(OperationDate, EntryKardexEntryId)</c>.</summary>
+    private static IReadOnlyList<CapaDeCosto> CapasDe(IEnumerable<CostLayer> capas, int producto, int ambito) =>
+        capas.Where(c => c.ProductId == producto && c.ScopeWarehouseId == ambito && c.RemainingQuantity > 0m)
+            .OrderBy(c => c.OperationDate).ThenBy(c => c.EntryKardexEntryId)
+            .Select(c => new CapaDeCosto(ReferenciaDeKardex.A(c.EntryKardexEntryId), c.OperationDate, c.OriginalQuantity, c.RemainingQuantity, c.UnitCost))
+            .ToList();
+
+    /// <summary>
+    /// Escribe lo que el motor dejó en PEPS (T836; data-model §3.5): una <c>INV_CostLayers</c> por capa nueva (aunque nazca consumida),
+    /// un <c>INV_LayerConsumptions</c> por consumo —de la salida o, con cantidad negativa, de la anulación que devuelve— y lo que queda de
+    /// cada capa del ámbito según su estado final (la que no aparece quedó agotada). Sólo agrega al seguimiento; nunca guarda.
+    /// </summary>
+    private void EscribirCapas(
+        IReadOnlyList<(int ProductId, int Ambito, ResultadoDeCosteo Costo)> plan,
+        IReadOnlyDictionary<(int, int), EstadoDeCosto> estados,
+        IReadOnlyDictionary<long, CostLayer> capasPorEntrada,
+        IReadOnlyDictionary<LineaDeKardexPropuesta, KardexEntry> propuestas,
+        DateOnly fecha)
+    {
+        var nuevas = new Dictionary<LineaDeKardexPropuesta, CostLayer>(ReferenceEqualityComparer.Instance);
+        foreach (var (producto, ambito, costo) in plan)
+        {
+            foreach (var capa in costo.CapasNuevas)
+            {
+                if (capa.Entrada.Linea is not { } linea || nuevas.ContainsKey(linea)) continue;
+                var entidad = CostLayer.Desde(producto, ambito, propuestas[linea], capa.OperationDate ?? fecha, capa.OriginalQuantity, capa.OriginalQuantity, capa.UnitCost);
+                db.CostLayers.Add(entidad);
+                nuevas[linea] = entidad;
+            }
+        }
+
+        CostLayer Entidad(ReferenciaDeKardex entrada) =>
+            entrada.Linea is { } l && nuevas.TryGetValue(l, out var nueva) ? nueva
+            : entrada.EntryId is { } id && capasPorEntrada.TryGetValue(id, out var existente) ? existente
+            : entrada.Linea is { } propuesta && propuestas.TryGetValue(propuesta, out var fila) && capasPorEntrada.TryGetValue(fila.Id, out var porFila) ? porFila
+            : throw new InvalidOperationException("El motor nombró una capa que el registro no conoce.");
+
+        foreach (var (_, _, costo) in plan)
+        {
+            foreach (var consumo in costo.Consumos)
+            {
+                var (salidaId, salida) = consumo.Salida.Linea is { } l
+                    ? (propuestas[l].Id, propuestas[l].Id == 0 ? propuestas[l] : null)
+                    : (consumo.Salida.EntryId ?? 0L, (KardexEntry?)null);
+                var capa = Entidad(consumo.Capa.Entrada);
+                db.LayerConsumptions.Add(new LayerConsumption
+                {
+                    ExitKardexEntryId = salidaId,
+                    ExitKardexEntry = salida,
+                    LayerId = capa.Id,
+                    Layer = capa.Id == 0 ? capa : null,
+                    Quantity = consumo.Quantity,
+                    UnitCost = consumo.UnitCost,
+                });
+            }
+        }
+
+        foreach (var (producto, ambito) in plan.Select(x => (x.ProductId, x.Ambito)).Distinct())
+        {
+            var vistas = new HashSet<CostLayer>(ReferenceEqualityComparer.Instance);
+            foreach (var capa in estados[(producto, ambito)].Capas)
+            {
+                var entidad = Entidad(capa.Entrada);
+                entidad.Reconstruir(capa.RemainingQuantity);
+                if (entidad.UnitCost != capa.UnitCost) entidad.Revaluar(capa.UnitCost);
+                vistas.Add(entidad);
+            }
+            foreach (var agotada in capasPorEntrada.Values.Concat(nuevas.Values)
+                         .Where(c => c.ProductId == producto && c.ScopeWarehouseId == ambito && !vistas.Contains(c) && c.RemainingQuantity != 0m))
+                agotada.Reconstruir(0m);
+        }
+    }
+
+    /// <summary>D6: el rechazo con PEPS, nombrando la línea y el producto.</summary>
+    private async Task<Error> RequierePromedioAsync(MovimientoDeKardex m, CancellationToken ct)
+    {
+        var codigo = await db.Products.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == m.Linea.ProductId).Select(x => x.Code).FirstAsync(ct);
+        return InventoryErrors.RetroactiveRequiresWeightedAverage(m.Linea.LineNumber, codigo);
+    }
+
+    // ------------------------------------------------------------------------------ cambio de método (T836) --
+
+    /// <summary>
+    /// Lo que bloquea el cambio de método o de ámbito (US16, T841): los estados de costo de los dos ámbitos de cada línea.
+    /// </summary>
+    public static PedidoDeCerrojo CerrojoDelCambio(IReadOnlyList<LineaDeCambioDeMetodo> lineas, CostMethod metodo) => new()
+    {
+        Bodegas = lineas.Select(l => l.WarehouseId).Distinct().ToList(),
+        EstadosDeCosto = lineas.Select(l => new ClaveDeEstadoDeCosto(l.Linea.ProductId, l.Ambito, metodo)).Distinct().ToList(),
+    };
+
+    /// <summary>
+    /// Escribe el cambio de método o de ámbito de costeo (US16, T836, T841; FR-043; data-model §3.1, §3.5): una línea
+    /// <c>MethodChange</c> por cada <see cref="LineaDeCambioDeMetodo"/> —sin cantidad en un cambio de método; con la cantidad que pasa de un
+    /// ámbito al otro en uno de ámbito (<c>Exit</c> del anterior, <c>Entry</c> al nuevo)—, las capas PEPS que abren, el cierre de las capas
+    /// del método anterior, y los estados de costo con el método nuevo. <paramref name="estadosFinales"/> es el estado de cada ámbito
+    /// después del cambio (lo calculó <c>MotorDeCosteo.CambiarMetodo</c> o el reparto del cambio de ámbito). Nunca guarda.
+    /// </summary>
+    public async Task RegistrarCambioDeMetodoAsync(
+        InventoryDocument documento, IReadOnlyList<LineaDeCambioDeMetodo> lineas, CostMethod metodo,
+        IReadOnlyDictionary<(int ProductId, int Ambito), EstadoDeCosto> estadosFinales, CancellationToken ct)
+    {
+        var ahora = reloj.UtcNow;
+        var productos = estadosFinales.Keys.Select(k => k.ProductId).Distinct().ToList();
+        var costos = (await db.CostStates.Where(c => productos.Contains(c.ProductId)).ToListAsync(ct)).ToDictionary(c => (c.ProductId, c.ScopeWarehouseId));
+        var vivas = await db.CostLayers.Where(c => productos.Contains(c.ProductId) && c.RemainingQuantity > 0m).ToListAsync(ct);
+
+        foreach (var l in lineas)
+        {
+            var fila = new KardexEntry
+            {
+                DocumentId = documento.Id,
+                DocumentLineId = l.Linea.Id,
+                ProductId = l.Linea.ProductId,
+                WarehouseId = l.WarehouseId,
+                LocationId = l.LocationId,
+                OperationDate = documento.OperationDate,
+                RegisteredAt = ahora,
+                Kind = l.QuantityBase > 0m ? KardexEntryKind.Entry : l.QuantityBase < 0m ? KardexEntryKind.Exit : KardexEntryKind.CostAdjustment,
+                Reason = KardexReason.MethodChange,
+                QuantityBase = l.QuantityBase,
+                UnitCost = l.UnitCost,
+                TotalCost = l.TotalCost,
+                CostScopeWarehouseId = l.Ambito,
+                CostMethod = metodo,
+            };
+            db.KardexEntries.Add(fila);
+            if (l.Capa is { OriginalQuantity: > 0m } capa)
+                db.CostLayers.Add(CostLayer.Desde(l.Linea.ProductId, l.Ambito, fila, documento.OperationDate, capa.OriginalQuantity, capa.RemainingQuantity, capa.UnitCost));
+        }
+
+        // Las capas del régimen anterior se cierran: desde el cambio, cada ámbito parte de su capa única (o del promedio).
+        foreach (var capa in vivas) capa.Reconstruir(0m);
+
+        foreach (var ((producto, ambito), final) in estadosFinales)
+        {
+            if (!costos.TryGetValue((producto, ambito), out var fila))
+            {
+                fila = new CostState { ProductId = producto, ScopeWarehouseId = ambito };
+                db.CostStates.Add(fila);
+                costos[(producto, ambito)] = fila;
+            }
+            fila.Method = metodo;
+            fila.Quantity = final.Quantity;
+            fila.Value = final.Value;
+            fila.AverageCost = final.AverageCost;
+            fila.LastUnitCost = final.LastUnitCost;
+        }
+        documento.CostTotal = 0m;
     }
 
     // ------------------------------------------------------------------------------------------ apoyo --

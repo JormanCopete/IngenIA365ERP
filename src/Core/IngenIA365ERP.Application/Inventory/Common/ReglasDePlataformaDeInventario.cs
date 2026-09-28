@@ -41,7 +41,8 @@ public sealed class ReglasDePlataformaDeInventario(
     IApplicationDbContext db,
     IAlcanceDeInventario alcanceDeLaPeticion,
     ILectorDeParametros? parametros = null,
-    IPermissionChecker? permisos = null)
+    IPermissionChecker? permisos = null,
+    IDateTimeService? reloj = null)
     : IResolutorDeAmbitoDeParametro, IReglasDeParametros, IReglasDePoliticaDeAprobacion
 {
     /// <summary>Dejar sin paso a contabilidad un tipo fiscal (api.md §7).</summary>
@@ -116,7 +117,12 @@ public sealed class ReglasDePlataformaDeInventario(
             case ParametrosDeInventario.CosteoMetodo:
             case ParametrosDeInventario.CosteoAmbito:
                 var inicio = await InicioDePeriodoAsync(alta.Definicion.Clave, alta.ValidFrom, corte?.LastClosedDate, ct);
-                return inicio.IsFailure ? Result.Failure<DecisionDeReglasDeParametro>(inicio.Error) : Result.Success(DecisionDeReglasDeParametro.Adelante);
+                if (inicio.IsFailure) return Result.Failure<DecisionDeReglasDeParametro>(inicio.Error);
+                // I5 (T841): el cambio se registra en el período en que empieza, no se programa: la capa única y los estados salen de la
+                // existencia real a esa fecha, que no se conoce de antemano (decisiones-transversales T42g).
+                if (reloj is not null && alta.ValidFrom > reloj.HoyLocal)
+                    return Result.Failure<DecisionDeReglasDeParametro>(InventoryErrors.MethodChangeInFuture(alta.Definicion.Clave, alta.ValidFrom, reloj.HoyLocal));
+                return Result.Success(DecisionDeReglasDeParametro.Adelante);
             case ParametrosDeInventario.ContabilidadModoDePaso:
                 return await ModoDePasoAsync(alta, ct);
             default:

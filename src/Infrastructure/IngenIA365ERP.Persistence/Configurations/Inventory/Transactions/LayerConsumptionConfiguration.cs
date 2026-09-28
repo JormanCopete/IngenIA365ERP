@@ -28,8 +28,8 @@ public class LayerConsumptionConfiguration : IEntityTypeConfiguration<LayerConsu
         builder.Property(e => e.Quantity).Cantidad().IsRequired();
         builder.Property(e => e.UnitCost).CostoUnitario().IsRequired();
 
-        builder.HasOne<KardexEntry>().WithMany().HasForeignKey(e => e.ExitKardexEntryId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<CostLayer>().WithMany().HasForeignKey(e => e.LayerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.ExitKardexEntry).WithMany().HasForeignKey(e => e.ExitKardexEntryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Layer).WithMany().HasForeignKey(e => e.LayerId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.ExitKardexEntryId).HasDatabaseName("IX_INV_LayerConsumptions_ExitKardexEntryId");
         builder.HasIndex(e => e.LayerId).HasDatabaseName("IX_INV_LayerConsumptions_LayerId");
