@@ -20,6 +20,12 @@ public class LandedCostAllocation : AuditableEntity
     /// <summary>El documento <c>LandedCost</c>.</summary>
     public int DocumentId { get; set; }
 
+    /// <summary>
+    /// (nuevo, I5, T799) El documento, para que el borrador escriba la propuesta del reparto antes de tener Id (T42e). Sólo navegación:
+    /// no cambia la tabla.
+    /// </summary>
+    public Documents.InventoryDocument? Document { get; set; }
+
     public int ReceiptDocumentId { get; set; }
 
     public int ReceiptLineId { get; set; }

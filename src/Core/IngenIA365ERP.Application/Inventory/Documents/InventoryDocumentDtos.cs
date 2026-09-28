@@ -36,7 +36,11 @@ public sealed record SaveInventoryDraftRequest(
     DateOnly? NeededBy = null,
     Guid? RequestedByPersonPublicId = null,
     DateOnly? ExpectedDate = null,
-    string? PaymentTerms = null)
+    string? PaymentTerms = null,
+    IReadOnlyList<Guid>? ReceiptPublicIds = null,
+    decimal? Amount = null,
+    LandedCostAllocationMethod? Method = null,
+    IReadOnlyList<ManualAllocationRequest>? ManualAllocations = null)
 {
     /// <summary>La contraparte: la del ciclo común o, en compras, el proveedor (<c>supplierPersonPublicId</c>, api.md §14).</summary>
     public Guid? Contraparte => CounterpartyPersonPublicId ?? SupplierPersonPublicId;
@@ -46,9 +50,16 @@ public sealed record SaveInventoryDraftRequest(
         OperationMunicipalityDaneCode is not null || SupplierPersonPublicId is not null || Supplier is not null
         || SupplierInvoicePublicId is not null || NoteKind is not null
         || NeededBy is not null || RequestedByPersonPublicId is not null || ExpectedDate is not null || PaymentTerms is not null
+        || ReceiptPublicIds is not null || Amount is not null || Method is not null || ManualAllocations is not null
         || Lines.Any(l => l.ReceiptLinePublicId is not null || l.InvoiceLinePublicId is not null || l.Amount is not null || l.AffectsCost is not null
                           || l.OrderLinePublicId is not null || l.RequestLinePublicId is not null);
 }
+
+/// <summary>
+/// Lo digitado a mano para una línea de recepción en unos costos adicionales con <c>method = Manual</c> (<c>manualAllocations[]</c>,
+/// api.md §14.9; I5, T799). (nuevo)
+/// </summary>
+public sealed record ManualAllocationRequest(Guid ReceiptLinePublicId, decimal Amount);
 
 /// <summary>
 /// El documento del proveedor en una factura o nota (<c>supplier</c>, api.md §14.4–§14.5): prefijo, número, CUFE o CUDE,
@@ -276,7 +287,40 @@ public sealed record InventoryDocumentDto(
     IReadOnlyList<DocumentMessageDto>? Messages,
     IReadOnlyList<DocumentAttachmentDto> Attachments,
     IReadOnlyList<string> AllowedActions,
-    IReadOnlyList<AvisoDto> Warnings);
+    IReadOnlyList<AvisoDto> Warnings,
+    LandedCostDto? LandedCost = null);
+
+/// <summary>
+/// Una línea de recepción a la que le toca parte de unos costos adicionales (<c>allocations[].receiptLine</c>, api.md §14.9). (nuevo)
+/// </summary>
+public sealed record LandedCostReceiptLineDto(Guid ReceiptPublicId, string? ReceiptDisplayNumber, Guid LinePublicId, int LineNumber);
+
+/// <summary>
+/// La porción de una línea de recepción (<c>allocations[]</c>, api.md §14.9; data-model §9.7): la base según el método, lo asignado
+/// (con el residuo del redondeo si le tocó, <see cref="RoundingResidue"/>), lo que va a inventario y lo que va a costo de venta. (nuevo)
+/// </summary>
+public sealed record LandedCostAllocationDto(
+    LandedCostReceiptLineDto ReceiptLine,
+    ReferenciaDto Product,
+    decimal Basis,
+    decimal Allocated,
+    decimal RoundingResidue,
+    decimal ToInventory,
+    decimal ToCostOfSales);
+
+/// <summary>
+/// Los costos adicionales de un documento <c>LandedCost</c> (api.md §14.9; I5, T799): la factura del flete o del seguro, el método, el
+/// monto que se reparte, lo que queda sin repartir de esa factura sin contar este documento (<see cref="Available"/>), el reparto y el
+/// residuo total del redondeo. En un borrador es la vista previa con la existencia de hoy; confirmado, lo que quedó escrito. Sin reparto
+/// (<see cref="Allocations"/> vacío) si no se pudo repartir: el porqué va en los avisos. (nuevo)
+/// </summary>
+public sealed record LandedCostDto(
+    DocumentoReferidoDto SupplierInvoice,
+    LandedCostAllocationMethod Method,
+    decimal Amount,
+    decimal Available,
+    IReadOnlyList<LandedCostAllocationDto> Allocations,
+    decimal RoundingResidue);
 
 // --------------------------------------------------------------------------------------------- resultados --
 

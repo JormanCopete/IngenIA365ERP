@@ -66,6 +66,8 @@ public sealed class ComprasDePrueba
                      ("NCP", DocumentClass.SupplierNote), ("DVP", DocumentClass.SupplierReturn),
                      // I5 (T785): la solicitud y la orden (operan con la entrega I5: ver Entrega).
                      ("SOC", DocumentClass.PurchaseRequest), ("ORC", DocumentClass.PurchaseOrder),
+                     // I5 (T799): los costos adicionales.
+                     ("CAD", DocumentClass.LandedCost),
                  })
         {
             var tipo = new InventoryDocumentType { Code = codigo, Name = codigo, Class = clase, IsActive = true };
@@ -122,6 +124,9 @@ public sealed class ComprasDePrueba
     /// <summary>El cruce a tres vías de la factura del proveedor (I5, T794), con el motor de aprobaciones de prueba.</summary>
     public CruceATresVias Cruce() => new(C.Db, K.Motor, K.Lector(), Vinculos(), C.Reloj);
 
+    /// <summary>Los costos adicionales (I5, T799).</summary>
+    public CostosAdicionalesDeCompra Costos() => new(C.Db, K.Lector(), K.Registro());
+
     public EfectosDeClase Efectos()
     {
         var registro = K.Registro();
@@ -140,10 +145,11 @@ public sealed class ComprasDePrueba
             new EfectoDevolucionAProveedor(registro, reversion, emision, maestros, vinculos, C.Db),
             new EfectoDeSolicitudDeCompra(maestros),
             new EfectoDeOrdenDeCompra(maestros, Calculo(), vinculos),
+            new EfectoDeCostosAdicionales(registro, emision, Costos(), vinculos, C.Db, C.Reloj),
         ], Entrega);
     }
 
-    public BorradorDeCompra Borrador() => new(C.Db, C.Reloj, Calculo(), Vinculos(), CompraDirecta, ContraOrden());
+    public BorradorDeCompra Borrador() => new(C.Db, C.Reloj, Calculo(), Vinculos(), CompraDirecta, ContraOrden(), Costos());
 
     public SaveInventoryDraftCommandHandler Guardar(EfectosDeClase? efectos = null) =>
         new(C.Db, K.Maestros(), K.Alcance, K.Actor, C.Reloj, efectos ?? Efectos(), K.Vista(), [Borrador()]);

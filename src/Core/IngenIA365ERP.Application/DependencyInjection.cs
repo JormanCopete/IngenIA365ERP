@@ -218,6 +218,9 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Purchasing.Common.CalculoTributarioDeCompra>();
         services.AddScoped<Inventory.Purchasing.Common.VinculosDeCompra>();
         services.AddScoped<Inventory.Purchasing.Common.DiferenciasDePrecioDeCompra>();
+        // I5 (T799, T800): los costos adicionales (flete, seguro) y su estrategia.
+        services.AddScoped<Inventory.Purchasing.Common.CostosAdicionalesDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeCostosAdicionales>();
         services.AddScoped<Inventory.Purchasing.Common.ContextoDeCompraDirecta>();
         services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Purchasing.Common.BorradorDeCompra>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoRecepcionDeCompra>();

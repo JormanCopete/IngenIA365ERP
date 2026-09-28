@@ -199,7 +199,8 @@ public sealed class ListSupplierInvoicesQueryHandler(
 public sealed record GetPurchaseDocumentQuery(Guid DocumentPublicId, DocumentClass? Clase = null) : IRequest<Result<PurchaseDocumentDto>>;
 
 public sealed class GetPurchaseDocumentQueryHandler(
-    IApplicationDbContext db, VistaDeDocumentos vista, VinculosDeCompra vinculos, CalculoTributarioDeCompra calculo, PendientesDeCompra pendientes)
+    IApplicationDbContext db, VistaDeDocumentos vista, VinculosDeCompra vinculos, CalculoTributarioDeCompra calculo, PendientesDeCompra pendientes,
+    CostosAdicionalesDeCompra? costos = null)
     : IRequestHandler<GetPurchaseDocumentQuery, Result<PurchaseDocumentDto>>
 {
     public async Task<Result<PurchaseDocumentDto>> Handle(GetPurchaseDocumentQuery request, CancellationToken ct)
@@ -224,6 +225,10 @@ public sealed class GetPurchaseDocumentQueryHandler(
             }
         }
 
+        // I5 (T799): los costos adicionales, con su reparto (la propuesta del borrador o lo que quedó escrito al confirmar).
+        if (documento.Class == DocumentClass.LandedCost && costos is not null && await CostosAdicionalesAsync(costos, documento, ct) is { } reparto)
+            detalle = detalle with { LandedCost = reparto };
+
         var proveedor = await db.SupplierInvoiceDetails.AsNoTracking().FirstOrDefaultAsync(d => d.DocumentId == documento.Id, ct);
         var eventos = documento.Class == DocumentClass.SupplierInvoice ? await ConsultasDeCompras.EventosAsync(db, documento.Id, ct) : [];
         var saldos = documento.Class == DocumentClass.PurchaseReceipt
@@ -236,6 +241,22 @@ public sealed class GetPurchaseDocumentQueryHandler(
             : [];
         return Result.Success(new PurchaseDocumentDto(detalle, ConsultasDeCompras.Info(proveedor), eventos, saldos, documento.OperationMunicipalityDaneCode,
             await AjustesDeCostoAsync(documento, ct), plan, pendientesDeLinea, cruce.Count == 0 ? null : cruce));
+    }
+
+    /// <summary>
+    /// <c>landedCost</c> del detalle (api.md §14.9): la factura del flete, el método y el monto, lo que queda sin repartir de la factura sin
+    /// contar este documento y las filas vivas de <c>INV_LandedCostAllocations</c> (la propuesta del borrador o las definitivas). (I5, T799)
+    /// </summary>
+    private async Task<LandedCostDto?> CostosAdicionalesAsync(CostosAdicionalesDeCompra costos, InventoryDocument documento, CancellationToken ct)
+    {
+        var factura = await costos.FacturaDeAsync(documento, ct);
+        if (factura is null) return null;
+        var filas = await costos.FilasAsync(documento, ct);
+        var recepciones = await vinculos.OrigenesAsync(documento, DocumentLinkKind.LandedCostOf, ct);
+        var lineas = await costos.LineasAsync(recepciones, ct);
+        var disponible = await costos.DisponibleAsync(factura, documento.Id, ct);
+        return CostosAdicionalesDeCompra.Vista(factura, filas.FirstOrDefault()?.AllocationMethod ?? LandedCostAllocationMethod.Value, documento.Subtotal,
+            Math.Max(0m, disponible), lineas, filas.Select(CostosAdicionalesDeCompra.ComoReparto).ToList());
     }
 
     /// <summary>

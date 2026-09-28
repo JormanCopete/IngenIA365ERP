@@ -77,6 +77,16 @@ public sealed record DiferenciaDePrecioPedida(InventoryDocumentLine Linea, Karde
 /// <summary>Una diferencia de precio ya escrita: lo que quedó en existencia, lo que pasó a lo vendido y sus filas. (nuevo)</summary>
 public sealed record DiferenciaDePrecioRegistrada(DiferenciaDePrecioPedida Pedida, decimal EnExistencia, decimal Vendida, IReadOnlyList<KardexEntry> Lineas);
 
+/// <summary>
+/// La porción de unos costos adicionales que toca a una línea de recepción (US13, T800): la línea del documento <c>LandedCost</c> (o
+/// de su anulación) que registra, la entrada del kardex de la recepción y el reparto de <see cref="Prorrateo"/>. En la anulación el
+/// reparto va con los signos contrarios. (nuevo)
+/// </summary>
+public sealed record CostoAdicionalPedido(InventoryDocumentLine Linea, KardexEntry Entrada, RepartoDeLinea Reparto);
+
+/// <summary>Un costo adicional ya escrito: lo que quedó en existencia, lo que pasó a costo de venta y sus filas. (nuevo)</summary>
+public sealed record CostoAdicionalRegistrado(CostoAdicionalPedido Pedido, decimal EnExistencia, decimal Vendida, IReadOnlyList<KardexEntry> Lineas);
+
 /// <summary>Lo que dejó el registro de un documento. (nuevo)</summary>
 public sealed record RegistroHecho(IReadOnlyList<MovimientoEscrito> Movimientos)
 {
@@ -543,6 +553,98 @@ public sealed class RegistroDeKardex(IApplicationDbContext db, ILectorDeParametr
             hechas.Add(new DiferenciaDePrecioRegistrada(pedida, DiferenciaDePrecio.EnExistencia(resultado), DiferenciaDePrecio.Vendida(resultado), filas));
         }
         return Result.Success<IReadOnlyList<DiferenciaDePrecioRegistrada>>(hechas);
+    }
+
+    // ------------------------------------------------------------------------- costos adicionales (US13) --
+
+    /// <summary>
+    /// Lo que bloquea un documento que sólo corrige el costo de unas entradas ya registradas (costos adicionales, US13, T800): los
+    /// estados de costo de esas entradas y sus bodegas. El mismo cerrojo que <see cref="CerrojoDeDiferenciasAsync"/>. (nuevo)
+    /// </summary>
+    public async Task<Result<PedidoDeCerrojo>> CerrojoDeEntradasAsync(DateOnly fecha, IReadOnlyList<KardexEntry> entradas, CancellationToken ct)
+    {
+        if (entradas.Count == 0) return Result.Success(new PedidoDeCerrojo());
+        var bodegas = entradas.Select(e => e.WarehouseId).Distinct().ToList();
+        var leidos = await LeerParametrosAsync(fecha, bodegas, ct);
+        if (leidos.IsFailure) return Result.Failure<PedidoDeCerrojo>(leidos.Error);
+        var p = leidos.Value;
+        return Result.Success(new PedidoDeCerrojo
+        {
+            Bodegas = bodegas,
+            EstadosDeCosto = entradas.Select(e => new ClaveDeEstadoDeCosto(e.ProductId, p.AmbitoDe(e.WarehouseId), p.Metodo)).Distinct().ToList(),
+        });
+    }
+
+    /// <summary>
+    /// Registra los costos adicionales de un documento <c>LandedCost</c> (o su contrario, con el reparto en signo contrario) sobre las
+    /// entradas de sus recepciones (US13, T800; FR-046; D5): pide a <see cref="MotorDeCosteo.CostoAdicional"/> las líneas
+    /// <c>CostAdjustment</c> <c>LandedCost</c> —lo asignado sobre la entrada y, si algo ya salió, lo vendido con signo contrario—, las
+    /// escribe bajo el documento con <c>AffectsEntryId</c> de la entrada, fechadas en él y en la bodega de la entrada, y mueve el valor del
+    /// ámbito sólo por lo que quedó en existencia. Sin cantidades, no mira disponibilidad. Nunca guarda. (nuevo)
+    /// </summary>
+    public async Task<Result<IReadOnlyList<CostoAdicionalRegistrado>>> RegistrarCostosAdicionalesAsync(
+        InventoryDocument documento, IReadOnlyList<CostoAdicionalPedido> pedidos, CancellationToken ct)
+    {
+        var conMonto = pedidos.Where(x => x.Reparto.AllocatedAmount != 0m).ToList();
+        if (conMonto.Count == 0) return Result.Success<IReadOnlyList<CostoAdicionalRegistrado>>([]);
+
+        var bodegas = conMonto.Select(x => x.Entrada.WarehouseId).Distinct().ToList();
+        var leidos = await LeerParametrosAsync(documento.OperationDate, bodegas, ct);
+        if (leidos.IsFailure) return Result.Failure<IReadOnlyList<CostoAdicionalRegistrado>>(leidos.Error);
+        var p = leidos.Value;
+
+        var productos = conMonto.Select(x => x.Entrada.ProductId).Distinct().ToList();
+        var costos = (await db.CostStates.Where(c => productos.Contains(c.ProductId)).ToListAsync(ct))
+            .ToDictionary(c => (c.ProductId, c.ScopeWarehouseId));
+        var ahora = reloj.UtcNow;
+        var hechos = new List<CostoAdicionalRegistrado>(conMonto.Count);
+
+        foreach (var pedido in conMonto)
+        {
+            var entrada = pedido.Entrada;
+            var ambito = p.AmbitoDe(entrada.WarehouseId);
+            if (!costos.TryGetValue((entrada.ProductId, ambito), out var fila))
+            {
+                fila = new CostState { ProductId = entrada.ProductId, ScopeWarehouseId = ambito, Method = p.Metodo };
+                db.CostStates.Add(fila);
+                costos[(entrada.ProductId, ambito)] = fila;
+            }
+            var estado = new EstadoDeCosto(fila.Quantity, fila.Value, fila.AverageCost, fila.LastUnitCost);
+            var resultado = MotorDeCosteo.CostoAdicional(estado, ReferenciaDeKardex.A(entrada.Id), pedido.Reparto);
+
+            var filas = new List<KardexEntry>(resultado.Lineas.Count);
+            foreach (var propuesta in resultado.Lineas)
+            {
+                var escrita = new KardexEntry
+                {
+                    DocumentId = documento.Id,
+                    DocumentLineId = pedido.Linea.Id,
+                    ProductId = entrada.ProductId,
+                    WarehouseId = entrada.WarehouseId,
+                    LocationId = entrada.LocationId,
+                    LotId = entrada.LotId,
+                    OperationDate = documento.OperationDate,
+                    RegisteredAt = ahora,
+                    Kind = KardexEntryKind.CostAdjustment,
+                    Reason = KardexReason.LandedCost,
+                    QuantityBase = 0m,
+                    UnitCost = propuesta.UnitCost,
+                    TotalCost = propuesta.TotalCost,
+                    CostScopeWarehouseId = ambito,
+                    CostMethod = p.Metodo,
+                    AffectsEntryId = entrada.Id,
+                };
+                db.KardexEntries.Add(escrita);
+                filas.Add(escrita);
+            }
+            fila.Method = p.Metodo;
+            fila.Quantity = resultado.Estado.Quantity;
+            fila.Value = resultado.Estado.Value;
+            fila.AverageCost = resultado.Estado.AverageCost;
+            fila.LastUnitCost = resultado.Estado.LastUnitCost;
+            hechos.Add(new CostoAdicionalRegistrado(pedido, Prorrateo.EnExistencia(resultado), Prorrateo.Vendida(resultado), filas));
+        }
+        return Result.Success<IReadOnlyList<CostoAdicionalRegistrado>>(hechos);
     }
 
     // ------------------------------------------------------------------------------------ retroactivo --

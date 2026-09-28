@@ -1969,6 +1969,18 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `Inventory/Purchasing/Consultas/{ListPurchaseMatchesQuery, GetSupplierInvoiceMatchQuery}` con `PurchaseMatchLineDto`,
     `PurchaseMatchInvoiceDto` y `ConsultasDelCruce` (`Visibles`, `DtosAsync`); `PurchaseDocumentDto.Match`; la vista
     `Inventory/Reports/PurchaseMatchesReportQuery` (`purchase-matches`; la ruta la registra T809). Reglas en T42d.
+- **I5, Application de costos adicionales (T799–T801, prueba T771; 2026-09-28) (nuevo)**: la estrategia
+    `Inventory/Documents/Efectos/EfectoDeCostosAdicionales` (clase `LandedCost`); `Inventory/Purchasing/Common/CostosAdicionalesDeCompra`
+    (`LineaConCostoAdicional`; `FacturaAsync`, `FacturaDeAsync`, `ValidarFacturaAsync`, `DisponibleAsync`, `RecepcionesAsync`,
+    `ConfirmadasAsync`, `LineasAsync`, `RepartirAsync`, `Vista`, `ComoReparto`, `FilasAsync`, `EscribirFilasAsync`, `EsFacturaDeFlete`),
+    inyectado **opcional** en `BorradorDeCompra` y `GetPurchaseDocumentQueryHandler`; en `RegistroDeKardex`, `CerrojoDeEntradasAsync` y
+    `RegistrarCostosAdicionalesAsync` con `CostoAdicionalPedido` y `CostoAdicionalRegistrado`; `EmisionDeInventario.AjusteDeCostosAdicionalesAsync`;
+    en el contrato del borrador `SaveInventoryDraftRequest.{ReceiptPublicIds, Amount, Method, ManualAllocations}` con
+    `ManualAllocationRequest`; en la respuesta `InventoryDocumentDto.LandedCost` (`LandedCostDto`, `LandedCostAllocationDto`,
+    `LandedCostReceiptLineDto`) y `ResultadoDelBorrador.CostosAdicionales`; la navegación `LandedCostAllocation.Document` (sólo navegación,
+    la tabla no cambia); errores `ErroresDeCompras.{LandedCostInvoiceNotService, LandedCostInvoiceNotConfirmed, LandedCostExceedsInvoice,
+    LandedCostBasisMissing (ProductoSinBase), LandedCostManualNotBalanced}` y la sobrecarga `ReceiptNotConfirmed(receiptPublicId,
+    displayNumber)`. Reglas en T42e.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2043,6 +2055,12 @@ Cruce a tres vías (I5, T796; **(nuevo)**): `Inventory.PurchaseMatch.QuantityNot
 por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción). Lo publica `DecisionDeCruce` en cualquier
 nivel (la decisión no queda), con `data { lineNumber, receivedNotInvoiced, invoiced }`, y la confirmación de la factura si la política
 vigente no pidiera aprobación para esa línea (T42d).
+
+Costos adicionales (I5, T799; **(nuevo)**): `Inventory.LandedCost.InvoiceNotConfirmed` (la factura del flete en borrador, en
+aprobación o anulada; `data { invoicePublicId, displayNumber, status }`). Los de api.md §14.9 quedan con su `data`:
+`.InvoiceNotService` (`{ invoicePublicId, displayNumber }`), `.ExceedsInvoice` (`{ available }`), `.BasisMissing`
+(`{ products: [{ publicId, code }] }`), `.ManualNotBalanced` (`{ amount, allocated }`) e `Inventory.Purchase.ReceiptNotConfirmed` sin
+línea (`{ receiptPublicId, displayNumber }`) (T42e).
 
 Solicitudes y órdenes (I5, T787–T792; **(nuevo)** los que api.md §14.9 nombra sin definir): `Inventory.Purchase.OrderFromOtherSupplier`
 (`data { lineNumber, orderPublicId, displayNumber }`), `Inventory.PurchaseOrder.NotOpen` (ahora también recibir contra una orden sin
@@ -2892,6 +2910,38 @@ Lo que T794/T795 y api.md §14.9 dejaban abierto y la aplicación tuvo que fijar
 - *Consultas*: `PurchaseMatchLineDto` agrega `exceedsTolerance` y `tolerance` (el `ToleranceJson`) **(nuevos)** para que la pantalla del
   cruce muestre la tolerancia usada; precios y diferencia de precio nulos sin `Inventory.Costs.Read`, en las consultas y en la vista
   `purchase-matches`, cuyo rango de fechas (el común, el mes en curso sin fechas) filtra por la fecha de la factura.
+
+**T42e · Costos adicionales: borrador, confirmación y anulación (I5, T799–T801; 2026-09-28; a revisar por el dueño).**
+Lo que T799/T800 y api.md §14.9 dejaban abierto y la aplicación tuvo que fijar:
+- *Dónde vive el método mientras es borrador.* `INV_Documents` no tiene columna para el método (T778 lo dejó en cada fila de
+  `INV_LandedCostAllocations` y la migración ya salió), así que **el borrador escribe la propuesta del reparto** en esa tabla —una fila
+  por línea de recepción, con el método y, en `Manual`, lo digitado en `Basis`— y la confirmación la **reescribe en su sitio** bajo el
+  cerrojo con la existencia de ese momento. Para escribirla antes de que el documento tenga `Id` se agregó la navegación
+  `LandedCostAllocation.Document` (no cambia la tabla). Volver a guardar actualiza cada fila en su sitio (nunca conviven dos vivas con
+  la misma `(DocumentId, ReceiptLineId)`).
+- *Las líneas no se digitan*: el servidor arma una por cada línea de recepción que dejó entrada en el kardex (producto, unidad y cantidad
+  de la recepción, vínculo `LandedCostOf` por línea); su valor es lo que le toca. El documento no factura: `Subtotal = Total = monto`,
+  sin impuestos (van en la factura del flete). La **contraparte** es el proveedor del flete; **sin bodega**; la sucursal, la de la
+  primera recepción. La factura se enlaza con un `LandedCostOf` a nivel de documento (sin líneas).
+- *La factura del flete*: una `SupplierInvoice` o un `SupportDocument` (un transportador no obligado a facturar), **confirmada**
+  (`Inventory.LandedCost.InvoiceNotConfirmed`, **nuevo**) y con algún renglón de un producto `Service` (`.InvoiceNotService`).
+- *Lo que queda sin repartir* (`ExceedsInvoice`, `data.available`): los renglones de servicio de la factura —**neto más lo que fue al
+  costo**, lo mismo que la factura llevó a la cuenta de costos por distribuir— menos el `Subtotal` de los otros `LandedCost`
+  `PendingApproval` o `Confirmed` que la reparten. Sin `amount`, el borrador propone lo que queda.
+- *Qué bloquea y qué avisa*: la factura y las recepciones (existen, confirmadas, de servicio) bloquean el borrador; lo que depende de otros
+  documentos o de la existencia (`ExceedsInvoice`, `BasisMissing`, `ManualNotBalanced`) vuelve como **aviso** y la confirmación lo
+  rechaza con el mismo código, repitiéndolo bajo el cerrojo (orígenes: las recepciones **y la factura del flete**, así dos costos
+  adicionales sobre la misma factura se confirman uno detrás del otro).
+- *Base del reparto por valor o cantidad*: la entrada que la línea de recepción dejó en el kardex (su `TotalCost` y su `QuantityBase`),
+  no el precio de la línea. Proporción en existencia (D5) con la existencia del ámbito de costo al confirmar.
+- *Mensajes*: un `AjusteDeCostoReconocido` `LandedCost` por recepción afectada (`Confirmation:{recepción:N}`, hereda el destino de esa
+  recepción). Recepciones con modos de paso distintos **sí** se pueden reunir: cada ajuste sigue el de la suya. El documento copia el
+  modo de la primera (derivado, FR-075).
+- *Anular* (`Voiding`): las **mismas porciones con el signo contrario**, sin recalcular D5 (lo que fue a costo de venta vuelve de costo
+  de venta), sobre las mismas entradas, y un ajuste por recepción con los signos contrarios. Las filas del original no cambian. La
+  recepción con costos adicionales vigentes no se anula (`HasDependents`, T801); la orden de la que viene nunca la bloquea.
+- *Vista*: `allocations[]` lleva además `roundingResidue` por línea; `basis`, `toInventory` y `toCostOfSales` no se ocultan sin
+  `Inventory.Costs.Read` (son el reparto de una factura, no el costo del producto) — a revisar si el dueño los quiere ocultos.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

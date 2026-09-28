@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Purchasing;
 using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Inventory.Costing;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Purchasing.Common;
@@ -59,7 +60,8 @@ public sealed class BorradorDeCompra(
     CalculoTributarioDeCompra calculo,
     VinculosDeCompra vinculos,
     ContextoDeCompraDirecta compraDirecta,
-    RecepcionContraOrden contraOrden) : IBorradorDeGrupo
+    RecepcionContraOrden contraOrden,
+    CostosAdicionalesDeCompra? costos = null) : IBorradorDeGrupo
 {
     public DocumentClassGroup Grupo => DocumentClassGroup.Purchases;
 
@@ -78,6 +80,13 @@ public sealed class BorradorDeCompra(
         var esSolicitud = clase == DocumentClass.PurchaseRequest;
         var esOrden = clase == DocumentClass.PurchaseOrder;
         var esRecepcion = clase == DocumentClass.PurchaseReceipt;
+
+        // I5 (T799): los costos adicionales arman sus líneas desde las recepciones; sus campos sólo en su clase.
+        if (clase == DocumentClass.LandedCost) return await PrepararCostosAdicionalesAsync(pedido, ct);
+        if (pedido.ReceiptPublicIds is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("receiptPublicIds", clase));
+        if (pedido.Amount is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("amount", clase));
+        if (pedido.Method is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("method", clase));
+        if (pedido.ManualAllocations is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("manualAllocations", clase));
 
         // I5 (T787): los campos de la solicitud y de la orden sólo en su clase.
         if (pedido.NeededBy is not null && !esSolicitud) return Falla(ErroresDeCompras.CampoNoAdmitido("neededBy", clase));
@@ -235,6 +244,9 @@ public sealed class BorradorDeCompra(
                 if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
                 break;
             }
+            case DocumentClass.LandedCost:
+                // I5 (T799): sin municipio, documento del proveedor ni impuestos (los lleva la factura del flete).
+                return await CostosAdicionalesAsync(documento, pedido, vivas, avisos, ct);
         }
 
         // Municipio de la operación (ReteICA): el pedido, o el de la sucursal de la bodega que recibe.
@@ -496,6 +508,138 @@ public sealed class BorradorDeCompra(
         if (demas.IsFailure) avisos.Add(demas.Error);
         else avisos.AddRange(demas.Value);
         return Result.Success();
+    }
+
+    // --------------------------------------------------------------------------------- costos adicionales (I5) --
+
+    /// <summary>Lo que <see cref="PrepararCostosAdicionalesAsync"/> dejó para <see cref="CostosAdicionalesAsync"/>.</summary>
+    private sealed record CostosPreparados(InventoryDocument Factura, IReadOnlyList<InventoryDocument> Recepciones, IReadOnlyList<LineaConCostoAdicional> Lineas);
+
+    private CostosPreparados? _costos;
+
+    private CostosAdicionalesDeCompra Costos => costos ?? throw new InvalidOperationException("Los costos adicionales necesitan CostosAdicionalesDeCompra.");
+
+    /// <summary>
+    /// Los costos adicionales (T799; api.md §14.9): la factura del flete (confirmada y de servicio), las recepciones (confirmadas), el método
+    /// y, en <c>Manual</c>, lo digitado por línea de recepción. Las líneas no se digitan: una por cada línea de recepción que dejó entrada
+    /// en el kardex, con su producto, unidad y cantidad; la contraparte es el proveedor del flete. Sin bodega: la sucursal, la de las
+    /// recepciones.
+    /// </summary>
+    private async Task<Result<SaveInventoryDraftRequest>> PrepararCostosAdicionalesAsync(SaveInventoryDraftRequest pedido, CancellationToken ct)
+    {
+        const DocumentClass clase = DocumentClass.LandedCost;
+        if (pedido.Supplier is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("supplier", clase));
+        if (pedido.NoteKind is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("noteKind", clase));
+        if (pedido.NeededBy is not null || pedido.ExpectedDate is not null || pedido.PaymentTerms is not null || pedido.RequestedByPersonPublicId is not null)
+            return Falla(ErroresDeCompras.CampoNoAdmitido(pedido.NeededBy is not null ? "neededBy" : pedido.ExpectedDate is not null ? "expectedDate"
+                : pedido.PaymentTerms is not null ? "paymentTerms" : "requestedByPersonPublicId", clase));
+        if (pedido.OperationMunicipalityDaneCode is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("operationMunicipalityDaneCode", clase));
+        if (pedido.WarehousePublicId is not null || pedido.DestinationWarehousePublicId is not null)
+            return Falla(ErroresDeCompras.CampoNoAdmitido("warehousePublicId", clase));
+        if (pedido.SupplierPersonPublicId is not null || pedido.CounterpartyPersonPublicId is not null)
+            return Falla(ErroresDeCompras.CampoNoAdmitido("supplierPersonPublicId", clase));
+        if (pedido.Lines.Count > 0) return Falla(ErroresDeCompras.CampoNoAdmitido("lines", clase));
+        if (pedido.SupplierInvoicePublicId is not { } facturaId) return Falla(InventoryErrors.FieldRequired("supplierInvoicePublicId"));
+        if (pedido.ReceiptPublicIds is not { Count: > 0 } recepcionesPedidas) return Falla(InventoryErrors.FieldRequired("receiptPublicIds"));
+        if (pedido.Method is not { } metodo || !Enum.IsDefined(metodo)) return Falla(InventoryErrors.FieldRequired("method"));
+        if (pedido.ManualAllocations is not null && metodo != LandedCostAllocationMethod.Manual)
+            return Falla(ErroresDeCompras.CampoNoAdmitido("manualAllocations", clase));
+        if (pedido.Amount is { } monto && (monto <= 0m || SaveInventoryDraftCommandValidator.Decimales(monto) > 2))
+            return Falla(new ErrorConDatos("Validation.Invalid", "El monto a repartir va positivo y con hasta 2 decimales.", new { field = "amount" }));
+        if (pedido.ManualAllocations?.Any(m => m.Amount < 0m || SaveInventoryDraftCommandValidator.Decimales(m.Amount) > 2) == true)
+            return Falla(new ErrorConDatos("Validation.Invalid", "Lo digitado por línea va en pesos, no negativo y con hasta 2 decimales.", new { field = "manualAllocations" }));
+
+        var factura = await Costos.FacturaAsync(facturaId, ct);
+        if (factura.IsFailure) return Falla(factura.Error);
+        var recepciones = await Costos.RecepcionesAsync(recepcionesPedidas, ct);
+        if (recepciones.IsFailure) return Falla(recepciones.Error);
+        var lineas = await Costos.LineasAsync(recepciones.Value, ct);
+
+        var deLasRecepciones = lineas.Select(l => l.LineaDeRecepcion.PublicId).ToHashSet();
+        if (pedido.ManualAllocations?.FirstOrDefault(m => !deLasRecepciones.Contains(m.ReceiptLinePublicId)) is { } ajena)
+            return Falla(new ErrorConDatos("Validation.Invalid", "Lo digitado a mano va sobre líneas de las recepciones elegidas.",
+                new { field = "manualAllocations", receiptLinePublicId = ajena.ReceiptLinePublicId }));
+
+        _costos = new CostosPreparados(factura.Value, recepciones.Value, lineas);
+        var unidades = lineas.Select(l => l.LineaDeRecepcion.UnitId).Distinct().ToList();
+        var publicasDeUnidad = await db.UnitsOfMeasure.AsNoTracking().Where(u => unidades.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.PublicId, ct);
+        var proveedor = await db.People.AsNoTracking().Where(p => p.Id == factura.Value.CounterpartyPersonId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+        var generadas = lineas.Select(l => new SaveInventoryDraftLine(null, l.Producto.PublicId, publicasDeUnidad[l.LineaDeRecepcion.UnitId],
+            l.LineaDeRecepcion.Quantity, SourceLinePublicId: l.LineaDeRecepcion.PublicId)).ToList();
+        return Result.Success(pedido with { CounterpartyPersonPublicId = proveedor, Lines = generadas });
+    }
+
+    /// <summary>
+    /// Después de armar las líneas (T799): los vínculos <c>LandedCostOf</c> (de cada recepción por línea y de la factura a nivel de documento),
+    /// el monto (el pedido o lo que queda sin repartir de la factura), el reparto como vista previa y su propuesta en
+    /// <c>INV_LandedCostAllocations</c> —el método y lo digitado viven ahí (T778, T42e)—. Lo que depende de otros documentos o de la
+    /// existencia (<c>ExceedsInvoice</c>, <c>BasisMissing</c>, <c>ManualNotBalanced</c>) vuelve como aviso; la confirmación lo repite bajo el
+    /// cerrojo.
+    /// </summary>
+    private async Task<Result<ResultadoDelBorrador>> CostosAdicionalesAsync(
+        InventoryDocument documento, SaveInventoryDraftRequest pedido, List<InventoryDocumentLine> vivas, List<Error> avisos, CancellationToken ct)
+    {
+        var (factura, recepciones, lineas) = _costos ?? throw new InvalidOperationException("Los costos adicionales se preparan antes de aplicarse.");
+        var metodo = pedido.Method!.Value;
+        documento.WarehouseId = null;
+        documento.DestinationWarehouseId = null;
+        documento.BranchId = recepciones[0].BranchId;
+        documento.OperationMunicipalityDaneCode = null;
+
+        // Las líneas vienen en el orden de las líneas de recepción (PrepararCostosAdicionalesAsync).
+        var pares = lineas.Select((l, i) => (Origen: l.LineaDeRecepcion, Destino: vivas[i])).ToList();
+        await vinculos.ReemplazarAsync(documento, DocumentLinkKind.LandedCostOf, pares, ct);
+        db.DocumentLinks.Add(new DocumentLink { SourceDocumentId = factura.Id, TargetDocument = documento, Kind = DocumentLinkKind.LandedCostOf });
+
+        var disponible = await Costos.DisponibleAsync(factura, documento.Id, ct);
+        var monto = pedido.Amount ?? Math.Max(0m, disponible);
+        if (monto > disponible) avisos.Add(ErroresDeCompras.LandedCostExceedsInvoice(Math.Max(0m, disponible)));
+
+        var manuales = (pedido.ManualAllocations ?? [])
+            .Join(lineas, m => m.ReceiptLinePublicId, l => l.LineaDeRecepcion.PublicId, (m, l) => (l.LineaDeRecepcion.Id, m.Amount))
+            .GroupBy(x => x.Id).ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+        IReadOnlyList<RepartoDeLinea> repartos = [];
+        if (monto > 0m)
+        {
+            var reparto = await Costos.RepartirAsync(documento.OperationDate, monto, metodo, lineas, manuales, ct);
+            if (reparto.IsFailure) avisos.Add(reparto.Error);
+            else repartos = reparto.Value.Lineas;
+        }
+
+        // Montos de las líneas: lo que le toca a cada una (el documento no factura: su subtotal es lo que reparte).
+        var porLinea = repartos.ToDictionary(r => r.ReceiptLineId);
+        foreach (var (origen, destino) in pares)
+        {
+            var asignado = porLinea.TryGetValue(origen.Id, out var r) ? r.AllocatedAmount : 0m;
+            destino.GrossAmount = asignado;
+            destino.DiscountAmount = 0m;
+            destino.NetAmount = asignado;
+            destino.UnitPrice = destino.Quantity == 0m ? 0m : Math.Round(asignado / destino.Quantity, 6, MidpointRounding.AwayFromZero);
+            destino.TotalCost = null;
+        }
+        documento.Subtotal = monto;
+        documento.DiscountTotal = 0m;
+        documento.TaxTotal = 0m;
+        documento.WithholdingTotal = 0m;
+        documento.Total = monto;
+        documento.AmountDue = monto;
+        documento.CostTotal = 0m;
+
+        // La propuesta: una fila por línea de recepción, con el método y lo digitado (en su sitio si ya estaba).
+        var propuesta = lineas.Select(l => porLinea.TryGetValue(l.LineaDeRecepcion.Id, out var r)
+            ? LandedCostAllocation.Desde(documento.Id, l.Recepcion.Id, metodo, r)
+            : new LandedCostAllocation
+            {
+                ReceiptDocumentId = l.Recepcion.Id,
+                ReceiptLineId = l.LineaDeRecepcion.Id,
+                ProductId = l.Entrada.ProductId,
+                AllocationMethod = metodo,
+                Basis = manuales.GetValueOrDefault(l.LineaDeRecepcion.Id),
+            }).ToList();
+        await Costos.EscribirFilasAsync(documento, propuesta, reloj.UtcNow, ct);
+
+        return Result.Success(new ResultadoDelBorrador(avisos, [],
+            CostosAdicionalesDeCompra.Vista(factura, metodo, monto, Math.Max(0m, disponible), lineas, repartos)));
     }
 
     // --------------------------------------------------------------------------------------------- apoyo --

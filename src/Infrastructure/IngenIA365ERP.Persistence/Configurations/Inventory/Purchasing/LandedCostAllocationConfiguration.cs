@@ -27,7 +27,7 @@ public class LandedCostAllocationConfiguration : IEntityTypeConfiguration<Landed
         builder.Property(e => e.ExistingAmount).Monto().IsRequired();
         builder.Property(e => e.SoldAmount).Monto().IsRequired();
 
-        builder.HasOne<InventoryDocument>().WithMany().HasForeignKey(e => e.DocumentId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Document).WithMany().HasForeignKey(e => e.DocumentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InventoryDocument>().WithMany().HasForeignKey(e => e.ReceiptDocumentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InventoryDocumentLine>().WithMany().HasForeignKey(e => e.ReceiptLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Product>().WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Restrict);

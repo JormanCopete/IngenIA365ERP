@@ -205,4 +205,47 @@ public static class ErroresDeCompras
     public static Error CampoNoAdmitido(string campo, DocumentClass clase) => new ErrorConDatos("Validation.Invalid",
         $"El campo {campo} no aplica a un documento de clase {clase}.",
         new { field = campo, @class = clase.ToString() });
+
+    // ------------------------------------------------------------------------- costos adicionales (§14.9, I5) --
+
+    /// <summary>Una recepción sin confirmar en unos costos adicionales (no hay línea: el campo es <c>receiptPublicIds</c>). (I5, T799)</summary>
+    public static Error ReceiptNotConfirmed(Guid receiptPublicId, string? displayNumber) => new ErrorConDatos(
+        "Inventory.Purchase.ReceiptNotConfirmed",
+        $"La recepción {displayNumber ?? "(borrador)"} no está confirmada: sólo se reparten costos sobre lo recibido.",
+        new { receiptPublicId, displayNumber });
+
+    /// <summary>La factura del flete o del seguro no tiene ningún renglón de un producto de servicio (api.md §14.9). (I5, T799)</summary>
+    public static Error LandedCostInvoiceNotService(Guid invoicePublicId, string? displayNumber) => new ErrorConDatos(
+        "Inventory.LandedCost.InvoiceNotService",
+        $"La factura {displayNumber} no trae ningún servicio (flete, seguro): los costos adicionales se toman de una factura de servicio.",
+        new { invoicePublicId, displayNumber });
+
+    /// <summary>
+    /// <b>(nuevo)</b> La factura del flete todavía no está confirmada (o está anulada): no hay costo que repartir. api.md §14.9 no lo
+    /// nombra; T42e. (I5, T799)
+    /// </summary>
+    public static Error LandedCostInvoiceNotConfirmed(Guid invoicePublicId, string? displayNumber, DocumentStatus status) => new ErrorConDatos(
+        "Inventory.LandedCost.InvoiceNotConfirmed",
+        $"La factura {displayNumber ?? "(borrador)"} no está confirmada: confírmela antes de repartir sus costos.",
+        new { invoicePublicId, displayNumber, status = status.ToString() });
+
+    /// <summary>Se reparte más de lo que queda sin repartir de la factura (lo ya repartido por otros costos adicionales vigentes). (I5, T799)</summary>
+    public static Error LandedCostExceedsInvoice(decimal available) => new ErrorConDatos(
+        "Inventory.LandedCost.ExceedsInvoice",
+        $"Se reparte más de lo que queda sin repartir de la factura del flete (quedan {available.ToString("N2", CultureInfo.GetCultureInfo("es-CO"))}).",
+        new { available });
+
+    /// <summary>Productos sin peso o volumen para repartir por ese método (<c>data.products[]</c>). (I5, T799)</summary>
+    public sealed record ProductoSinBase(Guid PublicId, string Code);
+
+    public static Error LandedCostBasisMissing(string mensaje, IReadOnlyList<ProductoSinBase> productos) => new ErrorConDatos(
+        "Inventory.LandedCost.BasisMissing",
+        $"{mensaje} Complete el dato en la ficha del producto o elija otro método.",
+        new { products = productos.Select(p => new { publicId = p.PublicId, code = p.Code }).ToList() });
+
+    /// <summary>Lo digitado a mano no suma el monto que se reparte (<c>data.amount</c>, <c>data.allocated</c>). (I5, T799)</summary>
+    public static Error LandedCostManualNotBalanced(decimal amount, decimal allocated) => new ErrorConDatos(
+        "Inventory.LandedCost.ManualNotBalanced",
+        $"Lo digitado a mano suma {allocated.ToString("N2", CultureInfo.GetCultureInfo("es-CO"))} y se reparten {amount.ToString("N2", CultureInfo.GetCultureInfo("es-CO"))}: tienen que ser iguales.",
+        new { amount, allocated });
 }

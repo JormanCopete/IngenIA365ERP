@@ -262,6 +262,35 @@ public sealed class EmisionDeInventario(
         };
     }
 
+    /// <summary>
+    /// Un <c>AjusteDeCostoReconocido</c> <c>LandedCost</c> sobre una recepción (US13, T800; §6.10; FR-046): lo que de sus costos
+    /// adicionales quedó en existencia y lo que pasó a costo de venta, por grupo contable y bodega. En la anulación, con los signos
+    /// contrarios. Lo que no suma cero es la contrapartida: la cuenta de costos por distribuir (contabilidad.md §3.6). (nuevo)
+    /// </summary>
+    public async Task<AjusteDeCostoReconocidoV1> AjusteDeCostosAdicionalesAsync(
+        InventoryDocument recepcion, DateOnly fecha, IReadOnlyList<CostoAdicionalRegistrado> costos, CancellationToken ct)
+    {
+        var (grupos, bodegas) = await DimensionesAsync(costos.Select(d => d.Pedido.Entrada.ProductId), costos.Select(d => d.Pedido.Entrada.WarehouseId), fecha, ct);
+        return new AjusteDeCostoReconocidoV1
+        {
+            Reason = KardexReason.LandedCost,
+            EffectiveDate = fecha,
+            AffectedDocument = Referencia(recepcion),
+            Lines = costos
+                .GroupBy(d => (Grupo: grupos.GetValueOrDefault(d.Pedido.Entrada.ProductId) ?? string.Empty, d.Pedido.Entrada.WarehouseId))
+                .OrderBy(g => g.Key.Grupo, StringComparer.Ordinal).ThenBy(g => bodegas[g.Key.WarehouseId].Code, StringComparer.Ordinal)
+                .Select(g => new CostDifferenceLineV1
+                {
+                    AccountingGroupCode = g.Key.Grupo,
+                    WarehouseCode = bodegas[g.Key.WarehouseId].Code,
+                    WarehouseBehavior = bodegas[g.Key.WarehouseId].Behavior,
+                    InventoryAmount = g.Sum(d => d.EnExistencia),
+                    SoldAmount = g.Sum(d => d.Vendida),
+                })
+                .ToList(),
+        };
+    }
+
     // ----------------------------------------------------------------------------------- traslados (US10) --
 
     /// <summary>

@@ -1504,7 +1504,9 @@ servicio), receiptPublicIds[], amount?, method: Value \| Quantity \| Weight \| V
 manualAllocations?: [{ receiptLinePublicId, amount }] }`. El borrador devuelve `allocations: [{
 receiptLine, product, basis, allocated, toInventory, toCostOfSales }]` y `roundingResidue` (`Prorrateo`:
 suma exacta por residuo mayor y diferencia visible; US13-3: $100.000 por valor sobre $600.000 y $400.000
-reparte $60.000 y $40.000). Confirmar emite un `AjusteDeCostoReconocido` por documento afectado. Errores:
+reparte $60.000 y $40.000). Las líneas las arma el servidor (una por línea de recepción); el borrador y el detalle devuelven
+`landedCost: { supplierInvoice, method, amount, available, allocations[], roundingResidue }` **(nuevo, T42e)**, con `roundingResidue`
+también por línea. Confirmar emite un `AjusteDeCostoReconocido` por documento afectado. Errores:
 `Inventory.LandedCost.BasisMissing` (`data: { products[] }`: sin peso o volumen),
 `.ManualNotBalanced` (`data: { amount, allocated }`), `.ExceedsInvoice` (`data: { available }`: más de lo
 que queda sin repartir de la factura), `.InvoiceNotService`, `Inventory.Purchase.ReceiptNotConfirmed`.
@@ -1521,7 +1523,7 @@ que queda sin repartir de la factura), `.InvoiceNotService`, `Inventory.Purchase
 | `Inventory.Purchase.GoodsWithoutReceipt` · `Inventory.SupplierInvoice.IssueDateInvalid` · `Inventory.SupplierNote.InvoiceFromOtherSupplier` · `.InvoiceNotConfirmed` · `.InvoiceLineRequired` **(nuevos, US9)** | 422 | §14.4, §14.5 | `{ lineNumber, productCode }` · `{ today }` · `{ invoicePublicId, displayNumber }` · `{ lineNumber }` |
 | `Inventory.Return.ReceiptLineRequired` · `.ExceedsReceived` | 422 | §14.6 | `{ received, alreadyReturned }` |
 | `Inventory.RadianEvent.NotApplicable` · `.OutOfOrder` · `.DateInvalid` · `.AlreadyRegistered` · `.ReceiptNotConfirmed` | 422 | §14.8 | |
-| `Inventory.LandedCost.BasisMissing` · `.ManualNotBalanced` · `.ExceedsInvoice` · `.InvoiceNotService` | 422 | §14.9 | |
+| `Inventory.LandedCost.BasisMissing` · `.ManualNotBalanced` · `.ExceedsInvoice` · `.InvoiceNotService` · `.InvoiceNotConfirmed` **(nuevo, T42e)** | 422 | §14.9 | `{ products[] }` · `{ amount, allocated }` · `{ available }` · `{ invoicePublicId, displayNumber, status? }` |
 | `Inventory.ProductTax.RateNotInForce` · `Taxation.Uvt.Missing` | 422 | §14.1 | `{ lineNumber, taxCode, date }` · `{ date }` |
 | `Inventory.Numbering.ResolutionUnavailable` · `ElectronicInvoicing.NotReady` | 422 | §14.7, §14.8 | `{ missing[] }` |
 

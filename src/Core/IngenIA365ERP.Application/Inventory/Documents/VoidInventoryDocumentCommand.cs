@@ -83,8 +83,11 @@ public sealed class VoidInventoryDocumentCommandHandler(
             return Falla(Sales.ErroresDeVentas.FiscalUseCorrection(original.Class));
         if (emitido) return Falla(InventoryErrors.FiscalUseCorrection());
 
+        // Dependientes: todo documento vigente que nace de éste. I5 (T801): una recepción tiene por dependientes sus facturas, devoluciones y
+        // costos adicionales (LandedCostOf, que también cuelga de la factura del flete); la orden de la que viene no, porque la recepción
+        // es el destino de FromOrder: anulada, su cantidad vuelve a lo pendiente de recibir.
         var dependientes = await db.DocumentLinks.AsNoTracking()
-            .Where(l => l.SourceDocumentId == original.Id && l.Kind != DocumentLinkKind.Voids)
+            .Where(l => l.SourceDocumentId == original.Id && l.Kind != DocumentLinkKind.Voids && !l.IsDeleted)
             .Join(db.InventoryDocuments.AsNoTracking(), l => l.TargetDocumentId, d => d.Id, (l, d) => d)
             .Where(d => Vigentes.Contains(d.Status))
             .Select(d => new { d.PublicId, d.Class, d.Prefix, d.Number, d.Status })

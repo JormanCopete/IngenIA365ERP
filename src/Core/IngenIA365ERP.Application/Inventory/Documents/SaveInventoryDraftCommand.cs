@@ -346,6 +346,7 @@ public sealed class SaveInventoryDraftCommandHandler(
         }
 
         var detalle = await vista.DetalleAsync(documento, avisos.Select(ReglasDelDocumento.ComoAviso).ToList(), ct);
+        if (delGrupo.CostosAdicionales is not null) detalle = detalle with { LandedCost = delGrupo.CostosAdicionales };
         return Result.Success(delGrupo.ImpuestosPrevistos.Count > 0 && detalle.TaxLines.Count == 0
             ? detalle with { TaxLines = delGrupo.ImpuestosPrevistos }
             : detalle);
