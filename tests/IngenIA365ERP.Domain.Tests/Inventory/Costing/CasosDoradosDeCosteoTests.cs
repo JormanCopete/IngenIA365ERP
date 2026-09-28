@@ -33,6 +33,19 @@ public class CasosDoradosDeCosteoTests
             .Contain("10-prorrateo-con-parte-vendida.json", "falta el caso 10 «prorrateo con parte vendida» (T768, research R10)");
     }
 
+    [Fact]
+    public void Estan_los_casos_de_I5_de_costeo_avanzado()
+    {
+        var nombres = CasoDoradoDeCosteo.Archivos().Select(Path.GetFileName).ToList();
+        foreach (var archivo in new[]
+                 {
+                     "09-compra-retroactiva-antes-de-tres-ventas.json", "11-peps-dos-capas.json", "16-valorizado-por-dos-metodos.json",
+                     "peps-devolucion-de-cliente.json", "peps-devolucion-a-proveedor.json", "peps-anulacion-de-salida.json",
+                     "peps-traslado-ambito-bodega.json", "peps-negativo-y-regularizacion.json", "peps-cambio-de-metodo.json",
+                 })
+            nombres.Should().Contain(archivo, "los casos dorados de US16 (T818–T821, research R10)");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_motor_coincide_al_peso_con_el_calculo_manual(string archivo)
@@ -53,7 +66,14 @@ public class CasosDoradosDeCosteoTests
         private readonly Dictionary<long, string> _nombres = [];
         private readonly Dictionary<string, long> _documentos = new(StringComparer.Ordinal);
         private readonly ParametrosDeCosteo _parametros = caso.ParametrosDelMotor();
+        private readonly Dictionary<string, CostMethod> _metodos = new(StringComparer.Ordinal);
+        private readonly List<ConsumoDeCapa> _consumos = [];
+        private readonly List<(string Ambito, string? Producto, DateOnly Fecha, LineaDeKardexPropuesta Linea, bool Primera, CostMethod Metodo)> _registro = [];
         private long _siguienteId;
+
+        /// <summary>El método vigente del ámbito: el del caso hasta que un movimiento lo cambia (I5, T821).</summary>
+        private ParametrosDeCosteo Parametros(string ambito) =>
+            _parametros with { Metodo = _metodos.GetValueOrDefault(ambito, _parametros.Metodo) };
 
         public void Correr()
         {
@@ -65,7 +85,8 @@ public class CasosDoradosDeCosteoTests
                 var cantidad = CantidadBase(m);
                 var movimiento = Movimiento(m, cantidad, estado);
 
-                if (m.CostoAdicional is { } costo) CostoAdicional(m, costo, ambito, estado);
+                if (m.CambioDeMetodo is { } metodo) CambioDeMetodo(m, metodo, ambito, estado);
+                else if (m.CostoAdicional is { } costo) CostoAdicional(m, costo, ambito, estado);
                 else if (m.Retroactivo) Retroactivo_(m, ambito, estado, movimiento);
                 else Normal(m, ambito, estado, movimiento);
             }
@@ -92,15 +113,32 @@ public class CasosDoradosDeCosteoTests
                 foreach (var l in lineas.Where(l => l.Kind != KardexEntryKind.CostAdjustment && l.Reason == KardexReason.Normal))
                     l.TotalCost.Should().Be(Redondeo.Monto(l.QuantityBase * l.UnitCost, _parametros.Montos),
                         $"TotalCost = round(QuantityBase × UnitCost) en la línea {_nombres.GetValueOrDefault(l.Id ?? 0)}");
+
+                // PEPS (FR-043, data-model §3.5): Σ valor de las capas vivas = valor del ámbito; 0 ≤ restante ≤ original y
+                // restante = original − Σ consumos de la capa.
+                if (Parametros(ambito).Metodo != CostMethod.Fifo) continue;
+                if (estado.Quantity >= 0m)
+                    estado.Capas.Sum(c => c.Valor(_parametros.Montos)).Should().Be(estado.Value, $"Σ valor de las capas = valor del ámbito {ambito}");
+                foreach (var capa in estado.Capas)
+                {
+                    capa.RemainingQuantity.Should().BeInRange(0m, capa.OriginalQuantity, $"restante de la capa {Nombre(capa.Entrada)}");
+                    var consumido = _consumos.Where(c => c.Capa.Entrada.Id == capa.Entrada.Id).Sum(c => c.Quantity);
+                    capa.RemainingQuantity.Should().Be(capa.OriginalQuantity - consumido, $"restante = original − Σ consumos en la capa {Nombre(capa.Entrada)}");
+                }
             }
+
+            if (caso.Valorizacion is { } valorizacion) Valorizar(valorizacion);
         }
 
         private void Normal(CasoDoradoDeCosteo.MovimientoJson m, string ambito, EstadoDeCosto estado, MovimientoDeCosto movimiento)
         {
-            var resultado = MotorDeCosteo.Aplicar(estado, movimiento, _parametros);
+            var resultado = MotorDeCosteo.Aplicar(estado, movimiento, Parametros(ambito));
             if (Rechazado(m, resultado.Rechazo)) return;
 
             Registrar(m, ambito, resultado.Lineas);
+            _consumos.AddRange(resultado.Consumos);
+            CompararConsumos(m.Esperado.Consumos, resultado.Consumos);
+            CompararCapas(m.Esperado.Capas, resultado.Estado);
             Historia(ambito).Add(new MovimientoRegistrado(resultado.Principal!.Id!.Value, Documento(m), m.Fecha, movimiento,
                 resultado.Valor, resultado.Principal.UnitCost, m.DejaElInventario));
             _estados[ambito] = resultado.Estado;
@@ -113,8 +151,21 @@ public class CasosDoradosDeCosteoTests
         private void Retroactivo_(CasoDoradoDeCosteo.MovimientoJson m, string ambito, EstadoDeCosto estado, MovimientoDeCosto movimiento)
         {
             var historia = Historia(ambito);
-            var resultado = Retroactivo.Insertar(new PedidoRetroactivo(EstadoDeCosto.Vacio, historia,
-                [new MovimientoRetroactivo(m.Fecha, Documento(m), movimiento)], _parametros));
+            var pedido = new PedidoRetroactivo(EstadoDeCosto.Vacio, historia,
+                [new MovimientoRetroactivo(m.Fecha, Documento(m), movimiento)], Parametros(ambito));
+
+            // T830: el impacto que se muestra antes de confirmar es el mismo cálculo que la confirmación (FR-045).
+            var impacto = MotorDeCosteo.SimularImpacto(pedido);
+            var resultado = Retroactivo.Insertar(pedido);
+            if (m.Esperado.Impacto is { } esperado)
+            {
+                impacto.EsRetroactivo.Should().Be(esperado.Retroactivo, "SimularImpacto dice si el documento es retroactivo");
+                impacto.Total.Should().Be(esperado.Total, "SimularImpacto da el total de la diferencia");
+            }
+            impacto.Afectados.Select(a => (a.DocumentId, a.EnExistencia, a.Vendida))
+                .Should().Equal(resultado.PorDocumento.Select(a => (a.DocumentId, a.EnExistencia, a.Vendida)), "el impacto es lo que escribe la confirmación");
+            impacto.Resultado.Ajustes.Select(a => (a.TotalCost, a.AffectsEntry?.Id, a.OperationDate, a.Porcion))
+                .Should().Equal(resultado.Ajustes.Select(a => (a.TotalCost, a.AffectsEntry?.Id, a.OperationDate, a.Porcion)));
             if (Rechazado(m, resultado.Rechazo)) return;
 
             var nuevo = resultado.Nuevos.Single();
@@ -177,6 +228,81 @@ public class CasosDoradosDeCosteoTests
             CompararExplicacion(m.Esperado.Explicacion, resultado.Explicacion.Agregar(reparto.Explicacion));
         }
 
+        /// <summary>
+        /// I5 (T821): el cambio de método del ámbito por <see cref="MotorDeCosteo.CambiarMetodo"/>: una línea <c>MethodChange</c> y, a
+        /// PEPS, una sola capa con la existencia al promedio. No entra a la historia (no es un movimiento de cantidad).
+        /// </summary>
+        private void CambioDeMetodo(CasoDoradoDeCosteo.MovimientoJson m, CostMethod metodo, string ambito, EstadoDeCosto estado)
+        {
+            var resultado = MotorDeCosteo.CambiarMetodo(estado, metodo, _parametros.Montos, m.Fecha);
+            Registrar(m, ambito, resultado.Lineas);
+            _estados[ambito] = resultado.Estado;
+            _metodos[ambito] = metodo;
+
+            CompararLineas(m.Esperado.Lineas, resultado.Lineas, "línea");
+            CompararCapas(m.Esperado.Capas, resultado.Estado);
+            CompararEstado(m.Esperado.Estado, resultado.Estado);
+            CompararExplicacion(m.Esperado.Explicacion, resultado.Explicacion);
+        }
+
+        private void CompararConsumos(List<CasoDoradoDeCosteo.ConsumoJson>? esperados, IReadOnlyList<ConsumoDeCapa> reales)
+        {
+            if (esperados is null) return;
+            reales.Select(c => (Salida: Nombre(c.Salida), Capa: Nombre(c.Capa.Entrada), c.Quantity, c.UnitCost))
+                .Should().Equal(esperados.Select(e => (e.Salida, e.Capa, Quantity: e.Cantidad, UnitCost: e.CostoUnitario)),
+                    "los consumos de capa del movimiento, en orden (data-model §3.5)");
+        }
+
+        private void CompararCapas(List<CasoDoradoDeCosteo.CapaJson>? esperadas, EstadoDeCosto estado)
+        {
+            if (esperadas is null) return;
+            estado.Capas.Select(c => (Capa: Nombre(c.Entrada), c.OriginalQuantity, c.RemainingQuantity, c.UnitCost))
+                .Should().Equal(esperadas.Select(e => (e.Capa, OriginalQuantity: e.Original, RemainingQuantity: e.Restante, UnitCost: e.CostoUnitario)),
+                    "las capas vivas del ámbito en orden PEPS (OperationDate, EntryKardexEntryId)");
+        }
+
+        /// <summary>
+        /// I5 (T820): del kardex que dejó el caso, una historia por producto y ámbito —entradas, salidas, el ajuste completo sobre
+        /// una entrada (la primera línea <c>PriceDifference</c>/<c>LandedCost</c> del movimiento) y los demás ajustes— para
+        /// <see cref="ValorizacionPorDosMetodos"/>; se compara por grupo y fecha.
+        /// </summary>
+        private void Valorizar(CasoDoradoDeCosteo.ValorizacionJson valorizacion)
+        {
+            using var _ = new AssertionScope($"{archivo} — {caso.Nombre} — valorizado por los dos métodos");
+            var productos = _registro.Select(r => r.Producto ?? string.Empty).Distinct().OrderBy(p => p, StringComparer.Ordinal).ToList();
+            var grupos = valorizacion.Grupos.Values.Distinct().OrderBy(g => g, StringComparer.Ordinal).ToList();
+
+            var historias = _registro.GroupBy(r => (r.Ambito, Producto: r.Producto ?? string.Empty)).Select(g =>
+            {
+                var producto = g.Key.Producto;
+                var movimientos = g.Select(r => new MovimientoAValorizar(
+                    r.Linea.Id!.Value, r.Fecha, Clase(r.Linea, r.Primera), r.Linea.QuantityBase, r.Linea.UnitCost, r.Linea.TotalCost,
+                    r.Metodo, r.Linea.AffectsEntry?.Id)).ToList();
+                return new HistoriaParaValorizar(productos.IndexOf(producto) + 1, 0, grupos.IndexOf(valorizacion.Grupos[producto]) + 1,
+                    valorizacion.Cortes.TryGetValue(producto, out var corte) ? corte : null, movimientos);
+            }).ToList();
+
+            var resultado = ValorizacionPorDosMetodos.Calcular(historias, valorizacion.Fechas, _parametros.Montos);
+
+            resultado.Grupos.Select(g => (Grupo: grupos[g.AccountingGroupId - 1], g.Fecha, g.PromedioPonderado, g.Peps, g.Diferencia,
+                    SinCalcular: string.Join(",", g.SinCalcular.Select(p => productos[p.ProductId - 1]))))
+                .Should().BeEquivalentTo(valorizacion.Esperado.Select(e => (e.Grupo, e.Fecha, e.PromedioPonderado, e.Peps, e.Diferencia,
+                    SinCalcular: string.Join(",", e.SinCalcular))), "el valorizado por grupo contable y fecha (FR-043)");
+            foreach (var p in resultado.Grupos.SelectMany(g => g.SinCalcular))
+            {
+                p.Nota.Should().NotBeNullOrWhiteSpace("todo producto sin calcular dice por qué");
+                if (valorizacion.Nota is { } nota) p.Nota.Should().Contain(nota);
+            }
+        }
+
+        private static ClaseAValorizar Clase(LineaDeKardexPropuesta l, bool primera) => l.Kind switch
+        {
+            KardexEntryKind.Entry => ClaseAValorizar.Entrada,
+            KardexEntryKind.Exit => ClaseAValorizar.Salida,
+            _ when primera && l.Reason is KardexReason.PriceDifference or KardexReason.LandedCost => ClaseAValorizar.AjusteSobreEntrada,
+            _ => ClaseAValorizar.OtroAjuste,
+        };
+
         private decimal CantidadBase(CasoDoradoDeCosteo.MovimientoJson m)
         {
             if (m.Unidad is not { } u) return m.Cantidad;
@@ -202,7 +328,7 @@ public class CasosDoradosDeCosteoTests
                     costo.CostoUnitario.Should().Be(e.CostoUnitario, $"costo de entrada de la compra. Explicación: {costo.Explicacion.Texto()}");
                     costo.ImpuestosAlCosto.Should().Be(e.ImpuestosAlCosto, "impuestos que van al costo");
                 }
-                return costo.Movimiento(cantidad);
+                return costo.Movimiento(cantidad) with { OperationDate = m.Fecha };
             }
 
             var valoracion = m.Valoracion ?? (cantidad > 0m && m.CostoUnitario is not null
@@ -212,7 +338,14 @@ public class CasosDoradosDeCosteoTests
                 ?? (valoracion is ValoracionDelMovimiento.AlCostoDeOrigen or ValoracionDelMovimiento.DevolucionDeEntrada && m.Origen is { } nombre
                     ? Linea(nombre).UnitCost
                     : null);
-            return new MovimientoDeCosto(cantidad, valoracion, costoUnitario, origen, m.Anulacion);
+            return new MovimientoDeCosto(cantidad, valoracion, costoUnitario, origen, m.Anulacion)
+            {
+                OperationDate = m.Fecha,
+                // I5 (PEPS): la anulación de una salida devuelve los consumos de esa salida.
+                ConsumosDelOrigen = m.Anulacion && m.Origen is { } anulada
+                    ? _consumos.Where(c => Nombre(c.Salida) == anulada && c.Quantity > 0m).ToList()
+                    : [],
+            };
         }
 
         private void Registrar(CasoDoradoDeCosteo.MovimientoJson m, string ambito, IReadOnlyList<LineaDeKardexPropuesta> lineas)
@@ -225,6 +358,7 @@ public class CasosDoradosDeCosteoTests
                 _lineas[nombre] = linea;
                 _nombres[linea.Id.Value] = nombre;
                 Kardex(ambito).Add(linea);
+                _registro.Add((ambito, m.Producto, linea.OperationDate ?? m.Fecha, linea, i == 0, Parametros(ambito).Metodo));
                 _existenciaPorBodega[m.Bodega] = _existenciaPorBodega.GetValueOrDefault(m.Bodega) + linea.QuantityBase;
             }
         }

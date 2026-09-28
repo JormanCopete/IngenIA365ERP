@@ -1,0 +1,49 @@
+{
+  // T821, data-model §3.5: anular una salida con PEPS entra al costo de la línea anulada y DEVUELVE sus consumos a las
+  // mismas capas —la agotada reaparece en su lugar del orden— con consumos de cantidad negativa bajo la línea de la
+  // anulación. La salida original y sus consumos no cambian (hechos).
+  "nombre": "PEPS: anulación de una salida devuelve los consumos",
+  "descripcion": "C1 10 × 1.000 (01/09), C2 10 × 1.300 (02/09). V1 vende 15 el 03/09: C1 10 + C2 5 = 16.500 a 1.100. AN1 anula V1 el 04/09: entra 15 a 1.100 = 16.500 (ReversesEntryId = V1) y devuelve, en orden inverso, 5 a C2 y 10 a C1 (que vuelve delante): consumos −5 y −10. Valor devuelto 6.500 + 10.000 = 16.500 = la línea: sin diferencia. Estado 20 por 23.000, capas como antes de la venta. V2 vende 12 el 05/09: C1 10 + C2 2 = 12.600 a 1.050.",
+  "parametros": { "metodo": "Fifo", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "C1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "C2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -15,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -15, "costoUnitario": 1100, "costoTotal": -16500 } ],
+        "capas": [ { "capa": "C2", "original": 10, "restante": 5, "costoUnitario": 1300 } ]
+      }
+    },
+    {
+      "id": "AN1", "documento": "AN-1", "fecha": "2026-09-04", "clase": "Voiding", "bodega": "PRINCIPAL", "cantidad": 15,
+      "valoracion": "AlCostoDeOrigen", "origen": "V1", "anulacion": true,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 15, "costoUnitario": 1100, "costoTotal": 16500, "revierte": "V1" } ],
+        "consumos": [
+          { "salida": "AN1", "capa": "C2", "cantidad": -5, "costoUnitario": 1300 },
+          { "salida": "AN1", "capa": "C1", "cantidad": -10, "costoUnitario": 1000 }
+        ],
+        "capas": [
+          { "capa": "C1", "original": 10, "restante": 10, "costoUnitario": 1000 },
+          { "capa": "C2", "original": 10, "restante": 10, "costoUnitario": 1300 }
+        ],
+        "estado": { "cantidad": 20, "valor": 23000, "promedio": 1150 },
+        "explicacion": [ "Devuelve los consumos" ]
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-05", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -12,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -12, "costoUnitario": 1050, "costoTotal": -12600 } ],
+        "consumos": [
+          { "salida": "V2", "capa": "C1", "cantidad": 10, "costoUnitario": 1000 },
+          { "salida": "V2", "capa": "C2", "cantidad": 2, "costoUnitario": 1300 }
+        ],
+        "estado": { "cantidad": 8, "valor": 10400, "promedio": 1300 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 8, "valor": 10400, "promedio": 1300 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 8 } ]
+}

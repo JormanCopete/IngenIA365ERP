@@ -39,6 +39,9 @@ public sealed class CasoDoradoDeCosteo
     public List<EstadoFinalJson> Final { get; set; } = [];
     public List<ExistenciaJson> Existencias { get; set; } = [];
 
+    /// <summary>I5 (T820): el valorizado por los dos métodos que se espera del kardex que dejó el caso.</summary>
+    public ValorizacionJson? Valorizacion { get; set; }
+
     public static string DirectorioDeCasos => Path.Combine(AppContext.BaseDirectory, "Inventory", "Costing", "Casos");
 
     public static IEnumerable<string> Archivos() =>
@@ -48,7 +51,12 @@ public sealed class CasoDoradoDeCosteo
         JsonSerializer.Deserialize<CasoDoradoDeCosteo>(File.ReadAllText(ruta), Opciones)
         ?? throw new InvalidOperationException($"El caso {ruta} está vacío.");
 
-    public string AmbitoDe(MovimientoJson m) => Parametros.Ambito == CostScope.Cooperative ? AmbitoCooperativa : m.Bodega;
+    /// <summary>El ámbito del movimiento; con <c>producto</c> (I5, caso 16), «producto@ámbito».</summary>
+    public string AmbitoDe(MovimientoJson m)
+    {
+        var ambito = Parametros.Ambito == CostScope.Cooperative ? AmbitoCooperativa : m.Bodega;
+        return m.Producto is { } producto ? $"{producto}@{ambito}" : ambito;
+    }
 
     public ParametrosDeCosteo ParametrosDelMotor() => new(Parametros.Metodo, Parametros.Montos, Parametros.NegativoPermitido);
 
@@ -79,6 +87,12 @@ public sealed class CasoDoradoDeCosteo
 
         /// <summary>I5 (T768): costos adicionales repartidos sobre una entrada ya registrada; el movimiento no mueve cantidad.</summary>
         public CostoAdicionalJson? CostoAdicional { get; set; }
+
+        /// <summary>I5 (T821): el cambio de método del ámbito a este valor; el movimiento no mueve cantidad.</summary>
+        public CostMethod? CambioDeMetodo { get; set; }
+
+        /// <summary>I5 (T820): el producto, cuando el caso lleva varios (el ámbito pasa a ser «producto@ámbito»).</summary>
+        public string? Producto { get; set; }
 
         public EsperadoJson Esperado { get; set; } = new();
 
@@ -138,6 +152,16 @@ public sealed class CasoDoradoDeCosteo
         public List<LineaJson> Ajustes { get; set; } = [];
         public List<PorDocumentoJson> AjustesPorDocumento { get; set; } = [];
         public EstadoJson? Estado { get; set; }
+
+        /// <summary>I5 (PEPS): los consumos de capa del movimiento; ausente = no se compara.</summary>
+        public List<ConsumoJson>? Consumos { get; set; }
+
+        /// <summary>I5 (PEPS): las capas vivas del ámbito después del movimiento, en orden; ausente = no se compara.</summary>
+        public List<CapaJson>? Capas { get; set; }
+
+        /// <summary>I5 (T830): lo que <c>SimularImpacto</c> dice antes de confirmar un retroactivo.</summary>
+        public ImpactoJson? Impacto { get; set; }
+
         public string? Rechazo { get; set; }
         public List<string> Explicacion { get; set; } = [];
     }
@@ -164,6 +188,54 @@ public sealed class CasoDoradoDeCosteo
 
         public DateOnly? Fecha { get; set; }
         public PorcionDelAjuste? Porcion { get; set; }
+    }
+
+    /// <summary>Un consumo de capa: la línea que consume («V1», o la anulación que devuelve) y la capa, nombrada por su entrada.</summary>
+    public sealed class ConsumoJson
+    {
+        public string Salida { get; set; } = string.Empty;
+        public string Capa { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+        public decimal CostoUnitario { get; set; }
+    }
+
+    public sealed class CapaJson
+    {
+        public string Capa { get; set; } = string.Empty;
+        public decimal Original { get; set; }
+        public decimal Restante { get; set; }
+        public decimal CostoUnitario { get; set; }
+    }
+
+    public sealed class ImpactoJson
+    {
+        public bool Retroactivo { get; set; }
+        public decimal Total { get; set; }
+    }
+
+    /// <summary>
+    /// El valorizado por los dos métodos (FR-043): el grupo contable de cada producto, el corte del sistema anterior de los que
+    /// empezaron con saldo inicial, las fechas y lo que se espera por grupo y fecha.
+    /// </summary>
+    public sealed class ValorizacionJson
+    {
+        public Dictionary<string, string> Grupos { get; set; } = [];
+        public Dictionary<string, DateOnly> Cortes { get; set; } = [];
+        public List<DateOnly> Fechas { get; set; } = [];
+        public List<GrupoValorizadoJson> Esperado { get; set; } = [];
+
+        /// <summary>Un fragmento que la nota de todo producto sin calcular debe decir.</summary>
+        public string? Nota { get; set; }
+    }
+
+    public sealed class GrupoValorizadoJson
+    {
+        public string Grupo { get; set; } = string.Empty;
+        public DateOnly Fecha { get; set; }
+        public decimal PromedioPonderado { get; set; }
+        public decimal Peps { get; set; }
+        public decimal Diferencia { get; set; }
+        public List<string> SinCalcular { get; set; } = [];
     }
 
     public sealed class PorDocumentoJson

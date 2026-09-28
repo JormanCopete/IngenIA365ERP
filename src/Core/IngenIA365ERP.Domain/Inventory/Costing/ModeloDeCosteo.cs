@@ -60,6 +60,13 @@ public sealed record EstadoDeCosto(decimal Quantity, decimal Value, decimal Aver
 
     public IReadOnlyList<SalidaEnNegativo> SalidasEnNegativo { get; init; } = [];
 
+    /// <summary>
+    /// Sólo en PEPS (I5, <c>INV_CostLayers</c>): las capas vivas del ámbito (<c>RemainingQuantity &gt; 0</c>) en el orden en que
+    /// se consumen, <c>(OperationDate, EntryKardexEntryId)</c>. Con existencia no negativa, Σ <see cref="CapaDeCosto.Valor"/> =
+    /// <see cref="Value"/>. En promedio ponderado va vacía.
+    /// </summary>
+    public IReadOnlyList<CapaDeCosto> Capas { get; init; } = [];
+
     /// <summary>El costo al que sale o entra un movimiento al costo vigente: el promedio, o el último costo sin existencia.</summary>
     public decimal CostoVigente => Quantity > 0m ? AverageCost : LastUnitCost;
 
@@ -88,6 +95,15 @@ public sealed record MovimientoDeCosto(
     bool EsAnulacion = false)
 {
     public bool EsEntrada => QuantityBase > 0m;
+
+    /// <summary>La fecha de operación del movimiento (I5): la capa PEPS que crea la lleva. Nula = sin fecha (no ordena).</summary>
+    public DateOnly? OperationDate { get; init; }
+
+    /// <summary>
+    /// Sólo en PEPS, en la anulación de una salida (I5; data-model §3.5): los consumos de capa de la salida anulada, para
+    /// devolverlos a las mismas capas. Los carga la aplicación de <c>INV_LayerConsumptions</c>.
+    /// </summary>
+    public IReadOnlyList<ConsumoDeCapa> ConsumosDelOrigen { get; init; } = [];
 }
 
 /// <summary>Método, redondeo y si el ámbito puede quedar en negativo (<c>Existencias.StockNegativoPermitido</c>). (nuevo)</summary>
@@ -136,9 +152,54 @@ public sealed record ResultadoDeCosteo(
 {
     public bool Admitido => Rechazo is null;
 
+    /// <summary>Sólo en PEPS (I5): los consumos de capa que escribe el movimiento (<c>INV_LayerConsumptions</c>), en orden.</summary>
+    public IReadOnlyList<ConsumoDeCapa> Consumos { get; init; } = [];
+
+    /// <summary>
+    /// Sólo en PEPS (I5): las capas que crea el movimiento (<c>INV_CostLayers</c>), aunque ya nazcan consumidas —la entrada que
+    /// cubre un negativo—: sus consumos las nombran.
+    /// </summary>
+    public IReadOnlyList<CapaDeCosto> CapasNuevas { get; init; } = [];
+
     /// <summary>La primera línea de entrada o salida: la que nombran las anulaciones, las devoluciones y los retroactivos.</summary>
     public LineaDeKardexPropuesta? Principal => Lineas.FirstOrDefault(l => l.Kind != KardexEntryKind.CostAdjustment);
 
     /// <summary>Σ <c>TotalCost</c> de sus líneas: lo que el movimiento cambió el valor del ámbito.</summary>
     public decimal Valor => Lineas.Sum(l => l.TotalCost);
 }
+
+/// <summary>
+/// Una capa PEPS (feature 012, I5, T828; data-model §3.5, <c>INV_CostLayers</c>): la entrada que la creó (una línea ya escrita o
+/// una propuesta; en el cambio de método, la línea <c>MethodChange</c>), su fecha, la cantidad original, la que queda y su costo
+/// unitario. <see cref="Origen"/> es la línea de origen de esa entrada (la de despacho, en la entrada al tránsito): la salida
+/// que viaja al costo de esa misma línea consume esta capa antes que la más antigua. (nuevo)
+/// </summary>
+public sealed record CapaDeCosto(
+    ReferenciaDeKardex Entrada,
+    DateOnly? OperationDate,
+    decimal OriginalQuantity,
+    decimal RemainingQuantity,
+    decimal UnitCost)
+{
+    public ReferenciaDeKardex? Origen { get; init; }
+
+    /// <summary>El valor de lo que queda: <c>round(RemainingQuantity × UnitCost)</c>. Σ de las capas vivas = valor del ámbito.</summary>
+    public decimal Valor(RedondeoDeMontos montos) => Redondeo.Monto(RemainingQuantity * UnitCost, montos);
+
+    /// <summary>Si la referencia nombra la entrada de esta capa (o su línea de origen, con <paramref name="oSuOrigen"/>).</summary>
+    public bool Es(ReferenciaDeKardex? referencia, bool oSuOrigen = false) =>
+        MismaLinea(Entrada, referencia) || (oSuOrigen && Origen is { } origen && MismaLinea(origen, referencia));
+
+    /// <summary>Dos referencias nombran la misma línea: por su Id o, si es una propuesta sin Id todavía, por ser la misma.</summary>
+    public static bool MismaLinea(ReferenciaDeKardex? a, ReferenciaDeKardex? b) =>
+        a is not null && b is not null
+        && (a.Id is { } x && b.Id is { } y ? x == y : a.Linea is { } l && ReferenceEquals(l, b.Linea));
+}
+
+/// <summary>
+/// Un consumo de capa (feature 012, I5, T828; data-model §3.5, <c>INV_LayerConsumptions</c>): la línea que consume (la salida;
+/// o, con cantidad negativa, la anulación que devuelve), la capa (tal como era al consumirla: su entrada, fecha, original y
+/// costo), la cantidad y el costo unitario de la capa, y el valor que tomó de ella. Σ consumos de una salida =
+/// |<c>QuantityBase</c>|; Σ consumos de una anulación = −<c>QuantityBase</c>. (nuevo)
+/// </summary>
+public sealed record ConsumoDeCapa(ReferenciaDeKardex Salida, CapaDeCosto Capa, decimal Quantity, decimal UnitCost, decimal Valor);

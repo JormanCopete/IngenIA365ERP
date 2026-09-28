@@ -55,10 +55,25 @@ public sealed record ResultadoRetroactivo(
 }
 
 /// <summary>
-/// El retroactivo mínimo de I1 (feature 012, T282; FR-045; decisiones-transversales T18; research R10, preguntas D8 y
-/// D9). Lo usan sólo dos clases, que no dependen de <c>Costeo.RetroactivosPermitidos</c>: el saldo inicial de una bodega
-/// <c>NotActivated</c> (y su anulación) y los ajustes de un conteo aprobado, fechados en la foto. El retroactivo general
-/// —cualquier otra clase, con el parámetro, sus días máximos y <c>SimularImpacto</c>— es de I5.
+/// Lo que muestra <c>POST /api/inventory/documents/{id}/cost-impact</c> antes de confirmar (US16, T830; FR-045; api.md §9.3): si
+/// el documento es retroactivo (deja un movimiento con fecha anterior a otro ya registrado del ámbito), los documentos afectados
+/// —uno <c>AjusteDeCostoReconocido</c> por cada uno, con su porción en existencia y vendida—, el total y el resultado del mismo
+/// cálculo que hará la confirmación; o el rechazo. (nuevo)
+/// </summary>
+public sealed record ImpactoEnCostos(
+    bool EsRetroactivo,
+    IReadOnlyList<AjusteRetroactivoPorDocumento> Afectados,
+    decimal Total,
+    ResultadoRetroactivo Resultado,
+    RechazoDeCosteo? Rechazo);
+
+/// <summary>
+/// El retroactivo (feature 012; T282 en I1, generalizado en I5 por T829; FR-045; decisiones-transversales T18; research R10,
+/// preguntas D6, D8 y D9): cualquier documento que deja un movimiento con fecha anterior a otro ya registrado del mismo producto
+/// y ámbito. En I1 lo usaban sólo el saldo inicial de una bodega <c>NotActivated</c> (y su anulación) y los ajustes de un conteo
+/// aprobado, que no dependen de <c>Costeo.RetroactivosPermitidos</c>; desde I5 cualquier clase, con el parámetro y sus días
+/// máximos, que mira la aplicación antes de llamarlo (la puerta no es del motor). <b>Sólo con promedio ponderado</b> (D6): con
+/// PEPS responde <see cref="CodigoRequierePromedioPonderado"/> sin calcular nada, también para las dos clases de I1.
 ///
 /// <para>
 /// Inserta los movimientos nuevos en el orden del kardex <c>(OperationDate, Id)</c> —los nuevos reciben Ids mayores, así
@@ -72,12 +87,34 @@ public sealed record ResultadoRetroactivo(
 /// </summary>
 public static class Retroactivo
 {
+    /// <summary>Con PEPS no se admiten retroactivos (D6): <c>Inventory.Costing.RetroactiveRequiresWeightedAverage</c>. (nuevo)</summary>
+    public const string CodigoRequierePromedioPonderado = "Inventory.Costing.RetroactiveRequiresWeightedAverage";
+
+    /// <summary>
+    /// El primer movimiento registrado con fecha posterior a <paramref name="fecha"/> en el orden del kardex
+    /// <c>(OperationDate, EntryId)</c>: el que hace retroactivo al documento y el que nombra su rechazo cuando el parámetro no lo
+    /// permite. A igual fecha lo nuevo va después, así que no cuenta. Nulo = el documento no es retroactivo.
+    /// </summary>
+    public static MovimientoRegistrado? PrimerMovimientoPosterior(IEnumerable<MovimientoRegistrado> historia, DateOnly fecha)
+    {
+        ArgumentNullException.ThrowIfNull(historia);
+        return historia.Where(h => h.OperationDate > fecha).OrderBy(h => h.OperationDate).ThenBy(h => h.EntryId).FirstOrDefault();
+    }
+
     public static ResultadoRetroactivo Insertar(PedidoRetroactivo pedido)
     {
         ArgumentNullException.ThrowIfNull(pedido);
         if (pedido.Nuevos.Count == 0) throw new ArgumentException("El retroactivo necesita al menos un movimiento.", nameof(pedido));
         var p = pedido.Parametros;
-        var explicacion = new ExplicacionDeCosto { Resumen = "Retroactivo mínimo de I1: movimientos insertados en su fecha y posteriores recalculados." };
+        var explicacion = new ExplicacionDeCosto { Resumen = "Retroactivo: movimientos insertados en su fecha y posteriores recalculados, sin reescribir nada." };
+
+        if (p.Metodo != CostMethod.WeightedAverage)
+        {
+            const string mensaje = "Con PEPS no se admiten movimientos con fecha anterior a otros ya registrados: sólo con promedio ponderado (D6).";
+            explicacion.Nota("Rechazo", mensaje);
+            return new ResultadoRetroactivo([], [], [], pedido.EstadoInicial, explicacion,
+                new RechazoDeCosteo(CodigoRequierePromedioPonderado, mensaje, 0m, 0m));
+        }
 
         var historia = pedido.Historia.OrderBy(h => h.OperationDate).ThenBy(h => h.EntryId).ToList();
         var primeraFecha = pedido.Nuevos.Min(n => n.OperationDate);

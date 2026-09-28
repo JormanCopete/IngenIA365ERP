@@ -1,0 +1,56 @@
+{
+  // US16-2, FR-045 (T819; data-model §3.1; research R10): el retroactivo general de I5. Una compra fechada antes de tres
+  // ventas ya confirmadas entra en su fecha; las ventas NO cambian: el kardex agrega una línea CostAdjustment Retroactive
+  // por cada una, con AffectsEntryId, fechada en la venta, marcada «vendida» (en existencia 0) y agrupada por documento
+  // (un AjusteDeCostoReconocido por venta afectada).
+  "nombre": "Compra retroactiva antes de tres ventas",
+  "descripcion": "Promedio ponderado, ámbito cooperativa. P1 compra 10 × 1.000 el 01/03. Ventas ya confirmadas: V1 2 el 10/03 (2.000), V2 3 el 15/03 (3.000), V3 1 el 20/03 (1.000): quedan 4 por 4.000. Llega P2, compra de 10 × 1.300 = 13.000 fechada el 05/03: insertada en su fecha el ámbito queda 20 por 23.000 (1.150). V1 debió costar 2 × 1.150 = 2.300: ajuste −300; V2 3 × 1.150 = 3.450: ajuste −450; V3 1.150: ajuste −150. Total vendido −900. Estado: 14 por 16.100 (1.150) = 4.000 + 13.000 − 900.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "P1", "documento": "EC-1", "fecha": "2026-03-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-03-10", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -2,
+      "esperado": { "lineas": [ { "kind": "Exit", "cantidad": -2, "costoUnitario": 1000, "costoTotal": -2000 } ] }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-03-15", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -3,
+      "esperado": { "lineas": [ { "kind": "Exit", "cantidad": -3, "costoUnitario": 1000, "costoTotal": -3000 } ] }
+    },
+    {
+      "id": "V3", "documento": "FV-3", "fecha": "2026-03-20", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -1,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -1, "costoUnitario": 1000, "costoTotal": -1000 } ],
+        "estado": { "cantidad": 4, "valor": 4000, "promedio": 1000, "ultimoCosto": 1000 }
+      }
+    },
+    {
+      "id": "P2", "documento": "EC-2", "fecha": "2026-03-05", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300,
+      "retroactivo": true,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 10, "costoUnitario": 1300, "costoTotal": 13000, "revierte": "-" } ],
+        "ajustes": [
+          { "kind": "CostAdjustment", "reason": "Retroactive", "cantidad": 0, "costoUnitario": 1150, "costoTotal": -300, "afecta": "V1", "fecha": "2026-03-10", "porcion": "Vendida" },
+          { "kind": "CostAdjustment", "reason": "Retroactive", "cantidad": 0, "costoUnitario": 1150, "costoTotal": -450, "afecta": "V2", "fecha": "2026-03-15", "porcion": "Vendida" },
+          { "kind": "CostAdjustment", "reason": "Retroactive", "cantidad": 0, "costoUnitario": 1150, "costoTotal": -150, "afecta": "V3", "fecha": "2026-03-20", "porcion": "Vendida" }
+        ],
+        "ajustesPorDocumento": [
+          { "documento": "FV-1", "enExistencia": 0, "vendida": -300 },
+          { "documento": "FV-2", "enExistencia": 0, "vendida": -450 },
+          { "documento": "FV-3", "enExistencia": 0, "vendida": -150 }
+        ],
+        "impacto": { "retroactivo": true, "total": -900 },
+        "estado": { "cantidad": 14, "valor": 16100, "promedio": 1150, "ultimoCosto": 1300 },
+        "explicacion": [ "Retroactivo", "Insertado el 2026-03-05" ]
+      }
+    },
+    {
+      "id": "V4", "documento": "FV-4", "fecha": "2026-03-25", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -4,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 1150, "costoTotal": -4600 } ],
+        "estado": { "cantidad": 10, "valor": 11500, "promedio": 1150 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 10, "valor": 11500, "promedio": 1150 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 10 } ]
+}

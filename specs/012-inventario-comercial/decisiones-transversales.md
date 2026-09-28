@@ -1920,6 +1920,21 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     Configuraciones EF `PurchaseMatchLineConfiguration` y `LandedCostAllocationConfiguration` adelantadas de T783–T784 (lo exige
     `LasCantidadesYCostosTienenSuPrecision`); `Basis` usa el alias `Factor` (18,6). Sin DbSet ni migración: los pone la sección de
     persistencia con el par `ComprasYCosteoAvanzado` (T835).
+- **I5, dominio de costeo (T827–T832, pruebas T818–T822; 2026-09-28) (nuevo)**: entidades `CostLayer` (proyección,
+    `AuditableEntityLong` como el kardex, `[SinDiffDeAuditoria]`; `Desde`, `Consumir` —negativo devuelve—, `Reconstruir`;
+    `RemainingQuantity` sólo por esos métodos) en `Entities/Inventory/Projections` y `LayerConsumption` (hecho, `IHechoInmutable`, sólo
+    `init`: `ExitKardexEntryId`, `LayerId` bigint, `Quantity`, `UnitCost`) en `Entities/Inventory/Transactions`. En
+    `Domain/Inventory/Costing`: `Peps` (`Aplicar`, `CambioDeMetodo`), `CapaDeCosto` (`Entrada`, `OperationDate`, `OriginalQuantity`,
+    `RemainingQuantity`, `UnitCost`, `Origen`, `Valor(montos)`, `Es`, `MismaLinea`), `ConsumoDeCapa` (`Salida`, `Capa`, `Quantity`,
+    `UnitCost`, `Valor`), `EstadoDeCosto.Capas`, `MovimientoDeCosto.OperationDate` y `.ConsumosDelOrigen`,
+    `ResultadoDeCosteo.Consumos` y `.CapasNuevas`; `MotorDeCosteo.CambiarMetodo` y `MotorDeCosteo.SimularImpacto` →
+    `ImpactoEnCostos` (`EsRetroactivo`, `Afectados` = `AjusteRetroactivoPorDocumento`, `Total`, `Resultado`, `Rechazo`);
+    `Retroactivo.PrimerMovimientoPosterior` y `Retroactivo.CodigoRequierePromedioPonderado`; `ValorizacionPorDosMetodos.Calcular` con
+    `ClaseAValorizar { Entrada, Salida, AjusteSobreEntrada, OtroAjuste }`, `MovimientoAValorizar`, `HistoriaParaValorizar`
+    (`CorteDelSistemaAnterior`), `ValorDeProducto`, `ValorizacionDeGrupo` (`Nota`) y `ResultadoDeValorizacion`. Configuraciones EF
+    `Projections/CostLayerConfiguration` y `Transactions/LayerConsumptionConfiguration` adelantadas de T833 (lo exige
+    `LasCantidadesYCostosTienenSuPrecision`); sin DbSet ni migración (T835). `ParametrosDeInventario` ya declaraba `Peps` desde I5 y las
+    dos claves de retroactivos (T832); `CatalogoDeParametros.EntregaVigente` **sigue en I4** hasta el cierre de I5. Reglas en T42b.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -1985,6 +2000,10 @@ activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, 
 `Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
 entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US11) → `Inventory.Count.AlreadyOpen` (nuevo, T392: abrir o editar un conteo con foto) y
 `Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina); pagos → `Payments.AmountInvalid` (nuevo, T579: un pago con valor cero o negativo; `ValidadorDePagos`), y `last4` que no son cuatro dígitos responde `Payments.ReferenceInvalid` con `data.field = "last4"`.
+
+Costeo avanzado (I5, T829; **(nuevo)**): `Inventory.Costing.RetroactiveRequiresWeightedAverage` (D6: un documento con fecha anterior
+a otro ya registrado del ámbito con PEPS vigente; `Retroactivo.CodigoRequierePromedioPonderado`, antes de calcular nada). Los otros dos
+de T838 (`Inventory.Costing.RetroactiveNotAllowed`, `.RetroactiveTooOld`) los publica la aplicación.
 
 Cruce a tres vías (I5, T796; **(nuevo)**): `Inventory.PurchaseMatch.QuantityNotApprovable` (aprobar por excepción una línea retenida
 por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción).
@@ -2739,6 +2758,46 @@ Dos huecos de la spec que el dominio tuvo que cerrar:
   nuevo): sale rechazando o con otra recepción. Sin orden sigue el 422 `Inventory.Purchase.InvoiceExceedsReceived` de I1. Es lo que
   mejor concilia la spec («queda retenida por cantidad») con data-model («nunca se aprueba por tolerancia»).
 - `Reasons` lista los motivos por los que la línea **se retiene**; una diferencia dentro de la tolerancia (o sin orden) no lleva razón.
+
+**T42b · PEPS, retroactivo general y valorizado por los dos métodos: reglas del dominio (I5, T827–T832; 2026-09-28; a revisar
+por el dueño y la contadora).** Lo que la spec y data-model §3.5 dejaban abierto y el motor tuvo que fijar:
+- *Una línea por salida.* La salida PEPS es **una** línea del kardex con el costo unitario ponderado de lo consumido
+  (`Σ consumido / cantidad`, 6 decimales) y un `LayerConsumption` por capa; si `round(cantidad × costo)` no da exactamente lo
+  consumido, el centavo va en una línea `RoundingResidue` sobre la salida. Así cada línea de documento sigue dando una línea de
+  kardex (la devolución de cliente y el tránsito viajan al costo de esa línea) y se cumple `TotalCost = round(QuantityBase × UnitCost)`.
+  Alternativa descartada: una línea por capa (partía la línea de venta y el costo de origen de sus devoluciones).
+- *Valor de una capa* = `round(RemainingQuantity × UnitCost)`; un consumo toma el valor antes menos el valor después (el que agota
+  la capa se lleva lo que quedaba). Con existencia no negativa, Σ valor de las capas vivas = `CostState.Value` al centavo: lo que
+  compara la verificación de integridad (T837).
+- *Identificación específica.* La devolución a proveedor y la anulación de una entrada consumen **primero la capa de esa entrada**;
+  la salida del tránsito, la capa creada desde **su misma línea de despacho** (`CapaDeCosto.Origen`), así el tránsito queda en cero
+  exacto aunque las recepciones lleguen en otro orden. Si esa capa ya no alcanza, siguen en orden PEPS y la diferencia entre el costo
+  de la línea y lo consumido es `VoidDifference` sobre el origen (caso `peps-devolucion-a-proveedor`).
+- *Anulación de una salida.* Entra al costo de la línea anulada y **devuelve sus consumos a las mismas capas** en orden inverso (la
+  agotada reaparece en su lugar); los consumos negativos se escriben **bajo la línea de la anulación** (`ExitKardexEntryId` = la
+  anulación), no bajo la salida original, que es un hecho: así Σ consumos de la salida sigue = |`QuantityBase`| y Σ consumos de la
+  anulación = −`QuantityBase`. Si el ámbito está en negativo al anular, la anulación entra como una entrada común (cubre el negativo).
+- *Negativo permitido.* Lo que no encuentra capa sale al último costo en su propia línea (como en promedio) y queda pendiente; la
+  entrada que lo cubre crea su capa, anota el consumo **a esa salida** y la diferencia como `NegativeRegularization`; al quedar la
+  existencia en cero o más, el centavo de redondeo va en la última regularización para que capas y valor cuadren.
+- *Cambio de método.* A PEPS: una línea `MethodChange` (`QuantityBase = 0`, costo = promedio) que abre una sola capa con toda la
+  existencia al promedio y lleva sólo la diferencia de redondeo entre esa capa y el valor (normalmente 0). A promedio: la línea va en 0
+  y las capas se cierran. Sin existencia no hay capa.
+- *D6 también para las dos excepciones de I1.* Con PEPS vigente, `Retroactivo` rechaza **todo** documento con fecha anterior
+  (`Inventory.Costing.RetroactiveRequiresWeightedAverage`), incluidos el saldo inicial de una bodega `NotActivated` y el ajuste de un
+  conteo fechado en la foto: el motor no sabe reinsertar capas en el pasado. Consecuencia a revisar: una cooperativa en PEPS no puede
+  activar una bodega nueva con saldo fechado antes de movimientos ya registrados del ámbito, ni fechar el ajuste de conteo en la foto
+  si hubo movimientos después (debe usar `Conteo.FechaDelAjuste = Aprobacion`). Abrir D6 es trabajo aparte.
+- *Valorizado por los dos métodos* (FR-043, api.md §27): se valora **al inicio** de cada fecha (lo anterior a ella: el cambio es el
+  primer día de un período y el comparativo empieza un primer día). El método con que se registró la historia sale del libro (Σ
+  `TotalCost`); el otro se reconstruye: promedio con entradas a su costo, salidas al promedio de 6 decimales y el ajuste completo
+  sobre una entrada en proporción `min(1, existencia / cantidad de la entrada)` (la regla de `DiferenciaDePrecio`); PEPS con una capa
+  por entrada, salidas en orden y el ajuste sobre una entrada en proporción a lo que queda de su capa (la regla que T843 propone). No se
+  calcula —con nota— un producto cuya historia empieza en el corte del sistema anterior en esa fecha o después, ni por PEPS uno cuya
+  historia deja la existencia en negativo; quedan fuera de las sumas de su grupo y se listan en la columna Nota. La aplicación (T844)
+  manda el ajuste completo sobre una entrada una sola vez por documento y entrada (la primera línea que escribió el motor).
+- *Pendiente en T843.* `DiferenciaDePrecio` y `CostoAdicional` todavía no mueven capas: con PEPS vigente dejarían el estado sin capas.
+  No puede pasar mientras `EntregaVigente` siga en I4 (PEPS no se puede elegir), pero T843 tiene que resolverlo antes del cierre de I5.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad
