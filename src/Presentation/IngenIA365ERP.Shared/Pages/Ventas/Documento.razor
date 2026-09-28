@@ -1,5 +1,7 @@
 @page "/ventas/documentos/{Id:guid}"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
 @using IngenIA365ERP.Shared.Services.Nomina
@@ -9,6 +11,7 @@
 @inject NavigationManager Nav
 @inject DescargaDeArchivos Descargas
 @inject IImpresionDeDocumentos Impresion
+@inject AdjuntosClient Adjuntos
 
 <PageTitle>Documento de venta - IngenIA365ERP</PageTitle>
 
@@ -16,7 +19,10 @@
    (y la aprobación que esperan), impuestos, retenciones, pagos por medio (de la tarjeta sólo los últimos cuatro dígitos), los mensajes a
    los otros módulos y los documentos vinculados (origen, notas, anulación)—. Acciones según su estado: el borrador se edita, se confirma
    o se descarta; el confirmado se entrega (tirilla o carta, y por correo), se reimprime con la marca «COPIA», recibe notas crédito o se
-   anula con el documento contrario. *@
+   anula con el documento contrario. I4 (T758): un documento electrónico muestra su estado ante la DIAN (EstadoElectronico) y no se anula
+   con el documento contrario: «Anular» emite en una sola confirmación la nota crédito total (o la nota de ajuste del documento
+   equivalente) con devolución, y sobre un documento equivalente POS ya expedido «Pedir factura» hace la nota de ajuste y la factura a
+   nombre del comprador en una transacción (SC-003, api.md §18.3.1). La carta de un electrónico baja por el enlace firmado. *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -40,13 +46,30 @@
                 }
                 @if (d.Status == 2)
                 {
-                    <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirEntrega(copia: false))">Entregar</SfButton>
+                    @if (d.Electronico is null)
+                    {
+                        <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirEntrega(copia: false))">Entregar</SfButton>
+                    }
                     <PermissionGate Required="Inventory.Documents.Reprint"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirEntrega(copia: true))">Reimprimir</SfButton></PermissionGate>
                     @if (!EsNota)
                     {
                         <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-credito/nueva?origen={d.DocumentPublicId}")">Nota crédito</a></PermissionGate>
                     }
-                    <PermissionGate Required="Inventory.Sales.Void"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Anular))">Anular</SfButton></PermissionGate>
+                    @if (d.Electronico is { } el)
+                    {
+                        @if (!EsNota && AccionesDelDocumentoElectronico.Entregable(el.Status))
+                        {
+                            <PermissionGate Required="Inventory.Sales.Confirm"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@AbrirAnulacionElectronica">Anular</SfButton></PermissionGate>
+                        }
+                        @if (d.Class == ClaseDocumentoEquivalente && AccionesDelDocumentoElectronico.Entregable(el.Status))
+                        {
+                            <PermissionGate Required="Inventory.Sales.Confirm"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@AbrirPedirFactura">Pedir factura</SfButton></PermissionGate>
+                        }
+                    }
+                    else
+                    {
+                        <PermissionGate Required="Inventory.Sales.Void"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Anular))">Anular</SfButton></PermissionGate>
+                    }
                 }
             }
         </div>
@@ -67,6 +90,7 @@
                 <div class="kpi-card"><span class="label">Vendedor</span><span>@(doc.Salesperson?.Name ?? "—")</span></div>
                 <div class="kpi-card"><span class="label">Paso a contabilidad</span><span>@TextosDeInventario.ModoDePaso(doc.PostingMode)</span></div>
             </div>
+            <EstadoElectronico Electronico="@doc.Electronico" DocumentoId="@doc.DocumentPublicId" Entregar="@(() => AbrirEntrega(copia: false))" Cambio="@CargarAsync" />
 
             <div class="tabla-desplazable">
                 <table class="data-grid">
@@ -243,9 +267,52 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular con la nota total" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Emitiendo la nota…">
+                <p class="texto-apoyo">Un documento electrónico validado no se anula con el documento contrario: se emite la nota crédito total (o la nota de ajuste del
+                    documento equivalente) con la devolución de lo vendido, con su propio número y código. Si hay que reintegrar pagos, la nota queda en borrador para registrarlos.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularConNotaAsync">Emitir la nota y anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarPedirFactura" Header="Pedir factura" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Emitiendo…">
+                <p class="texto-apoyo">El comprador pide factura sobre este documento equivalente ya expedido: se emite su nota de ajuste de anulación total y la factura a
+                    su nombre con los mismos pagos, en una sola operación. No mueve pagos ni existencias dos veces.</p>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Comprador * <PersonSearchPicker Selected="@_comprador" SelectedChanged="@CambiarComprador" ShowHelpText="false" Compacto="true" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _comprador is null || string.IsNullOrWhiteSpace(_motivo))" OnClick="@PedirFacturaAsync">Emitir la factura</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPedirFactura = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
+    /// <summary><c>DocumentClass.PosEquivalentDocument</c>.</summary>
+    private const int ClaseDocumentoEquivalente = 28;
+
+    private readonly ClaveDeOperacion _claveNota = new(), _claveConfirmarNota = new(), _clavePedirFactura = new();
+    private bool _mostrarAnulacion, _mostrarPedirFactura;
+    private PersonSearchPicker.PersonSearchItem? _comprador;
+
+    private void CambiarComprador(PersonSearchPicker.PersonSearchItem? comprador) => _comprador = comprador;
+
     private enum Accion { Anular, Descartar }
 
     [Parameter] public Guid Id { get; set; }
@@ -324,12 +391,64 @@
         }
         _mostrarEntrega = false;
         if (r.Value.Archivo is { } archivo) await Descargas.GuardarAsync(archivo.Nombre, archivo.TipoContenido, archivo.Contenido);
+        // I4: la carta de un electrónico es su representación gráfica guardada, por enlace firmado.
+        if (r.Value.Link is { Url: { } url }) await Adjuntos.DescargarAsync(url, $"{_doc.Numero}.pdf");
         if (r.Value.Ticket is { } tirilla)
         {
             _tirilla = tirilla;
             await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(tirilla), _doc.Numero);
         }
         if (r.Value.EmailSent) await Notification.SuccessAsync("Enviado por correo.");
+    }
+
+    private void AbrirAnulacionElectronica()
+    {
+        _motivo = null;
+        _mostrarAnulacion = true;
+    }
+
+    /// <summary>
+    /// «Anular» un electrónico (SC-003): la nota total con devolución en una sola confirmación. Si la confirmación no pasa —por ejemplo, porque
+    /// hay pagos que reintegrar—, la nota queda en borrador y se abre para completarla.
+    /// </summary>
+    private async Task AnularConNotaAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var borrador = await Ventas.GuardarNotaAsync(null, new BorradorDeNotaRequest(_doc.DocumentPublicId, _motivo.Trim(), TotalVoid: true, WithReturn: true, [], []),
+            _claveNota);
+        if (!borrador.IsSuccess || borrador.Value is null) { await Notification.ErrorAsync(borrador.ErrorMessage ?? "No se pudo preparar la nota."); return; }
+        var nota = borrador.Value;
+        var r = await Ventas.ConfirmarAsync(VentasClient.Rutas.Notas, nota.DocumentPublicId, nota.Totals.AmountDue, nota.RowVersion, _claveConfirmarNota);
+        _mostrarAnulacion = false;
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.WarningAsync((r.ErrorMessage ?? "La nota no se pudo confirmar.") + " Quedó en borrador para completarla.");
+            Nav.NavigateTo($"/ventas/notas-credito/nueva?documento={nota.DocumentPublicId}");
+            return;
+        }
+        await Notification.SuccessAsync(r.Value.Status == 1 ? "La nota quedó en aprobación." : $"Anulado con la nota {r.Value.DisplayNumber}; se transmite a la DIAN.");
+        Nav.NavigateTo($"/ventas/documentos/{nota.DocumentPublicId}");
+    }
+
+    private void AbrirPedirFactura()
+    {
+        _motivo = null;
+        _comprador = null;
+        _mostrarPedirFactura = true;
+    }
+
+    /// <summary>«Pedir factura» (§18.3.1): la nota de ajuste y la factura a nombre del comprador, en una transacción.</summary>
+    private async Task PedirFacturaAsync()
+    {
+        if (_doc is null || _comprador is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.PedirFacturaAsync(_doc.DocumentPublicId, new FacturaEnLugarRequest(_comprador.PublicId, _motivo.Trim(), _doc.Totals.AmountDue),
+            _clavePedirFactura);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo emitir la factura."); return; }
+        _mostrarPedirFactura = false;
+        await Notification.SuccessAsync($"Factura {r.Value.InvoiceNumber} emitida; la nota {r.Value.AdjustmentNoteNumber} anuló el documento equivalente.");
+        Nav.NavigateTo($"/ventas/documentos/{r.Value.InvoicePublicId}");
     }
 
     private void AbrirMotivo(Accion accion)

@@ -11,6 +11,8 @@ public static class ClasesDeCompra
     public const int Recepcion = 3;
     public const int Factura = 4;
     public const int Nota = 5;
+    public const int DocumentoSoporte = 6;
+    public const int NotaDeAjusteDeSoporte = 7;
     public const int Devolucion = 9;
     public const int Anulacion = 34;
 }
@@ -68,7 +70,8 @@ public sealed record BorradorDeCompraRequest(
     DocumentoDelProveedorRequest? Supplier = null,
     Guid? SupplierInvoicePublicId = null,
     string? NoteKind = null,
-    Guid? CostCenterPublicId = null);
+    Guid? CostCenterPublicId = null,
+    string? CorrectionConceptCode = null);
 
 /// <summary>La factura de la compra directa: su tipo y el documento del proveedor (§14.3).</summary>
 public sealed record FacturaDeCompraDirectaRequest(Guid DocumentTypePublicId, DocumentoDelProveedorRequest Supplier);
@@ -158,3 +161,9 @@ public sealed class FiltroDeCompras
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }
+
+/// <summary>Un borrador de documento soporte creado por la generación semanal (I4, §14.7): el proveedor y las recepciones que agrupa.</summary>
+public sealed record DocumentoSoporteSemanalDto(Guid SupportDocumentPublicId, Guid SupplierPersonPublicId, IReadOnlyList<Guid> ReceiptPublicIds);
+
+/// <summary>El cuerpo de <c>POST /support-documents/weekly</c>: hasta qué día (nulo = hoy).</summary>
+public sealed record GenerarSemanalRequest(DateOnly? UpTo);

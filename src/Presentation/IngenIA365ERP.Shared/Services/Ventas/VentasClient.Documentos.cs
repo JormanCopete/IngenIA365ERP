@@ -31,6 +31,14 @@ public sealed partial class VentasClient
     public Task<ResultadoDeInventario<EntregaDeVentaDto>> ReimprimirAsync(Guid id, EntregaRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EntregaAsync($"{Rutas.Reimpresion}/{id}/reprint", id, request, clave, ct);
 
+    /// <summary>
+    /// I4 (T758; §18.3.1): el comprador pide factura sobre un documento equivalente POS ya expedido. Una sola escritura: la nota de ajuste de
+    /// anulación total y la factura con los mismos pagos, en una transacción; la factura se transmite después de la nota.
+    /// </summary>
+    public Task<ResultadoDeInventario<FacturaEnLugarDelDocumentoEquivalenteDto>> PedirFacturaAsync(Guid id, FacturaEnLugarRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<FacturaEnLugarDelDocumentoEquivalenteDto>(HttpMethod.Post, $"{Rutas.Documentos}/{id}/invoice-instead", request, clave, ct);
+
     // ------------------------------------------------------------------------- facturas y notas --
 
     /// <summary>Guarda el borrador de una factura o comprobante de oficina: sin <paramref name="id"/> lo crea; con él lo reemplaza.</summary>
@@ -93,6 +101,9 @@ public sealed partial class VentasClient
             }
             var resultado = await ResultadoDeInventario<EntregaDeVentaDto>.DesdeAsync(resp, ct);
             if (resultado.IsSuccess) clave.Exito();
+            // I4: la carta de un electrónico es un enlace firmado; el del almacén local de desarrollo es relativo a la API.
+            if (resultado is { IsSuccess: true, Value: { Link: { Url: { } firmada } enlace } valor })
+                resultado = resultado with { Value = valor with { Link = enlace with { Url = Adjuntos.EnlacesFirmados.Absoluta(http, firmada) } } };
             return resultado;
         }
         catch (HttpRequestException ex)
