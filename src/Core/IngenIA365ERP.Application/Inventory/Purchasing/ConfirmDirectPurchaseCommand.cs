@@ -43,9 +43,10 @@ public sealed class ConfirmDirectPurchaseCommandValidator : AbstractValidator<Co
         });
         RuleFor(x => x.Invoice).NotNull();
         RuleFor(x => x.Invoice.DocumentTypePublicId).NotEmpty().WithMessage("Indicá el tipo de la factura del proveedor.");
-        RuleFor(x => x.Invoice.Supplier).NotNull();
-        RuleFor(x => x.Invoice.Supplier.Number).NotEmpty().MaximumLength(SupplierInvoiceDetail.LargoDelNumero).WithMessage("Indicá el número de la factura.");
-        RuleFor(x => x.Invoice.Supplier.Prefix).MaximumLength(SupplierInvoiceDetail.LargoDelPrefijo);
+        // I4 (T741): con un tipo de documento soporte no hay documento del proveedor; la factura lo exige en el handler.
+        RuleFor(x => x.Invoice.Supplier.Number).NotEmpty().MaximumLength(SupplierInvoiceDetail.LargoDelNumero).WithMessage("Indicá el número de la factura.")
+            .When(x => x.Invoice?.Supplier is not null);
+        RuleFor(x => x.Invoice.Supplier.Prefix).MaximumLength(SupplierInvoiceDetail.LargoDelPrefijo).When(x => x.Invoice?.Supplier is not null);
     }
 }
 
@@ -77,19 +78,26 @@ public sealed class ConfirmDirectPurchaseCommandHandler(
         if (tipoRecepcion.Class != DocumentClass.PurchaseReceipt) return Falla(InventoryErrors.TypeNotForRoute(tipoRecepcion.Class, DocumentClassGroup.Purchases));
         var tipoFactura = await db.InventoryDocumentTypes.AsNoTracking().FirstOrDefaultAsync(t => t.PublicId == request.Invoice.DocumentTypePublicId, ct);
         if (tipoFactura is null) return Falla(InventoryErrors.DocumentTypeNotFound());
-        if (tipoFactura.Class != DocumentClass.SupplierInvoice) return Falla(InventoryErrors.TypeNotForRoute(tipoFactura.Class, DocumentClassGroup.Purchases));
+        // I4 (T741): a un vendedor no obligado a facturar, la compra directa se soporta con el documento soporte (lo numera la cooperativa).
+        var esSoporte = tipoFactura.Class == DocumentClass.SupportDocument;
+        if (tipoFactura.Class != DocumentClass.SupplierInvoice && !esSoporte) return Falla(InventoryErrors.TypeNotForRoute(tipoFactura.Class, DocumentClassGroup.Purchases));
+        if (!esSoporte && request.Invoice.Supplier is null) return Falla(InventoryErrors.FieldRequired("supplier"));
 
         var proveedor = await db.People.AsNoTracking().Where(p => p.PublicId == request.Receipt.Contraparte).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
         if (proveedor is null) return Falla(ErroresDelDocumento.PersonaInexistente());
-        var previo = await ColisionDeFacturaDeProveedor.BuscarAsync(db, new SupplierInvoiceDetail
+        if (!esSoporte)
         {
-            DocumentClass = DocumentClass.SupplierInvoice,
-            SupplierPersonId = proveedor.Value,
-            SupplierPrefix = SupplierInvoiceDetail.NormalizarNumero(request.Invoice.Supplier.Prefix),
-            SupplierNumber = SupplierInvoiceDetail.NormalizarNumero(request.Invoice.Supplier.Number),
-            Cufe = SupplierInvoiceDetail.NormalizarCufe(request.Invoice.Supplier.Cufe),
-        }, ct);
-        if (previo is not null) return Falla(previo);
+            var previo = await ColisionDeFacturaDeProveedor.BuscarAsync(db, new SupplierInvoiceDetail
+            {
+                DocumentClass = DocumentClass.SupplierInvoice,
+                SupplierPersonId = proveedor.Value,
+                SupplierPrefix = SupplierInvoiceDetail.NormalizarNumero(request.Invoice.Supplier!.Prefix),
+                SupplierNumber = SupplierInvoiceDetail.NormalizarNumero(request.Invoice.Supplier.Number),
+                Cufe = SupplierInvoiceDetail.NormalizarCufe(request.Invoice.Supplier.Cufe),
+            }, ct);
+            if (previo is not null) return Falla(previo);
+        }
+        contexto.EnCurso = true;
 
         // (1) La recepción: su borrador y su confirmación (o su solicitud de aprobación).
         var recepcion = await guardar.Handle(new SaveInventoryDraftCommand(null, DocumentClassGroup.Purchases, request.Receipt), ct);
@@ -107,7 +115,7 @@ public sealed class ConfirmDirectPurchaseCommandHandler(
         var borradorFactura = new SaveInventoryDraftRequest(tipoFactura.PublicId, request.Receipt.OperationDate, null, null,
             request.Receipt.CostCenterPublicId, request.Receipt.Contraparte, null, null, null, request.Receipt.Notes, null, null, null, lineas,
             OperationMunicipalityDaneCode: request.Receipt.OperationMunicipalityDaneCode,
-            Supplier: request.Invoice.Supplier);
+            Supplier: esSoporte ? null : request.Invoice.Supplier);
 
         contexto.PermiteRecepcionPendiente = true;
         Result<InventoryDocumentDto> factura;
@@ -131,7 +139,7 @@ public sealed class ConfirmDirectPurchaseCommandHandler(
         }
 
         var documentoFactura = await db.InventoryDocuments.AsNoTracking().FirstAsync(d => d.PublicId == factura.Value.PublicId, ct);
-        var detalle = await db.SupplierInvoiceDetails.AsNoTracking().FirstAsync(d => d.DocumentId == documentoFactura.Id, ct);
+        var detalle = await db.SupplierInvoiceDetails.AsNoTracking().FirstOrDefaultAsync(d => d.DocumentId == documentoFactura.Id, ct);
         var eventos = await ConsultasDeCompras.EventosAsync(db, documentoFactura.Id, ct);
         var impuestos = await db.DocumentTaxLines.AsNoTracking().Where(t => t.DocumentId == documentoFactura.Id).OrderBy(t => t.Id).ToListAsync(ct);
         var numeros = await db.InventoryDocumentLines.AsNoTracking().Where(l => l.DocumentId == documentoFactura.Id).ToDictionaryAsync(l => l.Id, l => l.LineNumber, ct);
@@ -142,7 +150,7 @@ public sealed class ConfirmDirectPurchaseCommandHandler(
             confirmada.Value.Status,
             new DocumentoCreadoDto(confirmada.Value.PublicId, confirmada.Value.DisplayNumber, confirmada.Value.Status),
             new FacturaCreadaDto(documentoFactura.PublicId, VistaDeDocumentos.NumeroVisible(documentoFactura.Prefix, documentoFactura.Number),
-                documentoFactura.Status, detalle.NumeroVisible),
+                documentoFactura.Status, detalle?.NumeroVisible),
             confirmada.Value.Approval,
             new DocumentTotalsDto(documentoFactura.Subtotal, documentoFactura.DiscountTotal, documentoFactura.TaxTotal, documentoFactura.WithholdingTotal,
                 documentoFactura.Total, documentoFactura.AmountDue, costos ? documentoFactura.CostTotal : null),

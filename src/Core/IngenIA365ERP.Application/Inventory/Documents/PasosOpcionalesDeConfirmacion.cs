@@ -6,13 +6,29 @@ using IngenIA365ERP.Domain.Enums.Integration;
 namespace IngenIA365ERP.Application.Inventory.Documents;
 
 /// <summary>
-/// Paso 4 del flujo canónico (decisiones-transversales §1.3): la guardia de emisión fiscal de las clases fiscales. La
-/// confirmación lo omite mientras no haya implementación registrada (I3/I4 registran la que llama a
-/// <c>GuardiaDeEmisionFiscal</c>). (nuevo)
+/// Los pasos fiscales del flujo canónico (decisiones-transversales §1.3) para las clases fiscales. La confirmación los omite mientras no
+/// haya implementación registrada; desde I4 la registrada es <c>EmisionFiscalDeLaConfirmacion</c> (T734):
+/// <list type="bullet">
+/// <item>paso 4, <see cref="EvaluarAsync"/>: la guardia de emisión fiscal (<c>GuardiaDeEmisionFiscal</c>) y las reglas de contingencia;</item>
+/// <item>paso 8, <see cref="NumerarAsync"/>: el número de las clases que numeran con resolución (<c>NumeradorFiscal</c>), dentro del cerrojo
+/// y después de él (la fila de la resolución es la última del orden canónico);</item>
+/// <item>paso 10, <see cref="RegistrarAsync"/>: la fila <c>COR_ElectronicDocuments</c> y su versión 1, <b>después</b> del guardado del
+/// documento y en la misma transacción (el canónico se arma leyendo lo guardado, igual que lo volverá a armar la emisión).</item>
+/// </list>
+/// (nuevo)
 /// </summary>
 public interface IPasoFiscalDeConfirmacion
 {
     Task<Result> EvaluarAsync(ContextoDeEfecto contexto, CancellationToken ct);
+
+    /// <summary>Paso 8 de una clase numerada por resolución (<c>NumberedBy.DianResolution</c>). Un documento ya numerado no se renumera. (nuevo, I4)</summary>
+    Task<Result> NumerarAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(Result.Success());
+
+    /// <summary>
+    /// Paso 10, después del guardado del documento confirmado: registra su documento electrónico si la clase emite. <c>true</c> si agregó
+    /// algo que hay que guardar. (nuevo, I4)
+    /// </summary>
+    Task<Result<bool>> RegistrarAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(Result.Success(false));
 }
 
 /// <summary>

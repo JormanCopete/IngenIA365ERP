@@ -33,7 +33,8 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 public sealed class EmisionDeInventario(
     IApplicationDbContext db,
     Sales.CreditosAprobadosEnCurso? creditosEnCurso = null,
-    RechazoFiscalEnCurso? rechazoEnCurso = null)
+    RechazoFiscalEnCurso? rechazoEnCurso = null,
+    Sales.TrasladoDeVentaEnCurso? traslado = null)
 {
     /// <summary>
     /// El caso fiscal de una anulación sin efecto fiscal por un rechazo de la DIAN (T724, T725), o nulo si es una anulación corriente.
@@ -496,7 +497,7 @@ public sealed class EmisionDeInventario(
     /// </summary>
     public async Task<IReadOnlyList<object>> CreditoDeLaVentaAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
     {
-        if (rechazoEnCurso?.ReemplazaA(documento.PublicId) is not { } rechazadoPublicId)
+        if ((rechazoEnCurso?.ReemplazaA(documento.PublicId) ?? traslado?.DeLaFactura(documento.PublicId)) is not { } rechazadoPublicId)
             return [.. await VentasACreditoAsync(documento, pagos, ct)];
 
         var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.EsCredito).OrderBy(p => p.LineNumber).ToList();

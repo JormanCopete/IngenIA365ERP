@@ -132,7 +132,7 @@ public sealed class GetDianReadinessQueryHandler(
     }
 
     /// <summary>Cada rol de venta de la caja necesita el tipo del rol de contingencia que lo respalda (api.md §20.1, §24.3).</summary>
-    private static IEnumerable<FaltanteDeEmisionDto> ContingenciaDeLaCaja(IReadOnlyList<CashRegisterDocumentType> roles, bool obligada)
+    public static IEnumerable<FaltanteDeEmisionDto> ContingenciaDeLaCaja(IReadOnlyList<CashRegisterDocumentType> roles, bool obligada)
     {
         if (!obligada) yield break;
         foreach (var (venta, contingencia, nombre) in new[]

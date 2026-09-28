@@ -18,6 +18,9 @@ using IngenIA365ERP.Domain.Sales.Payments;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
+using IngenIA365ERP.Application.Inventory.Integration;
+using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
+
 namespace IngenIA365ERP.Application.Inventory.Sales;
 
 // ------------------------------------------------------------------------------------------------ los DTO --
@@ -199,8 +202,15 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         if (request.Number is { } numero) consulta = consulta.Where(d => d.Number == numero);
         if (request.PendingValidation is { } pendiente)
             consulta = consulta.Where(d => db.DocumentPayments.Any(p => p.DocumentId == d.Id && !p.IsDeleted && p.PendingValidation) == pendiente);
-        // I3: no hay documentos electrónicos todavía (I4); un filtro por su estado no devuelve nada.
-        if (!string.IsNullOrWhiteSpace(request.ElectronicStatus)) consulta = consulta.Where(_ => false);
+        // I4 (T743): el estado electrónico por la fuente (SourceModule = INV); un estado que no existe no devuelve nada.
+        if (!string.IsNullOrWhiteSpace(request.ElectronicStatus))
+        {
+            if (Enum.TryParse<ElectronicDocumentStatus>(request.ElectronicStatus, ignoreCase: true, out var estadoElectronico))
+                consulta = consulta.Where(d => db.ElectronicDocuments.Any(e => e.SourceModule == FuenteDeEmisionDeInventario.Modulo
+                    && e.SourceDocumentPublicId == d.PublicId && e.Status == estadoElectronico));
+            else
+                consulta = consulta.Where(_ => false);
+        }
 
         var pagina = request.Page < 1 ? 1 : request.Page;
         var tamano = request.PageSize is < 1 or > PageRequest.MaxPageSize ? 20 : request.PageSize;
@@ -238,6 +248,12 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         var vendedores = await db.Salespeople.IgnoreQueryFilters().AsNoTracking().Where(s => vendedorIds.Contains(s.Id)).Include(s => s.Person)
             .ToDictionaryAsync(s => s.Id, s => BorradorDelPos.Nombre(s.Person), ct);
 
+        var publicos = filas.Select(d => d.PublicId).ToList();
+        var estados = await db.ElectronicDocuments.AsNoTracking()
+            .Where(e => e.SourceModule == FuenteDeEmisionDeInventario.Modulo && publicos.Contains(e.SourceDocumentPublicId))
+            .Select(e => new { e.SourceDocumentPublicId, e.Status }).ToListAsync(ct);
+        var estadoDe = estados.GroupBy(e => e.SourceDocumentPublicId).ToDictionary(g => g.Key, g => g.First().Status.ToString());
+
         var items = filas.Select(d => new SalesDocumentSummaryDto(
             d.PublicId, d.Class, tipos.GetValueOrDefault(d.DocumentTypeId) ?? string.Empty, d.Prefix, d.Number, d.Status, d.OperationDate,
             d.PointOfSaleId is int p ? puntos.GetValueOrDefault(p) : null,
@@ -247,22 +263,37 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
             d.Total, d.AmountDue,
             pagos[d.Id].Where(x => x.Direction == PaymentDirection.Received || d.Class != DocumentClass.Voiding).OrderBy(x => x.LineNumber)
                 .Select(x => new SalesPaymentSummaryDto(x.MeansCode, x.MeansClass, x.Amount)).ToList(),
-            d.PostingMode, null,
+            d.PostingMode, estadoDe.GetValueOrDefault(d.PublicId),
             d.Status == DocumentStatus.Confirmed && d.PointOfSaleId is not null && !entregados.Contains(d.Id),
             pagos[d.Id].Any(x => x.PendingValidation))).ToList();
         return Result.Success(new PagedResult<SalesDocumentSummaryDto>(items, pagina, tamano, total));
     }
 
-    /// <summary>Los documentos que ya tuvieron su primera entrega (evento <c>Inventory.Document.Delivered</c> en la auditoría).</summary>
+    /// <summary>
+    /// Los documentos que ya tuvieron su primera entrega. Un documento electrónico (I4, T743) se entrega cuando su documento electrónico lo
+    /// anota (<c>DeliveredAt</c>: el cobro que validó en línea o la primera entrega después); uno rechazado o cancelado no se entrega nunca y
+    /// no queda pendiente. Los demás, por el evento <c>Inventory.Document.Delivered</c> de la auditoría.
+    /// </summary>
     private async Task<HashSet<int>> EntregadosAsync(IReadOnlyList<InventoryDocument> documentos, CancellationToken ct)
     {
         if (documentos.Count == 0) return [];
+        var publicos = documentos.Select(d => d.PublicId).ToList();
+        var electronicos = await db.ElectronicDocuments.AsNoTracking()
+            .Where(e => e.SourceModule == FuenteDeEmisionDeInventario.Modulo && publicos.Contains(e.SourceDocumentPublicId))
+            .Select(e => new { e.SourceDocumentPublicId, e.DeliveredAt, e.Status }).ToListAsync(ct);
+        var porElectronico = electronicos.GroupBy(e => e.SourceDocumentPublicId).ToDictionary(g => g.Key, g => g.First());
+        var resueltos = documentos.Where(d => porElectronico.TryGetValue(d.PublicId, out var e)
+                && (e.DeliveredAt is not null || e.Status is ElectronicDocumentStatus.Rejected or ElectronicDocumentStatus.CancelledWithoutReplacement))
+            .Select(d => d.Id).ToHashSet();
+        documentos = documentos.Where(d => !porElectronico.ContainsKey(d.PublicId)).ToList();
+        if (documentos.Count == 0) return resueltos;
         var cargas = await db.AuditOutbox.AsNoTracking()
             .Where(e => e.Module == ModuloDeAuditoria.Inventory && e.PayloadJson != null && e.PayloadJson.Contains(AuditEventTypes.InventoryDocumentDelivered))
             .Select(e => e.PayloadJson!).ToListAsync(ct);
         var entregados = cargas.Select(AuditoriaEncadenada.LeerCarga).Where(e => e.Action == AuditEventTypes.InventoryDocumentDelivered)
             .Select(e => e.EntityPublicId).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return documentos.Where(d => entregados.Contains(d.PublicId.ToString())).Select(d => d.Id).ToHashSet();
+        resueltos.UnionWith(documentos.Where(d => entregados.Contains(d.PublicId.ToString())).Select(d => d.Id));
+        return resueltos;
     }
 }
 
@@ -312,7 +343,9 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
             bodega, sucursal, punto, caja, sesion, canal, d.PostingMode, contraparte,
             vendedor is null ? null : new ReferenciaDto(vendedor.PublicId, string.Empty, BorradorDelPos.Nombre(vendedor.Person)),
             lineas, retenciones, new SalesTotalsDto(d.Subtotal, d.DiscountTotal, d.TaxTotal, d.WithholdingTotal, d.Total, d.AmountDue),
-            pagos, mensajes, null, await VinculosAsync(d, ct), creador, confirmador, await IssuesAsync(d, vendedor, pagos, ct), d.RowVersion ?? []));
+            pagos, mensajes,
+            await EstadoElectronicoDeInventario.DeAsync(db, d.PublicId, ct) is { } electronico ? Pos.EsperaEnLineaDelPos.Bloque(electronico, 0, null) : null,
+            await VinculosAsync(d, ct), creador, confirmador, await IssuesAsync(d, vendedor, pagos, ct), d.RowVersion ?? []));
     }
 
     private async Task<SalesCounterpartyDto?> ContraparteAsync(InventoryDocument d, CancellationToken ct)

@@ -47,7 +47,8 @@ public abstract class SalidaPorVenta(
         var reglasDeVenta = await reglas.ValidarVentaAsync(contexto, ct);
         if (reglasDeVenta.IsFailure) return reglasDeVenta;
 
-        var movimientos = Movimientos(contexto.Documento, productos.Value);
+        // I4 (T739): la factura que reemplaza al documento equivalente no escribe kardex: la salida ya la hizo el original (ReplacementOf).
+        var movimientos = reglas.EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento) ? [] : Movimientos(contexto.Documento, productos.Value);
         if (movimientos.Count == 0) return Result.Success();
         var preparado = await registro.PrepararAsync(contexto.Documento, movimientos, ct);
         if (preparado.IsFailure) return Result.Failure(preparado.Error);

@@ -84,7 +84,9 @@ public sealed class CheckoutPosDraftCommandHandler(
     IToqueDeSesionDeCaja toque,
     ConfirmacionDeDocumento confirmacion,
     ConstructorDeTirilla tirilla,
-    IAuditoriaDelPuntoDeVenta auditoria)
+    IAuditoriaDelPuntoDeVenta auditoria,
+    TareasTrasElCommit? trasElCommit = null,
+    EsperaEnLineaDelPos? esperaEnLinea = null)
     : IRequestHandler<CheckoutPosDraftCommand, Result<CheckoutResultDto>>
 {
     public Task<Result<CheckoutResultDto>> Handle(CheckoutPosDraftCommand request, CancellationToken ct) =>
@@ -126,6 +128,9 @@ public sealed class CheckoutPosDraftCommandHandler(
         await auditoria.AnotarAsync(AuditEventTypes.InventoryPosCheckout, request, venta.PublicId,
             new { venta.AmountDue, payments = registrados.Value.Pagos.Select(p => new { p.MeansCode, p.Amount, p.Last4 }).ToList(), change = registrados.Value.Change }, ct);
 
+        // (3b) I4 (T735): con la contingencia del facturador abierta, la venta se numera con el tipo del rol de contingencia de la caja.
+        await TipoDeVentaEnContingencia.AplicarAsync(db, venta, caja, ct);
+
         // (4) La confirmación por el flujo canónico.
         Result<ConfirmationResultDto> confirmada;
         try
@@ -141,14 +146,32 @@ public sealed class CheckoutPosDraftCommandHandler(
         var c = confirmada.Value;
 
         TicketDto? ticket = null;
+        ElectronicoDeLaVentaDto? electronico = null;
+        var formato = ReglasDePuntoDeVenta.FormatoDe(caja.ReceiptWidthMm);
         if (c.Status == DocumentStatus.Confirmed)
         {
-            var confirmado = await db.InventoryDocuments.Include(d => d.Lines).FirstAsync(d => d.PublicId == venta.PublicId, ct);
-            ticket = await tirilla.ConstruirAsync(confirmado, ReglasDePuntoDeVenta.FormatoDe(caja.ReceiptWidthMm), copia: false, ct);
+            // I4 (T736): un documento electrónico no se entrega antes de validarse (o de salir en contingencia): la tirilla la trae la espera
+            // en línea, después del commit.
+            var registrado = await Integration.EstadoElectronicoDeInventario.DeAsync(db, venta.PublicId, ct);
+            if (registrado is not null)
+            {
+                electronico = EsperaEnLineaDelPos.Bloque(registrado, 0, null);
+            }
+            else
+            {
+                var confirmado = await db.InventoryDocuments.Include(d => d.Lines).FirstAsync(d => d.PublicId == venta.PublicId, ct);
+                ticket = await tirilla.ConstruirAsync(confirmado, formato, copia: false, ct);
+            }
         }
-        return Result.Success(new CheckoutResultDto(venta.PublicId, c.Status, c.Approval?.RequestPublicId, venta.Class,
-            c.Number is null ? null : venta.Prefix, c.Number, venta.Total, venta.AmountDue, registrados.Value.Change, c.PostingMode, null, ticket,
-            c.Warnings));
+        var resultado = new CheckoutResultDto(venta.PublicId, c.Status, c.Approval?.RequestPublicId, venta.Class,
+            c.Number is null ? null : venta.Prefix, c.Number, venta.Total, venta.AmountDue, registrados.Value.Change, c.PostingMode, electronico, ticket,
+            c.Warnings);
+        if (electronico is not null && trasElCommit is not null && esperaEnLinea is not null)
+        {
+            trasElCommit.Completar<Result<CheckoutResultDto>>(async (r, t) =>
+                r.IsSuccess ? Result.Success(await esperaEnLinea.CompletarAsync(r.Value, formato, t)) : r);
+        }
+        return Result.Success(resultado);
     }
 
     private static Result<CheckoutResultDto> Falla(Error error) => Result.Failure<CheckoutResultDto>(error);

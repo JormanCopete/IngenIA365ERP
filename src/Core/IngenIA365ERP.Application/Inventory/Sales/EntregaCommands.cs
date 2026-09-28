@@ -4,7 +4,12 @@ using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Notifications;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
+using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.ElectronicInvoicing;
+using IngenIA365ERP.Application.ElectronicInvoicing.Documents;
+using IngenIA365ERP.Application.Inventory.Integration;
+using IngenIA365ERP.Domain.Entities.ElectronicInvoicing;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Pos;
@@ -27,7 +32,8 @@ public interface IRepresentacionDeVentaEnPdf
 }
 
 /// <summary>Lo que devuelve la entrega o la reimpresión: la tirilla, o el PDF de la carta, y si salió el correo. (nuevo)</summary>
-public sealed record EntregaDto(Guid DocumentPublicId, CashRegisterPrintFormat Format, bool Copy, TicketDto? Ticket, byte[]? Pdf, string? FileName, bool EmailSent);
+public sealed record EntregaDto(Guid DocumentPublicId, CashRegisterPrintFormat Format, bool Copy, TicketDto? Ticket, byte[]? Pdf, string? FileName, bool EmailSent,
+    EnlaceDeDescargaDto? Link = null);
 
 /// <summary>
 /// La <b>primera</b> entrega de una venta confirmada (<c>POST /api/inventory/sales/documents/{id}/deliver</c>, §20.3), sin la marca
@@ -61,12 +67,16 @@ public sealed class DeliverSalesDocumentCommandHandler(
         var documento = await entrega.DocumentoAsync(request.DocumentPublicId, soloVentas: true, ct);
         if (documento.IsFailure) return Result.Failure<EntregaDto>(documento.Error);
         var d = documento.Value;
-        if (d.Status != DocumentStatus.Confirmed || ClasesDeDocumento.De(d.Class).NumberedBy == NumberedBy.DianResolution)
-            return Result.Failure<EntregaDto>(ErroresDelPos.NotDeliverable(d.Status));
+        if (d.Status != DocumentStatus.Confirmed) return Result.Failure<EntregaDto>(ErroresDelPos.NotDeliverable(d.Status));
+        // I4 (T743): un documento electrónico se entrega después de validarse (o en contingencia); antes, NotDeliverable con su estado.
+        var electronico = await entrega.ElectronicoAsync(d, ct);
+        if (electronico.IsFailure) return Result.Failure<EntregaDto>(electronico.Error);
         if (await auditoria.ExisteAsync(AuditEventTypes.InventoryDocumentDelivered, d.PublicId, request.Format.ToString(), ct))
             return Result.Failure<EntregaDto>(ErroresDelPos.AlreadyDelivered(request.Format.ToString()));
 
-        var r = await entrega.EntregarAsync(d, request.Format, copia: false, request.SendEmail, request.Email, ct);
+        var r = electronico.Value is { } e
+            ? await entrega.EntregarElectronicoAsync(d, e, request.Format, copia: false, request.SendEmail, ct)
+            : await entrega.EntregarAsync(d, request.Format, copia: false, request.SendEmail, request.Email, ct);
         if (r.IsFailure) return r;
         await auditoria.AnotarAsync(AuditEventTypes.InventoryDocumentDelivered, request, d.PublicId,
             new { format = request.Format.ToString(), emailSent = r.Value.EmailSent }, ct,
@@ -107,7 +117,14 @@ public sealed class ReprintDocumentCommandHandler(IApplicationDbContext db, Entr
         var d = documento.Value;
         if (d.Status is not (DocumentStatus.Confirmed or DocumentStatus.Voided)) return Result.Failure<EntregaDto>(InventoryErrors.NotConfirmed(d.Status));
 
-        var r = await entrega.EntregarAsync(d, request.Format, copia: true, enviarCorreo: false, null, ct);
+        // I4 (T743): la copia de un electrónico sale del PDF guardado o, en tirilla, de su copia fiscal con el bloque electrónico y «COPIA».
+        var electronico = d.Status == DocumentStatus.Confirmed
+            ? await entrega.ElectronicoAsync(d, ct)
+            : Result.Success<Domain.Entities.ElectronicInvoicing.ElectronicDocument?>(null);
+        if (electronico.IsFailure) return Result.Failure<EntregaDto>(electronico.Error);
+        var r = electronico.Value is { } e
+            ? await entrega.EntregarElectronicoAsync(d, e, request.Format, copia: true, enviarCorreo: false, ct)
+            : await entrega.EntregarAsync(d, request.Format, copia: true, enviarCorreo: false, null, ct);
         if (r.IsFailure) return r;
         await auditoria.AnotarAsync(AuditEventTypes.InventoryDocumentReprinted, request, d.PublicId,
             new { format = request.Format.ToString(), reason = request.Reason }, ct,
@@ -123,9 +140,63 @@ public sealed class EntregaDeDocumentos(
     IAlcanceDeInventario alcanceDeLaPeticion,
     ConstructorDeTirilla tirilla,
     IEmailSender correo,
-    IEnumerable<IRepresentacionDeVentaEnPdf> representaciones)
+    IEnumerable<IRepresentacionDeVentaEnPdf> representaciones,
+    ISender? sender = null,
+    ElectronicInvoicing.Documents.EntregaAlComprador? entregaAlComprador = null,
+    IDateTimeService? reloj = null)
 {
     public const string RepresentationUnavailableCode = "Inventory.Document.RepresentationUnavailable";
+
+    /// <summary>
+    /// El documento electrónico (seguido) de una venta de clase electrónica, si está en un estado que se entrega; nulo si la clase no emite. Una
+    /// clase electrónica sin documento o todavía sin validar → <c>ElectronicInvoicing.Document.NotDeliverable</c> con <c>data.status</c> (T743).
+    /// </summary>
+    public async Task<Result<ElectronicDocument?>> ElectronicoAsync(InventoryDocument d, CancellationToken ct)
+    {
+        if (GuardiaDeEmisionFiscal.TipoElectronicoDe(d.Class) is null) return Result.Success<ElectronicDocument?>(null);
+        var e = await db.ElectronicDocuments
+            .FirstOrDefaultAsync(x => x.SourceModule == FuenteDeEmisionDeInventario.Modulo && x.SourceDocumentPublicId == d.PublicId, ct);
+        if (e is null) return Result.Failure<ElectronicDocument?>(ErroresDelPos.NotDeliverable(d.Status));
+        if (!EntregaAlComprador.Entregable(e.Status)) return Result.Failure<ElectronicDocument?>(ErroresDeDocumentosElectronicos.NotDeliverable(e.Status));
+        return Result.Success<ElectronicDocument?>(e);
+    }
+
+    /// <summary>
+    /// La entrega de un documento electrónico (§20.3, T743): tirilla desde su copia fiscal con el bloque electrónico (código único, QR, leyenda y,
+    /// en una copia, «COPIA»); carta → el enlace firmado de 60 s a la representación gráfica guardada (sin ella,
+    /// <c>ElectronicInvoicing.Document.ArtifactNotFound</c>); <paramref name="enviarCorreo"/> reenvía por <see cref="EntregaAlComprador"/>. La
+    /// primera entrega anota <c>DeliveredAt</c> (deja de estar pendiente de entrega).
+    /// </summary>
+    public async Task<Result<EntregaDto>> EntregarElectronicoAsync(InventoryDocument d, ElectronicDocument e, CashRegisterPrintFormat formato, bool copia,
+        bool enviarCorreo, CancellationToken ct)
+    {
+        TicketDto? modelo = null;
+        EnlaceDeDescargaDto? enlace = null;
+        if (formato == CashRegisterPrintFormat.Letter)
+        {
+            if (sender is null)
+                return Result.Failure<EntregaDto>(new Error(RepresentationUnavailableCode, "La representación en carta todavía no está disponible en este despliegue."));
+            var link = await sender.Send(new GetElectronicArtifactLinkQuery(e.PublicId, ArtefactosElectronicos.GraphicRepresentation), ct);
+            if (link.IsFailure) return Result.Failure<EntregaDto>(link.Error);
+            enlace = link.Value;
+        }
+        else
+        {
+            modelo = await EsperaEnLineaDelPos.TirillaElectronicaAsync(db, tirilla, d, e, formato, copia, ct);
+        }
+
+        var enviado = false;
+        if (enviarCorreo)
+        {
+            if (entregaAlComprador is null) return Result.Failure<EntregaDto>(ErroresDelPos.EmailRequired());
+            var version = await db.ElectronicDocumentVersions.Where(v => v.ElectronicDocumentId == e.Id).OrderByDescending(v => v.VersionNumber).FirstAsync(ct);
+            var r = await entregaAlComprador.EntregarAsync(e, version, null, null, forzar: true, ct);
+            if (r.IsFailure) return Result.Failure<EntregaDto>(r.Error);
+            enviado = r.Value;
+        }
+        if (!copia && e.DeliveredAt is null) e.DeliveredAt = reloj?.UtcNow ?? DateTime.UtcNow;
+        return Result.Success(new EntregaDto(d.PublicId, formato, copia, modelo, null, null, enviado, enlace));
+    }
 
     /// <summary>El documento, si está en el alcance del usuario (por su bodega o su punto); si no, el 404 del documento.</summary>
     public async Task<Result<InventoryDocument>> DocumentoAsync(Guid publicId, bool soloVentas, CancellationToken ct)

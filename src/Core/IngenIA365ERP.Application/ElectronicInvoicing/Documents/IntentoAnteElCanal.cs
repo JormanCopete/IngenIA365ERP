@@ -143,6 +143,39 @@ public sealed class IntentoAnteElCanal(
         }
     }
 
+    /// <summary>
+    /// La nota que esperaba al original (T738; FR-066): se registró sin el código único del original, que estaba en contingencia o sin respuesta;
+    /// validado el original, la nota nace de nuevo (versión <c>ReferenceCompleted</c>) con la referencia completa, siempre que la huella
+    /// económica no cambie. Sin eso, la reconstrucción no coincidiría con lo registrado y la nota nunca se transmitiría.
+    /// </summary>
+    private async Task<Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> CompletarReferenciaAsync(ElectronicDocument documento,
+        Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion version, CancellationToken ct)
+    {
+        if (documento.WaitsForDocument is not { UniqueCode: not null } esperado || documento.CorrectsDocumentId != esperado.Id
+            || version.Reason != DocumentVersionReason.Initial)
+            return version;
+        var rehecho = await artefactos.ReconstruirAsync(documento, version, ct);
+        if (rehecho.IsFailure || string.Equals(rehecho.Value.CanonicalSha256, version.CanonicalSha256, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(rehecho.Value.EconomicFingerprint, version.EconomicFingerprint, StringComparison.OrdinalIgnoreCase))
+            return version;
+
+        var nueva = new Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion
+        {
+            ElectronicDocumentId = documento.Id,
+            VersionNumber = (short)(version.VersionNumber + 1),
+            SourceDocumentPublicId = version.SourceDocumentPublicId,
+            Reason = DocumentVersionReason.ReferenceCompleted,
+            CanonicalSchemaVersion = (short)rehecho.Value.Documento.SchemaVersion,
+            CanonicalSha256 = rehecho.Value.CanonicalSha256,
+            EconomicFingerprint = rehecho.Value.EconomicFingerprint,
+            CorrectionReason = $"El documento que corrige ({esperado.Number}) quedó validado: la nota lleva su código único.",
+        };
+        documento.Versions.Add(nueva);
+        await db.SaveChangesAsync(ct);
+        documento.CurrentVersionId = nueva.Id;
+        return nueva;
+    }
+
     private async Task<Result<ElectronicTransmissionResultDto>> IntentarConLaFilaAsync(ElectronicDocument documento, PedidoDeIntento pedido,
         bool ambiguo, DateTime ahora, CancellationToken ct)
     {
@@ -169,6 +202,7 @@ public sealed class IntentoAnteElCanal(
         }
 
         var version = documento.Versions.OrderByDescending(v => v.VersionNumber).First();
+        if (operacion != TransmissionOperation.QueryStatus) version = await CompletarReferenciaAsync(documento, version, ct);
         var cooperativa = ConfiguracionDeEmision.Cooperativa(tenant);
         if (cooperativa.IsFailure) return Falla(cooperativa.Error);
 

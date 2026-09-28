@@ -121,6 +121,10 @@ public sealed class GuardadoDeArtefactos(ISender sender, IReconstruccionDelCanon
         return Result.Success(reconstruido.Value.Documento);
     }
 
+    /// <summary>El canónico de la versión vuelto a armar, sin comprobarlo ni subirlo (lo usa la nota que esperaba al original, T738). (nuevo)</summary>
+    public Task<Result<CanonicoConstruido>> ReconstruirAsync(ElectronicDocument documento, ElectronicDocumentVersion version, CancellationToken ct) =>
+        reconstruccion.ReconstruirAsync(documento, version, ct);
+
     /// <summary>
     /// Guarda lo que devolvió el canal: el XML firmado y el <c>AttachedDocument</c> en la versión (si no los tenía) y el
     /// <c>ApplicationResponse</c>, cuyo adjunto devuelve para la transmisión.

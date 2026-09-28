@@ -31,7 +31,7 @@ namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 /// <item>anularla (el <b>registro</b>) reversa sus diferencias de precio, libera su número y no toca los eventos.</item>
 /// </list>
 /// </summary>
-public sealed class EfectoFacturaDeProveedor(
+public class EfectoFacturaDeProveedor(
     RegistroDeKardex registro,
     EmisionDeInventario emision,
     IMaestrosDelDocumento maestros,
@@ -50,6 +50,31 @@ public sealed class EfectoFacturaDeProveedor(
     private readonly Dictionary<Guid, IReadOnlyList<DiferenciaDePrecioRegistrada>> _registradas = [];
 
     public override DocumentClass Clase => DocumentClass.SupplierInvoice;
+
+    /// <summary>¿Nacen los eventos RADIAN 030/032? En la factura del proveedor sí; el documento soporte los emite la cooperativa. (I4, T740)</summary>
+    /// <summary>La base, para las clases que se montan sobre ésta (I4, T740).</summary>
+    protected IApplicationDbContext BaseDeDatos => db;
+
+    protected virtual bool RegistraEventosRadian => true;
+
+    /// <summary>El <c>supplierDocument.kind</c> de <c>FacturaProveedorRegistrada</c>. (I4, T740)</summary>
+    protected virtual string TipoDelMensaje => "Invoice";
+
+    /// <summary>
+    /// Las reglas del documento del proveedor antes de la aprobación: en la factura, su número y CUFE (únicos entre los no liberados). El
+    /// documento soporte las reemplaza: lo numera la cooperativa y el vendedor no está obligado a facturar. (I4, T740)
+    /// </summary>
+    protected virtual async Task<Error?> ReglasDelDocumentoAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        var detalle = await vinculos.DetalleAsync(documento, ct);
+        if (detalle is null) return InventoryErrors.FieldRequired("supplier");
+        if (detalle.IsElectronic && detalle.Cufe is null) return ErroresDeCompras.CufeRequired();
+        return await ColisionDeFacturaDeProveedor.BuscarAsync(db, detalle, ct);
+    }
+
+    /// <summary>El documento del proveedor que viaja en el mensaje; el documento soporte lo arma con su propio número. (I4, T740)</summary>
+    protected virtual Task<SupplierInvoiceDetail?> DetalleDelMensajeAsync(InventoryDocument documento, CancellationToken ct) =>
+        vinculos.DetalleAsync(documento, ct);
 
     public override async Task<IReadOnlyList<InventoryDocument>> OrigenesDelModoAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         (_preparados.TryGetValue(contexto.Documento.PublicId, out var p) ? p.Recepciones : await vinculos.OrigenesAsync(contexto.Documento, DocumentLinkKind.InvoiceOfReceipt, ct))
@@ -72,11 +97,8 @@ public sealed class EfectoFacturaDeProveedor(
         var comunes = await ReglasDeCompra.ComunesAsync(contexto, maestros, ct);
         if (comunes is not null) return Result.Failure(comunes);
 
-        var detalle = await vinculos.DetalleAsync(documento, ct);
-        if (detalle is null) return Result.Failure(InventoryErrors.FieldRequired("supplier"));
-        if (detalle.IsElectronic && detalle.Cufe is null) return Result.Failure(ErroresDeCompras.CufeRequired());
-        var duplicado = await ColisionDeFacturaDeProveedor.BuscarAsync(db, detalle, ct);
-        if (duplicado is not null) return Result.Failure(duplicado);
+        var delDocumento = await ReglasDelDocumentoAsync(documento, ct);
+        if (delDocumento is not null) return Result.Failure(delDocumento);
 
         var recepciones = await ReglasDeFacturaAsync(documento, ct);
         if (recepciones.IsFailure) return Result.Failure(recepciones.Error);
@@ -120,6 +142,7 @@ public sealed class EfectoFacturaDeProveedor(
             db.DocumentTaxLines.Add(CalculoTributarioDeCompra.Foto(documento.Id, r.Linea is int n && lineas.TryGetValue(n, out var l) ? l.Id : null, r));
 
         // Los eventos RADIAN: a crédito, pendientes; de contado, no aplican.
+        if (!RegistraEventosRadian) return Result.Success();
         var detalle = (await vinculos.DetalleAsync(documento, ct))!;
         foreach (var (codigo, estado) in TransicionesDeEventoRadian.Iniciales(detalle.IsCredit))
             db.SupplierInvoiceEvents.Add(new SupplierInvoiceEvent { DocumentId = documento.Id, EventCode = codigo, Status = estado });
@@ -130,13 +153,13 @@ public sealed class EfectoFacturaDeProveedor(
     {
         var documento = contexto.Documento;
         if (!_preparados.TryGetValue(documento.PublicId, out var p)) return [];
-        var detalle = await vinculos.DetalleAsync(documento, ct);
+        var detalle = await DetalleDelMensajeAsync(documento, ct);
         if (detalle is null) return [];
 
         var lineas = await LineasDelMensajeAsync(documento, p.Calculo, ct);
         var contenidos = new List<object>
         {
-            await emision.FacturaProveedorRegistradaAsync(documento, detalle, "Invoice", p.Recepciones, lineas, p.Calculo.Renglones, 1m, ct),
+            await emision.FacturaProveedorRegistradaAsync(documento, detalle, TipoDelMensaje, p.Recepciones, lineas, p.Calculo.Renglones, 1m, ct),
         };
         if (_registradas.TryGetValue(documento.PublicId, out var hechas))
             contenidos.AddRange(await AjustesPorRecepcionAsync(emision, db, documento.OperationDate, hechas, ct));

@@ -74,9 +74,14 @@ public sealed class VoidInventoryDocumentCommandHandler(
         if (original.Status != DocumentStatus.Confirmed) return Falla(InventoryErrors.NotConfirmed(original.Status));
         // I3 (T610, FR-066): de las ventas sólo el comprobante y la nota no electrónicos se anulan con documento contrario; un fiscal
         // electrónico se corrige con su nota de anulación total (data.route).
-        if (ClasesDeDocumento.De(original.Class).Group == DocumentClassGroup.Sales && !ClasesDeDocumento.SeAnulaConAnulacion(original.Class))
+        // I4 (T738, T741): según su estado electrónico, enviado sin respuesta espera la respuesta y rechazado va a los casos a, b y c.
+        var emitido = ClasesDeDocumento.De(original.Class).FiscalDirection == FiscalDirection.Emitted;
+        var ventaNoAnulable = ClasesDeDocumento.De(original.Class).Group == DocumentClassGroup.Sales && !ClasesDeDocumento.SeAnulaConAnulacion(original.Class);
+        if ((emitido || ventaNoAnulable) && await Integration.EstadoElectronicoDeInventario.CorreccionImpedidaAsync(db, original.PublicId, ct) is { } impedida)
+            return Falla(impedida);
+        if (ventaNoAnulable || original.Class == DocumentClass.SupportDocument)
             return Falla(Sales.ErroresDeVentas.FiscalUseCorrection(original.Class));
-        if (ClasesDeDocumento.De(original.Class).FiscalDirection == FiscalDirection.Emitted) return Falla(InventoryErrors.FiscalUseCorrection());
+        if (emitido) return Falla(InventoryErrors.FiscalUseCorrection());
 
         var dependientes = await db.DocumentLinks.AsNoTracking()
             .Where(l => l.SourceDocumentId == original.Id && l.Kind != DocumentLinkKind.Voids)

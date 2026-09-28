@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Application.Inventory.Kardex;
 using IngenIA365ERP.Application.Inventory.Purchasing.Common;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Entities.Inventory.Purchasing;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,7 +25,7 @@ namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 /// (relacionado); el monto que se aprueba es su <c>Total</c> (rige el límite de <c>Purchases.Confirm</c>).</item>
 /// </list>
 /// </summary>
-public sealed class EfectoNotaDeProveedor(
+public class EfectoNotaDeProveedor(
     RegistroDeKardex registro,
     EmisionDeInventario emision,
     IMaestrosDelDocumento maestros,
@@ -43,6 +44,32 @@ public sealed class EfectoNotaDeProveedor(
     private readonly Dictionary<Guid, IReadOnlyList<DiferenciaDePrecioRegistrada>> _registradas = [];
 
     public override DocumentClass Clase => DocumentClass.SupplierNote;
+
+    /// <summary>La clase del documento que corrige: la factura del proveedor; en la nota de ajuste, el documento soporte. (I4, T740)</summary>
+    /// <summary>La base, para las clases que se montan sobre ésta (I4, T740).</summary>
+    protected IApplicationDbContext BaseDeDatos => db;
+
+    protected virtual DocumentClass ClaseCorregida => DocumentClass.SupplierInvoice;
+
+    /// <summary>
+    /// Las reglas del documento del proveedor de la nota (su número, CUFE y unicidad) y si es débito. La nota de ajuste del documento soporte
+    /// no lleva documento del proveedor: la numera la cooperativa y siempre disminuye (crédito). (I4, T740)
+    /// </summary>
+    protected virtual async Task<Result<SupplierInvoiceDetail>> DetalleDeLaNotaAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        var detalle = await vinculos.DetalleAsync(documento, ct);
+        if (detalle is null) return Result.Failure<SupplierInvoiceDetail>(InventoryErrors.FieldRequired("supplier"));
+        if (detalle.IsElectronic && detalle.Cufe is null) return Result.Failure<SupplierInvoiceDetail>(ErroresDeCompras.CufeRequired());
+        var duplicado = await ColisionDeFacturaDeProveedor.BuscarAsync(db, detalle, ct);
+        return duplicado is not null ? Result.Failure<SupplierInvoiceDetail>(duplicado) : Result.Success(detalle);
+    }
+
+    /// <summary>El documento del proveedor que viaja en el mensaje de la nota. (I4, T740)</summary>
+    protected virtual Task<SupplierInvoiceDetail?> DetalleDelMensajeAsync(InventoryDocument documento, CancellationToken ct) =>
+        vinculos.DetalleAsync(documento, ct);
+
+    /// <summary>El <c>supplierDocument.kind</c> de la nota. (I4, T740)</summary>
+    protected virtual string TipoDelMensaje(SupplierInvoiceDetail detalle) => detalle.IsDebitNote ? "DebitNote" : "CreditNote";
 
     public override async Task<IReadOnlyList<InventoryDocument>> OrigenesDelModoAsync(ContextoDeEfecto contexto, CancellationToken ct) =>
         _preparados.TryGetValue(contexto.Documento.PublicId, out var p) && p.Factura is { } factura
@@ -66,14 +93,13 @@ public sealed class EfectoNotaDeProveedor(
 
         var comunes = await ReglasDeCompra.ComunesAsync(contexto, maestros, ct);
         if (comunes is not null) return Result.Failure(comunes);
-        var detalle = await vinculos.DetalleAsync(documento, ct);
-        if (detalle is null) return Result.Failure(InventoryErrors.FieldRequired("supplier"));
-        if (detalle.IsElectronic && detalle.Cufe is null) return Result.Failure(ErroresDeCompras.CufeRequired());
-        var duplicado = await ColisionDeFacturaDeProveedor.BuscarAsync(db, detalle, ct);
-        if (duplicado is not null) return Result.Failure(duplicado);
+        var delDocumento = await DetalleDeLaNotaAsync(documento, ct);
+        if (delDocumento.IsFailure) return Result.Failure(delDocumento.Error);
+        var detalle = delDocumento.Value;
 
         var facturas = await vinculos.OrigenesAsync(documento, DocumentLinkKind.NoteOf, ct);
-        if (facturas.Count != 1) return Result.Failure(InventoryErrors.FieldRequired("supplierInvoice"));
+        if (facturas.Count != 1 || facturas[0].Class != ClaseCorregida)
+            return Result.Failure(InventoryErrors.FieldRequired(ClaseCorregida == DocumentClass.SupportDocument ? "supportDocumentPublicId" : "supplierInvoice"));
         var factura = facturas[0];
         var numero = VistaDeDocumentos.NumeroVisible(factura.Prefix, factura.Number);
         if (factura.Status != DocumentStatus.Confirmed) return Result.Failure(ErroresDeCompras.NoteInvoiceNotConfirmed(factura.PublicId, numero));
@@ -133,7 +159,7 @@ public sealed class EfectoNotaDeProveedor(
     {
         var documento = contexto.Documento;
         if (!_preparados.TryGetValue(documento.PublicId, out var p) || p.Factura is null) return [];
-        var detalle = await vinculos.DetalleAsync(documento, ct);
+        var detalle = await DetalleDelMensajeAsync(documento, ct);
         if (detalle is null) return [];
 
         // Cada línea hereda la bodega de la recepción de la línea de factura que corrige (o ninguna, si es un servicio).
@@ -157,7 +183,7 @@ public sealed class EfectoNotaDeProveedor(
         var signo = detalle.IsDebitNote ? 1m : -1m;
         var contenidos = new List<object>
         {
-            await emision.FacturaProveedorRegistradaAsync(documento, detalle, detalle.IsDebitNote ? "DebitNote" : "CreditNote", [], lineas,
+            await emision.FacturaProveedorRegistradaAsync(documento, detalle, TipoDelMensaje(detalle), [], lineas,
                 p.Calculo.Renglones, signo, ct),
         };
         if (_registradas.TryGetValue(documento.PublicId, out var hechas))

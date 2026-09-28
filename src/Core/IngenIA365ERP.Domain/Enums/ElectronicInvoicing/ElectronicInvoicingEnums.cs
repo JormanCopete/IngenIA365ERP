@@ -105,6 +105,12 @@ public enum DocumentVersionReason
     Initial = 1,
     CaseA = 2,
     CaseB = 3,
+
+    /// <summary>
+    /// La nota sobre un original en contingencia se registró sin el código único del original; cuando el original queda validado, la nota
+    /// nace de nuevo con la referencia completa y la misma huella económica (feature 012, I4, T738; FR-066). (nuevo)
+    /// </summary>
+    ReferenceCompleted = 4,
 }
 
 /// <summary>Quién entrega el documento al comprador por correo.</summary>

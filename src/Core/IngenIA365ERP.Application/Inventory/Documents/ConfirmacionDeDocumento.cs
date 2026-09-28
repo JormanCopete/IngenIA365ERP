@@ -229,6 +229,15 @@ public sealed class ConfirmacionDeDocumento(
             var numerado = await numerador.NumerarAsync(documento, tipo.Code, ct);
             if (numerado.IsFailure) return Falla(numerado.Error);
         }
+        else if (original is null)
+        {
+            // I4 (T734): la resolución DIAN, después del cerrojo de existencias (su fila es la última del orden canónico).
+            foreach (var paso in pasosFiscales)
+            {
+                var numerado = await paso.NumerarAsync(contexto, ct);
+                if (numerado.IsFailure) return Falla(numerado.Error);
+            }
+        }
 
         documento.PostingMode = modo.Value.Modo;
         documento.Confirmar(usuario, reloj.UtcNow);
@@ -250,6 +259,20 @@ public sealed class ConfirmacionDeDocumento(
         }
 
         await db.SaveChangesAsync(ct);
+
+        // I4 (T734, paso 10): el documento electrónico en Pending con su versión 1, armado sobre lo que se acaba de guardar y en la misma
+        // transacción; el canónico se sube después del commit.
+        if (clase.IsFiscal && original is null)
+        {
+            var registrado = false;
+            foreach (var paso in pasosFiscales)
+            {
+                var r = await paso.RegistrarAsync(contexto, ct);
+                if (r.IsFailure) return Falla(r.Error);
+                registrado |= r.Value;
+            }
+            if (registrado) await db.SaveChangesAsync(ct);
+        }
 
         // US17 (T953): con el kardex ya escrito, las salidas que dejaron la posición en o bajo el punto de reorden avisan en
         // warnings[] y levantan Inventario.Reorden / Inventario.Quiebre en esta misma transacción. Nunca bloquea.

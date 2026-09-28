@@ -130,8 +130,11 @@ public abstract class DevolucionDeCliente(
         var contenidos = new List<object> { await emision.NotaCreditoAsync(nota, impuestos, reintegros, ct) };
         if (nota.ReturnsGoods && filas.Count > 0) contenidos.Add(await emision.DevolucionDeClienteAsync(nota, filas, ct));
         // I3 (T656): lo que la nota reintegra a un pago de crédito de la venta ajusta su crédito en Cartera.
+        // I4 (T739): la nota que anula el documento equivalente para la factura no reintegra, pero deja su crédito en cero (la factura lo
+        // vuelve a registrar con Replacement).
         if (await NotasDeVenta.OriginalDeAsync(db, nota, ct) is { } original)
-            contenidos.AddRange(await emision.AjustesDeVentaACreditoAsync(nota, original, reintegros, ct));
+            contenidos.AddRange(await emision.AjustesDeVentaACreditoAsync(nota, original,
+                reglas.EsNotaSinReintegro(nota) ? await Sales.TrasladoDeVentaEnCurso.ReintegrosDeCreditoAsync(db, original, ct) : reintegros, ct));
         return contenidos;
     }
 
