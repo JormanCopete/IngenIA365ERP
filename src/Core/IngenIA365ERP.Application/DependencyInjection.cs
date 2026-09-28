@@ -272,6 +272,27 @@ public static class DependencyInjection
         // INV_: pregunta por el puerto).
         services.AddScoped<ElectronicInvoicing.Numeracion.NumeradorFiscal>();
         services.AddScoped<ElectronicInvoicing.Numeracion.IPrefijosDeModulos, Inventory.Integration.PrefijosDeInventario>();
+        // Feature 012, I4 (T711-T721): el registro del documento electrónico en la confirmación, el intento contra el canal sellado
+        // (emitir, consultar, transmitir contingencia) con sus artefactos, la contingencia 04, la representación, la entrega al comprador,
+        // la bandeja (con el alcance que decide cada fuente) y las alertas DIAN de la tarea einvoicing.alerts. Las esperas entre intentos
+        // son técnicas (ElectronicInvoicing:Retries, contracts/dian.md §6.3): estos son los defectos del contrato; T728 los lee de la sección.
+        services.AddSingleton(new ElectronicInvoicing.Documents.EsperasDeReintento(
+            [TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5),
+             TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(60)],
+            TimeSpan.FromHours(1), TimeSpan.FromMinutes(2)));
+        // Sin canales ni credenciales registrados (T728, T729 los agregan en AddElectronicInvoicing, que se llama después y manda), el
+        // contenedor se arma igual: la validación de desarrollo exige poder construir cada manejador.
+        services.TryAddScoped<ElectronicInvoicing.Channels.ICanalesDeEmision, ElectronicInvoicing.Channels.SinCanalesRegistrados>();
+        services.TryAddScoped<ElectronicInvoicing.Channels.ICredencialesDeCanal, ElectronicInvoicing.Channels.SinCredencialesConfiguradas>();
+        services.AddScoped<ElectronicInvoicing.Documents.RegistroDeDocumentoElectronico>();
+        services.AddScoped<ElectronicInvoicing.Documents.IReconstruccionDelCanonico, ElectronicInvoicing.Documents.ReconstruccionDelCanonico>();
+        services.AddScoped<ElectronicInvoicing.Documents.GuardadoDeArtefactos>();
+        services.AddScoped<ElectronicInvoicing.Contingencies.ContingenciaDeLaDian>();
+        services.AddScoped<ElectronicInvoicing.Documents.GeneracionDeRepresentacion>();
+        services.AddScoped<ElectronicInvoicing.Documents.EntregaAlComprador>();
+        services.AddScoped<ElectronicInvoicing.Documents.IntentoAnteElCanal>();
+        services.AddScoped<ElectronicInvoicing.Documents.AlertasDeFacturacionElectronica>();
+        services.AddScoped<ElectronicInvoicing.Documents.IConsultaDeFuenteElectronica, Inventory.Integration.ConsultaDeEmisionDeInventario>();
         services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
         services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
         // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,

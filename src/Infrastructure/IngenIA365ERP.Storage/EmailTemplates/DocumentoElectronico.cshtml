@@ -1,0 +1,15 @@
+@* Feature 012, I4 (T720): el correo con que el ERP entrega un documento electrónico al comprador (contracts/dian.md §13.2).
+   Asunto y nombre del adjunto según el anexo técnico: POR COTEJAR con la contadora y el proveedor (T761). *@
+<div>
+    <h2 style="margin:0 0 12px 0;">Documento electrónico {{Numero}}</h2>
+    <p>Señor(a) {{Comprador}}:</p>
+    <p>
+        {{Emisor}} le entrega el documento electrónico <strong>{{Numero}}</strong> del {{Fecha}},
+        por un total de <strong>{{Total}}</strong>.
+    </p>
+    <p>Código único: <code>{{CodigoUnico}}</code></p>
+    <p>
+        En el archivo adjunto encontrará el documento electrónico y su representación gráfica.
+        Este correo se envía únicamente para entregarle el documento que exige la norma.
+    </p>
+</div>

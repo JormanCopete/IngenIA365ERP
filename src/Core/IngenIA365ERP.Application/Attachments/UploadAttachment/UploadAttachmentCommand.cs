@@ -57,7 +57,7 @@ public sealed class UploadAttachmentCommandValidator : AbstractValidator<UploadA
                 .WithMessage($"El archivo excede el tamaño máximo de {maximo.MaxBytesLegible}.")
                 .WithErrorCode(AttachmentErrorCodes.Validation_FileTooLarge);
         RuleFor(x => x.ContentType)
-            .Must(ct => AttachmentPolicy.AllowedMimeTypes.Contains(ct))
+            .Must(AttachmentPolicy.AdmiteGeneradoPorModulo)
                 .WithMessage("El tipo MIME no está permitido.")
                 .WithErrorCode(AttachmentErrorCodes.Validation_MimeTypeNotAllowed);
     }
