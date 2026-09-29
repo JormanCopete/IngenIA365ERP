@@ -9,6 +9,7 @@ using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Pos;
 using IngenIA365ERP.Application.Inventory.Pricing;
+using IngenIA365ERP.Application.Inventory.Sales.CicloComercial;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -38,7 +39,10 @@ public sealed record SalesLineInput(
     SalesDiscountInput? Discount = null,
     string? Notes = null,
     Guid? LinePublicId = null,
-    int? LineNumber = null);
+    int? LineNumber = null,
+    Guid? OriginLinePublicId = null,
+    string? LotCode = null,
+    string? SerialNumber = null);
 
 /// <summary>
 /// <c>SalesDraftInput</c> (contracts/api.md §18.2, feature 012, I3, T608): el cuerpo de <c>POST</c> y <c>PUT
@@ -61,13 +65,19 @@ public sealed record SalesDraftInput(
     string? Notes = null,
     SalesDiscountInput? DocumentDiscount = null,
     IReadOnlyList<Guid>? OriginPublicIds = null,
-    byte[]? RowVersion = null)
+    byte[]? RowVersion = null,
+    DateOnly? ValidUntil = null,
+    string? CorrectionConceptCode = null)
 {
-    /// <summary>El borrador del ciclo común con los datos de la venta (<see cref="DatosDeVentaDelBorrador"/>).</summary>
-    public SaveInventoryDraftRequest ComoBorrador() => new(
+    /// <summary>
+    /// El borrador del ciclo común con los datos de la venta (<see cref="DatosDeVentaDelBorrador"/>). <paramref name="clasesDeLaRuta"/> son las
+    /// clases que admite la ruta que lo recibe (<see cref="RutasDeVenta"/>; sin ellas, las de <c>/invoices</c>). (I6: orígenes, vigencia de la
+    /// cotización y concepto de corrección de la nota débito.)
+    /// </summary>
+    public SaveInventoryDraftRequest ComoBorrador(IReadOnlyList<DocumentClass>? clasesDeLaRuta = null) => new(
         DocumentTypePublicId,
         OperationDate,
-        WarehousePublicId,
+        WarehousePublicId == Guid.Empty ? null : WarehousePublicId,
         null,
         CostCenterPublicId,
         CounterpartyPersonPublicId,
@@ -79,8 +89,39 @@ public sealed record SalesDraftInput(
         null,
         RowVersion,
         (Lines ?? []).Select(l => new SaveInventoryDraftLine(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Quantity,
-            UnitPrice: l.UnitPrice, DiscountPercent: l.Discount?.Percent, DiscountAmount: l.Discount?.Amount, Notes: l.Notes)).ToList(),
-        Sales: new DatosDeVentaDelBorrador(SalespersonPublicId, DueDate, DocumentDiscount, Payments ?? []));
+            UnitPrice: l.UnitPrice, DiscountPercent: l.Discount?.Percent, DiscountAmount: l.Discount?.Amount, Notes: l.Notes,
+            SourceLinePublicId: l.OriginLinePublicId, LotCode: l.LotCode, SerialNumber: l.SerialNumber)).ToList(),
+        Sales: new DatosDeVentaDelBorrador(SalespersonPublicId, DueDate, DocumentDiscount, Payments ?? [], OriginPublicIds, ValidUntil, clasesDeLaRuta),
+        CorrectionConceptCode: CorrectionConceptCode);
+}
+
+/// <summary>
+/// Las clases que admite cada ruta de ventas (feature 012, I6; contracts/api.md §18.2, §18.4; T891 las usa al mapear): <c>/invoices</c> (con
+/// la factura desde remisiones), <c>/quotes</c>, <c>/orders</c>, <c>/shipments</c> y <c>/debit-notes</c>. Otra clase por esa ruta responde
+/// <c>Inventory.Document.TypeNotForRoute</c>. (nuevo)
+/// </summary>
+public static class RutasDeVenta
+{
+    public static readonly IReadOnlyList<DocumentClass> Facturas =
+        [DocumentClass.SalesInvoice, DocumentClass.NonElectronicSalesReceipt, DocumentClass.SalesInvoiceFromShipments];
+    public static readonly IReadOnlyList<DocumentClass> Cotizaciones = [DocumentClass.SalesQuote];
+    public static readonly IReadOnlyList<DocumentClass> Pedidos = [DocumentClass.SalesOrder];
+    public static readonly IReadOnlyList<DocumentClass> Remisiones = [DocumentClass.Shipment];
+    public static readonly IReadOnlyList<DocumentClass> NotasDebito = [DocumentClass.DebitNote];
+
+    /// <summary>La clase de la que nace cada clase del ciclo por <c>originPublicIds</c>, y el vínculo; nulo si no admite origen.</summary>
+    public static (IReadOnlyList<DocumentClass> Origenes, DocumentLinkKind Kind)? OrigenDe(DocumentClass clase) => clase switch
+    {
+        DocumentClass.SalesOrder => ([DocumentClass.SalesQuote], DocumentLinkKind.FromOrder),
+        DocumentClass.Shipment => ([DocumentClass.SalesOrder], DocumentLinkKind.DispatchOf),
+        DocumentClass.SalesInvoice or DocumentClass.NonElectronicSalesReceipt => ([DocumentClass.SalesOrder], DocumentLinkKind.FromOrder),
+        DocumentClass.SalesInvoiceFromShipments => ([DocumentClass.Shipment], DocumentLinkKind.FromShipment),
+        DocumentClass.DebitNote => ([DocumentClass.SalesInvoice, DocumentClass.SalesInvoiceFromShipments], DocumentLinkKind.NoteOf),
+        _ => null,
+    };
+
+    /// <summary>¿La clase cobra (pagos, persona inactiva de contado)? No la cotización, el pedido ni la remisión.</summary>
+    public static bool Cobra(DocumentClass clase) => clase is not (DocumentClass.SalesQuote or DocumentClass.SalesOrder or DocumentClass.Shipment);
 }
 
 /// <summary>
@@ -91,7 +132,10 @@ public sealed record DatosDeVentaDelBorrador(
     Guid? SalespersonPublicId,
     DateOnly? DueDate,
     SalesDiscountInput? DocumentDiscount,
-    IReadOnlyList<DocumentPaymentInput> Payments)
+    IReadOnlyList<DocumentPaymentInput> Payments,
+    IReadOnlyList<Guid>? OriginPublicIds = null,
+    DateOnly? ValidUntil = null,
+    IReadOnlyList<DocumentClass>? ClasesAdmitidas = null)
 {
     public static DatosDeVentaDelBorrador Vacio { get; } = new(null, null, null, []);
 }
@@ -131,12 +175,27 @@ public sealed class BorradorDeVenta(
     /// <summary>Las clases que admite la ruta de facturas en I3 (§18.2).</summary>
     public static readonly IReadOnlyList<DocumentClass> ClasesDeFactura = [DocumentClass.SalesInvoice, DocumentClass.NonElectronicSalesReceipt];
 
+    private readonly VinculosDelCiclo vinculos = new(db, reloj);
+
     public DocumentClassGroup Grupo => DocumentClassGroup.Sales;
 
     public async Task<Result<SaveInventoryDraftRequest>> PrepararAsync(InventoryDocumentType tipo, SaveInventoryDraftRequest pedido, InventoryDocument? existente, CancellationToken ct)
     {
         if (existente?.PointOfSaleId is not null) return Result.Failure<SaveInventoryDraftRequest>(InventoryErrors.DocumentNotFound());
-        if (!ClasesDeFactura.Contains(tipo.Class)) return Result.Failure<SaveInventoryDraftRequest>(InventoryErrors.TypeNotForRoute(tipo.Class, DocumentClassGroup.Sales));
+        var admitidas = pedido.Sales?.ClasesAdmitidas ?? RutasDeVenta.Facturas;
+        if (!admitidas.Contains(tipo.Class)) return Result.Failure<SaveInventoryDraftRequest>(InventoryErrors.TypeNotForRoute(tipo.Class, DocumentClassGroup.Sales));
+
+        // I6 (T878–T884): el documento que nace de otros (cotización → pedido → remisión o factura → factura desde remisiones; nota débito).
+        if (pedido.Sales?.OriginPublicIds is { Count: > 0 } || pedido.Lines.Any(l => l.SourceLinePublicId is not null))
+        {
+            var conOrigen = await ConOrigenesAsync(tipo, pedido, existente, ct);
+            if (conOrigen.IsFailure) return conOrigen;
+            pedido = conOrigen.Value;
+        }
+        else if (tipo.Class is DocumentClass.SalesInvoiceFromShipments or DocumentClass.DebitNote)
+        {
+            return Result.Failure<SaveInventoryDraftRequest>(ErroresDelCicloComercial.OriginInvalid(tipo.Class, RutasDeVenta.OrigenDe(tipo.Class)!.Value.Origenes[0]));
+        }
         if (pedido.Contraparte is not null) return Result.Success(pedido);
 
         var fecha = pedido.OperationDate ?? existente?.OperationDate ?? reloj.HoyLocal;
@@ -162,6 +221,9 @@ public sealed class BorradorDeVenta(
             if (fila is not { Vivo: true }) avisos.Add(ErroresDelPos.SalespersonInvalid());
         }
         documento.DueDate = datos.DueDate;
+        // I6: la vigencia de la cotización (la del pedido la sella su confirmación) y el concepto de corrección de la nota débito.
+        documento.ValidUntil = documento.Class == DocumentClass.SalesQuote ? datos.ValidUntil : null;
+        if (documento.Class == DocumentClass.DebitNote) documento.CorrectionConceptCode = string.IsNullOrWhiteSpace(pedido.CorrectionConceptCode) ? null : pedido.CorrectionConceptCode.Trim();
 
         // Precios, descuentos, impuestos y totales.
         var vivas = documento.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
@@ -173,10 +235,16 @@ public sealed class BorradorDeVenta(
         else
         {
             var municipio = await db.Branches.AsNoTracking().Where(b => b.Id == documento.BranchId).Select(b => b.MunicipalityDaneCode).FirstOrDefaultAsync(ct);
+            // I6: una línea que nace de otra (pedido, remisión, factura desde remisiones) conserva la lista y el precio de lista de su origen
+            // —«a su precio»—: el precio guardado en la línea origen es sin impuestos y no puede volver a entrar como precio digitado, que va
+            // en la base de la lista (con una lista con IVA la remisión y su factura salían con un «descuento» igual al IVA).
+            var listasDeOrigen = await ListasDeOrigenAsync(pedido, ct);
             var lineas = vivas.Select(l =>
             {
                 var p = l.LineNumber - 1 < pedido.Lines.Count ? pedido.Lines[l.LineNumber - 1] : null;
-                return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase, p?.UnitPrice, p?.DiscountPercent, p?.DiscountAmount);
+                var fijada = p?.SourceLinePublicId is { } origen && listasDeOrigen.TryGetValue(origen, out var lista) ? lista : null;
+                return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase, p?.UnitPrice, p?.DiscountPercent, p?.DiscountAmount,
+                    fijada);
             }).ToList();
             var pedidoDePrecio = new PedidoDePrecificacion(documento.OperationDate, documento.CounterpartyPersonId, documento.SalesChannelId,
                 documento.BranchId, documento.WarehouseId, actor.UserId, lineas, datos.DocumentDiscount?.Amount, municipio);
@@ -184,7 +252,12 @@ public sealed class BorradorDeVenta(
             {
                 var previa = await precificacion.PrecificarAsync(pedidoDePrecio, ct);
                 if (previa.IsFailure) return Result.Failure<ResultadoDelBorrador>(previa.Error);
-                pedidoDePrecio = pedidoDePrecio with { DescuentoPorTotal = Math.Round(previa.Value.Lineas.Sum(l => l.NetAmount) * pct, 2, MidpointRounding.AwayFromZero) };
+                // Sobre las líneas sin promoción: sólo a ellas se prorratea el descuento por total (I6, F9).
+                pedidoDePrecio = pedidoDePrecio with
+                {
+                    DescuentoPorTotal = Math.Round(previa.Value.Lineas.Where(l => l.Descuentos.All(d => d.Source != DiscountSource.Promotion)).Sum(l => l.NetAmount) * pct,
+                        2, MidpointRounding.AwayFromZero),
+                };
             }
             if (pedidoDePrecio.DescuentoPorTotal is <= 0m) pedidoDePrecio = pedidoDePrecio with { DescuentoPorTotal = null };
             var precificada = await precificacion.PrecificarAsync(pedidoDePrecio, ct);
@@ -229,6 +302,14 @@ public sealed class BorradorDeVenta(
             }
         }
 
+        // I6: los vínculos con los orígenes (y, en la factura desde remisiones, lo que ya se facturó, como aviso).
+        var vinculado = await VincularAsync(documento, pedido, ct);
+        if (vinculado.IsFailure) return Result.Failure<ResultadoDelBorrador>(vinculado.Error);
+        avisos.AddRange(vinculado.Value);
+
+        // La cotización, el pedido y la remisión no cobran: sin pagos ni regla de persona inactiva de contado.
+        if (!RutasDeVenta.Cobra(documento.Class)) return Result.Success(new ResultadoDelBorrador(avisos, previstos));
+
         // Pagos del borrador.
         var pagos = await GuardarPagosAsync(documento, datos.Payments, actor.UserId, ct);
         if (pagos.IsFailure) return Result.Failure<ResultadoDelBorrador>(pagos.Error);
@@ -242,6 +323,133 @@ public sealed class BorradorDeVenta(
     }
 
     public Task<Error?> TraducirColisionAsync(DbUpdateException ex, BorradorEnCurso borrador, CancellationToken ct) => Task.FromResult<Error?>(null);
+
+    /// <summary>
+    /// I6: la lista y el precio de lista de cada línea origen que nombran las líneas del borrador (<c>SourceLinePublicId</c>), para precificar la
+    /// línea derivada con ellos (<see cref="LineaAPrecificar.ListaFijada"/>). Una línea origen sin precio de lista no fija nada.
+    /// </summary>
+    private async Task<Dictionary<Guid, PrecioFijado>> ListasDeOrigenAsync(SaveInventoryDraftRequest pedido, CancellationToken ct)
+    {
+        var origenes = pedido.Lines.Select(l => l.SourceLinePublicId).OfType<Guid>().Distinct().ToList();
+        if (origenes.Count == 0) return [];
+        var filas = await db.InventoryDocumentLines.AsNoTracking().Where(l => origenes.Contains(l.PublicId))
+            .Select(l => new { l.PublicId, l.PriceListId, l.ListPrice, l.ListPriceIncludesTaxes }).ToListAsync(ct);
+        return filas.Where(f => f.ListPrice is > 0m)
+            .ToDictionary(f => f.PublicId, f => new PrecioFijado(f.PriceListId, f.ListPrice!.Value, f.ListPriceIncludesTaxes));
+    }
+
+    // ------------------------------------------------------------------------------------ orígenes (I6) --
+
+    /// <summary>
+    /// I6 (T878–T884): los orígenes del borrador (<c>originPublicIds</c> y las líneas con <c>SourceLinePublicId</c>): confirmados, de la clase de
+    /// la que nace la del tipo (<see cref="RutasDeVenta.OrigenDe"/>) —si no, <c>Inventory.Sales.OriginInvalid</c>—. Sin contraparte, la del
+    /// origen; sin bodega, la del origen. Sin líneas (salvo la nota débito, que carga conceptos nuevos), propone lo pendiente de cada línea
+    /// origen —la cotización entera, lo pendiente por despachar del pedido, lo pendiente por facturar de la remisión— a su precio (la lista y el precio de lista de la línea origen, <see cref="ListasDeOrigenAsync"/>); una línea con
+    /// origen toma de él producto, unidad y lista. En la factura desde remisiones toda línea viene de una remisión.
+    /// </summary>
+    private async Task<Result<SaveInventoryDraftRequest>> ConOrigenesAsync(InventoryDocumentType tipo, SaveInventoryDraftRequest pedido, InventoryDocument? existente,
+        CancellationToken ct)
+    {
+        if (RutasDeVenta.OrigenDe(tipo.Class) is not { } regla)
+            return Result.Failure<SaveInventoryDraftRequest>(ErroresDelCicloComercial.OriginInvalid(tipo.Class, tipo.Class));
+        var pedidos = (pedido.Sales?.OriginPublicIds ?? []).Distinct().ToList();
+        var porLinea = pedido.Lines.Select(l => l.SourceLinePublicId).OfType<Guid>().Distinct().ToList();
+        var deLasLineas = porLinea.Count == 0
+            ? []
+            : await db.InventoryDocumentLines.AsNoTracking().Where(l => porLinea.Contains(l.PublicId)).Select(l => l.Document!.PublicId).Distinct().ToListAsync(ct);
+        var ids = pedidos.Concat(deLasLineas).Distinct().ToList();
+        var origenes = await db.InventoryDocuments.AsNoTracking().Include(d => d.Lines).Where(d => ids.Contains(d.PublicId)).OrderBy(d => d.Id).ToListAsync(ct);
+        if (origenes.Count != ids.Count) return Result.Failure<SaveInventoryDraftRequest>(InventoryErrors.DocumentNotFound());
+        if (origenes.FirstOrDefault(o => !regla.Origenes.Contains(o.Class) || o.Status != DocumentStatus.Confirmed) is { } invalido)
+            return Result.Failure<SaveInventoryDraftRequest>(ErroresDelCicloComercial.OriginInvalid(tipo.Class, invalido.Class));
+
+        var lineasOrigen = origenes.SelectMany(o => o.Lines).Where(l => !l.IsDeleted).ToList();
+        var unidades = await db.UnitsOfMeasure.AsNoTracking().Where(u => lineasOrigen.Select(l => l.UnitId).Distinct().Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.PublicId, ct);
+        var productos = await db.Products.AsNoTracking().Where(p => lineasOrigen.Select(l => l.ProductId).Distinct().Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
+
+        var lineas = pedido.Lines.ToList();
+        if (lineas.Count == 0 && tipo.Class != DocumentClass.DebitNote)
+        {
+            var pendiente = tipo.Class switch
+            {
+                DocumentClass.SalesInvoiceFromShipments => await vinculos.PendientePorFacturarAsync(lineasOrigen, existente?.Id ?? 0, ct),
+                DocumentClass.SalesOrder => lineasOrigen.ToDictionary(l => l.Id, l => l.QuantityBase),
+                _ => await vinculos.PendientePorDespacharAsync(lineasOrigen, existente?.Id ?? 0, ct),
+            };
+            foreach (var o in lineasOrigen.OrderBy(l => l.DocumentId).ThenBy(l => l.LineNumber))
+            {
+                var queda = pendiente.GetValueOrDefault(o.Id);
+                if (queda <= 0m) continue;
+                var factor = o.Factor == 0m ? 1m : o.Factor;
+                // El precio lo pone la lista de la línea origen al precificar (ListasDeOrigenAsync), no su precio sin impuestos.
+                lineas.Add(new SaveInventoryDraftLine(null, productos[o.ProductId], unidades[o.UnitId], Math.Round(queda / factor, 4, MidpointRounding.AwayFromZero),
+                    SourceLinePublicId: o.PublicId));
+            }
+        }
+        else
+        {
+            for (var i = 0; i < lineas.Count; i++)
+            {
+                var l = lineas[i];
+                if (l.SourceLinePublicId is not { } origen)
+                {
+                    if (tipo.Class == DocumentClass.SalesInvoiceFromShipments)
+                        return Result.Failure<SaveInventoryDraftRequest>(ErroresDelCicloComercial.OriginInvalid(tipo.Class, DocumentClass.Shipment));
+                    continue;
+                }
+                var o = lineasOrigen.FirstOrDefault(x => x.PublicId == origen);
+                if (o is null) return Result.Failure<SaveInventoryDraftRequest>(ErroresDelDocumento.ProductoInexistente());
+                lineas[i] = l with
+                {
+                    ProductPublicId = productos[o.ProductId],
+                    UnitPublicId = l.UnitPublicId == Guid.Empty ? unidades[o.UnitId] : l.UnitPublicId,
+                };
+            }
+        }
+
+        var primero = origenes[0];
+        Guid? contraparte = pedido.Contraparte;
+        if (contraparte is null && primero.CounterpartyPersonId is int persona)
+            contraparte = await db.People.AsNoTracking().Where(p => p.Id == persona).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+        Guid? bodega = pedido.WarehousePublicId;
+        if (bodega is null && primero.WarehouseId is int w)
+            bodega = await db.Warehouses.AsNoTracking().Where(x => x.Id == w).Select(x => (Guid?)x.PublicId).FirstOrDefaultAsync(ct);
+        return Result.Success(pedido with
+        {
+            CounterpartyPersonPublicId = contraparte,
+            SupplierPersonPublicId = null,
+            WarehousePublicId = bodega,
+            Lines = lineas,
+            Sales = (pedido.Sales ?? DatosDeVentaDelBorrador.Vacio) with { OriginPublicIds = origenes.Select(o => o.PublicId).ToList() },
+        });
+    }
+
+    /// <summary>
+    /// I6: reemplaza los vínculos del documento con sus orígenes (uno por documento, con los de sus líneas) y devuelve los avisos de lo que la
+    /// confirmación diría: la factura que pide más de lo pendiente de sus remisiones (<c>Inventory.Shipment.AlreadyInvoiced</c>).
+    /// </summary>
+    private async Task<Result<IReadOnlyList<Error>>> VincularAsync(InventoryDocument documento, SaveInventoryDraftRequest pedido, CancellationToken ct)
+    {
+        if (RutasDeVenta.OrigenDe(documento.Class) is not { } regla) return Result.Success<IReadOnlyList<Error>>([]);
+        var ids = pedido.Sales?.OriginPublicIds ?? [];
+        if (ids.Count == 0 && documento.Id == 0) return Result.Success<IReadOnlyList<Error>>([]);
+
+        var origenes = ids.Count == 0 ? [] : await db.InventoryDocuments.AsNoTracking().Include(d => d.Lines).Where(d => ids.Contains(d.PublicId)).ToListAsync(ct);
+        var lineasOrigen = origenes.SelectMany(o => o.Lines).Where(l => !l.IsDeleted).ToDictionary(l => l.PublicId);
+        var pares = new List<(InventoryDocumentLine Origen, InventoryDocumentLine Destino)>();
+        foreach (var linea in documento.Lines.Where(l => !l.IsDeleted))
+        {
+            var pedida = linea.LineNumber - 1 < pedido.Lines.Count ? pedido.Lines[linea.LineNumber - 1] : null;
+            if (pedida?.SourceLinePublicId is { } origen && lineasOrigen.TryGetValue(origen, out var o)) pares.Add((o, linea));
+        }
+        await vinculos.ReemplazarAsync(documento, regla.Kind, origenes.Select(o => o.Id).ToList(), pares, ct);
+
+        if (documento.Class != DocumentClass.SalesInvoiceFromShipments || origenes.Count == 0) return Result.Success<IReadOnlyList<Error>>([]);
+        var avisos = new List<Error>();
+        if (origenes.Any(o => o.CounterpartyPersonId != documento.CounterpartyPersonId)) avisos.Add(ErroresDelCicloComercial.ShipmentCustomerMismatch());
+        if (await Documents.Efectos.EfectoDeFacturaDesdeRemisiones.ExcesoAsync(vinculos, documento, origenes, ct) is { } exceso) avisos.Add(exceso);
+        return Result.Success<IReadOnlyList<Error>>(avisos);
+    }
 
     /// <summary>
     /// Reemplaza los pagos del borrador: los anteriores quedan de baja lógica y los nuevos llevan las copias del medio. Devuelve lo que

@@ -21,6 +21,8 @@ using Microsoft.EntityFrameworkCore;
 using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 
+using IngenIA365ERP.Application.Inventory.Sales.CicloComercial;
+
 namespace IngenIA365ERP.Application.Inventory.Sales;
 
 // ------------------------------------------------------------------------------------------------ los DTO --
@@ -47,7 +49,8 @@ public sealed record SalesDocumentSummaryDto(
     PostingMode? PostingMode,
     string? ElectronicStatus,
     bool PendingDelivery,
-    bool PendingValidation);
+    bool PendingValidation,
+    Guid? CounterpartyPersonPublicId = null);
 
 /// <summary>La contraparte: la copia fiscal vigente en un confirmado, el maestro en un borrador (§18.1). (nuevo)</summary>
 public sealed record SalesCounterpartyDto(Guid PersonPublicId, bool IsFinalConsumer, string Name, string? IdType, string? IdNumber, string? Address, string? Email);
@@ -55,13 +58,22 @@ public sealed record SalesCounterpartyDto(Guid PersonPublicId, bool IsFinalConsu
 /// <summary>La aprobación de un descuento (§18.1). (nuevo)</summary>
 public sealed record SalesDiscountApprovalDto(Guid ApprovalRequestPublicId, string Status);
 
-/// <summary>Un descuento de la línea (§18.1). (nuevo)</summary>
-public sealed record SalesLineDiscountDto(DiscountSource Source, decimal? Percent, decimal Amount, bool FromDocumentDiscount, bool IsPriceOverride, SalesDiscountApprovalDto? Approval);
+/// <summary>
+/// Un descuento de la línea (§18.1; nuevo). I6 (T875): con <c>source = Promotion</c>, <see cref="PromotionPublicId"/> y el nombre de la
+/// promoción (FR-055 «el documento muestra cuál se aplicó»).
+/// </summary>
+public sealed record SalesLineDiscountDto(DiscountSource Source, decimal? Percent, decimal Amount, bool FromDocumentDiscount, bool IsPriceOverride,
+    SalesDiscountApprovalDto? Approval, Guid? PromotionPublicId = null, string? PromotionName = null);
 
 /// <summary>Un impuesto de la línea o una retención del documento (§18.1). (nuevo)</summary>
 public sealed record SalesTaxDto(string TaxRateCode, TaxKind Kind, decimal? Rate, decimal? AmountPerUnit, decimal Base, decimal Amount, TaxTreatment Treatment);
 
-/// <summary>Una línea de la venta (§18.1). <see cref="BelowCost"/> no expone el costo. (nuevo)</summary>
+/// <summary>
+/// Una línea de la venta (§18.1). <see cref="BelowCost"/> no expone el costo. (nuevo) I6 (T893–T897): <see cref="OriginLinePublicId"/> es la
+/// línea de la que nace (cotización, pedido o remisión; la pantalla la reenvía al volver a guardar el borrador) y <see cref="Pending"/>, en
+/// unidad base, lo que falta por despachar o facturar de la línea de un pedido confirmado o por facturar de la de una remisión confirmada
+/// (nulo en las demás clases).
+/// </summary>
 public sealed record SalesLineDto(
     Guid LinePublicId,
     int LineNumber,
@@ -79,7 +91,9 @@ public sealed record SalesLineDto(
     IReadOnlyList<SalesTaxDto> Taxes,
     decimal Subtotal,
     decimal Total,
-    bool BelowCost);
+    bool BelowCost,
+    Guid? OriginLinePublicId = null,
+    decimal? Pending = null);
 
 /// <summary>Los totales (§18.1, T26). (nuevo)</summary>
 public sealed record SalesTotalsDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);
@@ -121,7 +135,12 @@ public sealed record SalesLinksDto(
 /// <summary>Lo que impediría confirmar un borrador (§18.1). (nuevo)</summary>
 public sealed record SalesIssueDto(string Code, string Message, int? LineNumber);
 
-/// <summary><c>SalesDocumentDto</c> (contracts/api.md §18.1). <c>electronic</c> lo llena I4. (nuevo)</summary>
+/// <summary>
+/// <c>SalesDocumentDto</c> (contracts/api.md §18.1). <c>electronic</c> lo llena I4. (nuevo) I6 (T893–T898): <see cref="ValidUntil"/> es la
+/// vigencia de la cotización o el vencimiento de la reserva del pedido; <see cref="CorrectionConceptCode"/>, el concepto de la nota débito;
+/// <see cref="Origins"/>, todos los documentos de los que nace (una factura desde remisiones tiene varios; <c>links.origin</c> sólo el
+/// primero).
+/// </summary>
 public sealed record SalesDocumentDto(
     Guid DocumentPublicId,
     DocumentClass Class,
@@ -150,7 +169,10 @@ public sealed record SalesDocumentDto(
     UsuarioDto CreatedBy,
     UsuarioDto? ConfirmedBy,
     IReadOnlyList<SalesIssueDto> Issues,
-    byte[] RowVersion);
+    byte[] RowVersion,
+    DateOnly? ValidUntil = null,
+    string? CorrectionConceptCode = null,
+    IReadOnlyList<DocumentoReferidoDto>? Origins = null);
 
 // ---------------------------------------------------------------------------------------------- consultas --
 
@@ -243,7 +265,7 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         var cajaIds = filas.Select(d => d.CashRegisterId).OfType<int>().Distinct().ToList();
         var cajas = await db.CashRegisters.AsNoTracking().Where(c => cajaIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Code, ct);
         var personaIds = filas.Select(d => d.CounterpartyPersonId).OfType<int>().Distinct().ToList();
-        var personas = await db.People.AsNoTracking().Where(p => personaIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, BorradorDelPos.Nombre, ct);
+        var personas = await db.People.AsNoTracking().Where(p => personaIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => (Nombre: BorradorDelPos.Nombre(p), p.PublicId), ct);
         var vendedorIds = filas.Select(d => d.SalespersonId).OfType<int>().Distinct().ToList();
         var vendedores = await db.Salespeople.IgnoreQueryFilters().AsNoTracking().Where(s => vendedorIds.Contains(s.Id)).Include(s => s.Person)
             .ToDictionaryAsync(s => s.Id, s => BorradorDelPos.Nombre(s.Person), ct);
@@ -258,14 +280,15 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
             d.PublicId, d.Class, tipos.GetValueOrDefault(d.DocumentTypeId) ?? string.Empty, d.Prefix, d.Number, d.Status, d.OperationDate,
             d.PointOfSaleId is int p ? puntos.GetValueOrDefault(p) : null,
             d.CashRegisterId is int c ? cajas.GetValueOrDefault(c) : null,
-            d.CounterpartyPersonId is int per ? personas.GetValueOrDefault(per) ?? string.Empty : "Consumidor final",
+            d.CounterpartyPersonId is int per ? (personas.TryGetValue(per, out var nombre) ? nombre.Nombre : string.Empty) : "Consumidor final",
             d.SalespersonId is int v ? vendedores.GetValueOrDefault(v) : null,
             d.Total, d.AmountDue,
             pagos[d.Id].Where(x => x.Direction == PaymentDirection.Received || d.Class != DocumentClass.Voiding).OrderBy(x => x.LineNumber)
                 .Select(x => new SalesPaymentSummaryDto(x.MeansCode, x.MeansClass, x.Amount)).ToList(),
             d.PostingMode, estadoDe.GetValueOrDefault(d.PublicId),
             d.Status == DocumentStatus.Confirmed && d.PointOfSaleId is not null && !entregados.Contains(d.Id),
-            pagos[d.Id].Any(x => x.PendingValidation))).ToList();
+            pagos[d.Id].Any(x => x.PendingValidation),
+            d.CounterpartyPersonId is int cp && personas.TryGetValue(cp, out var persona) ? persona.PublicId : null)).ToList();
         return Result.Success(new PagedResult<SalesDocumentSummaryDto>(items, pagina, tamano, total));
     }
 
@@ -345,7 +368,8 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
             lineas, retenciones, new SalesTotalsDto(d.Subtotal, d.DiscountTotal, d.TaxTotal, d.WithholdingTotal, d.Total, d.AmountDue),
             pagos, mensajes,
             await EstadoElectronicoDeInventario.DeAsync(db, d.PublicId, ct) is { } electronico ? Pos.EsperaEnLineaDelPos.Bloque(electronico, 0, null) : null,
-            await VinculosAsync(d, ct), creador, confirmador, await IssuesAsync(d, vendedor, pagos, ct), d.RowVersion ?? []));
+            await VinculosAsync(d, ct), creador, confirmador, await IssuesAsync(d, vendedor, pagos, ct), d.RowVersion ?? [],
+            d.ValidUntil, d.CorrectionConceptCode, await OrigenesAsync(d, ct)));
     }
 
     private async Task<SalesCounterpartyDto?> ContraparteAsync(InventoryDocument d, CancellationToken ct)
@@ -372,6 +396,9 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         var lineaIds = vivas.Select(l => l.Id).ToList();
         var descuentos = await db.DocumentLineDiscounts.AsNoTracking().Where(x => lineaIds.Contains(x.DocumentLineId) && !x.IsDeleted).ToListAsync(ct);
         var fuentes = descuentos.Where(x => x.RequiresApproval).Select(x => x.PublicId).ToList();
+        var promocionIds = descuentos.Select(x => x.PromotionId).OfType<int>().Distinct().ToList();
+        var promociones = await db.Promotions.AsNoTracking().Where(p => promocionIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => (p.PublicId, p.Name), ct);
         var solicitudes = await db.ApprovalRequests.AsNoTracking()
             .Where(r => r.SourceType == ApprovalSourceTypes.DocumentLineDiscount && fuentes.Contains(r.SourcePublicId) && r.Status != ApprovalRequestStatus.Cancelled)
             .Select(r => new { r.SourcePublicId, r.PublicId, r.Status, r.Id }).ToListAsync(ct);
@@ -380,6 +407,14 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         // Bajo costo: confirmada, contra el costo con que salió; en borrador, contra el promedio vigente. Nunca se expone el costo.
         var costos = await db.CostStates.AsNoTracking().Where(x => productoIds.Contains(x.ProductId) && x.ScopeWarehouseId == 0)
             .ToDictionaryAsync(x => x.ProductId, x => x.AverageCost, ct);
+        // I6: la línea origen de cada una y lo pendiente de las líneas de un pedido o una remisión confirmados.
+        var origenDeLinea = (await db.DocumentLineLinks.AsNoTracking()
+                .Where(x => !x.IsDeleted && lineaIds.Contains(x.TargetLineId) && !x.DocumentLink!.IsDeleted)
+                .Select(x => new { x.TargetLineId, x.SourceLine!.PublicId, x.DocumentLink!.Id })
+                .ToListAsync(ct))
+            .GroupBy(x => x.TargetLineId).ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First().PublicId);
+        var pendiente = await PendienteAsync(d, vivas, ct);
+
         return vivas.Select(l =>
         {
             var costo = l.UnitCost ?? costos.GetValueOrDefault(l.ProductId);
@@ -390,11 +425,42 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
                 descuentos.Where(x => x.DocumentLineId == l.Id).OrderBy(x => x.Sequence).Select(x =>
                 {
                     var solicitud = solicitudes.Where(r => r.SourcePublicId == x.PublicId).OrderByDescending(r => r.Id).FirstOrDefault();
+                    var promocion = x.PromotionId is int pid ? promociones.GetValueOrDefault(pid) : default;
                     return new SalesLineDiscountDto(x.Source, x.Rate, x.Amount, x.FromDocumentDiscount, x.IsPriceOverride,
-                        solicitud is null ? null : new SalesDiscountApprovalDto(solicitud.PublicId, solicitud.Status.ToString()));
+                        solicitud is null ? null : new SalesDiscountApprovalDto(solicitud.PublicId, solicitud.Status.ToString()),
+                        promocion.PublicId == Guid.Empty ? null : promocion.PublicId, promocion.Name);
                 }).ToList(),
-                deLinea, l.NetAmount, l.NetAmount + deLinea.Where(t => t.Treatment == TaxTreatment.Generated).Sum(t => t.Amount), bajo);
+                deLinea, l.NetAmount, l.NetAmount + deLinea.Where(t => t.Treatment == TaxTreatment.Generated).Sum(t => t.Amount), bajo,
+                origenDeLinea.TryGetValue(l.Id, out var origen) ? origen : null,
+                pendiente?.TryGetValue(l.Id, out var queda) == true ? queda : null);
         }).ToList();
+    }
+
+    /// <summary>
+    /// I6: lo pendiente de cada línea por los vínculos del ciclo (<see cref="VinculosDelCiclo"/>, que no guarda contadores): por despachar o
+    /// facturar en un pedido confirmado, por facturar en una remisión confirmada; nulo en las demás. El reloj no hace falta para leer.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<int, decimal>?> PendienteAsync(InventoryDocument d, IReadOnlyCollection<InventoryDocumentLine> lineas, CancellationToken ct)
+    {
+        if (d.Status != DocumentStatus.Confirmed || lineas.Count == 0) return null;
+        var vinculos = new VinculosDelCiclo(db, null!);
+        return d.Class switch
+        {
+            DocumentClass.SalesOrder => await vinculos.PendientePorDespacharAsync(lineas, 0, ct),
+            DocumentClass.Shipment => await vinculos.PendientePorFacturarAsync(lineas, 0, ct),
+            _ => null,
+        };
+    }
+
+    /// <summary>I6: todos los documentos de los que nace éste (cotización, pedidos, remisiones o la factura de la nota débito).</summary>
+    private async Task<IReadOnlyList<DocumentoReferidoDto>> OrigenesAsync(InventoryDocument d, CancellationToken ct)
+    {
+        var kinds = new[] { DocumentLinkKind.FromOrder, DocumentLinkKind.DispatchOf, DocumentLinkKind.FromShipment, DocumentLinkKind.NoteOf };
+        var ids = await db.DocumentLinks.AsNoTracking().Where(l => !l.IsDeleted && l.TargetDocumentId == d.Id && kinds.Contains(l.Kind))
+            .Select(l => l.SourceDocumentId).Distinct().ToListAsync(ct);
+        if (ids.Count == 0) return [];
+        return (await db.InventoryDocuments.AsNoTracking().Where(o => ids.Contains(o.Id)).OrderBy(o => o.Id).ToListAsync(ct))
+            .Select(o => new DocumentoReferidoDto(o.PublicId, VistaDeDocumentos.NumeroVisible(o.Prefix, o.Number))).ToList();
     }
 
     private async Task<IReadOnlyList<DocumentPaymentDto>> PagosAsync(InventoryDocument d, CancellationToken ct)

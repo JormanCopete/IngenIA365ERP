@@ -37,6 +37,13 @@ public sealed partial class VentasClient(HttpClient http, CentralAuthClient auth
         public const string Notas = Base + "/sales/credit-notes";
         public const string EvaluacionesDeCredito = Base + "/sales/credit-evaluations";
         public const string Reimpresion = Base + "/documents";
+
+        // I6 (T893; §18.4, §19.4): el ciclo comercial y las promociones.
+        public const string Cotizaciones = Base + "/sales/quotes";
+        public const string Pedidos = Base + "/sales/orders";
+        public const string Remisiones = Base + "/sales/shipments";
+        public const string NotasDebito = Base + "/sales/debit-notes";
+        public const string Promociones = Base + "/promotions";
     }
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>

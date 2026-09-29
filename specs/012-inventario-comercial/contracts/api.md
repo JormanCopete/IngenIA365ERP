@@ -377,9 +377,10 @@ Qué cuentas le corresponden a cada grupo lo dice la matriz de Contabilidad (§2
 accountingGroupPublicId?, vatSaleTreatment, withholdingConceptPublicId?, reference?, weight?, volume?,
 tracksLot?, tracksSerial?, tracksExpiry?, units?: [{ unitPublicId, factor, usage }], barcodes?: [{
 barcode, unitPublicId? }], taxes?: [{ taxDefinitionPublicId, taxRatePublicId?, taxableUnitsPerBaseUnit?
-}] }`. En I1 `kind` admite `Inventoriable` y `Service`; `Combo`, `Kit`, `Template` y `Variant`, y las
-marcas de lote, serie y vencimiento, responden 422 `Inventory.Product.KindNotAvailable` /
-`.TrackingNotAvailable` (`data: { availableIn: "I6" }`) hasta I6. `accountingGroupPublicId` es obligatorio
+}] }`. Hasta I6 `kind` admitía `Inventoriable` y `Service` y lo demás respondía `Inventory.Product.KindNotAvailable` /
+`.TrackingNotAvailable`; desde I6 (T918, retirados) admite las seis clases —una `Variant` sólo nace de su plantilla (422
+`Inventory.Variant.ParentRequired`)— y las marcas de seguimiento con `.ExpiryRequiresLot`, `.TrackingNotApplicable` y
+`.TrackingLocked`; el `PUT` acepta `kind?` (nulo = no cambia; `.KindLocked` con movimientos o dependientes). `accountingGroupPublicId` es obligatorio
 si es inventariable (422 `Inventory.Product.AccountingGroupRequired`) y no se admite en un servicio. Las
 unidades, los códigos y los impuestos del alta siguen las mismas reglas de sus subrecursos (§3.6), en la
 misma transacción.
@@ -518,7 +519,7 @@ exige además `Inventory.Catalog.Export` y deja el evento `Inventory.Catalog.Exp
 | `Inventory.Unit.DianCodeUnknown` · `.DecimalsInUse` · `.InUse` | 422 | §3.1 | `{ maxDecimalsUsed }` · `{ products, examples[] }` |
 | `Inventory.Category.TooDeep` · `.Cycle` · `.InUse` | 422 | §3.2 | `{ maxLevel }` · — · `{ children, products }` |
 | `Inventory.AccountingGroup.InUse` · `.Inactive` | 422 | §3.4, §3.6.4 | |
-| `Inventory.Product.KindNotAvailable` · `.TrackingNotAvailable` | 422 | clase de producto o control de lote/serie antes de I6 | `{ availableIn }` |
+| `Inventory.Product.ExpiryRequiresLot` · `.TrackingNotApplicable` · `.TrackingLocked` · `.KindLocked` (I6; reemplazan a `.KindNotAvailable`/`.TrackingNotAvailable`, retirados) | 422 | vencimiento sin lote; lote o serie en servicio o combo; seguimiento con existencia o borradores; clase con movimientos o dependientes | `{ kind }` / `{ hasStock, drafts }` |
 | `Inventory.Product.WithholdingConceptRequired` **(nuevo, T217)** | 422 | producto sin concepto de retención en compras (obligatorio salvo plantillas y combos, data-model §1.6) | |
 | `Inventory.Product.AccountingGroupRequired` · `.BaseUnitLocked` · `.UseReclassifyAccountingGroup` · `.HasHistory` · `.StatusUnchanged` · `.NotInventoriable` · `.AccountingGroupUnchanged` · `.MovementsAfterEffectiveDate` | 422 | §3.5, §3.6.4 | `{ alternatives[] }` en `HasHistory`; `{ lastMovementDate }` |
 | `Inventory.ProductUnit.IsBaseUnit` · `.Duplicate` · `.FactorLocked` · `.InUse` | 422 | §3.6.1 | |
@@ -1707,6 +1708,17 @@ alcance (lo demás es 404). Es la pestaña «Alcance comercial» de `/admin/usua
   `GET /alert-types/{typeCode}/history`, `POST /alert-types/{typeCode}/versions`,
   `GET /parameters/{module}/{key}/history`, `POST /parameters/{module}/{key}/versions`,
   `POST /api/inventory/integrity/verify|rebuild` con cuerpo de filtros.
+- **Catálogo avanzado (I6, T934; `CatalogEndpoints.cs`)**: `GET|POST /api/inventory/variant-attributes` y `PUT /variant-attributes/{id}`
+  (`Catalog.View` / `Catalog.Manage`; cuerpo `{ code, name, values: [{ code, name, sortOrder }], isActive }`, los valores que no vienen se
+  retiran), `GET /products/{id}/variants` y `POST /products/{id}/variants` (genera: `{ attributes: [{ attributePublicId, valuePublicIds }],
+  adjustments?: [{ variantKey, code?, name?, barcode? }] }` → 201 `{ templatePublicId, created[], alreadyExisting[] }`), `GET|PUT
+  /products/{id}/components` (`{ components: [{ componentProductPublicId, quantity }] }`, la lista completa), `GET
+  /lots?productPublicId=&warehousePublicId=&includeExpired=` → `[{ publicId, code, expiryDate?, manufactureDate?, quantity, state:
+  Current | ExpiringSoon | Expired | NoExpiry, suggested }]` en orden FEFO y `GET /serials?productPublicId=&warehousePublicId=&inStock=` →
+  `[{ publicId, serialNumber, lotCode?, warehouse?, location?, inStock }]` (`Stock.View`, alcance por bodega, fuera de él 404); `GET
+  /products/search?forSale=true` quita las plantillas. `ProductDto` suma `parent?`, `variantValues[]` y `components[]`, `UpdateProductRequest`
+  `kind?`, y la vista `kardex` el filtro `lot`. En el POS, `POST /pos/drafts/{id}/lines` acepta `serialNumber` y `lotCode` y `PATCH
+  …/lines/{lineId}` `lotCode`; cada línea devuelve `lotCode`, `lotExpiryDate`, `lotExpired`, `serialNumber`, `tracksLot` y `tracksSerial`.
 - **Eventos de auditoría**: `Inventory.Catalog.Exported`, `Inventory.Integrity.Verified`.
 - **Reporte**: la orden de compra en PDF (I5) necesita una clase `PurchaseOrderReport`, que no está en la
   lista de reportes de las decisiones.
@@ -3262,6 +3274,9 @@ Total es el del documento; en los valorados al costo (sin precio: ajustes, trasl
 sale con `Inventory.Costs.Read` (la nota lo dice). Un rango de más de cinco años responde `Inventory.Report.RangeTooLong`, el
 código común de §27 (T946 decía `Validation.Invalid`; manda el código de la base, T182).
 
+Filtros propios de I6 (T960–T965): un valor de `by`, `basis`, `days` (negativo) o `year` que la vista no admite responde 422
+`Inventory.Report.FilterInvalid` con los admitidos. `expiring` lleva en `_lote` el código del lote (lo que filtra el kardex con `?lot=`).
+
 `shrinkage-cap` es opcional, para el régimen ordinario de renta. Su porcentaje sale del parámetro
 `Informes.TopeFaltantesPorcentaje` (fracción, por defecto 0, con vigencia y `LegalSource`; data-model
 §4.2); con 0 la vista dice que el tope no está parametrizado.
@@ -3306,6 +3321,11 @@ InventoryDashboardDto {
 
 Las fichas de valor y margen exigen `Inventory.Costs.Read`; sin él no salen. `withoutRecipient` lista
 los tipos de alerta levantados sin destinatario activo, que se enrutaron a `CompanyAdmin` (SC-022).
+
+Precisión de I6 (T967, 2026-09-29; T54e de decisiones-transversales): las fichas de un área salen sólo con el permiso que abre esa área —
+mensajes y lotes con `Inventory.Messages.View`, DIAN con `ElectronicInvoicing.Documents.View`, alertas y `withoutRecipient` con
+`Inventory.Alerts.View`, `fiscalTypesNotPosted` con `Inventory.DocumentTypes.View`—; `value` es nulo cuando no hay dato (rotación sin inventario);
+la rotación, los días y el margen son del mes del corte. `scope` trae `{ publicId, code, name }` de las sucursales y bodegas activas del alcance.
 
 ## 29. Cambios en rutas existentes
 

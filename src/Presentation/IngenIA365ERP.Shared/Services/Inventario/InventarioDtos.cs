@@ -302,7 +302,8 @@ public sealed record BorradorDeInventarioRequest(
     string? Currency,
     decimal? ExchangeRate,
     byte[]? RowVersion,
-    IReadOnlyList<LineaDeBorradorRequest> Lines);
+    IReadOnlyList<LineaDeBorradorRequest> Lines,
+    EnsambleRequest? Assembly = null);
 
 /// <summary>Un nivel de la aprobación que pidió la confirmación.</summary>
 public sealed record NivelPedidoDeInventarioDto(int Order, decimal Threshold, string PermissionCode, string Status);

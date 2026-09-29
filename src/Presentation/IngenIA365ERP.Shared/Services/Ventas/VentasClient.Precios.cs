@@ -46,6 +46,22 @@ public sealed partial class VentasClient
     public Task<ResultadoDeInventario<MiTopeDto>> MiTopeAsync(CancellationToken ct = default) =>
         Enviar<MiTopeDto>(HttpMethod.Get, $"{Rutas.Topes}/mine", null, null, ct);
 
+    // ---------------------------------------------------------------------------------- promociones (I6) --
+
+    /// <summary>Las promociones (§19.4): vigentes a <paramref name="vigentesAl"/> y activas o no. Consulta: sin clave.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<PromocionDto>>> ListarPromocionesAsync(DateOnly? vigentesAl = null, bool? activas = null, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<PromocionDto>>(HttpMethod.Get, Q(Rutas.Promociones, ("asOf", Texto(vigentesAl)), ("active", Texto(activas))), null, null, ct);
+
+    public Task<ResultadoDeInventario<PromocionDto>> ObtenerPromocionAsync(Guid id, CancellationToken ct = default) =>
+        Enviar<PromocionDto>(HttpMethod.Get, $"{Rutas.Promociones}/{id}", null, null, ct);
+
+    public Task<ResultadoDeInventario<PromocionDto>> CrearPromocionAsync(PromocionRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<PromocionDto>(HttpMethod.Post, Rutas.Promociones, request, clave, ct);
+
+    /// <summary>Ya aplicada en un documento confirmado, cambiar algo más que nombre, fin y activo responde <c>Inventory.Promotion.InUse</c>.</summary>
+    public Task<ResultadoDeInventario<PromocionDto>> EditarPromocionAsync(Guid id, EdicionDePromocionRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<PromocionDto>(HttpMethod.Put, $"{Rutas.Promociones}/{id}", request, clave, ct);
+
     public Task<ResultadoDeInventario<TopeCreadoDto>> CrearTopeAsync(TopeRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<TopeCreadoDto>(HttpMethod.Post, Rutas.Topes, request, clave, ct);
 }

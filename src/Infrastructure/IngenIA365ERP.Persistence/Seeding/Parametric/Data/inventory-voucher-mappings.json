@@ -23,5 +23,9 @@
   { "operation": "AjusteDeCosto", "voucherTypeCode": "AC", "crossDocumentTypeCode": null },
   { "operation": "Reclasificacion", "voucherTypeCode": "AC", "crossDocumentTypeCode": null },
   { "operation": "MovimientoDeCaja", "voucherTypeCode": "CJ", "crossDocumentTypeCode": null },
-  { "operation": "DiferenciaDeArqueo", "voucherTypeCode": "CJ", "crossDocumentTypeCode": null }
+  { "operation": "DiferenciaDeArqueo", "voucherTypeCode": "CJ", "crossDocumentTypeCode": null },
+  // I6 (T861; contracts/contabilidad.md §2.6): la remisión reconoce el costo de venta en un SI, no en el FV de la factura.
+  // Fila por tipo de documento (el REM sembrado por InventoryDocumentTypesSeeder); idempotente por MappingKey, así que en
+  // las cooperativas que ya corrieron la semilla sólo se agrega esta fila.
+  { "operation": "CostoDeVenta", "voucherTypeCode": "SI", "crossDocumentTypeCode": null, "inventoryDocumentTypeCode": "REM" }
 ]

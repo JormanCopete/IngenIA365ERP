@@ -16,7 +16,8 @@
    documento de cada línea abre su pantalla por la columna oculta _documento. Exportar exige Inventory.Reports.Export.
    I5 (T849; FR-042, FR-045, FR-046): la columna «Motivo» distingue cada ajuste de costo (retroactivo, diferencia de precio, costos
    adicionales, cambio de método) y, en PEPS, «Capas consumidas» dice qué capas consumió cada salida, con su fecha y, con
-   Inventory.Costs.Read, su costo. Las dos las arma el servidor; aquí sólo se explican. *@
+   Inventory.Costs.Read, su costo. Las dos las arma el servidor; aquí sólo se explican. I6 (T940): la columna «Lote/serie» y el filtro
+   de lote (?lot=, desde Existencias): con lote, sólo sus movimientos y el saldo del lote. *@
 <PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -48,6 +49,7 @@
             </label>
             <label class="campo">Desde <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
             <label class="campo">Hasta <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd")" @onchange="@(e => _hasta = LeerFecha(e.Value) ?? _hasta)" /></label>
+            <label class="campo">Lote <input class="e-input" @bind="_lote" maxlength="40" placeholder="todos" /></label>
             <SfCheckBox @bind-Checked="_conAjustes" TChecked="bool" Label="Mostrar ajustes de costo" />
             <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _producto is null)" OnClick="@ConsultarAsync">Consultar</SfButton>
         </div>
@@ -110,10 +112,12 @@
     private DateOnly _desde = new(DateTime.Today.Year, DateTime.Today.Month, 1), _hasta = DateOnly.FromDateTime(DateTime.Today);
     private bool _conAjustes = true, _iniciado;
     private TablaReporteDto? _tabla;
+    private string? _lote;
 
     /// <summary>Llega desde Existencias con el producto (y la bodega): se consulta sola.</summary>
     [SupplyParameterFromQuery(Name = "product")] public Guid? Producto { get; set; }
     [SupplyParameterFromQuery(Name = "warehouse")] public Guid? Bodega { get; set; }
+    [SupplyParameterFromQuery(Name = "lot")] public string? Lote { get; set; }
 
     /// <summary>Las columnas que se pintan (sin las ocultas «_»), con su índice en la fila.</summary>
     private IEnumerable<(ColumnaReporteDto Columna, int Indice)> Visibles =>
@@ -126,6 +130,7 @@
         var bodegas = await Inventario.ListarBodegasAsync(incluirTransito: true);
         _bodegas = bodegas.IsSuccess ? [.. bodegas.Value ?? []] : [];
         _bodega = Bodega;
+        _lote = Lote;
         if (Producto is { } id)
         {
             var existencia = await Inventario.ExistenciaDelProductoAsync(id);
@@ -149,7 +154,7 @@
     {
         if (_producto is null) return;
         using var carga = _carga.Iniciar();
-        var r = await Inventario.KardexAsync(_producto.PublicId, _bodega, null, _desde, _hasta, _conAjustes);
+        var r = await Inventario.KardexAsync(_producto.PublicId, _bodega, null, _desde, _hasta, _conAjustes, lote: LoteElegido);
         if (!r.IsSuccess)
         {
             _tabla = null;
@@ -163,7 +168,7 @@
     {
         if (_producto is null) return;
         using var carga = _carga.Iniciar();
-        var r = await Inventario.DescargarKardexAsync(_producto.PublicId, _bodega, null, _desde, _hasta, _conAjustes, formato);
+        var r = await Inventario.DescargarKardexAsync(_producto.PublicId, _bodega, null, _desde, _hasta, _conAjustes, formato, lote: LoteElegido);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar el kardex."); return; }
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
@@ -182,6 +187,8 @@
         documento.StartsWith("PositiveAdjustment", StringComparison.Ordinal) || documento.StartsWith("NegativeAdjustment", StringComparison.Ordinal)
         || documento.StartsWith("InternalConsumption", StringComparison.Ordinal) || documento.StartsWith("WriteOff", StringComparison.Ordinal)
         || documento.StartsWith("Voiding", StringComparison.Ordinal);
+
+    private string? LoteElegido => string.IsNullOrWhiteSpace(_lote) ? null : _lote.Trim().ToUpperInvariant();
 
     private static DateOnly? LeerFecha(object? valor) =>
         DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;

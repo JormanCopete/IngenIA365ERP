@@ -130,10 +130,18 @@ public sealed class ListInventoryPeriodsQueryHandler(IApplicationDbContext db, I
             }
             meses.Add(new InventoryPeriodDto(
                 mes.Year, mes.Month, fila.Status, fila.ClosedAt, Usuario(fila.ClosedByUserId), fila.ReopenedAt, Usuario(fila.ReopenedByUserId),
-                fila.ReopenReason, null, fila.CloseVersion == 0 ? null : fila.CloseVersion));
+                fila.ReopenReason, Aceptadas(fila), fila.CloseVersion == 0 ? null : fila.CloseVersion));
         }
         return Result.Success(new InventoryPeriodsDto(setup.StartDate, setup.LastClosedDate, meses));
 
         UsuarioDto? Usuario(int? id) => id is int i ? usuarios.GetValueOrDefault(i) : null;
+
+        // I6 (T890): las remisiones sin facturar aceptadas en el último cierre (quién, cuándo, motivo, cuántas y su valor).
+        UnbilledShipmentsAcceptedDto? Aceptadas(Domain.Entities.Inventory.Periods.InventoryPeriod fila)
+        {
+            if (fila.UnbilledShipmentsJson is not { Length: > 0 } json || Usuario(fila.UnbilledShipmentsAcceptedByUserId) is not { } quien) return null;
+            var lista = System.Text.Json.JsonSerializer.Deserialize<List<UnbilledShipmentDto>>(json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) ?? [];
+            return new UnbilledShipmentsAcceptedDto(quien, fila.ClosedAt ?? DateTime.MinValue, fila.UnbilledShipmentsAcceptedReason ?? string.Empty, lista.Count, lista.Sum(r => r.Value));
+        }
     }
 }

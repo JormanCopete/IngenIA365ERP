@@ -163,9 +163,11 @@ public sealed class CreateProductCommandHandler(IApplicationDbContext db, IDateT
 }
 
 /// <summary>
-/// Edición de un producto (T218; §3.5, <c>PUT /{id}</c>): lo mismo que el alta sin código, clase, unidades, códigos ni
-/// impuestos (tienen sus rutas). Con movimientos la unidad base y el grupo contable no cambian por aquí; el tratamiento de
-/// IVA se revisa contra los impuestos que ya tiene. (nuevo)
+/// Edición de un producto (T218; §3.5, <c>PUT /{id}</c>): lo mismo que el alta sin código, unidades, códigos ni impuestos
+/// (tienen sus rutas). Con movimientos la unidad base y el grupo contable no cambian por aquí; el tratamiento de IVA se revisa
+/// contra los impuestos que ya tiene. Desde I6 (T918) <see cref="Kind"/> nulo deja la clase como está; si viene, cambia sólo sin
+/// movimientos ni dependientes (<c>Inventory.Product.KindLocked</c>), y las marcas de seguimiento no cambian con existencia ni
+/// borradores (<c>.TrackingLocked</c>). (nuevo)
 /// </summary>
 public sealed record UpdateProductCommand(
     Guid ProductPublicId,
@@ -185,7 +187,8 @@ public sealed record UpdateProductCommand(
     bool TracksSerial,
     bool TracksExpiry,
     bool IsPurchasable = true,
-    bool IsSellable = true)
+    bool IsSellable = true,
+    ProductKind? Kind = null)
     : IRequest<Result<ProductDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -203,6 +206,7 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
         RuleFor(x => x.Weight).GreaterThanOrEqualTo(0).Must(ValidacionDeProducto.Cuatro).WithMessage("El peso admite hasta 4 decimales.");
         RuleFor(x => x.Volume).GreaterThanOrEqualTo(0).Must(ValidacionDeProducto.Cuatro).WithMessage("El volumen admite hasta 4 decimales.");
         RuleFor(x => x.VatSaleTreatment).IsInEnum();
+        RuleFor(x => x.Kind).IsInEnum().When(x => x.Kind is not null);
         RuleFor(x => x.CategoryPublicId).NotEmpty();
         RuleFor(x => x.BaseUnitPublicId).NotEmpty();
     }
@@ -215,7 +219,7 @@ public sealed class UpdateProductCommandHandler(IApplicationDbContext db, IDateT
         var producto = await db.Products.FirstOrDefaultAsync(p => p.PublicId == request.ProductPublicId, ct);
         if (producto is null) return Result.Failure<ProductDto>(CatalogErrors.ProductNotFound());
 
-        var datos = new DatosDeProducto(request.Name, request.ShortName, request.Description, producto.Kind, request.CategoryPublicId,
+        var datos = new DatosDeProducto(request.Name, request.ShortName, request.Description, request.Kind ?? producto.Kind, request.CategoryPublicId,
             request.BrandPublicId, request.BaseUnitPublicId, request.AccountingGroupPublicId, request.VatSaleTreatment,
             request.WithholdingConceptPublicId, request.Reference, request.Weight, request.Volume, request.TracksLot, request.TracksSerial,
             request.TracksExpiry, request.IsPurchasable, request.IsSellable);
@@ -286,12 +290,14 @@ public sealed class DeleteProductCommandHandler(IApplicationDbContext db, IDateT
     public async Task<Result> Handle(DeleteProductCommand request, CancellationToken ct)
     {
         var producto = await db.Products.Include(p => p.Units).Include(p => p.Barcodes).Include(p => p.Taxes)
+            .Include(p => p.VariantValues).Include(p => p.Components)
             .FirstOrDefaultAsync(p => p.PublicId == request.ProductPublicId, ct);
         if (producto is null) return Result.Failure(CatalogErrors.ProductNotFound());
         if (await ReglasDeProducto.TieneMovimientosAsync(db, producto.Id, ct)) return Result.Failure(CatalogErrors.ProductHasHistory());
 
         var ahora = reloj.UtcNow;
-        foreach (var fila in producto.Units.Cast<Domain.Common.BaseEntity>().Concat(producto.Barcodes).Concat(producto.Taxes).Append(producto))
+        foreach (var fila in producto.Units.Cast<Domain.Common.BaseEntity>().Concat(producto.Barcodes).Concat(producto.Taxes)
+                     .Concat(producto.VariantValues).Concat(producto.Components).Append(producto))
         {
             fila.IsDeleted = true;
             fila.DeletedAt = ahora;

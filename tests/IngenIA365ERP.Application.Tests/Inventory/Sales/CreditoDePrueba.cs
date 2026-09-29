@@ -53,9 +53,12 @@ public sealed class CreditoDePrueba
 
     private CreditoDePrueba(VentasDePrueba v) => V = v;
 
-    public static async Task<CreditoDePrueba> CrearAsync()
+    public static async Task<CreditoDePrueba> CrearAsync() => await SobreAsync(await VentasDePrueba.CrearAsync());
+
+    /// <summary>La misma preparación sobre una cooperativa de ventas ya creada (I6: el ciclo comercial la combina con la factura electrónica).</summary>
+    public static async Task<CreditoDePrueba> SobreAsync(VentasDePrueba v)
     {
-        var c = new CreditoDePrueba(await VentasDePrueba.CrearAsync());
+        var c = new CreditoDePrueba(v);
         var db = c.Db;
         c.CredAsoc = Medio("CREDASOC", PaymentMeansClass.AssociateCredit);
         c.CredCli = Medio("CREDCLI", PaymentMeansClass.CustomerCredit);
@@ -104,11 +107,17 @@ public sealed class CreditoDePrueba
 
     // ------------------------------------------------------------------------------------------- servicios --
 
-    private void UsarMotorReal()
+    /// <summary>
+    /// La confirmación con que la última aprobación reentra (por defecto, la de este escenario); el ciclo comercial de I6 pone la suya y
+    /// vuelve a armar el motor con <see cref="UsarMotorReal"/>.
+    /// </summary>
+    public Func<ConfirmacionDeDocumento>? ConfirmacionDelMotor { get; set; }
+
+    public void UsarMotorReal()
     {
         var limites = Substitute.For<ILimitesPorPermiso>();
         limites.MontoMaximoAsync(Arg.Any<string>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns((decimal?)null);
-        var servicios = new ServiceCollection().AddTransient(_ => Confirmacion()).BuildServiceProvider();
+        var servicios = new ServiceCollection().AddTransient(_ => ConfirmacionDelMotor?.Invoke() ?? Confirmacion()).BuildServiceProvider();
         var fuentes = new IFuenteDeAprobacion[]
         {
             new FuenteDeAprobacionDeDocumento(Db, V.K.Maestros(), servicios),

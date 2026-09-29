@@ -916,10 +916,10 @@ public static class ManualCatalogo
             "canales", "venta", "punto de venta", "lista de precios"));
 
         t.Add(Proceso("inventario-productos", "Productos", Modulos.Inventario, "/inventario/productos",
-            "El catálogo de productos: se busca con el lector o por filtros, se crea, se corrige en su detalle y cambia de estado con motivo. En esta entrega un producto es inventariable o servicio; combos, kits, variantes y el control de lote, serie o vencimiento llegan después.",
+            "El catálogo de productos: se busca con el lector o por filtros, se crea, se corrige en su detalle y cambia de estado con motivo. Un producto es inventariable, servicio, combo, kit o plantilla de variantes, y puede controlar lote, vencimiento o serie (ver «Variantes, combos, kits, lotes y series»).",
             [
                 P("Inventario → Productos", "Filtrá o leé el código de barras para ir directo al detalle.", "/inventario/productos", "Abrir Productos"),
-                P("Nuevo producto", "Código (hasta 20, en mayúsculas, único), nombre, clase (inventariable o servicio), unidad base, grupo contable obligatorio, concepto de retención e IVA."),
+                P("Nuevo producto", "Código (hasta 20, en mayúsculas, único), nombre, clase (inventariable, servicio, combo, kit o plantilla), unidad base, grupo contable (no en la plantilla), concepto de retención (no en la plantilla ni en el combo), IVA y, si aplica, «Controla lote», «Controla vencimiento» (exige lote) y «Controla serie»."),
                 P("Detalle", "Pestañas Datos («Se compra» y «Se vende» dicen dónde se ofrece), Unidades (el factor dice cuántas unidades base tiene cada empaque: caja × 12 = 12), Códigos de barras (el de un empaque elige esa unidad al leerlo), Impuestos, Imágenes y Grupo contable. Con movimientos, la unidad base, el factor de una unidad usada y el grupo no cambian por Datos."),
                 P("Cambiar de grupo contable", "Pestaña Grupo contable, «Cambiar grupo»: fecha efectiva y motivo; lo confirmado antes conserva su grupo. Pide el permiso Inventory.Catalog.ReclassifyAccountingGroup."),
                 P("Estado o borrar", "«Estado» pasa a activo, inactivo (no se ofrece en documentos nuevos) o bloqueado (ningún movimiento salvo el conteo y la recepción de lo que ya viajaba), con motivo. «Borrar» sólo sirve para un producto que nunca estuvo en un documento."),
@@ -927,7 +927,23 @@ public static class ManualCatalogo
             ],
             ["productos", "codigo de barras", "lector", "unidad base", "empaque", "iva", "bloquear", "inactivar", "plantilla 6"],
             ["Permiso Inventory.Catalog.View; para crear y corregir, Inventory.Catalog.Manage.", "Unidades, categorías, marcas y grupos contables cargados."],
-            ["inventario-grupos-contables", "inventario-unidades", "inventario-plantillas"], ["/inventario/productos/{Id}"], TipoDeTema.Maestro));
+            ["inventario-grupos-contables", "inventario-unidades", "inventario-plantillas", "inventario-catalogo-avanzado"], ["/inventario/productos/{Id}"], TipoDeTema.Maestro));
+
+        // Feature 012, I6 (T936–T941): el catálogo avanzado.
+        t.Add(Proceso("inventario-catalogo-avanzado", "Variantes, combos, kits, lotes y series", Modulos.Inventario, "/inventario/productos",
+            "Una plantilla genera variantes (talla, color…) con código, códigos de barras y existencia propios; un combo se vende como una línea y descuenta sus componentes; un kit se arma con un ensamble; y un producto puede llevar lote, vencimiento o serie.",
+            [
+                P("Atributos", "En el detalle de una plantilla, pestaña Variantes, «Atributos…»: cada atributo (TALLA, COLOR) con sus valores y su orden. Un código que ya usan variantes no cambia; el nombre sí.", "/inventario/productos", "Abrir Productos"),
+                P("Generar variantes", "Marque los atributos y los valores: la vista previa muestra cada combinación con su código y nombre propuestos (se pueden cambiar, y agregar un código de barras). «Generar» crea sólo las que faltan; cada variante hereda categoría, marca, unidades, grupo contable, impuestos y seguimiento. La plantilla no entra a documentos: se vende una variante."),
+                P("Componentes", "En un combo o un kit, pestaña Componentes: agregue los productos y la cantidad por unidad (en la unidad base de cada uno) y «Guardar componentes». El cambio rige para lo que se venda o ensamble después."),
+                P("Ensamblar kits", "Ajustes → «Nuevo ajuste» con un tipo de clase Ensamble: elija el kit y cuántos, revise los componentes que saldrán con su disponible y «Proponer líneas». Al confirmar salen los componentes y entra el kit al costo de lo consumido.", "/inventario/ajustes/nuevo", "Nuevo ajuste"),
+                P("Lotes y vencimientos", "En una entrada (ajuste positivo, recepción) cada línea pide el lote y, si el producto lo controla, el vencimiento. En una salida (ajuste, traslado, venta) se propone el lote que vence primero; los vencidos y próximos a vencer se marcan, y vender uno vencido lo bloquea o lo avisa según el parámetro Ventas.LoteVencido."),
+                P("Series", "Cada serie es una unidad: se lee con el lector en la línea (o en el POS, después de leer el producto). Una serie que ya está en existencia no vuelve a entrar, ni sale una que no está en la bodega."),
+                P("Consultar", "Existencias muestra la cantidad por ubicación y lote, y cada lote abre su kardex; el Kardex filtra por lote y muestra el lote o la serie de cada movimiento.", "/inventario/existencias", "Abrir Existencias"),
+            ],
+            ["variantes", "talla", "color", "plantilla", "combo", "kit", "ensamble", "componentes", "lote", "vencimiento", "serie", "fefo"],
+            ["Permiso Inventory.Catalog.View; para crear y cambiar, Inventory.Catalog.Manage. Lotes y series: Inventory.Stock.View."],
+            ["inventario-productos", "inventario-ajustes", "inventario-existencias", "inventario-kardex", "inventario-conteos"], ["/inventario/productos/{Id}"], TipoDeTema.Maestro));
 
         t.Add(Proceso("inventario-bodegas", "Bodegas", Modulos.Inventario, "/inventario/bodegas",
             "Las bodegas del alcance agrupadas por sucursal. Toda bodega nace sin activar —sólo admite su saldo inicial— con su ubicación general; la primera bodega operativa de una sucursal trae su bodega de tránsito, que no se crea a mano.",
@@ -960,7 +976,7 @@ public static class ManualCatalogo
             [
                 P("Inventario → Existencias", "Leé o escribí el producto, o filtrá la lista por bodega, «Sólo con existencia» o «En o bajo el punto de reorden».", "/inventario/existencias", "Abrir Existencias"),
                 P("Leer las columnas", "Física, reservada, disponible y en tránsito hacia la bodega; mínimo, punto de reorden y posición cuando la bodega tiene política. Promedio y valor sólo aparecen con Inventory.Costs.Read."),
-                P("Detalle", "El código del producto abre sus bodegas y ubicaciones y el enlace a su kardex."),
+                P("Detalle", "El código del producto abre sus bodegas y ubicaciones —con el lote, que se filtra y abre su kardex— y el enlace a su kardex."),
             ],
             ["existencias", "stock", "disponible", "transito", "reservado", "reorden"],
             ["Permiso Inventory.Stock.View. Sólo se ven las bodegas del alcance."],
@@ -969,7 +985,7 @@ public static class ManualCatalogo
         t.Add(Proceso("inventario-kardex", "Kardex", Modulos.Inventario, "/inventario/kardex",
             "Los movimientos de un producto en orden: la primera fila es el saldo al día anterior a «desde» y cada línea lleva su documento, entrada, salida y saldo.",
             [
-                P("Inventario → Kardex", "Leé o escribí el producto, elegí la bodega y el rango (hasta 5 años) y «Consultar». «Mostrar ajustes de costo» agrega esas líneas.", "/inventario/kardex", "Abrir Kardex"),
+                P("Inventario → Kardex", "Leé o escribí el producto, elegí la bodega, el lote si hace falta y el rango (hasta 5 años) y «Consultar». «Mostrar ajustes de costo» agrega esas líneas; con lote, sólo sus movimientos y su saldo.", "/inventario/kardex", "Abrir Kardex"),
                 P("Leer", "Costo y valor llegan vacíos sin Inventory.Costs.Read, y la nota lo dice. El número del documento abre su pantalla."),
                 P("Exportar", "Excel o PDF con Inventory.Reports.Export."),
             ],
@@ -983,6 +999,7 @@ public static class ManualCatalogo
                 P("Inventario → Ajustes", "Filtros por clase, estado, bodega, fecha y número.", "/inventario/ajustes", "Abrir Ajustes"),
                 P("Nuevo ajuste", "Tipo, bodega, fecha, causa, centro de costo, motivo y líneas (el lector llena producto y empaque). El costo sólo se digita en un ajuste positivo y con Inventory.Adjustments.SetUnitCost.", "/inventario/ajustes/nuevo", "Nuevo ajuste"),
                 P("Guardar y revisar", "El borrador se guarda con avisos, que se marcan en la línea que nombran. Ctrl+S guarda; Ctrl+Enter confirma."),
+                P("Lote, serie y ensamble", "Un producto con lote o serie los pide en la línea (en la salida se propone el lote que vence primero). Un tipo de clase Ensamble muestra el formulario del kit: kit, cantidad y «Proponer líneas»."),
                 P("Soportes", "Actas de destrucción, denuncias y demás se suben mientras el ajuste está en borrador o en aprobación."),
                 P("Confirmar", "Si la política o el monto lo piden, queda en aprobación, congelado y sin número, hasta la última aprobación. Las acciones posibles las dice el servidor."),
                 P("Descartar o anular", "Descartar un borrador y anular uno confirmado piden motivo."),
@@ -1006,12 +1023,12 @@ public static class ManualCatalogo
             ["inventario-existencias", "inventario-aprobaciones"], ["/inventario/traslados/nuevo", "/inventario/traslados/{Id}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("inventario-conteos", "Conteos físicos", Modulos.Inventario, "/inventario/conteos",
-            "El conteo de toda una bodega o cíclico (por categorías, ubicaciones o productos), ciego o no, con su foto, la captura con lector y el ajuste que aprueba alguien que no abrió ni contó.",
+            "El conteo de toda una bodega o cíclico (por categorías, ubicaciones, productos o clase ABC), ciego o no, con su foto, la captura con lector —por lote cuando el producto lo controla— y el ajuste que aprueba alguien que no abrió ni contó.",
             [
                 P("Inventario → Conteos", "Los conteos del alcance con su estado; el valor de la diferencia con Inventory.Costs.Read.", "/inventario/conteos", "Abrir Conteos"),
-                P("Nuevo conteo", "Bodega, alcance, si es ciego y los contadores; «Crear el conteo»."),
+                P("Nuevo conteo", "Bodega, alcance (con «Clase ABC» se elige A, B o C: la lista sale al abrir, con el valor de lo que salió de la bodega en los doce meses anteriores), si es ciego y los contadores; «Crear el conteo»."),
                 P("Abrir (tomar la foto)", "Congela el teórico a esa hora. Con conteos abiertos con foto el mes no se cierra."),
-                P("Capturar", "Código y Enter: cada lectura suma y se envía por tandas; una cantidad negativa corrige. En un conteo ciego quien sólo captura no ve el teórico."),
+                P("Capturar", "Código y Enter: cada lectura suma y se envía por tandas; una cantidad negativa corrige. Con lote, escriba el lote antes de leer: acompaña las lecturas hasta que se cambie. En un conteo ciego quien sólo captura no ve el teórico."),
                 P("Cerrar el conteo", "Compara, exige el reconteo de las líneas marcadas y numera."),
                 P("Generar ajuste", "Muestra la fecha del ajuste (la de la foto o la de la aprobación, según el parámetro) y lo crea en aprobación."),
             ],
@@ -1074,9 +1091,23 @@ public static class ManualCatalogo
                 P("Consultar y profundizar", "La fila de un documento abre el documento; la de un producto o una bodega, su kardex."),
                 P("Exportar", "Excel, Word o PDF con Inventory.Reports.Export; las vistas con datos de clientes piden además Inventory.Reports.ExportPersonalData."),
             ],
-            ["informes", "reportes", "valorizado", "documentos", "reorden", "quiebres", "exportar"],
+            ["informes", "reportes", "valorizado", "documentos", "reorden", "quiebres", "exportar", "margen", "rotacion", "abc", "sin movimiento",
+             "por vencer", "sugerido de compras", "faltantes"],
             ["Permiso Inventory.Reports.View."],
-            ["inventario-kardex", "centro-de-reportes"], [], TipoDeTema.Reporte));
+            ["inventario-kardex", "inventario-tablero", "centro-de-reportes"], [], TipoDeTema.Reporte));
+
+        // I6, US17 (T969): el tablero (§28).
+        t.Add(Proceso("inventario-tablero", "Tablero de inventario", Modulos.Inventario, "/inventario/tablero",
+            "Las cifras clave del inventario y del comercio en una pantalla, por sucursal y bodega: valor del inventario, rotación y días, margen del mes, ventas del día y del mes frente al período anterior, reorden, quiebres, próximos a vencer, mensajes, lotes, documentos DIAN, tipos fiscales sin paso a contabilidad y alertas. Cada ficha lleva a su detalle con un clic.",
+            [
+                P("Inventario → Tablero", "Filtrá por sucursal o bodega (sólo las de su alcance) y la fecha de corte.", "/inventario/tablero", "Abrir el tablero"),
+                P("Leer las fichas", "El borde dice la severidad: amarillo pide atención, rojo es un problema (quiebres, rechazos, margen negativo). Las ventas muestran el período anterior debajo."),
+                P("Ir al detalle", "Un clic en la ficha abre el informe o la bandeja con los mismos filtros: valorizado, rotación, margen por categoría, ventas por caja, reorden, por vencer, mensajes, lotes, documentos electrónicos, parámetros o alertas."),
+                P("Tipos de alerta sin destinatario", "Si una alerta se levantó sin nadie activo con su permiso, el aviso lo dice: asigne el permiso destinatario del tipo en Alertas."),
+            ],
+            ["tablero", "indicadores", "kpi", "rotacion", "margen", "ventas del dia", "quiebres", "vencer", "sin destinatario"],
+            ["Permiso Inventory.Dashboard.View; las fichas de valor y margen, además Inventory.Costs.Read; mensajes y lotes, Inventory.Messages.View; DIAN, ElectronicInvoicing.Documents.View; alertas, Inventory.Alerts.View; tipos sin paso, Inventory.DocumentTypes.View."],
+            ["inventario-informes", "inventario-alertas"], [], TipoDeTema.Consulta));
 
         t.Add(Proceso("inventario-plantillas", "Plantillas de parametrización", Modulos.Inventario, "/inventario/plantillas",
             "Las dieciséis plantillas de la puesta en marcha en su orden de carga: cada una sólo cita lo que cargaron las anteriores. Las que todavía no se importan dicen desde qué entrega.",
@@ -1301,6 +1332,66 @@ public static class ManualCatalogo
             ["informes", "ventas", "caja", "arqueo", "tarjetas", "bonos", "deterioro", "exportar"],
             ["Permiso Inventory.Reports.View."],
             ["ventas-oficina", "ventas-caja"], [], TipoDeTema.Proceso));
+
+        // Feature 012, I6 (T894–T901, T983): el ciclo comercial y las promociones.
+        t.Add(Proceso("ventas-cotizaciones", "Cotizaciones", Modulos.Ventas, "/ventas/cotizaciones",
+            "La cotización ofrece precios con vigencia sin mover la existencia. Confirmada y vigente, se convierte en pedido.",
+            [
+                P("Ventas → Cotizaciones", "«Nueva cotización»: tipo, bodega, cliente, vendedor, vigencia y productos. El precio sale de la lista que gana y las promociones vigentes se ven en cada línea.", "/ventas/cotizaciones", "Abrir Cotizaciones"),
+                P("Confirmar", "Exige la vigencia; no reserva ni emite nada."),
+                P("Convertir en pedido", "Crea el borrador del pedido con las líneas y precios cotizados. Se puede convertir más de una vez (pedidos parciales); vencida, ya no."),
+                P("Anular", "Con motivo; no tiene efecto sobre la existencia."),
+            ],
+            ["cotizacion", "vigencia", "convertir en pedido", "precio", "promocion"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm; anular, Inventory.Sales.Void."],
+            ["ventas-pedidos", "ventas-promociones", "ventas-oficina"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-pedidos", "Pedidos y reservas", Modulos.Ventas, "/ventas/pedidos",
+            "El pedido confirmado reserva lo pedido en la bodega hasta la fecha de vencimiento de la reserva; lo reservado deja de estar disponible para otras ventas.",
+            [
+                P("Ventas → Pedidos", "Cada línea muestra físico, reservado y disponible en la bodega del pedido. Si no alcanza el disponible, no se confirma.", "/ventas/pedidos", "Abrir Pedidos"),
+                P("La reserva", "Vence en la fecha que se ve en el pedido y se libera sola; la remisión o la factura desde el pedido la consumen."),
+                P("Remisionar o facturar", "Desde el pedido confirmado: «Remisionar» despacha sin facturar y «Facturar» factura lo pendiente."),
+                P("Anular", "Libera lo que siga reservado; lo ya remisionado o facturado queda como está."),
+            ],
+            ["pedido", "reserva", "disponible", "remisionar", "facturar"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm; anular, Inventory.Sales.Void."],
+            ["ventas-cotizaciones", "ventas-remisiones", "ventas-oficina"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-remisiones", "Remisiones y factura desde remisiones", Modulos.Ventas, "/ventas/remisiones",
+            "La remisión despacha la mercancía y reconoce su costo sin facturarla; después se factura una o varias remisiones del mismo cliente sin volver a descargar.",
+            [
+                P("Ventas → Remisiones", "Desde un pedido («Remisionar») o directa. La lista dice cuántos días lleva cada una sin facturar.", "/ventas/remisiones", "Abrir Remisiones"),
+                P("Facturar remisiones", "Elija las remisiones confirmadas del mismo cliente y «Facturar remisiones»: la factura trae lo pendiente de cada línea, de sólo lectura."),
+                P("Sin facturar al cierre", "Una remisión vieja sin facturar levanta una alerta y el cierre del período pide aceptarla con motivo."),
+                P("Anular", "Sin facturar, la mercancía vuelve al costo con que salió; ya facturada, no se anula."),
+            ],
+            ["remision", "despacho", "factura desde remisiones", "sin facturar", "cierre"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm; anular, Inventory.Sales.Void."],
+            ["ventas-pedidos", "ventas-oficina"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-notas-debito", "Notas débito", Modulos.Ventas, "/ventas/notas-debito",
+            "La nota débito aumenta lo cobrado en una factura confirmada (intereses, gastos, un mayor valor) sin mover la existencia, y se transmite a la DIAN como la factura.",
+            [
+                P("Ventas → Notas débito", "Elija la factura, «Nueva nota débito», el concepto de corrección, las líneas y guarde para ver el total.", "/ventas/notas-debito", "Abrir Notas débito"),
+                P("Pagos", "Se registran como en la factura. Con un medio de crédito el pago queda esperando la aprobación del crédito provisional."),
+                P("Estado electrónico", "Confirmada, se ve su estado ante la DIAN; validada, no se anula: se corrige con otra nota."),
+            ],
+            ["nota debito", "intereses", "concepto de correccion", "credito provisional", "dian"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm."],
+            ["ventas-oficina", "facturacion-electronica"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-promociones", "Promociones", Modulos.Ventas, "/ventas/promociones",
+            "Las promociones con vigencia se aplican solas al vender, en oficina y en el POS, como descuento en la línea que baja la base de los impuestos; el documento dice cuál se aplicó.",
+            [
+                P("Ventas → Promociones", "Código, nombre, clase (porcentaje, valor por unidad, lleve N pague M, precio por cantidad o precio de paquete), vigencia y motivo.", "/ventas/promociones", "Abrir Promociones"),
+                P("Ámbitos", "Productos, categorías (con sus subcategorías), segmentos y canales; vacío es todo lo vendido. Entre clases se exigen todas; dentro de una clase basta una."),
+                P("Acumulable", "Entre las no acumulables gana la de mayor descuento; una línea con promoción no admite descuento manual."),
+                P("Editar", "Ya aplicada en un documento confirmado, sólo cambian el nombre, el fin de la vigencia y si está activa."),
+            ],
+            ["promocion", "3x2", "lleve pague", "descuento", "vigencia", "paquete"],
+            ["Permiso Inventory.Prices.View; para crear y editar, Inventory.Prices.Manage."],
+            ["ventas-precios", "ventas-cotizaciones", "ventas-pos"], [], TipoDeTema.Proceso));
 
         // Feature 012, I4 (T753–T759): facturación electrónica ante la DIAN.
         t.Add(Proceso("facturacion-electronica", "Facturación electrónica ante la DIAN", Modulos.Ventas, "/admin/facturacion-electronica",

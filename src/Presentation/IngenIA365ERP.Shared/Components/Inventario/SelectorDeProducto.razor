@@ -71,6 +71,12 @@
     /// <summary>Consultas: también los inactivos.</summary>
     [Parameter] public bool IncluirInactivos { get; set; }
 
+    /// <summary>
+    /// Una línea de documento (I6, T938): sin plantillas de variantes, que no entran a documentos (<c>forSale=true</c>); se elige una de sus
+    /// variantes.
+    /// </summary>
+    [Parameter] public bool SinPlantillas { get; set; }
+
     /// <summary>El producto elegido y, si se leyó el código de un empaque, su unidad y factor.</summary>
     [Parameter] public EventCallback<ProductoElegido> Elegido { get; set; }
 
@@ -139,7 +145,7 @@
         _mensaje = null;
         using var carga = _carga.Iniciar();
         StateHasChanged();
-        var r = await Inventario.BuscarProductosAsync(q, Bodega, IncluirInactivos, null, Clases, token);
+        var r = await Inventario.BuscarProductosAsync(q, Bodega, IncluirInactivos, null, Clases, token, SinPlantillas);
         token.ThrowIfCancellationRequested();
         if (!r.IsSuccess)
         {

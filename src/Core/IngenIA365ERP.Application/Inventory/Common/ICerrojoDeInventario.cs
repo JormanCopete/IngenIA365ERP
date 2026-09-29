@@ -13,6 +13,9 @@ namespace IngenIA365ERP.Application.Inventory.Common;
 /// no se pasan de lo pendiente);</item>
 /// <item><c>INV_CostStates</c>, <c>INV_StockBalances</c> e <c>INV_StockDetails</c>, exclusivos; antes de bloquearlas crea
 /// las filas de proyección que falten;</item>
+/// <item><c>INV_Serials</c> (I6, T925), exclusivas y por Id, después de los detalles: la fila de la serie la crea el borrador (con el
+/// índice único <c>(ProductId, SerialNumber)</c> como árbitro) y aquí sólo se bloquea, así dos recepciones o dos ventas de la misma
+/// serie no se pasan;</item>
 /// <item>y, al final, la fila de numeración (<see cref="BloquearNumeracionAsync"/>, que llama <c>Numerador</c>).</item>
 /// </list>
 /// Todos los que confirman bloquean en el mismo orden, así que no hay abrazo mortal; <c>RowVersion</c> queda como
@@ -74,4 +77,7 @@ public sealed record PedidoDeCerrojo
     public IReadOnlyCollection<ClaveDeExistencia> Existencias { get; init; } = [];
 
     public IReadOnlyCollection<ClaveDeDetalleDeExistencia> Detalles { get; init; } = [];
+
+    /// <summary>I6 (T925): las filas de <c>INV_Serials</c> que se mueven, por Id, exclusivas y después de los detalles. (nuevo)</summary>
+    public IReadOnlyCollection<int> Series { get; init; } = [];
 }

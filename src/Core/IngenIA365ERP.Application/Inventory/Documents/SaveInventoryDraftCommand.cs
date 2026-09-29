@@ -88,7 +88,8 @@ public sealed class SaveInventoryDraftCommandHandler(
     EfectosDeClase efectos,
     VistaDeDocumentos vista,
     IEnumerable<IBorradorDeGrupo>? borradoresDeGrupo = null,
-    Counts.BloqueoPorConteo? bloqueoPorConteo = null)
+    Counts.BloqueoPorConteo? bloqueoPorConteo = null,
+    ReglasDeSeguimiento? seguimiento = null)
     : IRequestHandler<SaveInventoryDraftCommand, Result<InventoryDocumentDto>>
 {
     private readonly IReadOnlyList<IBorradorDeGrupo> _deGrupo = borradoresDeGrupo?.ToList() ?? [];
@@ -123,6 +124,14 @@ public sealed class SaveInventoryDraftCommandHandler(
         if (!tipo.IsActive && (documento is null || documento.DocumentTypeId != tipo.Id)) return Falla(InventoryErrors.DocumentTypeInactive(tipo.Code));
         var efecto = efectos.Para(tipo.Class);
         if (efecto.IsFailure) return Falla(efecto.Error);
+
+        // (2a) I6 (T928; api.md §10): el ensamble propone sus líneas desde los componentes del kit (conserva lote, serie y ubicación digitados).
+        if (tipo.Class == DocumentClass.Assembly && borrador.Assembly is { } ensamble)
+        {
+            var propuestas = await PropuestaDeEnsamble.LineasAsync(db, ensamble, borrador.Lines, ct);
+            if (propuestas.IsFailure) return Falla(propuestas.Error);
+            borrador = borrador with { Lines = propuestas.Value };
+        }
 
         // (2b) Lo que agrega el grupo (compras, US9): sin implementación, sus campos no se admiten.
         var deGrupo = _deGrupo.FirstOrDefault(g => g.Grupo == request.ExpectedGroup);
@@ -193,6 +202,8 @@ public sealed class SaveInventoryDraftCommandHandler(
             var linea = borrador.Lines[i];
             var numero = i + 1;
             if (!productos.TryGetValue(linea.ProductPublicId, out var producto)) return Falla(ErroresDelDocumento.ProductoInexistente());
+            // I6 (T918): una plantilla de variantes no entra a documentos; se usa una de sus variantes.
+            if (producto.EsPlantilla) return Falla(InventoryErrors.ProductNotInventoriable(numero, producto.Code));
 
             var unidad = await maestros.UnidadAsync(producto.Id, linea.UnitPublicId, ct);
             if (unidad is null) return Falla(InventoryErrors.UnitNotForProduct(numero, producto.Code, string.Empty));
@@ -260,6 +271,7 @@ public sealed class SaveInventoryDraftCommandHandler(
         // (7) Líneas: las que traen su PublicId se conservan; las nuevas se agregan; las que faltan se dan de baja.
         var existentes = documento.Lines.Where(l => !l.IsDeleted).ToDictionary(l => l.PublicId);
         var conservadas = new HashSet<Guid>();
+        var pedidosDeSeguimiento = new List<SeguimientoPedido>(calculadas.Count);
         foreach (var c in calculadas)
         {
             InventoryDocumentLine linea;
@@ -291,6 +303,18 @@ public sealed class SaveInventoryDraftCommandHandler(
             linea.AdjustmentCauseId = causaId;
             linea.Description = Limpio(c.Pedida.Notes);
             linea.AffectsCost = c.Pedida.AffectsCost == true;
+            pedidosDeSeguimiento.Add(new SeguimientoPedido(linea, c.Pedida.LotCode, c.Pedida.ExpiryDate, c.Pedida.SerialNumber));
+        }
+
+        // (7b) I6 (T923): el lote y la serie digitados se vuelven LotId/SerialId (el lote o la serie de una entrada nace aquí).
+        if (seguimiento is not null)
+        {
+            var resuelto = await seguimiento.ResolverAsync(documento, pedidosDeSeguimiento, ct);
+            if (resuelto.IsFailure)
+            {
+                db.DescartarCambios();
+                return Falla(resuelto.Error);
+            }
         }
         foreach (var sobrante in existentes.Values.Where(l => !conservadas.Contains(l.PublicId)))
         {
@@ -333,6 +357,13 @@ public sealed class SaveInventoryDraftCommandHandler(
         avisos.AddRange(await efecto.Value.AvisosDelBorradorAsync(new ContextoDeEfecto(documento, tipo, clase), ct));
         // US11 (T393): lo que un conteo abierto bloquea, con el código que daría la confirmación.
         if (bloqueoPorConteo is not null && await bloqueoPorConteo.EvaluarAsync(documento, null, ct) is { } bloqueado) avisos.Add(bloqueado);
+        // I6 (T923): las reglas de lote, vencimiento y serie, con el código que daría la confirmación.
+        if (seguimiento is not null)
+        {
+            var veredicto = await seguimiento.EvaluarAsync(documento, ct);
+            avisos.AddRange(veredicto.Errores);
+            avisos.AddRange(veredicto.Avisos);
+        }
 
         try
         {

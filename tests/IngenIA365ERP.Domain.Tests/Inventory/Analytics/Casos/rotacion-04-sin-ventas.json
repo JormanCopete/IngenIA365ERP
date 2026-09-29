@@ -1,0 +1,5 @@
+{
+  "nombre": "Sin costo de venta: rota 0 y los días no se pueden medir (sin dato de días)",
+  "costoDeVenta": 0, "saldos": [8000, 8000], "diasDelPeriodo": 90,
+  "esperado": { "inventarioPromedio": 8000, "rotacion": 0, "diasDeInventario": null, "sinDato": false }
+}

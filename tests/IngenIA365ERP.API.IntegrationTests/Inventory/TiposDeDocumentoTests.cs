@@ -69,12 +69,13 @@ public class TiposDeDocumentoTests(CentralIdentityApiFixture fx)
 
         clases.Should().HaveCount(34);
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("PositiveAdjustment")).GetProperty("operable").GetBoolean().Should().BeTrue();
-        // Desde I5 (EntregaVigente = I5) la orden de compra y los costos adicionales son operables; el ensamble espera a I6.
+        // Desde I6 (EntregaVigente = I6, la última entrega) todas las clases son operables, también el ensamble y el ciclo comercial.
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("SalesInvoice")).GetProperty("operable").GetBoolean().Should().BeTrue();
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("SupportDocument")).GetProperty("operable").GetBoolean().Should().BeTrue();
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("PurchaseOrder")).GetProperty("operable").GetBoolean().Should().BeTrue();
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("LandedCost")).GetProperty("operable").GetBoolean().Should().BeTrue();
-        clases.Single(c => c.GetProperty("class").GetInt32() == Numero("Assembly")).GetProperty("operable").GetBoolean().Should().BeFalse();
+        clases.Single(c => c.GetProperty("class").GetInt32() == Numero("Assembly")).GetProperty("operable").GetBoolean().Should().BeTrue();
+        clases.Should().OnlyContain(c => c.GetProperty("operable").GetBoolean());
     }
 
     [Fact]

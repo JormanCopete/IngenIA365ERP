@@ -134,7 +134,33 @@ public sealed class CapturePhysicalCountCommandHandler(
                 }
                 ubicacionId = u.Id;
             }
-            var linea = lineas.Concat(nuevas).FirstOrDefault(l => l.ProductId == producto.Id && l.LotId == null
+            // I6 (T930): la captura va por lote cuando el producto lo controla (el lote tiene que existir: la foto y el ajuste van por él).
+            int? loteId = null;
+            var codigoDeLote = Documents.ReglasDeSeguimiento.Normalizar(lectura.LotCode);
+            var controlaLote = await db.Products.AsNoTracking().Where(p => p.Id == producto.Id).Select(p => p.TracksLot).FirstOrDefaultAsync(ct);
+            if (controlaLote)
+            {
+                if (codigoDeLote is null)
+                {
+                    var requerido = Catalog.CatalogErrors.LotRequired(producto.Code);
+                    rechazadas.Add(new RejectedReadDto(i, requerido.Code, requerido.Message));
+                    continue;
+                }
+                loteId = await db.Lots.AsNoTracking().Where(l => l.ProductId == producto.Id && l.Code == codigoDeLote).Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
+                if (loteId is null)
+                {
+                    var noExiste = Catalog.CatalogErrors.LotNotFound(producto.Code, codigoDeLote);
+                    rechazadas.Add(new RejectedReadDto(i, noExiste.Code, noExiste.Message));
+                    continue;
+                }
+            }
+            else if (codigoDeLote is not null)
+            {
+                var sinLote = Catalog.CatalogErrors.LotNotTracked(producto.Code);
+                rechazadas.Add(new RejectedReadDto(i, sinLote.Code, sinLote.Message));
+                continue;
+            }
+            var linea = lineas.Concat(nuevas).FirstOrDefault(l => l.ProductId == producto.Id && l.LotId == loteId
                 && (ubicacionId is null ? true : l.LocationId == ubicacionId));
             if (linea is null)
             {
@@ -156,6 +182,7 @@ public sealed class CapturePhysicalCountCommandHandler(
                     DocumentId = conteo.Id,
                     ProductId = producto.Id,
                     LocationId = ubicacionId!.Value,
+                    LotId = loteId,
                     TheoreticalQuantity = 0m,
                     SnapshotUnitCost = await CostoAsync(producto.Id, ct),
                     AddedDuringCapture = true,

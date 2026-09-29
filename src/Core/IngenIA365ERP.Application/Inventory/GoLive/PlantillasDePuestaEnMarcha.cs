@@ -45,9 +45,9 @@ public static class PlantillaDeSaldoInicial
             new(Cantidad, TipoDeValor.Cantidad, Obligatoria: true,
                 Reglas: "mayor que cero, en unidad base, con los decimales que admite la unidad", Ejemplo: "120"),
             new(CostoUnitario, TipoDeValor.Costo, Obligatoria: true, Reglas: "cero o más; entra al costo cargado (cero se admite con aviso)", Ejemplo: "1850,000000"),
-            new(Lote, TipoDeValor.Texto, Largo: 30, Reglas: "se habilita con la entrega I6"),
-            new(Vencimiento, TipoDeValor.Fecha, Reglas: "se habilita con la entrega I6"),
-            new(Serie, TipoDeValor.Texto, Largo: 60, Reglas: "se habilita con la entrega I6"),
+            new(Lote, TipoDeValor.Texto, Largo: 30, Reglas: "obligatorio si el producto se controla por lote; vacío si no; entra a la llave"),
+            new(Vencimiento, TipoDeValor.Fecha, Reglas: "del lote; obligatorio si el producto controla vencimiento; un lote tiene una sola fecha"),
+            new(Serie, TipoDeValor.Texto, Largo: 60, Reglas: "obligatoria si el producto se controla por serie (cantidad 1, una fila por serie); entra a la llave"),
         ]),
     ]);
 }

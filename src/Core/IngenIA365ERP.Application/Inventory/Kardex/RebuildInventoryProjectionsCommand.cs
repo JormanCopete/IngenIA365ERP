@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Application.Inventory.Kardex;
 
 /// <summary>
 /// <c>POST /api/inventory/integrity/rebuild</c> (feature 012, T258; contracts/api.md §6.2; FR-003; data-model §3.7): recalcula
-/// <c>INV_StockBalances</c>, <c>INV_StockDetails</c> e <c>INV_CostStates</c> desde el kardex, con motivo y
+/// <c>INV_StockBalances</c> (con <c>Reserved</c> desde las reservas vivas, I6), <c>INV_StockDetails</c> e <c>INV_CostStates</c> desde el kardex, con motivo y
 /// <c>Inventory.Integrity.Rebuild</c>. <b>Nunca toca el kardex</b>: no inserta, modifica ni borra una <c>KardexEntry</c>. Es, con
 /// <c>RegistroDeKardex</c>, el único que escribe las proyecciones (<c>NadieEscribeElKardexFueraDelRegistro</c>). (nuevo)
 ///
@@ -133,6 +133,20 @@ public sealed class RebuildInventoryProjectionsCommandHandler(
             huerfana.Physical = 0m;
         }
 
+        // I6 (T877; data-model §3.2, §3.6; SC-006): Reserved = Σ (QuantityBase − ConsumedQuantityBase) de las reservas Active.
+        var reservadas = (await db.Reservations.AsNoTracking()
+                .Where(r => r.ProductId == producto && r.Status == ReservationStatus.Active && !r.IsDeleted && (bodegas == null || bodegas.Contains(r.WarehouseId)))
+                .Select(r => new { r.WarehouseId, Pendiente = r.QuantityBase - r.ConsumedQuantityBase })
+                .ToListAsync(ct))
+            .GroupBy(r => r.WarehouseId).ToDictionary(g => g.Key, g => g.Sum(r => r.Pendiente));
+        foreach (var fila in existentes)
+        {
+            var esperado = reservadas.GetValueOrDefault(fila.WarehouseId);
+            if (fila.Reserved == esperado) continue;
+            correcciones.Add((TiposDeIncidente.StockBalance, producto, fila.WarehouseId, "Reserved", fila.Reserved, esperado));
+            fila.Reserved = esperado;
+        }
+
         // ------------------------------------------------------------------------- ubicación y lote --
         var porUbicacion = deBodegas.GroupBy(k => (k.WarehouseId, k.LocationId, k.LotId)).ToDictionary(g => g.Key, g => g.Sum(k => k.QuantityBase));
         foreach (var (clave, cantidad) in porUbicacion)
@@ -205,6 +219,30 @@ public sealed class RebuildInventoryProjectionsCommandHandler(
             }
         }
         _capas += capas.Count;
+
+        // ------------------------------------------------------------------------- series (I6, T924) --
+        // Cada serie del producto queda donde su kardex suma una unidad (o fuera de existencia). Las filas de la serie no se crean aquí:
+        // nacen con el borrador que la cita.
+        var seriesDelProducto = await db.Serials.Where(s => s.ProductId == producto).ToListAsync(ct);
+        if (seriesDelProducto.Count > 0)
+        {
+            var porSerie = kardex.Where(k => k.SerialId is not null && k.Kind != KardexEntryKind.CostAdjustment)
+                .GroupBy(k => (SerialId: k.SerialId!.Value, k.WarehouseId, k.LocationId))
+                .Select(g => (g.Key.SerialId, g.Key.WarehouseId, g.Key.LocationId, Cantidad: g.Sum(k => k.QuantityBase)))
+                .Where(x => x.Cantidad > 0m)
+                .ToList();
+            foreach (var serie in seriesDelProducto)
+            {
+                var donde = porSerie.Where(x => x.SerialId == serie.Id).OrderByDescending(x => x.Cantidad).FirstOrDefault();
+                int? bodega = donde.SerialId == 0 ? null : donde.WarehouseId;
+                int? ubicacion = donde.SerialId == 0 ? null : donde.LocationId;
+                if (bodegas is not null && !(bodega is int b1 && bodegas.Contains(b1)) && !(serie.InStockWarehouseId is int b2 && bodegas.Contains(b2))) continue;
+                if (serie.InStockWarehouseId != bodega)
+                    correcciones.Add((TiposDeIncidente.Serial, producto, bodega ?? serie.InStockWarehouseId, "InStockWarehouseId", serie.InStockWarehouseId ?? 0, bodega ?? 0));
+                serie.InStockWarehouseId = bodega;
+                serie.InStockLocationId = ubicacion;
+            }
+        }
 
         await db.SaveChangesAsync(ct);
         return (existentes.Count, detallesExistentes.Count, costosExistentes.Count);

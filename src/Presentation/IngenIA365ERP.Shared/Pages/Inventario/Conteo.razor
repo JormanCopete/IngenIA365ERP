@@ -16,7 +16,9 @@
    motivo—; la ronda 2 sólo acepta las líneas marcadas para reconteo. «Cerrar» compara, exige el reconteo y numera. Después, la
    vista previa del ajuste (fecha según Conteo.FechaDelAjuste, valor al promedio de esa fecha) y «Generar ajuste», que nace en
    aprobación de alguien que no abrió ni contó. Descartar (abierto o borrador) y anular (cerrado) piden motivo. En un conteo ciego
-   quien sólo captura no ve el teórico: lo decide el servidor (ShowsTheoretical). *@
+   quien sólo captura no ve el teórico: lo decide el servidor (ShowsTheoretical). I6 (T940): la foto y la captura van por lote cuando el
+   producto lo controla —el campo «Lote» acompaña cada lectura hasta que se cambie; un lote que no existe lo rechaza el servidor— y la
+   tabla muestra el lote de cada línea. *@
 <PermissionGate Required="Inventory.Counts.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -80,6 +82,7 @@
                         </label>
                         <label class="campo">Cantidad por lectura <input class="e-input numero" type="number" step="any" value="@(_cantidad?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="1"
                             @onchange="@(e => _cantidad = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q) ? q : null)" /></label>
+                        <label class="campo">Lote (si el producto lo controla) <input class="e-input" @bind="_lote" maxlength="40" placeholder="sin lote" /></label>
                         <label class="campo campo-ancho">Código (lector: lea y Enter) <input class="e-input" @bind="_codigo" @bind:event="oninput" @onkeydown="@TeclaAsync" placeholder="Código de barras" /></label>
                     </div>
                     <p class="texto-apoyo">@_pendientes.Count lectura(s) sin enviar. Se envían solas cada @TamanoDeTanda lecturas; una cantidad negativa corrige una lectura equivocada.</p>
@@ -110,6 +113,7 @@
                     <thead>
                         <tr>
                             <th>Producto</th><th>Ubicación</th>
+                            @if (c.Lines.Any(x => x.Lot is not null)) { <th>Lote</th> }
                             @if (c.ShowsTheoretical) { <th class="numero">Teórico</th> }
                             <th class="numero">Ronda 1</th><th class="numero">Ronda 2</th><th class="numero">Contado</th>
                             @if (c.ShowsTheoretical) { <th class="numero">Diferencia</th> }
@@ -123,6 +127,7 @@
                             <tr>
                                 <td>@l.Product.Code · @l.Product.Name @(l.AddedDuringCapture ? "(encontrado)" : "")</td>
                                 <td>@l.Location.Code</td>
+                                @if (c.Lines.Any(x => x.Lot is not null)) { <td>@l.Lot</td> }
                                 @if (c.ShowsTheoretical) { <td class="numero">@l.Theoretical?.ToString("N4")</td> }
                                 <td class="numero">@l.CountedRound1?.ToString("N4")</td>
                                 <td class="numero">@l.CountedRound2?.ToString("N4")</td>
@@ -201,6 +206,7 @@
     private Guid? _ubicacion;
     private decimal? _cantidad;
     private string _codigo = "";
+    private string? _lote;
     private string? _motivo;
     private Accion _accion;
 
@@ -262,7 +268,8 @@
     private async Task TeclaAsync(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
     {
         if (e.Key != "Enter" || string.IsNullOrWhiteSpace(_codigo)) return;
-        _pendientes.Add(new LecturaDeConteoRequest(_codigo.Trim(), null, null, _cantidad, _ubicacion, null, DateTime.UtcNow));
+        _pendientes.Add(new LecturaDeConteoRequest(_codigo.Trim(), null, null, _cantidad, _ubicacion,
+            string.IsNullOrWhiteSpace(_lote) ? null : _lote.Trim().ToUpperInvariant(), DateTime.UtcNow));
         _codigo = "";
         if (_pendientes.Count >= TamanoDeTanda) await EnviarAsync();
     }

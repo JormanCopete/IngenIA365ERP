@@ -1,0 +1,5 @@
+{
+  "nombre": "Inventario promedio 0: sin dato, no división por cero",
+  "costoDeVenta": 5000, "saldos": [0, 0], "diasDelPeriodo": 30,
+  "esperado": { "inventarioPromedio": 0, "rotacion": null, "diasDeInventario": null, "sinDato": true }
+}

@@ -1,0 +1,45 @@
+{
+  "nombre": "Precio por cantidad con dos tramos",
+  "descripcion": "Producto 30 a 1.000. Desde 6 unidades, 900; desde 12, 800. La cantidad es la suma de las lineas del producto. Con 5 no llega al primer tramo. Con 6: (1.000 - 900) x 6 = 600. Con dos lineas de 8 y 4 (12 en total) rige el segundo tramo en las dos: (1.000 - 800) x 8 = 1.600 y (1.000 - 800) x 4 = 800.",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "promociones": [
+    {
+      "id": 3,
+      "codigo": "VOLUMEN",
+      "clase": "QuantityPrice",
+      "acumulable": false,
+      "desde": "2026-10-01",
+      "hasta": "2026-12-31",
+      "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 30 } ],
+      "tramos": [
+        { "desde": 6, "precio": 900 },
+        { "desde": 12, "precio": 800 }
+      ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-15",
+      "lineas": [ { "linea": 1, "producto": 30, "categorias": [3], "cantidad": 5, "precio": 1000 } ],
+      "esperado": []
+    },
+    {
+      "fecha": "2026-10-15",
+      "lineas": [ { "linea": 1, "producto": 30, "categorias": [3], "cantidad": 6, "precio": 1000 } ],
+      "esperado": [ { "linea": 1, "promocion": 3, "valor": 600 } ]
+    },
+    {
+      "fecha": "2026-10-15",
+      "lineas": [
+        { "linea": 1, "producto": 30, "categorias": [3], "cantidad": 8, "precio": 1000 },
+        { "linea": 2, "producto": 30, "categorias": [3], "cantidad": 4, "precio": 1000 }
+      ],
+      "esperado": [
+        { "linea": 1, "promocion": 3, "valor": 1600 },
+        { "linea": 2, "promocion": 3, "valor": 800 }
+      ]
+    }
+  ]
+}

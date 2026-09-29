@@ -417,6 +417,79 @@ public sealed class EmisionDeInventario(
         };
     }
 
+    /// <summary>
+    /// <c>NotaDebitoEmitida</c> v1 (I6, T884; mensajes.md §6.12): el mismo contenido que <c>VentaFacturada</c> —lo que se carga por grupo y
+    /// bodega, la foto de impuestos, cómo se cobra (<c>Received</c>) y los totales— sin costo; <c>related</c> es la venta que corrige (lo pone
+    /// el sobre del derivado). (nuevo)
+    /// </summary>
+    public async Task<NotaDebitoEmitidaV1> NotaDebitoAsync(InventoryDocument nota, IReadOnlyList<DocumentTaxLine> impuestos,
+        IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
+    {
+        var caja = await DeCajaAsync(nota, ct);
+        var canal = nota.SalesChannelId is int c ? await db.SalesChannels.AsNoTracking().Where(x => x.Id == c).Select(x => x.Code).FirstOrDefaultAsync(ct) : null;
+        return new NotaDebitoEmitidaV1
+        {
+            SalesChannelCode = canal,
+            PointOfSaleCode = caja.PointOfSaleCode,
+            CashRegisterCode = caja.CashRegisterCode,
+            CashSessionPublicId = caja.CashSessionPublicId,
+            Lines = await LineasDeVentaAsync(nota, ct),
+            Taxes = await RenglonesDeImpuestoAsync(nota, impuestos, ct),
+            Payments = await LineasDePagoAsync(nota, pagos.Where(p => p.Direction == PaymentDirection.Received).ToList(), ct),
+            Totals = Totales(nota),
+        };
+    }
+
+    /// <summary>
+    /// Lo que una nota débito cobrada con crédito le dice a Cartera (I6, T885; mensajes.md §8.2; contracts/api.md §23.4): por cada pago de
+    /// crédito de la nota, un <c>AjusteDeVentaACredito</c> con <c>AdjustmentClass = DebitNote</c>, el monto <b>positivo</b>, las condiciones
+    /// del valor nuevo (<c>terms</c>) y el <c>OriginalMessageId</c> de la <c>VentaACreditoRegistrada</c> de la venta que corrige (el mismo medio
+    /// primero, si no el primero de la venta), con su mismo sello. Si la venta no fue a crédito —o su crédito no se registró— no hay qué
+    /// ajustar: el pago de crédito de la nota se registra como venta a crédito propia (decisiones-transversales T53a). (nuevo)
+    /// </summary>
+    public async Task<IReadOnlyList<object>> CreditoDeLaNotaDebitoAsync(InventoryDocument nota, InventoryDocument original, IReadOnlyList<DocumentPayment> pagos,
+        CancellationToken ct)
+    {
+        var creditos = pagos.Where(p => p.Direction == PaymentDirection.Received && !p.IsDeleted && p.EsCredito).OrderBy(p => p.LineNumber).ToList();
+        if (creditos.Count == 0) return [];
+        var deLaVenta = await db.DocumentPayments.AsNoTracking()
+            .Where(p => p.DocumentId == original.Id && !p.IsDeleted && p.Direction == PaymentDirection.Received
+                && (p.MeansClass == PaymentMeansClass.AssociateCredit || p.MeansClass == PaymentMeansClass.CustomerCredit))
+            .OrderBy(p => p.LineNumber).ToListAsync(ct);
+        var registradas = await db.IntegrationMessages.AsNoTracking()
+            .Where(m => m.OriginPublicId == original.PublicId && m.Type == VentaACreditoRegistradaV1.Type)
+            .Select(m => new { m.PublicId, m.OriginEventKey }).ToListAsync(ct);
+
+        var contenidos = new List<object>();
+        var sinPar = new List<DocumentPayment>();
+        foreach (var p in creditos)
+        {
+            var par = deLaVenta.FirstOrDefault(o => o.PaymentMeansId == p.PaymentMeansId) ?? deLaVenta.FirstOrDefault();
+            var mensaje = par is null
+                ? null
+                : registradas.FirstOrDefault(m => m.OriginEventKey == IngenIA365ERP.Application.Common.Integration.ClavesDeEvento.ConfirmacionPor(par.PublicId));
+            if (par is null || mensaje is null)
+            {
+                sinPar.Add(p);
+                continue;
+            }
+            contenidos.Add(new AjusteDeVentaACreditoV1
+            {
+                AdjustmentClass = "DebitNote",
+                Amount = p.Amount,
+                OriginalMessageId = mensaje.PublicId,
+                OriginalCreditPaymentPublicId = par.PublicId,
+                OriginalDocument = Referencia(original),
+                PaymentMeansCode = p.MeansCode,
+                Terms = CondicionesDelCredito(p, nota.OperationDate),
+                Reason = nota.Reason,
+                AccountsReceivableRecordedBy = par.AccountsReceivableRecordedBy ?? Sales.CreditoEnLaVenta.Contabilidad,
+            });
+        }
+        if (sinPar.Count > 0) contenidos.AddRange(await VentasACreditoAsync(nota, sinPar, ct));
+        return contenidos;
+    }
+
     /// <summary><c>DevolucionRegistrada</c> v1 de una devolución de cliente (§6.8): <c>Entry</c> al costo con que salió.</summary>
     public async Task<DevolucionRegistradaV1> DevolucionDeClienteAsync(InventoryDocument nota, IEnumerable<KardexEntry> kardex, CancellationToken ct) => new()
     {

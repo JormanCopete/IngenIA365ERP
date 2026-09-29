@@ -84,6 +84,33 @@ public static class MotorDeCosteo
         return new ImpactoEnCostos(retroactivo, resultado.PorDocumento, resultado.Ajustes.Sum(a => a.TotalCost), resultado, resultado.Rechazo);
     }
 
+    /// <summary>
+    /// La venta de un combo (US15-2, I6, T917; FR-044): una salida por componente —cantidad por combo × combos, en su unidad base— al
+    /// costo vigente de su ámbito, y el costo de venta es la suma (<see cref="ResultadoDeCompuesto{TClave}.Costo"/>). El combo no tiene
+    /// kardex propio. La devolución por nota crédito es el mismo llamado con entradas al costo con que salió cada componente
+    /// (<see cref="ValoracionDelMovimiento.AlCostoDeOrigen"/>). Si un componente no alcanza, no sale ninguno y el rechazo lo nombra.
+    /// </summary>
+    public static ResultadoDeCompuesto<TClave> MoverCombo<TClave>(IReadOnlyList<MovimientoDeComponente<TClave>> componentes,
+        ParametrosDeCosteo parametros) =>
+        ComboYEnsamble.Mover(componentes, parametros, "combo");
+
+    /// <summary>
+    /// El ensamble de kits (documento <c>Assembly</c>; US15-3, I6, T917): salen los componentes al costo de su ámbito y entra el kit
+    /// por <see cref="EntradaDeEnsamble"/> con lo consumido. Todo o nada.
+    /// </summary>
+    public static ResultadoDeEnsamble<TClave> Ensamblar<TClave>(IReadOnlyList<MovimientoDeComponente<TClave>> componentes,
+        EstadoDeCosto estadoDelKit, decimal cantidadDelKit, ParametrosDeCosteo parametros, DateOnly? fecha) =>
+        ComboYEnsamble.Ensamblar(componentes, estadoDelKit, cantidadDelKit, parametros, fecha);
+
+    /// <summary>
+    /// La entrada del kit al costo de lo consumido (I6, T917): Σ de las salidas de los componentes ÷ la cantidad, a 6 decimales; el
+    /// residuo que deje ese redondeo va en una línea <c>RoundingResidue</c> sobre la entrada, así el kit entra exactamente por lo
+    /// consumido (FR-017).
+    /// </summary>
+    public static ResultadoDeCosteo EntradaDeEnsamble(EstadoDeCosto estadoDelKit, decimal cantidad, decimal costoConsumido,
+        ParametrosDeCosteo parametros, DateOnly? fecha) =>
+        ComboYEnsamble.EntradaDeEnsamble(estadoDelKit, cantidad, costoConsumido, parametros, fecha);
+
     public static ResultadoDeCosteo CostoAdicional(EstadoDeCosto estado, ReferenciaDeKardex entrada, RepartoDeLinea reparto,
         CostMethod metodo = CostMethod.WeightedAverage, RedondeoDeMontos montos = RedondeoDeMontos.Centavo) =>
         Costing.Prorrateo.AlKardex(estado, entrada, reparto, metodo, montos);

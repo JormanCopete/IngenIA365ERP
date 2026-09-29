@@ -10,7 +10,9 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// <c>Inventory.Adjustments.{View, Create, Confirm, Void}</c>, <c>Idempotency-Key</c> en toda escritura
 /// (<c>LosComandosDeInventarioLlevanClave</c>) y el 404 fuera del alcance. Lo publica <see cref="CicloDeDocumentoRutas"/>: las
 /// reglas de cada clase las ponen sus estrategias (<c>EfectoDeAjustePositivo</c>, <c>EfectoDeSalidaPorAjuste</c>). El movimiento
-/// entre ubicaciones (US10) y el ensamble (I6) se montan sobre esta misma ruta. (nuevo)
+/// entre ubicaciones (US10) y el ensamble (I6, T935) se montan sobre esta misma ruta: la clase <c>Assembly</c> llega con el cuerpo
+/// <c>assembly { kitProductPublicId, quantity }</c> de <c>SaveInventoryDraftRequest</c> y su estrategia <c>EfectoDeEnsamble</c> propone las líneas de
+/// componentes y la del kit (contracts/api.md §10). (nuevo)
 /// </summary>
 public class AdjustmentsEndpoints : ICarterModule
 {

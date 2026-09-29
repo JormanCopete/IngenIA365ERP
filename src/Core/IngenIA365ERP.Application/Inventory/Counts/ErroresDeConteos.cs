@@ -28,9 +28,9 @@ public static class ErroresDeConteos
     public static Error EmptyScope() => new("Inventory.Count.EmptyScope",
         "El alcance del conteo no tiene productos en la bodega: revise la categoría, la ubicación o la selección.");
 
-    /// <summary>El conteo por clase ABC llega en I6.</summary>
-    public static Error ScopeNotAvailable(CountScope scope) => new ErrorConDatos("Inventory.Count.ScopeNotAvailable",
-        "El conteo por clase ABC todavía no está disponible.", new { scope = scope.ToString() });
+    /// <summary>I6 (T930): el conteo por clase ABC pide la clase A, B o C. (nuevo)</summary>
+    public static Error AbcClassInvalid(string? abcClass) => new ErrorConDatos("Inventory.Count.AbcClassInvalid",
+        $"El conteo por clase ABC pide la clase A, B o C{(string.IsNullOrWhiteSpace(abcClass) ? string.Empty : $"; «{abcClass}» no lo es")}.", new { abcClass });
 
     public static Error NotOpen() => new("Inventory.Count.NotOpen",
         "El conteo no está abierto: se abre con su foto antes de capturar, y después de cerrarlo ya no se captura.");

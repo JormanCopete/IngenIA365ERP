@@ -1,0 +1,118 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+
+@*
+    Feature 012, I6, T938 (US15-4, US15-5; FR-026; contracts/api.md §17.1, GET /api/inventory/lots): el lote, el vencimiento y la serie de una
+    línea, para el editor de líneas de ajustes, traslados, compras y ventas.
+    - En una ENTRADA pide el código del lote y, si el producto controla vencimiento, la fecha (el lote nace con la primera entrada; el mismo
+      código con otra fecha lo rechaza el servidor, Inventory.Lot.ExpiryMismatch).
+    - En una SALIDA propone el lote que vence primero con existencia en la bodega (Suggested) y deja elegir otro; marca los vencidos y los
+      próximos a vencer. Dejarlo vacío es «el que vence primero»: el servidor reparte la salida entre lotes al confirmar y aplica
+      Ventas.LoteVencido.
+    - Con serie, el campo recibe la lectura del lector (código + Enter): cada lectura es una unidad; la pantalla la pone en su línea.
+    Sólo se muestra lo que el producto controla. (nuevo)
+*@
+
+@if (ControlaLote || ControlaSerie)
+{
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="toolbar">
+            @if (ControlaLote)
+            {
+                @if (Entrada)
+                {
+                    <input class="e-input" placeholder="Lote" maxlength="40" disabled="@Deshabilitado" value="@Lote"
+                           @onchange="@(e => CambiarLoteAsync(e.Value?.ToString()))" aria-label="Lote" />
+                    @if (ControlaVencimiento)
+                    {
+                        <input class="e-input" type="date" disabled="@Deshabilitado" value="@(Vencimiento?.ToString("yyyy-MM-dd"))" aria-label="Vencimiento"
+                               @onchange="@(e => VencimientoChanged.InvokeAsync(DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null))" />
+                    }
+                }
+                else
+                {
+                    <select class="e-input" disabled="@Deshabilitado" value="@(Lote ?? "")" @onchange="@(e => CambiarLoteAsync(e.Value?.ToString()))" aria-label="Lote">
+                        <option value="">@(Sugerido is { } s ? $"El que vence primero ({s.Code})" : "El que vence primero")</option>
+                        @foreach (var l in _lotes)
+                        {
+                            <option value="@l.Code" class="@(l.Vencido || l.ProximoAVencer ? "texto-alerta" : "")">@Texto(l)</option>
+                        }
+                    </select>
+                }
+            }
+            @if (ControlaSerie)
+            {
+                <input class="e-input" placeholder="Serie (lector + Enter)" maxlength="60" disabled="@Deshabilitado" value="@Serie" aria-label="Serie"
+                       @onkeydown="@LeerSerieAsync" @onchange="@(e => SerieChanged.InvokeAsync(Normalizar(e.Value?.ToString())))" />
+            }
+        </div>
+        @if (!Entrada && LoteElegido is { Vencido: true } vencido)
+        {
+            <p class="aviso aviso-alerta">El lote @vencido.Code venció el @vencido.ExpiryDate?.ToString("dd/MM/yyyy"): según la política de la cooperativa, la venta se bloquea o sale con aviso.</p>
+        }
+        else if (!Entrada && LoteElegido is { ProximoAVencer: true } pronto)
+        {
+            <p class="texto-tenue">El lote @pronto.Code vence el @pronto.ExpiryDate?.ToString("dd/MM/yyyy").</p>
+        }
+    </IndicadorDeCarga>
+}
+
+@code {
+    /// <summary>El producto de la línea.</summary>
+    [Parameter] public Guid Producto { get; set; }
+
+    /// <summary>La bodega de donde sale (para proponer el lote); en una entrada no se usa.</summary>
+    [Parameter] public Guid? Bodega { get; set; }
+
+    /// <summary>¿La línea entra a la bodega (pide lote y vencimiento) o sale (propone el lote)?</summary>
+    [Parameter] public bool Entrada { get; set; }
+
+    [Parameter] public bool ControlaLote { get; set; }
+    [Parameter] public bool ControlaVencimiento { get; set; }
+    [Parameter] public bool ControlaSerie { get; set; }
+    [Parameter] public bool Deshabilitado { get; set; }
+
+    [Parameter] public string? Lote { get; set; }
+    [Parameter] public EventCallback<string?> LoteChanged { get; set; }
+    [Parameter] public DateOnly? Vencimiento { get; set; }
+    [Parameter] public EventCallback<DateOnly?> VencimientoChanged { get; set; }
+    [Parameter] public string? Serie { get; set; }
+    [Parameter] public EventCallback<string?> SerieChanged { get; set; }
+
+    /// <summary>Una serie leída con el lector (Enter): la pantalla decide si la pone en esta línea o abre otra (cada serie es una unidad).</summary>
+    [Parameter] public EventCallback<string> SerieLeida { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<LoteDto> _lotes = [];
+    private (Guid, Guid?, bool)? _cargado;
+
+    private LoteDto? Sugerido => _lotes.FirstOrDefault(l => l.Suggested);
+    private LoteDto? LoteElegido => string.IsNullOrEmpty(Lote) ? Sugerido : _lotes.FirstOrDefault(l => l.Code == Lote);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!ControlaLote || Entrada || Producto == Guid.Empty) return;
+        var clave = (Producto, Bodega, Entrada);
+        if (_cargado == clave) return;
+        _cargado = clave;
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarLotesAsync(Producto, Bodega, incluirVencidos: true);
+        _lotes = r.IsSuccess ? [.. r.Value ?? []] : [];
+    }
+
+    private static string Texto(LoteDto l) =>
+        $"{l.Code} · {l.Quantity:N2}" + (l.ExpiryDate is { } v ? $" · vence {v:dd/MM/yyyy}" : "")
+        + (l.Vencido || l.ProximoAVencer ? $" · {TextosDeInventario.EstadoDeLote(l.State).ToLowerInvariant()}" : "");
+
+    private Task CambiarLoteAsync(string? valor) => LoteChanged.InvokeAsync(Normalizar(valor));
+
+    private async Task LeerSerieAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        // El valor lo trae @onchange (que dispara al perder el foco o con Enter); aquí sólo se avisa que la lectura terminó.
+        if (!string.IsNullOrWhiteSpace(Serie)) await SerieLeida.InvokeAsync(Serie);
+    }
+
+    private static string? Normalizar(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim().ToUpperInvariant();
+}

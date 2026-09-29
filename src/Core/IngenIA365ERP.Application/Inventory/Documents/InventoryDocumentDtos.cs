@@ -40,7 +40,8 @@ public sealed record SaveInventoryDraftRequest(
     IReadOnlyList<Guid>? ReceiptPublicIds = null,
     decimal? Amount = null,
     LandedCostAllocationMethod? Method = null,
-    IReadOnlyList<ManualAllocationRequest>? ManualAllocations = null)
+    IReadOnlyList<ManualAllocationRequest>? ManualAllocations = null,
+    IngenIA365ERP.Application.Inventory.Documents.Efectos.AssemblyRequest? Assembly = null)
 {
     /// <summary>La contraparte: la del ciclo común o, en compras, el proveedor (<c>supplierPersonPublicId</c>, api.md §14).</summary>
     public Guid? Contraparte => CounterpartyPersonPublicId ?? SupplierPersonPublicId;

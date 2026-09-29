@@ -182,6 +182,10 @@ public static class DependencyInjection
         // reconstruccion); las estrategias de ajuste (Scoped: recuerdan lo preparado por documento) se registran por clase; la
         // existencia real reemplaza a ExistenciasSinKardex; PosicionDeReposicion es el unico lector de la posicion de reposicion.
         services.AddScoped<Inventory.Kardex.RegistroDeKardex>();
+        // Feature 012, I6 (T923): las reglas de lote, vencimiento y serie del borrador y de la confirmacion (el registro las repite en el cerrojo).
+        services.AddScoped<Inventory.Documents.ReglasDeSeguimiento>();
+        // I6 (T928): el ensamble de kits (grupo Adjustments); opera cuando el despliegue llega a I6.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeEnsamble>();
         services.AddScoped<Inventory.Kardex.ReversionDeKardex>();
         services.AddScoped<Inventory.Kardex.VerificacionDeIntegridad>();
         services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
@@ -204,6 +208,9 @@ public static class DependencyInjection
         // Feature 012 (US3, T287-T291): el valorizado a una fecha (cierre y vista valuation), la revision del cierre y la
         // reclasificacion de grupo contable (comando y plantilla de productos).
         services.AddScoped<Inventory.Periods.ValorizadoALaFecha>();
+        // Feature 012, I6, US17 (T960-T967): la analitica de inventario (margen, rotacion, consumo, sin movimiento, por vencer) que
+        // comparten las vistas de I6, el motivo «sin movimiento» de impairment y el tablero.
+        services.AddScoped<Inventory.Reports.AnaliticaDeInventario>();
         services.AddScoped<Inventory.Periods.RevisionDeCierre>();
         services.AddScoped<Inventory.Catalog.Products.ReclasificacionDeGrupo>();
         services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();
@@ -352,6 +359,15 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaCreditoDeVenta>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeAjustePos>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeVentaNoElectronica>();
+        // I6 (T877-T889): el ciclo comercial. Las reservas (único escritor de INV_Reservations y de Reserved), los vínculos del ciclo y
+        // las estrategias de cotización, pedido, remisión, factura desde remisiones y nota débito. Operan cuando el despliegue llega a I6.
+        services.AddScoped<Inventory.Sales.Reservas.ReservasDeInventario>();
+        services.AddScoped<Inventory.Sales.CicloComercial.VinculosDelCiclo>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeCotizacion>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDePedido>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeRemision>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeFacturaDesdeRemisiones>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDebito>();
         // I3 (T617-T620): la caja. El grupo Cash por el ciclo común (borrador del movimiento, sus dos estrategias) y los servicios que
         // comparten las sesiones, el arqueo y los movimientos.
         services.AddScoped<Inventory.Cash.SesionesDeCaja>();

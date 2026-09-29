@@ -89,8 +89,15 @@ public sealed class EfectoRecepcionDeTraslado(
             foreach (var linea in grupo.Where(l => l.QuantityBase > 0m))
             {
                 linea.ToLocationId ??= ubicaciones.TryGetValue(hacia, out var u) ? u : null;
+                // I6 (T924): con una sola entrada al tránsito por la línea del despacho, sale su lote y su serie; con varias (un despacho
+                // repartido entre lotes), el registro reparte en el tránsito por el que vence primero.
+                var unica = entradasAlTransito.Count(k => k.DocumentLineId == grupo.Key) == 1 ? entrada : null;
                 var sale = new MovimientoDeKardex(linea, transito, -linea.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen, entrada.UnitCost,
-                    LocationId: entrada.LocationId);
+                    LocationId: entrada.LocationId)
+                {
+                    LotId = unica?.LotId,
+                    SerialId = unica?.SerialId,
+                };
                 movimientos.Add(sale);
                 movimientos.Add(new MovimientoDeKardex(linea, hacia, linea.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen, entrada.UnitCost,
                     LocationId: linea.ToLocationId, AlCostoDe: sale));

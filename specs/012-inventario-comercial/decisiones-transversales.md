@@ -633,7 +633,7 @@ en `appsettings`, sección `Integration` (T10).
 
 | Área | Prefijo | Archivo de rutas |
 |---|---|---|
-| Catálogo | `/api/inventory/{units, product-categories, brands, accounting-groups, products, products/search, products/{id}/barcodes, products/{id}/units, products/{id}/taxes, products/{id}/accounting-group, adjustment-causes, sales-channels}` | `Endpoints/Inventory/CatalogEndpoints.cs` |
+| Catálogo | `/api/inventory/{units, product-categories, brands, accounting-groups, products, products/search, products/{id}/barcodes, products/{id}/units, products/{id}/taxes, products/{id}/accounting-group, adjustment-causes, sales-channels}`; I6 (T934, nuevas) `variant-attributes`, `products/{id}/variants`, `products/{id}/components`, `lots`, `serials` y `products/search?forSale=` | `Endpoints/Inventory/CatalogEndpoints.cs` |
 | Bodegas y existencias | `/api/inventory/{warehouse-types, warehouses, warehouses/{id}/locations, warehouses/{id}/activation, reorder-policies, stock, integrity/verify, integrity/rebuild}` | `WarehousesEndpoints.cs`, `StockEndpoints.cs` |
 | Tipos y documentos genéricos | `/api/inventory/{document-types, documents}` (lista y detalle con alcance; sin escritura); I5 `documents/{id}/cost-impact` (consulta sin clave: `MotorDeCosteo.SimularImpacto`, sin guardar) | `DocumentTypesEndpoints.cs`, `DocumentsEndpoints.cs` |
 | Ajustes, consumos, bajas, ensamble, ubicaciones | `/api/inventory/adjustments` (+ `/{id}`, `/{id}/confirm`, `/{id}/void`, `/{id}/discard`) | `AdjustmentsEndpoints.cs` |
@@ -829,7 +829,7 @@ JSON embebidos versionados (T40), no semillas.
 | I3 | `VentasYPuntoDeVenta` | aditiva | `COR_PaymentMeans`, `COR_Card*`, `COR_CashDenominations`, tablas `INV_` de I3. |
 | I4 | `DocumentosElectronicos` | aditiva | `COR_ElectronicEmissionSettings`, `COR_DianNumberingResolutions`, `COR_DianResolutionChannels`, `COR_ElectronicDocuments`, `COR_ElectronicDocumentVersions`, `COR_ElectronicDocumentTransmissions`, `COR_DianContingencyEvents`. |
 | I5 | `ComprasYCosteoAvanzado` | aditiva | `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`, `INV_LayerConsumptions`; columnas `BalanceClosedAt`, `BalanceClosedByUserId` (FK `SEC_Users`, `IX_INV_Documents_BalanceClosedByUserId`), `BalanceClosedReason` y `ExpectedDate` (data-model §5.1, I5; la necesitan la solicitud y la orden de T787/T790 y no se puede sumar después sin otra migración) en `INV_Documents`. Generada el 2026-09-28 (T835); `AllocationMethod` **no** va en `INV_Documents` (vive por fila en `INV_LandedCostAllocations`, T778). |
-| I6 | `ComercioAmpliado` | aditiva | variantes, componentes, lotes, series, reservas, promociones. |
+| I6 | `ComercioAmpliado` | aditiva | variantes, componentes, lotes, series, reservas, promociones: `INV_ProductComponents`, `INV_VariantAttributes`, `INV_VariantAttributeValues`, `INV_ProductVariantValues`, `INV_Lots`, `INV_Serials`, `INV_Reservations`, `INV_Promotions`, `INV_PromotionScopes` (con el `CHECK` **(nuevo)** `CK_INV_PromotionScopes_OneTarget`: una sola columna destino por fila), `INV_PromotionTiers`; columnas `INV_Products.ParentProductId`/`VariantKey` (`UK_INV_Products_Parent_VariantKey` filtrado) e `INV_DocumentLineDiscounts.PromotionId`; FK de `LotId` en `INV_KardexEntries`, `INV_DocumentLines`, `INV_StockDetails`, `INV_CountSnapshotLines` e `INV_TransferDiscrepancies` (ésta **(nuevo)**: §0 «FK `Restrict` siempre») y de `SerialId` en las dos primeras, sin tocar los índices únicos de las proyecciones. Generada el 2026-09-29 (T860): el lado SQL Server con `add-migration.ps1`; el de PostgreSQL con `dotnet ef` y el ensamblado de migraciones como arranque (la API no tiene cadena de PostgreSQL en el worktree), como en I4 e I5. Scaffold revisado sin cambios ajenos; paridad verificada. Los `CHECK` se escriben en T-SQL con corchetes y `ProviderModelConventions.ApplyPortableIndexFilters` los traduce a PostgreSQL igual que los filtros de índice **(nuevo)**. |
 
 ### 2.16 Componentes con nombre fijo
 
@@ -2047,6 +2047,132 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     (`AddParameterVersionCommandTests`, `LectorDeParametrosTests`, `RetroactivoMinimoTests`) y las de clases operables
     (`DocumentTypeCommandsTests`, e2e `TiposDeDocumentoTests`) esperan la orden y los costos adicionales operables y el ensamble no. Todo
     sobre `CanalSimulado`. Pruebas: ver §2.18.
+- **I6, promociones (T872–T876; 2026-09-29) (nuevo)**: Domain puro `Sales/Promotions/MotorDePromociones` (`Aplicar`, `Aplica`,
+    `AlcanzaLinea`) con sus piezas `LineaDePromocion` (cantidad en **unidad base**, precio por unidad base **sin impuestos**, `BrutoDado`),
+    `ContextoDePromocion`, `PromocionVigente`, `AmbitoDePromocion`, `TramoDePromocion`, `DescuentoDePromocion` (con `Residuo` y
+    `Explicacion`), `PromocionDescartada` y `ResultadoDePromociones`. En Application `Inventory/Pricing/Promotions/`: `CreatePromotionCommand`,
+    `UpdatePromotionCommand` (con sus validadores), `ListPromotionsQuery`, `GetPromotionQuery`, `PromotionDto` / `PromotionScopeDto` /
+    `PromotionTierDto`, `PromotionScopeInput` / `PromotionTierInput`, `MecanicaDePromocion`, `ReglasDePromociones` (coherencia clase-campos,
+    ámbitos a Id, comparación) y `VistaDePromociones` (`EnUsoAsync`, `ListarAsync`); `LectorDePromocionesVigentes` (una consulta; categorías
+    expandidas a sus descendientes por `Path`; segmento y canal) con `PromocionesParaElDocumento` y `ProductoParaPromocion`.
+    `DescuentoCalculado` gana `Source`, `PromotionId` y `Explicacion`; `SalesLineDiscountDto` y `PosLineDiscountDto` ganan
+    `PromotionPublicId` y `PromotionName`; `ResolvedPriceDto` gana `Promotions` (`ResolvedPromotionDto`: las vigentes que alcanzan al
+    producto). Slug `promociones` en `BuscarCodigoDeCatalogoQuery`. Reglas en T51a.
+- **I6, documentos del ciclo comercial (T877–T890; 2026-09-29) (nuevo)**: `Application/Inventory/Sales/Reservas/ReservasDeInventario`
+    (`Reservar`, `ConsumirAsync`, `LiberarAsync`, `VencidasAsync`, `VencerAsync`, `Claves`, `Pendiente`; `ConsumoDeReserva`), único escritor de
+    `INV_Reservations` y de `Reserved`; `ReleaseExpiredReservationsCommand` y `TareaDeReservasVencidas` (`inventario.reservas`);
+    `Sales/Shipments/RaiseUnbilledShipmentAlertsCommand` (condición `RemisionSinFacturar:{shipmentPublicId}`) y `TareaDeRemisionesSinFacturar`
+    (`inventario.remisiones`), las dos tareas sólo desde I6; `Sales/Quotes/ConvertQuoteToOrderCommand`; `Sales/CicloComercial/VinculosDelCiclo`
+    (`ReemplazarAsync`, `ParesAsync`, `OrigenesAsync`, `PendientePorDespacharAsync`, `PendientePorFacturarAsync`; `ParDelCiclo`) y
+    `ErroresDelCicloComercial`; en `SalesDraftCommands`, `RutasDeVenta` (`Facturas`, `Cotizaciones`, `Pedidos`, `Remisiones`, `NotasDebito`,
+    `OrigenDe`, `Cobra`), `SalesLineInput.OriginLinePublicId`, `SalesDraftInput.{ValidUntil, CorrectionConceptCode}` y
+    `ComoBorrador(clasesDeLaRuta)`, `DatosDeVentaDelBorrador.{OriginPublicIds, ValidUntil, ClasesAdmitidas}`. Estrategias
+    `Documents/Efectos/EfectoDeCotizacion`, `EfectoDePedido`, `EfectoDeRemision`, `EfectoDeFacturaDesdeRemisiones` (sobre `SalidaPorVenta`, que
+    gana `DescargaExistencia`, `ValidarOrigenesAsync`, `OrigenesQueBloquea` y el consumo de reservas desde `FromOrder`) y `EfectoDeNotaDebito`;
+    `EmisionDeInventario.{NotaDebitoAsync, CreditoDeLaNotaDebitoAsync}`; `ReglasDeConfirmacionDeVenta.VeredictoFiscalAsync`;
+    `RevisionDeCierre.RemisionesSinFacturarAsync`. Reglas en T53a.
+- **I6, API y pantallas del ciclo comercial (T891–T901; 2026-09-29) (nuevo)**: en `API/Endpoints/Inventory/SalesEndpoints`,
+    `CicloComercial` (los prefijos `/sales/{quotes, orders, shipments, debit-notes}` por `MapBorradoresDeVenta`, que devuelve el grupo, y
+    `POST /quotes/{id}/to-order` con `ConvertirEnPedidoRequest`), `Promociones` (`/api/inventory/promotions` con `PricingEndpoints.PermisoDeConsulta` y
+    `.PermisoDeListas`); `/invoices` pasa `RutasDeVenta.Facturas` (admite la factura desde remisiones). Lectura para las pantallas (sin
+    columnas nuevas): `SalesDocumentDto.{ValidUntil, CorrectionConceptCode, Origins}`, `SalesLineDto.{OriginLinePublicId, Pending}` (lo
+    pendiente por despachar o facturar de la línea de un pedido confirmado, por facturar de la de una remisión confirmada, por
+    `VinculosDelCiclo`) y `SalesDocumentSummaryDto.CounterpartyPersonPublicId`. En Shared: `VentasClient.Rutas.{Cotizaciones, Pedidos,
+    Remisiones, NotasDebito, Promociones}`, `GuardarBorradorAsync(ruta, …)`, `ConvertirEnPedidoAsync`, `ListarPromocionesAsync`,
+    `ObtenerPromocionAsync`, `CrearPromocionAsync`, `EditarPromocionAsync`; espejos `PromocionDto`, `AmbitoDePromocionDto`,
+    `TramoDePromocionDto`, `PromocionRequest`, `EdicionDePromocionRequest`, `AmbitoDePromocionRequest`, `TramoDePromocionRequest`,
+    `ConvertirEnPedidoRequest`; `TextosDeVentas.{ClasesDePromocion, NombresDeClaseDePromocion, AmbitosDePromocion, DescuentoDePromocion,
+    Clase*}`; `Services/Ventas/FormularioDelCiclo` y `LineaDelCiclo` (releer un borrador conservando la línea origen y sin tomar la promoción
+    como descuento manual); el componente `Components/Ventas/EditorDelCiclo` (el borrador de cotización, pedido, remisión y nota débito:
+    guardar, confirmar, anular y descartar detrás de su permiso, existencias por línea, pendiente, promociones y pagos); las páginas
+    `Pages/Ventas/{Cotizaciones, Pedidos, Remisiones, NotasDebito, Promociones}`; `NuevaFactura` gana `?pedido=` y `?remisiones=`; el detalle
+    de la venta y `LineasDeVenta` del POS dicen la promoción; cinco temas `ventas-{cotizaciones, pedidos, remisiones, notas-debito,
+    promociones}` en `ManualCatalogo`.
+- **I6, dominio del catálogo avanzado (T913–T917; 2026-09-29) (nuevo)**: motores puros en `Domain/Inventory/`:
+    `Catalog/GeneradorDeVariantes` (`Generar`, `ClaveDe`, `Normalizar`, `LargoDelCodigo`, `CodigoSinAtributos`, `CodigoAtributoRepetido`,
+    `CodigoAtributosDistintos`) con `PedidoDeVariantes`, `AtributoParaVariantes`, `ValorDeAtributo`, `ValorDeVariante`, `VariantePropuesta`
+    (`CodigoRecortado`, `CodigoRepetido`), `RechazoDeVariantes` y `ResultadoDeVariantes`; `Catalog/ValidadorDeComponentes` (`Validar` y los
+    códigos `CodigoClaseInvalida`, `CodigoCiclo`, `CodigoSinComponentes`, `CodigoNoEsComboNiKit`, `CodigoCantidadInvalida`, `CodigoRepetido`)
+    con `PedidoDeComponentes`, `ProductoDelGrafo`, `ComponentePropuesto`, `ErrorDeComponente` y `ResultadoDeComponentes`;
+    `Tracking/SelectorDeLotes` (`Repartir`, `Ordenar`, `Veredicto`, `EstaVencido`, `PoliticaDesde`, `CodigoLoteVencido`) con los enums
+    `PoliticaDeLoteVencido { Bloquear, Advertir }` y `VeredictoDeLote { Vigente, Bloqueado, Advertido }` (no se guardan), `LoteDisponible`,
+    `PedidoDeLotes` (`AdmiteVencidos`), `LoteOrdenado`, `AsignacionDeLote` y `ResultadoDeLotes` (`Sugerido`, `Completo`, `HayVencidos`,
+    `Excluidos`); `Analytics/ClasificacionAbc` (`Clasificar<TClave>`) con el enum `ClaseAbc { A, B, C }` (no se guarda), `UmbralesAbc`
+    (`Interpretar`, `CodigoNoAdmitido`), `UmbralesInterpretados`, `ValorParaAbc<TClave>` y `FilaAbc<TClave>`. En el costeo,
+    `MotorDeCosteo.{MoverCombo<TClave>, Ensamblar<TClave>, EntradaDeEnsamble}` sobre `Costing/ComboYEnsamble` (interno) con
+    `MovimientoDeComponente<TClave>`, `ResultadoDeComponente<TClave>`, `ResultadoDeCompuesto<TClave>` (`Costo`, `ComponenteRechazado`) y
+    `ResultadoDeEnsamble<TClave>` (`Kit`, `CostoConsumido`). Reglas en T54a.
+- **I6, aplicación del catálogo avanzado (T918–T922; 2026-09-29) (nuevo)**: en `Application/Inventory/Catalog/`:
+    `Products/ReglasDeProducto` gana `ClasesConSeguimiento`, `CambiaSeguimiento`, `HistoriaAsync`, `TieneDependientesAsync`,
+    `SeguimientoAsync` y la sobrecarga `Aplicar(…, HistoriaDeProducto)` con el record `HistoriaDeProducto` (`TieneMovimientos`,
+    `TieneExistencia`, `Borradores`, `TieneDependientes`, `SeguimientoBloqueado`, `Nueva`); se retiran `ClasesDisponibles` y los errores
+    `ProductKindNotAvailable`/`ProductTrackingNotAvailable` (y `CatalogErrors.EntregaDelCatalogoAvanzado`); `UpdateProductCommand` gana
+    `Kind` opcional (nulo = no cambia). `Variants/`: `SaveVariantAttributeCommand` (+ `ValorDeAtributoPedido`), `ListVariantAttributesQuery`,
+    `VariantAttributeDto`, `VariantAttributeValueDto`, `VistaDeAtributos`; `GenerateProductVariantsCommand` (+ `AtributoElegido`,
+    `VarianteAjustada`), `VariantesGeneradasDto`, `ProductVariantDto`, `ValorDeVarianteDto`, `ListProductVariantsQuery` (para
+    `GET /products/{id}/variants`, T934) y `VistaDeVariantes`. `Components/`: `SetProductComponentsCommand` (+ `ComponentePedido`),
+    `GetProductComponentsQuery`, `ProductComponentsDto`, `ProductComponentDto`, `VistaDeComponentes`. En documentos,
+    `ProductoDelDocumento.EsPlantilla` (la revisan `SaveInventoryDraftCommand` y `ReglasDeLineasDeVenta`). Plantilla 6:
+    `PlantillaDeProductos.{HojaVariantes, HojaComponentes, Plantilla, Atributo, Valor, Componente, Cantidad}` (T922, decisión por defecto).
+    `DeleteProductCommand` también da de baja los valores de variante y los componentes del producto.
+- **I6, lotes, series, combos, ensamble y conteo en la aplicación (T923–T933; 2026-09-29) (nuevo)**: `Documents/ReglasDeSeguimiento`
+    (`ResolverAsync`, `EvaluarAsync`, `ValidarAsync`, `SugerirAsync`, `SugerirParaVenderAsync`, `DisponiblesAsync`, `PoliticaAsync`,
+    `PoliticaVigenteAsync`, `Entra`, `Normalizar`, `ClasesConSeguimientoEnLaLinea`) con `SeguimientoPedido` y `VeredictoDeSeguimiento`; la
+    usan `SaveInventoryDraftCommandHandler` y `ConfirmacionDeDocumento` (parámetro opcional `seguimiento`) y el POS. `MovimientoDeKardex`
+    gana `ProductId` (el componente de un combo), `LotId`, `SerialId`, `AlCostoConsumidoDe` (el kit de un ensamble) y las lecturas
+    `Producto`, `Lote`, `Serie`; `RegistroDeKardex` gana `ClasesDeVenta`, `PoliticaDeLoteVencidoAsync`, `FilasProvisionalesDeAsync` y el paso
+    privado de seguimiento (reparto FEFO, herencia del tránsito, reglas de la serie, proyección `INV_Serials.InStock*`). `PedidoDeCerrojo.Series`
+    y `SqlDelCerrojo.TablaSeries` (T925). `TiposDeIncidente.Serial` en la verificación y la reconstrucción (T924).
+    `Documents/Efectos/ExpansionDeCombos` (`ComponentesAsync`, `Cantidad`, `Salidas`, `SalidasDeVentaAsync`, `DisponibleDeCombosAsync`) con
+    `ComponenteDelCompuesto` (T926, T927); `Documents/Efectos/EfectoDeEnsamble` con `AssemblyRequest` (en `SaveInventoryDraftRequest.Assembly`),
+    `PropuestaDeEnsamble` y `ErroresDeEnsamble` (T928). `Counts/ClasificacionAbcDelConteo` (`MesesDeLaBase`, `Base`, `ProductosAsync`) y
+    `CriterioDelConteo.{ProductosDeLaClase, BaseAbc}` (T930). `Catalog/Lots/RaiseExpiringLotAlertsCommand` (+ validador vacío) y la tarea
+    `TareaDeLotesProximosAVencer` (`inventario.lotes`, sólo desde I6, registrada en `Program.cs`) (T932).
+    `ImpairmentReportQueryHandler.{MotivoVencido, MotivoProximoAVencer}` (T933). Contratos que crecen: `SalesLineInput.{LotCode,
+    SerialNumber}`, `SearchProductsQuery.ForSale`, `AddPosLineCommand.{SerialNumber, LotCode}`, `UpdatePosLineCommand.LotCode`,
+    `ProductoLeido.SerialId`, `BorradorDelPos.AsignarLoteAsync`. Reglas en T54c y T931.
+- **I6, catálogo avanzado en la API y en Shared (T934–T941; 2026-09-29) (nuevo)**: en Application, `Catalog/Lots/LotQueries.cs` con
+    `ListLotsQuery` → `LotDto` (FEFO, `Suggested`, `State`) y `EstadosDeLote` (`Current`, `ExpiringSoon`, `Expired`, `NoExpiry`), y
+    `ListSerialsQuery` → `SerialDto`, los dos con alcance por bodega (en `LasConsultasDeInventarioRespetanElAlcance`); `ProductDto.{Parent,
+    VariantValues, Components}` (en `VistaDeProductos`); `ProductStockByLocationDto.Lot` ya llega lleno; `KardexReportQuery.Lot` (filtro
+    `lot` de la vista `kardex`, con la columna «Lote/serie» llena); `PosLineDto.{LotCode, LotExpiryDate, LotExpired, SerialNumber, TracksLot,
+    TracksSerial}`. En la API, `CatalogEndpoints.{AtributosDeVariante, LotesYSeries}` con los cuerpos `AtributoDeVarianteRequest`,
+    `ValorDeAtributoRequest`, `GenerarVariantesRequest`, `AtributoElegidoRequest`, `VarianteAjustadaRequest`, `ComponentesRequest`,
+    `ComponenteRequest`, `EditarProductoRequest.Kind`, y en `PosEndpoints` `LecturaRequest.{SerialNumber, LotCode}` y `LineaRequest.LotCode`.
+    En Shared, `InventarioClient.CatalogoAvanzado` (`RutaDeAtributosDeVariante`, `RutaDeLotes`, `RutaDeSeries`) con
+    `InventarioDtos.CatalogoAvanzado` (`AtributoDeVarianteDto`, `ValorDeAtributoDto`, `VarianteDto`, `VariantesGeneradasDto`,
+    `ComponentesDelProductoDto`, `ComponenteDelProductoDto`, `LoteDto`, `SerieDto`, `EnsambleRequest`…), `VistaPreviaDeVariantes`,
+    `Components/Inventario/{AtributosDeVarianteDialog, SelectorDeLote}.razor`, `SelectorDeProducto.SinPlantillas`,
+    `TextosDeInventario.{ClasesDeProductoAlCrear, ClaseCombo, ClaseKit, ClasePlantilla, ClaseVariante, LoteVigente, LoteProximoAVencer,
+    LoteVencido, LoteSinVencimiento, EstadoDeLote, AlcancesDeConteoDesdeI6, AlcancePorClaseAbc}`, `BorradorDeInventarioRequest.Assembly`,
+    `LineaDeCompraRequest.{LotCode, SerialNumber, ExpiryDate}`, `LineaDeVentaRequest.{LotCode, SerialNumber}`,
+    `LineaDelCiclo.{Lote, Serie, ControlaLote, ControlaSerie}` y `FormularioDelCiclo.ConservarSeguimiento`, y el tema del manual
+    `inventario-catalogo-avanzado`. Reglas en T54d.
+- **I6, analítica, reposición y tablero (US17, T959–T970; 2026-09-29) (nuevo)**: en Domain, `Inventory/Analytics/IndicadoresDeRotacion`
+    (`Decimales`, `InventarioPromedio`, `DiasDelPeriodo`, `Calcular`) con el record `IndicadorDeRotacion` (`CostoDeVenta`, `InventarioPromedio`,
+    `DiasDelPeriodo`, `Rotacion?`, `DiasDeInventario?`, `SinDato`). En Application, `Inventory/Reports/AnaliticaDeInventario` (el único cálculo de
+    la analítica: `AmbitoAsync`, `LineasDeVentaAsync`, `CostoDeVentaPorProductoAsync`, `ConsumoPorProductoAsync`, `ExistenciasAsync`,
+    `InventarioPromedioPorProductoAsync`, `FechasDeSaldo`, `SinMovimientoAsync`, `LotesPorVencerAsync`, `CostosPromedioAsync`,
+    `PorcentajeDeMargen`, `ClasesDeCostoDeVenta`, `ClasesQueNoSonConsumo`, `FiltroInvalidoCodigo`, `PermisoDeCostos`, `NotaSinCostos`) con los
+    records `AmbitoDeAnalitica`, `ProductoDeAnalitica`, `LineaDeMargen`, `LotePorVencer` y `ExistenciaSinMovimiento`; las vistas
+    `Reports/Vistas/{MarginReportQuery, TurnoverReportQuery, AbcReportQuery, NoMovementReportQuery, ExpiringReportQuery,
+    PurchaseSuggestionReportQuery, ShrinkageCapReportQuery}` (cada una con su `Vista` y sus `Columnas`; `MarginReportQueryHandler.{SinCategoria,
+    SinVendedor, SinCliente, SinPunto}`, `ShrinkageCapReportQueryHandler.{TopeNoParametrizado, ClasesDeCompra, ClasesDeFaltantes}`);
+    `ImpairmentReportQueryHandler.MotivoSinMovimiento`; `AccountingBatchesReportQueryHandler.{Visibles, Limite, Tarde}` (la regla de «tarde» que
+    comparten la vista y el tablero); `Reports/Dashboard/GetInventoryDashboardQuery` con `InventoryDashboardDto`, `DashboardTileDto`,
+    `DashboardLinkDto`, `DashboardScopeDto`, `DashboardScopeItemDto` y `DashboardWithoutRecipientDto`. En la API,
+    `Endpoints/Inventory/DashboardEndpoints` (`GET /api/inventory/dashboard`, `Inventory_Dashboard_Get`). En Shared, `Pages/Inventario/Tablero.razor`,
+    `InventarioClient.{RutaDelTablero, TableroAsync}` con `InventarioDtos.Tablero` (`TableroDeInventarioDto`, `FichaDelTableroDto`,
+    `EnlaceDeFichaDto`, `AlcanceDelTableroDto`, `ElementoDelTableroDto`, `SinDestinatarioDto`), `DestinoDeDocumentoDeInventario.Kardex(…, lote)`, las
+    clases `.ficha-tablero` y `.severidad-{info,warning,critical}` de `componentes.css` y el tema `inventario-tablero` del manual. Reglas en T54e.
+- **I6, cierre de las e2e (T870, T871, T911, T912, T951; 2026-09-29) (nuevo)**: `CatalogoDeParametros.EntregaVigente` sube a **I6**, la última
+    entrega del comercio: toda clase es operable (ensamble y ciclo comercial incluidos), la semilla siembra `COT`, `PED`, `REM`, `FVR`, `NDV` y
+    `ENS`, las tareas `inventario.reservas`, `inventario.remisiones` e `inventario.lotes` corren y los valores de I6 de los parámetros se admiten.
+    Ya no queda «clase de una entrega futura»: las pruebas que la fijaban (`DocumentTypeCommandsTests`, `ImportDocumentTypesCommandTests`, e2e
+    `TiposDeDocumentoTests`) comprueban ahora que todo es operable y que la regla sigue en pie para I5 (`Operable(EntregaDelComercio.I5)`).
+    Corrección que destapó T870: `BorradorDeVenta.ListasDeOrigenAsync` **(nuevo)** —la línea que nace de otra (pedido, remisión, factura desde
+    remisiones) se precifica con la lista y el precio de lista de su línea origen (`LineaAPrecificar.ListaFijada`, que hasta hoy no usaba nadie) y
+    ya no copia su `UnitPrice` como precio digitado—. Reglas en T54f.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2096,10 +2222,15 @@ ya registrado del mismo producto y ámbito, fuera del saldo inicial de bodega no
 lineNumber, productCode, laterMovement { documentPublicId, displayNumber, operationDate } }`); períodos →
 `Inventory.Period.NotStarted` (nuevo, T289: cerrar sin `INV_Setup`), `.NotNext` (`data.nextToClose { year, month }`),
 `.NotEnded`, `.OpenCounts`, `.WarningsNotAcknowledged` (`data.warnings`), `.UnbilledShipmentsNotAccepted`,
-`.AcceptUnbilledNotAllowed`, `.NotLastClosed` (`data.lastClosed`), `.NotClosed`; plantillas → `Import.Cell.Ignored` (nuevo,
+`.AcceptUnbilledNotAllowed`, `.NotLastClosed` (`data.lastClosed`), `.NotClosed`; ciclo comercial (I6, T877–T884) →
+`Inventory.Quote.Expired` y `.ValidUntilInvalid` (nuevos), `Inventory.Shipment.AlreadyInvoiced` (`data.lines[] { shipmentLinePublicId,
+pending, requested }`) y `.CustomerMismatch` (nuevos), `Inventory.Order.ExceedsPending` (nuevo, `data.lines[] { orderLinePublicId, pending,
+requested }`), `Inventory.Sales.OriginInvalid` (nuevo, `data { class, originClass }`), `Inventory.DebitNote.OriginInvalid` (nuevo), y
+remisiones con modos distintos en una factura → `Inventory.PostingMode.ChainMismatch` (`data { chain, shipments }`); plantillas → `Import.Cell.Ignored` (nuevo,
 T286: aviso de una celda que la clase ignora, como el modo de paso del saldo inicial);
 informes de inventario → `Inventory.Report.RangeInvalid` y `Inventory.Report.RangeTooLong` (nuevo, T182: rango al revés o de
-más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
+más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009) y `Inventory.Report.FilterInvalid` (nuevo, I6, T960–T965: un filtro propio
+—`by`, `basis`, `days`, `year`— con un valor que la vista no admite, 422 con los admitidos en el mensaje); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
 data-model §1.6) → `Inventory.Product.WithholdingConceptRequired` (nuevo, T217); vendedores → `Inventory.Salesperson.AlreadyActive`; puesta en marcha (US4) → `Inventory.OpeningBalance.{WarehouseActive,
 TransitNotAllowed, AlreadyConfirmed (data.documents[])}`, `Inventory.OpeningBalance.ZeroCost` (nuevo, T308: aviso de fila, costo
 unitario cero), `Inventory.LegacyFigures.CodeUnresolved` (aviso), `Inventory.LegacyFigures.GroupMismatch` (nuevo, T311: aviso, el
@@ -2152,6 +2283,34 @@ evento **en emisión** (pendiente con documento electrónico). Un evento sin CUF
 Cierre de las e2e de I4 (T685–T687; **(nuevo)**): `Inventory.DocumentType.ContingencyNotByResolution` (`data.class`: un tipo de contingencia en una clase que no numera por resolución DIAN).
 
 Facturación electrónica desde Inventario (I4, T734–T743; todos **(nuevo)**): `ElectronicInvoicing.Contingency.UseContingencyType` (en `data.missing[]` de `ElectronicInvoicing.NotReady`: con la 03 abierta, en oficina el tipo normal nombra el de contingencia), `Inventory.SupportDocument.SupplierObligated` (documento soporte a un proveedor obligado a facturar), `Inventory.SupportDocument.Proposed` (aviso: la recepción de un no obligado propuso su DS) e `Inventory.Sales.InvoiceInsteadNotApplicable` (api.md §18.3.1); `Inventory.Document.FiscalUseCorrection` gana `data { route: /api/electronic-invoicing/documents/{id}, cases[] }` sobre un rechazado y `correctionClass = SupportDocumentAdjustmentNote` sobre un documento soporte.
+
+Promociones (I6, T873–T875; todos **(nuevo)** salvo `.InUse`): `Inventory.Promotion.NotFound` (404), `Inventory.Promotion.InUse`
+(`data.fields[]`: lo pedido que no puede cambiar), `Inventory.Promotion.ScopeTargetNotFound` (`data { kind, publicId }`) e
+`Inventory.Discount.PromotionApplied` (`data { lines[], promotions[] }`: un manual en una línea con promoción, o un descuento por total
+cuando todas las líneas la tienen). Un segmento desconocido responde el `Inventory.PriceList.SegmentUnknown` de las listas (T51).
+
+Catálogo avanzado, dominio (I6, T913–T917; todos **(nuevo)** salvo los que ya nombraban T908 y T920): `Inventory.Component.InvalidKind` y
+`.Cycle` (T920), `Inventory.Component.Required` (combo o kit sin componentes), `.NotAComboOrKit` (componentes a un producto que no es combo
+ni kit), `.InvalidQuantity` (cero, negativa o con más decimales que la unidad base del componente) y `.Duplicate` (el mismo componente dos
+veces); `Inventory.Variant.AttributesRequired` (sin atributos o un atributo sin valores), `.AttributeRepeated` (atributo o valor repetido) y
+`.AttributesMismatch` (las variantes existentes de la plantilla usan otros atributos); `Inventory.Lot.Expired` lo publica
+`SelectorDeLotes.CodigoLoteVencido` (T908); un texto de `Informes.UmbralesAbc` que no suma 100 es `Parameters.ValueNotAllowed`
+(`UmbralesAbc.CodigoNoAdmitido`). Un combo o ensamble cuyo componente no alcanza responde `Inventory.Stock.Insufficient` nombrando al
+componente (`ResultadoDeCompuesto.ComponenteRechazado`).
+
+Catálogo avanzado, aplicación (I6, T918–T922; todos **(nuevo)**; retirados `Inventory.Product.KindNotAvailable` y `.TrackingNotAvailable`):
+`Inventory.Product.ExpiryRequiresLot`, `.TrackingNotApplicable` (lote o serie en un servicio o un combo), `.TrackingLocked` (`data {
+hasStock, drafts }`), `.KindLocked` (la clase con movimientos, variantes o componentes); `Inventory.Variant.ParentRequired` (una
+variante sólo nace de su plantilla), `.NotATemplate`, `.CombinationExists` (`data { variantKeys }`); `Inventory.VariantAttribute.NotFound`
+(404), `.ValueNotFound`, `.Inactive`, `.InUse` (código de atributo o valor que ya está en un `VariantKey`), `.ValueDuplicate`;
+`Inventory.Lot.Required`, `.ExpiryRequired`, `.ExpiryMismatch`, `.NotTracked`; `Inventory.Serial.Required`, `.NotTracked`,
+`.QuantityNotOne`, `.AlreadyInStock` (las fábricas viven en `CatalogErrors` para que T923 las reuse). Los errores de
+`ValidadorDeComponentes` salen de `SetProductComponentsCommand` con el primero como código y todos en `data.errors[]`.
+
+Lotes, series, combos, ensamble y conteo (I6, T923–T933; todos **(nuevo)**; retirado `Inventory.Count.ScopeNotAvailable`):
+`Inventory.Lot.Expired` (`CatalogErrors.LotExpired`, con `data { productCode, lotCode, expiryDate }`), `Inventory.Lot.NotFound`,
+`Inventory.Serial.NotInStock`, `Inventory.Serial.NotFound`; `Inventory.Assembly.NotAKit`, `.ComponentsMissing`, `.NotAComponent`
+(`ErroresDeEnsamble`); `Inventory.Count.AbcClassInvalid`.
 
 ### 2.18 Pruebas con nombre fijo
 
@@ -2264,8 +2423,53 @@ las escrituras, sin `Authorization`) y `tests/IngenIA365ERP.Application.Tests/In
 `ComprasCompletasTests` (escenario «comprasi5»: el ciclo solicitud → orden aprobada → recepciones → factura retenida → aprobación, y el
 flete prorrateado por valor), `EventosRadianEmitidosTests` (sobre `EscenarioDeFacturacionElectronica` «radiani5» con `CanalSimulado`) y
 `CosteoAvanzadoTests` (cooperativas «costeoretro» con contabilidad, «costeocerrado» y «costeopeps»).
+**(nuevos, I6 fundacional, T850/T851/T861)** e2e `tests/IngenIA365ERP.API.IntegrationTests/Inventory/ComercioAmpliadoMigracionTests`
+(colección «Inventario e2e», escenario «comercioampliado»: baja y sube el par con un ajuste de I1 confirmado, filas idénticas, índices y FK
+de data-model §1.11/§3.0/§14; verde en PostgreSQL y SQL Server el 2026-09-29), `tests/IngenIA365ERP.Application.Tests/Infrastructure/SemillasDeComercioAmpliadoTests`
+(un tipo por clase de I6, la factura desde remisiones sin consecutivo, idempotente sobre I1–I5, y la fila por tipo de la remisión hacia `SI`)
+y `LasCantidadesYCostosTienenSuPrecision` (+ componentes, reservas y promociones). Tipos sembrados de I6 **(nuevo, códigos propuestos a
+confirmar con la contadora)**: `COT` cotización, `PED` pedido, `REM` remisión (`InventoryDocumentTypesSeeder.CodigoDeLaRemision`), `FVR`
+factura desde remisiones, `NDV` nota débito, `ENS` ensamble; `SemillasDeIntegracionContableTests` cuenta ahora la fila por tipo de la remisión.
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
+**(nuevos, I6 promociones, T862/T867)** `tests/IngenIA365ERP.Domain.Tests/Sales/Promotions/MotorDePromocionesTests` sobre los casos
+dorados `Sales/Promotions/Casos/01..08-*.json` (3×2 con residuo, porcentaje por categoría y segmento, precio por cantidad, paquete, no
+acumulables, acumulable, vigencia y canal, nunca precio cero) y `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/PromocionesEnLaVentaTests`.
+**(nuevos, I6 documentos del ciclo, T863–T866, T868, T869)** el caso dorado `Inventory/Costing/Casos/20-remision-y-factura-desde-remisiones.json`
+(y `CasosDoradosDeCosteoTests.Esta_el_caso_20_de_I6_y_la_factura_desde_remisiones_no_mueve_kardex`); en `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/`
+el escenario `CicloComercialDePrueba` (ventas + crédito provisional + factura electrónica, tipos `COT`, `PED`, `REM`, `FVR`, `NDV`, entrega I6;
+`VentaElectronicaDePrueba.SobreAsync`, `CreditoDePrueba.SobreAsync` y `CreditoDePrueba.ConfirmacionDelMotor` para combinarlos),
+`ReservasDePedidoTests`, `RemisionesYFacturaDesdeRemisionesTests`, `CotizacionYNotaDebitoTests` y `TareasDeRemisionYReservaTests`;
+`ConstructorDelCanonicoTests.La_nota_debito_es_el_tipo_92_y_referencia_la_factura_con_su_concepto`; y la de arquitectura
+`SoloLasReservasEscribenLoReservado` (`NadieEscribeElKardexFueraDelRegistro` admite `.Reserved` en `ReservasDeInventario.cs`).
+**(nuevos, I6 API y pantallas del ciclo, T891–T901)** `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/DetalleDelCicloComercialTests`
+(vigencia, origen y pendiente por línea, orígenes, concepto de la nota débito, persona del cliente en la lista),
+`tests/IngenIA365ERP.Shared.Tests/Ventas/CicloComercialClientTests` y `FormularioDelCicloTests`, y las de arquitectura
+`LasPantallasDelCicloComercialEstanEnElMenu` (páginas, permisos, indicador, menú, origen de la factura, promoción en el detalle y el POS,
+rutas de I6 en `SalesEndpoints`, temas del manual) y `TextosDeVentasTests.Cada_clase_de_promocion`.
+**(nuevos, I6 dominio del catálogo avanzado, T902–T906)** en `tests/IngenIA365ERP.Domain.Tests/Inventory/`: `Catalog/GeneradorDeVariantesTests`,
+`Catalog/ValidadorDeComponentesTests`, `Tracking/SelectorDeLotesTests`, `Analytics/ClasificacionAbcTests`, los casos dorados
+`Costing/Casos/18-ensamble-de-kits.json` y `19-venta-de-combo.json` (con `CasosDoradosDeCosteoTests.Estan_los_casos_18_y_19_de_I6`; el
+arnés `CasoDoradoDeCosteo` gana `componentes` en el movimiento y `componentes`, `costoCompuesto` y `componenteRechazado` en lo esperado) y
+`Costing/MotorDeCosteoEnsambleYComboTests` (residuo del kit, PEPS, entradas inválidas, negativo permitido).
+**(nuevos, I6 aplicación del catálogo avanzado, T907 y T921)** `tests/IngenIA365ERP.Application.Tests/Inventory/Catalog/CatalogoAvanzadoTests`;
+en `Imports/ImportProductsCommandTests`, `Las_hojas_Variantes_y_Componentes_crean_plantilla_variantes_y_kit_en_una_carga` y
+`Las_hojas_de_I6_responden_combinacion_repetida_clase_invalida_y_variante_sin_plantilla`; en
+`GoLive/ImportOpeningBalanceCommandHandlerTests`, `Lote_vencimiento_y_serie_siguen_lo_que_controla_el_producto`. Las pruebas de I1 que
+fijaban «hasta I6» (`ProductCommandsTests`, `ImportProductsCommandTests`, `ImportOpeningBalanceCommandHandlerTests`,
+`ImportacionComunTests`) se reescribieron con la regla nueva.
+**(nuevos, I6 lotes, series, combos, ensamble y conteo, T908–T910, T923–T933)** en `tests/IngenIA365ERP.Application.Tests/Inventory/`:
+`Documents/LotesYSeriesTests`, `Documents/ComboYEnsambleTests`, `Counts/ConteoPorClaseAbcTests`,
+`Reports/ImpairmentReportQueryTests.Los_lotes_vencidos_y_proximos_a_vencer_salen_por_lote_con_su_motivo` y
+`Common/CerrojoDeInventarioSqlTests.Las_series_se_bloquean_en_exclusivo_por_Id_despues_de_los_detalles`. `AbrirConteoTests` dejó de fijar
+`.ScopeNotAvailable`; `KardexDePrueba` (`Seguimiento()`), `ConteosDePrueba`, `TrasladosDePrueba` y `VentasDePrueba` pasan
+`ReglasDeSeguimiento` al guardado y a la confirmación.
+**(nuevos, I6 cierre, T870/T871/T911/T912/T951)** e2e en la colección «Inventario e2e», verdes en PostgreSQL y SQL Server:
+`tests/IngenIA365ERP.API.IntegrationTests/Ventas/CicloComercialTests` (escenario «cicloi6» sobre `EscenarioDeFacturacionElectronica` con
+`CanalSimulado` y el tipo `FRE` de factura desde remisiones con su resolución `FR`; y «remisioni6» sobre `EscenarioDeInventario` para la
+remisión vieja y el cierre), `Ventas/ReservaConcurrenteTests` («reservai6»), `Inventory/CatalogoAvanzadoTests` («catalogoi6»),
+`Inventory/SeriesConcurrentesTests` («seriesi6») e `Inventory/TableroEInformesAvanzadosTests` («tableroi6»); y en Application
+`RemisionesYFacturaDesdeRemisionesTests.Con_una_lista_con_IVA_la_remision_y_su_factura_conservan_el_precio_de_lista_sin_descuentos`.
 
 ---
 
@@ -3229,11 +3433,185 @@ descuento; sobre el tope, aprobación (T33). Descuento por total prorrateado a l
 I6 como descuentos no condicionados, no acumulables, gana la de mayor descuento; el esquema de descuentos
 por línea existe desde I3. Segmento = `Associate.AssociateClass` validado contra los valores existentes.
 
+**T51a · Cómo aplican las promociones (nuevo, I6, T872–T875; 2026-09-29).**
+Decisión (dentro de lo que dicen FR-055, F9 y data-model §14; ninguna pregunta nueva al dueño): (a) el motor corre sobre el
+**documento entero** tras cada cambio de la venta (borrador de oficina y cada acción del POS) en `PrecificacionDeVenta`, después de los
+descuentos manuales y antes de los impuestos, así la promoción baja la base de `INV_DocumentTaxLines`; (b) cantidades en **unidad base** y
+precios **sin impuestos**; «lleve N pague M» y «precio por cantidad» suman las líneas del mismo producto; el 3×2 regala al precio más bajo
+del producto en el documento y **reparte** lo regalado entre sus líneas (nunca una línea a cero) con el residuo por `Redondeo.Residuo`;
+el paquete cabe tantas veces como el componente más escaso; un ámbito sobre la plantilla alcanza a sus variantes; (c) entre **no
+acumulables** gana la de mayor descuento sobre el documento (empate: menor código) y se descarta sólo la que **comparte línea** con una
+ganadora —dos no acumulables sobre productos distintos aplican las dos—; las acumulables se suman y ninguna línea recibe más que su bruto;
+(d) una promoción **no se mide contra el tope** del vendedor (no es un descuento suyo) ni pide aprobación; (e) un descuento manual —precio
+digitado bajo la lista, porcentaje o valor— en una línea con promoción → `Inventory.Discount.PromotionApplied`; el descuento por total se
+prorratea **sólo a las líneas sin promoción** (si todas la tienen, el mismo error); (f) `PromotionDto` lleva los valores de la clase en la
+cabecera (`percent` como fracción, `amount`, `buyQuantity`, `payQuantity`, `bundlePrice`) y `tiers` sólo los escalones `{ minQuantity,
+price }` del precio por cantidad; `validTo` es obligatorio (la columna no admite nulo); (g) «en uso» = un descuento vivo de la promoción en
+un documento `Confirmed` o `Voided`; en uso sólo cambian `name`, `validTo` e `isActive` (también las notas quedan fijas); sin uso se cambia
+entera (una clase nueva limpia los valores de la anterior) y los ámbitos o tramos reemplazados quedan de baja lógica. El código no cambia.
+
 **T52 · Consumidor final y copia fiscal.**
 Decisión: `ConsumidorFinalSeeder` (I3) crea la persona genérica del maestro; la copia de identificación
 fiscal de la contraparte es `INV_DocumentPartySnapshots`, sólo inserción, versión 1 al confirmar; el caso
 a de FR-066 agrega la versión siguiente con antes y después auditados (y queda también en la versión del
 documento electrónico). Reimpresiones y representación gráfica usan la copia vigente o el archivo firmado.
+
+**T53a · Cómo corre el ciclo comercial (nuevo, I6, T877–T890; 2026-09-29).**
+Decisión (dentro de FR-033, FR-047, FR-052, FR-060, FR-075 y data-model §14; ninguna pregunta nueva al dueño, **revisar con el dueño**):
+(a) **las rutas eligen las clases** (`RutasDeVenta`): `/invoices` admite `SalesInvoice`, `NonElectronicSalesReceipt` y
+`SalesInvoiceFromShipments`; `/quotes`, `/orders`, `/shipments` y `/debit-notes` la suya; el documento nace de otros por `originPublicIds` y,
+en cada línea, `originLinePublicId` —cotización → pedido (`FromOrder`), pedido → remisión (`DispatchOf`) o factura (`FromOrder`), remisiones →
+factura (`FromShipment`), factura → nota débito (`NoteOf`)—, sólo desde orígenes **confirmados**; sin líneas, el borrador propone lo pendiente de
+cada línea origen a su precio, y una línea con origen toma de él producto, unidad y precio; sin contraparte ni bodega, las del origen;
+(b) la cotización, el pedido y la remisión **no cobran** (sin pagos ni regla de persona inactiva de contado); (c) la reserva es **todo o nada**
+por pedido y usa el disponible (`Physical − Reserved`); la salida desde un pedido consume primero su reserva y lo que pida de más —la reserva ya
+venció o se liberó— sale del disponible como cualquier salida; ninguna salida pasa de lo pendiente de su línea de pedido; el vencimiento vence
+**el día siguiente** a `ExpiresOn` (el propio día todavía reserva); (d) anular una cotización o un pedido **no mira dependientes** (lo tomado
+queda tomado; el pedido libera lo que falte); anular una remisión facturada → `Inventory.Document.HasDependents`, y la remisión anulada no
+vuelve a reservar; (e) una nota crédito de una factura desde remisiones deja pendiente **sólo lo que acredita por su valor completo** —una
+rebaja de precio no devuelve la mercancía a «por facturar»—; (f) la nota débito sólo confirma con veredicto `Electronic` (una sobre comprobante
+no electrónico es pregunta abierta del dueño, Apéndice fases 18–20); cobrada a crédito, pide la aprobación `ProvisionalCredit` y ajusta la
+`VentaACreditoRegistrada` de la venta (mismo medio primero); si la venta no fue a crédito —o su crédito no se registró— la nota registra su
+propia `VentaACreditoRegistrada`; cobrada de contado sobre una venta a crédito no hay ajuste; (g) remisiones sin facturar del cierre: las
+confirmadas **del mes** con saldo, valoradas al neto de la línea del pedido (`Order`) o, sin pedido, al de la remisión, que se precificó con la
+lista vigente al guardarla (`PriceList`); (h) la alerta `Inventario.RemisionSinFacturar` se levanta una sola vez por remisión aunque la
+anterior esté atendida; las dos tareas programadas corren una vez al día y no corren antes de que el despliegue llegue a I6.
+
+**T54a · Catálogo avanzado en el dominio: variantes, componentes, lotes, ABC, combo y ensamble (nuevo, I6, T913–T917; 2026-09-29;
+revisar con el dueño).**
+Decisión (dentro de FR-023, FR-026, FR-040, FR-086 y data-model §1.6/§1.11; ninguna pregunta nueva al dueño): (a) **variantes**: la
+`VariantKey` va en mayúsculas y ordenada por código de atributo (`COLOR=AZUL;TALLA=M`), pero el código y el nombre propuestos siguen el
+**orden en que la persona eligió los atributos** («CAMISA-M-AZUL», «Camisa M Azul»); dentro de un atributo los valores van por `SortOrder` y
+código; el código se recorta a 20 sin dejar guion colgando y la propuesta avisa si quedó recortado o repetido con otra (la persona lo cambia;
+el duplicado contra la base lo responde la aplicación con `Catalogo.CodigoDuplicado`); si las variantes que ya tiene la plantilla usan otros
+atributos, no se generan (`Inventory.Variant.AttributesMismatch`). (b) **componentes**: se validan todos los errores a la vez; un componente
+que cierra un ciclo se informa como ciclo aunque además sea de una clase inválida; la cantidad no admite más decimales que la unidad base del
+componente (`Inventory.Component.InvalidQuantity`, no `Inventory.Unit.DecimalsNotAllowed`, para que el error nombre al componente). (c) **lotes**:
+un lote vence el día **siguiente** a su `ExpiryDate` (la fecha de vencimiento es el último día en que sirve); el orden de salida es
+vencimiento, código y Id, con los lotes sin vencimiento al final; con `Advertir` los vencidos entran en su lugar FEFO —es decir, primero— y
+marcados, y la baja por vencimiento los saca sin mirar la política (`AdmiteVencidos`). (d) **ABC**: un producto es A si el acumulado **con
+él** no pasa del umbral A, B si no pasa de A + B y C si no —el que cruza un umbral pasa a la clase siguiente—, salvo el primero, que siempre
+es A; un grupo de valores iguales toma la clase que le da el acumulado con su primer miembro; valores cero o negativos son C y participan con
+cero; los umbrales son enteros que suman 100 con A mayor que cero. (e) **combo y ensamble**: el motor mueve cada componente en su propio ámbito por
+`MotorDeCosteo.Aplicar` (la venta al costo vigente; la devolución de la nota crédito al costo con que salió cada componente) y el conjunto es
+**todo o nada**; el kit entra a `round6(consumido ÷ cantidad)` y, si `round(cantidad × costo)` no da lo consumido, la diferencia va en una
+línea `RoundingResidue` sobre la entrada del kit (FR-017): `Redondeo.Residuo` no interviene porque el ensamble tiene una sola línea de kit
+(con cantidades menores que 10.000 al centavo el residuo no aparece; en PEPS la capa del kit lleva el costo unitario y el residuo se libera
+cuando el ámbito llega a cero, como el de una salida). (f) La «guarda hasta I6» de `Assembly` es su `AvailableFrom = I6` en
+`ClasesDeDocumento`, la misma de las otras clases de I6: se retira sola cuando `CatalogoDeParametros.EntregaVigente` sube a I6 (lo hace
+quien cierre I6) y con la estrategia `EfectoDeEnsamble` (T928); el dominio no tiene otra guarda propia del ensamble.
+
+**T54b · Catálogo avanzado en la aplicación: clases, seguimiento, variantes, componentes y plantillas (nuevo, I6, T918–T922;
+2026-09-29; revisar con el dueño).**
+Decisión (dentro de FR-023, FR-026, FR-030 y data-model §1.6/§1.11): (a) **clases**: las seis se crean por el alta de siempre, sin
+depender de `EntregaVigente` (a diferencia de las clases de documento, que sí esperan a que suba); una `Variant` **no** nace por el alta
+ni por una fila suelta de la plantilla sino de su plantilla (`Inventory.Variant.ParentRequired`): por «Generar variantes» o por la hoja
+`Variantes`. La clase de un producto guardado cambia por la edición (`UpdateProductCommand.Kind`, nulo = no cambia) sólo sin
+movimientos, sin variantes, sin componentes y sin ser componente (`.KindLocked`). (b) **seguimiento**: permitido en inventariable,
+variante, kit y plantilla (que lo hereda); nunca en servicio ni combo (`.TrackingNotApplicable`); `TracksExpiry` exige `TracksLot`; las
+marcas no cambian con existencia distinta de cero en alguna bodega ni con documentos en borrador **o en aprobación** que citen el producto
+(`.TrackingLocked`). (c) **variantes**: heredan de la plantilla categoría, marca, unidad base y alternas (con sus defectos), grupo contable,
+tratamiento de IVA e impuestos, concepto de retención, seguimiento, descripción, referencia, peso, volumen y compra/venta; no heredan
+códigos de barras (cada variante trae el suyo, opcional); si la plantilla no tiene grupo o concepto, la variante no nace. Si todas las
+combinaciones pedidas existen → `CombinationExists`; si sólo algunas, se crean las demás y se informan. (d) **atributos**: los valores se
+identifican por código; el código de un atributo o valor que ya está en un `VariantKey` no cambia ni se retira (`.InUse`), el nombre sí.
+(e) **componentes**: el comando reemplaza la lista entera (baja lógica de lo retirado) y responde todos los errores del validador en
+`data.errors[]`; la hoja `Componentes` sólo agrega o cambia (la plantilla nunca borra). (f) **plantilla en documentos**: rechazada con
+`Inventory.Product.NotInventoriable` en el guardado genérico (`SaveInventoryDraftCommand`) y en las reglas de venta
+(`ReglasDeLineasDeVenta`, que cubre el POS al cobrar); un combo entra a las ventas como línea sin existencia propia hasta T926.
+(g) **plantillas de importación** (T921): las clases y marcas de seguimiento se habilitan en la 6; las columnas `lote`, `vencimiento` y
+`serie` en la 14 crean o reutilizan el `Lot` y registran la `Serial` **al aplicar** (sin proyección: `InStock*` la escribe
+`RegistroDeKardex` al confirmar) porque la línea sólo tiene `LotId`/`SerialId`; lote y serie se guardan recortados y en mayúsculas. Las
+seis clases de venta y `Assembly` en la plantilla 8 no se tocan: `ImportDocumentTypesCommand` las rechaza por `ClasesDeDocumento.Operable()`
+y quedan admitidas solas cuando quien cierre I6 suba `CatalogoDeParametros.EntregaVigente`.
+
+**T922 · Hojas de variantes y componentes en la plantilla de productos (decisión por defecto, revisar con el dueño; 2026-09-29).**
+Se adopta la propuesta de la tarea: la plantilla 6 suma las hojas opcionales `Variantes` (`producto`, `plantilla`, `atributo`,
+`valor`; una fila por variante y atributo) y `Componentes` (`producto`, `componente`, `cantidad`), cargadas después de `Productos` con las
+mismas reglas que la pantalla y la API (contracts/plantillas.md §6). Los atributos y sus valores **no** tienen hoja: se crean por
+pantalla o API antes de cargar. Si el dueño prefiere no tener las hojas, basta con retirarlas de `PlantillaDeProductos.Definicion` y
+de `ImportProductsCommand`; nada más depende de ellas.
+
+**T54c · Lotes, series, combos, ensamble y conteo en la aplicación (nuevo, I6, T923–T933; 2026-09-29; revisar con el dueño).**
+Decisión (dentro de FR-026, FR-036, FR-040, FR-044 y data-model §1.11, §13): (a) **el lote y la serie nacen al guardar el borrador** de
+una línea que entra (`ReglasDeSeguimiento.ResolverAsync`): la línea sólo guarda `LotId`/`SerialId`, así que el código que digitó la persona
+no tiene dónde esperar a la confirmación; un borrador descartado deja un lote o una serie sin movimientos, que no estorba (el índice único
+es el árbitro). En una línea que sale, el lote y la serie tienen que existir (`.NotFound`). (b) **dónde manda `Ventas.LoteVencido`**: sólo
+en las cuatro clases de venta que sacan mercancía (remisión, factura, documento equivalente POS, comprobante); las demás salidas (ajustes,
+bajas, consumos, traslados) toman el lote que vence primero **aunque esté vencido** —la baja existe para sacarlo—. Leído antes de I6, el
+parámetro da su defecto `Bloquear`. (c) **reparto FEFO dentro del cerrojo**: una salida sin lote de un producto con lote se parte por
+`SelectorDeLotes` en la ubicación de la línea; si sólo lo vencido alcanzaría y la política es `Bloquear`, `Inventory.Lot.Expired` con el
+primer lote vencido; si ni así alcanza, `Inventory.Stock.Insufficient`. La entrada al tránsito o a otra ubicación hereda lote y serie de
+su salida, partida igual; la recepción del traslado toma el lote y la serie de la entrada al tránsito cuando la línea del despacho tuvo
+una sola, y si tuvo varias reparte en el tránsito por el que vence primero. (d) **combo**: la línea del documento es la del combo (precio y
+`VentaFacturada` por el grupo del combo); el kardex tiene una fila por componente con la línea del combo (su `CostoDeVentaReconocido` por
+el grupo de cada componente); la línea del combo guarda el costo total y el unitario = total ÷ cantidad de combos. La nota crédito que
+devuelve mercancía de una línea que salió por varias filas (componentes, lotes) o con lote o serie reingresa **por cada fila de origen, en
+proporción** (cantidad devuelta ÷ vendida), al costo, lote y serie con que salió; la anulación revierte cada fila en su producto. El
+disponible de un combo (búsqueda con `forSale` y lector del POS) es el mínimo entero de (disponible del componente ÷ cantidad).
+(e) **ensamble**: exactamente una línea de kit; las demás, componentes vigentes del kit (`.NotAComponent` si no lo son; las cantidades
+propuestas se pueden cambiar); el kit entra por exactamente lo consumido con el residuo en su propia línea `RoundingResidue`; el monto de
+aprobación es el valor al costo consumido. (f) **POS**: el lector reconoce una serie en existencia y agrega una unidad con esa serie (un
+producto con serie no se agrega sin ella); a un producto con lote se le asigna el lote sugerido **sólo si uno solo alcanza** para la línea
+(visible y cambiable por `UpdatePosLineCommand.LotCode`); si no, queda sin lote y la confirmación reparte. (g) **conteo por lote**: la
+captura de un producto con lote exige un lote que exista (un lote nuevo encontrado en el conteo se registra por una entrada). (h) **la
+proyección de la serie** se verifica y se reconstruye desde el kardex: la serie está donde su kardex suma una unidad.
+
+**T54d · El catálogo avanzado en la API y en las pantallas (nuevo, I6, T934–T941; 2026-09-29; revisar con el dueño).**
+Reglas fijadas sin consultar al dueño: (a) **`GET /lots`** devuelve sólo los lotes **con existencia** del producto en la bodega pedida (o
+sumando las del alcance), en orden FEFO; un lote nuevo se escribe en la entrada, no se elige de una lista. Los vencidos sólo con
+`includeExpired` y nunca son el sugerido; «próximo a vencer» usa `Informes.DiasProximoAVencer` (antes de I6, cero días). (b) **`GET
+/serials`** sin bodega devuelve las series en bodegas del alcance **y las que ya no están en existencia** (vendidas o dadas de baja, sin
+bodega); con bodega, sólo las de esa bodega. (c) Las dos rutas exigen `Inventory.Stock.View` (no `Catalog.View`): dicen cuánto hay y dónde.
+(d) **El kardex con lote** muestra sólo los movimientos del lote y lleva el saldo del lote (en las bodegas visibles), valorado al promedio
+visible. (e) **El POS** manda la serie como una lectura más (el servidor reconoce la serie en existencia): tras
+`Inventory.Serial.Required` la pantalla espera la serie en el mismo campo, sin ratón; Esc la cancela. `pos.js` no cambia: el lector no
+distingue un código de una serie. (f) **La venta de oficina** no recibe el lote de vuelta en `LineaDeVentaDto`: la pantalla conserva el
+lote y la serie elegidos por línea al releer el borrador (`FormularioDelCiclo.ConservarSeguimiento`). (g) **La ficha** ofrece en el alta
+inventariable, servicio, combo, kit y plantilla (la variante nace de su plantilla) y las marcas de seguimiento para inventariable, kit y
+plantilla; al guardar Datos manda la clase sólo si cambió. (h) Los clientes tipados no ponen `Authorization` y toda escritura lleva su
+clave (`CatalogoAvanzadoClientTests`).
+
+**T931 · Base de la clasificación ABC para los conteos (decisión por defecto, revisar con el dueño; 2026-09-29).**
+Se adopta la propuesta de la tarea: el **valor al costo de las salidas** (kardex `Exit`, sin ajustes de costo) **de la bodega del conteo**
+en los **doce meses** anteriores a la fecha de la foto, clasificado por `ClasificacionAbc` con `Informes.UmbralesAbc`; los productos con
+existencia y sin salidas valen cero y son C. La clase y la lista resuelta se congelan en `CountScopeJson` con la base en palabras
+(`BaseAbc`). La alternativa (el valor de ventas, como `abc?basis=sales`) se cambia sólo en `ClasificacionAbcDelConteo`. Que la base sea
+la bodega y no toda la cooperativa también es propuesta: un conteo es de una bodega.
+
+**T54e · Cómo mide la analítica de inventario y el tablero (nuevo, I6, T959–T970; 2026-09-29; revisar con el dueño).** Reglas que la
+implementación fijó sin pregunta al dueño, todas en `AnaliticaDeInventario` para que la vista y la ficha digan lo mismo: (a) **venta neta** =
+`NetAmount` de las líneas vivas de los documentos confirmados de las clases de venta menos las de devolución (sin impuestos, con los
+descuentos de la línea); el **costo de venta** del margen es el del kardex de esas líneas y, en la factura desde remisiones —que no mueve el
+kardex—, el de las líneas de remisión que factura en proporción a la cantidad; los ajustes retroactivos posteriores quedan en el kardex del
+documento que los causó y no se reparten a la venta. (b) El margen por punto de venta atribuye cada documento a **su** punto: una nota que
+reintegra en la sesión de un punto resta en ese punto, aunque la venta haya sido de oficina. (c) La **rotación** toma el costo de venta del kardex
+por fecha de operación de ventas, remisiones y devoluciones, y el **inventario promedio** es el promedio de los saldos del día anterior al período,
+de cada fin de mes dentro de él y del último día (cada uno por `ValorizadoALaFecha`, que parte de los cierres); un grupo (categoría, grupo contable,
+total) se mide con sus sumas, no con el promedio de las rotaciones; se muestran a dos decimales. (d) El **ABC por consumo** es el costo de las
+salidas normales sin traslados, movimientos entre ubicaciones ni anulaciones (una devolución de cliente no descuenta consumo); sólo entran
+productos con valor en el período; sin `Inventory.Costs.Read` el valor sale vacío y la clase no. (e) **Sin movimiento**: días desde la última
+entrada o salida del kardex hasta el corte, ≥ N; sin bodegas de tránsito. **Por vencer**: lotes que vencen entre el corte y N días después; los ya
+vencidos salen sólo en `impairment`. `_lote` lleva el **código** del lote (es lo que filtra el kardex con `?lot=`), no un Id. (f) **Sugerido de
+compras**: sólo las filas que piden reorden (no las que sólo están en quiebre); último costo y proveedor habitual son los de la última
+recepción de compra confirmada del producto en cualquier bodega; el filtro `supplier` deja lo que habitualmente se le compra. (g) **Tope de
+faltantes**: compras = kardex de recepciones, facturas y notas del proveedor, documentos soporte y sus notas, costos adicionales, menos
+devoluciones; faltantes = salidas de ajustes negativos y bajas, detallados por causa en las notas (la tabla es una sola fila con las columnas de
+§27); el porcentaje se lee vigente al 31 de diciembre del año. (h) **Tablero**: rotación, días y margen son del mes del corte; ventas del día contra
+el día anterior y del mes contra el mismo tramo del mes anterior; las fichas de mensajes y lotes exigen `Inventory.Messages.View`, las DIAN
+`ElectronicInvoicing.Documents.View`, las alertas `Inventory.Alerts.View` y la de tipos sin paso `Inventory.DocumentTypes.View` (§28 sólo exigía
+costos para las de valor); `messagesPending`/`messagesRejected` cuentan `Pending`/`Rejected` (no `InBatch` ni `ValidationFailed`), y
+`fiscalTypesNotPosted` cuenta los tipos fiscales activos con `NoPasa` **guardado** (el defecto `NoPasa` sin contabilidad iniciada no cuenta).
+
+**T54f · El precio de una línea derivada y la última entrega (nuevo, I6, cierre de las e2e; 2026-09-29; revisar con el dueño).** (a) La
+línea que nace de otra por `originPublicIds`/`originLinePublicId` —el pedido desde la cotización al guardarse otra vez, la remisión desde el
+pedido, la factura desde el pedido o desde remisiones— **conserva la lista y el precio de lista de su línea origen** («a su precio»), aunque la
+lista haya cambiado después; el precio sin impuestos guardado en el origen ya no entra como precio digitado (va en la base de la lista: con
+una lista con IVA la remisión y su factura salían con un «descuento» igual al IVA que pedía aprobación). Un precio que la persona digita en la
+línea derivada sigue siendo un descuento contra ese precio de lista. Los **descuentos manuales** del origen no se trasladan a la remisión ni a
+la factura (sólo «Convertir en pedido» copia los de la cotización); las promociones vigentes se vuelven a aplicar solas. (b) **I6 es la última
+entrega**: con `EntregaVigente = I6` no hay clase ni valor «de una entrega futura»; `Inventory.DocumentClass.NotAvailable` y
+`Parameters.ValueNotAllowed` por entrega siguen en el código para quien evalúe otra entrega (las pruebas de I1–I5 la pasan explícita).
 
 ---
 
@@ -3308,6 +3686,8 @@ qué no puede salir sin una respuesta explícita: una entrega, el ensayo (D-07) 
 | D7 | ¿El documento equivalente POS pertenece a la cadena de ventas de FR-075 y por eso comparte modo de paso con la factura de oficina? | Sí (lectura literal de FR-075) | No |
 | D8 | Puesta en marcha bodega por bodega con ámbito de costeo cooperativa: el saldo inicial de una bodega que se activa después queda fechado antes de ventas ya registradas en otras. ¿Se admite como excepción a `Costeo.RetroactivosPermitidos`, o se exige `Costeo.Ambito = Bodega` mientras haya bodegas no activas? | Excepción: un `OpeningBalance` (y su `Voiding`) de una bodega `NotActivated` no depende del parámetro; el motor lo inserta en `(OperationDate, Id)`, recalcula las salidas posteriores y registra `AjusteDeCostoReconocido` por documento afectado (T18, entregado en I1) | I1 (salida de la segunda bodega) |
 | D9 | Los ajustes que genera un conteo aprobado se fechan en la foto (FR-041) y suelen quedar antes de movimientos de otras bodegas. ¿Se admiten siempre, sin depender de `Costeo.RetroactivosPermitidos`? | Sí, con el mismo soporte retroactivo mínimo de D8 en I1 (precisión aplicada a FR-045) | I1 |
+| D10 | (T922) ¿La plantilla de productos suma hojas para los valores de variante y los componentes? | Sí: hojas opcionales `Variantes` y `Componentes` cargadas después de `Productos` (adoptada por defecto el 2026-09-29, T922; ver §3) | No |
+| D11 | (T931) ¿Con qué base se clasifica la clase ABC de un conteo cíclico? | El valor al costo de las salidas de la bodega en los doce meses anteriores a la foto, con `Informes.UmbralesAbc` (adoptada por defecto el 2026-09-29, T931; ver §3) | No |
 
 ### E. Compras e impuestos
 

@@ -23,7 +23,10 @@
    fila —_documento abre el documento según su clase (DestinoDeDocumentoDeInventario), _producto/_bodega el kardex—.
    I5 (T816, T849): las vistas «purchase-matches» (cruce a tres vías) y «method-change-valuation» (valorizado por los dos métodos, sólo con
    Inventory.Costs.Read) llegan por el registro; aquí se suman sus filtros propios: el proveedor y el estado del cruce (retenida, aprobada,
-   rechazada, que no son los estados del documento) y el corte comparativo. *@
+   rechazada, que no son los estados del documento) y el corte comparativo.
+   I6, US17 (T970): las vistas de analítica (margin, turnover, abc, no-movement, expiring, purchase-suggestion, shrinkage-cap) llegan por el
+   registro; aquí se suman sus filtros propios —la dimensión «by» (sus valores dependen de la vista), la base «basis», los días «days» (vacío
+   = el parámetro de la cooperativa) y el año «year»— y la profundización por _lote (el kardex del lote). *@
 <PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -88,6 +91,31 @@
                     <label class="campo">Proveedor
                         <IngenIA365ERP.Shared.Components.Compras.SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@(p => { _proveedor = p; PonerOtro("supplier", p?.PublicId.ToString()); })" />
                     </label>
+                }
+                @if (UsaPropio("by"))
+                {
+                    <label class="campo">Por
+                        <select class="e-input" value="@Otro("by")" @onchange="@(e => PonerOtro("by", e.Value?.ToString()))">
+                            @foreach (var (valor, texto) in DimensionesDeLaVista) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("basis"))
+                {
+                    <label class="campo">Base
+                        <select class="e-input" value="@Otro("basis")" @onchange="@(e => PonerOtro("basis", e.Value?.ToString()))">
+                            <option value="sales">Ventas</option>
+                            <option value="consumption">Consumo</option>
+                        </select>
+                    </label>
+                }
+                @if (UsaPropio("days"))
+                {
+                    <label class="campo">Días <input type="number" min="0" class="e-input" value="@Otro("days")" placeholder="los de la cooperativa" @onchange="@(e => PonerOtro("days", e.Value?.ToString()))" /></label>
+                }
+                @if (UsaPropio("year"))
+                {
+                    <label class="campo">Año <input type="number" min="2000" class="e-input" value="@Otro("year")" placeholder="@DateTime.Today.Year" @onchange="@(e => PonerOtro("year", e.Value?.ToString()))" /></label>
                 }
                 @if (UsaPropio("comparativeFrom"))
                 {
@@ -187,9 +215,9 @@
         if (string.IsNullOrWhiteSpace(clave) || clave == _vista?.Key) return;
         _vista = _vistas.FirstOrDefault(v => v.Key == clave);
         _tabla = null;
-        // El «status» y el proveedor de una vista no significan lo mismo en otra (el cruce tiene sus propios estados).
-        _filtros.Otros.Remove("status");
-        _filtros.Otros.Remove("supplier");
+        // El «status» y el proveedor de una vista no significan lo mismo en otra (el cruce tiene sus propios estados); tampoco la
+        // dimensión, la base, los días ni el año de las vistas de analítica (I6).
+        foreach (var propio in new[] { "status", "supplier", "by", "basis", "days", "year" }) _filtros.Otros.Remove(propio);
         _proveedor = null;
         await EvaluarExportacionAsync();
     }
@@ -216,6 +244,11 @@
         else _filtros.Otros[nombre] = valor;
     }
 
+    /// <summary>Las dimensiones de «by» de la vista elegida (margin y turnover no abren por lo mismo).</summary>
+    private IReadOnlyList<(string Valor, string Texto)> DimensionesDeLaVista => _vista?.Key == "turnover"
+        ? [("product", "Producto"), ("category", "Categoría"), ("accountingGroup", "Grupo contable")]
+        : [("product", "Producto"), ("category", "Categoría"), ("salesperson", "Vendedor"), ("customer", "Cliente"), ("point", "Punto de venta")];
+
     /// <summary>La tabla trae con qué profundizar: el documento o el producto.</summary>
     private bool Profundiza => _tabla is not null && _tabla.Columnas.Any(c => c.Clave is "_documento" or "_producto");
 
@@ -226,7 +259,8 @@
     {
         if (_tabla is null) return null;
         if (TablaDeReporte.Oculto(_tabla, fila, "_documento") is { } documento) return documento;
-        return DestinoDeDocumentoDeInventario.Kardex(TablaDeReporte.Oculto(_tabla, fila, "_producto"), TablaDeReporte.Oculto(_tabla, fila, "_bodega"));
+        return DestinoDeDocumentoDeInventario.Kardex(TablaDeReporte.Oculto(_tabla, fila, "_producto"), TablaDeReporte.Oculto(_tabla, fila, "_bodega"),
+            TablaDeReporte.Oculto(_tabla, fila, "_lote"));
     }
 
     private async Task ProfundizarAsync(FilaReporteDto fila)

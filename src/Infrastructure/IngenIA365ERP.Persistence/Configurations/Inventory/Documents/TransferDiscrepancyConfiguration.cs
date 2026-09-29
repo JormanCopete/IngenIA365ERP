@@ -31,6 +31,8 @@ public class TransferDiscrepancyConfiguration : IEntityTypeConfiguration<Transfe
         builder.HasOne<InventoryDocumentLine>().WithMany().HasForeignKey(e => e.DispatchLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Product>().WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<AdjustmentCause>().WithMany().HasForeignKey(e => e.AdjustmentCauseId).OnDelete(DeleteBehavior.Restrict);
+        // I6 (ComercioAmpliado, T857; data-model §0 «FK Restrict siempre», §7.1): el lote nació en I1 sin FK.
+        builder.HasOne<Lot>().WithMany().HasForeignKey(e => e.LotId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.ReceiptDocumentId, e.DispatchLineId, e.Kind }).IsUnique().HasFilter("[IsDeleted] = 0")
             .HasDatabaseName("UK_INV_TransferDiscrepancies_Receipt_DispatchLine_Kind");

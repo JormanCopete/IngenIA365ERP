@@ -28,9 +28,16 @@ public static class DestinoDeDocumentoDeInventario
     };
 
     /// <summary>El kardex del producto (y de la bodega, si viene), o nulo si el producto no es un PublicId.</summary>
-    public static string? Kardex(string? producto, string? bodega)
+    public static string? Kardex(string? producto, string? bodega) => Kardex(producto, bodega, null);
+
+    /// <summary>
+    /// El kardex del producto, de la bodega si viene y, desde I6 (T970), del lote si viene (<c>_lote</c> lleva su código, que es lo que filtra
+    /// el kardex con <c>?lot=</c>).
+    /// </summary>
+    public static string? Kardex(string? producto, string? bodega, string? lote)
     {
         if (!Guid.TryParse(producto, out var p)) return null;
-        return Guid.TryParse(bodega, out var b) ? $"/inventario/kardex?product={p}&warehouse={b}" : $"/inventario/kardex?product={p}";
+        var ruta = Guid.TryParse(bodega, out var b) ? $"/inventario/kardex?product={p}&warehouse={b}" : $"/inventario/kardex?product={p}";
+        return string.IsNullOrWhiteSpace(lote) ? ruta : $"{ruta}&lot={Uri.EscapeDataString(lote.Trim())}";
     }
 }

@@ -1,0 +1,46 @@
+{
+  "nombre": "Fuera de vigencia, de canal o inactiva no aplica",
+  "descripcion": "El 1 de octubre en el canal 1: VENCIDA termino el 30 de septiembre, FUTURA empieza el 2 de octubre, OTROCANAL es solo del canal 2, INACTIVA esta apagada. Solo aplica CANAL1 (5 % en el canal 1): 5 % de 10.000 = 500.",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "promociones": [
+    {
+      "id": 9, "codigo": "VENCIDA", "clase": "Percent", "tasa": 0.20, "acumulable": true,
+      "desde": "2026-09-01", "hasta": "2026-09-30", "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 70 } ]
+    },
+    {
+      "id": 10, "codigo": "FUTURA", "clase": "Percent", "tasa": 0.20, "acumulable": true,
+      "desde": "2026-10-02", "hasta": "2026-10-31", "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 70 } ]
+    },
+    {
+      "id": 11, "codigo": "OTROCANAL", "clase": "Percent", "tasa": 0.20, "acumulable": true,
+      "desde": "2026-09-01", "hasta": "2026-12-31", "activa": true,
+      "ambitos": [ { "clase": "Channel", "canal": 2 } ]
+    },
+    {
+      "id": 12, "codigo": "INACTIVA", "clase": "Percent", "tasa": 0.20, "acumulable": true,
+      "desde": "2026-09-01", "hasta": "2026-12-31", "activa": false,
+      "ambitos": []
+    },
+    {
+      "id": 13, "codigo": "CANAL1", "clase": "Percent", "tasa": 0.05, "acumulable": false,
+      "desde": "2026-10-01", "hasta": "2026-10-01", "activa": true,
+      "ambitos": [ { "clase": "Channel", "canal": 1 } ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-01",
+      "canal": 1,
+      "lineas": [ { "linea": 1, "producto": 70, "categorias": [7], "cantidad": 1, "precio": 10000 } ],
+      "esperado": [ { "linea": 1, "promocion": 13, "valor": 500 } ]
+    },
+    {
+      "fecha": "2026-10-01",
+      "lineas": [ { "linea": 1, "producto": 70, "categorias": [7], "cantidad": 1, "precio": 10000 } ],
+      "esperado": []
+    }
+  ]
+}

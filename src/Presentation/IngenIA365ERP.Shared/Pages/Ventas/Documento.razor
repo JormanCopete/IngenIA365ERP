@@ -55,6 +55,11 @@
                     {
                         <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-credito/nueva?origen={d.DocumentPublicId}")">Nota crédito</a></PermissionGate>
                     }
+                    @if (d.Class is TextosDeVentas.ClaseFactura or TextosDeVentas.ClaseFacturaDesdeRemisiones)
+                    {
+                        @* I6 (T898): la nota débito sobre esta factura. *@
+                        <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-debito?factura={d.DocumentPublicId}")">Nota débito</a></PermissionGate>
+                    }
                     @if (d.Electronico is { } el)
                     {
                         @if (!EsNota && AccionesDelDocumentoElectronico.Entregable(el.Status))
@@ -101,7 +106,7 @@
                             <tr>
                                 <td>@l.LineNumber</td><td>@l.Product.Code · @l.Product.Name@(l.BelowCost ? " · bajo el costo" : "")</td><td>@l.Unit.Code</td>
                                 <td class="numero">@l.Quantity.ToString("0.####")</td><td class="numero">@l.ListPrice.ToString("N0")</td><td class="numero">@l.UnitPrice.ToString("N0")</td>
-                                <td>@string.Join("; ", l.Discounts.Select(x => $"{(x.Percent is { } pct ? $"{pct * 100m:0.##} %" : "")} {x.Amount:N0}{(x.FromDocumentDiscount ? " (del total)" : "")}{(x.Approval is { } a ? $" · aprobación {a.Status}" : "")}"))</td>
+                                <td>@string.Join("; ", l.Discounts.Select(x => $"{(x.EsPromocion ? $"{x.PromotionName ?? "Promoción"}: " : "")}{(x.Percent is { } pct ? $"{pct * 100m:0.##} %" : "")} {x.Amount:N0}{(x.FromDocumentDiscount ? " (del total)" : "")}{(x.Approval is { } a ? $" · aprobación {a.Status}" : "")}"))</td>
                                 <td>@string.Join("; ", l.Taxes.Select(x => $"{x.TaxRateCode} {x.Amount:N0}"))</td>
                                 <td class="numero">@l.Total.ToString("N0")</td>
                             </tr>

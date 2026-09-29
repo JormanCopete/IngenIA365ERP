@@ -1,0 +1,44 @@
+{
+  "nombre": "Dos promociones no acumulables: gana la de mayor descuento",
+  "descripcion": "Producto 50 a 10.000. PCT10 da el 10 %; 3X2 regala una de cada tres. Con 3 unidades: PCT10 = 3.000, 3X2 = 10.000; gana 3X2 y PCT10 queda descartada. Con 1 unidad: PCT10 = 1.000, 3X2 = 0; gana PCT10.",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "promociones": [
+    {
+      "id": 5,
+      "codigo": "PCT10",
+      "clase": "Percent",
+      "tasa": 0.10,
+      "acumulable": false,
+      "desde": "2026-10-01",
+      "hasta": "2026-12-31",
+      "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 50 } ]
+    },
+    {
+      "id": 6,
+      "codigo": "3X2",
+      "clase": "BuyNPayM",
+      "lleva": 3,
+      "paga": 2,
+      "acumulable": false,
+      "desde": "2026-10-01",
+      "hasta": "2026-12-31",
+      "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 50 } ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-15",
+      "lineas": [ { "linea": 1, "producto": 50, "categorias": [5], "cantidad": 3, "precio": 10000 } ],
+      "esperado": [ { "linea": 1, "promocion": 6, "valor": 10000 } ],
+      "descartadas": [5]
+    },
+    {
+      "fecha": "2026-10-15",
+      "lineas": [ { "linea": 1, "producto": 50, "categorias": [5], "cantidad": 1, "precio": 10000 } ],
+      "esperado": [ { "linea": 1, "promocion": 5, "valor": 1000 } ]
+    }
+  ]
+}

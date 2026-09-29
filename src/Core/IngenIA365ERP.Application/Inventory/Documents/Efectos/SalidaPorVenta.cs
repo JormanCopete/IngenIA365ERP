@@ -4,6 +4,8 @@ using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Application.Inventory.Kardex;
 using IngenIA365ERP.Application.Inventory.Sales;
+using IngenIA365ERP.Application.Inventory.Sales.CicloComercial;
+using IngenIA365ERP.Application.Inventory.Sales.Reservas;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Transactions;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -33,10 +35,25 @@ public abstract class SalidaPorVenta(
     IMaestrosDelDocumento maestros,
     ReglasDeConfirmacionDeVenta reglas,
     AnulacionDeVenta anulacion,
-    IApplicationDbContext db) : EfectoDeClaseBase
+    IApplicationDbContext db,
+    ReservasDeInventario? reservas = null,
+    VinculosDelCiclo? vinculos = null) : EfectoDeClaseBase
 {
     private readonly Dictionary<Guid, (PreparacionDelRegistro Preparacion, IReadOnlyList<MovimientoDeKardex> Movimientos)> _preparados = [];
     private readonly Dictionary<Guid, RegistroHecho> _registrados = [];
+    private readonly Dictionary<Guid, (IReadOnlyList<ConsumoDeReserva> Consumos, IReadOnlyList<int> Pedidos)> _deLosPedidos = [];
+
+    /// <summary>
+    /// ¿La clase descarga existencia? Sí, salvo la factura desde remisiones (I6, T881): lo que factura ya salió por la remisión. (nuevo)
+    /// </summary>
+    protected virtual bool DescargaExistencia => true;
+
+    /// <summary>Las reglas propias de la clase antes de las de venta (I6: las remisiones de la factura). Por defecto, ninguna. (nuevo)</summary>
+    protected virtual Task<Result> ValidarOrigenesAsync(ContextoDeEfecto contexto, CancellationToken ct) => Task.FromResult(Result.Success());
+
+    /// <summary>Los documentos de origen que bloquea la confirmación (I6: los pedidos o las remisiones). (nuevo)</summary>
+    protected virtual IReadOnlyList<int> OrigenesQueBloquea(ContextoDeEfecto contexto) =>
+        _deLosPedidos.TryGetValue(contexto.Documento.PublicId, out var p) ? p.Pedidos : [];
 
     public override async Task<Result> ValidarAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
@@ -44,15 +61,43 @@ public abstract class SalidaPorVenta(
 
         var productos = await ReglasDeLineasDeVenta.ProductosAsync(contexto.Documento, maestros, ct);
         if (productos.IsFailure) return Result.Failure(productos.Error);
+        var origenes = await ValidarOrigenesAsync(contexto, ct);
+        if (origenes.IsFailure) return origenes;
         var reglasDeVenta = await reglas.ValidarVentaAsync(contexto, ct);
         if (reglasDeVenta.IsFailure) return reglasDeVenta;
 
+        // I6 (T882): la factura o el comprobante desde un pedido (FromOrder) no pasa de lo pendiente del pedido y consume su reserva.
+        var delPedido = await DelPedidoAsync(contexto.Documento, ct);
+        if (delPedido.IsFailure) return delPedido;
+
         // I4 (T739): la factura que reemplaza al documento equivalente no escribe kardex: la salida ya la hizo el original (ReplacementOf).
-        var movimientos = reglas.EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento) ? [] : Movimientos(contexto.Documento, productos.Value);
+        // I6 (T926): un combo sale por sus componentes.
+        var movimientos = !DescargaExistencia || reglas.EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento)
+            ? []
+            : await ExpansionDeCombos.SalidasDeVentaAsync(db, contexto.Documento, productos.Value, ct);
         if (movimientos.Count == 0) return Result.Success();
         var preparado = await registro.PrepararAsync(contexto.Documento, movimientos, ct);
         if (preparado.IsFailure) return Result.Failure(preparado.Error);
         _preparados[contexto.Documento.PublicId] = (preparado.Value, movimientos);
+        return Result.Success();
+    }
+
+    /// <summary>Los consumos de reserva de los pedidos de origen (<c>FromOrder</c>), sin pasar de lo pendiente de cada línea.</summary>
+    private async Task<Result> DelPedidoAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        if (vinculos is null || !DescargaExistencia) return Result.Success();
+        var pares = await vinculos.ParesAsync(documento, DocumentLinkKind.FromOrder, ct);
+        if (pares.Count == 0) return Result.Success();
+        var pedidos = await vinculos.OrigenesAsync(documento, DocumentLinkKind.FromOrder, ct);
+        var lineas = pedidos.SelectMany(p => p.Lines).Where(l => pares.Any(x => x.SourceLineId == l.Id)).ToList();
+        var pendiente = await vinculos.PendientePorDespacharAsync(lineas, documento.Id, ct);
+        var excedidas = pares.GroupBy(p => p.SourceLineId)
+            .Where(g => g.Sum(p => p.Destino.QuantityBase) > pendiente.GetValueOrDefault(g.Key))
+            .Select(g => new ErroresDelCicloComercial.PendienteDePedido(lineas.First(l => l.Id == g.Key).PublicId, pendiente.GetValueOrDefault(g.Key),
+                g.Sum(p => p.Destino.QuantityBase)))
+            .ToList();
+        if (excedidas.Count > 0) return Result.Failure(ErroresDelCicloComercial.OrderExceedsPending(excedidas));
+        _deLosPedidos[documento.PublicId] = (pares.Select(p => new ConsumoDeReserva(p.SourceLineId, p.Destino.QuantityBase)).ToList(), pedidos.Select(p => p.Id).ToList());
         return Result.Success();
     }
 
@@ -65,13 +110,18 @@ public abstract class SalidaPorVenta(
     public override PedidoDeCerrojo Cerrojo(ContextoDeEfecto contexto)
     {
         if (contexto.EsAnulacion) return anulacion.Cerrojo(contexto, base.Cerrojo(contexto));
-        return _preparados.TryGetValue(contexto.Documento.PublicId, out var p)
+        var pedido = _preparados.TryGetValue(contexto.Documento.PublicId, out var p)
             ? p.Preparacion.Cerrojo with { Bodegas = base.Cerrojo(contexto).Bodegas.Concat(p.Preparacion.Cerrojo.Bodegas).Distinct().ToList() }
             : base.Cerrojo(contexto);
+        var origenes = OrigenesQueBloquea(contexto);
+        return origenes.Count == 0 ? pedido : pedido with { DocumentosDeOrigen = pedido.DocumentosDeOrigen.Concat(origenes).Distinct().ToList() };
     }
 
     public override async Task<Result> AplicarAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
+        // I6 (T882): la reserva del pedido se consume antes de la salida, en la misma transacción: lo que sale ya no está reservado.
+        if (reservas is not null && _deLosPedidos.TryGetValue(contexto.Documento.PublicId, out var delPedido))
+            await reservas.ConsumirAsync(contexto.Documento, delPedido.Consumos, ct);
         if (_preparados.TryGetValue(contexto.Documento.PublicId, out var p))
         {
             var registrado = await registro.RegistrarAsync(contexto.Documento, p.Movimientos, ct);
@@ -97,11 +147,8 @@ public abstract class SalidaPorVenta(
         if (contexto.EsAnulacion) return await MensajesDeAnulacionAsync(contexto, ct);
         var documento = contexto.Documento;
         IReadOnlyList<KardexEntry> filas = [];
-        if (documento.WarehouseId is int bodega && _preparados.TryGetValue(documento.PublicId, out var p))
-        {
-            var lineas = p.Movimientos.Select(m => m.Linea.Id).ToHashSet();
-            filas = (await registro.FilasProvisionalesAsync(documento, bodega, KardexEntryKind.Exit, null, ct)).Where(f => lineas.Contains(f.DocumentLineId)).ToList();
-        }
+        if (_preparados.TryGetValue(documento.PublicId, out var p))
+            filas = await registro.FilasProvisionalesDeAsync(documento, p.Movimientos, ct);
         return await ContenidosAsync(documento, filas, ct);
     }
 
@@ -121,15 +168,6 @@ public abstract class SalidaPorVenta(
         return contenidos;
     }
 
-    /// <summary>Una salida por línea viva de producto inventariable, al promedio vigente, en la bodega de la venta.</summary>
-    private static IReadOnlyList<MovimientoDeKardex> Movimientos(InventoryDocument documento, IReadOnlySet<int> inventariables)
-    {
-        if (documento.WarehouseId is not int bodega) return [];
-        return documento.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m && inventariables.Contains(l.ProductId)).OrderBy(l => l.LineNumber)
-            .Select(l => new MovimientoDeKardex(l, bodega, -l.QuantityBase, ValoracionDelMovimiento.AlCostoVigente, LocationId: l.LocationId))
-            .ToList();
-    }
-
     private async Task<List<KardexEntry>> KardexAsync(InventoryDocument documento, CancellationToken ct)
     {
         var enMemoria = db.KardexEntries.Local.Where(k => k.DocumentId == documento.Id).ToList();
@@ -140,8 +178,8 @@ public abstract class SalidaPorVenta(
 /// <summary><c>SalesInvoice</c>: la factura electrónica de venta; confirma sólo si la guardia fiscal responde <c>Electronic</c> (I4). (nuevo)</summary>
 public sealed class EfectoFacturaDeVenta(
     RegistroDeKardex registro, EmisionDeInventario emision, IMaestrosDelDocumento maestros, ReglasDeConfirmacionDeVenta reglas,
-    AnulacionDeVenta anulacion, IApplicationDbContext db)
-    : SalidaPorVenta(registro, emision, maestros, reglas, anulacion, db)
+    AnulacionDeVenta anulacion, IApplicationDbContext db, ReservasDeInventario? reservas = null, VinculosDelCiclo? vinculos = null)
+    : SalidaPorVenta(registro, emision, maestros, reglas, anulacion, db, reservas, vinculos)
 {
     public override DocumentClass Clase => DocumentClass.SalesInvoice;
 }
@@ -149,8 +187,8 @@ public sealed class EfectoFacturaDeVenta(
 /// <summary><c>PosEquivalentDocument</c>: el documento equivalente electrónico del POS; confirma con I4. (nuevo)</summary>
 public sealed class EfectoDocumentoEquivalentePos(
     RegistroDeKardex registro, EmisionDeInventario emision, IMaestrosDelDocumento maestros, ReglasDeConfirmacionDeVenta reglas,
-    AnulacionDeVenta anulacion, IApplicationDbContext db)
-    : SalidaPorVenta(registro, emision, maestros, reglas, anulacion, db)
+    AnulacionDeVenta anulacion, IApplicationDbContext db, ReservasDeInventario? reservas = null, VinculosDelCiclo? vinculos = null)
+    : SalidaPorVenta(registro, emision, maestros, reglas, anulacion, db, reservas, vinculos)
 {
     public override DocumentClass Clase => DocumentClass.PosEquivalentDocument;
 }
@@ -158,13 +196,17 @@ public sealed class EfectoDocumentoEquivalentePos(
 /// <summary><c>NonElectronicSalesReceipt</c>: el comprobante de venta de una cooperativa no obligada; se anula con documento contrario. (nuevo)</summary>
 public sealed class EfectoComprobanteDeVenta(
     RegistroDeKardex registro, EmisionDeInventario emision, IMaestrosDelDocumento maestros, ReglasDeConfirmacionDeVenta reglas,
-    AnulacionDeVenta anulacion, IApplicationDbContext db)
-    : SalidaPorVenta(registro, emision, maestros, reglas, anulacion, db)
+    AnulacionDeVenta anulacion, IApplicationDbContext db, ReservasDeInventario? reservas = null, VinculosDelCiclo? vinculos = null)
+    : SalidaPorVenta(registro, emision, maestros, reglas, anulacion, db, reservas, vinculos)
 {
     public override DocumentClass Clase => DocumentClass.NonElectronicSalesReceipt;
 }
 
-/// <summary>Las reglas de producto de una línea de venta o nota: existe, no está inactivo ni bloqueado. Devuelve los inventariables. (nuevo)</summary>
+/// <summary>
+/// Las reglas de producto de una línea de venta o nota: existe, no es una plantilla de variantes (I6), no está inactivo ni bloqueado.
+/// Devuelve los inventariables; un combo entra como línea de venta sin existencia propia y sale por sus componentes (T926,
+/// <see cref="ExpansionDeCombos"/>). (nuevo)
+/// </summary>
 public static class ReglasDeLineasDeVenta
 {
     public static async Task<Result<IReadOnlySet<int>>> ProductosAsync(InventoryDocument documento, IMaestrosDelDocumento maestros, CancellationToken ct)
@@ -174,6 +216,7 @@ public static class ReglasDeLineasDeVenta
         foreach (var linea in vivas)
         {
             if (!productos.TryGetValue(linea.ProductId, out var producto)) continue;
+            if (producto.EsPlantilla) return Result.Failure<IReadOnlySet<int>>(InventoryErrors.ProductNotInventoriable(linea.LineNumber, producto.Code));
             if (producto.Status == ProductStatus.Blocked) return Result.Failure<IReadOnlySet<int>>(InventoryErrors.ProductBlocked(linea.LineNumber, producto.Code));
             if (producto.Status == ProductStatus.Inactive && documento.Class is not (DocumentClass.CreditNote or DocumentClass.PosAdjustmentNote or DocumentClass.NonElectronicSalesNote))
                 return Result.Failure<IReadOnlySet<int>>(InventoryErrors.ProductInactive(linea.LineNumber, producto.Code));

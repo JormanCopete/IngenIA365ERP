@@ -1,0 +1,120 @@
+@page "/ventas/cotizaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Cotizaciones - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I6 (T894; FR-052, FR-055; contracts/api.md §18.4): la cotización con vigencia. No mueve existencia ni emite mensajes; los
+   precios salen de la lista que gana y las promociones vigentes se ven en cada línea. Confirmada y vigente, «Convertir en pedido» crea el
+   borrador del pedido con sus líneas (se puede convertir más de una vez: pedidos parciales); vencida no se convierte
+   (Inventory.Quote.Expired). Anularla no tiene efecto. (nuevo) *@
+<PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cotizaciones</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Inventory.Sales.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva cotización</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_editando)
+    {
+        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Cotizaciones" Clases="@([TextosDeVentas.ClaseCotizacion])" Nombre="cotización" Documento="@Documento"
+                        ConVigencia="true" AvisoDeAnulacion="Anular una cotización no tiene efecto sobre la existencia ni emite mensajes." Cambio="@CambioAsync">
+            <Acciones Context="doc">
+                <PermissionGate Required="Inventory.Sales.Create">
+                    <SfButton CssClass="e-primary" Disabled="@(_convertir.Activa || doc.ValidUntil < DateOnly.FromDateTime(DateTime.Today))"
+                              OnClick="@(() => ConvertirAsync(doc))">Convertir en pedido</SfButton>
+                </PermissionGate>
+            </Acciones>
+        </EditorDelCiclo>
+    }
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _convertir.Activa)">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="numero">Total</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _cotizaciones)
+                    {
+                        var id = c.DocumentPublicId;
+                        <tr>
+                            <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@c.CounterpartyName</td><td>@(c.SalespersonName ?? "—")</td>
+                            <td>@TextosDeInventario.Estado(c.Status)</td><td class="numero">@c.Total.ToString("N0")</td>
+                            <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(id))">Abrir</SfButton></td>
+                        </tr>
+                    }
+                    @if (_cotizaciones.Count == 0) { <tr><td colspan="7" class="texto-tenue">No hay cotizaciones.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _convertir = new();
+    private readonly ClaveDeOperacion _claveConvertir = new();
+    private List<ResumenDeVentaDto> _cotizaciones = [];
+    private bool _editando;
+    private Guid _clave = Guid.NewGuid();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _editando = _editando || Documento is not null;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClaseCotizacion, PageSize = 50 });
+        _cotizaciones = r.IsSuccess ? [.. r.Value!.Items] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cotizaciones.");
+    }
+
+    private void Nueva()
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo("/ventas/cotizaciones", replace: true);
+    }
+
+    private void Abrir(Guid id)
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo($"/ventas/cotizaciones?documento={id}");
+    }
+
+    private async Task CambioAsync(DocumentoDeVentaDto? doc)
+    {
+        if (doc is null) { _editando = false; Nav.NavigateTo("/ventas/cotizaciones", replace: true); }
+        else if (Documento != doc.DocumentPublicId) Nav.NavigateTo($"/ventas/cotizaciones?documento={doc.DocumentPublicId}", replace: true);
+        await CargarAsync();
+    }
+
+    private async Task ConvertirAsync(DocumentoDeVentaDto cotizacion)
+    {
+        using var carga = _convertir.Iniciar();
+        var r = await Ventas.ConvertirEnPedidoAsync(cotizacion.DocumentPublicId, null, _claveConvertir);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "Inventory.Quote.Expired"
+                ? "La cotización ya venció: no se convierte en pedido. Haga una nueva."
+                : r.ErrorMessage ?? "No se pudo convertir la cotización.");
+            return;
+        }
+        await Notification.SuccessAsync("Se creó el borrador del pedido: revíselo y confírmelo para reservar.");
+        Nav.NavigateTo($"/ventas/pedidos?documento={r.Value.DocumentPublicId}");
+    }
+}

@@ -47,6 +47,39 @@ public class CasosDoradosDeCosteoTests
             nombres.Should().Contain(archivo, "los casos dorados de US16 (T818–T821, research R10)");
     }
 
+    /// <summary>
+    /// I6, T863 (SC-007, FR-044, FR-052): el caso 20 de la remisión existe y ninguno de sus movimientos es de la factura desde remisiones ni de
+    /// una nota crédito: esas clases no producen kardex (lo facturado ya salió por la remisión, y la nota de esa factura no devuelve mercancía).
+    /// </summary>
+    [Fact]
+    public void Esta_el_caso_20_de_I6_y_la_factura_desde_remisiones_no_mueve_kardex()
+    {
+        var archivo = CasoDoradoDeCosteo.Archivos().SingleOrDefault(f => Path.GetFileName(f) == "20-remision-y-factura-desde-remisiones.json");
+        archivo.Should().NotBeNull("falta el caso 20 «remisión y factura desde remisiones» (T863)");
+        var caso = CasoDoradoDeCosteo.Cargar(archivo!);
+        caso.Movimientos.Should().Contain(m => m.Clase == DocumentClass.Shipment);
+        caso.Movimientos.Should().NotContain(m => m.Clase == DocumentClass.SalesInvoiceFromShipments || m.Clase == DocumentClass.CreditNote);
+        caso.Movimientos.Should().Contain(m => m.Anulacion && m.Valoracion == ValoracionDelMovimiento.AlCostoDeOrigen,
+            "la anulación de la remisión no facturada entra al costo con que salió");
+    }
+
+    /// <summary>
+    /// I6, T904 (SC-007, US15-2, US15-3): los casos 18 (ensamble de kits) y 19 (venta de combo) existen y recorren el camino compuesto:
+    /// el ensamble lleva clase <c>Assembly</c> y componentes; el combo, componentes en una clase de venta.
+    /// </summary>
+    [Fact]
+    public void Estan_los_casos_18_y_19_de_I6()
+    {
+        var nombres = CasoDoradoDeCosteo.Archivos().Select(Path.GetFileName).ToList();
+        nombres.Should().Contain("18-ensamble-de-kits.json", "falta el caso 18 «ensamble de kits» (T904)");
+        nombres.Should().Contain("19-venta-de-combo.json", "falta el caso 19 «venta de combo» (T904)");
+
+        var ensamble = CasoDoradoDeCosteo.Cargar(Path.Combine(CasoDoradoDeCosteo.DirectorioDeCasos, "18-ensamble-de-kits.json"));
+        ensamble.Movimientos.Should().Contain(m => m.Clase == DocumentClass.Assembly && m.Componentes.Count > 0);
+        var combo = CasoDoradoDeCosteo.Cargar(Path.Combine(CasoDoradoDeCosteo.DirectorioDeCasos, "19-venta-de-combo.json"));
+        combo.Movimientos.Should().Contain(m => m.Clase == DocumentClass.SalesInvoice && m.Componentes.Count > 0);
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_motor_coincide_al_peso_con_el_calculo_manual(string archivo)
@@ -81,6 +114,12 @@ public class CasosDoradosDeCosteoTests
             foreach (var m in caso.Movimientos)
             {
                 using var _ = new AssertionScope($"{archivo} — {caso.Nombre} — movimiento {m.Id}");
+                if (m.Componentes.Count > 0)
+                {
+                    Compuesto(m);
+                    continue;
+                }
+
                 var ambito = caso.AmbitoDe(m);
                 var estado = _estados.GetValueOrDefault(ambito, EstadoDeCosto.Vacio);
                 var cantidad = CantidadBase(m);
@@ -189,6 +228,92 @@ public class CasosDoradosDeCosteoTests
                     "un AjusteDeCostoReconocido por documento afectado, separado en existencia y vendido");
             CompararEstado(m.Esperado.Estado, resultado.EstadoFinal);
             CompararExplicacion(m.Esperado.Explicacion, resultado.Explicacion);
+        }
+
+        /// <summary>
+        /// I6 (T904): un combo vendido o devuelto (<see cref="MotorDeCosteo.MoverCombo{TClave}"/>) o un ensamble de kits
+        /// (<see cref="MotorDeCosteo.Ensamblar{TClave}"/>). Cada componente mueve su propio ámbito —«componente@ámbito»—; el combo no
+        /// tiene kardex propio y el kit entra al costo de lo consumido. Si un componente no alcanza, no se mueve ninguno.
+        /// </summary>
+        private void Compuesto(CasoDoradoDeCosteo.MovimientoJson m)
+        {
+            var ensamble = m.Clase == DocumentClass.Assembly;
+            var movimientos = m.Componentes.Select(c =>
+            {
+                var ambito = caso.AmbitoDe(c.Producto, m.Bodega);
+                var cantidad = ensamble ? -Math.Abs(c.Cantidad * m.Cantidad) : c.Cantidad * m.Cantidad;
+                var origen = cantidad > 0m && m.Origen is { } o ? Linea($"{o}:{c.Producto}") : null;
+                var movimiento = origen is null
+                    ? new MovimientoDeCosto(cantidad, ValoracionDelMovimiento.AlCostoVigente) { OperationDate = m.Fecha }
+                    : new MovimientoDeCosto(cantidad, ValoracionDelMovimiento.AlCostoDeOrigen, origen.UnitCost, ReferenciaDeKardex.A(origen.Id!.Value))
+                    {
+                        OperationDate = m.Fecha,
+                    };
+                return new MovimientoDeComponente<string>(c.Producto, _estados.GetValueOrDefault(ambito, EstadoDeCosto.Vacio), movimiento);
+            }).ToList();
+
+            ResultadoDeCompuesto<string> componentes;
+            ResultadoDeCosteo? kit = null;
+            ExplicacionDeCosto explicacion;
+            var ambitoDelKit = caso.AmbitoDe(m);
+            if (ensamble)
+            {
+                var r = MotorDeCosteo.Ensamblar(movimientos, _estados.GetValueOrDefault(ambitoDelKit, EstadoDeCosto.Vacio), m.Cantidad,
+                    Parametros(ambitoDelKit), m.Fecha);
+                componentes = r.Componentes;
+                kit = r.Kit;
+                explicacion = r.Explicacion;
+                if (r.Admitido) r.CostoConsumido.Should().Be(componentes.Costo, "el ensamble consume lo que salió de sus componentes");
+            }
+            else
+            {
+                componentes = MotorDeCosteo.MoverCombo(movimientos, _parametros);
+                explicacion = componentes.Explicacion;
+            }
+
+            if (m.Esperado.ComponenteRechazado is { } rechazado) componentes.ComponenteRechazado.Should().Be(rechazado);
+            if (Rechazado(m, componentes.Rechazo))
+            {
+                componentes.Componentes.Should().BeEmpty("un combo o ensamble rechazado no mueve ningún componente");
+                kit.Should().BeNull();
+                return;
+            }
+
+            foreach (var c in componentes.Componentes)
+            {
+                var ambito = caso.AmbitoDe(c.Componente, m.Bodega);
+                Registrar($"{m.Id}:{c.Componente}", ambito, c.Componente, m.Bodega, m.Fecha, c.Resultado.Lineas);
+                var mov = movimientos.Single(x => x.Componente == c.Componente).Movimiento;
+                Historia(ambito).Add(new MovimientoRegistrado(c.Resultado.Principal!.Id!.Value, Documento(m), m.Fecha, mov,
+                    c.Resultado.Valor, c.Resultado.Principal.UnitCost, true));
+                _estados[ambito] = c.Resultado.Estado;
+
+                var esperado = m.Esperado.Componentes.SingleOrDefault(e => e.Producto == c.Componente);
+                if (esperado is null) continue;
+                using var _ = new AssertionScope($"componente {c.Componente}");
+                CompararLineas(esperado.Lineas, c.Resultado.Lineas, "línea");
+                CompararEstado(esperado.Estado, c.Resultado.Estado);
+            }
+
+            if (m.Esperado.CostoCompuesto is { } costo)
+                componentes.Costo.Should().Be(costo, ensamble ? "costo consumido del ensamble" : "costo de venta del combo = Σ de sus componentes");
+
+            if (kit is not null)
+            {
+                Registrar(m.Id, ambitoDelKit, m.Producto, m.Bodega, m.Fecha, kit.Lineas);
+                Historia(ambitoDelKit).Add(new MovimientoRegistrado(kit.Principal!.Id!.Value, Documento(m), m.Fecha,
+                    new MovimientoDeCosto(m.Cantidad, ValoracionDelMovimiento.AlCostoIndicado, kit.Principal.UnitCost) { OperationDate = m.Fecha },
+                    kit.Valor, kit.Principal.UnitCost, false));
+                _estados[ambitoDelKit] = kit.Estado;
+                CompararLineas(m.Esperado.Lineas, kit.Lineas, "línea del kit");
+                CompararEstado(m.Esperado.Estado, kit.Estado);
+            }
+            else
+            {
+                m.Esperado.Lineas.Should().BeNull("un combo no tiene kardex propio: sólo sus componentes");
+            }
+
+            CompararExplicacion(m.Esperado.Explicacion, explicacion);
         }
 
         private bool Rechazado(CasoDoradoDeCosteo.MovimientoJson m, RechazoDeCosteo? rechazo)
@@ -355,18 +480,21 @@ public class CasosDoradosDeCosteoTests
             };
         }
 
-        private void Registrar(CasoDoradoDeCosteo.MovimientoJson m, string ambito, IReadOnlyList<LineaDeKardexPropuesta> lineas)
+        private void Registrar(CasoDoradoDeCosteo.MovimientoJson m, string ambito, IReadOnlyList<LineaDeKardexPropuesta> lineas) =>
+            Registrar(m.Id, ambito, m.Producto, m.Bodega, m.Fecha, lineas);
+
+        private void Registrar(string id, string ambito, string? producto, string bodega, DateOnly fecha, IReadOnlyList<LineaDeKardexPropuesta> lineas)
         {
             for (var i = 0; i < lineas.Count; i++)
             {
                 var linea = lineas[i];
                 linea.Id = ++_siguienteId;
-                var nombre = i == 0 ? m.Id : $"{m.Id}#{i + 1}";
+                var nombre = i == 0 ? id : $"{id}#{i + 1}";
                 _lineas[nombre] = linea;
                 _nombres[linea.Id.Value] = nombre;
                 Kardex(ambito).Add(linea);
-                _registro.Add((ambito, m.Producto, linea.OperationDate ?? m.Fecha, linea, i == 0, Parametros(ambito).Metodo));
-                _existenciaPorBodega[m.Bodega] = _existenciaPorBodega.GetValueOrDefault(m.Bodega) + linea.QuantityBase;
+                _registro.Add((ambito, producto, linea.OperationDate ?? fecha, linea, i == 0, Parametros(ambito).Metodo));
+                _existenciaPorBodega[bodega] = _existenciaPorBodega.GetValueOrDefault(bodega) + linea.QuantityBase;
             }
         }
 

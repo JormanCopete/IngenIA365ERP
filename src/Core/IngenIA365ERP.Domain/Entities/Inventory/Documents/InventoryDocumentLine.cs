@@ -57,11 +57,15 @@ public class InventoryDocumentLine : AuditableEntity
 
     public int? ToLocationId { get; set; }
 
-    /// <summary>Sin FK hasta I6 (data-model §3.0).</summary>
+    /// <summary>Nace en I1 sin FK; <c>ComercioAmpliado</c> (I6) agrega la FK a <c>INV_Lots</c> (data-model §3.0).</summary>
     public int? LotId { get; set; }
 
-    /// <summary>Sin FK hasta I6 (data-model §3.0).</summary>
+    public Catalog.Lot? Lot { get; set; }
+
+    /// <summary>Nace en I1 sin FK; <c>ComercioAmpliado</c> (I6) agrega la FK a <c>INV_Serials</c> (data-model §3.0).</summary>
     public int? SerialId { get; set; }
+
+    public Catalog.Serial? Serial { get; set; }
 
     public int? AdjustmentCauseId { get; set; }
 

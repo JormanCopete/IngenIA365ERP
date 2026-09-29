@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Inventory.Catalog.Categories;
 using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 using IngenIA365ERP.Domain.Enums.Core;
+using IngenIA365ERP.Domain.Enums.Inventory;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Catalog.Products;
@@ -47,7 +48,28 @@ public static class VistaDeProductos
             p.Reference, p.Weight, p.Volume, p.TracksLot, p.TracksSerial, p.TracksExpiry, p.IsPurchasable, p.IsSellable,
             unidades, codigos, impuestos, imagenes,
             await ReglasDeProducto.TieneMovimientosAsync(db, p.Id, ct),
-            p.CreatedAt, p.CreatedBy, p.UpdatedAt);
+            p.CreatedAt, p.CreatedBy, p.UpdatedAt,
+            await PlantillaAsync(db, p, ct),
+            await ValoresDeVarianteAsync(db, p, ct),
+            p.Kind is ProductKind.Combo or ProductKind.Kit ? (await Components.VistaDeComponentes.ArmarAsync(db, p, ct)).Components : []);
+    }
+
+    /// <summary>La plantilla de una variante (I6, T934), o nada.</summary>
+    private static async Task<CatalogRefDto?> PlantillaAsync(IApplicationDbContext db, Product p, CancellationToken ct) =>
+        p.ParentProductId is not int padre ? null
+            : await db.Products.AsNoTracking().Where(x => x.Id == padre).Select(x => new CatalogRefDto(x.PublicId, x.Code, x.Name)).FirstOrDefaultAsync(ct);
+
+    /// <summary>Los pares atributo–valor de una variante (I6, T934), por código de atributo como su <c>VariantKey</c>.</summary>
+    private static async Task<IReadOnlyList<Variants.ValorDeVarianteDto>> ValoresDeVarianteAsync(IApplicationDbContext db, Product p, CancellationToken ct)
+    {
+        if (p.Kind != ProductKind.Variant) return [];
+        var valores = await db.ProductVariantValues.AsNoTracking()
+            .Include(v => v.VariantAttribute).Include(v => v.VariantAttributeValue)
+            .Where(v => v.ProductId == p.Id).ToListAsync(ct);
+        return valores.OrderBy(v => v.VariantAttribute?.Code, StringComparer.Ordinal)
+            .Select(v => new Variants.ValorDeVarianteDto(v.VariantAttribute?.Code ?? string.Empty, v.VariantAttribute?.Name ?? string.Empty,
+                v.VariantAttributeValue?.Code ?? string.Empty, v.VariantAttributeValue?.Name ?? string.Empty))
+            .ToList();
     }
 
     public static async Task<IReadOnlyList<ProductUnitDto>> UnidadesAsync(IApplicationDbContext db, int productoId, CancellationToken ct) =>

@@ -76,6 +76,10 @@ public class TextosDeVentasTests
     [Fact]
     public void Cada_estado_de_bono() => Cubre<VoucherRedemptionStatus>("EstadosDeBono", "NombresDeEstadoDeBono");
 
+    /// <summary>I6 (T893, T899): la clase de la promoción viaja por nombre desde la pantalla de promociones.</summary>
+    [Fact]
+    public void Cada_clase_de_promocion() => Cubre<PromotionKind>("ClasesDePromocion", "NombresDeClaseDePromocion");
+
     [Fact]
     public void Cada_formato_de_impresion() => Cubre<CashRegisterPrintFormat>("FormatosDeImpresion", "NombresDeFormatoDeImpresion");
 

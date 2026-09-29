@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Core.Taxes;
 using IngenIA365ERP.Application.Inventory.Pricing;
+using IngenIA365ERP.Application.Inventory.Pricing.Promotions;
 using IngenIA365ERP.Application.Inventory.Purchasing.Common;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Core;
@@ -10,6 +11,7 @@ using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Inventory.Costing;
 using IngenIA365ERP.Domain.Inventory.Parameters;
 using IngenIA365ERP.Domain.Sales.Pricing;
+using IngenIA365ERP.Domain.Sales.Promotions;
 using IngenIA365ERP.Domain.Taxes;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,7 +54,10 @@ public sealed record PedidoDePrecificacion(
     decimal? DescuentoPorTotal = null,
     string? MunicipioDane = null);
 
-/// <summary>Un descuento de la línea tal como irá a <c>INV_DocumentLineDiscounts</c>. (nuevo)</summary>
+/// <summary>
+/// Un descuento de la línea tal como irá a <c>INV_DocumentLineDiscounts</c> (nuevo). I6 (T875): <see cref="Source"/> =
+/// <c>Promotion</c> con su <see cref="PromotionId"/> y la <see cref="Explicacion"/> del motor cuando lo produjo una promoción.
+/// </summary>
 public sealed record DescuentoCalculado(
     byte Sequence,
     bool FromDocumentDiscount,
@@ -60,7 +65,10 @@ public sealed record DescuentoCalculado(
     decimal? Rate,
     decimal Amount,
     decimal CapRateApplied,
-    bool RequiresApproval);
+    bool RequiresApproval,
+    DiscountSource Source = DiscountSource.Manual,
+    int? PromotionId = null,
+    string? Explicacion = null);
 
 /// <summary>
 /// Una línea precificada (nuevo). <see cref="UnitPrice"/> es siempre sin impuestos (18,6); con una lista que los incluye,
@@ -121,6 +129,10 @@ public sealed record VentaPrecificada(
 /// vendedor (<see cref="TopeDeDescuento"/>, el mayor de sus roles; sin fila 0); varios en la misma línea se miden juntos; el
 /// descuento por total se prorratea a las líneas con el residuo por <c>Redondeo.Residuo</c>
 /// (<c>FromDocumentDiscount</c>) y se compara con el tope por total. Sobre el tope no se rechaza: queda <c>RequiresApproval</c>;</item>
+/// <item>I6 (T875, FR-055, F9): las promociones vigentes (<see cref="LectorDePromocionesVigentes"/>) sobre el documento entero con
+/// <see cref="MotorDePromociones"/>, en base sin impuestos: descuentos no condicionados de la línea (<c>Source = Promotion</c>), que no
+/// se miden contra el tope del vendedor. Un descuento manual (precio digitado bajo la lista, porcentaje o valor) en una línea con
+/// promoción → <c>Inventory.Discount.PromotionApplied</c>; el descuento por total se prorratea sólo a las líneas sin promoción;</item>
 /// <item>impuestos y retenciones con <see cref="MotorTributario"/> en perspectiva de venta: vendedor = la cooperativa, comprador =
 /// el perfil de la persona (sus retenciones son <c>WithholdingSuffered</c>);</item>
 /// <item>el residuo de la lista con impuestos (lo que dice la lista menos bruto + impuestos) se reparte por <c>Redondeo.Residuo</c>
@@ -133,6 +145,8 @@ public sealed record VentaPrecificada(
 /// </summary>
 public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatalogoTributario catalogo, ILectorDeParametros parametros)
 {
+    private readonly LectorDePromocionesVigentes promociones = new(db);
+
     public async Task<Result<VentaPrecificada>> PrecificarAsync(PedidoDePrecificacion pedido, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(pedido);
@@ -226,11 +240,42 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
                     $"Los descuentos de la línea {b.Linea.LineNumber} superan su valor."));
         }
 
+        // Promociones (I6, T875): el documento entero, sobre el bruto sin impuestos; con promoción no entra un manual (F9).
+        var enPromocion = new HashSet<int>();
+        var codigosDePromocion = new SortedSet<string>(StringComparer.Ordinal);
+        var paraPromociones = await promociones.LeerAsync(fecha, pedido.CompradorPersonId, pedido.SalesChannelId, productoIds, montos, residuo, ct);
+        if (!paraPromociones.Vacio)
+        {
+            var resultadoPromociones = MotorDePromociones.Aplicar(
+                borradores.Where(b => b.Linea.QuantityBase > 0m && b.Gross > 0m)
+                    .Select(b => paraPromociones.Linea(b.Linea.LineNumber, b.Linea.ProductId, b.Linea.QuantityBase, b.Gross / b.Linea.QuantityBase, b.Gross))
+                    .ToList(),
+                paraPromociones.Contexto, paraPromociones.Promociones);
+            var porLineaDePromocion = resultadoPromociones.Descuentos.ToLookup(d => d.LineNumber);
+            var conManual = borradores.Where(b => porLineaDePromocion[b.Linea.LineNumber].Any() && b.Descuentos.Count > 0).ToList();
+            if (conManual.Count > 0)
+                return Result.Failure<VentaPrecificada>(ErroresDePrecios.PromotionApplied(conManual.Select(b => b.Linea.LineNumber).ToList(),
+                    conManual.SelectMany(b => porLineaDePromocion[b.Linea.LineNumber]).Select(d => d.PromotionCode).Distinct().ToList()));
+            foreach (var b in borradores)
+            {
+                foreach (var d in porLineaDePromocion[b.Linea.LineNumber])
+                {
+                    b.Descuentos.Add(new DescuentoCalculado((byte)(b.Descuentos.Count + 1), false, false, d.Rate, d.Amount, tope.MaxLineRate, false,
+                        DiscountSource.Promotion, d.PromotionId, d.Explicacion));
+                    enPromocion.Add(b.Linea.LineNumber);
+                    codigosDePromocion.Add(d.PromotionCode);
+                }
+            }
+        }
+
         // Descuento por total, prorrateado a los netos.
         DescuentoPorTotal? porTotal = null;
         if (pedido.DescuentoPorTotal is { } descuentoTotal && descuentoTotal > 0m)
         {
-            var netos = borradores.Select(b => b.Gross - b.Descuentos.Sum(d => d.Amount)).ToList();
+            // Las líneas con promoción no reciben parte del descuento por total (F9: el manual no se suma a una promoción).
+            var netos = borradores.Select(b => enPromocion.Contains(b.Linea.LineNumber) ? 0m : b.Gross - b.Descuentos.Sum(d => d.Amount)).ToList();
+            if (enPromocion.Count > 0 && netos.Sum() <= 0m)
+                return Result.Failure<VentaPrecificada>(ErroresDePrecios.PromotionApplied(enPromocion.Order().ToList(), codigosDePromocion.ToList()));
             if (descuentoTotal > netos.Sum())
                 return Result.Failure<VentaPrecificada>(new Error(Error.Validation.Code, "El descuento por total supera el valor de la venta."));
             porTotal = TopeDeDescuento.PorTotal(descuentoTotal, netos, tope, montos, residuo);
@@ -334,7 +379,8 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
             DocumentLineId = linea.Id,
             DocumentId = documento.Id,
             Sequence = d.Sequence,
-            Source = DiscountSource.Manual,
+            Source = d.Source,
+            PromotionId = d.PromotionId,
             FromDocumentDiscount = d.FromDocumentDiscount,
             IsPriceOverride = d.IsPriceOverride,
             Rate = d.Rate,

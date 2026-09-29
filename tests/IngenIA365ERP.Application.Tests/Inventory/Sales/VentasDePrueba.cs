@@ -206,12 +206,12 @@ public sealed class VentasDePrueba
     public BorradorDeVenta Borrador() => new(Db, K.Actor, Compras.C.Reloj, Precificacion(), Aprobaciones(), K.Permisos, K.Lector());
 
     public SaveInventoryDraftCommandHandler Guardar() =>
-        new(Db, K.Maestros(), K.Alcance, K.Actor, Compras.C.Reloj, Efectos(), K.Vista(), [Borrador()]);
+        new(Db, K.Maestros(), K.Alcance, K.Actor, Compras.C.Reloj, Efectos(), K.Vista(), [Borrador()], seguimiento: K.Seguimiento());
 
     public ConfirmacionDeDocumento Confirmacion(IPasoDeValidacionPrevia? validacionPrevia = null) => new(
         Db, K.Maestros(), K.Actor, Compras.C.Reloj, Efectos(), K.Motor, K.Cerrojo, new Numerador(Db, K.Cerrojo),
         new EmisorDeMensajes(Db, K.Actor, Compras.C.Reloj), K.Lector(), K.Vista(), [], validacionPrevia is null ? [] : [validacionPrevia],
-        avisosAlConfirmar: [new AlertaDeVentaBajoCosto(Db, K.Lector(), Alertas)]);
+        avisosAlConfirmar: [new AlertaDeVentaBajoCosto(Db, K.Lector(), Alertas)], seguimiento: K.Seguimiento());
 
     public ConfirmInventoryDocumentCommandHandler Confirmar() => new(Db, Confirmacion());
 

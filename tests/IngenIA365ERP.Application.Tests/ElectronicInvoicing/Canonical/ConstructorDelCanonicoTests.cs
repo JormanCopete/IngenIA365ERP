@@ -196,6 +196,34 @@ public class ConstructorDelCanonicoTests
         c.References.Corrected.Should().Be(new DocumentoCorregidoCanonico("SETP990000123", "cufe-de-la-factura", Fecha, "2"));
     }
 
+    /// <summary>
+    /// I6, T888 (contracts/dian.md, fila <c>DebitNote</c>): la nota débito es el tipo 92, sin resolución (consecutivo propio, T16), con la
+    /// referencia a la factura que corrige —número, CUFE y fecha— y su concepto de corrección de nota débito.
+    /// </summary>
+    [Fact]
+    public void La_nota_debito_es_el_tipo_92_y_referencia_la_factura_con_su_concepto()
+    {
+        var nota = Factura() with
+        {
+            Kind = ElectronicDocumentKind.DebitNote,
+            DocumentClass = "DebitNote",
+            Correccion = new CorreccionDeEntrada(Guid.NewGuid(), "SETP990000123", Fecha, "1"),
+        };
+        var contexto = Contexto() with
+        {
+            Resolucion = Resolucion(ResolutionKind.Invoice),
+            Prefijo = "NDV",
+            Consecutivo = 1,
+            Corregido = new DocumentoCorregidoCanonico("SETP990000123", "cufe-de-la-factura", Fecha, null),
+        };
+
+        var c = Construir(nota, contexto).Documento;
+
+        c.Resolution.Should().BeNull();
+        c.DianDocumentTypeCode.Should().Be("92");
+        c.References.Corrected.Should().Be(new DocumentoCorregidoCanonico("SETP990000123", "cufe-de-la-factura", Fecha, "1"));
+    }
+
     [Fact]
     public void Una_nota_sin_concepto_de_correccion_es_un_dato_faltante()
     {

@@ -470,7 +470,7 @@ public class ImportacionComunTests
         CatalogoDePlantillas.Todas.Select(p => p.Numero).Should().Equal(Enumerable.Range(1, 16));
         CatalogoDePlantillas.Todas.Select(p => p.Clave).Should().OnlyHaveUniqueItems();
         CatalogoDePlantillas.Por(CatalogoDePlantillas.ProductosClave).Definicion.Hojas.Select(h => h.Nombre)
-            .Should().Equal("Productos", "CodigosDeBarras", "Unidades", "ImpuestosAdicionales");
+            .Should().Equal("Productos", "CodigosDeBarras", "Unidades", "ImpuestosAdicionales", "Variantes", "Componentes");
         CatalogoDePlantillas.Todas.Where(p => p.Definicion.EsDeUnaHoja).Should()
             .OnlyContain(p => p.Definicion.Hojas[0].Nombre == "Datos");
     }

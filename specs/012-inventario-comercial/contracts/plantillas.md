@@ -369,13 +369,13 @@ FR-023 a FR-030. Las cuatro hojas se revisan y se aplican juntas.
 |---|---|---|---|
 | `codigo` | código **20** | sí | llave |
 | `nombre` | texto 200 | sí | |
-| `tipo` | `ProductKind`: `Inventoriable` (inventariable), `Service` (servicio) | sí | `Combo`, `Kit`, `Template`, `Variant` → `Import.Cell.NotYetAvailable` hasta I6 |
+| `tipo` | `ProductKind`: `Inventoriable` (inventariable), `Service` (servicio), `Combo`, `Kit`, `Template` (plantilla), `Variant` (variante) | sí | desde I6 (T921) las seis; una `Variant` nueva exige sus filas en la hoja `Variantes` (`Inventory.Variant.ParentRequired`); no cambia con movimientos, variantes o componentes (`Inventory.Product.KindLocked`) |
 | `categoria` | código de categoría | sí | |
 | `marca` | código de marca | no | |
 | `unidadBase` | código de unidad | sí | no cambia si el producto tiene movimientos (FR-025) |
 | `grupoContable` | código de grupo | en inventariables | en servicios es opcional, pero sin grupo su venta no encontrará cuenta de ingreso en la matriz (aviso) |
 | `estado` | `ProductStatus`: `Active` (activo), `Inactive` (inactivo), `Blocked` (bloqueado) | no (Active) | |
-| `controlaLote` · `controlaSerie` · `controlaVencimiento` | sí/no | no (no) | «sí» → `Import.Cell.NotYetAvailable` hasta I6; no cambian con movimientos |
+| `controlaLote` · `controlaSerie` · `controlaVencimiento` | sí/no | no (no) | desde I6 (T921): ni servicios ni combos (`Inventory.Product.TrackingNotApplicable`); `controlaVencimiento` exige `controlaLote` (`.ExpiryRequiresLot`); no cambian con existencia distinta de cero ni con borradores que citen el producto (`.TrackingLocked`) |
 | `tratamientoIva` | `VatSaleTreatment`: `Taxed` (gravado), `Exempt` (exento), `Excluded` (excluido) | sí | |
 | `tarifaIva` | código de tarifa de un impuesto de clase `Iva` | si es gravado | vacío si exento o excluido |
 | `conceptoRetencion` | código de concepto | sí | concepto de retención en compras (FR-027) |
@@ -441,6 +441,34 @@ Llave: `producto` + `tarifa`.
 | producto | tarifa | unidadesGravables |
 |---|---|---|
 | BOLSA-01 | BOLSA | 1 |
+
+### Hoja `Variantes` (I6; T922, decisión por defecto, revisar con el dueño) **(nueva)**
+
+Una fila por variante y atributo. Llave: `producto` + `atributo`. Opcional; se procesa después de `Productos`.
+
+| Columna | Tipo | Oblig. | Reglas |
+|---|---|---|---|
+| `producto` | código de la variante (tipo `Variant`, de la hoja o existente) | sí | |
+| `plantilla` | código de su plantilla (tipo `Template`) | sí | la misma en todas las filas de la variante; una variante no cambia de plantilla (`Inventory.Variant.NotATemplate` si no es plantilla) |
+| `atributo` | código de atributo de variante | sí | `Inventory.VariantAttribute.NotFound` |
+| `valor` | código de un valor del atributo | sí | `Inventory.VariantAttribute.ValueNotFound` |
+
+Arma el `VariantKey` como la generación (`COLOR=AZUL;TALLA=M`): la combinación no se repite en la plantilla
+(`Inventory.Variant.CombinationExists`), todas las variantes de una plantilla llevan los mismos atributos
+(`Inventory.Variant.AttributesMismatch`) y la combinación de una variante existente no cambia por plantilla.
+
+### Hoja `Componentes` (I6; T922, decisión por defecto, revisar con el dueño) **(nueva)**
+
+Llave: `producto` + `componente`. Opcional; agrega o cambia la cantidad (lo que no viene queda como está: la plantilla nunca
+borra; para retirar un componente, la pantalla o `PUT /products/{id}/components`).
+
+| Columna | Tipo | Oblig. | Reglas |
+|---|---|---|---|
+| `producto` | código del combo o kit | sí | `Inventory.Component.NotAComboOrKit` |
+| `componente` | código de producto inventariable o variante | sí | `Inventory.Component.InvalidKind`, `.Cycle` |
+| `cantidad` | cantidad > 0 | sí | en la unidad base del componente, con sus decimales (`Inventory.Component.InvalidQuantity`) |
+
+El conjunto final de cada producto se revisa con `ValidadorDeComponentes`, igual que `SetProductComponentsCommand`.
 
 ## 7. Bodegas y ubicaciones
 
@@ -804,12 +832,12 @@ genera comprobante, porque ese valor ya está en los libros.
 | `ubicacion` | código de ubicación de la bodega | no (la por defecto) | |
 | `cantidad` | cantidad > 0 | sí | **en unidad base**, con los decimales que admite la unidad |
 | `costoUnitario` | costo ≥ 0 | sí | entra al costo cargado (FR-044); 0 se admite con aviso |
-| `lote` · `vencimiento` · `serie` | texto 30 · fecha · texto 60 | no | `Import.Cell.NotYetAvailable` hasta I6 |
+| `lote` · `vencimiento` · `serie` | texto 30 · fecha · texto 60 | según el producto | desde I6 (T921): lote obligatorio si el producto lo controla (`Inventory.Lot.Required`) y vacío si no (`.NotTracked`); vencimiento si lo controla (`.ExpiryRequired`), uno solo por lote en la base y en el archivo (`.ExpiryMismatch`); serie obligatoria si la controla (`Inventory.Serial.Required`), vacía si no (`.NotTracked`), cantidad 1 (`.QuantityNotOne`) y nunca una que ya está en existencia (`.AlreadyInStock`). El lote nace con la primera fila que lo cita; la serie se registra sin proyección (la escribe el kardex al confirmar) |
 
 Reglas:
 
-- Llave: `bodega` + `producto` + `ubicacion` (+ `lote`/`serie` desde I6); repetida en el archivo es
-  error, no se suma.
+- Llave: `bodega` + `producto` + `ubicacion` + `lote` + `serie` (desde I6); repetida en el archivo es
+  error, no se suma; una misma serie de un producto va en una sola fila.
 - La cantidad es la del conteo, más o menos los movimientos que la bodega tuvo en el sistema anterior entre el conteo
   y el corte (o la bodega deja de operar en el sistema anterior desde el conteo hasta su activación; FR-089).
 - Una bodega con saldo inicial **confirmado** vigente rechaza la fila (para reemplazarlo, se anula

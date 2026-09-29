@@ -64,7 +64,12 @@ public sealed class ReversionDeKardex(IApplicationDbContext db, RegistroDeKardex
                 fila.UnitCost,
                 fila,
                 EsAnulacion: true,
-                LocationId: fila.LocationId));
+                LocationId: fila.LocationId)
+            {
+                // I6 (T926): la fila de un componente de combo (otro producto que el de la línea) se revierte en su producto; el lote y la
+                // serie los trae la fila de origen.
+                ProductId = fila.ProductId != linea.ProductId ? fila.ProductId : null,
+            });
         }
         return movimientos;
     }

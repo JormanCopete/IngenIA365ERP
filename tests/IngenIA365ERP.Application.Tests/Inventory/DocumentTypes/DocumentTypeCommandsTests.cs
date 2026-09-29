@@ -2,6 +2,7 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Parameters;
+using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.DocumentTypes;
 using IngenIA365ERP.Application.Tests.Common;
@@ -121,12 +122,17 @@ public class DocumentTypeCommandsTests
     }
 
     [Fact]
-    public async Task Una_clase_de_una_entrega_futura_no_esta_disponible()
+    public async Task Desde_I6_el_ensamble_se_registra_y_antes_no_estaba_disponible()
     {
-        var r = await CrearAsync(Alta(DocumentClass.Assembly));
+        // I6 es la última entrega del comercio: desde su cierre (EntregaVigente = I6) no queda clase futura. La regla sigue en pie
+        // para la entrega anterior: el ensamble no era operable en I5 y su error dice en cuál llega.
+        (await CrearAsync(Alta(DocumentClass.Assembly, "ENX", prefijo: "ENX"))).IsSuccess.Should().BeTrue();
+        Domain.Inventory.Documents.ClasesDeDocumento.De(DocumentClass.Assembly)
+            .Operable(Domain.Common.Parametros.EntregaDelComercio.I5).Should().BeFalse();
 
-        r.Error.Code.Should().Be("Inventory.DocumentClass.NotAvailable");
-        r.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { @class = "Assembly", availableIn = "I6" });
+        var error = InventoryErrors.DocumentClassNotAvailable(DocumentClass.Assembly);
+        error.Code.Should().Be("Inventory.DocumentClass.NotAvailable");
+        error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { @class = "Assembly", availableIn = "I6" });
     }
 
     [Fact]
@@ -307,11 +313,12 @@ public class DocumentTypeCommandsTests
 
         r.Value.Should().HaveCount(34);
         r.Value.Single(c => c.Class == DocumentClass.PositiveAdjustment).Operable.Should().BeTrue();
-        // Desde I5 (EntregaVigente = I5) la orden de compra y los costos adicionales son operables; el ensamble sigue esperando a I6.
+        // Desde I6 (EntregaVigente = I6, la última entrega) todas las clases son operables: el ensamble y el ciclo comercial también.
         r.Value.Single(c => c.Class == DocumentClass.SupportDocument).Operable.Should().BeTrue();
         r.Value.Single(c => c.Class == DocumentClass.PurchaseOrder).Operable.Should().BeTrue();
         r.Value.Single(c => c.Class == DocumentClass.LandedCost).Operable.Should().BeTrue();
-        r.Value.Single(c => c.Class == DocumentClass.Assembly).Operable.Should().BeFalse();
+        r.Value.Single(c => c.Class == DocumentClass.Assembly).Operable.Should().BeTrue();
+        r.Value.Should().OnlyContain(c => c.Operable);
         r.Value.Single(c => c.Class == DocumentClass.SalesInvoice).Should().BeEquivalentTo(new
         {
             Operable = true, IsFiscal = true, NumberedBy = Domain.Inventory.Documents.NumberedBy.DianResolution,
@@ -334,7 +341,10 @@ public class DocumentTypeCommandsTests
         var deConteo = InventoryDocumentTypesSeeder.AjustesDeConteo.Values.Select(v => v.Codigo).ToHashSet();
         tipos.Where(t => !deConteo.Contains(t.Code)).Select(t => t.Class).Should().BeEquivalentTo(operables, "un tipo por clase sembrada operable (las de I1, incluida la anulación, y las dos de caja de I3)");
         tipos.Should().OnlyContain(t => t.IsSeeded && t.IsActive);
-        tipos.Should().OnlyContain(t => t.Sequences.Count == 1 && t.Sequences.Single().Prefix == string.Empty
+        // La factura desde remisiones (I6) numera por resolución: no lleva consecutivo propio (T861).
+        tipos.Where(t => t.Class == DocumentClass.SalesInvoiceFromShipments).Should().OnlyContain(t => t.Sequences.Count == 0);
+        tipos.Where(t => t.Class != DocumentClass.SalesInvoiceFromShipments)
+            .Should().OnlyContain(t => t.Sequences.Count == 1 && t.Sequences.Single().Prefix == string.Empty
             && t.Sequences.Single().ValidFrom == InventoryDocumentTypesSeeder.VigenciaDeLaSemilla && t.Sequences.Single().NextValue == 1);
         tipos.Should().Contain(t => t.Class == DocumentClass.Voiding);
 

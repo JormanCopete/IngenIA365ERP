@@ -200,6 +200,12 @@ public static class TextosDeInventario
     /// <summary><c>CountScope</c> de I1 que se definen en pantalla (sin la clase ABC).</summary>
     public static readonly IReadOnlyList<int> AlcancesDeConteoDeI1 = [0, 1, 2, 3];
 
+    /// <summary>Los alcances desde I6 (T940): los de I1 y la clase ABC (<c>CountScope.AbcClass</c>, A, B o C).</summary>
+    public static readonly IReadOnlyList<int> AlcancesDeConteoDesdeI6 = [0, 1, 2, 3, 4];
+
+    /// <summary><c>CountScope.AbcClass</c>.</summary>
+    public const int AlcancePorClaseAbc = 4;
+
     /// <summary><c>TransferDiscrepancyKind.Shortage</c>: sus salidas son devolver, dar de baja o recibir tarde.</summary>
     public const int DiferenciaFaltante = 1;
 
@@ -209,6 +215,34 @@ public static class TextosDeInventario
 
     /// <summary>Las clases de producto que se crean en I1 (<c>Inventoriable</c>, <c>Service</c>).</summary>
     public static readonly IReadOnlyList<int> ClasesDeProductoDeI1 = [1, 2];
+
+    /// <summary>
+    /// Las clases que ofrece el alta desde I6 (T937): inventariable, servicio, combo, kit y plantilla. La variante no: nace de su plantilla
+    /// (<c>Inventory.Variant.ParentRequired</c>).
+    /// </summary>
+    public static readonly IReadOnlyList<int> ClasesDeProductoAlCrear = [1, 2, 3, 4, 5];
+
+    /// <summary><c>ProductKind.Combo</c>, <c>.Kit</c>, <c>.Template</c> y <c>.Variant</c> (I6).</summary>
+    public const int ClaseCombo = 3;
+    public const int ClaseKit = 4;
+    public const int ClasePlantilla = 5;
+    public const int ClaseVariante = 6;
+
+    /// <summary>El estado de un lote (<c>LotDto.State</c>, I6, T938).</summary>
+    public const string LoteVigente = "Current";
+    public const string LoteProximoAVencer = "ExpiringSoon";
+    public const string LoteVencido = "Expired";
+    public const string LoteSinVencimiento = "NoExpiry";
+
+    /// <summary>El estado de un lote en castellano.</summary>
+    public static string EstadoDeLote(string? estado) => estado switch
+    {
+        LoteVigente => "Vigente",
+        LoteProximoAVencer => "Próximo a vencer",
+        LoteVencido => "Vencido",
+        LoteSinVencimiento => "Sin vencimiento",
+        _ => estado ?? string.Empty,
+    };
 
     /// <summary><c>VatSaleTreatment.Taxed</c>: exige una tarifa de IVA.</summary>
     public const int TratamientoGravado = 1;

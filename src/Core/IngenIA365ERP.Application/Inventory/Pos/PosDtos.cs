@@ -32,7 +32,10 @@ public sealed record PosCustomerDto(Guid? PersonPublicId, string Name, bool IsFi
 /// <summary>El vendedor (FR-057). (nuevo)</summary>
 public sealed record PosSalespersonDto(Guid SalespersonPublicId, string Name);
 
-/// <summary>Un descuento de la línea con su aprobación si la exige. (nuevo)</summary>
+/// <summary>
+/// Un descuento de la línea con su aprobación si la exige (nuevo). I6 (T875): con <c>Source = Promotion</c>, la promoción que lo produjo
+/// (<see cref="PromotionPublicId"/>, <see cref="PromotionName"/>; FR-055 «el documento muestra cuál se aplicó»).
+/// </summary>
 public sealed record PosLineDiscountDto(
     byte Sequence,
     DiscountSource Source,
@@ -41,7 +44,9 @@ public sealed record PosLineDiscountDto(
     decimal? Percent,
     decimal Amount,
     bool RequiresApproval,
-    PosLineDiscountApprovalDto? Approval);
+    PosLineDiscountApprovalDto? Approval,
+    Guid? PromotionPublicId = null,
+    string? PromotionName = null);
 
 /// <summary>El estado de la aprobación de un descuento. (nuevo)</summary>
 public sealed record PosLineDiscountApprovalDto(Guid? ApprovalRequestPublicId, string Status);
@@ -67,7 +72,13 @@ public sealed record PosLineDto(
     IReadOnlyList<PosLineTaxDto> Taxes,
     decimal Total,
     decimal? Available,
-    bool BelowCost);
+    bool BelowCost,
+    string? LotCode = null,
+    DateOnly? LotExpiryDate = null,
+    bool LotExpired = false,
+    string? SerialNumber = null,
+    bool TracksLot = false,
+    bool TracksSerial = false);
 
 /// <summary>Los totales de la venta (T26). (nuevo)</summary>
 public sealed record PosTotalsDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);

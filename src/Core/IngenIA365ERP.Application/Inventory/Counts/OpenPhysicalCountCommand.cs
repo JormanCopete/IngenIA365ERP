@@ -36,12 +36,13 @@ public sealed class OpenPhysicalCountCommandValidator : AbstractValidator<OpenPh
 /// En orden, dentro de una <see cref="TransaccionExplicita"/>:
 /// <list type="number">
 /// <item>el conteo existe en el alcance (404), está en borrador y sin foto (<c>Inventory.Count.AlreadyOpen</c>), sin cambios desde
-/// que se leyó; la clase ABC llega en I6 (<c>.ScopeNotAvailable</c>); la bodega sigue activa; la fecha de hoy no cae en un período
+/// que se leyó; la clase ABC (I6, T930) es A, B o C (<c>.AbcClassInvalid</c>); la bodega sigue activa; la fecha de hoy no cae en un período
 /// cerrado ni antes del inicio;</item>
 /// <item>toma <b>en exclusivo</b> la fila de la bodega por <see cref="ICerrojoDeInventario"/>: espera a que terminen las
 /// confirmaciones en vuelo (que la tienen compartida) y ninguna entra mientras copia;</item>
 /// <item>copia de <c>INV_StockDetails</c> las existencias distintas de cero del alcance (todo, categorías con sus descendientes,
-/// ubicaciones o selección), con el costo promedio de su ámbito (<c>SnapshotUnitCost</c>); sin ninguna,
+/// ubicaciones, selección o —I6, T930— los productos de la clase ABC pedida, resuelta por <see cref="ClasificacionAbcDelConteo"/>), por
+/// lote cuando el producto lo controla, con el costo promedio de su ámbito (<c>SnapshotUnitCost</c>); sin ninguna,
 /// <c>Inventory.Count.EmptyScope</c>;</item>
 /// <item>un producto que ya está en otro conteo abierto de la bodega: <c>Inventory.Count.Overlaps</c>;</item>
 /// <item>sella <c>CountSnapshotAt</c>, el mayor Id del kardex (<c>CountSnapshotKardexEntryId</c>), la ronda 1, la fecha de la foto,
@@ -73,7 +74,14 @@ public sealed class OpenPhysicalCountCommandHandler(
         if (conteo.CountSnapshotAt is { } foto) return Falla(ErroresDeConteos.AlreadyOpen(foto));
         if (request.RowVersion is { Length: > 0 } leida && conteo.RowVersion is { Length: > 0 } actual && !leida.AsSpan().SequenceEqual(actual))
             return Falla(Error.StaleRowVersion);
-        if (conteo.CountScope == CountScope.AbcClass) return Falla(ErroresDeConteos.ScopeNotAvailable(CountScope.AbcClass));
+        Domain.Inventory.Analytics.ClaseAbc? claseAbc = null;
+        if (conteo.CountScope == CountScope.AbcClass)
+        {
+            var pedida = CriterioDelConteo.De(conteo.CountScopeJson).ClaseAbc?.Trim();
+            if (!Enum.TryParse<Domain.Inventory.Analytics.ClaseAbc>(pedida, ignoreCase: true, out var clase) || !Enum.IsDefined(clase) || pedida!.Length != 1)
+                return Falla(ErroresDeConteos.AbcClassInvalid(pedida));
+            claseAbc = clase;
+        }
         if (conteo.WarehouseId is not int bodegaId) return Falla(InventoryErrors.FieldRequired(ReglasDelDocumento.CampoBodega));
 
         var bodega = (await maestros.BodegasPorIdAsync([bodegaId], ct)).First();
@@ -93,6 +101,8 @@ public sealed class OpenPhysicalCountCommandHandler(
         // (3) La foto del alcance.
         var criterio = CriterioDelConteo.De(conteo.CountScopeJson);
         var existencias = db.StockDetails.AsNoTracking().Where(s => s.WarehouseId == bodegaId && s.Quantity != 0m);
+        IReadOnlyList<int> deLaClase = [];
+        string? baseAbc = null;
         switch (conteo.CountScope)
         {
             case CountScope.Location:
@@ -104,6 +114,14 @@ public sealed class OpenPhysicalCountCommandHandler(
             case CountScope.Category:
                 var categorias = await conteos.CategoriasConDescendientesAsync(criterio.Categorias, ct);
                 existencias = existencias.Where(s => db.Products.Any(p => p.Id == s.ProductId && categorias.Contains(p.CategoryId)));
+                break;
+            case CountScope.AbcClass:
+                // I6 (T930, T931): la clase a la fecha de la foto, congelada con ella.
+                var clasificados = await new ClasificacionAbcDelConteo(db, parametros).ProductosAsync(bodegaId, claseAbc!.Value, hoy, ct);
+                if (clasificados.IsFailure) return Falla(clasificados.Error);
+                deLaClase = clasificados.Value;
+                baseAbc = ClasificacionAbcDelConteo.Base(hoy);
+                existencias = existencias.Where(s => deLaClase.Contains(s.ProductId));
                 break;
         }
         var filas = await existencias.OrderBy(s => s.ProductId).ThenBy(s => s.LocationId).ThenBy(s => s.LotId).ToListAsync(ct);
@@ -150,7 +168,14 @@ public sealed class OpenPhysicalCountCommandHandler(
         conteo.CountSnapshotAt = ahora;
         conteo.CountSnapshotKardexEntryId = ultimoKardex;
         conteo.CountRound = 1;
-        conteo.CountScopeJson = (criterio with { BloqueaMovimientos = leidos.Value.BloquearMovimientos, AbiertoPor = usuario }).ComoJson();
+        conteo.CountScopeJson = (criterio with
+        {
+            BloqueaMovimientos = leidos.Value.BloquearMovimientos,
+            AbiertoPor = usuario,
+            ClaseAbc = claseAbc?.ToString() ?? criterio.ClaseAbc,
+            ProductosDeLaClase = deLaClase,
+            BaseAbc = baseAbc,
+        }).ComoJson();
         await db.SaveChangesAsync(ct);
 
         return Result.Success(new OpenPhysicalCountResultDto(conteo.PublicId, ahora, hoy, filas.Count, leidos.Value.BloquearMovimientos));

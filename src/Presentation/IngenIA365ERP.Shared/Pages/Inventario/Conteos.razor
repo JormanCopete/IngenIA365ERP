@@ -13,7 +13,8 @@
 @* Feature 012, T404 (FR-040, FR-041, US11; contracts/api.md §12): los conteos de las bodegas del alcance con su estado derivado
    (borrador, abierto, cerrado, ajuste en aprobación, ajustado, descartado, anulado) y, con Inventory.Costs.Read, el valor de la
    diferencia. «Nuevo conteo» define el alcance —toda la bodega o cíclico por categorías, ubicaciones o una selección de productos;
-   ciego o no; los contadores— y lleva al conteo, donde se abre con su foto, se captura con el lector y se cierra. *@
+   ciego o no; los contadores— y lleva al conteo, donde se abre con su foto, se captura con el lector y se cierra. I6 (T940): el alcance
+   «Clase ABC» (A, B o C, resuelto al abrir con Informes.UmbralesAbc). *@
 <PermissionGate Required="Inventory.Counts.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -105,7 +106,7 @@
                     </label>
                     <label class="campo">Alcance *
                         <select class="e-input" value="@_f.Alcance" @onchange="@(e => _f.Alcance = int.TryParse(e.Value?.ToString(), out var a) ? a : 0)">
-                            @foreach (var a in TextosDeInventario.AlcancesDeConteoDeI1) { <option value="@a">@TextosDeInventario.Texto(TextosDeInventario.AlcancesDeConteo, a)</option> }
+                            @foreach (var a in TextosDeInventario.AlcancesDeConteoDesdeI6) { <option value="@a">@TextosDeInventario.Texto(TextosDeInventario.AlcancesDeConteo, a)</option> }
                         </select>
                     </label>
                     <label class="campo"><input type="checkbox" @bind="_f.Ciego" /> Conteo ciego (quien sólo captura no ve el teórico)</label>
@@ -130,6 +131,20 @@
                         {
                             <label class="campo"><input type="checkbox" checked="@_f.Ubicaciones.Contains(u.PublicId)" @onchange="@(e => Marcar(_f.Ubicaciones, u.PublicId, e.Value))" /> @u.Code · @u.Name</label>
                         }
+                    </div>
+                }
+                else if (_f.Alcance == TextosDeInventario.AlcancePorClaseAbc)
+                {
+                    <div class="info-card">
+                        <label class="campo">Clase *
+                            <select class="e-input" @bind="_f.ClaseAbc">
+                                <option value="A">A · la mayor parte del valor que sale</option>
+                                <option value="B">B · la parte intermedia</option>
+                                <option value="C">C · el resto</option>
+                            </select>
+                        </label>
+                        <p class="texto-tenue">La clase se calcula al abrir el conteo (al tomar la foto) con el valor al costo de lo que salió de la bodega en los doce
+                        meses anteriores y los umbrales del parámetro Informes.UmbralesAbc; la lista de productos queda guardada con el conteo.</p>
                     </div>
                 }
                 else if (_f.Alcance == 3)
@@ -177,6 +192,7 @@
         public Guid? Tipo { get; set; }
         public Guid? Bodega { get; set; }
         public int Alcance { get; set; }
+        public string ClaseAbc { get; set; } = "A";
         public bool Ciego { get; set; }
         public List<Guid> Categorias { get; } = [];
         public List<Guid> Ubicaciones { get; } = [];
@@ -292,7 +308,7 @@
             _f.Alcance == 1 ? [.. _f.Categorias] : null,
             _f.Alcance == 2 ? [.. _f.Ubicaciones] : null,
             _f.Alcance == 3 ? [.. _f.Productos.Select(p => p.PublicId)] : null,
-            null, _f.Ciego, _f.Contadores.Count > 0 ? [.. _f.Contadores] : null, _f.Notas), _claveDefinir);
+            _f.Alcance == TextosDeInventario.AlcancePorClaseAbc ? _f.ClaseAbc : null, _f.Ciego, _f.Contadores.Count > 0 ? [.. _f.Contadores] : null, _f.Notas), _claveDefinir);
         if (!r.IsSuccess || r.Value is null)
         {
             await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el conteo.");

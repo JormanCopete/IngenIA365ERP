@@ -2,7 +2,8 @@
 
 @* Feature 012, I3 (T639; FR-059, SC-008): las líneas de la venta en una tabla liviana, sin SfGrid: cientos de lecturas por hora no
    pueden esperar a una grilla. La línea elegida es la que cambian F3, F7 y Supr; por defecto, la última leída. Marca los descuentos
-   que esperan aprobación y lo que se vende bajo el costo. (nuevo) *@
+   que esperan aprobación y lo que se vende bajo el costo. I6 (T941): el lote asignado (y si está vencido) y la serie de cada línea; un
+   combo es una sola línea. (nuevo) *@
 <div class="tabla-desplazable">
     <table class="pos-lineas" aria-label="Líneas de la venta">
         <thead>
@@ -17,7 +18,13 @@
                     <td>@l.Product.Code · @l.Product.Name
                         @if (l.EsperaAprobacion) { <span class="badge">descuento por aprobar</span> }
                         @if (l.BelowCost) { <span class="badge">bajo el costo</span> }
+                        @* I6 (T900, FR-055): la promoción que dio el descuento de la línea. *@
+                        @foreach (var promo in l.Discounts.Where(d => d.PromotionName is not null)) { <span class="badge">@promo.PromotionName · @promo.Amount.ToString("N0")</span> }
                         @if (l.Available is { } d && d < l.QuantityBase) { <span class="badge">existencia @d.ToString("0.##")</span> }
+                        @if (l.LotCode is { } lote) { <span class="badge">lote @lote@(l.LotExpiryDate is { } v ? $" · vence {v:dd/MM/yyyy}" : "")</span> }
+                        else if (l.TracksLot) { <span class="badge">lote: el que vence primero</span> }
+                        @if (l.LotExpired) { <span class="badge">lote vencido</span> }
+                        @if (l.SerialNumber is { } serie) { <span class="badge">serie @serie</span> }
                     </td>
                     <td>@l.Unit.Code</td>
                     <td class="numero">@l.Quantity.ToString("0.####")</td>

@@ -1,0 +1,5 @@
+{
+  "nombre": "Un año: costo de venta 120.000 sobre un inventario promedio de 40.000 rota 3 veces y dura 120 días",
+  "costoDeVenta": 120000, "saldos": [30000, 50000], "diasDelPeriodo": 360,
+  "esperado": { "inventarioPromedio": 40000, "rotacion": 3, "diasDeInventario": 120, "sinDato": false }
+}

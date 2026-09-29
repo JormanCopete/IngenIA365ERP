@@ -31,6 +31,8 @@ public sealed class LookupPosProductQueryHandler(IApplicationDbContext db, Borra
         var leido = await pos.LeerAsync(codigo, ct);
         if (leido.IsFailure) return Result.Failure<PosLookupDto>(leido.Error);
         var l = leido.Value;
+        // I6 (T927): una plantilla de variantes no se vende; se lee una de sus variantes.
+        if (l.Producto.Kind == ProductKind.Template) return Result.Failure<PosLookupDto>(Common.InventoryErrors.ProductNotInventoriable(0, l.Producto.Code));
 
         var usuario = (await pos.UsuarioAsync(ct)).Value.UserId;
         var precio = await precificacion.PrecificarAsync(new PedidoDePrecificacion(s.OperatingDate, await pos.ConsumidorFinalAsync(s.OperatingDate, ct),
@@ -41,8 +43,12 @@ public sealed class LookupPosProductQueryHandler(IApplicationDbContext db, Borra
             ? await db.PriceLists.AsNoTracking().Where(p => p.Id == id).Select(p => new PosRefDto(p.PublicId, p.Code, p.Name)).FirstOrDefaultAsync(ct)
             : null;
         var unidad = await db.UnitsOfMeasure.AsNoTracking().Where(u => u.Id == l.UnitId).Select(u => new PosRefDto(u.PublicId, u.Code, u.Name)).FirstAsync(ct);
+        // I6 (T927): el disponible de un combo es el de su componente más escaso (en combos enteros).
+        var disponible = linea.Available;
+        if (l.Producto.Kind == ProductKind.Combo && caja.WarehouseId is int bodegaDeLaCaja)
+            disponible = (await Documents.Efectos.ExpansionDeCombos.DisponibleDeCombosAsync(db, [l.Producto.Id], bodegaDeLaCaja, ct)).GetValueOrDefault(l.Producto.Id);
         return Result.Success(new PosLookupDto(new PosRefDto(l.Producto.PublicId, l.Producto.Code, l.Producto.Name), l.Producto.Status, unidad, l.Factor,
-            linea.ListPrice, lista, linea.ListPriceIncludesTaxes, linea.Available));
+            linea.ListPrice, lista, linea.ListPriceIncludesTaxes, disponible));
     }
 }
 

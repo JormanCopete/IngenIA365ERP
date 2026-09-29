@@ -91,11 +91,13 @@ public sealed partial class InventarioClient
     /// La búsqueda del lector y del teclado (§3.5): primero la lectura exacta por código de barras o código (<c>exact</c>, con el
     /// empaque), luego los términos. <paramref name="ct"/> es el de la tecla: la pantalla cancela la búsqueda anterior.
     /// </summary>
+    /// <remarks>I6 (T927, T934): <paramref name="paraVenta"/> (<c>forSale=true</c>) quita las plantillas de variantes, que no entran a documentos.</remarks>
     public Task<ResultadoDeInventario<BusquedaDeProductosDto>> BuscarProductosAsync(string q, Guid? bodega = null, bool incluirInactivos = false,
-        int? tomar = null, IReadOnlyList<int>? clases = null, CancellationToken ct = default) =>
+        int? tomar = null, IReadOnlyList<int>? clases = null, CancellationToken ct = default, bool paraVenta = false) =>
         EnviarAsync<BusquedaDeProductosDto>(HttpMethod.Get, ConQuery($"{RutaDeProductos}/search", Query(
             ("q", q), ("warehousePublicId", bodega?.ToString()), ("includeInactive", incluirInactivos ? "true" : null),
-            ("take", tomar?.ToString()), ("kinds", clases is { Count: > 0 } ? string.Join(",", clases) : null))), null, null, ct);
+            ("take", tomar?.ToString()), ("kinds", clases is { Count: > 0 } ? string.Join(",", clases) : null),
+            ("forSale", paraVenta ? "true" : null))), null, null, ct);
 
     public Task<ResultadoDeInventario<ProductoDto>> CrearProductoAsync(CrearProductoRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnviarAsync<ProductoDto>(HttpMethod.Post, RutaDeProductos, request, clave, ct);

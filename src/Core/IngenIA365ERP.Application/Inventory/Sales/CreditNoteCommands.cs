@@ -147,6 +147,10 @@ public sealed class SaveCreditNoteDraftCommandHandler(
             if (tipo is null) return Falla(InventoryErrors.DocumentTypeNotFound());
         }
 
+        // I6 (T883): la nota de una factura desde remisiones no devuelve mercancía (lo remisionado vuelve anulando la remisión): se fuerza
+        // sin devolución, no mueve existencia y deja otra vez pendientes de facturar las cantidades acreditadas de sus remisiones.
+        var conDevolucion = entrada.WithReturn && original.Class != DocumentClass.SalesInvoiceFromShipments;
+
         // (4) El concepto de corrección de la DIAN en las electrónicas.
         var fecha = entrada.OperationDate ?? nota?.OperationDate ?? reloj.HoyLocal;
         string? concepto = null;
@@ -189,18 +193,18 @@ public sealed class SaveCreditNoteDraftCommandHandler(
             decimal cantidadBase, neto;
             if (entrada.TotalVoid)
             {
-                cantidadBase = entrada.WithReturn ? queda.RemainingQuantity : origen.QuantityBase;
+                cantidadBase = conDevolucion ? queda.RemainingQuantity : origen.QuantityBase;
                 neto = queda.RemainingAmount;
             }
             else
             {
-                var cantidad = pedida.Quantity ?? (entrada.WithReturn ? queda.RemainingQuantity / (origen.Factor == 0m ? 1m : origen.Factor) : origen.Quantity);
+                var cantidad = pedida.Quantity ?? (conDevolucion ? queda.RemainingQuantity / (origen.Factor == 0m ? 1m : origen.Factor) : origen.Quantity);
                 cantidadBase = Math.Round(cantidad * origen.Factor, 4, MidpointRounding.AwayFromZero);
                 neto = pedida.Amount ?? (origen.QuantityBase > 0m
                     ? Math.Round(origen.NetAmount * cantidadBase / origen.QuantityBase, 2, MidpointRounding.AwayFromZero)
                     : origen.NetAmount);
             }
-            if ((entrada.WithReturn && cantidadBase > queda.RemainingQuantity) || neto > queda.RemainingAmount) excedidas = true;
+            if ((conDevolucion && cantidadBase > queda.RemainingQuantity) || neto > queda.RemainingAmount) excedidas = true;
             if (cantidadBase <= 0m || neto <= 0m) continue;
             planeadas.Add((origen, Math.Round(cantidadBase / (origen.Factor == 0m ? 1m : origen.Factor), 4, MidpointRounding.AwayFromZero), cantidadBase, neto));
         }
@@ -249,7 +253,7 @@ public sealed class SaveCreditNoteDraftCommandHandler(
         nota.SalesChannelId = original.SalesChannelId;
         nota.CostCenterId = original.CostCenterId;
         nota.Reason = entrada.Reason.Trim();
-        nota.ReturnsGoods = entrada.WithReturn;
+        nota.ReturnsGoods = conDevolucion;
         nota.IsFullReversal = entrada.TotalVoid;
         nota.CorrectionConceptCode = concepto;
 
@@ -284,7 +288,7 @@ public sealed class SaveCreditNoteDraftCommandHandler(
                 GrossAmount = bruto,
                 DiscountAmount = bruto - neto,
                 NetAmount = neto,
-                LocationId = entrada.WithReturn && bodegaId == original.WarehouseId ? origen.LocationId ?? ubicacion : ubicacion,
+                LocationId = conDevolucion && bodegaId == original.WarehouseId ? origen.LocationId ?? ubicacion : ubicacion,
             };
             nota.Lines.Add(linea);
             lineaOriginal[numero] = origen.LineNumber;

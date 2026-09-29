@@ -36,14 +36,15 @@ public sealed partial class InventarioClient
     /// El kardex de un producto (vista <c>kardex</c>): <paramref name="desde"/>–<paramref name="hasta"/>, bodega, ubicación y si
     /// muestra las líneas de ajuste de costo. La primera fila es el saldo al día anterior a <paramref name="desde"/>.
     /// </summary>
+    /// <remarks>I6 (T940): <paramref name="lote"/> deja sólo los movimientos de ese lote, con su saldo.</remarks>
     public Task<ResultadoDeInventario<TablaReporteDto>> KardexAsync(Guid producto, Guid? bodega, Guid? ubicacion, DateOnly desde, DateOnly hasta,
-        bool conAjustesDeCosto = true, CancellationToken ct = default) =>
-        InformeAsync("kardex", QueryDelKardex(producto, bodega, ubicacion, desde, hasta, conAjustesDeCosto), ct);
+        bool conAjustesDeCosto = true, CancellationToken ct = default, string? lote = null) =>
+        InformeAsync("kardex", QueryDelKardex(producto, bodega, ubicacion, desde, hasta, conAjustesDeCosto, lote), ct);
 
     /// <summary>El mismo kardex como archivo (<paramref name="formato"/> xlsx, pdf o docx): exige <c>Inventory.Reports.Export</c>.</summary>
     public Task<InvitationApiResult<ArchivoDescargado>> DescargarKardexAsync(Guid producto, Guid? bodega, Guid? ubicacion, DateOnly desde, DateOnly hasta,
-        bool conAjustesDeCosto, string formato, CancellationToken ct = default) =>
-        DescargarInformeAsync("kardex", QueryDelKardex(producto, bodega, ubicacion, desde, hasta, conAjustesDeCosto), formato, ct);
+        bool conAjustesDeCosto, string formato, CancellationToken ct = default, string? lote = null) =>
+        DescargarInformeAsync("kardex", QueryDelKardex(producto, bodega, ubicacion, desde, hasta, conAjustesDeCosto, lote), formato, ct);
 
     /// <summary>Compara el kardex con las proyecciones (vacío = todo lo del alcance). Es consulta: sin clave de idempotencia.</summary>
     public Task<ResultadoDeInventario<InformeDeIntegridadDto>> VerificarIntegridadAsync(VerificarIntegridadRequest request, CancellationToken ct = default) =>
@@ -54,11 +55,13 @@ public sealed partial class InventarioClient
         CancellationToken ct = default) =>
         EnviarAsync<ResultadoDeReconstruccionDto>(HttpMethod.Post, $"{RutaDeIntegridad}/rebuild", request, clave, ct);
 
-    private static string QueryDelKardex(Guid producto, Guid? bodega, Guid? ubicacion, DateOnly desde, DateOnly hasta, bool conAjustesDeCosto) => Query(
+    private static string QueryDelKardex(Guid producto, Guid? bodega, Guid? ubicacion, DateOnly desde, DateOnly hasta, bool conAjustesDeCosto,
+        string? lote = null) => Query(
         ("product", producto.ToString()),
         ("warehouse", bodega?.ToString()),
         ("location", ubicacion?.ToString()),
         ("from", desde.ToString("yyyy-MM-dd")),
         ("to", hasta.ToString("yyyy-MM-dd")),
-        ("includeCostAdjustments", conAjustesDeCosto ? null : "false"));
+        ("includeCostAdjustments", conAjustesDeCosto ? null : "false"),
+        ("lot", lote));
 }

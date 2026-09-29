@@ -1,6 +1,9 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Inventory.Pricing.Promotions;
+using IngenIA365ERP.Domain.Inventory.Costing;
 using IngenIA365ERP.Domain.Sales.Pricing;
+using IngenIA365ERP.Domain.Sales.Promotions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,7 +45,20 @@ public sealed class ResolvePriceQueryHandler(IApplicationDbContext db, IDateTime
             request.Date ?? reloj.HoyLocal);
         var resuelto = await ResolucionDePrecios.ResolverAsync(db, contexto, producto.Id, unidad.Id, ct);
         if (!resuelto.Precio.Found) return Result.Failure<ResolvedPriceDto>(ErroresDePrecios.PriceNotFound(producto.Code, unidad.Code));
-        return Result.Success(resuelto.ComoDto());
+
+        // I6 (T875): las promociones vigentes que alcanzan al producto en este contexto (el descuento lo calcula la venta).
+        var paraPromociones = await new LectorDePromocionesVigentes(db).LeerAsync(contexto.Date, persona, canal, [producto.Id],
+            RedondeoDeMontos.Centavo, ResiduoDeRedondeo.MayorValor, ct);
+        IReadOnlyList<ResolvedPromotionDto> promociones = [];
+        if (!paraPromociones.Vacio)
+        {
+            var linea = paraPromociones.Linea(1, producto.Id, 1m, resuelto.Precio.Price ?? 0m, resuelto.Precio.Price ?? 0m);
+            var alcanzan = paraPromociones.Promociones
+                .Where(p => MotorDePromociones.Aplica(p, paraPromociones.Contexto) && MotorDePromociones.AlcanzaLinea(p, linea)).Select(p => p.Id).ToList();
+            promociones = await db.Promotions.AsNoTracking().Where(p => alcanzan.Contains(p.Id)).OrderBy(p => p.Code)
+                .Select(p => new ResolvedPromotionDto(p.PublicId, p.Code, p.Name, p.Kind, p.IsCumulative)).ToListAsync(ct);
+        }
+        return Result.Success(resuelto.ComoDto() with { Promotions = promociones });
     }
 }
 

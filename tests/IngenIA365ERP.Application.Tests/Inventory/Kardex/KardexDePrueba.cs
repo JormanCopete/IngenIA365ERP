@@ -132,6 +132,9 @@ public sealed class KardexDePrueba
 
     public VistaDeDocumentos Vista() => new(C.Db, Maestros(), Permisos, Alcance);
 
+    /// <summary>I6 (T923): las reglas de lote, vencimiento y serie del borrador y de la confirmación.</summary>
+    public ReglasDeSeguimiento Seguimiento() => new(C.Db, Lector(), C.Reloj);
+
     public EfectosDeClase Efectos(RegistroDeKardex? compartido = null)
     {
         var registro = compartido ?? Registro();
@@ -160,11 +163,11 @@ public sealed class KardexDePrueba
         return new(
             C.Db, Maestros(), Actor, C.Reloj, efectos ?? Efectos(registro), Motor, Cerrojo, new Numerador(C.Db, Cerrojo),
             new EmisorDeMensajes(C.Db, Actor, C.Reloj), Lector(), Vista(), [], [], avisoDeReposicion: AvisoDeReposicion,
-            registroDeKardex: registro, emisionDeInventario: new EmisionDeInventario(C.Db));
+            registroDeKardex: registro, emisionDeInventario: new EmisionDeInventario(C.Db), seguimiento: Seguimiento());
     }
 
     public SaveInventoryDraftCommandHandler Guardar(EfectosDeClase? efectos = null) =>
-        new(C.Db, Maestros(), Alcance, Actor, C.Reloj, efectos ?? Efectos(), Vista());
+        new(C.Db, Maestros(), Alcance, Actor, C.Reloj, efectos ?? Efectos(), Vista(), seguimiento: Seguimiento());
 
     public VoidInventoryDocumentCommandHandler Anular() => new(C.Db, Actor, C.Reloj, Vista(), Confirmacion());
 

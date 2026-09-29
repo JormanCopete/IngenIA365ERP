@@ -64,7 +64,10 @@ public sealed record ProductTaxesDto(VatSaleTreatment VatSaleTreatment, CatalogR
 /// <summary>Una imagen del producto: un adjunto del dueño <c>InventoryProduct</c> (§3.6.5).</summary>
 public sealed record ProductImageDto(Guid AttachmentPublicId, string FileName);
 
-/// <summary><c>ProductDto</c> (§3.5).</summary>
+/// <summary>
+/// <c>ProductDto</c> (§3.5). Desde I6 (T934): <see cref="Parent"/> es la plantilla de una variante, <see cref="VariantValues"/> sus pares
+/// atributo–valor y <see cref="Components"/> los componentes vigentes de un combo o kit (vacíos en las demás clases).
+/// </summary>
 public sealed record ProductDto(
     Guid PublicId,
     string Code,
@@ -94,7 +97,10 @@ public sealed record ProductDto(
     bool HasMovements,
     DateTime CreatedAt,
     string? CreatedBy,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    CatalogRefDto? Parent = null,
+    IReadOnlyList<Variants.ValorDeVarianteDto>? VariantValues = null,
+    IReadOnlyList<Components.ProductComponentDto>? Components = null);
 
 /// <summary>El empaque que identifica el código leído: su unidad alterna y el factor (US1-5).</summary>
 public sealed record PackUnitDto(Guid ProductUnitPublicId, string UnitCode, decimal Factor);

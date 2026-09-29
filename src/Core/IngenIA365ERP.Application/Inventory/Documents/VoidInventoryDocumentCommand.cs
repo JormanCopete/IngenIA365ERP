@@ -86,8 +86,12 @@ public sealed class VoidInventoryDocumentCommandHandler(
         // Dependientes: todo documento vigente que nace de éste. I5 (T801): una recepción tiene por dependientes sus facturas, devoluciones y
         // costos adicionales (LandedCostOf, que también cuelga de la factura del flete); la orden de la que viene no, porque la recepción
         // es el destino de FromOrder: anulada, su cantidad vuelve a lo pendiente de recibir.
+        // I6 (T887; data-model §14, fila Voiding): la cotización y el pedido se anulan aunque ya tengan pedidos, remisiones o facturas: lo
+        // tomado queda tomado y la anulación sólo suelta lo que falta (el pedido libera su reserva viva). La remisión facturada, en cambio,
+        // tiene por dependiente su factura (FromShipment): primero la nota de la factura.
+        var sinDependientes = original.Class is DocumentClass.SalesQuote or DocumentClass.SalesOrder;
         var dependientes = await db.DocumentLinks.AsNoTracking()
-            .Where(l => l.SourceDocumentId == original.Id && l.Kind != DocumentLinkKind.Voids && !l.IsDeleted)
+            .Where(l => !sinDependientes && l.SourceDocumentId == original.Id && l.Kind != DocumentLinkKind.Voids && !l.IsDeleted)
             .Join(db.InventoryDocuments.AsNoTracking(), l => l.TargetDocumentId, d => d.Id, (l, d) => d)
             .Where(d => Vigentes.Contains(d.Status))
             .Select(d => new { d.PublicId, d.Class, d.Prefix, d.Number, d.Status })

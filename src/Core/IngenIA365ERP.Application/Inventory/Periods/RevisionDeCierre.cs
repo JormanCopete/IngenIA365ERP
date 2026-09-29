@@ -21,7 +21,9 @@ namespace IngenIA365ERP.Application.Inventory.Periods;
 /// son del bloqueo), despachos de traslado sin recepción con fecha en o antes del fin del mes, los recibidos hasta el fin
 /// del mes con faltantes o sobrantes sin resolver (<c>INV_TransferDiscrepancies</c> con <c>ResolvedAt</c> nulo, US10, T377) y
 /// entregas de mensajes de Inventario pendientes, en lote o rechazadas con fecha en el mes.</item>
-/// <item><b>Remisiones sin facturar</b>: vacías hasta I6; el campo y su aceptación quedan cableados.</item>
+/// <item><b>Remisiones sin facturar</b> (I6, T890): las remisiones confirmadas con fecha en el mes que todavía tienen algo por facturar, con
+/// su valor —lo pendiente al precio neto de la línea del pedido del que salió (<c>valueSource = Order</c>) o, sin pedido, al de la propia
+/// remisión, que se precificó con la lista vigente (<c>PriceList</c>)—; se cierra sólo aceptándolas con permiso y motivo.</item>
 /// </list>
 /// </summary>
 public sealed class RevisionDeCierre(IApplicationDbContext db, IDateTimeService reloj)
@@ -45,8 +47,57 @@ public sealed class RevisionDeCierre(IApplicationDbContext db, IDateTimeService 
         var bloqueos = new CloseBlockersDto(await ConteosAbiertosAsync(inicio, fin, ct), noEsElSiguiente, noTermino);
 
         var avisos = await AvisosAsync(inicio, fin, ct);
-        IReadOnlyList<UnbilledShipmentDto> remisiones = [];
+        var remisiones = await RemisionesSinFacturarAsync(inicio, fin, ct);
         return Result.Success(new PeriodCloseCheckDto(year, month, !bloqueos.Any, bloqueos, avisos, remisiones, remisiones.Sum(r => r.Value)));
+    }
+
+    /// <summary>
+    /// I6 (T890; FR-047, FR-052; contracts/api.md §13.4): las remisiones confirmadas con fecha en el mes y saldo pendiente de facturar
+    /// (<see cref="Sales.CicloComercial.VinculosDelCiclo.PendientePorFacturarAsync"/>), con su valor al precio del pedido o de la lista.
+    /// </summary>
+    public async Task<IReadOnlyList<UnbilledShipmentDto>> RemisionesSinFacturarAsync(DateOnly inicio, DateOnly fin, CancellationToken ct)
+    {
+        var remisiones = await db.InventoryDocuments.AsNoTracking().Include(d => d.Lines)
+            .Where(d => d.Class == DocumentClass.Shipment && d.Status == DocumentStatus.Confirmed && d.OperationDate >= inicio && d.OperationDate <= fin)
+            .OrderBy(d => d.OperationDate).ThenBy(d => d.Id).ToListAsync(ct);
+        if (remisiones.Count == 0) return [];
+        var vinculos = new Sales.CicloComercial.VinculosDelCiclo(db, reloj);
+        var lineas = remisiones.SelectMany(r => r.Lines).Where(l => !l.IsDeleted).ToList();
+        var pendiente = await vinculos.PendientePorFacturarAsync(lineas, 0, ct);
+        var ids = lineas.Select(l => l.Id).ToList();
+        var delPedido = (await db.DocumentLineLinks.AsNoTracking()
+                .Where(x => !x.IsDeleted && ids.Contains(x.TargetLineId) && !x.DocumentLink!.IsDeleted && x.DocumentLink.Kind == DocumentLinkKind.DispatchOf)
+                .Select(x => new { x.TargetLineId, x.SourceLine!.NetAmount, x.SourceLine.QuantityBase })
+                .ToListAsync(ct))
+            .GroupBy(x => x.TargetLineId).ToDictionary(g => g.Key, g => g.First());
+        var personas = remisiones.Select(r => r.CounterpartyPersonId).OfType<int>().Distinct().ToList();
+        var nombres = (await db.People.AsNoTracking().Where(p => personas.Contains(p.Id)).ToListAsync(ct))
+            .ToDictionary(p => p.Id, Pos.BorradorDelPos.Nombre);
+
+        var resultado = new List<UnbilledShipmentDto>();
+        foreach (var r in remisiones)
+        {
+            var vivas = r.Lines.Where(l => !l.IsDeleted && pendiente.GetValueOrDefault(l.Id) > 0m).ToList();
+            if (vivas.Count == 0) continue;
+            var valor = 0m;
+            var dePedido = false;
+            foreach (var l in vivas)
+            {
+                var queda = pendiente[l.Id];
+                if (delPedido.TryGetValue(l.Id, out var o) && o.QuantityBase > 0m)
+                {
+                    dePedido = true;
+                    valor += Math.Round(o.NetAmount / o.QuantityBase * queda, 2, MidpointRounding.AwayFromZero);
+                }
+                else if (l.QuantityBase > 0m)
+                {
+                    valor += Math.Round(l.NetAmount / l.QuantityBase * queda, 2, MidpointRounding.AwayFromZero);
+                }
+            }
+            resultado.Add(new UnbilledShipmentDto(r.PublicId, VistaDeDocumentos.NumeroVisible(r.Prefix, r.Number),
+                r.CounterpartyPersonId is int p && nombres.TryGetValue(p, out var nombre) ? nombre : string.Empty, valor, dePedido ? "Order" : "PriceList"));
+        }
+        return resultado;
     }
 
     /// <summary>

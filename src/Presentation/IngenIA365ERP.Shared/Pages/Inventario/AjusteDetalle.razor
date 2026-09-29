@@ -18,7 +18,12 @@
    (actas, denuncias) mientras está en borrador o en aprobación, y las acciones que el SERVIDOR permite (AllowedActions):
    guardar, descartar con motivo, confirmar y anular con motivo; la pantalla nunca las deduce. Los avisos (warnings[]) vuelven
    al salir de cada campo de una línea (se guarda el borrador) y se marcan en la línea que nombran. Atajos: Ctrl+S guarda,
-   Ctrl+Enter confirma. *@
+   Ctrl+Enter confirma.
+   I6 (T938, T939; US15; contracts/api.md §10): cada línea de un producto con lote, vencimiento o serie lleva SelectorDeLote (en la entrada
+   pide lote y vencimiento; en la salida propone el que vence primero y marca vencidos y próximos; la serie con el lector, una unidad por
+   serie), y la clase Ensamble muestra el formulario del kit: kit, cantidad y la vista previa de los componentes que saldrán con su
+   disponible en la bodega; «Proponer líneas» guarda el borrador con assembly { kitProductPublicId, quantity } y el servidor arma las líneas
+   (salida de componentes, entrada del kit al costo consumido). *@
 <PermissionGate Required="Inventory.Adjustments.View" MostrarAviso="true">
 <div class="pagina" tabindex="0" @onkeydown="@AtajoAsync">
     <div class="page-header">
@@ -106,10 +111,57 @@
             <label class="campo campo-ancho">Notas <input class="e-input" disabled="@(!Editable)" @bind="_f.Notas" maxlength="1000" /></label>
         </div>
 
-        @if (Editable)
+        @if (Editable && EsEnsamble)
         {
             <div class="info-card">
-                <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_f.Bodega" Elegido="@AgregarLineaAsync" />
+                <h4>Ensamble</h4>
+                <p class="texto-apoyo">Elija el kit y cuántos se arman: salen sus componentes y entra el kit al costo de lo consumido.</p>
+                <div class="form-grid">
+                    <div class="campo campo-ancho">
+                        <SelectorDeProducto Etiqueta="Kit" Clases="@ClasesDeKit" Bodega="@_f.Bodega" Elegido="@ElegirKitAsync" />
+                        @if (_kit is { } kit) { <span class="texto-apoyo">@kit.Code · @kit.Name</span> }
+                    </div>
+                    <label class="campo">Cantidad de kits
+                        <input class="e-input numero" type="number" min="0" step="any" value="@_cantidadDeKits.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                               @onchange="@(e => _cantidadDeKits = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var c) ? c : _cantidadDeKits)" />
+                    </label>
+                </div>
+                <IndicadorDeCarga Cargando="@_vistaDeEnsamble.Activa">
+                    @if (_componentesDelKit.Count > 0)
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Componente</th><th class="numero">Por kit</th><th class="numero">Saldrán</th><th class="numero">Disponible en la bodega</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in _componentesDelKit)
+                                    {
+                                        var saldran = c.Quantity * _cantidadDeKits;
+                                        var disponible = _disponibles.GetValueOrDefault(c.Component.PublicId);
+                                        <tr class="@(disponible < saldran ? "resaltada" : "")" title="@(disponible < saldran ? "No alcanza el disponible" : null)">
+                                            <td>@c.Component.Code · @c.Component.Name</td>
+                                            <td class="numero">@c.Quantity.ToString("N4") @c.BaseUnit.Code</td>
+                                            <td class="numero">@saldran.ToString("N4")</td>
+                                            <td class="numero">@disponible.ToString("N4")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else if (_kit is not null)
+                    {
+                        <p class="aviso aviso-alerta">El kit no tiene componentes: regístrelos en su ficha (pestaña Componentes).</p>
+                    }
+                </IndicadorDeCarga>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _kit is null || _cantidadDeKits <= 0m)" OnClick="@ProponerEnsambleAsync">Proponer líneas</SfButton>
+                </div>
+            </div>
+        }
+        else if (Editable)
+        {
+            <div class="info-card">
+                <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_f.Bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync" />
             </div>
         }
 
@@ -119,6 +171,7 @@
                     <tr>
                         <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th>Ubicación</th>
                         @if (EsMovimiento) { <th>Hacia la ubicación</th> }
+                        @if (ConSeguimiento) { <th>Lote / serie</th> }
                         @if (MuestraCosto) { <th class="numero">Costo unitario</th> }
                         @if (_doc?.Lines.Any(l => l.TotalCost is not null) == true) { <th class="numero">Costo total</th> }
                         @if (Editable) { <th></th> }
@@ -165,6 +218,22 @@
                                         </select>
                                     }
                                     else { @guardada?.ToLocation?.Code }
+                                </td>
+                            }
+                            @if (ConSeguimiento)
+                            {
+                                <td>
+                                    @if (Editable && (l.ControlaLote || l.ControlaSerie))
+                                    {
+                                        <SelectorDeLote Producto="@l.ProductPublicId" Bodega="@_f.Bodega" Entrada="@EsEntrada(l)"
+                                                        ControlaLote="@l.ControlaLote" ControlaVencimiento="@l.ControlaVencimiento" ControlaSerie="@l.ControlaSerie"
+                                                        @bind-Lote="l.Lote" @bind-Vencimiento="l.Vencimiento" @bind-Serie="l.Serie"
+                                                        SerieLeida="@(serie => SerieLeidaAsync(indice, serie))" />
+                                    }
+                                    else
+                                    {
+                                        @string.Join(" · ", new[] { guardada?.Lot, guardada?.ExpiryDate?.ToString("dd/MM/yyyy"), guardada?.Serial }.Where(x => !string.IsNullOrEmpty(x)))
+                                    }
                                 </td>
                             }
                             @if (MuestraCosto)
@@ -243,6 +312,12 @@
         public decimal? Costo { get; set; }
         public Guid? Ubicacion { get; set; }
         public Guid? Hacia { get; set; }
+        public string? Lote { get; set; }
+        public DateOnly? Vencimiento { get; set; }
+        public string? Serie { get; set; }
+        public bool ControlaLote { get; set; }
+        public bool ControlaVencimiento { get; set; }
+        public bool ControlaSerie { get; set; }
     }
 
     private sealed class Formulario
@@ -283,6 +358,22 @@
     private bool ExigeCausa => Clase is InventarioClient.ClasesDeAjuste.Negativo or InventarioClient.ClasesDeAjuste.Baja;
     private bool EsMovimiento => Clase == InventarioClient.ClasesDeAjuste.MovimientoEntreUbicaciones;
     private bool MuestraCosto => Clase == InventarioClient.ClasesDeAjuste.Positivo || _doc?.Lines.Any(l => l.UnitCost is not null) == true;
+    private bool EsEnsamble => Clase == InventarioClient.ClasesDeAjuste.Ensamble;
+    private bool ConSeguimiento => _f.Lineas.Any(l => l.ControlaLote || l.ControlaSerie) || _doc?.Lines.Any(l => l.Lot is not null || l.Serial is not null) == true;
+
+    // I6 (T938, T939): seguimiento por producto y el ensamble.
+    private static readonly IReadOnlyList<int> ClasesDeKit = [TextosDeInventario.ClaseKit];
+    private readonly EstadoDeCarga _vistaDeEnsamble = new();
+    private readonly Dictionary<Guid, (bool Lote, bool Vencimiento, bool Serie)> _seguimiento = [];
+    private readonly Dictionary<Guid, int> _clasesDeProducto = [];
+    private ProductoEncontradoDto? _kit;
+    private decimal _cantidadDeKits = 1m;
+    private List<ComponenteDelProductoDto> _componentesDelKit = [];
+    private Dictionary<Guid, decimal> _disponibles = [];
+
+    /// <summary>Entra a la bodega: un ajuste positivo o, en un ensamble, la línea del kit.</summary>
+    private bool EsEntrada(LineaForm l) => Clase == InventarioClient.ClasesDeAjuste.Positivo
+        || (EsEnsamble && (l.ProductPublicId == _kit?.PublicId || _clasesDeProducto.GetValueOrDefault(l.ProductPublicId) == TextosDeInventario.ClaseKit));
 
     private IEnumerable<CausaDeAjusteDto> CausasDeLaClase => _causas.Where(c => c.IsActive
         && (Clase == InventarioClient.ClasesDeAjuste.Positivo ? c.AllowsPositive : c.AllowsNegative));
@@ -300,7 +391,7 @@
             await Task.WhenAll(tipos, bodegas, causas, centros);
             // US10 (T368): el movimiento entre ubicaciones (clase 18) va por esta misma ruta.
             _tipos = tipos.Result.IsSuccess
-                ? [.. (tipos.Result.Value ?? []).Where(t => t.IsActive && (t.Class is >= 10 and <= 13 || t.Class == InventarioClient.ClasesDeAjuste.MovimientoEntreUbicaciones))]
+                ? [.. (tipos.Result.Value ?? []).Where(t => t.IsActive && (t.Class is >= 10 and <= 14 || t.Class == InventarioClient.ClasesDeAjuste.MovimientoEntreUbicaciones))]
                 : [];
             _bodegas = bodegas.Result.IsSuccess ? [.. (bodegas.Result.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
             _causas = causas.Result.IsSuccess ? [.. causas.Result.Value ?? []] : [];
@@ -328,6 +419,7 @@
         }
         Mostrar(r.Value);
         await CargarUbicacionesAsync();
+        if (Editable) await CargarSeguimientoAsync();
     }
 
     /// <summary>El documento del servidor pasa al formulario (líneas con su PublicId para conservarlas al guardar).</summary>
@@ -343,14 +435,82 @@
                 LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
                 UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Costo = doc.Status == 0 ? l.UnitCost : null,
                 Ubicacion = l.Location?.PublicId, Hacia = l.ToLocation?.PublicId,
+                Lote = l.Lot, Vencimiento = l.ExpiryDate, Serie = l.Serial,
             }).ToList(),
         };
+        AplicarSeguimiento();
+    }
+
+    /// <summary>Las marcas de seguimiento de cada producto de las líneas (se leen una vez por producto).</summary>
+    private async Task CargarSeguimientoAsync()
+    {
+        foreach (var producto in _f.Lineas.Select(l => l.ProductPublicId).Distinct().Where(p => !_seguimiento.ContainsKey(p)).ToList())
+        {
+            var r = await Inventario.ObtenerProductoAsync(producto);
+            if (r.IsSuccess && r.Value is { } p)
+            {
+                _seguimiento[producto] = (p.TracksLot, p.TracksExpiry, p.TracksSerial);
+                _clasesDeProducto[producto] = p.Kind;
+            }
+        }
+        AplicarSeguimiento();
+    }
+
+    private void AplicarSeguimiento()
+    {
+        foreach (var l in _f.Lineas)
+            if (_seguimiento.TryGetValue(l.ProductPublicId, out var s))
+                (l.ControlaLote, l.ControlaVencimiento, l.ControlaSerie) = s;
+    }
+
+    /// <summary>Una serie leída en una línea que ya tiene la suya abre otra línea del mismo producto (cada serie es una unidad).</summary>
+    private async Task SerieLeidaAsync(int indice, string serie)
+    {
+        var l = _f.Lineas[indice];
+        l.Cantidad = 1m;
+        if (!string.IsNullOrEmpty(l.Serie) && l.Serie != serie)
+            _f.Lineas.Add(new LineaForm
+            {
+                ProductPublicId = l.ProductPublicId, Producto = l.Producto, UnitPublicId = l.UnitPublicId, Unidad = l.Unidad, Serie = serie,
+                ControlaLote = l.ControlaLote, ControlaVencimiento = l.ControlaVencimiento, ControlaSerie = l.ControlaSerie, Ubicacion = l.Ubicacion,
+            });
+        await GuardarAlSalirAsync();
+    }
+
+    private async Task ElegirKitAsync(ProductoElegido elegido)
+    {
+        _kit = elegido.Producto;
+        await CargarVistaDeEnsambleAsync();
+    }
+
+    /// <summary>Los componentes del kit y su disponible en la bodega elegida.</summary>
+    private async Task CargarVistaDeEnsambleAsync()
+    {
+        _componentesDelKit = [];
+        _disponibles = [];
+        if (_kit is null) return;
+        using var carga = _vistaDeEnsamble.Iniciar();
+        var r = await Inventario.ObtenerComponentesAsync(_kit.PublicId);
+        _componentesDelKit = r.IsSuccess ? [.. r.Value?.Components ?? []] : [];
+        foreach (var c in _componentesDelKit)
+        {
+            var existencia = await Inventario.ExistenciaDelProductoAsync(c.Component.PublicId);
+            _disponibles[c.Component.PublicId] = existencia.Value?.ByWarehouse.Where(b => b.Warehouse.PublicId == _f.Bodega).Sum(b => b.Available) ?? 0m;
+        }
+    }
+
+    /// <summary>Guarda el borrador con el kit y la cantidad: el servidor propone las líneas de componentes y la del kit.</summary>
+    private async Task ProponerEnsambleAsync()
+    {
+        if (_kit is null || _cantidadDeKits <= 0m) return;
+        if (await GuardarAsync(false, new EnsambleRequest(_kit.PublicId, _cantidadDeKits))) await CargarSeguimientoAsync();
     }
 
     private async Task CambiarBodegaAsync(string? valor)
     {
         _f.Bodega = Guid.TryParse(valor, out var g) ? g : null;
         await CargarUbicacionesAsync();
+        if (EsEnsamble) await CargarVistaDeEnsambleAsync();
     }
 
     private async Task CargarUbicacionesAsync()
@@ -372,10 +532,13 @@
         }
         var p = producto.Value;
         var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        _seguimiento[p.PublicId] = (p.TracksLot, p.TracksExpiry, p.TracksSerial);
+        _clasesDeProducto[p.PublicId] = p.Kind;
         _f.Lineas.Add(new LineaForm
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            ControlaLote = p.TracksLot, ControlaVencimiento = p.TracksExpiry, ControlaSerie = p.TracksSerial,
         });
         if (_doc is not null) await GuardarAsync(true);
     }
@@ -389,7 +552,7 @@
     private Task GuardarAlSalirAsync() => _doc is not null && Editable ? GuardarAsync(true) : Task.CompletedTask;
 
     /// <summary>Guarda el borrador (POST la primera vez, PUT después): los avisos vuelven del servidor.</summary>
-    private async Task<bool> GuardarAsync(bool silencioso)
+    private async Task<bool> GuardarAsync(bool silencioso, EnsambleRequest? ensamble = null)
     {
         if (_f.Tipo is not { } tipo)
         {
@@ -402,7 +565,9 @@
             _doc?.RowVersion,
             _f.Lineas.Select(l => new LineaDeBorradorRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad,
                 UnitCost: Clase == InventarioClient.ClasesDeAjuste.Positivo ? l.Costo : null, LocationPublicId: l.Ubicacion,
-                ToLocationPublicId: EsMovimiento ? l.Hacia : null)).ToList());
+                ToLocationPublicId: EsMovimiento ? l.Hacia : null, LotCode: l.Lote, SerialNumber: l.Serie,
+                ExpiryDate: l.ControlaVencimiento ? l.Vencimiento : null)).ToList(),
+            ensamble);
         var r = await Inventario.GuardarAjusteAsync(_doc?.PublicId, request, _claveGuardar);
         if (!r.IsSuccess || r.Value is null)
         {
@@ -411,6 +576,7 @@
         }
         var nuevo = _doc is null;
         Mostrar(r.Value);
+        if (ensamble is not null) await CargarSeguimientoAsync();
         if (!silencioso) await Notification.SuccessAsync("Borrador guardado.");
         if (nuevo) Nav.NavigateTo($"/inventario/ajustes/{r.Value.PublicId}", replace: true);
         return true;

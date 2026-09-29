@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
+using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Enums.Integration;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -146,6 +147,24 @@ public sealed class AccountingBatchesReportQueryHandler(IApplicationDbContext db
         new("Tarde", TipoDeColumna.Texto),
     ];
 
+    /// <summary>Con alcance de bodega parcial, sólo los lotes con alguna entrega visible (la misma regla de la bandeja).</summary>
+    public static IQueryable<IntegrationBatch> Visibles(IApplicationDbContext db, IQueryable<IntegrationBatch> lotes, AlcanceDeInventario alcance)
+    {
+        if (alcance.TodasLasBodegas) return lotes;
+        var visibles = VistaDeMensajes.Visibles(db, alcance);
+        return lotes.Where(b => visibles.Any(d => d.BatchId == b.Id));
+    }
+
+    /// <summary>El instante local antes del cual un lote programado que no corrió va tarde.</summary>
+    public static DateTime Limite(IDateTimeService reloj, int toleranciaEnMinutos) => reloj.AhoraLocal.DateTime.AddMinutes(-toleranciaEnMinutos);
+
+    /// <summary>
+    /// Los lotes que van tarde: programados, sin correr, con la franja antes de <paramref name="limite"/>. La columna «Tarde» y la ficha
+    /// <c>lateBatches</c> del tablero (T967) dicen lo mismo con esta regla.
+    /// </summary>
+    public static IQueryable<IntegrationBatch> Tarde(IQueryable<IntegrationBatch> lotes, DateTime limite) =>
+        lotes.Where(b => b.Trigger == BatchTrigger.Scheduled && b.Status == BatchStatus.Requested && b.ScheduledFor != null && b.ScheduledFor < limite);
+
     public async Task<Result<TablaExportable>> Handle(AccountingBatchesReportQuery request, CancellationToken ct)
     {
         var f = request.Filtros;
@@ -157,14 +176,9 @@ public sealed class AccountingBatchesReportQueryHandler(IApplicationDbContext db
         var lotes = db.IntegrationBatches.AsNoTracking().Where(b => b.RequestedAt >= desde && b.RequestedAt < hasta);
         if (request.Status is { } estado) lotes = lotes.Where(b => b.Status == estado);
         if (request.Trigger is { } disparador) lotes = lotes.Where(b => b.Trigger == disparador);
-        if (!alcance.TodasLasBodegas)
-        {
-            var visibles = VistaDeMensajes.Visibles(db, alcance);
-            lotes = lotes.Where(b => visibles.Any(d => d.BatchId == b.Id));
-        }
+        lotes = Visibles(db, lotes, alcance);
 
-        var ahoraLocal = reloj.AhoraLocal.DateTime;
-        var limite = ahoraLocal.AddMinutes(-request.LateToleranceMinutes);
+        var limite = Limite(reloj, request.LateToleranceMinutes);
         static string? Instante(DateTime? t) => t?.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
         var filas = (await lotes.OrderBy(b => b.Number).ToListAsync(ct)).Select(b =>
         {

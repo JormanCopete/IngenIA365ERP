@@ -35,6 +35,18 @@ public sealed record DatosDeProducto(
 public sealed record ReferenciasDeProducto(
     ProductCategory Categoria, Brand? Marca, UnitOfMeasure UnidadBase, AccountingGroup? Grupo, WithholdingConcept? Concepto);
 
+/// <summary>
+/// Lo que se sabe de la historia de un producto guardado para las reglas que dependen de ella (I6, T918; data-model §1.6):
+/// movimientos (bloquean unidad base, grupo y clase), existencia distinta de cero y documentos en borrador o en aprobación que lo
+/// citan (bloquean el seguimiento), y dependientes —variantes, componentes o ser componente— (bloquean la clase). (nuevo)
+/// </summary>
+public sealed record HistoriaDeProducto(bool TieneMovimientos, bool TieneExistencia = false, int Borradores = 0, bool TieneDependientes = false)
+{
+    public static HistoriaDeProducto Nueva { get; } = new(false);
+
+    public bool SeguimientoBloqueado => TieneExistencia || Borradores > 0;
+}
+
 /// <summary>Un impuesto pedido para el producto: la definición, la tarifa (cualquier vigencia de su código) y las unidades gravables. (nuevo)</summary>
 public sealed record ImpuestoPedido(Guid TaxDefinitionPublicId, Guid? TaxRatePublicId, decimal? TaxableUnitsPerBaseUnit);
 
@@ -46,8 +58,11 @@ public sealed record ImpuestoResuelto(TaxDefinition Definicion, TaxRate? Tarifa,
 /// alta unitaria, la edición y <c>ImportProductsCommand</c> —como <c>ImportAccountsCommand</c> reusa
 /// <c>CreateAccountCommandHandler.AplicarReglasAsync</c>—, así la plantilla responde los mismos códigos que la pantalla:
 /// <list type="bullet">
-/// <item>clase disponible en I1 (inventariable o servicio; las demás, <c>Inventory.Product.KindNotAvailable</c>) y
-/// seguimiento por lote, serie o vencimiento apagado hasta I6 (<c>.TrackingNotAvailable</c>);</item>
+/// <item>clase y seguimiento (I6, T918): las seis clases; <c>TracksExpiry</c> exige <c>TracksLot</c>
+/// (<c>.ExpiryRequiresLot</c>); ni servicios ni combos se controlan por lote o serie (<c>.TrackingNotApplicable</c>); una
+/// variante nace de su plantilla (<c>Inventory.Variant.ParentRequired</c>); en un producto guardado la clase no cambia con
+/// movimientos, variantes o componentes (<c>.KindLocked</c>) y las marcas de seguimiento no cambian con existencia distinta de
+/// cero ni con borradores que lo citen (<c>.TrackingLocked</c>);</item>
 /// <item>grupo contable obligatorio salvo en plantillas (la matriz asigna la cuenta por él) y concepto de retención
 /// obligatorio salvo en plantillas y combos;</item>
 /// <item>con movimientos, la unidad base no cambia (<c>.BaseUnitLocked</c>) y el grupo contable cambia sólo por
@@ -61,13 +76,15 @@ public sealed record ImpuestoResuelto(TaxDefinition Definicion, TaxRate? Tarifa,
 /// </summary>
 public static class ReglasDeProducto
 {
-    /// <summary>Clases de producto habilitadas en I1.</summary>
-    public static readonly IReadOnlySet<ProductKind> ClasesDisponibles = new HashSet<ProductKind> { ProductKind.Inventoriable, ProductKind.Service };
+    /// <summary>Clases que pueden llevar seguimiento por lote, serie o vencimiento: las que tienen existencia propia y la plantilla, que lo hereda a sus variantes.</summary>
+    public static readonly IReadOnlySet<ProductKind> ClasesConSeguimiento =
+        new HashSet<ProductKind> { ProductKind.Inventoriable, ProductKind.Variant, ProductKind.Kit, ProductKind.Template };
 
+    /// <summary>Las reglas de clase y seguimiento que no dependen de la historia del producto (I6, T918; data-model §1.6).</summary>
     public static Result ClaseYSeguimiento(ProductKind kind, bool lote, bool serie, bool vencimiento)
     {
-        if (!ClasesDisponibles.Contains(kind)) return Result.Failure(CatalogErrors.ProductKindNotAvailable(kind));
-        if (lote || serie || vencimiento) return Result.Failure(CatalogErrors.ProductTrackingNotAvailable());
+        if (vencimiento && !lote) return Result.Failure(CatalogErrors.ProductExpiryRequiresLot());
+        if ((lote || serie) && !ClasesConSeguimiento.Contains(kind)) return Result.Failure(CatalogErrors.ProductTrackingNotApplicable(kind));
         return Result.Success();
     }
 
@@ -108,9 +125,8 @@ public static class ReglasDeProducto
             if (concepto is null) return Result.Failure(TaxErrors.ConceptNotFound());
         }
 
-        var cambiaAlgoBloqueado = producto.Id != 0 && (producto.BaseUnitId != unidadBase.Id || producto.AccountingGroupId != grupo?.Id);
-        var conMovimientos = cambiaAlgoBloqueado && await TieneMovimientosAsync(db, producto.Id, ct);
-        return Aplicar(producto, datos, new ReferenciasDeProducto(categoria, marca, unidadBase, grupo, concepto), conMovimientos);
+        var historia = await HistoriaAsync(db, producto, datos, unidadBase.Id, grupo?.Id, ct);
+        return Aplicar(producto, datos, new ReferenciasDeProducto(categoria, marca, unidadBase, grupo, concepto), historia);
     }
 
     /// <summary>
@@ -118,10 +134,18 @@ public static class ReglasDeProducto
     /// bloque, T228: nunca una consulta por fila). <paramref name="tieneMovimientos"/> es si el producto existente estuvo
     /// alguna vez en un documento. No guarda.
     /// </summary>
-    public static Result Aplicar(Product producto, DatosDeProducto datos, ReferenciasDeProducto referencias, bool tieneMovimientos)
+    public static Result Aplicar(Product producto, DatosDeProducto datos, ReferenciasDeProducto referencias, bool tieneMovimientos) =>
+        Aplicar(producto, datos, referencias, new HistoriaDeProducto(tieneMovimientos));
+
+    /// <summary>
+    /// Las reglas con lo que se sabe de la historia del producto guardado (<see cref="HistoriaDeProducto"/>): movimientos, existencia,
+    /// borradores y dependientes. La plantilla la arma en bloque; el alta y la edición, con <see cref="HistoriaAsync"/>. No guarda.
+    /// </summary>
+    public static Result Aplicar(Product producto, DatosDeProducto datos, ReferenciasDeProducto referencias, HistoriaDeProducto historia)
     {
         var clase = ClaseYSeguimiento(datos.Kind, datos.TracksLot, datos.TracksSerial, datos.TracksExpiry);
         if (clase.IsFailure) return clase;
+        var tieneMovimientos = historia.TieneMovimientos;
 
         var (categoria, marca, unidadBase, grupo, concepto) = referencias;
         if (grupo is null && datos.Kind != ProductKind.Template) return Result.Failure(CatalogErrors.ProductAccountingGroupRequired());
@@ -129,6 +153,12 @@ public static class ReglasDeProducto
             return Result.Failure(CatalogErrors.ProductWithholdingConceptRequired());
 
         var esNuevo = producto.Id == 0;
+        if (!esNuevo && producto.Kind != datos.Kind && (tieneMovimientos || historia.TieneDependientes || producto.ParentProductId is not null))
+            return Result.Failure(CatalogErrors.ProductKindLocked(producto.Kind));
+        if (datos.Kind == ProductKind.Variant && producto.ParentProductId is null && producto.ParentProduct is null)
+            return Result.Failure(CatalogErrors.VariantParentRequired());
+        if (!esNuevo && historia.SeguimientoBloqueado && CambiaSeguimiento(producto, datos))
+            return Result.Failure(CatalogErrors.ProductTrackingLocked(historia.TieneExistencia, historia.Borradores));
         if (!esNuevo && tieneMovimientos)
         {
             if (producto.BaseUnitId != unidadBase.Id) return Result.Failure(CatalogErrors.ProductBaseUnitLocked());
@@ -166,6 +196,43 @@ public static class ReglasDeProducto
     /// <summary>¿El producto estuvo alguna vez en un documento (cualquier estado, incluido el borrador)?</summary>
     public static Task<bool> TieneMovimientosAsync(IApplicationDbContext db, int productoId, CancellationToken ct) =>
         db.InventoryDocumentLines.IgnoreQueryFilters().AnyAsync(l => l.ProductId == productoId, ct);
+
+    /// <summary>¿Cambia alguna marca de seguimiento (lote, serie, vencimiento)?</summary>
+    public static bool CambiaSeguimiento(Product producto, DatosDeProducto datos) =>
+        producto.TracksLot != datos.TracksLot || producto.TracksSerial != datos.TracksSerial || producto.TracksExpiry != datos.TracksExpiry;
+
+    /// <summary>
+    /// La historia de un producto guardado, consultando sólo lo que el cambio pedido necesita: movimientos si cambia la unidad
+    /// base, el grupo o la clase; dependientes (variantes o componentes) si cambia la clase; existencia y borradores si cambia el
+    /// seguimiento. Un producto nuevo no tiene historia.
+    /// </summary>
+    public static async Task<HistoriaDeProducto> HistoriaAsync(
+        IApplicationDbContext db, Product producto, DatosDeProducto datos, int unidadBaseId, int? grupoId, CancellationToken ct)
+    {
+        if (producto.Id == 0) return HistoriaDeProducto.Nueva;
+        var cambiaClase = producto.Kind != datos.Kind;
+        var cambiaBloqueado = cambiaClase || producto.BaseUnitId != unidadBaseId || producto.AccountingGroupId != grupoId;
+        var movimientos = cambiaBloqueado && await TieneMovimientosAsync(db, producto.Id, ct);
+        var dependientes = cambiaClase && await TieneDependientesAsync(db, producto.Id, ct);
+        var (existencia, borradores) = CambiaSeguimiento(producto, datos) ? await SeguimientoAsync(db, producto.Id, ct) : (false, 0);
+        return new HistoriaDeProducto(movimientos, existencia, borradores, dependientes);
+    }
+
+    /// <summary>¿Una variante cuelga de él, o es combo o kit con componentes, o es componente de alguno?</summary>
+    public static async Task<bool> TieneDependientesAsync(IApplicationDbContext db, int productoId, CancellationToken ct) =>
+        await db.Products.AnyAsync(p => p.ParentProductId == productoId, ct)
+        || await db.ProductComponents.AnyAsync(c => c.ProductId == productoId || c.ComponentProductId == productoId, ct);
+
+    /// <summary>La existencia distinta de cero en alguna bodega y los documentos en borrador o en aprobación que citan el producto.</summary>
+    public static async Task<(bool Existencia, int Borradores)> SeguimientoAsync(IApplicationDbContext db, int productoId, CancellationToken ct)
+    {
+        var existencia = await db.StockBalances.AnyAsync(b => b.ProductId == productoId && b.Physical != 0m, ct);
+        var borradores = await db.InventoryDocumentLines
+            .Where(l => l.ProductId == productoId
+                && (l.Document!.Status == DocumentStatus.Draft || l.Document.Status == DocumentStatus.PendingApproval))
+            .Select(l => l.DocumentId).Distinct().CountAsync(ct);
+        return (existencia, borradores);
+    }
 
     /// <summary>
     /// Resuelve los impuestos pedidos contra el catálogo tributario: la definición existe (<c>Core.Tax.NotFound</c>), no es

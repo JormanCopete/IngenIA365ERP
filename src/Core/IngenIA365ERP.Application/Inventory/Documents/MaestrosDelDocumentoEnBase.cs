@@ -22,12 +22,14 @@ public sealed class MaestrosDelDocumentoEnBase(IApplicationDbContext db) : IMaes
 
     public async Task<IReadOnlyList<ProductoDelDocumento>> ProductosAsync(IReadOnlyCollection<Guid> publicIds, CancellationToken ct) =>
         publicIds.Count == 0 ? [] : await db.Products.AsNoTracking().Where(p => publicIds.Contains(p.PublicId))
-            .Select(p => new ProductoDelDocumento(p.Id, p.PublicId, p.Code, p.Name, p.Kind == ProductKind.Inventoriable || p.Kind == ProductKind.Variant, p.Status))
+            .Select(p => new ProductoDelDocumento(p.Id, p.PublicId, p.Code, p.Name, p.Kind == ProductKind.Inventoriable || p.Kind == ProductKind.Variant, p.Status,
+                p.Kind == ProductKind.Template))
             .ToListAsync(ct);
 
     public async Task<IReadOnlyList<ProductoDelDocumento>> ProductosPorIdAsync(IReadOnlyCollection<int> ids, CancellationToken ct) =>
         ids.Count == 0 ? [] : await db.Products.AsNoTracking().Where(p => ids.Contains(p.Id))
-            .Select(p => new ProductoDelDocumento(p.Id, p.PublicId, p.Code, p.Name, p.Kind == ProductKind.Inventoriable || p.Kind == ProductKind.Variant, p.Status))
+            .Select(p => new ProductoDelDocumento(p.Id, p.PublicId, p.Code, p.Name, p.Kind == ProductKind.Inventoriable || p.Kind == ProductKind.Variant, p.Status,
+                p.Kind == ProductKind.Template))
             .ToListAsync(ct);
 
     public async Task<UnidadDelDocumento?> UnidadAsync(int productId, Guid unitPublicId, CancellationToken ct)

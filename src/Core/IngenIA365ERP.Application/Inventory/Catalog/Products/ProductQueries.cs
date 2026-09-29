@@ -141,7 +141,14 @@ public sealed class ListProductBarcodesQueryHandler(IApplicationDbContext db) : 
 /// </summary>
 public sealed record SearchProductsQuery(
     string Q, Guid? WarehousePublicId = null, IReadOnlyList<ProductKind>? Kinds = null, bool IncludeInactive = false, int? Take = null)
-    : IRequest<Result<ProductSearchResultDto>>;
+    : IRequest<Result<ProductSearchResultDto>>
+{
+    /// <summary>
+    /// I6 (T927; nuevo): la búsqueda de una línea de venta o de documento (<c>forSale=true</c>): sin plantillas de variantes, que no entran a
+    /// documentos (se vende una de sus variantes, que sí vienen).
+    /// </summary>
+    public bool ForSale { get; init; }
+}
 
 public sealed class SearchProductsQueryValidator : AbstractValidator<SearchProductsQuery>
 {
@@ -179,6 +186,7 @@ public sealed class SearchProductsQueryHandler(
         var candidatos = db.Products.AsNoTracking();
         if (!request.IncludeInactive) candidatos = candidatos.Where(p => p.Status != ProductStatus.Inactive);
         if (request.Kinds is { Count: > 0 } clases) candidatos = candidatos.Where(p => clases.Contains(p.Kind));
+        if (request.ForSale) candidatos = candidatos.Where(p => p.Kind != ProductKind.Template);
 
         // 1) Lectura exacta: código de barras vivo (con su empaque) o código del producto.
         var leido = ProductBarcode.Normalizar(request.Q);
@@ -203,7 +211,12 @@ public sealed class SearchProductsQueryHandler(
 
         IReadOnlyDictionary<int, decimal> disponibles = new Dictionary<int, decimal>();
         if (bodegaId is int b && await permisos.HasPermissionAsync(VerExistencias, ct))
+        {
             disponibles = await existencias.DisponibleAsync(todos, b, ct);
+            // I6 (T927): un combo no tiene existencia propia: está disponible tanto como su componente más escaso.
+            var combos = await Documents.Efectos.ExpansionDeCombos.DisponibleDeCombosAsync(db, todos, b, ct);
+            if (combos.Count > 0) disponibles = disponibles.Concat(combos).GroupBy(x => x.Key).ToDictionary(g => g.Key, g => g.Last().Value);
+        }
         decimal? Disponible(int id) => bodegaId is null ? null : disponibles.TryGetValue(id, out var d) ? d : null;
 
         ProductSearchItemDto Item(Product p, ProductBarcode? codigo) => new(

@@ -41,12 +41,29 @@ public sealed partial class VentasClient
 
     // ------------------------------------------------------------------------- facturas y notas --
 
-    /// <summary>Guarda el borrador de una factura o comprobante de oficina: sin <paramref name="id"/> lo crea; con él lo reemplaza.</summary>
+    /// <summary>
+    /// Guarda el borrador de una factura o comprobante de oficina —también la factura desde un pedido o desde remisiones, con
+    /// <c>originPublicIds</c> (I6)—: sin <paramref name="id"/> lo crea; con él lo reemplaza.
+    /// </summary>
     public Task<ResultadoDeInventario<DocumentoDeVentaDto>> GuardarFacturaAsync(Guid? id, BorradorDeVentaRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
+        GuardarBorradorAsync(Rutas.Facturas, id, request, clave, ct);
+
+    /// <summary>
+    /// I6 (T893; §18.4): guarda el borrador por la ruta de su clase —<see cref="Rutas.Cotizaciones"/>, <see cref="Rutas.Pedidos"/>,
+    /// <see cref="Rutas.Remisiones"/>, <see cref="Rutas.NotasDebito"/> o <see cref="Rutas.Facturas"/>—; otra clase por esa ruta responde
+    /// <c>Inventory.Document.TypeNotForRoute</c>.
+    /// </summary>
+    public Task<ResultadoDeInventario<DocumentoDeVentaDto>> GuardarBorradorAsync(string ruta, Guid? id, BorradorDeVentaRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
         id is { } existente
-            ? Enviar<DocumentoDeVentaDto>(HttpMethod.Put, $"{Rutas.Facturas}/{existente}", request, clave, ct)
-            : Enviar<DocumentoDeVentaDto>(HttpMethod.Post, Rutas.Facturas, request, clave, ct);
+            ? Enviar<DocumentoDeVentaDto>(HttpMethod.Put, $"{ruta}/{existente}", request, clave, ct)
+            : Enviar<DocumentoDeVentaDto>(HttpMethod.Post, ruta, request, clave, ct);
+
+    /// <summary>I6 (§18.4): «Convertir en pedido» crea el borrador del pedido de una cotización confirmada y vigente.</summary>
+    public Task<ResultadoDeInventario<DocumentoDeVentaDto>> ConvertirEnPedidoAsync(Guid cotizacion, Guid? tipoDelPedido, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<DocumentoDeVentaDto>(HttpMethod.Post, $"{Rutas.Cotizaciones}/{cotizacion}/to-order", new ConvertirEnPedidoRequest(tipoDelPedido), clave, ct);
 
     public Task<ResultadoDeInventario<DocumentoDeVentaDto>> GuardarNotaAsync(Guid? id, BorradorDeNotaRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>

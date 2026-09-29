@@ -10,7 +10,8 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Documents;
 /// gravable línea a línea; cambiar el precio de lista a mano es un descuento <see cref="IsPriceOverride"/>. Sobre el tope del
 /// usuario no se rechaza: queda <see cref="RequiresApproval"/> con su solicitud <c>DiscountOverCap</c>, que vale mientras la
 /// línea no cambie (la huella <c>ContentSha256</c>, T33). Único <c>(DocumentLineId, Sequence)</c> entre vivos. Con una promoción
-/// en la línea no entra un manual (F9); <c>PromotionId</c> llega en I6. En un documento confirmado, inmutable.
+/// en la línea no entra un manual (F9); <see cref="PromotionId"/> llega en I6 (<c>ComercioAmpliado</c>, T856). En un documento
+/// confirmado, inmutable.
 /// </summary>
 public class DocumentLineDiscount : AuditableEntity
 {
@@ -50,4 +51,9 @@ public class DocumentLineDiscount : AuditableEntity
 
     /// <summary>Obligatorio si <see cref="RequiresApproval"/>.</summary>
     public string? Reason { get; set; }
+
+    /// <summary>I6: la promoción que lo produjo; obligatoria si <see cref="Source"/> es <c>Promotion</c>.</summary>
+    public int? PromotionId { get; set; }
+
+    public Pricing.Promotion? Promotion { get; set; }
 }

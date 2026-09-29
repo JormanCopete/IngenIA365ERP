@@ -298,6 +298,17 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine> PurchaseMatchLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer> CostLayers => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer>();
+    // Feature 012, I6 (T859): catálogo avanzado, lotes y series, reservas y promociones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent> ProductComponents => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute> VariantAttributes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue> VariantAttributeValues => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue> ProductVariantValues => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot> Lots => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial> Serials => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation> Reservations => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion> Promotions => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope> PromotionScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier> PromotionTiers => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption>();
     // Feature 012 (T585, I3): medios de pago, punto de venta y caja, precios y satélites de la venta.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans => Set<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans>();
@@ -438,7 +449,26 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
             b.HasMany(p => p.Units).WithOne(u => u.Product).HasForeignKey(u => u.ProductId);
             b.HasMany(p => p.Barcodes).WithOne(x => x.Product).HasForeignKey(x => x.ProductId);
             b.HasMany(p => p.Taxes).WithOne(x => x.Product).HasForeignKey(x => x.ProductId);
+            // I6 (T857): la variante y su plantilla; los componentes (dos FK a producto) y los valores de la variante.
+            b.HasOne(p => p.ParentProduct).WithMany(p => p.Variants).HasForeignKey(p => p.ParentProductId);
+            b.HasMany(p => p.Components).WithOne(c => c.Product).HasForeignKey(c => c.ProductId);
+            b.HasMany(p => p.VariantValues).WithOne(v => v.Product).HasForeignKey(v => v.ProductId);
         });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent>(b =>
+        {
+            b.Ignore("RowVersion");
+            b.HasQueryFilter(x => !x.IsDeleted);
+            b.HasOne(c => c.ComponentProduct).WithMany().HasForeignKey(c => c.ComponentProductId);
+        });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

@@ -118,9 +118,9 @@ public sealed class TrasladosDePrueba
 
     public ConfirmacionDeDocumento Confirmacion() => new(
         Db, K.Maestros(), K.Actor, K.C.Reloj, Efectos(), Motor, K.Cerrojo, new Numerador(Db, K.Cerrojo),
-        new EmisorDeMensajes(Db, K.Actor, K.C.Reloj), K.Lector(), K.Vista(), [], []);
+        new EmisorDeMensajes(Db, K.Actor, K.C.Reloj), K.Lector(), K.Vista(), [], [], seguimiento: K.Seguimiento());
 
-    public SaveInventoryDraftCommandHandler Guardar() => new(Db, K.Maestros(), K.Alcance, K.Actor, K.C.Reloj, Efectos(), K.Vista());
+    public SaveInventoryDraftCommandHandler Guardar() => new(Db, K.Maestros(), K.Alcance, K.Actor, K.C.Reloj, Efectos(), K.Vista(), seguimiento: K.Seguimiento());
 
     public VoidInventoryDocumentCommandHandler Anular() => new(Db, K.Actor, K.C.Reloj, K.Vista(), Confirmacion());
 
