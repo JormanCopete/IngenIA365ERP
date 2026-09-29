@@ -36,6 +36,8 @@
     <!-- Feature 012, I3 (T546, T547): casos dorados de precios y de caja, calculados a mano. -->
     <None Include="Sales\Pricing\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Sales\Cash\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 012, I6 (T862): casos dorados de promociones, calculados a mano. -->
+    <None Include="Sales\Promotions\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 012, I5 (T766, T767): casos del cruce a tres vías y del reparto de costos adicionales, calculados a mano. -->
     <None Include="Inventory\Purchasing\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Inventory\Costing\Prorrateo\*.json" CopyToOutputDirectory="PreserveNewest" />

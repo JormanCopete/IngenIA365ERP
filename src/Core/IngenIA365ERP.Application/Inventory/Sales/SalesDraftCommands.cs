@@ -184,7 +184,12 @@ public sealed class BorradorDeVenta(
             {
                 var previa = await precificacion.PrecificarAsync(pedidoDePrecio, ct);
                 if (previa.IsFailure) return Result.Failure<ResultadoDelBorrador>(previa.Error);
-                pedidoDePrecio = pedidoDePrecio with { DescuentoPorTotal = Math.Round(previa.Value.Lineas.Sum(l => l.NetAmount) * pct, 2, MidpointRounding.AwayFromZero) };
+                // Sobre las líneas sin promoción: sólo a ellas se prorratea el descuento por total (I6, F9).
+                pedidoDePrecio = pedidoDePrecio with
+                {
+                    DescuentoPorTotal = Math.Round(previa.Value.Lineas.Where(l => l.Descuentos.All(d => d.Source != DiscountSource.Promotion)).Sum(l => l.NetAmount) * pct,
+                        2, MidpointRounding.AwayFromZero),
+                };
             }
             if (pedidoDePrecio.DescuentoPorTotal is <= 0m) pedidoDePrecio = pedidoDePrecio with { DescuentoPorTotal = null };
             var precificada = await precificacion.PrecificarAsync(pedidoDePrecio, ct);

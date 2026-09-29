@@ -1,0 +1,33 @@
+{
+  "nombre": "La salida es un descuento por linea con su promocion, nunca una linea a precio cero",
+  "descripcion": "Lleve 2 pague 1 con dos lineas de una unidad a 10.000: la unidad regalada no es la segunda linea a cero; los 10.000 se reparten 5.000 y 5.000 y las dos lineas quedan con neto de 5.000. La variante 81 (hija de la plantilla 80) entra por el ambito de su plantilla.",
+  "montos": "Centavo",
+  "residuo": "UltimaLinea",
+  "promociones": [
+    {
+      "id": 14,
+      "codigo": "2X1",
+      "clase": "BuyNPayM",
+      "lleva": 2,
+      "paga": 1,
+      "acumulable": false,
+      "desde": "2026-10-01",
+      "hasta": "2026-12-31",
+      "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 80 } ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-15",
+      "lineas": [
+        { "linea": 1, "producto": 81, "padre": 80, "categorias": [8], "cantidad": 1, "precio": 10000 },
+        { "linea": 2, "producto": 81, "padre": 80, "categorias": [8], "cantidad": 1, "precio": 10000 }
+      ],
+      "esperado": [
+        { "linea": 1, "promocion": 14, "valor": 5000 },
+        { "linea": 2, "promocion": 14, "valor": 5000 }
+      ]
+    }
+  ]
+}

@@ -2047,6 +2047,17 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     (`AddParameterVersionCommandTests`, `LectorDeParametrosTests`, `RetroactivoMinimoTests`) y las de clases operables
     (`DocumentTypeCommandsTests`, e2e `TiposDeDocumentoTests`) esperan la orden y los costos adicionales operables y el ensamble no. Todo
     sobre `CanalSimulado`. Pruebas: ver §2.18.
+- **I6, promociones (T872–T876; 2026-09-29) (nuevo)**: Domain puro `Sales/Promotions/MotorDePromociones` (`Aplicar`, `Aplica`,
+    `AlcanzaLinea`) con sus piezas `LineaDePromocion` (cantidad en **unidad base**, precio por unidad base **sin impuestos**, `BrutoDado`),
+    `ContextoDePromocion`, `PromocionVigente`, `AmbitoDePromocion`, `TramoDePromocion`, `DescuentoDePromocion` (con `Residuo` y
+    `Explicacion`), `PromocionDescartada` y `ResultadoDePromociones`. En Application `Inventory/Pricing/Promotions/`: `CreatePromotionCommand`,
+    `UpdatePromotionCommand` (con sus validadores), `ListPromotionsQuery`, `GetPromotionQuery`, `PromotionDto` / `PromotionScopeDto` /
+    `PromotionTierDto`, `PromotionScopeInput` / `PromotionTierInput`, `MecanicaDePromocion`, `ReglasDePromociones` (coherencia clase-campos,
+    ámbitos a Id, comparación) y `VistaDePromociones` (`EnUsoAsync`, `ListarAsync`); `LectorDePromocionesVigentes` (una consulta; categorías
+    expandidas a sus descendientes por `Path`; segmento y canal) con `PromocionesParaElDocumento` y `ProductoParaPromocion`.
+    `DescuentoCalculado` gana `Source`, `PromotionId` y `Explicacion`; `SalesLineDiscountDto` y `PosLineDiscountDto` ganan
+    `PromotionPublicId` y `PromotionName`; `ResolvedPriceDto` gana `Promotions` (`ResolvedPromotionDto`: las vigentes que alcanzan al
+    producto). Slug `promociones` en `BuscarCodigoDeCatalogoQuery`. Reglas en T51a.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2152,6 +2163,11 @@ evento **en emisión** (pendiente con documento electrónico). Un evento sin CUF
 Cierre de las e2e de I4 (T685–T687; **(nuevo)**): `Inventory.DocumentType.ContingencyNotByResolution` (`data.class`: un tipo de contingencia en una clase que no numera por resolución DIAN).
 
 Facturación electrónica desde Inventario (I4, T734–T743; todos **(nuevo)**): `ElectronicInvoicing.Contingency.UseContingencyType` (en `data.missing[]` de `ElectronicInvoicing.NotReady`: con la 03 abierta, en oficina el tipo normal nombra el de contingencia), `Inventory.SupportDocument.SupplierObligated` (documento soporte a un proveedor obligado a facturar), `Inventory.SupportDocument.Proposed` (aviso: la recepción de un no obligado propuso su DS) e `Inventory.Sales.InvoiceInsteadNotApplicable` (api.md §18.3.1); `Inventory.Document.FiscalUseCorrection` gana `data { route: /api/electronic-invoicing/documents/{id}, cases[] }` sobre un rechazado y `correctionClass = SupportDocumentAdjustmentNote` sobre un documento soporte.
+
+Promociones (I6, T873–T875; todos **(nuevo)** salvo `.InUse`): `Inventory.Promotion.NotFound` (404), `Inventory.Promotion.InUse`
+(`data.fields[]`: lo pedido que no puede cambiar), `Inventory.Promotion.ScopeTargetNotFound` (`data { kind, publicId }`) e
+`Inventory.Discount.PromotionApplied` (`data { lines[], promotions[] }`: un manual en una línea con promoción, o un descuento por total
+cuando todas las líneas la tienen). Un segmento desconocido responde el `Inventory.PriceList.SegmentUnknown` de las listas (T51).
 
 ### 2.18 Pruebas con nombre fijo
 
@@ -2273,6 +2289,9 @@ confirmar con la contadora)**: `COT` cotización, `PED` pedido, `REM` remisión 
 factura desde remisiones, `NDV` nota débito, `ENS` ensamble; `SemillasDeIntegracionContableTests` cuenta ahora la fila por tipo de la remisión.
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
+**(nuevos, I6 promociones, T862/T867)** `tests/IngenIA365ERP.Domain.Tests/Sales/Promotions/MotorDePromocionesTests` sobre los casos
+dorados `Sales/Promotions/Casos/01..08-*.json` (3×2 con residuo, porcentaje por categoría y segmento, precio por cantidad, paquete, no
+acumulables, acumulable, vigencia y canal, nunca precio cero) y `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/PromocionesEnLaVentaTests`.
 
 ---
 
@@ -3235,6 +3254,23 @@ por producto en la siguiente lista aplicable; la línea guarda la lista usada. T
 descuento; sobre el tope, aprobación (T33). Descuento por total prorrateado a las líneas. Promociones en
 I6 como descuentos no condicionados, no acumulables, gana la de mayor descuento; el esquema de descuentos
 por línea existe desde I3. Segmento = `Associate.AssociateClass` validado contra los valores existentes.
+
+**T51a · Cómo aplican las promociones (nuevo, I6, T872–T875; 2026-09-29).**
+Decisión (dentro de lo que dicen FR-055, F9 y data-model §14; ninguna pregunta nueva al dueño): (a) el motor corre sobre el
+**documento entero** tras cada cambio de la venta (borrador de oficina y cada acción del POS) en `PrecificacionDeVenta`, después de los
+descuentos manuales y antes de los impuestos, así la promoción baja la base de `INV_DocumentTaxLines`; (b) cantidades en **unidad base** y
+precios **sin impuestos**; «lleve N pague M» y «precio por cantidad» suman las líneas del mismo producto; el 3×2 regala al precio más bajo
+del producto en el documento y **reparte** lo regalado entre sus líneas (nunca una línea a cero) con el residuo por `Redondeo.Residuo`;
+el paquete cabe tantas veces como el componente más escaso; un ámbito sobre la plantilla alcanza a sus variantes; (c) entre **no
+acumulables** gana la de mayor descuento sobre el documento (empate: menor código) y se descarta sólo la que **comparte línea** con una
+ganadora —dos no acumulables sobre productos distintos aplican las dos—; las acumulables se suman y ninguna línea recibe más que su bruto;
+(d) una promoción **no se mide contra el tope** del vendedor (no es un descuento suyo) ni pide aprobación; (e) un descuento manual —precio
+digitado bajo la lista, porcentaje o valor— en una línea con promoción → `Inventory.Discount.PromotionApplied`; el descuento por total se
+prorratea **sólo a las líneas sin promoción** (si todas la tienen, el mismo error); (f) `PromotionDto` lleva los valores de la clase en la
+cabecera (`percent` como fracción, `amount`, `buyQuantity`, `payQuantity`, `bundlePrice`) y `tiers` sólo los escalones `{ minQuantity,
+price }` del precio por cantidad; `validTo` es obligatorio (la columna no admite nulo); (g) «en uso» = un descuento vivo de la promoción en
+un documento `Confirmed` o `Voided`; en uso sólo cambian `name`, `validTo` e `isActive` (también las notas quedan fijas); sin uso se cambia
+entera (una clase nueva limpia los valores de la anterior) y los ámbitos o tramos reemplazados quedan de baja lógica. El código no cambia.
 
 **T52 · Consumidor final y copia fiscal.**
 Decisión: `ConsumidorFinalSeeder` (I3) crea la persona genérica del maestro; la copia de identificación

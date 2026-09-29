@@ -40,8 +40,16 @@ public sealed record PriceCandidateDto(Guid PriceListPublicId, string Code, IRea
 /// <summary>La lista que ganó (§19.2). (nuevo)</summary>
 public sealed record ResolvedPriceListDto(Guid PublicId, string Code, string Name, IReadOnlyList<string> MatchedDimensions);
 
-/// <summary><c>ResolvedPriceDto</c> de §19.2. (nuevo)</summary>
-public sealed record ResolvedPriceDto(decimal Price, bool IncludesTaxes, ResolvedPriceListDto PriceList, bool FallbackUsed, IReadOnlyList<PriceCandidateDto> Candidates);
+/// <summary>
+/// <c>ResolvedPriceDto</c> de §19.2 (nuevo). I6 (T875): <see cref="Promotions"/> son las promociones vigentes que alcanzan al producto en
+/// ese contexto (canal, segmento, producto y categoría); si descuentan o no depende de la cantidad y del resto del documento, así que
+/// la ruta no calcula el descuento: lo hace la precificación de la venta.
+/// </summary>
+public sealed record ResolvedPriceDto(decimal Price, bool IncludesTaxes, ResolvedPriceListDto PriceList, bool FallbackUsed, IReadOnlyList<PriceCandidateDto> Candidates,
+    IReadOnlyList<ResolvedPromotionDto>? Promotions = null);
+
+/// <summary>Una promoción vigente que alcanza al producto consultado (§19.2, I6). (nuevo)</summary>
+public sealed record ResolvedPromotionDto(Guid PromotionPublicId, string Code, string Name, Domain.Enums.Inventory.PromotionKind Kind, bool Cumulative);
 
 /// <summary>Un tope de descuento de un rol (§19.3); los topes van como fracción. (nuevo)</summary>
 public sealed record DiscountCapDto(

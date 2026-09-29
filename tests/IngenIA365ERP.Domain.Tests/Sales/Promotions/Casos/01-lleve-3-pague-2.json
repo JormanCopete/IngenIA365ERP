@@ -1,0 +1,51 @@
+{
+  "nombre": "Lleve 3 pague 2 a 10.000: el precio de una, repartido en las tres",
+  "descripcion": "Tres lineas de una unidad del producto 10 a 10.000. Un juego de 3: se regala 1 unidad (3 - 2) al precio mas bajo, 10.000. 10.000 / 3 = 3.333,333... por linea; redondeadas al centavo suman 9.999,99 y el centavo que falta va a la ultima linea (Redondeo.Residuo = UltimaLinea). Con dos unidades no hay juego completo y no hay descuento.",
+  "montos": "Centavo",
+  "residuo": "UltimaLinea",
+  "promociones": [
+    {
+      "id": 1,
+      "codigo": "3X2",
+      "clase": "BuyNPayM",
+      "lleva": 3,
+      "paga": 2,
+      "acumulable": false,
+      "desde": "2026-10-01",
+      "hasta": "2026-10-31",
+      "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 10 } ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-15",
+      "lineas": [
+        { "linea": 1, "producto": 10, "categorias": [1], "cantidad": 1, "precio": 10000 },
+        { "linea": 2, "producto": 10, "categorias": [1], "cantidad": 1, "precio": 10000 },
+        { "linea": 3, "producto": 10, "categorias": [1], "cantidad": 1, "precio": 10000 }
+      ],
+      "esperado": [
+        { "linea": 1, "promocion": 1, "valor": 3333.33 },
+        { "linea": 2, "promocion": 1, "valor": 3333.33 },
+        { "linea": 3, "promocion": 1, "valor": 3333.34 }
+      ]
+    },
+    {
+      "fecha": "2026-10-15",
+      "lineas": [
+        { "linea": 1, "producto": 10, "categorias": [1], "cantidad": 2, "precio": 10000 }
+      ],
+      "esperado": []
+    },
+    {
+      "fecha": "2026-10-15",
+      "lineas": [
+        { "linea": 1, "producto": 10, "categorias": [1], "cantidad": 7, "precio": 10000 }
+      ],
+      "esperado": [
+        { "linea": 1, "promocion": 1, "valor": 20000 }
+      ]
+    }
+  ]
+}

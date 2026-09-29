@@ -55,8 +55,12 @@ public sealed record SalesCounterpartyDto(Guid PersonPublicId, bool IsFinalConsu
 /// <summary>La aprobación de un descuento (§18.1). (nuevo)</summary>
 public sealed record SalesDiscountApprovalDto(Guid ApprovalRequestPublicId, string Status);
 
-/// <summary>Un descuento de la línea (§18.1). (nuevo)</summary>
-public sealed record SalesLineDiscountDto(DiscountSource Source, decimal? Percent, decimal Amount, bool FromDocumentDiscount, bool IsPriceOverride, SalesDiscountApprovalDto? Approval);
+/// <summary>
+/// Un descuento de la línea (§18.1; nuevo). I6 (T875): con <c>source = Promotion</c>, <see cref="PromotionPublicId"/> y el nombre de la
+/// promoción (FR-055 «el documento muestra cuál se aplicó»).
+/// </summary>
+public sealed record SalesLineDiscountDto(DiscountSource Source, decimal? Percent, decimal Amount, bool FromDocumentDiscount, bool IsPriceOverride,
+    SalesDiscountApprovalDto? Approval, Guid? PromotionPublicId = null, string? PromotionName = null);
 
 /// <summary>Un impuesto de la línea o una retención del documento (§18.1). (nuevo)</summary>
 public sealed record SalesTaxDto(string TaxRateCode, TaxKind Kind, decimal? Rate, decimal? AmountPerUnit, decimal Base, decimal Amount, TaxTreatment Treatment);
@@ -372,6 +376,9 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         var lineaIds = vivas.Select(l => l.Id).ToList();
         var descuentos = await db.DocumentLineDiscounts.AsNoTracking().Where(x => lineaIds.Contains(x.DocumentLineId) && !x.IsDeleted).ToListAsync(ct);
         var fuentes = descuentos.Where(x => x.RequiresApproval).Select(x => x.PublicId).ToList();
+        var promocionIds = descuentos.Select(x => x.PromotionId).OfType<int>().Distinct().ToList();
+        var promociones = await db.Promotions.AsNoTracking().Where(p => promocionIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => (p.PublicId, p.Name), ct);
         var solicitudes = await db.ApprovalRequests.AsNoTracking()
             .Where(r => r.SourceType == ApprovalSourceTypes.DocumentLineDiscount && fuentes.Contains(r.SourcePublicId) && r.Status != ApprovalRequestStatus.Cancelled)
             .Select(r => new { r.SourcePublicId, r.PublicId, r.Status, r.Id }).ToListAsync(ct);
@@ -390,8 +397,10 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
                 descuentos.Where(x => x.DocumentLineId == l.Id).OrderBy(x => x.Sequence).Select(x =>
                 {
                     var solicitud = solicitudes.Where(r => r.SourcePublicId == x.PublicId).OrderByDescending(r => r.Id).FirstOrDefault();
+                    var promocion = x.PromotionId is int pid ? promociones.GetValueOrDefault(pid) : default;
                     return new SalesLineDiscountDto(x.Source, x.Rate, x.Amount, x.FromDocumentDiscount, x.IsPriceOverride,
-                        solicitud is null ? null : new SalesDiscountApprovalDto(solicitud.PublicId, solicitud.Status.ToString()));
+                        solicitud is null ? null : new SalesDiscountApprovalDto(solicitud.PublicId, solicitud.Status.ToString()),
+                        promocion.PublicId == Guid.Empty ? null : promocion.PublicId, promocion.Name);
                 }).ToList(),
                 deLinea, l.NetAmount, l.NetAmount + deLinea.Where(t => t.Treatment == TaxTreatment.Generated).Sum(t => t.Amount), bajo);
         }).ToList();

@@ -334,7 +334,8 @@ public sealed class BorradorDelPos(
     private static LineaAPrecificar Pedida(InventoryDocumentLine l, IReadOnlyList<DocumentLineDiscount> filas, CambioDeLinea? cambio, bool resolverListas)
     {
         PrecioFijado? fijado = !resolverListas && l.ListPrice is { } lista ? new PrecioFijado(l.PriceListId, lista, l.ListPriceIncludesTaxes) : null;
-        var manuales = filas.Where(f => !f.FromDocumentDiscount).OrderBy(f => f.Sequence).ToList();
+        // Los de promoción (I6) no son pedidos de la persona: el motor los vuelve a calcular en cada precificación.
+        var manuales = filas.Where(f => !f.FromDocumentDiscount && f.Source == DiscountSource.Manual).OrderBy(f => f.Sequence).ToList();
         var porPrecio = manuales.FirstOrDefault(f => f.IsPriceOverride);
         var otros = manuales.Where(f => !f.IsPriceOverride).ToList();
         var divisor = l.ListPriceIncludesTaxes && l.ListPrice is { } lp && l.UnitPrice > 0m ? lp / l.UnitPrice : 1m;
@@ -388,7 +389,8 @@ public sealed class BorradorDelPos(
         var resultado = new List<(InventoryDocumentLine, DocumentLineDiscount)>();
         foreach (var d in p.Descuentos)
         {
-            var igual = libres.FirstOrDefault(f => f.FromDocumentDiscount == d.FromDocumentDiscount && f.IsPriceOverride == d.IsPriceOverride && f.Amount == d.Amount);
+            var igual = libres.FirstOrDefault(f => f.FromDocumentDiscount == d.FromDocumentDiscount && f.IsPriceOverride == d.IsPriceOverride && f.Amount == d.Amount
+                && f.Source == d.Source && f.PromotionId == d.PromotionId);
             if (igual is not null)
             {
                 libres.Remove(igual);
@@ -405,7 +407,8 @@ public sealed class BorradorDelPos(
                 DocumentLineId = linea.Id,
                 DocumentId = venta.Id,
                 Sequence = d.Sequence,
-                Source = DiscountSource.Manual,
+                Source = d.Source,
+                PromotionId = d.PromotionId,
                 FromDocumentDiscount = d.FromDocumentDiscount,
                 IsPriceOverride = d.IsPriceOverride,
                 Rate = d.Rate,
@@ -491,6 +494,9 @@ public sealed class BorradorDelPos(
         var lineaIds = vivas.Select(l => l.Id).ToList();
         var filas = await db.DocumentLineDiscounts.AsNoTracking().Where(d => lineaIds.Contains(d.DocumentLineId) && !d.IsDeleted).ToListAsync(ct);
         var solicitudes = await SolicitudesAsync(filas.Where(f => f.RequiresApproval).Select(f => f.PublicId).ToList(), ct);
+        var promocionIds = filas.Select(f => f.PromotionId).OfType<int>().Distinct().ToList();
+        var promociones = await db.Promotions.AsNoTracking().Where(p => promocionIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => (p.PublicId, p.Name), ct);
         var impuestosGuardados = precificada is null
             ? (await db.DocumentTaxLines.AsNoTracking().Where(t => t.DocumentId == venta.Id).ToListAsync(ct))
             : [];
@@ -507,9 +513,11 @@ public sealed class BorradorDelPos(
             var descuentos = filas.Where(f => f.DocumentLineId == l.Id).OrderBy(f => f.Sequence).Select(f =>
             {
                 var s = solicitudes.GetValueOrDefault(f.PublicId);
+                var promocion = f.PromotionId is int pid ? promociones.GetValueOrDefault(pid) : default;
                 return new PosLineDiscountDto(f.Sequence, f.Source, f.FromDocumentDiscount, f.IsPriceOverride,
                     f.Rate, f.Amount, f.RequiresApproval,
-                    f.RequiresApproval ? new PosLineDiscountApprovalDto(s?.PublicId, s?.Status.ToString() ?? "Pending") : null);
+                    f.RequiresApproval ? new PosLineDiscountApprovalDto(s?.PublicId, s?.Status.ToString() ?? "Pending") : null,
+                    promocion.PublicId == Guid.Empty ? null : promocion.PublicId, promocion.Name);
             }).ToList();
             lineas.Add(new PosLineDto(l.PublicId, l.LineNumber, productos[l.ProductId], unidades[l.UnitId], l.Factor, l.Quantity, l.QuantityBase,
                 l.RoundingQuantity, l.ListPrice ?? l.UnitPrice, l.UnitPrice, l.ListPriceIncludesTaxes,

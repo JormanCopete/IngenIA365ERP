@@ -21,6 +21,10 @@ public static class ErroresDePrecios
     public const string ApprovalPendingCode = "Inventory.Discount.ApprovalPending";
     public const string CapInsufficientCode = "Inventory.Discount.CapInsufficient";
     public const string BelowCostCode = "Inventory.Sales.BelowCost";
+    public const string PromotionNotFoundCode = "Inventory.Promotion.NotFound";
+    public const string PromotionInUseCode = "Inventory.Promotion.InUse";
+    public const string PromotionScopeTargetNotFoundCode = "Inventory.Promotion.ScopeTargetNotFound";
+    public const string PromotionAppliedCode = "Inventory.Discount.PromotionApplied";
 
     /// <summary>La lista no existe (404).</summary>
     public static Error PriceListNotFound() => new(PriceListNotFoundCode, "La lista de precios no existe.");
@@ -80,4 +84,31 @@ public static class ErroresDePrecios
     public static Error BelowCost(int lineNumber, string productCode, decimal unitPrice, decimal averageCost) => new ErrorConDatos(BelowCostCode,
         $"La línea {lineNumber} ({productCode}) se vende a {unitPrice:N2} y su costo promedio es {averageCost:N2}: la cooperativa no permite vender por debajo del costo.",
         new { lineNumber, productCode, unitPrice, averageCost });
+
+    // ------------------------------------------------------------------------------------ promociones (I6) --
+
+    /// <summary>La promoción no existe (404). (nuevo, I6 T873)</summary>
+    public static Error PromotionNotFound() => new(PromotionNotFoundCode, "La promoción no existe.");
+
+    /// <summary>
+    /// La promoción ya se aplicó en un documento confirmado: sólo cambian nombre, fin de vigencia y activo (422, §19.4).
+    /// <paramref name="fields"/> son los campos pedidos que no pueden cambiar.
+    /// </summary>
+    public static Error PromotionInUse(IReadOnlyList<string> fields) => new ErrorConDatos(PromotionInUseCode,
+        $"La promoción ya se aplicó en documentos confirmados: sólo cambian el nombre, el fin de la vigencia y si está activa (pidió cambiar {string.Join(", ", fields)}). "
+        + "Para otra mecánica, cierre ésta y cree otra.",
+        new { fields });
+
+    /// <summary>Un ámbito nombra un producto, categoría o canal que no existe. (nuevo, I6 T873)</summary>
+    public static Error PromotionScopeTargetNotFound(string kind, Guid publicId) => new ErrorConDatos(PromotionScopeTargetNotFoundCode,
+        $"El ámbito de la promoción nombra un {kind} que no existe o fue eliminado.", new { kind, publicId });
+
+    /// <summary>
+    /// Un descuento manual en una línea que ya tiene promoción (422, F9: no son acumulables; «el manual no se suma»). Incluye el
+    /// descuento por total cuando todas las líneas tienen promoción. (nuevo, I6 T875)
+    /// </summary>
+    public static Error PromotionApplied(IReadOnlyList<int> lines, IReadOnlyList<string> promotions) => new ErrorConDatos(PromotionAppliedCode,
+        $"Las líneas {string.Join(", ", lines)} ya tienen la promoción {string.Join(", ", promotions)}: un descuento manual no se suma a una promoción. "
+        + "Quite el descuento o el precio digitado de esas líneas.",
+        new { lines, promotions });
 }

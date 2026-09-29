@@ -1,0 +1,48 @@
+{
+  "nombre": "Una acumulable se suma a la no acumulable que gano",
+  "descripcion": "Producto 60 a 10.000, una unidad. PCT10 (no acumulable) da 1.000; MENOS500 (acumulable, 500 por unidad) da 500 y se suma. Con 2 unidades: 2.000 y 1.000.",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "promociones": [
+    {
+      "id": 7,
+      "codigo": "PCT10",
+      "clase": "Percent",
+      "tasa": 0.10,
+      "acumulable": false,
+      "desde": "2026-10-01",
+      "hasta": "2026-12-31",
+      "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 60 } ]
+    },
+    {
+      "id": 8,
+      "codigo": "MENOS500",
+      "clase": "Amount",
+      "valor": 500,
+      "acumulable": true,
+      "desde": "2026-10-01",
+      "hasta": "2026-12-31",
+      "activa": true,
+      "ambitos": [ { "clase": "Product", "producto": 60 } ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-15",
+      "lineas": [ { "linea": 1, "producto": 60, "categorias": [6], "cantidad": 1, "precio": 10000 } ],
+      "esperado": [
+        { "linea": 1, "promocion": 7, "valor": 1000 },
+        { "linea": 1, "promocion": 8, "valor": 500 }
+      ]
+    },
+    {
+      "fecha": "2026-10-15",
+      "lineas": [ { "linea": 1, "producto": 60, "categorias": [6], "cantidad": 2, "precio": 10000 } ],
+      "esperado": [
+        { "linea": 1, "promocion": 7, "valor": 2000 },
+        { "linea": 1, "promocion": 8, "valor": 1000 }
+      ]
+    }
+  ]
+}
