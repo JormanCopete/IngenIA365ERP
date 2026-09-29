@@ -297,6 +297,48 @@ public static class TextosDeVentas
         [2] = "Released",
     };
 
+    // ------------------------------------------------------------------------------ promociones (I6) --
+
+    /// <summary><c>PromotionKind</c> (I6, T899).</summary>
+    public static IReadOnlyDictionary<int, string> ClasesDePromocion { get; } = new Dictionary<int, string>
+    {
+        [1] = "Porcentaje",
+        [2] = "Valor por unidad",
+        [3] = "Lleve N pague M",
+        [4] = "Precio por cantidad",
+        [5] = "Precio de paquete",
+    };
+
+    public static IReadOnlyDictionary<int, string> NombresDeClaseDePromocion { get; } = new Dictionary<int, string>
+    {
+        [1] = "Percent",
+        [2] = "Amount",
+        [3] = "BuyNPayM",
+        [4] = "QuantityPrice",
+        [5] = "BundlePrice",
+    };
+
+    /// <summary><c>PromotionScopeKind</c>: el ámbito de una promoción.</summary>
+    public static IReadOnlyDictionary<int, string> AmbitosDePromocion { get; } = new Dictionary<int, string>
+    {
+        [1] = "Producto",
+        [2] = "Categoría",
+        [3] = "Segmento",
+        [4] = "Canal",
+    };
+
+    /// <summary><c>DiscountSource.Promotion</c>.</summary>
+    public const int DescuentoDePromocion = 2;
+
+    /// <summary>Las clases del ciclo comercial de I6 (<c>DocumentClass</c>).</summary>
+    public const int ClaseCotizacion = 23;
+    public const int ClasePedido = 24;
+    public const int ClaseRemision = 25;
+    public const int ClaseFactura = 26;
+    public const int ClaseFacturaDesdeRemisiones = 27;
+    public const int ClaseComprobanteNoElectronico = 29;
+    public const int ClaseNotaDebito = 33;
+
     // ----------------------------------------------------------------------------------- ayudantes --
 
     public static string ClaseDeMedio(int v) => Texto(ClasesDeMedio, v, "Medio");
@@ -314,6 +356,8 @@ public static class TextosDeVentas
     public static string DireccionDePago(int v) => Texto(DireccionesDePago, v, "Dirección");
     public static string OrigenDeCredito(int? v) => v is { } x ? Texto(OrigenesDeCredito, x, "Origen") : "—";
     public static string EstadoDeBono(int? v) => v is { } x ? Texto(EstadosDeBono, x, "Bono") : "—";
+    public static string ClaseDePromocion(int v) => Texto(ClasesDePromocion, v, "Clase");
+    public static string AmbitoDePromocion(int v) => Texto(AmbitosDePromocion, v, "Ámbito");
 
     public static string NombreDeClaseDeMedio(int v) => Nombre(NombresDeClaseDeMedio, v);
     public static string NombreDeTipoDeTarjeta(int v) => Nombre(NombresDeTipoDeTarjeta, v);
@@ -326,6 +370,7 @@ public static class TextosDeVentas
     public static string NombreDeClaseDeMovimiento(int v) => Nombre(NombresDeClaseDeMovimiento, v);
     public static string NombreDeDestino(int v) => Nombre(NombresDeDestinoDeMovimiento, v);
     public static string NombreDeTratamiento(int v) => Nombre(NombresDeTratamientoDeDiferencia, v);
+    public static string NombreDeClaseDePromocion(int v) => Nombre(NombresDeClaseDePromocion, v);
 
     /// <summary>El número de un nombre (lo que vuelve de un <c>select</c> que muestra etiquetas y guarda nombres).</summary>
     public static int? Numero(IReadOnlyDictionary<int, string> nombres, string? nombre) =>

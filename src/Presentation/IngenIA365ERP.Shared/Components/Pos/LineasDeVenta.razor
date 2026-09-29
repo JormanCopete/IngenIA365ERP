@@ -17,6 +17,8 @@
                     <td>@l.Product.Code · @l.Product.Name
                         @if (l.EsperaAprobacion) { <span class="badge">descuento por aprobar</span> }
                         @if (l.BelowCost) { <span class="badge">bajo el costo</span> }
+                        @* I6 (T900, FR-055): la promoción que dio el descuento de la línea. *@
+                        @foreach (var promo in l.Discounts.Where(d => d.PromotionName is not null)) { <span class="badge">@promo.PromotionName · @promo.Amount.ToString("N0")</span> }
                         @if (l.Available is { } d && d < l.QuantityBase) { <span class="badge">existencia @d.ToString("0.##")</span> }
                     </td>
                     <td>@l.Unit.Code</td>

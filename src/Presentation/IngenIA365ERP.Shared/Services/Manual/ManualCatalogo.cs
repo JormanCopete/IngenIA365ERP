@@ -1302,6 +1302,66 @@ public static class ManualCatalogo
             ["Permiso Inventory.Reports.View."],
             ["ventas-oficina", "ventas-caja"], [], TipoDeTema.Proceso));
 
+        // Feature 012, I6 (T894–T901, T983): el ciclo comercial y las promociones.
+        t.Add(Proceso("ventas-cotizaciones", "Cotizaciones", Modulos.Ventas, "/ventas/cotizaciones",
+            "La cotización ofrece precios con vigencia sin mover la existencia. Confirmada y vigente, se convierte en pedido.",
+            [
+                P("Ventas → Cotizaciones", "«Nueva cotización»: tipo, bodega, cliente, vendedor, vigencia y productos. El precio sale de la lista que gana y las promociones vigentes se ven en cada línea.", "/ventas/cotizaciones", "Abrir Cotizaciones"),
+                P("Confirmar", "Exige la vigencia; no reserva ni emite nada."),
+                P("Convertir en pedido", "Crea el borrador del pedido con las líneas y precios cotizados. Se puede convertir más de una vez (pedidos parciales); vencida, ya no."),
+                P("Anular", "Con motivo; no tiene efecto sobre la existencia."),
+            ],
+            ["cotizacion", "vigencia", "convertir en pedido", "precio", "promocion"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm; anular, Inventory.Sales.Void."],
+            ["ventas-pedidos", "ventas-promociones", "ventas-oficina"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-pedidos", "Pedidos y reservas", Modulos.Ventas, "/ventas/pedidos",
+            "El pedido confirmado reserva lo pedido en la bodega hasta la fecha de vencimiento de la reserva; lo reservado deja de estar disponible para otras ventas.",
+            [
+                P("Ventas → Pedidos", "Cada línea muestra físico, reservado y disponible en la bodega del pedido. Si no alcanza el disponible, no se confirma.", "/ventas/pedidos", "Abrir Pedidos"),
+                P("La reserva", "Vence en la fecha que se ve en el pedido y se libera sola; la remisión o la factura desde el pedido la consumen."),
+                P("Remisionar o facturar", "Desde el pedido confirmado: «Remisionar» despacha sin facturar y «Facturar» factura lo pendiente."),
+                P("Anular", "Libera lo que siga reservado; lo ya remisionado o facturado queda como está."),
+            ],
+            ["pedido", "reserva", "disponible", "remisionar", "facturar"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm; anular, Inventory.Sales.Void."],
+            ["ventas-cotizaciones", "ventas-remisiones", "ventas-oficina"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-remisiones", "Remisiones y factura desde remisiones", Modulos.Ventas, "/ventas/remisiones",
+            "La remisión despacha la mercancía y reconoce su costo sin facturarla; después se factura una o varias remisiones del mismo cliente sin volver a descargar.",
+            [
+                P("Ventas → Remisiones", "Desde un pedido («Remisionar») o directa. La lista dice cuántos días lleva cada una sin facturar.", "/ventas/remisiones", "Abrir Remisiones"),
+                P("Facturar remisiones", "Elija las remisiones confirmadas del mismo cliente y «Facturar remisiones»: la factura trae lo pendiente de cada línea, de sólo lectura."),
+                P("Sin facturar al cierre", "Una remisión vieja sin facturar levanta una alerta y el cierre del período pide aceptarla con motivo."),
+                P("Anular", "Sin facturar, la mercancía vuelve al costo con que salió; ya facturada, no se anula."),
+            ],
+            ["remision", "despacho", "factura desde remisiones", "sin facturar", "cierre"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm; anular, Inventory.Sales.Void."],
+            ["ventas-pedidos", "ventas-oficina"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-notas-debito", "Notas débito", Modulos.Ventas, "/ventas/notas-debito",
+            "La nota débito aumenta lo cobrado en una factura confirmada (intereses, gastos, un mayor valor) sin mover la existencia, y se transmite a la DIAN como la factura.",
+            [
+                P("Ventas → Notas débito", "Elija la factura, «Nueva nota débito», el concepto de corrección, las líneas y guarde para ver el total.", "/ventas/notas-debito", "Abrir Notas débito"),
+                P("Pagos", "Se registran como en la factura. Con un medio de crédito el pago queda esperando la aprobación del crédito provisional."),
+                P("Estado electrónico", "Confirmada, se ve su estado ante la DIAN; validada, no se anula: se corrige con otra nota."),
+            ],
+            ["nota debito", "intereses", "concepto de correccion", "credito provisional", "dian"],
+            ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm."],
+            ["ventas-oficina", "facturacion-electronica"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("ventas-promociones", "Promociones", Modulos.Ventas, "/ventas/promociones",
+            "Las promociones con vigencia se aplican solas al vender, en oficina y en el POS, como descuento en la línea que baja la base de los impuestos; el documento dice cuál se aplicó.",
+            [
+                P("Ventas → Promociones", "Código, nombre, clase (porcentaje, valor por unidad, lleve N pague M, precio por cantidad o precio de paquete), vigencia y motivo.", "/ventas/promociones", "Abrir Promociones"),
+                P("Ámbitos", "Productos, categorías (con sus subcategorías), segmentos y canales; vacío es todo lo vendido. Entre clases se exigen todas; dentro de una clase basta una."),
+                P("Acumulable", "Entre las no acumulables gana la de mayor descuento; una línea con promoción no admite descuento manual."),
+                P("Editar", "Ya aplicada en un documento confirmado, sólo cambian el nombre, el fin de la vigencia y si está activa."),
+            ],
+            ["promocion", "3x2", "lleve pague", "descuento", "vigencia", "paquete"],
+            ["Permiso Inventory.Prices.View; para crear y editar, Inventory.Prices.Manage."],
+            ["ventas-precios", "ventas-cotizaciones", "ventas-pos"], [], TipoDeTema.Proceso));
+
         // Feature 012, I4 (T753–T759): facturación electrónica ante la DIAN.
         t.Add(Proceso("facturacion-electronica", "Facturación electrónica ante la DIAN", Modulos.Ventas, "/admin/facturacion-electronica",
             "Toda factura, nota crédito, documento equivalente POS y documento soporte se numera con una resolución vigente, lleva su código único y QR, se transmite por el canal configurado y se entrega al comprador después de validarse. Las contingencias no detienen la venta.",

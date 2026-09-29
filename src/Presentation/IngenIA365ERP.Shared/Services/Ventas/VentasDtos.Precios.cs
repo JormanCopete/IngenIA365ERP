@@ -52,4 +52,52 @@ public sealed record MiTopeDto(decimal MaxLinePercent, decimal MaxDocumentPercen
 
 public sealed record TopeCreadoDto(Guid DiscountCapPublicId);
 
+// ------------------------------------------------------------------------------------- promociones (I6) --
+// Espejos de las promociones (feature 012, I6, T893; contracts/api.md §19.4). Kind y Scopes[].Kind llegan como número
+// (PromotionKind, PromotionScopeKind); al guardar la clase viaja por nombre (TextosDeVentas.NombresDeClaseDePromocion). Percent es
+// fracción (0,10 = 10 %). (nuevos)
+
+public sealed record AmbitoDePromocionDto(int Kind, Guid? ProductPublicId, string? ProductCode, Guid? CategoryPublicId, string? CategoryCode, string? Segment,
+    Guid? SalesChannelPublicId, string? SalesChannelCode, decimal? RequiredQuantity);
+
+public sealed record TramoDePromocionDto(decimal MinQuantity, decimal Price);
+
+public sealed record PromocionDto(
+    Guid PromotionPublicId,
+    string Code,
+    string Name,
+    int Kind,
+    decimal? Percent,
+    decimal? Amount,
+    decimal? BuyQuantity,
+    decimal? PayQuantity,
+    decimal? BundlePrice,
+    DateOnly ValidFrom,
+    DateOnly ValidTo,
+    bool Cumulative,
+    bool IsActive,
+    string? Notes,
+    bool InUse,
+    IReadOnlyList<AmbitoDePromocionDto> Scopes,
+    IReadOnlyList<TramoDePromocionDto> Tiers);
+
+/// <summary>Un ámbito al guardar: exactamente uno de los cuatro destinos; <see cref="RequiredQuantity"/> sólo con producto en el paquete.</summary>
+public sealed record AmbitoDePromocionRequest(Guid? ProductPublicId = null, Guid? CategoryPublicId = null, string? Segment = null,
+    Guid? SalesChannelPublicId = null, decimal? RequiredQuantity = null);
+
+public sealed record TramoDePromocionRequest(decimal MinQuantity, decimal Price);
+
+/// <summary>Alta de una promoción (<c>POST /promotions</c>, §19.4).</summary>
+public sealed record PromocionRequest(string Code, string Name, string Kind, DateOnly ValidFrom, DateOnly ValidTo, string Reason, decimal? Percent = null,
+    decimal? Amount = null, decimal? BuyQuantity = null, decimal? PayQuantity = null, decimal? BundlePrice = null, bool Cumulative = false, bool IsActive = true,
+    IReadOnlyList<AmbitoDePromocionRequest>? Scopes = null, IReadOnlyList<TramoDePromocionRequest>? Tiers = null, string? Notes = null);
+
+/// <summary>
+/// Edición (<c>PUT /promotions/{id}</c>, §19.4): nombre, fin de vigencia y activo siempre; lo demás, nulo = no cambia, y ya aplicada en un
+/// documento confirmado no cambia (<c>Inventory.Promotion.InUse</c>).
+/// </summary>
+public sealed record EdicionDePromocionRequest(string Name, DateOnly ValidTo, bool IsActive, string Reason, string? Kind = null, decimal? Percent = null,
+    decimal? Amount = null, decimal? BuyQuantity = null, decimal? PayQuantity = null, decimal? BundlePrice = null, bool? Cumulative = null,
+    DateOnly? ValidFrom = null, IReadOnlyList<AmbitoDePromocionRequest>? Scopes = null, IReadOnlyList<TramoDePromocionRequest>? Tiers = null, string? Notes = null);
+
 public sealed record TopeRequest(Guid RolePublicId, decimal MaxLinePercent, decimal MaxDocumentPercent, DateOnly ValidFrom, DateOnly? ValidTo, string Reason);

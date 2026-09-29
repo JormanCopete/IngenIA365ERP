@@ -2071,6 +2071,23 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     gana `DescargaExistencia`, `ValidarOrigenesAsync`, `OrigenesQueBloquea` y el consumo de reservas desde `FromOrder`) y `EfectoDeNotaDebito`;
     `EmisionDeInventario.{NotaDebitoAsync, CreditoDeLaNotaDebitoAsync}`; `ReglasDeConfirmacionDeVenta.VeredictoFiscalAsync`;
     `RevisionDeCierre.RemisionesSinFacturarAsync`. Reglas en T53a.
+- **I6, API y pantallas del ciclo comercial (T891–T901; 2026-09-29) (nuevo)**: en `API/Endpoints/Inventory/SalesEndpoints`,
+    `CicloComercial` (los prefijos `/sales/{quotes, orders, shipments, debit-notes}` por `MapBorradoresDeVenta`, que devuelve el grupo, y
+    `POST /quotes/{id}/to-order` con `ConvertirEnPedidoRequest`), `Promociones` (`/api/inventory/promotions` con `PricingEndpoints.PermisoDeConsulta` y
+    `.PermisoDeListas`); `/invoices` pasa `RutasDeVenta.Facturas` (admite la factura desde remisiones). Lectura para las pantallas (sin
+    columnas nuevas): `SalesDocumentDto.{ValidUntil, CorrectionConceptCode, Origins}`, `SalesLineDto.{OriginLinePublicId, Pending}` (lo
+    pendiente por despachar o facturar de la línea de un pedido confirmado, por facturar de la de una remisión confirmada, por
+    `VinculosDelCiclo`) y `SalesDocumentSummaryDto.CounterpartyPersonPublicId`. En Shared: `VentasClient.Rutas.{Cotizaciones, Pedidos,
+    Remisiones, NotasDebito, Promociones}`, `GuardarBorradorAsync(ruta, …)`, `ConvertirEnPedidoAsync`, `ListarPromocionesAsync`,
+    `ObtenerPromocionAsync`, `CrearPromocionAsync`, `EditarPromocionAsync`; espejos `PromocionDto`, `AmbitoDePromocionDto`,
+    `TramoDePromocionDto`, `PromocionRequest`, `EdicionDePromocionRequest`, `AmbitoDePromocionRequest`, `TramoDePromocionRequest`,
+    `ConvertirEnPedidoRequest`; `TextosDeVentas.{ClasesDePromocion, NombresDeClaseDePromocion, AmbitosDePromocion, DescuentoDePromocion,
+    Clase*}`; `Services/Ventas/FormularioDelCiclo` y `LineaDelCiclo` (releer un borrador conservando la línea origen y sin tomar la promoción
+    como descuento manual); el componente `Components/Ventas/EditorDelCiclo` (el borrador de cotización, pedido, remisión y nota débito:
+    guardar, confirmar, anular y descartar detrás de su permiso, existencias por línea, pendiente, promociones y pagos); las páginas
+    `Pages/Ventas/{Cotizaciones, Pedidos, Remisiones, NotasDebito, Promociones}`; `NuevaFactura` gana `?pedido=` y `?remisiones=`; el detalle
+    de la venta y `LineasDeVenta` del POS dicen la promoción; cinco temas `ventas-{cotizaciones, pedidos, remisiones, notas-debito,
+    promociones}` en `ManualCatalogo`.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2316,6 +2333,11 @@ el escenario `CicloComercialDePrueba` (ventas + crédito provisional + factura e
 `ReservasDePedidoTests`, `RemisionesYFacturaDesdeRemisionesTests`, `CotizacionYNotaDebitoTests` y `TareasDeRemisionYReservaTests`;
 `ConstructorDelCanonicoTests.La_nota_debito_es_el_tipo_92_y_referencia_la_factura_con_su_concepto`; y la de arquitectura
 `SoloLasReservasEscribenLoReservado` (`NadieEscribeElKardexFueraDelRegistro` admite `.Reserved` en `ReservasDeInventario.cs`).
+**(nuevos, I6 API y pantallas del ciclo, T891–T901)** `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/DetalleDelCicloComercialTests`
+(vigencia, origen y pendiente por línea, orígenes, concepto de la nota débito, persona del cliente en la lista),
+`tests/IngenIA365ERP.Shared.Tests/Ventas/CicloComercialClientTests` y `FormularioDelCicloTests`, y las de arquitectura
+`LasPantallasDelCicloComercialEstanEnElMenu` (páginas, permisos, indicador, menú, origen de la factura, promoción en el detalle y el POS,
+rutas de I6 en `SalesEndpoints`, temas del manual) y `TextosDeVentasTests.Cada_clase_de_promocion`.
 
 ---
 

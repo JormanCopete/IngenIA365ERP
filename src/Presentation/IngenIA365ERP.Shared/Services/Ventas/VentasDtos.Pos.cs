@@ -74,8 +74,9 @@ public sealed record VendedorDelPosDto(Guid SalespersonPublicId, string Name);
 
 public sealed record AprobacionDeDescuentoDto(Guid? ApprovalRequestPublicId, string Status);
 
+/// <summary>Un descuento de la línea del POS. I6 (T900): con <c>source = Promotion</c>, la promoción que lo dio (FR-055).</summary>
 public sealed record DescuentoDeLineaPosDto(byte Sequence, int Source, bool FromDocumentDiscount, bool IsPriceOverride, decimal? Percent, decimal Amount,
-    bool RequiresApproval, AprobacionDeDescuentoDto? Approval);
+    bool RequiresApproval, AprobacionDeDescuentoDto? Approval, Guid? PromotionPublicId = null, string? PromotionName = null);
 
 public sealed record ImpuestoDeLineaPosDto(string TaxRateCode, int Kind, decimal? Rate, decimal Base, decimal Amount);
 

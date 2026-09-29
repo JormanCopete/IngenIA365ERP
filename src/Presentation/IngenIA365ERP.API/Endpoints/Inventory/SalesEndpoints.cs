@@ -3,7 +3,9 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Pos;
+using IngenIA365ERP.Application.Inventory.Pricing.Promotions;
 using IngenIA365ERP.Application.Inventory.Sales;
+using IngenIA365ERP.Application.Inventory.Sales.Quotes;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using MediatR;
 
@@ -18,6 +20,13 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// (<c>Payments.RefundMeansNotAllowed</c>, <c>Payments.MeansNotAvailable</c>) salen del handler, no del filtro: el recurso ya es visible
 /// (§1.2). La reimpresión, que sirve para cualquier grupo, está en <see cref="DocumentsEndpoints"/>. Cada ruta sólo reenvía al
 /// <see cref="ISender"/>. (nuevo)
+/// <para>
+/// I6 (T891, T892; §18.4, §19.4): cotizaciones, pedidos, remisiones y notas débito (<c>/sales/{quotes, orders, shipments, debit-notes}</c>) con
+/// las mismas cinco operaciones del ciclo común y los mismos permisos <c>Sales.*</c>; cada prefijo admite sólo su clase
+/// (<see cref="RutasDeVenta"/>), <c>POST /quotes/{id}/to-order</c> crea el borrador del pedido, y <c>POST /invoices</c> admite además la
+/// factura desde remisiones con <c>originPublicIds</c>. Las promociones (<c>/api/inventory/promotions</c>) viven en este archivo
+/// (decisiones-transversales §2.9) con <c>Inventory.Prices.View</c> y <c>.Manage</c>.
+/// </para>
 /// </summary>
 public class SalesEndpoints : ICarterModule
 {
@@ -33,6 +42,110 @@ public class SalesEndpoints : ICarterModule
         Facturas(app);
         Notas(app);
         Credito(app);
+        CicloComercial(app);
+        Promociones(app);
+    }
+
+    /// <summary>
+    /// I6 (T891; §18.4): cotizaciones, pedidos, remisiones y notas débito sobre el ciclo común; cada prefijo admite sólo su clase y otra
+    /// responde <c>Inventory.Document.TypeNotForRoute</c> (<c>data { class, group }</c>). «Convertir en pedido» responde 201 con el borrador.
+    /// </summary>
+    private static void CicloComercial(IEndpointRouteBuilder app)
+    {
+        var cotizaciones = MapBorradoresDeVenta(app, "/api/inventory/sales/quotes", "Inventory Sales Quotes", "Inventory_Sales_Quotes", RutasDeVenta.Cotizaciones);
+        cotizaciones.MapPost("/{id:guid}/to-order", async (Guid id, ConvertirEnPedidoRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(new ConvertQuoteToOrderCommand(id, body?.DocumentTypePublicId) { OperationKey = http.ClaveDeOperacion() }, ct);
+                if (result.IsFailure) return (object)result;
+                return Results.Created($"/api/inventory/sales/orders/{result.Value.PublicId}", await DetalleAsync(sender, result.Value, ct));
+            })
+            .WithName("Inventory_Sales_Quotes_ToOrder")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Crear);
+
+        MapBorradoresDeVenta(app, "/api/inventory/sales/orders", "Inventory Sales Orders", "Inventory_Sales_Orders", RutasDeVenta.Pedidos);
+        MapBorradoresDeVenta(app, "/api/inventory/sales/shipments", "Inventory Sales Shipments", "Inventory_Sales_Shipments", RutasDeVenta.Remisiones);
+        MapBorradoresDeVenta(app, "/api/inventory/sales/debit-notes", "Inventory Sales Debit Notes", "Inventory_Sales_DebitNotes", RutasDeVenta.NotasDebito);
+    }
+
+    /// <summary>
+    /// I6 (T892; §19.4): las promociones. Consultar con <c>Inventory.Prices.View</c>; crear y editar con <c>Inventory.Prices.Manage</c> y
+    /// <c>Idempotency-Key</c>. Ya aplicada en un documento confirmado, sólo cambian nombre, fin de vigencia y activo
+    /// (<c>Inventory.Promotion.InUse</c>).
+    /// </summary>
+    private static void Promociones(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/inventory/promotions")
+            .WithTags("Inventory Promotions")
+            .RequireAuthorization();
+
+        group.MapGet("/", async (DateOnly? asOf, bool? active, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListPromotionsQuery(asOf, active), ct))
+            .WithName("Inventory_Promotions_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PricingEndpoints.PermisoDeConsulta);
+
+        group.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetPromotionQuery(id), ct))
+            .WithName("Inventory_Promotions_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PricingEndpoints.PermisoDeConsulta);
+
+        group.MapPost("/", async (CreatePromotionCommand body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct);
+                return result.IsSuccess
+                    ? (object)Results.Created($"/api/inventory/promotions/{result.Value.PromotionPublicId}", result.Value)
+                    : result;
+            })
+            .WithName("Inventory_Promotions_Create")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(PricingEndpoints.PermisoDeListas);
+
+        group.MapPut("/{id:guid}", async (Guid id, UpdatePromotionCommand body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(body with { PromotionPublicId = id, OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_Promotions_Update")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(PricingEndpoints.PermisoDeListas);
+    }
+
+    /// <summary>
+    /// Las cinco operaciones del ciclo común de un prefijo de ventas de I6 (§18.4): crear y reemplazar el borrador —sólo con las clases de
+    /// <paramref name="clases"/>—, confirmar, anular y descartar. Devuelve el grupo para sumarle rutas propias.
+    /// </summary>
+    private static RouteGroupBuilder MapBorradoresDeVenta(IEndpointRouteBuilder app, string prefijo, string etiqueta, string nombre,
+        IReadOnlyList<DocumentClass> clases)
+    {
+        var group = app.MapGroup(prefijo)
+            .WithTags(etiqueta)
+            .RequireAuthorization();
+
+        group.MapPost("/", async (SalesDraftInput body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(new SaveInventoryDraftCommand(null, DocumentClassGroup.Sales, body.ComoBorrador(clases)) { OperationKey = http.ClaveDeOperacion() }, ct);
+                if (result.IsFailure) return (object)result;
+                return Results.Created($"{prefijo}/{result.Value.PublicId}", await DetalleAsync(sender, result.Value, ct));
+            })
+            .WithName($"{nombre}_Create")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Crear);
+
+        group.MapPut("/{id:guid}", async (Guid id, SalesDraftInput body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(new SaveInventoryDraftCommand(id, DocumentClassGroup.Sales, body.ComoBorrador(clases)) { OperationKey = http.ClaveDeOperacion() }, ct);
+                return result.IsFailure ? (object)result : await DetalleAsync(sender, result.Value, ct);
+            })
+            .WithName($"{nombre}_Update")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Crear);
+
+        MapConfirmarAnularDescartar(group, nombre);
+        return group;
     }
 
     /// <summary>
@@ -112,7 +225,7 @@ public class SalesEndpoints : ICarterModule
 
         group.MapPost("/", async (SalesDraftInput body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var result = await sender.Send(new SaveInventoryDraftCommand(null, DocumentClassGroup.Sales, body.ComoBorrador()) { OperationKey = http.ClaveDeOperacion() }, ct);
+                var result = await sender.Send(new SaveInventoryDraftCommand(null, DocumentClassGroup.Sales, body.ComoBorrador(RutasDeVenta.Facturas)) { OperationKey = http.ClaveDeOperacion() }, ct);
                 if (result.IsFailure) return (object)result;
                 return Results.Created($"/api/inventory/sales/invoices/{result.Value.PublicId}", await DetalleAsync(sender, result.Value, ct));
             })
@@ -123,7 +236,7 @@ public class SalesEndpoints : ICarterModule
 
         group.MapPut("/{id:guid}", async (Guid id, SalesDraftInput body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var result = await sender.Send(new SaveInventoryDraftCommand(id, DocumentClassGroup.Sales, body.ComoBorrador()) { OperationKey = http.ClaveDeOperacion() }, ct);
+                var result = await sender.Send(new SaveInventoryDraftCommand(id, DocumentClassGroup.Sales, body.ComoBorrador(RutasDeVenta.Facturas)) { OperationKey = http.ClaveDeOperacion() }, ct);
                 return result.IsFailure ? (object)result : await DetalleAsync(sender, result.Value, ct);
             })
             .WithName("Inventory_Sales_Invoices_Update")
@@ -224,6 +337,9 @@ public class SalesEndpoints : ICarterModule
 
     /// <summary><c>POST …/invoice-instead</c> (§18.3.1): a nombre de quién va la factura, el motivo y lo que la persona vio a pagar. (nuevo)</summary>
     public sealed record FacturaEnLugarRequest(Guid BuyerPersonPublicId, string? Reason, decimal ExpectedAmountDue);
+
+    /// <summary><c>POST /quotes/{id}/to-order</c> (§18.4): el tipo del pedido; sin él, el primero activo de clase <c>SalesOrder</c>. (nuevo)</summary>
+    public sealed record ConvertirEnPedidoRequest(Guid? DocumentTypePublicId);
 
     /// <summary><c>POST …/confirm</c>: lo que la persona vio a pagar y, si la tiene, la versión leída.</summary>
     public sealed record ConfirmarVentaRequest(decimal? ExpectedAmountDue, byte[]? RowVersion);

@@ -1,0 +1,324 @@
+@page "/ventas/promociones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Promociones - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I6 (T899; FR-055; contracts/api.md §19.4): las promociones con vigencia. Se aplican solas al precificar la venta —en oficina y
+   en el POS— como descuento no condicionado en la línea (nunca como línea a precio cero), y reducen la base de los impuestos. Cinco
+   clases: porcentaje, valor por unidad, lleve N pague M, precio por cantidad (tramos) y precio de paquete; los ámbitos se combinan (Y entre
+   clases, O dentro de una clase): productos, categorías (con sus descendientes), segmentos y canales. Entre las no acumulables gana la de
+   mayor descuento. Ya aplicada en un documento confirmado, sólo cambian nombre, fin de vigencia y activo (Inventory.Promotion.InUse). (nuevo) *@
+<PermissionGate Required="Inventory.Prices.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Promociones</h3>
+        <div class="toolbar">
+            <label class="campo">Vigentes al <input type="date" class="e-input" value="@(_vigentesAl?.ToString("yyyy-MM-dd"))" @onchange="@(async e => { _vigentesAl = Fecha(e.Value); await CargarAsync(); })" /></label>
+            <label class="campo"><input type="checkbox" checked="@_soloActivas" @onchange="@(async e => { _soloActivas = e.Value is true; await CargarAsync(); })" /> Sólo activas</label>
+            <PermissionGate Required="Inventory.Prices.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva promoción</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_form is { } f)
+    {
+        <PermissionGate Required="Inventory.Prices.Manage">
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="info-card">
+                    <h4>@(f.Id is null ? "Nueva promoción" : $"Promoción {f.Codigo}")</h4>
+                    @if (f.EnUso)
+                    {
+                        <p class="aviso aviso-info">Ya se aplicó en documentos confirmados: sólo se cambian el nombre, el fin de la vigencia y si está activa.</p>
+                    }
+                    <div class="form-grid">
+                        <CampoCodigo Catalogo="promociones" @bind-Value="f.Codigo" Largo="10" Obligatorio="true" Readonly="@(f.Id is not null)" EditandoPublicId="@f.Id"
+                                     DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                        <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="f.Nombre" maxlength="120" /></label>
+                        <label class="campo">Clase *
+                            <select class="e-input" disabled="@f.EnUso" value="@f.Clase" @onchange="@(e => f.Clase = int.TryParse(e.Value?.ToString(), out var v) ? v : 1)">
+                                @foreach (var (valor, etiqueta) in TextosDeVentas.ClasesDePromocion) { <option value="@valor">@etiqueta</option> }
+                            </select>
+                        </label>
+                        @switch (f.Clase)
+                        {
+                            case 1:
+                                <label class="campo">Porcentaje (%) * <input class="e-input numero" type="number" min="0" max="100" step="any" disabled="@f.EnUso" @bind="f.Porcentaje" /></label>
+                                break;
+                            case 2:
+                                <label class="campo">Valor por unidad * <input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="f.Valor" /></label>
+                                break;
+                            case 3:
+                                <label class="campo">Lleve * <input class="e-input numero" type="number" min="1" step="1" disabled="@f.EnUso" @bind="f.Lleve" /></label>
+                                <label class="campo">Pague * <input class="e-input numero" type="number" min="0" step="1" disabled="@f.EnUso" @bind="f.Pague" /></label>
+                                break;
+                            case 5:
+                                <label class="campo">Precio del paquete * <input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="f.PrecioPaquete" /></label>
+                                break;
+                        }
+                        <label class="campo">Desde * <input type="date" class="e-input" disabled="@f.EnUso" value="@(f.Desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => f.Desde = Fecha(e.Value))" /></label>
+                        <label class="campo">Hasta * <input type="date" class="e-input" value="@(f.Hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => f.Hasta = Fecha(e.Value))" /></label>
+                        <label class="campo"><input type="checkbox" disabled="@f.EnUso" @bind="f.Acumulable" /> Acumulable con otras</label>
+                        <label class="campo"><input type="checkbox" @bind="f.Activa" /> Activa</label>
+                        <label class="campo campo-ancho">Notas <input class="e-input" disabled="@f.EnUso" @bind="f.Notas" maxlength="500" /></label>
+                    </div>
+
+                    @if (f.Clase == 4)
+                    {
+                        <h5>Tramos (desde la cantidad, en unidad base, el precio sin impuestos)</h5>
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Desde la cantidad</th><th class="numero">Precio</th><th></th></tr></thead>
+                            <tbody>
+                                @for (var i = 0; i < f.Tramos.Count; i++)
+                                {
+                                    var indice = i;
+                                    var t = f.Tramos[i];
+                                    <tr>
+                                        <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="t.Desde" /></td>
+                                        <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="t.Precio" /></td>
+                                        <td>@if (!f.EnUso) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el tramo" OnClick="@(() => f.Tramos.RemoveAt(indice))" /> }</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (!f.EnUso) { <SfButton CssClass="e-flat" IconCss="e-icons e-plus" OnClick="@(() => f.Tramos.Add(new TramoForm()))">Agregar tramo</SfButton> }
+                    }
+
+                    <h5>Ámbitos (vacío: todo lo vendido)</h5>
+                    <table class="data-grid">
+                        <thead><tr><th>Ámbito</th><th>Destino</th>@if (f.Clase == 5) { <th class="numero">Cantidad en el paquete</th> }<th></th></tr></thead>
+                        <tbody>
+                            @for (var i = 0; i < f.Ambitos.Count; i++)
+                            {
+                                var indice = i;
+                                var a = f.Ambitos[i];
+                                <tr>
+                                    <td>@TextosDeVentas.AmbitoDePromocion(a.Clase)</td><td>@a.Etiqueta</td>
+                                    @if (f.Clase == 5) { <td class="numero">@if (a.Clase == 1) { <input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="a.CantidadEnPaquete" /> }</td> }
+                                    <td>@if (!f.EnUso) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el ámbito" OnClick="@(() => f.Ambitos.RemoveAt(indice))" /> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (!f.EnUso)
+                    {
+                        <div class="form-grid">
+                            <SelectorDeProducto Etiqueta="Agregar producto" Elegido="@(p => f.Ambitos.Add(new AmbitoForm { Clase = 1, Id = p.Producto.PublicId, Etiqueta = $"{p.Producto.Code} · {p.Producto.Name}" }))" />
+                            <label class="campo">Agregar categoría
+                                <select class="e-input" value="" @onchange="@(e => AgregarCategoria(f, e.Value?.ToString()))">
+                                    <option value="">Elija…</option>
+                                    @foreach (var c in _categorias) { <option value="@c.PublicId">@c.Path</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Agregar canal
+                                <select class="e-input" value="" @onchange="@(e => AgregarCanal(f, e.Value?.ToString()))">
+                                    <option value="">Elija…</option>
+                                    @foreach (var c in _canales) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Agregar segmento
+                                <input class="e-input" @bind="_segmento" maxlength="40" placeholder="Asociados, empleados…" />
+                            </label>
+                            <SfButton CssClass="e-flat" Disabled="@string.IsNullOrWhiteSpace(_segmento)" OnClick="@(() => AgregarSegmento(f))">Agregar segmento</SfButton>
+                        </div>
+                    }
+
+                    <div class="form-grid">
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="f.Motivo" maxlength="500" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(_guardado.Activa || _codigoRepetido)" OnClick="@GuardarAsync">Guardar</SfButton>
+                        <SfButton CssClass="e-flat" OnClick="@(() => _form = null)">Cancelar</SfButton>
+                    </div>
+                </div>
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Clase</th><th>Vigencia</th><th>Ámbitos</th><th>Acumulable</th><th>Activa</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _promociones)
+                    {
+                        var promocion = p;
+                        <tr>
+                            <td>@p.Code</td><td>@p.Name@(p.InUse ? " · en uso" : "")</td><td>@TextosDeVentas.ClaseDePromocion(p.Kind)</td>
+                            <td>@p.ValidFrom.ToString("dd/MM/yyyy") – @p.ValidTo.ToString("dd/MM/yyyy")</td>
+                            <td>@(p.Scopes.Count == 0 ? "Todo" : string.Join(", ", p.Scopes.Select(Destino)))</td>
+                            <td>@(p.Cumulative ? "Sí" : "No")</td><td>@(p.IsActive ? "Sí" : "No")</td>
+                            <td><PermissionGate Required="Inventory.Prices.Manage"><SfButton CssClass="e-flat" OnClick="@(() => Editar(promocion))">Editar</SfButton></PermissionGate></td>
+                        </tr>
+                    }
+                    @if (_promociones.Count == 0) { <tr><td colspan="8" class="texto-tenue">No hay promociones.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private sealed class TramoForm
+    {
+        public decimal Desde { get; set; }
+        public decimal Precio { get; set; }
+    }
+
+    private sealed class AmbitoForm
+    {
+        public int Clase { get; set; }
+        public Guid? Id { get; set; }
+        public string? Segmento { get; set; }
+        public string Etiqueta { get; set; } = "";
+        public decimal? CantidadEnPaquete { get; set; }
+    }
+
+    private sealed class PromocionForm
+    {
+        public Guid? Id { get; set; }
+        public bool EnUso { get; set; }
+        public string? Codigo { get; set; }
+        public string Nombre { get; set; } = "";
+        public int Clase { get; set; } = 1;
+        public decimal? Porcentaje { get; set; }
+        public decimal? Valor { get; set; }
+        public decimal? Lleve { get; set; }
+        public decimal? Pague { get; set; }
+        public decimal? PrecioPaquete { get; set; }
+        public DateOnly? Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public DateOnly? Hasta { get; set; }
+        public bool Acumulable { get; set; }
+        public bool Activa { get; set; } = true;
+        public string? Notas { get; set; }
+        public string? Motivo { get; set; }
+        public List<TramoForm> Tramos { get; set; } = [];
+        public List<AmbitoForm> Ambitos { get; set; } = [];
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveGuardar = new();
+    private List<PromocionDto> _promociones = [];
+    private List<CategoriaDto> _categorias = [];
+    private List<CanalDeVentaDto> _canales = [];
+    private PromocionForm? _form;
+    private DateOnly? _vigentesAl;
+    private bool _soloActivas = true, _codigoRepetido;
+    private string? _segmento;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var categorias = await Inventario.ListarCategoriasAsync();
+        _categorias = categorias.IsSuccess ? [.. (categorias.Value ?? []).Where(c => c.IsActive).OrderBy(c => c.Path)] : [];
+        var canales = await Inventario.ListarCanalesAsync();
+        _canales = canales.IsSuccess ? [.. canales.Value ?? []] : [];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarPromocionesAsync(_vigentesAl, _soloActivas ? true : null);
+        _promociones = r.IsSuccess ? [.. r.Value ?? []] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las promociones.");
+    }
+
+    private void Nueva()
+    {
+        _form = new PromocionForm();
+        _codigoRepetido = false;
+    }
+
+    private void Editar(PromocionDto p) => _form = new PromocionForm
+    {
+        Id = p.PromotionPublicId, EnUso = p.InUse, Codigo = p.Code, Nombre = p.Name, Clase = p.Kind, Porcentaje = p.Percent * 100m, Valor = p.Amount,
+        Lleve = p.BuyQuantity, Pague = p.PayQuantity, PrecioPaquete = p.BundlePrice, Desde = p.ValidFrom, Hasta = p.ValidTo, Acumulable = p.Cumulative,
+        Activa = p.IsActive, Notas = p.Notes,
+        Tramos = p.Tiers.Select(t => new TramoForm { Desde = t.MinQuantity, Precio = t.Price }).ToList(),
+        Ambitos = p.Scopes.Select(a => new AmbitoForm
+        {
+            Clase = a.Kind, Id = a.ProductPublicId ?? a.CategoryPublicId ?? a.SalesChannelPublicId, Segmento = a.Segment, Etiqueta = Destino(a),
+            CantidadEnPaquete = a.RequiredQuantity,
+        }).ToList(),
+    };
+
+    private string Destino(AmbitoDePromocionDto a) => a.Kind switch
+    {
+        1 => a.ProductCode ?? "Producto",
+        2 => _categorias.FirstOrDefault(c => c.PublicId == a.CategoryPublicId)?.Path ?? a.CategoryCode ?? "Categoría",
+        3 => a.Segment ?? "Segmento",
+        _ => a.SalesChannelCode ?? "Canal",
+    };
+
+    private void AgregarCategoria(PromocionForm f, string? valor)
+    {
+        if (!Guid.TryParse(valor, out var id) || _categorias.FirstOrDefault(c => c.PublicId == id) is not { } c) return;
+        f.Ambitos.Add(new AmbitoForm { Clase = 2, Id = id, Etiqueta = c.Path });
+    }
+
+    private void AgregarCanal(PromocionForm f, string? valor)
+    {
+        if (!Guid.TryParse(valor, out var id) || _canales.FirstOrDefault(c => c.PublicId == id) is not { } c) return;
+        f.Ambitos.Add(new AmbitoForm { Clase = 4, Id = id, Etiqueta = $"{c.Code} · {c.Name}" });
+    }
+
+    private void AgregarSegmento(PromocionForm f)
+    {
+        if (string.IsNullOrWhiteSpace(_segmento)) return;
+        f.Ambitos.Add(new AmbitoForm { Clase = 3, Segmento = _segmento.Trim(), Etiqueta = _segmento.Trim() });
+        _segmento = null;
+    }
+
+    private static IReadOnlyList<AmbitoDePromocionRequest> Ambitos(PromocionForm f) => f.Ambitos.Select(a => a.Clase switch
+    {
+        1 => new AmbitoDePromocionRequest(ProductPublicId: a.Id, RequiredQuantity: f.Clase == 5 ? a.CantidadEnPaquete : null),
+        2 => new AmbitoDePromocionRequest(CategoryPublicId: a.Id),
+        3 => new AmbitoDePromocionRequest(Segment: a.Segmento),
+        _ => new AmbitoDePromocionRequest(SalesChannelPublicId: a.Id),
+    }).ToList();
+
+    private async Task GuardarAsync()
+    {
+        if (_form is not { } f) return;
+        if (string.IsNullOrWhiteSpace(f.Codigo) || string.IsNullOrWhiteSpace(f.Nombre) || f.Desde is null || f.Hasta is null)
+        {
+            await Notification.WarningAsync("Complete código, nombre y vigencia.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(f.Motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var guardado = _guardado.Iniciar();
+        var clase = TextosDeVentas.NombreDeClaseDePromocion(f.Clase);
+        decimal? pct = f.Clase == 1 ? f.Porcentaje / 100m : null;
+        IReadOnlyList<TramoDePromocionRequest> tramos = f.Clase == 4 ? f.Tramos.Select(t => new TramoDePromocionRequest(t.Desde, t.Precio)).ToList() : [];
+        var r = f.Id is { } id
+            ? await Ventas.EditarPromocionAsync(id, f.EnUso
+                ? new EdicionDePromocionRequest(f.Nombre.Trim(), f.Hasta.Value, f.Activa, f.Motivo.Trim())
+                : new EdicionDePromocionRequest(f.Nombre.Trim(), f.Hasta.Value, f.Activa, f.Motivo.Trim(), clase, pct, f.Clase == 2 ? f.Valor : null,
+                    f.Clase == 3 ? f.Lleve : null, f.Clase == 3 ? f.Pague : null, f.Clase == 5 ? f.PrecioPaquete : null, f.Acumulable, f.Desde, Ambitos(f), tramos,
+                    string.IsNullOrWhiteSpace(f.Notas) ? null : f.Notas.Trim()), _claveGuardar)
+            : await Ventas.CrearPromocionAsync(new PromocionRequest(f.Codigo.Trim(), f.Nombre.Trim(), clase, f.Desde.Value, f.Hasta.Value, f.Motivo.Trim(), pct,
+                f.Clase == 2 ? f.Valor : null, f.Clase == 3 ? f.Lleve : null, f.Clase == 3 ? f.Pague : null, f.Clase == 5 ? f.PrecioPaquete : null, f.Acumulable, f.Activa,
+                Ambitos(f), tramos, string.IsNullOrWhiteSpace(f.Notas) ? null : f.Notas.Trim()), _claveGuardar);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "Inventory.Promotion.InUse"
+                ? "La promoción ya se aplicó en documentos confirmados: sólo se cambian el nombre, el fin de la vigencia y si está activa."
+                : r.ErrorMessage ?? "No se pudo guardar la promoción.");
+            return;
+        }
+        await Notification.SuccessAsync("Promoción guardada.");
+        _form = null;
+        await CargarAsync();
+    }
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

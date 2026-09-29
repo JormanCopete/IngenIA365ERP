@@ -26,7 +26,8 @@ public sealed record ResumenDeVentaDto(
     int? PostingMode,
     string? ElectronicStatus,
     bool PendingDelivery,
-    bool PendingValidation)
+    bool PendingValidation,
+    Guid? CounterpartyPersonPublicId = null)
 {
     public string Numero => Number is { } n ? $"{Prefix}{n}" : "(borrador)";
 }
@@ -35,7 +36,12 @@ public sealed record CompradorDto(Guid PersonPublicId, bool IsFinalConsumer, str
 
 public sealed record AprobacionDeVentaDto(Guid ApprovalRequestPublicId, string Status);
 
-public sealed record DescuentoDeLineaDeVentaDto(int Source, decimal? Percent, decimal Amount, bool FromDocumentDiscount, bool IsPriceOverride, AprobacionDeVentaDto? Approval);
+/// <summary>Un descuento de la línea. I6 (T900): con <c>source = Promotion</c>, la promoción que lo dio (FR-055).</summary>
+public sealed record DescuentoDeLineaDeVentaDto(int Source, decimal? Percent, decimal Amount, bool FromDocumentDiscount, bool IsPriceOverride, AprobacionDeVentaDto? Approval,
+    Guid? PromotionPublicId = null, string? PromotionName = null)
+{
+    public bool EsPromocion => Source == TextosDeVentas.DescuentoDePromocion;
+}
 
 public sealed record ImpuestoDeVentaDto(string TaxRateCode, int Kind, decimal? Rate, decimal? AmountPerUnit, decimal Base, decimal Amount, int Treatment);
 
@@ -56,7 +62,9 @@ public sealed record LineaDeVentaDto(
     IReadOnlyList<ImpuestoDeVentaDto> Taxes,
     decimal Subtotal,
     decimal Total,
-    bool BelowCost);
+    bool BelowCost,
+    Guid? OriginLinePublicId = null,
+    decimal? Pending = null);
 
 public sealed record TotalesDeVentaDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);
 
@@ -121,7 +129,10 @@ public sealed record DocumentoDeVentaDto(
     UsuarioDeInventarioDto CreatedBy,
     UsuarioDeInventarioDto? ConfirmedBy,
     IReadOnlyList<HallazgoDeVentaDto> Issues,
-    byte[]? RowVersion)
+    byte[]? RowVersion,
+    DateOnly? ValidUntil = null,
+    string? CorrectionConceptCode = null,
+    IReadOnlyList<DocumentoReferidoDeInventarioDto>? Origins = null)
 {
     public string Numero => Number is { } n ? $"{Prefix}{n}" : "(borrador)";
 
@@ -185,9 +196,13 @@ public sealed class FiltroDeVentas
 }
 
 public sealed record LineaDeVentaRequest(Guid ProductPublicId, Guid UnitPublicId, decimal Quantity, decimal? UnitPrice = null, DescuentoRequest? Discount = null,
-    string? Notes = null, Guid? LinePublicId = null, int? LineNumber = null);
+    string? Notes = null, Guid? LinePublicId = null, int? LineNumber = null, Guid? OriginLinePublicId = null);
 
-/// <summary>El borrador de una factura o comprobante de oficina (<c>SalesDraftInput</c>, §18.2), con sus pagos.</summary>
+/// <summary>
+/// El borrador de una factura o comprobante de oficina (<c>SalesDraftInput</c>, §18.2), con sus pagos. I6 (§18.4): el mismo cuerpo sirve a
+/// cotizaciones (<see cref="ValidUntil"/>), pedidos, remisiones y notas débito (<see cref="CorrectionConceptCode"/>, y la factura en
+/// <see cref="OriginPublicIds"/>).
+/// </summary>
 public sealed record BorradorDeVentaRequest(
     Guid DocumentTypePublicId,
     Guid WarehousePublicId,
@@ -202,7 +217,12 @@ public sealed record BorradorDeVentaRequest(
     string? Notes = null,
     DescuentoRequest? DocumentDiscount = null,
     IReadOnlyList<Guid>? OriginPublicIds = null,
-    byte[]? RowVersion = null);
+    byte[]? RowVersion = null,
+    DateOnly? ValidUntil = null,
+    string? CorrectionConceptCode = null);
+
+/// <summary><c>POST /quotes/{id}/to-order</c>: el tipo del pedido (sin él, el primero activo). (nuevo)</summary>
+public sealed record ConvertirEnPedidoRequest(Guid? DocumentTypePublicId);
 
 public sealed record LineaDeNotaRequest(Guid OriginLinePublicId, decimal? Quantity = null, decimal? Amount = null);
 

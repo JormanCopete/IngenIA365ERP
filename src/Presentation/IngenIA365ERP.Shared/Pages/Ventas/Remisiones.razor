@@ -1,0 +1,119 @@
+@page "/ventas/remisiones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Remisiones - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I6 (T896; FR-044, FR-047, FR-052; contracts/api.md §18.4): la remisión despacha la mercancía —descarga la existencia al costo
+   del momento y reconoce el costo de venta— sin facturarla. Nace de un pedido (?pedido=, propone lo pendiente por despachar y consume su
+   reserva) o directa. La lista dice cuántos días lleva cada una sin facturar; se eligen varias del mismo cliente y «Facturar remisiones»
+   abre la factura desde remisiones, que no vuelve a descargar. Anular una remisión ya facturada no se puede
+   (Inventory.Document.HasDependents); la no facturada vuelve a entrar al costo con que salió. (nuevo) *@
+<PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Remisiones</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Inventory.Sales.Create">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@Nueva">Remisión directa</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@(FormularioDelCiclo.NoSePuedenFacturarJuntas(Elegidas) is not null)" title="@(FormularioDelCiclo.NoSePuedenFacturarJuntas(Elegidas) ?? "")"
+                          OnClick="@Facturar">Facturar remisiones (@_elegidas.Count)</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_editando)
+    {
+        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Remisiones" Clases="@([TextosDeVentas.ClaseRemision])" Nombre="remisión" Documento="@Documento"
+                        Origenes="@(Pedido is { } p ? [p] : null)" EtiquetaPendiente="Pendiente por facturar"
+                        AvisoDeAnulacion="Si la remisión no se ha facturado, la mercancía vuelve a la bodega al costo con que salió; facturada, no se anula." Cambio="@CambioAsync" />
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <label class="campo"><input type="checkbox" checked="@_soloConfirmadas" @onchange="@(async e => { _soloConfirmadas = e.Value is true; await CargarAsync(); })" /> Sólo confirmadas</label>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th></th><th>Número</th><th>Fecha</th><th class="numero">Días sin facturar</th><th>Cliente</th><th>Estado</th><th class="numero">Total</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _remisiones)
+                    {
+                        var remision = r;
+                        <tr>
+                            <td>@if (r.Status == 2) { <input type="checkbox" checked="@_elegidas.Contains(r.DocumentPublicId)" @onchange="@(e => Elegir(remision, e.Value is true))" aria-label="Elegir para facturar" /> }</td>
+                            <td>@r.Numero</td><td>@r.OperationDate.ToString("dd/MM/yyyy")</td>
+                            <td class="numero">@(r.Status == 2 ? FormularioDelCiclo.DiasDesde(r.OperationDate, DateOnly.FromDateTime(DateTime.Today)).ToString() : "")</td>
+                            <td>@r.CounterpartyName</td><td>@TextosDeInventario.Estado(r.Status)</td><td class="numero">@r.Total.ToString("N0")</td>
+                            <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(remision.DocumentPublicId))">Abrir</SfButton></td>
+                        </tr>
+                    }
+                    @if (_remisiones.Count == 0) { <tr><td colspan="8" class="texto-tenue">No hay remisiones.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+        <p class="texto-apoyo">Lo pendiente por facturar de cada línea se ve al abrir la remisión. Una remisión totalmente facturada puede seguir en la lista: la factura dirá que no queda nada.</p>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
+
+    /// <summary>El pedido del que nace una remisión nueva (desde «Remisionar» en Pedidos).</summary>
+    [SupplyParameterFromQuery(Name = "pedido")] public Guid? Pedido { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<ResumenDeVentaDto> _remisiones = [];
+    private readonly HashSet<Guid> _elegidas = [];
+    private bool _editando, _soloConfirmadas = true;
+    private Guid _clave = Guid.NewGuid();
+
+    private IReadOnlyCollection<ResumenDeVentaDto> Elegidas => _remisiones.Where(r => _elegidas.Contains(r.DocumentPublicId)).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _editando = _editando || Documento is not null || Pedido is not null;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClaseRemision, Status = _soloConfirmadas ? 2 : null, PageSize = 100 });
+        _remisiones = r.IsSuccess ? [.. r.Value!.Items] : [];
+        _elegidas.IntersectWith(_remisiones.Select(x => x.DocumentPublicId));
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las remisiones.");
+    }
+
+    private void Elegir(ResumenDeVentaDto remision, bool elegida)
+    {
+        if (elegida) _elegidas.Add(remision.DocumentPublicId);
+        else _elegidas.Remove(remision.DocumentPublicId);
+    }
+
+    private void Facturar() => Nav.NavigateTo($"/ventas/facturas/nueva?remisiones={string.Join(",", _elegidas)}");
+
+    private void Nueva()
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo("/ventas/remisiones", replace: true);
+    }
+
+    private void Abrir(Guid id)
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo($"/ventas/remisiones?documento={id}");
+    }
+
+    private async Task CambioAsync(DocumentoDeVentaDto? doc)
+    {
+        if (doc is null) { _editando = false; Nav.NavigateTo("/ventas/remisiones", replace: true); }
+        else if (Documento != doc.DocumentPublicId) Nav.NavigateTo($"/ventas/remisiones?documento={doc.DocumentPublicId}", replace: true);
+        await CargarAsync();
+    }
+}

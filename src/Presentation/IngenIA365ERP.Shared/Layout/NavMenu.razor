@@ -211,9 +211,13 @@
         </PermissionGate>
 
         <NavMenuGroup Icon="e-grid-view" Title="Ventas" Expanded="SidebarOpen">
-            @* I3 (T644): las ventas de oficina, los puntos de venta, los precios y los informes de ventas. *@
+            @* I3 (T644): las ventas de oficina, los puntos de venta, los precios y los informes de ventas. I6 (T901): cotizaciones, pedidos, remisiones, notas débito y promociones. *@
             <PermissionGate Required="Inventory.Sales.View">
                 <NavLink href="/ventas/documentos" class="nav-subitem">Documentos de venta</NavLink>
+                <NavLink href="/ventas/cotizaciones" class="nav-subitem">Cotizaciones</NavLink>
+                <NavLink href="/ventas/pedidos" class="nav-subitem">Pedidos</NavLink>
+                <NavLink href="/ventas/remisiones" class="nav-subitem">Remisiones</NavLink>
+                <NavLink href="/ventas/notas-debito" class="nav-subitem">Notas débito</NavLink>
             </PermissionGate>
             <PermissionGate Required="Inventory.Sales.Create">
                 <NavLink href="/ventas/facturas/nueva" class="nav-subitem">Nueva factura</NavLink>
@@ -231,6 +235,7 @@
             <PermissionGate Required="Inventory.Prices.View">
                 <NavLink href="/ventas/listas-de-precios" class="nav-subitem">Listas de precios</NavLink>
                 <NavLink href="/ventas/topes-de-descuento" class="nav-subitem">Topes de descuento</NavLink>
+                <NavLink href="/ventas/promociones" class="nav-subitem">Promociones</NavLink>
             </PermissionGate>
             <PermissionGate Required="Inventory.Reports.View">
                 <NavLink href="/ventas/informes" class="nav-subitem">Informes de ventas</NavLink>
