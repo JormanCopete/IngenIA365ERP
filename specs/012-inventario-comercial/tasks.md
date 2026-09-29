@@ -2914,6 +2914,7 @@ filtrados que fija data-model y agrega las FK de lote y serie sin tocar una fila
 
 **Checkpoint**: el modelo de I6 existe en los dos motores y las cooperativas con datos de I1–I5 migran
 sin cambios; US14 y US15 pueden empezar en paralelo.
+- Verificación del Checkpoint (2026-09-29, cierre de I6): cumplido. `ComercioAmpliadoMigracionTests` verde en PostgreSQL y SQL Server dentro de la suite completa; `Feature004_MigrationParity` y `PrincipioXII_MigracionesDestructivas` verdes.
 
 ---
 
@@ -2973,8 +2974,10 @@ base gravable (quickstart.md §7, I6).
   - hecho 2026-09-29: 4 pruebas (vencer es idempotente y sólo toca las activas vencidas; las dos tareas corren una vez al día desde I6 por `ISender`; la alerta una vez por remisión; el cierre con remisiones sin facturar: sin aceptar, sin permiso, aceptado y guardado en `INV_Periods` y en la lista de períodos); verdes.
 - [X] T869 [P] [US14] Escribir la prueba de arquitectura tests/IngenIA365ERP.Architecture.Tests/Principles/SoloLasReservasEscribenLoReservado.cs **(nuevo)**: fuera de `Application/Inventory/Sales/Reservas/ReservasDeInventario` y de `RebuildInventoryProjectionsCommand`, nadie asigna `StockBalance.Reserved` ni cambia `Reservation.Status` (mismo estilo regex + ArchUnit que `NadieEscribeElKardexFueraDelRegistro`)
   - hecho 2026-09-29: 3 pruebas; `NadieEscribeElKardexFueraDelRegistro` admite ahora `.Reserved` en `ReservasDeInventario.cs` (ése lo vigila la nueva).
-- [ ] T870 [US14] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Ventas/CicloComercialTests.cs **(nuevo)** con `CentralIdentityApiFixture`, colección «Inventario e2e», cooperativa aislada, `CanalSimulado` y los dos motores, recorriendo por HTTP el Independent Test completo: `/api/inventory/sales/quotes` → `POST /quotes/{id}/to-order` → `/orders/{id}/confirm` (reserva visible en `GET /api/inventory/stock/{productId}`) → `/shipments` → `POST /invoices` con tipo `SalesInvoiceFromShipments` y `originPublicIds` → nota crédito sin devolución → nota débito a crédito → promoción 3×2; cada escritura con `Idempotency-Key` y repetida tres veces con un solo efecto (SC-002); vista `stock` con la columna Reservado; el cierre del período con una remisión sin facturar
-- [ ] T871 [P] [US14] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Ventas/ReservaConcurrenteTests.cs **(nuevo)**, en los dos motores: con 5 disponibles, dos pedidos simultáneos de 3 → uno confirma y el otro recibe `Inventory.Stock.Insufficient` con el disponible real; un pedido y una venta POS simultáneos del último disponible nunca dejan el disponible negativo (FR-004, T15; la reserva toma la fila exclusiva de `INV_StockBalances` en el orden canónico)
+- [X] T870 [US14] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Ventas/CicloComercialTests.cs **(nuevo)** con `CentralIdentityApiFixture`, colección «Inventario e2e», cooperativa aislada, `CanalSimulado` y los dos motores, recorriendo por HTTP el Independent Test completo: `/api/inventory/sales/quotes` → `POST /quotes/{id}/to-order` → `/orders/{id}/confirm` (reserva visible en `GET /api/inventory/stock/{productId}`) → `/shipments` → `POST /invoices` con tipo `SalesInvoiceFromShipments` y `originPublicIds` → nota crédito sin devolución → nota débito a crédito → promoción 3×2; cada escritura con `Idempotency-Key` y repetida tres veces con un solo efecto (SC-002); vista `stock` con la columna Reservado; el cierre del período con una remisión sin facturar
+  - hecho 2026-09-29 (cierre de I6): cuatro pruebas en «cicloi6» (`EscenarioDeFacturacionElectronica` + tipo `FRE` con su resolución `FR` en `CanalSimulado`) y «remisioni6»: cotización → pedido (4 reservadas, 6 disponibles, también en la vista `stock`) → pedido fechado atrás cuya reserva vence y `inventario.reservas` libera una vez → remisión con `CostoDeVentaReconocido` → factura desde remisiones sin kardex, validada, y la segunda factura `Inventory.Shipment.AlreadyInvoiced`; nota crédito sin devolución sin kardex; nota débito a crédito con aprobación `ProvisionalCredit`, `NotaDebitoEmitida` y `AjusteDeVentaACredito` `DebitNote`; 3×2 como descuento `Promotion` con la base del IVA en 10.000 y `Inventory.Promotion.InUse`; remisión vieja con su alerta única y el cierre (`UnbilledShipmentsNotAccepted`, `AcceptUnbilledNotAllowed`, aceptado con motivo). Las escrituras del ciclo se repiten tres veces con la misma clave. Destapó el precio de las líneas derivadas con lista con IVA (T54f, `BorradorDeVenta.ListasDeOrigenAsync`). Verde en PostgreSQL y SQL Server.
+- [X] T871 [P] [US14] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Ventas/ReservaConcurrenteTests.cs **(nuevo)**, en los dos motores: con 5 disponibles, dos pedidos simultáneos de 3 → uno confirma y el otro recibe `Inventory.Stock.Insufficient` con el disponible real; un pedido y una venta POS simultáneos del último disponible nunca dejan el disponible negativo (FR-004, T15; la reserva toma la fila exclusiva de `INV_StockBalances` en el orden canónico)
+  - hecho 2026-09-29: «reservai6»; dos pedidos de 3 sobre 5 → uno reserva y el otro `Inventory.Stock.Insufficient` con `available` 2; pedido de 2 contra venta POS de 2 → a lo sumo una pasa, la otra `Insufficient`, y el disponible nunca queda negativo. Verde en los dos motores.
 
 ### Implementation for User Story 14
 
@@ -3053,6 +3056,7 @@ base gravable (quickstart.md §7, I6).
 **Checkpoint**: US14 funciona sola sobre la base de I6 y las entregas I1–I4: las pruebas de dominio,
 Application, arquitectura y las dos e2e (`CicloComercialTests`, `ReservaConcurrenteTests`) pasan en los dos
 motores.
+- Verificación del Checkpoint (2026-09-29, cierre de I6): cumplido. Dominio, Application y arquitectura verdes; `CicloComercialTests` y `ReservaConcurrenteTests` pasan en PostgreSQL y SQL Server. `CatalogoDeParametros.EntregaVigente` sube a **I6** (T54f). T886 sigue con su rama de Cartera bloqueada por IC (D-02).
 
 ---
 
@@ -3093,8 +3097,10 @@ de dos lotes (vencen a 10 y 60 días) y venta que sugiere el de 10; lote vencido
   - hecho 2026-09-29: 6 pruebas (también el ensamble sin componentes suficientes que no mueve nada, el monto que se aprueba y el disponible del combo en la búsqueda de venta, T927)
 - [X] T910 [P] [US15] Escribir tests/IngenIA365ERP.Application.Tests/Inventory/Counts/ConteoPorClaseAbcTests.cs **(nuevo)**: `OpenPhysicalCountCommand` con `scope = AbcClass` y `abcClass = A` ya no responde `.ScopeNotAvailable`, congela en la foto los productos de la clase a la fecha y guarda la clase y la lista resuelta en `CountScopeJson`; la foto y la captura van por lote cuando el producto lo controla (FR-040)
   - hecho 2026-09-29: 6 pruebas (las tres clases, los umbrales de `Informes.UmbralesAbc`, `Inventory.Count.AbcClassInvalid` y la foto, captura y diferencia por lote). La prueba de I1 que fijaba `.ScopeNotAvailable` (`AbrirConteoTests`) quedó sólo con `EmptyScope`
-- [ ] T911 [US15] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Inventory/CatalogoAvanzadoTests.cs **(nuevo)** con `CentralIdentityApiFixture`, colección «Inventario e2e», cooperativa aislada y los dos motores, que recorre por HTTP el Independent Test completo (atributos → variantes → combo vendido → ensamble de 5 kits → recepción por lote → venta con sugerencia → lote vencido bloqueado → serie repetida → conteo clase A), con `Idempotency-Key` en cada escritura y la vista `kardex?lot=` mostrando el lote
-- [ ] T912 [P] [US15] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Inventory/SeriesConcurrentesTests.cs **(nuevo)**, en los dos motores: dos recepciones simultáneas con la misma serie → una confirma y la otra recibe `Inventory.Serial.AlreadyInStock`; dos ventas simultáneas de la misma serie → una sola sale (el cerrojo incluye `INV_Serials`)
+- [X] T911 [US15] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Inventory/CatalogoAvanzadoTests.cs **(nuevo)** con `CentralIdentityApiFixture`, colección «Inventario e2e», cooperativa aislada y los dos motores, que recorre por HTTP el Independent Test completo (atributos → variantes → combo vendido → ensamble de 5 kits → recepción por lote → venta con sugerencia → lote vencido bloqueado → serie repetida → conteo clase A), con `Idempotency-Key` en cada escritura y la vista `kardex?lot=` mostrando el lote
+  - hecho 2026-09-29: «catalogoi6»; atributos TALLA y COLOR → 4 variantes (la segunda generación responde `Inventory.Variant.CombinationExists`) con existencia propia; combo P1 + P2 con costo de venta 3.500; ensamble de 5 kits (kit a 55.750 y `AjusteInventarioAprobado` con `Ensamble`); recepción de L10, L60 y uno vencido, `GET /lots` en FEFO con L10 sugerido, venta de L10 y `kardex?lot=L10` con el saldo del lote; lote vencido `Inventory.Lot.Expired`; serie repetida `Inventory.Serial.AlreadyInStock`; conteo clase A con P3 y sin P1. Verde en los dos motores.
+- [X] T912 [P] [US15] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Inventory/SeriesConcurrentesTests.cs **(nuevo)**, en los dos motores: dos recepciones simultáneas con la misma serie → una confirma y la otra recibe `Inventory.Serial.AlreadyInStock`; dos ventas simultáneas de la misma serie → una sola sale (el cerrojo incluye `INV_Serials`)
+  - hecho 2026-09-29: «seriesi6»; dos recepciones simultáneas de SN-C1 → una entra y la otra `Inventory.Serial.AlreadyInStock`; dos ventas simultáneas → sale una sola (la otra 422), existencia 0 y la serie fuera de existencia. Verde en los dos motores.
 
 ### Implementation for User Story 15
 
@@ -3170,6 +3176,7 @@ de dos lotes (vencen a 10 y 60 días) y venta que sugiere el de 10; lote vencido
 **Checkpoint**: US15 funciona sola sobre la base de I6 y las entregas I1–I3 (el ensamble y el lote no
 dependen de US14); las pruebas de dominio, Application y las dos e2e (`CatalogoAvanzadoTests`,
 `SeriesConcurrentesTests`) pasan en los dos motores.
+- Verificación del Checkpoint (2026-09-29, cierre de I6): cumplido. `CatalogoAvanzadoTests` y `SeriesConcurrentesTests` pasan en PostgreSQL y SQL Server. Decisiones por defecto para revisar con el dueño: T922 y T931.
 
 ---
 
@@ -3205,7 +3212,8 @@ quiebre (US17-2); cada vista contrastada con cifras calculadas a mano; exportar 
   - hecho 2026-09-26 (cierre de I1, T443): `ReordenYQuiebreTests` escrita y verde en los dos motores (la revisión diaria se dispara con `fx.CorrerTareaAsync`; SC-022 en la cooperativa «reordensolo», donde sólo el administrador tiene el permiso destinatario).
 - [X] T950 [US17] Crear `tests/IngenIA365ERP.API.IntegrationTests/Inventory/InformesDeInventarioTests.cs` (nuevo; quickstart §3.14): `documents` y `reorder-alerts` en `json` con `Inventory.Reports.View`, en `xlsx` y `pdf` sólo con `Inventory.Reports.Export` (sin él, 404) y cada exportación con su evento `Inventory.Report.Exported` en la base Mongo de la cooperativa; `bodega.b` sólo ve PV2; `documents` con contraparte exportado sin `Inventory.Reports.ExportPersonalData` → 404; el valorizado a un corte pasado (vista `valuation` de US3) coincide con `INV_PeriodClosingBalances` del período cerrado (US17-1, US17-3, FR-087)
   - hecho 2026-09-26 (cierre de I1, T443): `InformesDeInventarioTests` escrita y verde en los dos motores.
-- [ ] T951 [US17] Crear `tests/IngenIA365ERP.API.IntegrationTests/Inventory/TableroEInformesAvanzadosTests.cs` (nuevo; quickstart §7 I6): las vistas de I6 y el motivo «sin movimiento» de `impairment` en `json` y `xlsx` con cifras conocidas; `margin?by=customer` exportado sin `Inventory.Reports.ExportPersonalData` → 404 (US17-3); `GET /api/inventory/dashboard` con y sin `Inventory.Costs.Read` y con alcance parcial; sin `Inventory.Dashboard.View` → 404
+- [X] T951 [US17] Crear `tests/IngenIA365ERP.API.IntegrationTests/Inventory/TableroEInformesAvanzadosTests.cs` (nuevo; quickstart §7 I6): las vistas de I6 y el motivo «sin movimiento» de `impairment` en `json` y `xlsx` con cifras conocidas; `margin?by=customer` exportado sin `Inventory.Reports.ExportPersonalData` → 404 (US17-3); `GET /api/inventory/dashboard` con y sin `Inventory.Costs.Read` y con alcance parcial; sin `Inventory.Dashboard.View` → 404
+  - hecho 2026-09-29: «tableroi6» con cifras a mano: `margin` (200.000 − 120.000 = 80.000, 40 %), `turnover` (rotación = costo ÷ promedio), `abc` (P7 clase A), `no-movement` con `Informes.DiasSinMovimiento` = 20 (P8, 8 a 3.000) y el mismo motivo en `impairment`, `expiring` (LX, 10 días, 20.000), `purchase-suggestion` (sugerido 46, último costo 5.000, proveedor), `shrinkage-cap` (compras 20.000, mermas 2.000, «no está parametrizado»); las ocho en `xlsx`; `margin?by=customer` exportado sin `ExportPersonalData` → 404; tablero con y sin `Costs.Read` y con alcance sólo en PRIN; sin `Dashboard.View` → 404. Verde en los dos motores.
 
 ### Implementation for User Story 17 — I1 (reorden y vistas básicas)
 
@@ -3262,6 +3270,7 @@ los cálculos a mano y respetan costos, alcance y datos personales (US17-1 a US1
 - Estado 2026-09-26 (cierre de I1, T443): la parte de I1 (T949, T950) escrita y verde en los dos motores; lo demás de la fase es de I6.
 - Estado 2026-09-29 (I6, sección us17-tablero): T943, T947, T948 y T959–T970 hechas, sin migración ni columnas nuevas. Quedan la e2e T951
   (se escribe en el cierre de I6) y T971 (del dueño: el porcentaje legal de la contadora). Reglas fijadas sin pregunta al dueño en T54e.
+- Verificación del Checkpoint (2026-09-29, cierre de I6): cumplido en lo de I6. `TableroEInformesAvanzadosTests` (T951) pasa en PostgreSQL y SQL Server con las cifras a mano. Queda T971 (del dueño: el porcentaje legal de la contadora).
 
 ---
 

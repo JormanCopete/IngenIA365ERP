@@ -230,14 +230,16 @@ public class ImportDocumentTypesCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Una_clase_de_una_entrega_futura_todavia_no_se_registra()
+    public async Task Desde_I6_toda_clase_se_importa()
     {
-        var futura = Enum.GetValues<DocumentClass>().First(c => !ClasesDeDocumento.De(c).Operable());
-        Tipos(Tipo("FUT", futura.ToString()));
+        // I6 es la última entrega del comercio: desde su cierre (EntregaVigente = I6) ninguna clase queda por llegar, así que
+        // la columna Clase ya no responde CellNotYetAvailable; el ensamble, que llegaba con I6, se importa como cualquier otra.
+        Enum.GetValues<DocumentClass>().Should().OnlyContain(c => ClasesDeDocumento.De(c).Operable());
+        Tipos(Tipo("ENX", "Assembly"));
 
-        var error = UnicoError(await ImportarAsync(ModoDeImportacion.Review));
+        var revision = await ImportarAsync(ModoDeImportacion.Review);
 
-        (error.Column, error.Code).Should().Be((P.Clase, ImportErrors.CellNotYetAvailable));
+        revision.Value.Errors.Should().NotContain(e => e.Column == P.Clase);
     }
 
     [Fact]

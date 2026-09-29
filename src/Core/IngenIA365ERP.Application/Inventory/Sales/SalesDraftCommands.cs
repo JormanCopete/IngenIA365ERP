@@ -235,10 +235,16 @@ public sealed class BorradorDeVenta(
         else
         {
             var municipio = await db.Branches.AsNoTracking().Where(b => b.Id == documento.BranchId).Select(b => b.MunicipalityDaneCode).FirstOrDefaultAsync(ct);
+            // I6: una línea que nace de otra (pedido, remisión, factura desde remisiones) conserva la lista y el precio de lista de su origen
+            // —«a su precio»—: el precio guardado en la línea origen es sin impuestos y no puede volver a entrar como precio digitado, que va
+            // en la base de la lista (con una lista con IVA la remisión y su factura salían con un «descuento» igual al IVA).
+            var listasDeOrigen = await ListasDeOrigenAsync(pedido, ct);
             var lineas = vivas.Select(l =>
             {
                 var p = l.LineNumber - 1 < pedido.Lines.Count ? pedido.Lines[l.LineNumber - 1] : null;
-                return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase, p?.UnitPrice, p?.DiscountPercent, p?.DiscountAmount);
+                var fijada = p?.SourceLinePublicId is { } origen && listasDeOrigen.TryGetValue(origen, out var lista) ? lista : null;
+                return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase, p?.UnitPrice, p?.DiscountPercent, p?.DiscountAmount,
+                    fijada);
             }).ToList();
             var pedidoDePrecio = new PedidoDePrecificacion(documento.OperationDate, documento.CounterpartyPersonId, documento.SalesChannelId,
                 documento.BranchId, documento.WarehouseId, actor.UserId, lineas, datos.DocumentDiscount?.Amount, municipio);
@@ -318,14 +324,28 @@ public sealed class BorradorDeVenta(
 
     public Task<Error?> TraducirColisionAsync(DbUpdateException ex, BorradorEnCurso borrador, CancellationToken ct) => Task.FromResult<Error?>(null);
 
+    /// <summary>
+    /// I6: la lista y el precio de lista de cada línea origen que nombran las líneas del borrador (<c>SourceLinePublicId</c>), para precificar la
+    /// línea derivada con ellos (<see cref="LineaAPrecificar.ListaFijada"/>). Una línea origen sin precio de lista no fija nada.
+    /// </summary>
+    private async Task<Dictionary<Guid, PrecioFijado>> ListasDeOrigenAsync(SaveInventoryDraftRequest pedido, CancellationToken ct)
+    {
+        var origenes = pedido.Lines.Select(l => l.SourceLinePublicId).OfType<Guid>().Distinct().ToList();
+        if (origenes.Count == 0) return [];
+        var filas = await db.InventoryDocumentLines.AsNoTracking().Where(l => origenes.Contains(l.PublicId))
+            .Select(l => new { l.PublicId, l.PriceListId, l.ListPrice, l.ListPriceIncludesTaxes }).ToListAsync(ct);
+        return filas.Where(f => f.ListPrice is > 0m)
+            .ToDictionary(f => f.PublicId, f => new PrecioFijado(f.PriceListId, f.ListPrice!.Value, f.ListPriceIncludesTaxes));
+    }
+
     // ------------------------------------------------------------------------------------ orígenes (I6) --
 
     /// <summary>
     /// I6 (T878–T884): los orígenes del borrador (<c>originPublicIds</c> y las líneas con <c>SourceLinePublicId</c>): confirmados, de la clase de
     /// la que nace la del tipo (<see cref="RutasDeVenta.OrigenDe"/>) —si no, <c>Inventory.Sales.OriginInvalid</c>—. Sin contraparte, la del
     /// origen; sin bodega, la del origen. Sin líneas (salvo la nota débito, que carga conceptos nuevos), propone lo pendiente de cada línea
-    /// origen —la cotización entera, lo pendiente por despachar del pedido, lo pendiente por facturar de la remisión— a su precio; una línea con
-    /// origen toma de él producto, unidad y, si no lo trae, precio. En la factura desde remisiones toda línea viene de una remisión.
+    /// origen —la cotización entera, lo pendiente por despachar del pedido, lo pendiente por facturar de la remisión— a su precio (la lista y el precio de lista de la línea origen, <see cref="ListasDeOrigenAsync"/>); una línea con
+    /// origen toma de él producto, unidad y lista. En la factura desde remisiones toda línea viene de una remisión.
     /// </summary>
     private async Task<Result<SaveInventoryDraftRequest>> ConOrigenesAsync(InventoryDocumentType tipo, SaveInventoryDraftRequest pedido, InventoryDocument? existente,
         CancellationToken ct)
@@ -361,8 +381,9 @@ public sealed class BorradorDeVenta(
                 var queda = pendiente.GetValueOrDefault(o.Id);
                 if (queda <= 0m) continue;
                 var factor = o.Factor == 0m ? 1m : o.Factor;
+                // El precio lo pone la lista de la línea origen al precificar (ListasDeOrigenAsync), no su precio sin impuestos.
                 lineas.Add(new SaveInventoryDraftLine(null, productos[o.ProductId], unidades[o.UnitId], Math.Round(queda / factor, 4, MidpointRounding.AwayFromZero),
-                    UnitPrice: o.UnitPrice, SourceLinePublicId: o.PublicId));
+                    SourceLinePublicId: o.PublicId));
             }
         }
         else
@@ -382,7 +403,6 @@ public sealed class BorradorDeVenta(
                 {
                     ProductPublicId = productos[o.ProductId],
                     UnitPublicId = l.UnitPublicId == Guid.Empty ? unidades[o.UnitId] : l.UnitPublicId,
-                    UnitPrice = l.UnitPrice ?? o.UnitPrice,
                 };
             }
         }

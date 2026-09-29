@@ -145,4 +145,28 @@ public class RemisionesYFacturaDesdeRemisionesTests
         c.MensajesDe(contrario.PublicId).Should().Contain(DocumentoAnuladoV1.Type);
         c.Db.InventoryDocuments.AsNoTracking().Single(d => d.Id == libre.Id).Status.Should().Be(DocumentStatus.Voided);
     }
+    [Fact]
+    public async Task Con_una_lista_con_IVA_la_remision_y_su_factura_conservan_el_precio_de_lista_sin_descuentos()
+    {
+        // Lo destapó la e2e T870 (2026-09-29): la línea derivada tomaba el precio sin impuestos de su origen como precio digitado, que va en
+        // la base de la lista; con una lista con IVA la remisión y la factura salían con un «descuento» igual al IVA y pedían aprobación.
+        var c = await CicloComercialDePrueba.CrearAsync();
+        var lista = await c.Db.PriceLists.SingleAsync(l => l.Code == "GENERAL");
+        lista.IncludesTaxes = true;
+        foreach (var item in await c.Db.PriceListItems.Where(i => i.PriceListId == lista.Id).ToListAsync()) item.Price *= 1.19m;
+        await c.Db.SaveChangesAsync();
+
+        var pedido = await c.PedidoAsync(2m, c.P3);
+        var remision = await c.RemisionAsync(2m, pedido, c.P3);
+        var factura = await c.FacturaAsync("FVR", [remision.PublicId]);
+
+        foreach (var documento in new[] { pedido, remision, c.Doc(factura) })
+        {
+            var linea = documento.Lines.Single(l => !l.IsDeleted);
+            (linea.ListPrice, linea.ListPriceIncludesTaxes, linea.UnitPrice).Should().Be((11_900m, true, 10_000m), $"{documento.Class} a su precio de lista");
+            c.Db.DocumentLineDiscounts.AsNoTracking().Count(d => d.DocumentId == documento.Id && !d.IsDeleted).Should().Be(0, $"{documento.Class} sin descuentos");
+        }
+        c.Doc(factura).AmountDue.Should().Be(23_800m);
+        CicloComercialDePrueba.Exito(await c.ConfirmarAsync(factura));
+    }
 }

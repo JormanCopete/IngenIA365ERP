@@ -2165,6 +2165,14 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `InventarioClient.{RutaDelTablero, TableroAsync}` con `InventarioDtos.Tablero` (`TableroDeInventarioDto`, `FichaDelTableroDto`,
     `EnlaceDeFichaDto`, `AlcanceDelTableroDto`, `ElementoDelTableroDto`, `SinDestinatarioDto`), `DestinoDeDocumentoDeInventario.Kardex(…, lote)`, las
     clases `.ficha-tablero` y `.severidad-{info,warning,critical}` de `componentes.css` y el tema `inventario-tablero` del manual. Reglas en T54e.
+- **I6, cierre de las e2e (T870, T871, T911, T912, T951; 2026-09-29) (nuevo)**: `CatalogoDeParametros.EntregaVigente` sube a **I6**, la última
+    entrega del comercio: toda clase es operable (ensamble y ciclo comercial incluidos), la semilla siembra `COT`, `PED`, `REM`, `FVR`, `NDV` y
+    `ENS`, las tareas `inventario.reservas`, `inventario.remisiones` e `inventario.lotes` corren y los valores de I6 de los parámetros se admiten.
+    Ya no queda «clase de una entrega futura»: las pruebas que la fijaban (`DocumentTypeCommandsTests`, `ImportDocumentTypesCommandTests`, e2e
+    `TiposDeDocumentoTests`) comprueban ahora que todo es operable y que la regla sigue en pie para I5 (`Operable(EntregaDelComercio.I5)`).
+    Corrección que destapó T870: `BorradorDeVenta.ListasDeOrigenAsync` **(nuevo)** —la línea que nace de otra (pedido, remisión, factura desde
+    remisiones) se precifica con la lista y el precio de lista de su línea origen (`LineaAPrecificar.ListaFijada`, que hasta hoy no usaba nadie) y
+    ya no copia su `UnitPrice` como precio digitado—. Reglas en T54f.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2456,6 +2464,12 @@ fijaban «hasta I6» (`ProductCommandsTests`, `ImportProductsCommandTests`, `Imp
 `Common/CerrojoDeInventarioSqlTests.Las_series_se_bloquean_en_exclusivo_por_Id_despues_de_los_detalles`. `AbrirConteoTests` dejó de fijar
 `.ScopeNotAvailable`; `KardexDePrueba` (`Seguimiento()`), `ConteosDePrueba`, `TrasladosDePrueba` y `VentasDePrueba` pasan
 `ReglasDeSeguimiento` al guardado y a la confirmación.
+**(nuevos, I6 cierre, T870/T871/T911/T912/T951)** e2e en la colección «Inventario e2e», verdes en PostgreSQL y SQL Server:
+`tests/IngenIA365ERP.API.IntegrationTests/Ventas/CicloComercialTests` (escenario «cicloi6» sobre `EscenarioDeFacturacionElectronica` con
+`CanalSimulado` y el tipo `FRE` de factura desde remisiones con su resolución `FR`; y «remisioni6» sobre `EscenarioDeInventario` para la
+remisión vieja y el cierre), `Ventas/ReservaConcurrenteTests` («reservai6»), `Inventory/CatalogoAvanzadoTests` («catalogoi6»),
+`Inventory/SeriesConcurrentesTests` («seriesi6») e `Inventory/TableroEInformesAvanzadosTests` («tableroi6»); y en Application
+`RemisionesYFacturaDesdeRemisionesTests.Con_una_lista_con_IVA_la_remision_y_su_factura_conservan_el_precio_de_lista_sin_descuentos`.
 
 ---
 
@@ -3588,6 +3602,16 @@ el día anterior y del mes contra el mismo tramo del mes anterior; las fichas de
 `ElectronicInvoicing.Documents.View`, las alertas `Inventory.Alerts.View` y la de tipos sin paso `Inventory.DocumentTypes.View` (§28 sólo exigía
 costos para las de valor); `messagesPending`/`messagesRejected` cuentan `Pending`/`Rejected` (no `InBatch` ni `ValidationFailed`), y
 `fiscalTypesNotPosted` cuenta los tipos fiscales activos con `NoPasa` **guardado** (el defecto `NoPasa` sin contabilidad iniciada no cuenta).
+
+**T54f · El precio de una línea derivada y la última entrega (nuevo, I6, cierre de las e2e; 2026-09-29; revisar con el dueño).** (a) La
+línea que nace de otra por `originPublicIds`/`originLinePublicId` —el pedido desde la cotización al guardarse otra vez, la remisión desde el
+pedido, la factura desde el pedido o desde remisiones— **conserva la lista y el precio de lista de su línea origen** («a su precio»), aunque la
+lista haya cambiado después; el precio sin impuestos guardado en el origen ya no entra como precio digitado (va en la base de la lista: con
+una lista con IVA la remisión y su factura salían con un «descuento» igual al IVA que pedía aprobación). Un precio que la persona digita en la
+línea derivada sigue siendo un descuento contra ese precio de lista. Los **descuentos manuales** del origen no se trasladan a la remisión ni a
+la factura (sólo «Convertir en pedido» copia los de la cotización); las promociones vigentes se vuelven a aplicar solas. (b) **I6 es la última
+entrega**: con `EntregaVigente = I6` no hay clase ni valor «de una entrega futura»; `Inventory.DocumentClass.NotAvailable` y
+`Parameters.ValueNotAllowed` por entrega siguen en el código para quien evalúe otra entrega (las pruebas de I1–I5 la pasan explícita).
 
 ---
 
