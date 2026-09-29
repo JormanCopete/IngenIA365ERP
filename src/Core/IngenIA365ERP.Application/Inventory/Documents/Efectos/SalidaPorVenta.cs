@@ -211,7 +211,10 @@ public sealed class EfectoComprobanteDeVenta(
     public override DocumentClass Clase => DocumentClass.NonElectronicSalesReceipt;
 }
 
-/// <summary>Las reglas de producto de una línea de venta o nota: existe, no está inactivo ni bloqueado. Devuelve los inventariables. (nuevo)</summary>
+/// <summary>
+/// Las reglas de producto de una línea de venta o nota: existe, no es una plantilla de variantes (I6), no está inactivo ni bloqueado.
+/// Devuelve los inventariables; un combo entra como línea de venta sin existencia propia (su salida por componentes es de T926). (nuevo)
+/// </summary>
 public static class ReglasDeLineasDeVenta
 {
     public static async Task<Result<IReadOnlySet<int>>> ProductosAsync(InventoryDocument documento, IMaestrosDelDocumento maestros, CancellationToken ct)
@@ -221,6 +224,7 @@ public static class ReglasDeLineasDeVenta
         foreach (var linea in vivas)
         {
             if (!productos.TryGetValue(linea.ProductId, out var producto)) continue;
+            if (producto.EsPlantilla) return Result.Failure<IReadOnlySet<int>>(InventoryErrors.ProductNotInventoriable(linea.LineNumber, producto.Code));
             if (producto.Status == ProductStatus.Blocked) return Result.Failure<IReadOnlySet<int>>(InventoryErrors.ProductBlocked(linea.LineNumber, producto.Code));
             if (producto.Status == ProductStatus.Inactive && documento.Class is not (DocumentClass.CreditNote or DocumentClass.PosAdjustmentNote or DocumentClass.NonElectronicSalesNote))
                 return Result.Failure<IReadOnlySet<int>>(InventoryErrors.ProductInactive(linea.LineNumber, producto.Code));

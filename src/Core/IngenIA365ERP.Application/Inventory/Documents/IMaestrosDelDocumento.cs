@@ -14,8 +14,11 @@ public sealed record BodegaDelDocumento(
     bool Inactiva,
     DateOnly? CutoffDate = null);
 
-/// <summary>Un producto tal como lo usa una línea. (nuevo)</summary>
-public sealed record ProductoDelDocumento(int Id, Guid PublicId, string Code, string Name, bool Inventariable, ProductStatus Status);
+/// <summary>
+/// Un producto tal como lo usa una línea. <see cref="EsPlantilla"/> (I6, T918): una plantilla de variantes no entra a ningún
+/// documento (<c>Inventory.Product.NotInventoriable</c>); un combo sí entra a las ventas, sin existencia propia. (nuevo)
+/// </summary>
+public sealed record ProductoDelDocumento(int Id, Guid PublicId, string Code, string Name, bool Inventariable, ProductStatus Status, bool EsPlantilla = false);
 
 /// <summary>
 /// La unidad de una línea para un producto: la base o una alterna, con su factor a la base, los decimales que admite y

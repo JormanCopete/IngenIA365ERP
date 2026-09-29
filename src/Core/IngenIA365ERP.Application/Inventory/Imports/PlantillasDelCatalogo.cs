@@ -108,6 +108,12 @@ public static class PlantillaDeProductos
     public const string HojaUnidades = "Unidades";
     public const string HojaImpuestos = "ImpuestosAdicionales";
 
+    /// <summary>I6 (T922, decisión por defecto): los valores de atributo de cada variante. (nuevo)</summary>
+    public const string HojaVariantes = "Variantes";
+
+    /// <summary>I6 (T922, decisión por defecto): los componentes de combos y kits. (nuevo)</summary>
+    public const string HojaComponentes = "Componentes";
+
     public const string PermisoDeReclasificar = "Inventory.Catalog.ReclassifyAccountingGroup";
 
     // Productos.
@@ -138,6 +144,13 @@ public static class PlantillaDeProductos
     public const string Uso = "uso";
     public const string Tarifa = "tarifa";
     public const string UnidadesGravables = "unidadesGravables";
+
+    // Variantes y Componentes (I6).
+    public const string Plantilla = "plantilla";
+    public const string Atributo = "atributo";
+    public const string Valor = "valor";
+    public const string Componente = "componente";
+    public const string Cantidad = "cantidad";
 
     public static readonly IReadOnlyDictionary<string, ProductKind> EtiquetasDeTipo = new Dictionary<string, ProductKind>
     {
@@ -177,7 +190,7 @@ public static class PlantillaDeProductos
             new(Codigo, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoLargo, Reglas: "llave", Ejemplo: "ARZ-001"),
             new(Nombre, TipoDeValor.Texto, Obligatoria: true, Largo: 200, Ejemplo: "ARROZ DIANA 500 G"),
             new(Tipo, TipoDeValor.Enumeracion, Obligatoria: true,
-                Reglas: "Inventoriable (inventariable) o Service (servicio); combos, kits, plantillas y variantes llegan con I6", Ejemplo: "Inventoriable"),
+                Reglas: "Inventoriable (inventariable), Service (servicio), Combo, Kit, Template (plantilla) o Variant (variante: con sus filas en la hoja Variantes); no cambia con movimientos, variantes o componentes", Ejemplo: "Inventoriable"),
             new(Categoria, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "código de categoría", Ejemplo: "ARROZ"),
             new(Marca, TipoDeValor.Codigo, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "código de marca", Ejemplo: "DIANA"),
             new(UnidadBase, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoCorto,
@@ -186,9 +199,9 @@ public static class PlantillaDeProductos
                 Reglas: "código de grupo; obligatorio (la matriz contable asigna las cuentas por él); con movimientos cambia por la reclasificación de grupo",
                 Ejemplo: "ABARROTES"),
             new(Estado, TipoDeValor.Enumeracion, Reglas: "Active (activo), Inactive (inactivo), Blocked (bloqueado); vacío = activo al crear, sin cambio al actualizar", Ejemplo: "Active"),
-            new(ControlaLote, TipoDeValor.SiNo, Reglas: "«sí» llega con I6", Ejemplo: "no"),
-            new(ControlaSerie, TipoDeValor.SiNo, Reglas: "«sí» llega con I6", Ejemplo: "no"),
-            new(ControlaVencimiento, TipoDeValor.SiNo, Reglas: "«sí» llega con I6", Ejemplo: "no"),
+            new(ControlaLote, TipoDeValor.SiNo, Reglas: "ni en servicios ni en combos; no cambia con existencia ni con borradores", Ejemplo: "no"),
+            new(ControlaSerie, TipoDeValor.SiNo, Reglas: "ni en servicios ni en combos; no cambia con existencia ni con borradores", Ejemplo: "no"),
+            new(ControlaVencimiento, TipoDeValor.SiNo, Reglas: "exige controlaLote; no cambia con existencia ni con borradores", Ejemplo: "no"),
             new(TratamientoIva, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "Taxed (gravado), Exempt (exento), Excluded (excluido)", Ejemplo: "Excluded"),
             new(TarifaIva, TipoDeValor.Codigo, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "código de tarifa de IVA; obligatoria si es gravado, vacía si exento o excluido", Ejemplo: "IVA19"),
             new(ConceptoRetencion, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "concepto de retención en compras", Ejemplo: "COMPRAS"),
@@ -217,6 +230,19 @@ public static class PlantillaDeProductos
             new(Producto, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoLargo, Reglas: "llave con tarifa", Ejemplo: "BOLSA-01"),
             new(Tarifa, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "código de tarifa; ni IVA (va en tarifaIva) ni retención", Ejemplo: "BOLSA"),
             new(UnidadesGravables, TipoDeValor.Costo, Reglas: "en impuestos por unidad: unidades gravables por unidad base", Ejemplo: "1"),
+        ], Obligatoria: false),
+        new HojaDePlantilla(HojaVariantes,
+        [
+            new(Producto, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoLargo, Reglas: "código de la variante (tipo Variant); llave con atributo", Ejemplo: "CAM-M-AZUL"),
+            new(Plantilla, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoLargo, Reglas: "código de su plantilla (tipo Template); la misma en todas sus filas", Ejemplo: "CAM"),
+            new(Atributo, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "código de atributo (Inventario → Atributos de variante)", Ejemplo: "TALLA"),
+            new(Valor, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "código de un valor del atributo; la combinación no se repite en la plantilla", Ejemplo: "M"),
+        ], Obligatoria: false),
+        new HojaDePlantilla(HojaComponentes,
+        [
+            new(Producto, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoLargo, Reglas: "código del combo o kit; llave con componente", Ejemplo: "KIT-ASEO"),
+            new(Componente, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoLargo, Reglas: "producto inventariable o variante; sin ciclos", Ejemplo: "JABON-01"),
+            new(Cantidad, TipoDeValor.Cantidad, Obligatoria: true, Reglas: "> 0, en la unidad base del componente y con sus decimales; lo que no viene queda como está", Ejemplo: "2"),
         ], Obligatoria: false),
     ]);
 }

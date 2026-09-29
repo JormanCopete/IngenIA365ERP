@@ -13,9 +13,6 @@ namespace IngenIA365ERP.Application.Inventory.Catalog;
 /// </summary>
 public static class CatalogErrors
 {
-    /// <summary>La entrega en que se habilitan las clases de producto y el seguimiento por lote y serie.</summary>
-    public const string EntregaDelCatalogoAvanzado = "I6";
-
     // ------------------------------------------------------------------------------ no existe --
 
     public static Error UnitNotFound(string? codigo = null) => NoExiste("Inventory.Unit.NotFound", "La unidad de medida", codigo);
@@ -65,13 +62,26 @@ public static class CatalogErrors
 
     // -------------------------------------------------------------------------------- productos --
 
-    public static Error ProductKindNotAvailable(ProductKind kind) => new ErrorConDatos("Inventory.Product.KindNotAvailable",
-        $"La clase de producto {kind} llega con la entrega {EntregaDelCatalogoAvanzado}: por ahora sólo inventariable o servicio.",
-        new { kind = kind.ToString(), availableIn = EntregaDelCatalogoAvanzado });
+    /// <summary>I6 (T918): el vencimiento se controla por lote (data-model §1.6). (nuevo)</summary>
+    public static Error ProductExpiryRequiresLot() => new("Inventory.Product.ExpiryRequiresLot",
+        "El control por vencimiento va por lote: encienda también el control por lote.");
 
-    public static Error ProductTrackingNotAvailable() => new ErrorConDatos("Inventory.Product.TrackingNotAvailable",
-        $"El control por lote, serie y vencimiento llega con la entrega {EntregaDelCatalogoAvanzado}.",
-        new { availableIn = EntregaDelCatalogoAvanzado });
+    /// <summary>I6 (T918): el seguimiento sólo tiene sentido en lo que tiene existencia propia (y en la plantilla, que lo hereda). (nuevo)</summary>
+    public static Error ProductTrackingNotApplicable(ProductKind kind) => new ErrorConDatos("Inventory.Product.TrackingNotApplicable",
+        $"Un producto de clase {kind} no maneja existencia propia: no se controla por lote, serie ni vencimiento.",
+        new { kind = kind.ToString() });
+
+    /// <summary>I6 (T918; data-model §1.6): las marcas de seguimiento no cambian con existencia ni con borradores que citen el producto. (nuevo)</summary>
+    public static Error ProductTrackingLocked(bool hasStock, int drafts) => new ErrorConDatos("Inventory.Product.TrackingLocked",
+        hasStock
+            ? "El producto tiene existencia: el control por lote, serie o vencimiento no cambia hasta que quede en cero."
+            : $"El producto está en {drafts} documento(s) en borrador o en aprobación: confírmelos o descártelos antes de cambiar el control por lote, serie o vencimiento.",
+        new { hasStock, drafts });
+
+    /// <summary>I6 (T918; data-model §1.6): la clase no cambia después del primer movimiento ni con variantes o componentes que dependan de ella. (nuevo)</summary>
+    public static Error ProductKindLocked(ProductKind actual) => new ErrorConDatos("Inventory.Product.KindLocked",
+        $"El producto ya tiene movimientos, variantes o componentes: su clase ({actual}) no cambia. Cree otro producto.",
+        new { kind = actual.ToString() });
 
     public static Error ProductAccountingGroupRequired() => new("Inventory.Product.AccountingGroupRequired",
         "El producto necesita su grupo contable: con él la matriz de Contabilidad sabe qué cuentas usar.");
@@ -157,6 +167,80 @@ public static class CatalogErrors
 
     public static Error SalesChannelInUse(IReadOnlyList<string> usedBy) => new ErrorConDatos("Inventory.SalesChannel.InUse",
         $"El canal lo usan {string.Join(", ", usedBy)}: cámbielos antes de inactivarlo.", new { usedBy });
+
+    // --------------------------------------------------------------------------- variantes (I6) --
+
+    /// <summary>I6 (T918, T919): una variante nace de su plantilla. (nuevo)</summary>
+    public static Error VariantParentRequired() => new("Inventory.Variant.ParentRequired",
+        "Una variante nace de su plantilla: genérela desde la plantilla (Generar variantes) o, en la plantilla de productos, con sus filas en la hoja Variantes.");
+
+    /// <summary>I6 (T919): se generan variantes sólo sobre una plantilla. (nuevo)</summary>
+    public static Error VariantNotATemplate(string productCode) => new ErrorConDatos("Inventory.Variant.NotATemplate",
+        $"El producto {productCode} no es una plantilla: sólo una plantilla tiene variantes.", new { productCode });
+
+    /// <summary>I6 (T919, US15-1): la combinación ya existe en la plantilla. (nuevo)</summary>
+    public static Error VariantCombinationExists(IReadOnlyList<string> variantKeys) => new ErrorConDatos("Inventory.Variant.CombinationExists",
+        $"La plantilla ya tiene {(variantKeys.Count == 1 ? "la variante" : "las variantes")} {string.Join(", ", variantKeys)}: no se repiten.",
+        new { variantKeys });
+
+    public static Error VariantAttributeNotFound(string? codigo = null) => NoExiste("Inventory.VariantAttribute.NotFound", "El atributo de variante", codigo);
+
+    /// <summary>I6 (T919): el valor no es de ese atributo. (nuevo)</summary>
+    public static Error VariantAttributeValueNotFound(string attributeCode, string? valueCode = null) => new ErrorConDatos(
+        "Inventory.VariantAttribute.ValueNotFound",
+        valueCode is null ? $"Un valor elegido no es del atributo {attributeCode}." : $"El atributo {attributeCode} no tiene el valor «{valueCode}».",
+        new { attributeCode, valueCode });
+
+    /// <summary>I6 (T919): con un atributo inactivo no se generan variantes nuevas. (nuevo)</summary>
+    public static Error VariantAttributeInactive(string attributeCode) => new ErrorConDatos("Inventory.VariantAttribute.Inactive",
+        $"El atributo {attributeCode} está inactivo: actívelo para generar variantes con él.", new { attributeCode });
+
+    /// <summary>I6 (T919): el código de un atributo o un valor que usan variantes no cambia ni se retira (está en su <c>VariantKey</c>). (nuevo)</summary>
+    public static Error VariantAttributeInUse(string code, int variants) => new ErrorConDatos("Inventory.VariantAttribute.InUse",
+        $"{code} lo usan {variants} variante(s): su código no cambia ni se retira. Puede cambiarle el nombre o inactivar el atributo.",
+        new { code, variants });
+
+    /// <summary>I6 (T919): el mismo valor dos veces en un atributo. (nuevo)</summary>
+    public static Error VariantAttributeValueDuplicate(string valueCode) => new ErrorConDatos("Inventory.VariantAttribute.ValueDuplicate",
+        $"El valor {valueCode} está dos veces en el atributo.", new { valueCode });
+
+    // ------------------------------------------------------------------------ lotes y series (I6) --
+
+    /// <summary>I6 (T921, T908): el producto controla lote y la entrada no lo trae. (nuevo)</summary>
+    public static Error LotRequired(string productCode) => new ErrorConDatos("Inventory.Lot.Required",
+        $"El producto {productCode} se controla por lote: indique el lote.", new { productCode });
+
+    /// <summary>I6 (T921): el producto controla vencimiento y el lote no trae la fecha. (nuevo)</summary>
+    public static Error LotExpiryRequired(string productCode) => new ErrorConDatos("Inventory.Lot.ExpiryRequired",
+        $"El producto {productCode} controla vencimiento: indique la fecha de vencimiento del lote.", new { productCode });
+
+    /// <summary>I6 (T921, T908): un mismo lote con otra fecha de vencimiento. (nuevo)</summary>
+    public static Error LotExpiryMismatch(string productCode, string lotCode, DateOnly? expiryDate) => new ErrorConDatos("Inventory.Lot.ExpiryMismatch",
+        expiryDate is { } f
+            ? $"El lote {lotCode} del producto {productCode} ya existe y vence el {f:yyyy-MM-dd}: un lote tiene una sola fecha de vencimiento."
+            : $"El lote {lotCode} del producto {productCode} ya existe sin fecha de vencimiento: un lote tiene una sola fecha.",
+        new { productCode, lotCode, expiryDate });
+
+    /// <summary>I6 (T921): el producto no se controla por lote. (nuevo)</summary>
+    public static Error LotNotTracked(string productCode) => new ErrorConDatos("Inventory.Lot.NotTracked",
+        $"El producto {productCode} no se controla por lote: deje vacíos el lote y el vencimiento.", new { productCode });
+
+    /// <summary>I6 (T921): el producto controla serie y la entrada no la trae. (nuevo)</summary>
+    public static Error SerialRequired(string productCode) => new ErrorConDatos("Inventory.Serial.Required",
+        $"El producto {productCode} se controla por serie: indique la serie de la unidad.", new { productCode });
+
+    /// <summary>I6 (T921): el producto no se controla por serie. (nuevo)</summary>
+    public static Error SerialNotTracked(string productCode) => new ErrorConDatos("Inventory.Serial.NotTracked",
+        $"El producto {productCode} no se controla por serie: deje vacía la serie.", new { productCode });
+
+    /// <summary>I6 (T921, T908): una serie es una unidad: una línea por serie. (nuevo)</summary>
+    public static Error SerialQuantityNotOne(string productCode, string serialNumber) => new ErrorConDatos("Inventory.Serial.QuantityNotOne",
+        $"La serie {serialNumber} del producto {productCode} es una unidad: la cantidad es 1 (una línea por serie).",
+        new { productCode, serialNumber });
+
+    /// <summary>US15-5 (data-model §13): una entrada con una serie que ya está en existencia. (nuevo)</summary>
+    public static Error SerialAlreadyInStock(string productCode, string serialNumber) => new ErrorConDatos("Inventory.Serial.AlreadyInStock",
+        $"La serie {serialNumber} del producto {productCode} ya está en existencia: no entra dos veces.", new { productCode, serialNumber });
 
     private static Error NoExiste(string codigo, string que, string? cual) =>
         new(codigo, cual is null ? $"{que} no existe." : $"{que} «{cual}» no existe.");

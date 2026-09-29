@@ -69,26 +69,25 @@ public class ProductCommandsTests
     [InlineData(ProductKind.Combo)]
     [InlineData(ProductKind.Kit)]
     [InlineData(ProductKind.Template)]
-    [InlineData(ProductKind.Variant)]
-    public async Task Las_clases_de_I6_no_estan_disponibles(ProductKind clase)
+    public async Task Desde_I6_combos_kits_y_plantillas_se_crean_por_el_alta(ProductKind clase)
     {
         var c = await CatalogoDePrueba.CrearAsync();
 
         var r = await c.CrearProductoAsync(c.Alta(clase: clase));
 
-        r.Error.Code.Should().Be("Inventory.Product.KindNotAvailable");
-        ConDatos(r.Error).Data.Should().BeEquivalentTo(new { kind = clase.ToString(), availableIn = "I6" });
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Code : string.Empty);
+        r.Value.Kind.Should().Be(clase);
     }
 
     [Fact]
-    public async Task El_lote_la_serie_y_el_vencimiento_llegan_con_I6()
+    public async Task El_lote_se_controla_desde_I6()
     {
         var c = await CatalogoDePrueba.CrearAsync();
 
         var r = await c.CrearProductoAsync(c.Alta(lote: true));
 
-        r.Error.Code.Should().Be("Inventory.Product.TrackingNotAvailable");
-        ConDatos(r.Error).Data.Should().BeEquivalentTo(new { availableIn = "I6" });
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Code : string.Empty);
+        r.Value.TracksLot.Should().BeTrue();
     }
 
     [Fact]

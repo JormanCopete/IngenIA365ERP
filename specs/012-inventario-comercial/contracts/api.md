@@ -377,9 +377,10 @@ Qué cuentas le corresponden a cada grupo lo dice la matriz de Contabilidad (§2
 accountingGroupPublicId?, vatSaleTreatment, withholdingConceptPublicId?, reference?, weight?, volume?,
 tracksLot?, tracksSerial?, tracksExpiry?, units?: [{ unitPublicId, factor, usage }], barcodes?: [{
 barcode, unitPublicId? }], taxes?: [{ taxDefinitionPublicId, taxRatePublicId?, taxableUnitsPerBaseUnit?
-}] }`. En I1 `kind` admite `Inventoriable` y `Service`; `Combo`, `Kit`, `Template` y `Variant`, y las
-marcas de lote, serie y vencimiento, responden 422 `Inventory.Product.KindNotAvailable` /
-`.TrackingNotAvailable` (`data: { availableIn: "I6" }`) hasta I6. `accountingGroupPublicId` es obligatorio
+}] }`. Hasta I6 `kind` admitía `Inventoriable` y `Service` y lo demás respondía `Inventory.Product.KindNotAvailable` /
+`.TrackingNotAvailable`; desde I6 (T918, retirados) admite las seis clases —una `Variant` sólo nace de su plantilla (422
+`Inventory.Variant.ParentRequired`)— y las marcas de seguimiento con `.ExpiryRequiresLot`, `.TrackingNotApplicable` y
+`.TrackingLocked`; el `PUT` acepta `kind?` (nulo = no cambia; `.KindLocked` con movimientos o dependientes). `accountingGroupPublicId` es obligatorio
 si es inventariable (422 `Inventory.Product.AccountingGroupRequired`) y no se admite en un servicio. Las
 unidades, los códigos y los impuestos del alta siguen las mismas reglas de sus subrecursos (§3.6), en la
 misma transacción.
@@ -518,7 +519,7 @@ exige además `Inventory.Catalog.Export` y deja el evento `Inventory.Catalog.Exp
 | `Inventory.Unit.DianCodeUnknown` · `.DecimalsInUse` · `.InUse` | 422 | §3.1 | `{ maxDecimalsUsed }` · `{ products, examples[] }` |
 | `Inventory.Category.TooDeep` · `.Cycle` · `.InUse` | 422 | §3.2 | `{ maxLevel }` · — · `{ children, products }` |
 | `Inventory.AccountingGroup.InUse` · `.Inactive` | 422 | §3.4, §3.6.4 | |
-| `Inventory.Product.KindNotAvailable` · `.TrackingNotAvailable` | 422 | clase de producto o control de lote/serie antes de I6 | `{ availableIn }` |
+| `Inventory.Product.ExpiryRequiresLot` · `.TrackingNotApplicable` · `.TrackingLocked` · `.KindLocked` (I6; reemplazan a `.KindNotAvailable`/`.TrackingNotAvailable`, retirados) | 422 | vencimiento sin lote; lote o serie en servicio o combo; seguimiento con existencia o borradores; clase con movimientos o dependientes | `{ kind }` / `{ hasStock, drafts }` |
 | `Inventory.Product.WithholdingConceptRequired` **(nuevo, T217)** | 422 | producto sin concepto de retención en compras (obligatorio salvo plantillas y combos, data-model §1.6) | |
 | `Inventory.Product.AccountingGroupRequired` · `.BaseUnitLocked` · `.UseReclassifyAccountingGroup` · `.HasHistory` · `.StatusUnchanged` · `.NotInventoriable` · `.AccountingGroupUnchanged` · `.MovementsAfterEffectiveDate` | 422 | §3.5, §3.6.4 | `{ alternatives[] }` en `HasHistory`; `{ lastMovementDate }` |
 | `Inventory.ProductUnit.IsBaseUnit` · `.Duplicate` · `.FactorLocked` · `.InUse` | 422 | §3.6.1 | |

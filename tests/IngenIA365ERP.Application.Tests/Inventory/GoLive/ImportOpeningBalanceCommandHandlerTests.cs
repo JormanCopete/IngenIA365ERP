@@ -108,7 +108,7 @@ public class ImportOpeningBalanceCommandHandlerTests
             [.. PuestaEnMarchaDePrueba.Fila("B3", "P2", "1", "0", "A-01"), null],     // 7: costo cero, aviso
             [.. PuestaEnMarchaDePrueba.Fila("B3", "SERV", "1", "10"), null],          // 8: no inventariable
             [.. PuestaEnMarchaDePrueba.Fila("B4", "BLOQ", "1", "10"), null],          // 9: bloqueado
-            [.. PuestaEnMarchaDePrueba.Fila("B5", "P1", "1", "10"), "L-001"],         // 10: lote hasta I6
+            [.. PuestaEnMarchaDePrueba.Fila("B5", "P1", "1", "10"), "L-001"],         // 10: P1 no controla lote (I6)
         ]);
 
         var r = await p.ImportarSaldoAsync(ModoDeImportacion.Review);
@@ -122,8 +122,71 @@ public class ImportOpeningBalanceCommandHandlerTests
         r.Value.Warnings.Should().ContainSingle(x => x.Row == 7 && x.Code == GoLiveErrors.OpeningBalanceZeroCostCode);
         e.Should().ContainSingle(x => x.Row == 8 && x.Code == "Inventory.Product.NotInventoriable");
         e.Should().ContainSingle(x => x.Row == 9 && x.Code == "Inventory.Product.Blocked");
-        e.Should().ContainSingle(x => x.Row == 10 && x.Column == S.Lote && x.Code == ImportErrors.CellNotYetAvailable);
+        e.Should().ContainSingle(x => x.Row == 10 && x.Column == S.Lote && x.Code == "Inventory.Lot.NotTracked");
         e.Should().NotContain(x => x.Row == 2);
+    }
+
+    // ------------------------------------------------------------------------------- lote, vencimiento y serie (I6) --
+
+    /// <summary>T921: las columnas de I6 con las reglas del producto y la llave con lote y serie.</summary>
+    [Fact]
+    public async Task Lote_vencimiento_y_serie_siguen_lo_que_controla_el_producto()
+    {
+        var p = await PuestaEnMarchaDePrueba.CrearAsync();
+        var leche = await p.K.C.ProductoAsync(p.K.C.Alta("LT", "Leche", lote: true));
+        var celular = await p.K.C.ProductoAsync(p.K.C.Alta("SR", "Celular"));
+        var lt = await p.Db.Products.SingleAsync(x => x.PublicId == leche.PublicId);
+        lt.TracksExpiry = true;
+        var sr = await p.Db.Products.SingleAsync(x => x.PublicId == celular.PublicId);
+        sr.TracksSerial = true;
+        p.Db.Serials.Add(new Domain.Entities.Inventory.Catalog.Serial { ProductId = sr.Id, SerialNumber = "S-9", InStockWarehouseId = p.B4.Id });
+        await p.Db.SaveChangesAsync();
+        p.Db.ChangeTracker.Clear();
+
+        string?[] Con(string?[] fila, string? lote, string? vence, string? serie) => [.. fila, lote, vence, serie];
+        p.Datos([.. PuestaEnMarchaDePrueba.Encabezados, S.Lote, S.Vencimiento, S.Serie],
+        [
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "LT", "10", "1000"), "l1", "2026-12-31", null),           // 2: bien
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "LT", "5", "1000", "A-01"), "L1", "2027-01-31", null),    // 3: otra fecha para L1
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "LT", "5", "1000"), null, null, null),                   // 4: sin lote
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "SR", "1", "900000"), null, null, "s-1"),                // 5: bien
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "SR", "2", "900000"), null, null, "S-2"),                // 6: dos unidades
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "SR", "1", "900000", "A-01"), null, null, null),         // 7: sin serie
+            Con(PuestaEnMarchaDePrueba.Fila("B4", "P1", "1", "1000"), null, null, "X-1"),                  // 8: P1 no controla serie
+            Con(PuestaEnMarchaDePrueba.Fila("B4", "LT", "1", "1000"), "L2", null, null),                   // 9: sin vencimiento
+            Con(PuestaEnMarchaDePrueba.Fila("B4", "SR", "1", "900000"), null, null, "S-9"),                // 10: ya en existencia
+        ]);
+
+        var r = await p.ImportarSaldoAsync(ModoDeImportacion.Review);
+
+        var e = r.Value.Errors;
+        e.Should().NotContain(x => x.Row == 2 || x.Row == 5);
+        e.Should().NotContain(x => x.Code == ImportErrors.CellNotYetAvailable);
+        e.Should().ContainSingle(x => x.Row == 3 && x.Column == S.Vencimiento && x.Code == "Inventory.Lot.ExpiryMismatch");
+        e.Should().ContainSingle(x => x.Row == 4 && x.Column == S.Lote && x.Code == "Inventory.Lot.Required");
+        e.Should().ContainSingle(x => x.Row == 6 && x.Column == S.Cantidad && x.Code == "Inventory.Serial.QuantityNotOne");
+        e.Should().ContainSingle(x => x.Row == 7 && x.Column == S.Serie && x.Code == "Inventory.Serial.Required");
+        e.Should().ContainSingle(x => x.Row == 8 && x.Column == S.Serie && x.Code == "Inventory.Serial.NotTracked");
+        e.Should().ContainSingle(x => x.Row == 9 && x.Column == S.Vencimiento && x.Code == "Inventory.Lot.ExpiryRequired");
+        e.Should().ContainSingle(x => x.Row == 10 && x.Column == S.Serie && x.Code == "Inventory.Serial.AlreadyInStock");
+
+        // Sólo las filas buenas: el lote nace con su fecha y la serie queda registrada, sin proyección (la escribe el kardex al confirmar).
+        p.Datos([.. PuestaEnMarchaDePrueba.Encabezados, S.Lote, S.Vencimiento, S.Serie],
+        [
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "LT", "10", "1000"), "l1", "2026-12-31", null),
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "LT", "4", "1000", "A-01"), "L1", "2026-12-31", null),
+            Con(PuestaEnMarchaDePrueba.Fila("B3", "SR", "1", "900000"), null, null, "s-1"),
+        ]);
+        var aplicada = await p.ImportarSaldoAsync(ModoDeImportacion.Apply);
+        Bien(aplicada);
+        var lote = await p.Db.Lots.SingleAsync();
+        lote.Code.Should().Be("L1");
+        lote.ExpiryDate.Should().Be(new DateOnly(2026, 12, 31));
+        var serie = await p.Db.Serials.SingleAsync(x => x.SerialNumber == "S-1");
+        serie.InStockWarehouseId.Should().BeNull();
+        var lineas = await p.Db.InventoryDocumentLines.ToListAsync();
+        lineas.Where(l => l.ProductId == lt.Id).Should().HaveCount(2).And.OnlyContain(l => l.LotId == lote.Id);
+        lineas.Single(l => l.ProductId == sr.Id).SerialId.Should().Be(serie.Id);
     }
 
     // ------------------------------------------------------------------------------------------ la bodega --

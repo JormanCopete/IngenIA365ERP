@@ -193,6 +193,8 @@ public sealed class SaveInventoryDraftCommandHandler(
             var linea = borrador.Lines[i];
             var numero = i + 1;
             if (!productos.TryGetValue(linea.ProductPublicId, out var producto)) return Falla(ErroresDelDocumento.ProductoInexistente());
+            // I6 (T918): una plantilla de variantes no entra a documentos; se usa una de sus variantes.
+            if (producto.EsPlantilla) return Falla(InventoryErrors.ProductNotInventoriable(numero, producto.Code));
 
             var unidad = await maestros.UnidadAsync(producto.Id, linea.UnitPublicId, ct);
             if (unidad is null) return Falla(InventoryErrors.UnitNotForProduct(numero, producto.Code, string.Empty));

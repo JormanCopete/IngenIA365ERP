@@ -39,6 +39,15 @@ namespace IngenIA365ERP.Application.Inventory.GoLive;
 /// <c>Redondeo.Montos</c>; <c>extra.documents[]</c> al aplicar.</item>
 /// </list>
 /// La plantilla nunca confirma: el borrador se confirma con aprobación (<c>Inventory.OpeningBalance.Approve</c>). (nuevo)
+/// <para>
+/// I6 (T921): <c>lote</c>, <c>vencimiento</c> y <c>serie</c> con las reglas del producto —lote obligatorio si lo controla
+/// (<c>Inventory.Lot.Required</c>) y vacío si no (<c>.NotTracked</c>); vencimiento si lo controla (<c>.ExpiryRequired</c>) y uno
+/// solo por lote, contra la base y dentro del archivo (<c>.ExpiryMismatch</c>); serie obligatoria si la controla
+/// (<c>Inventory.Serial.Required</c>) y vacía si no (<c>.NotTracked</c>), una unidad por fila (<c>.QuantityNotOne</c>) y nunca una
+/// que ya está en existencia (<c>.AlreadyInStock</c>)— y la llave <c>bodega + producto + ubicacion + lote + serie</c>. Al aplicar,
+/// el lote nace (o se reutiliza) con la primera entrada que lo cita y la serie se registra sin proyección: su bodega la escribe
+/// <c>RegistroDeKardex</c> al confirmar.
+/// </para>
 /// </summary>
 public sealed record ImportOpeningBalanceCommand(ModoDeImportacion? Mode, ArchivoDeImportacion File, string Reason = "")
     : IRequest<Result<ImportResultDto>>, IComandoDeImportacion, IOperacionIdempotente
@@ -97,9 +106,13 @@ public sealed class ImportOpeningBalanceCommandHandler(
         ejecutor.EjecutarAsync(S.Definicion, request, ProcesarAsync, ct);
 
     private sealed record FilaDeSaldo(FilaDeImportacion Fila, Warehouse Bodega, DateOnly Corte, ProductoLeido Producto, int? UbicacionId,
-        string? CodigoDeUbicacion, decimal Cantidad, decimal Costo);
+        string? CodigoDeUbicacion, decimal Cantidad, decimal Costo, string? Lote = null, DateOnly? Vencimiento = null, string? Serie = null)
+    {
+        public string Llave => $"{Bodega.Code}|{Producto.Code}|{CodigoDeUbicacion}|{Lote}|{Serie}";
+    }
 
-    private sealed record ProductoLeido(int Id, string Code, int BaseUnitId, int Decimales, string? Grupo, bool Inventariable, ProductStatus Status);
+    private sealed record ProductoLeido(int Id, string Code, int BaseUnitId, int Decimales, string? Grupo, bool Inventariable, ProductStatus Status,
+        bool TracksLot = false, bool TracksSerial = false, bool TracksExpiry = false);
 
     private async Task ProcesarAsync(ContextoDeImportacion ctx, CancellationToken ct)
     {
@@ -117,13 +130,23 @@ public sealed class ImportOpeningBalanceCommandHandler(
                 .Where(p => codigos.Contains(p.Code))
                 .Select(p => new
                 {
-                    p.Id, p.Code, p.BaseUnitId, p.Kind, p.Status,
+                    p.Id, p.Code, p.BaseUnitId, p.Kind, p.Status, p.TracksLot, p.TracksSerial, p.TracksExpiry,
                     Decimales = p.BaseUnit != null ? (int)p.BaseUnit.AllowedDecimals : 0,
                     Grupo = p.AccountingGroup != null ? p.AccountingGroup.Code : null,
                 })
                 .ToListAsync(ct))
             .ToDictionary(p => p.Code, p => new ProductoLeido(p.Id, p.Code, p.BaseUnitId, p.Decimales, p.Grupo,
-                p.Kind is ProductKind.Inventoriable or ProductKind.Variant, p.Status), StringComparer.OrdinalIgnoreCase);
+                p.Kind is ProductKind.Inventoriable or ProductKind.Variant, p.Status, p.TracksLot, p.TracksSerial, p.TracksExpiry),
+                StringComparer.OrdinalIgnoreCase);
+
+        // Lotes y series que el archivo cita (I6, T921), en bloque.
+        var idsDeProducto = productos.Values.Select(p => p.Id).ToList();
+        var lotes = (await db.Lots.Where(l => idsDeProducto.Contains(l.ProductId)).ToListAsync(ct))
+            .ToDictionary(l => (l.ProductId, l.Code), l => l);
+        var seriesDelArchivo = hoja.Filas.Select(f => Normalizar(f.Crudo(S.Serie))).OfType<string>().Distinct().ToList();
+        var series = (await db.Serials.Where(x => idsDeProducto.Contains(x.ProductId) && seriesDelArchivo.Contains(x.SerialNumber)).ToListAsync(ct))
+            .ToDictionary(x => (x.ProductId, x.SerialNumber), x => x);
+        var vencimientoDelArchivo = new Dictionary<(int, string), DateOnly?>();
         var setup = await db.InventorySetups.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
 
         var idsDeBodega = bodegas.Values.Select(b => b.Id).ToList();
@@ -145,8 +168,9 @@ public sealed class ImportOpeningBalanceCommandHandler(
             var codigoDeUbicacion = fila.Codigo(S.Ubicacion);
             var cantidad = fila.Cantidad(S.Cantidad);
             var costo = fila.Costo(S.CostoUnitario);
-            foreach (var columna in new[] { S.Lote, S.Vencimiento, S.Serie })
-                if (!fila.EstaVacia(columna)) fila.TodaviaNoDisponible(columna, "I6");
+            var lote = Normalizar(fila.Texto(S.Lote, 30));
+            var vencimiento = fila.Fecha(S.Vencimiento);
+            var serie = Normalizar(fila.Texto(S.Serie, 60));
 
             // Bodega: del alcance (si no, como inexistente), operativa, no activa, sin saldo confirmado.
             Warehouse? bodega = null;
@@ -212,13 +236,20 @@ public sealed class ImportOpeningBalanceCommandHandler(
                 else if (k == 0m) fila.Aviso(S.CostoUnitario, GoLiveErrors.OpeningBalanceZeroCostCode, "El costo unitario es cero: la existencia entra sin valor.");
             }
 
-            // Llave: bodega + producto + ubicación (repetida es error, no se suma).
+            // Lote, vencimiento y serie según lo que el producto controla (I6, T921).
+            if (producto is not null && !fila.TieneErrores)
+                Seguimiento(fila, producto, lote, vencimiento, serie, cantidad, lotes, series, vencimientoDelArchivo);
+
+            // Llave: bodega + producto + ubicación + lote + serie (repetida es error, no se suma); una serie, una sola fila.
             if (codigoDeBodega is not null && codigoDeProducto is not null)
-                hoja.LlaveUnica(fila, $"{codigoDeBodega}|{codigoDeProducto}|{codigoDeUbicacion}", S.Producto);
+                hoja.LlaveUnica(fila, $"{codigoDeBodega}|{codigoDeProducto}|{codigoDeUbicacion}|{lote}|{serie}", S.Producto);
+            if (codigoDeProducto is not null && serie is not null)
+                hoja.LlaveUnica(fila, $"serie|{codigoDeProducto}|{serie}", S.Serie);
 
             if (fila.TieneErrores || bodega is null || corte is null || producto is null || cantidad is null || costo is null)
                 continue;
-            leidas.Add(new FilaDeSaldo(fila, bodega, corte.Value, producto, ubicacionId, codigoDeUbicacion, cantidad.Value, costo.Value));
+            leidas.Add(new FilaDeSaldo(fila, bodega, corte.Value, producto, ubicacionId, codigoDeUbicacion, cantidad.Value, costo.Value,
+                lote, lote is null ? null : vencimiento, serie));
         }
 
         var montos = await MontosAsync(hoy, ct);
@@ -279,6 +310,7 @@ public sealed class ImportOpeningBalanceCommandHandler(
                 var numero = 0;
                 foreach (var l in tramos[i])
                 {
+                    var (loteDeLaLinea, serieDeLaLinea) = LoteYSerie(l, lotes, series);
                     documento.Lines.Add(new InventoryDocumentLine
                     {
                         Document = documento,
@@ -291,8 +323,12 @@ public sealed class ImportOpeningBalanceCommandHandler(
                         UnitCost = l.Costo,
                         TotalCost = Redondeo.Monto(l.Cantidad * l.Costo, montos),
                         LocationId = l.UbicacionId,
+                        Lot = loteDeLaLinea,
+                        LotId = loteDeLaLinea is { Id: > 0 } lg ? lg.Id : null,
+                        Serial = serieDeLaLinea,
+                        SerialId = serieDeLaLinea is { Id: > 0 } sg ? sg.Id : null,
                     });
-                    ctx.Registrar(l.Fila, $"{bodega.Code}|{l.Producto.Code}|{l.CodigoDeUbicacion}", reemplaza ? AccionDeImportacion.Update : AccionDeImportacion.Create);
+                    ctx.Registrar(l.Fila, l.Llave, reemplaza ? AccionDeImportacion.Update : AccionDeImportacion.Create);
                 }
                 documento.CostTotal = documento.Lines.Where(x => !x.IsDeleted).Sum(x => x.TotalCost ?? 0m);
                 documentos.Add(new DocumentoDeSaldoInicialDto(documento.PublicId, new BodegaDeSaldoInicialDto(bodega.PublicId, bodega.Code),
@@ -304,6 +340,64 @@ public sealed class ImportOpeningBalanceCommandHandler(
                 sobrante.Descartar(usuario, reloj.UtcNow, MotivoDeDescarte);
         }
         ctx.Extra[ExtraDocumentos] = documentos;
+    }
+
+    /// <summary>Recortado y en mayúsculas, como se guardan el lote y la serie; vacío = nulo.</summary>
+    private static string? Normalizar(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim().ToUpperInvariant();
+
+    /// <summary>
+    /// Las reglas de seguimiento de una fila (I6, T921): lote y vencimiento si el producto controla lote, serie de una unidad si
+    /// controla serie, y nada de eso si no. Un lote tiene una sola fecha de vencimiento (en la base y dentro del archivo) y una
+    /// serie que ya está en existencia no entra otra vez.
+    /// </summary>
+    private static void Seguimiento(FilaDeImportacion fila, ProductoLeido producto, string? lote, DateOnly? vencimiento, string? serie, decimal? cantidad,
+        Dictionary<(int, string), Domain.Entities.Inventory.Catalog.Lot> lotes,
+        Dictionary<(int, string), Domain.Entities.Inventory.Catalog.Serial> series,
+        Dictionary<(int, string), DateOnly?> vencimientoDelArchivo)
+    {
+        if (producto.TracksLot)
+        {
+            if (lote is null) Error(fila, S.Lote, CatalogErrors.LotRequired(producto.Code));
+            else if (producto.TracksExpiry && vencimiento is null) Error(fila, S.Vencimiento, CatalogErrors.LotExpiryRequired(producto.Code));
+            else if (lotes.TryGetValue((producto.Id, lote), out var existente) && existente.ExpiryDate != vencimiento)
+                Error(fila, S.Vencimiento, CatalogErrors.LotExpiryMismatch(producto.Code, lote, existente.ExpiryDate));
+            else if (vencimientoDelArchivo.TryGetValue((producto.Id, lote), out var delArchivo) && delArchivo != vencimiento)
+                Error(fila, S.Vencimiento, CatalogErrors.LotExpiryMismatch(producto.Code, lote, delArchivo));
+            else vencimientoDelArchivo[(producto.Id, lote)] = vencimiento;
+        }
+        else if (lote is not null) Error(fila, S.Lote, CatalogErrors.LotNotTracked(producto.Code));
+        else if (vencimiento is not null) Error(fila, S.Vencimiento, CatalogErrors.LotNotTracked(producto.Code));
+
+        if (producto.TracksSerial)
+        {
+            if (serie is null) Error(fila, S.Serie, CatalogErrors.SerialRequired(producto.Code));
+            else if (cantidad is { } q && q != 1m) Error(fila, S.Cantidad, CatalogErrors.SerialQuantityNotOne(producto.Code, serie));
+            else if (series.TryGetValue((producto.Id, serie), out var registrada) && registrada.InStockWarehouseId is not null)
+                Error(fila, S.Serie, CatalogErrors.SerialAlreadyInStock(producto.Code, serie));
+        }
+        else if (serie is not null) Error(fila, S.Serie, CatalogErrors.SerialNotTracked(producto.Code));
+    }
+
+    /// <summary>El lote (que nace con la primera entrada que lo cita) y la serie (sin proyección: la escribe el kardex al confirmar) de una línea.</summary>
+    private (Domain.Entities.Inventory.Catalog.Lot?, Domain.Entities.Inventory.Catalog.Serial?) LoteYSerie(FilaDeSaldo l,
+        Dictionary<(int, string), Domain.Entities.Inventory.Catalog.Lot> lotes,
+        Dictionary<(int, string), Domain.Entities.Inventory.Catalog.Serial> series)
+    {
+        Domain.Entities.Inventory.Catalog.Lot? lote = null;
+        if (l.Lote is { } codigo && !lotes.TryGetValue((l.Producto.Id, codigo), out lote))
+        {
+            lote = new Domain.Entities.Inventory.Catalog.Lot { ProductId = l.Producto.Id, Code = codigo, ExpiryDate = l.Vencimiento };
+            db.Lots.Add(lote);
+            lotes[(l.Producto.Id, codigo)] = lote;
+        }
+        Domain.Entities.Inventory.Catalog.Serial? serie = null;
+        if (l.Serie is { } numero && !series.TryGetValue((l.Producto.Id, numero), out serie))
+        {
+            serie = new Domain.Entities.Inventory.Catalog.Serial { ProductId = l.Producto.Id, SerialNumber = numero, Lot = lote };
+            db.Serials.Add(serie);
+            series[(l.Producto.Id, numero)] = serie;
+        }
+        return (lote, serie);
     }
 
     /// <summary>La bodega admite saldo inicial: operativa, no activa, sin un saldo confirmado vigente ni uno en aprobación.</summary>

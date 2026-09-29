@@ -10,6 +10,7 @@ using IngenIA365ERP.Domain.Entities.Core.Taxes;
 using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Inventory.Catalog;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using P = IngenIA365ERP.Application.Inventory.Imports.PlantillaDeProductos;
@@ -31,6 +32,14 @@ namespace IngenIA365ERP.Application.Inventory.Imports;
 /// US3 T288), con fecha efectiva hoy: la revisión sólo la valida; la aplicación bloquea, reclasifica y emite
 /// <c>GrupoContableReclasificado</c> si hay existencia, en la misma transacción. Sin movimientos, es una edición más. Un código
 /// numérico de 8, 12, 13 o 14 dígitos con el dígito de control EAN/UPC errado deja el aviso <c>Import.Barcode.CheckDigit</c>. (nuevo)
+/// </para>
+/// <para>
+/// I6 (T921, T922): las seis clases y las marcas de seguimiento con las reglas del alta unitaria (<see cref="HistoriaDeProducto"/>
+/// armada en bloque: movimientos, existencia, borradores y dependientes), y dos hojas opcionales —decisión por defecto de T922,
+/// revisar con el dueño—: <c>Variantes</c> (una fila por variante y atributo: la plantilla, el atributo y el valor; arma el
+/// <c>VariantKey</c> con <see cref="GeneradorDeVariantes.ClaveDe"/> y rechaza la combinación repetida y los atributos distintos
+/// de los de las demás variantes de la plantilla) y <c>Componentes</c> (agrega o cambia componentes de combos y kits —lo que no
+/// viene queda como está— y revisa el conjunto final con <see cref="ValidadorDeComponentes"/>, como <c>SetProductComponentsCommand</c>).
 /// </para>
 /// </summary>
 public sealed record ImportProductsCommand(ModoDeImportacion? Mode, ArchivoDeImportacion File, string Reason = "")
@@ -72,6 +81,9 @@ public sealed class ImportProductsCommandHandler(
         public List<(FilaDeImportacion Fila, ImpuestoResuelto Impuesto)> Adicionales { get; } = [];
     }
 
+    /// <summary>La historia en bloque de los productos existentes que el archivo toca (I6, T918): lo que bloquea clase y seguimiento.</summary>
+    private sealed record HistoriaEnBloque(HashSet<int> ConExistencia, Dictionary<int, int> Borradores, HashSet<int> ConDependientes);
+
     private sealed record Catalogos(
         CatalogoCitado<ProductCategory> Categorias,
         CatalogoCitado<Brand> Marcas,
@@ -90,11 +102,15 @@ public sealed class ImportProductsCommandHandler(
         var hUnidades = ctx.Hoja(P.HojaUnidades);
         var hCodigos = ctx.Hoja(P.HojaCodigos);
         var hImpuestos = ctx.Hoja(P.HojaImpuestos);
+        var hVariantes = ctx.Hoja(P.HojaVariantes);
+        var hComponentes = ctx.Hoja(P.HojaComponentes);
 
         // Todo en bloque (§0.3): los catálogos citados y sólo los productos y códigos que el archivo nombra.
         var catalogos = await CatalogosAsync(ct);
         var codigosDelArchivo = hProductos.Filas.Select(f => f.Crudo(P.Codigo))
-            .Concat(new[] { hUnidades, hCodigos, hImpuestos }.SelectMany(h => h.Filas.Select(f => f.Crudo(P.Producto))))
+            .Concat(new[] { hUnidades, hCodigos, hImpuestos, hVariantes, hComponentes }.SelectMany(h => h.Filas.Select(f => f.Crudo(P.Producto))))
+            .Concat(hVariantes.Filas.Select(f => f.Crudo(P.Plantilla)))
+            .Concat(hComponentes.Filas.Select(f => f.Crudo(P.Componente)))
             .Select(CodigoDeCatalogo.Normalizar).OfType<string>().Distinct().ToList();
         var existentes = await db.Products
             .Include(p => p.Units).ThenInclude(u => u.Unit)
@@ -109,6 +125,7 @@ public sealed class ImportProductsCommandHandler(
                 .Select(l => new { l.ProductId, l.UnitId }).Distinct().ToListAsync(ct))
             .Select(m => (m.ProductId, m.UnitId)).ToHashSet();
         var conMovimientos = movimientos.Select(m => m.ProductId).ToHashSet();
+        var historia = await HistoriaAsync(idsExistentes, ct);
 
         var barrasDelArchivo = hCodigos.Filas.Select(f => ProductBarcode.Normalizar(f.Crudo(P.CodigoDeBarras))).Where(b => b.Length > 0).Distinct().ToList();
         var duenos = (await db.ProductBarcodes.AsNoTracking()
@@ -120,7 +137,9 @@ public sealed class ImportProductsCommandHandler(
         var tocados = new Dictionary<string, Tocado>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in existentes) tocados[p.Code] = new Tocado(p, esNuevo: false);
 
-        Productos(ctx, hProductos, catalogos, tocados, conMovimientos);
+        Productos(ctx, hProductos, hVariantes, catalogos, tocados, conMovimientos, historia);
+        await VariantesAsync(hVariantes, tocados, ct);
+        await ComponentesAsync(hComponentes, tocados, ct);
         Unidades(hUnidades, catalogos, tocados, movimientos);
         Codigos(hCodigos, tocados, duenos.ToDictionary(d => d.Key, d => (d.Value.Id, d.Value.PublicId, d.Value.Code, d.Value.Name)));
         Impuestos(hImpuestos, catalogos, tocados);
@@ -159,8 +178,35 @@ public sealed class ImportProductsCommandHandler(
 
     // ---------------------------------------------------------------------------------------------------- Productos --
 
-    private void Productos(ContextoDeImportacion ctx, HojaDeImportacion hoja, Catalogos c, Dictionary<string, Tocado> tocados, HashSet<int> conMovimientos)
+    /// <summary>Existencia distinta de cero, borradores que citan y dependientes (variantes o componentes) de los existentes, en bloque.</summary>
+    private async Task<HistoriaEnBloque> HistoriaAsync(List<int> ids, CancellationToken ct)
     {
+        var conExistencia = (await db.StockBalances.AsNoTracking().Where(b => ids.Contains(b.ProductId) && b.Physical != 0m)
+            .Select(b => b.ProductId).Distinct().ToListAsync(ct)).ToHashSet();
+        var borradores = (await db.InventoryDocumentLines.AsNoTracking()
+                .Where(l => ids.Contains(l.ProductId)
+                    && (l.Document!.Status == DocumentStatus.Draft || l.Document.Status == DocumentStatus.PendingApproval))
+                .Select(l => new { l.ProductId, l.DocumentId }).Distinct().ToListAsync(ct))
+            .GroupBy(x => x.ProductId).ToDictionary(g => g.Key, g => g.Count());
+        var padres = await db.Products.AsNoTracking().Where(p => p.ParentProductId != null && ids.Contains(p.ParentProductId.Value))
+            .Select(p => p.ParentProductId!.Value).Distinct().ToListAsync(ct);
+        var enComponentes = await db.ProductComponents.AsNoTracking().Where(x => ids.Contains(x.ProductId) || ids.Contains(x.ComponentProductId))
+            .Select(x => new { x.ProductId, x.ComponentProductId }).ToListAsync(ct);
+        var dependientes = padres.Concat(enComponentes.Select(x => x.ProductId)).Concat(enComponentes.Select(x => x.ComponentProductId))
+            .Where(ids.Contains).ToHashSet();
+        return new HistoriaEnBloque(conExistencia, borradores, dependientes);
+    }
+
+    private void Productos(ContextoDeImportacion ctx, HojaDeImportacion hoja, HojaDeImportacion hVariantes, Catalogos c, Dictionary<string, Tocado> tocados,
+        HashSet<int> conMovimientos, HistoriaEnBloque historia)
+    {
+        // La plantilla de cada variante nueva (hoja Variantes), para que la variante nazca de ella (Inventory.Variant.ParentRequired).
+        var codigosDeLaHoja = hoja.Filas.Select(f => CodigoDeCatalogo.Normalizar(f.Crudo(P.Codigo))).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var plantillaDe = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in hVariantes.Filas)
+            if (CodigoDeCatalogo.Normalizar(f.Crudo(P.Producto)) is { } v && CodigoDeCatalogo.Normalizar(f.Crudo(P.Plantilla)) is { } t)
+                plantillaDe.TryAdd(v, t);
+
         foreach (var fila in hoja.Filas)
         {
             var codigo = fila.Codigo(P.Codigo);
@@ -182,11 +228,6 @@ public sealed class ImportProductsCommandHandler(
             var volumen = fila.Cantidad(P.Volumen);
             var motivoDeGrupo = fila.Texto(P.MotivoCambioDeGrupo);
 
-            // Lo que llega con I6 (§6): clases de producto y seguimiento por lote, serie o vencimiento.
-            if (tipo is { } k && !ReglasDeProducto.ClasesDisponibles.Contains(k)) fila.TodaviaNoDisponible(P.Tipo, "I6");
-            if (lote) fila.TodaviaNoDisponible(P.ControlaLote, "I6");
-            if (serie) fila.TodaviaNoDisponible(P.ControlaSerie, "I6");
-            if (vencimiento) fila.TodaviaNoDisponible(P.ControlaVencimiento, "I6");
             if (peso is < 0) fila.Error(P.Peso, ImportErrors.CellFormat, "El peso no puede ser negativo.");
             if (volumen is < 0) fila.Error(P.Volumen, ImportErrors.CellFormat, "El volumen no puede ser negativo.");
 
@@ -225,10 +266,27 @@ public sealed class ImportProductsCommandHandler(
                 grupoDeLasReglas = c.GruposPorId.GetValueOrDefault(actual);
             }
 
+            // Una variante nueva nace de la plantilla que le da la hoja Variantes (de este archivo o existente).
+            if (tipo == ProductKind.Variant && producto.ParentProductId is null && producto.ParentProduct is null
+                && plantillaDe.TryGetValue(codigo, out var codigoDePlantilla))
+            {
+                if (!tocados.TryGetValue(codigoDePlantilla, out var padre) && codigosDeLaHoja.Contains(codigoDePlantilla))
+                    tocados[codigoDePlantilla] = padre = new Tocado(new Product { Code = codigoDePlantilla, Status = ProductStatus.Active }, esNuevo: true);
+                if (padre is not null)
+                {
+                    producto.ParentProduct = padre.Producto;
+                    if (padre.Producto.Id > 0) producto.ParentProductId = padre.Producto.Id;
+                }
+            }
+
             var datos = new DatosDeProducto(nombre, producto.ShortName, producto.Description, tipo.Value, categoria.PublicId, marca?.PublicId,
                 unidadBase.PublicId, grupoDeLasReglas?.PublicId, tratamiento.Value, concepto?.PublicId, referencia, peso, volumen, lote, serie, vencimiento,
                 producto.IsPurchasable, producto.IsSellable);
-            var reglas = ReglasDeProducto.Aplicar(producto, datos, new ReferenciasDeProducto(categoria, marca, unidadBase, grupoDeLasReglas, concepto), tieneMovimientos);
+            var historiaDelProducto = tocado.EsNuevo
+                ? HistoriaDeProducto.Nueva
+                : new HistoriaDeProducto(tieneMovimientos || conMovimientos.Contains(producto.Id), historia.ConExistencia.Contains(producto.Id),
+                    historia.Borradores.GetValueOrDefault(producto.Id), historia.ConDependientes.Contains(producto.Id));
+            var reglas = ReglasDeProducto.Aplicar(producto, datos, new ReferenciasDeProducto(categoria, marca, unidadBase, grupoDeLasReglas, concepto), historiaDelProducto);
             if (reglas.IsFailure)
             {
                 FilasDeCatalogo.Error(fila, ColumnaDe(reglas.Error), reglas.Error);
@@ -292,7 +350,7 @@ public sealed class ImportProductsCommandHandler(
     /// <summary>El producto como lo muestra la plantilla, para los cambios campo a campo.</summary>
     private sealed record FotoDeProducto(
         string Nombre, string Tipo, string? Categoria, string? Marca, string? UnidadBase, string? Grupo, string Estado, string Iva, string? TarifaIva,
-        string? Concepto, string? Referencia, string Peso, string Volumen)
+        string? Concepto, string? Referencia, string Peso, string Volumen, string Lote, string Serie, string Vencimiento)
     {
         public IEnumerable<(string, string?, string?)> Diferencias(FotoDeProducto d)
         {
@@ -302,6 +360,7 @@ public sealed class ImportProductsCommandHandler(
                 (P.UnidadBase, UnidadBase, d.UnidadBase), (P.GrupoContable, Grupo, d.Grupo), (P.Estado, Estado, d.Estado),
                 (P.TratamientoIva, Iva, d.Iva), (P.TarifaIva, TarifaIva, d.TarifaIva), (P.ConceptoRetencion, Concepto, d.Concepto),
                 (P.Referencia, Referencia, d.Referencia), (P.Peso, Peso, d.Peso), (P.Volumen, Volumen, d.Volumen),
+                (P.ControlaLote, Lote, d.Lote), (P.ControlaSerie, Serie, d.Serie), (P.ControlaVencimiento, Vencimiento, d.Vencimiento),
             };
             return pares.Where(p => !string.Equals(p.Item2 ?? string.Empty, p.Item3 ?? string.Empty, StringComparison.Ordinal));
         }
@@ -310,7 +369,8 @@ public sealed class ImportProductsCommandHandler(
     private static FotoDeProducto Foto(Product p, Catalogos c) => new(
         p.Name, p.Kind.ToString(), p.Category?.Code, p.Brand?.Code, p.BaseUnit?.Code, p.AccountingGroup?.Code, p.Status.ToString(),
         p.VatSaleTreatment.ToString(), TarifaIvaGuardada(p, c), p.WithholdingConcept?.Code, p.Reference,
-        FilasDeCatalogo.Numero(p.Weight), FilasDeCatalogo.Numero(p.Volume));
+        FilasDeCatalogo.Numero(p.Weight), FilasDeCatalogo.Numero(p.Volume),
+        FilasDeCatalogo.SiNo(p.TracksLot), FilasDeCatalogo.SiNo(p.TracksSerial), FilasDeCatalogo.SiNo(p.TracksExpiry));
 
     private static string? TarifaIvaGuardada(Product p, Catalogos c) =>
         p.Taxes.Where(t => !t.IsDeleted && c.Definiciones.GetValueOrDefault(t.TaxDefinitionId)?.Kind == TaxKind.Iva)
@@ -323,8 +383,9 @@ public sealed class ImportProductsCommandHandler(
             or "Inventory.Product.AccountingGroupUnchanged" or "Inventory.Period.Closed" => P.GrupoContable,
         "Inventory.Product.WithholdingConceptRequired" => P.ConceptoRetencion,
         "Inventory.Product.BaseUnitLocked" => P.UnidadBase,
-        "Inventory.Product.KindNotAvailable" => P.Tipo,
-        "Inventory.Product.TrackingNotAvailable" => P.ControlaLote,
+        "Inventory.Product.KindLocked" or "Inventory.Variant.ParentRequired" => P.Tipo,
+        "Inventory.Product.ExpiryRequiresLot" => P.ControlaVencimiento,
+        "Inventory.Product.TrackingNotApplicable" or "Inventory.Product.TrackingLocked" => P.ControlaLote,
         _ => P.Codigo,
     };
 
@@ -341,6 +402,224 @@ public sealed class ImportProductsCommandHandler(
         // Un producto cuya fila tiene errores ya los muestra en su hoja: sus filas hijas no se procesan.
         return tocado.ConError ? null : tocado;
     }
+
+    // ---------------------------------------------------------------------------------------------------- Variantes --
+
+    /// <summary>
+    /// La hoja <c>Variantes</c> (I6, T922, decisión por defecto): cada variante del archivo con su plantilla y un valor por atributo.
+    /// Arma el <c>VariantKey</c> como <c>GenerateProductVariantsCommand</c>; la combinación no se repite en la plantilla
+    /// (<c>Inventory.Variant.CombinationExists</c>), todas las variantes de una plantilla llevan los mismos atributos
+    /// (<c>Inventory.Variant.AttributesMismatch</c>) y la combinación de una variante existente no cambia por plantilla.
+    /// </summary>
+    private async Task VariantesAsync(HojaDeImportacion hoja, Dictionary<string, Tocado> tocados, CancellationToken ct)
+    {
+        if (hoja.Filas.Count == 0) return;
+        var atributos = (await db.VariantAttributes.Include(a => a.Values).ToListAsync(ct))
+            .ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
+
+        var porVariante = new Dictionary<Tocado, List<(FilaDeImportacion Fila, Tocado Plantilla, VariantAttribute Atributo, VariantAttributeValue Valor)>>();
+        var conError = new HashSet<Tocado>();
+        foreach (var fila in hoja.Filas)
+        {
+            var tocado = ProductoDe(fila, tocados);
+            var codigoDePlantilla = fila.Codigo(P.Plantilla);
+            var codigoDeAtributo = fila.Codigo(P.Atributo);
+            var codigoDeValor = fila.Codigo(P.Valor);
+            if (tocado is null || codigoDePlantilla is null || codigoDeAtributo is null || codigoDeValor is null || fila.TieneErrores)
+            {
+                if (tocado is not null) conError.Add(tocado);
+                continue;
+            }
+            if (!hoja.LlaveUnica(fila, $"{tocado.Producto.Code}|{codigoDeAtributo}", P.Atributo)) { conError.Add(tocado); continue; }
+
+            if (tocado.Producto.Kind != ProductKind.Variant)
+                fila.Error(P.Producto, ImportErrors.CellFormat, $"El producto {tocado.Producto.Code} no es una variante: en la hoja Productos su tipo debe ser Variant (variante).");
+            else if (!tocados.TryGetValue(codigoDePlantilla, out var plantilla))
+                fila.Error(P.Plantilla, ImportErrors.CellNotFound, $"No hay un producto «{codigoDePlantilla}». Créelo como plantilla en la hoja Productos o en Inventario → Productos.");
+            else if (plantilla.Producto.Kind != ProductKind.Template)
+                FilasDeCatalogo.Error(fila, P.Plantilla, CatalogErrors.VariantNotATemplate(plantilla.Producto.Code));
+            else if (!ReferenceEquals(tocado.Producto.ParentProduct ?? plantilla.Producto, plantilla.Producto)
+                && tocado.Producto.ParentProductId != plantilla.Producto.Id)
+                fila.Error(P.Plantilla, ImportErrors.CellFormat, $"La variante {tocado.Producto.Code} es de otra plantilla: una variante no cambia de plantilla.");
+            else if (!atributos.TryGetValue(codigoDeAtributo, out var atributo))
+                FilasDeCatalogo.Error(fila, P.Atributo, CatalogErrors.VariantAttributeNotFound(codigoDeAtributo));
+            else if (atributo.Values.FirstOrDefault(v => !v.IsDeleted && string.Equals(v.Code, codigoDeValor, StringComparison.OrdinalIgnoreCase)) is not { } valor)
+                FilasDeCatalogo.Error(fila, P.Valor, CatalogErrors.VariantAttributeValueNotFound(atributo.Code, codigoDeValor));
+            else
+            {
+                if (!porVariante.TryGetValue(tocado, out var filas)) porVariante[tocado] = filas = [];
+                if (filas.Count > 0 && !ReferenceEquals(filas[0].Plantilla, plantilla))
+                {
+                    fila.Error(P.Plantilla, ImportErrors.CellFormat, $"La variante {tocado.Producto.Code} trae otra plantilla en otra fila: una variante tiene una sola.");
+                    conError.Add(tocado);
+                    continue;
+                }
+                filas.Add((fila, plantilla, atributo, valor));
+                continue;
+            }
+            conError.Add(tocado);
+        }
+
+        // Las claves que ya tienen las plantillas existentes (sin las variantes que el archivo toca).
+        var idsDePlantilla = porVariante.Values.Select(f => f[0].Plantilla.Producto.Id).Where(id => id > 0).Distinct().ToList();
+        var existentes = await db.Products.AsNoTracking()
+            .Where(p => p.ParentProductId != null && idsDePlantilla.Contains(p.ParentProductId.Value) && p.VariantKey != null)
+            .Select(p => new { p.Id, Plantilla = p.ParentProductId!.Value, p.Code, Clave = p.VariantKey! }).ToListAsync(ct);
+
+        var claves = new List<(Tocado Variante, Tocado Plantilla, string Clave, List<(FilaDeImportacion Fila, Tocado Plantilla, VariantAttribute Atributo, VariantAttributeValue Valor)> Filas)>();
+        foreach (var (variante, filas) in porVariante.Where(x => !conError.Contains(x.Key) && !x.Key.ConError))
+        {
+            var clave = GeneradorDeVariantes.ClaveDe(filas.Select(f => (f.Atributo.Code, f.Valor.Code)));
+            if (variante.Producto.VariantKey is { } actual && !string.Equals(actual, clave, StringComparison.Ordinal))
+            {
+                filas[0].Fila.Error(P.Valor, ImportErrors.CellFormat,
+                    $"La variante {variante.Producto.Code} ya es {actual}: la combinación de una variante existente no cambia por plantilla.");
+                continue;
+            }
+            claves.Add((variante, filas[0].Plantilla, clave, filas));
+        }
+
+        foreach (var grupo in claves.GroupBy(c => c.Plantilla))
+        {
+            var plantilla = grupo.Key.Producto;
+            var deLaBase = existentes.Where(e => e.Plantilla == plantilla.Id && grupo.All(g => g.Variante.Producto.Id != e.Id)).ToList();
+            var atributosEsperados = deLaBase.Select(e => AtributosDe(e.Clave)).Concat(grupo.Select(g => AtributosDe(g.Clave))).FirstOrDefault();
+            var vistas = deLaBase.ToDictionary(e => e.Clave, e => e.Code, StringComparer.Ordinal);
+            foreach (var (variante, _, clave, filas) in grupo)
+            {
+                if (AtributosDe(clave) != atributosEsperados)
+                {
+                    filas[0].Fila.Error(P.Atributo, GeneradorDeVariantes.CodigoAtributosDistintos,
+                        $"Las variantes de la plantilla {plantilla.Code} llevan los atributos {atributosEsperados}; {variante.Producto.Code} lleva {AtributosDe(clave)}.");
+                    continue;
+                }
+                if (!vistas.TryAdd(clave, variante.Producto.Code))
+                {
+                    FilasDeCatalogo.Error(filas[0].Fila, P.Valor, CatalogErrors.VariantCombinationExists([clave]));
+                    continue;
+                }
+
+                var producto = variante.Producto;
+                var esNueva = producto.VariantKey is null;
+                producto.ParentProduct = plantilla;
+                if (plantilla.Id > 0) producto.ParentProductId = plantilla.Id;
+                producto.VariantKey = clave;
+                foreach (var f in filas)
+                {
+                    if (producto.VariantValues.Any(v => !v.IsDeleted && (ReferenceEquals(v.VariantAttributeValue, f.Valor) || v.VariantAttributeValueId == f.Valor.Id)))
+                        continue;
+                    producto.VariantValues.Add(new ProductVariantValue
+                    {
+                        Product = producto, VariantAttributeId = f.Atributo.Id, VariantAttribute = f.Atributo,
+                        VariantAttributeValueId = f.Valor.Id, VariantAttributeValue = f.Valor,
+                    });
+                }
+                foreach (var f in filas)
+                    hoja.Contexto.Registrar(f.Fila, $"{producto.Code} {f.Atributo.Code}", esNueva ? AccionDeImportacion.Create : AccionDeImportacion.Unchanged,
+                        esNueva ? [new(P.Plantilla, null, plantilla.Code), new(P.Valor, null, f.Valor.Code)] : null);
+            }
+        }
+    }
+
+    private static string AtributosDe(string clave) =>
+        string.Join(',', clave.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Split('=')[0]));
+
+    // -------------------------------------------------------------------------------------------------- Componentes --
+
+    /// <summary>
+    /// La hoja <c>Componentes</c> (I6, T922, decisión por defecto): agrega o cambia la cantidad de componentes de combos y kits
+    /// (lo que no viene queda como está) y revisa el conjunto final de cada producto con <see cref="ValidadorDeComponentes"/> sobre
+    /// el grafo de la base más el del archivo, igual que <c>SetProductComponentsCommand</c>.
+    /// </summary>
+    private async Task ComponentesAsync(HojaDeImportacion hoja, Dictionary<string, Tocado> tocados, CancellationToken ct)
+    {
+        if (hoja.Filas.Count == 0) return;
+        var porProducto = new Dictionary<Tocado, List<(FilaDeImportacion Fila, Tocado Componente, decimal Cantidad)>>();
+        foreach (var fila in hoja.Filas)
+        {
+            var tocado = ProductoDe(fila, tocados);
+            var codigoDeComponente = fila.Codigo(P.Componente);
+            var cantidad = fila.Cantidad(P.Cantidad);
+            Tocado? componente = null;
+            if (codigoDeComponente is not null && !tocados.TryGetValue(codigoDeComponente, out componente))
+                fila.Error(P.Componente, ImportErrors.CellNotFound, $"No hay un producto «{codigoDeComponente}». Créelo en la hoja Productos de este archivo o en Inventario → Productos.");
+            if (tocado is null || componente is null || cantidad is null || fila.TieneErrores) continue;
+            if (!hoja.LlaveUnica(fila, $"{tocado.Producto.Code}|{componente.Producto.Code}", P.Componente)) continue;
+            if (componente.ConError) continue;
+            if (!porProducto.TryGetValue(tocado, out var filas)) porProducto[tocado] = filas = [];
+            filas.Add((fila, componente, cantidad.Value));
+        }
+        if (porProducto.Count == 0) return;
+
+        // Ids para el validador: los de la base, y negativos para lo nuevo del archivo.
+        var temporales = new Dictionary<Product, int>(ReferenceEqualityComparer.Instance);
+        int IdDe(Product p)
+        {
+            if (p.Id > 0) return p.Id;
+            if (!temporales.TryGetValue(p, out var id)) temporales[p] = id = -(temporales.Count + 1);
+            return id;
+        }
+
+        var existentesIds = porProducto.Keys.Select(t => t.Producto.Id).Where(id => id > 0).ToList();
+        var vigentes = await db.ProductComponents.Include(c => c.ComponentProduct).ThenInclude(p => p!.BaseUnit)
+            .Where(c => existentesIds.Contains(c.ProductId)).ToListAsync(ct);
+        var aristas = await db.ProductComponents.AsNoTracking().Where(c => !existentesIds.Contains(c.ProductId))
+            .Select(c => new { c.ProductId, c.ComponentProductId }).ToListAsync(ct);
+
+        // El conjunto final de cada producto: lo vigente más lo del archivo (que agrega o cambia la cantidad).
+        var finales = porProducto.ToDictionary(x => x.Key, x =>
+        {
+            var lista = vigentes.Where(v => v.ProductId == x.Key.Producto.Id && x.Key.Producto.Id > 0)
+                .Where(v => x.Value.All(f => f.Componente.Producto.Id != v.ComponentProductId))
+                .Select(v => (Producto: v.ComponentProduct!, Cantidad: v.Quantity, Fila: (FilaDeImportacion?)null)).ToList();
+            lista.AddRange(x.Value.Select(f => (f.Componente.Producto, f.Cantidad, (FilaDeImportacion?)f.Fila)));
+            return lista;
+        });
+
+        var grafo = aristas.GroupBy(a => a.ProductId).ToDictionary(g => g.Key, g => g.Select(a => a.ComponentProductId).ToList());
+        foreach (var (tocado, lista) in finales) grafo[IdDe(tocado.Producto)] = lista.Select(l => IdDe(l.Producto)).ToList();
+        var grafoLeido = grafo.ToDictionary(g => g.Key, g => (IReadOnlyList<int>)g.Value);
+
+        foreach (var (tocado, lista) in finales)
+        {
+            var producto = tocado.Producto;
+            var nodos = new Dictionary<int, ProductoDelGrafo> { [IdDe(producto)] = Nodo(producto, IdDe(producto)) };
+            foreach (var (componente, _, _) in lista) nodos[IdDe(componente)] = Nodo(componente, IdDe(componente));
+            var resultado = ValidadorDeComponentes.Validar(new PedidoDeComponentes(IdDe(producto),
+                lista.Select(l => new ComponentePropuesto(IdDe(l.Producto), l.Cantidad)).ToList(), nodos,
+                grafoLeido.Where(g => g.Key != IdDe(producto)).ToDictionary(g => g.Key, g => g.Value)));
+            if (!resultado.Valido)
+            {
+                var primeraFila = porProducto[tocado][0].Fila;
+                foreach (var e in resultado.Errores)
+                {
+                    var fila = lista.FirstOrDefault(l => e.ComponentProductId is int id && IdDe(l.Producto) == id).Fila ?? primeraFila;
+                    var columna = e.Codigo == ValidadorDeComponentes.CodigoCantidadInvalida ? P.Cantidad
+                        : e.ComponentProductId is null ? P.Producto : P.Componente;
+                    fila.Error(columna, e.Codigo, e.Mensaje);
+                }
+                continue;
+            }
+
+            foreach (var (fila, componente, cantidad) in porProducto[tocado])
+            {
+                var actual = vigentes.FirstOrDefault(v => v.ProductId == producto.Id && producto.Id > 0 && v.ComponentProductId == componente.Producto.Id && componente.Producto.Id > 0);
+                var llave = $"{producto.Code} {componente.Producto.Code}";
+                if (actual is null)
+                {
+                    producto.Components.Add(new ProductComponent { Product = producto, ComponentProduct = componente.Producto, ComponentProductId = componente.Producto.Id, Quantity = cantidad });
+                    hoja.Contexto.Registrar(fila, llave, AccionDeImportacion.Create, [new(P.Cantidad, null, FilasDeCatalogo.Numero(cantidad))]);
+                    continue;
+                }
+                var campos = new List<CampoCambiadoDto>();
+                FilasDeCatalogo.Diferencia(campos, P.Cantidad, FilasDeCatalogo.Numero(actual.Quantity), FilasDeCatalogo.Numero(cantidad));
+                if (actual.Quantity != cantidad) actual.Quantity = cantidad;
+                hoja.Contexto.Registrar(fila, llave, FilasDeCatalogo.Accion(campos), campos);
+            }
+        }
+    }
+
+    private static ProductoDelGrafo Nodo(Product p, int id) => new(id, p.Code, p.Kind, p.BaseUnit?.AllowedDecimals ?? 0);
 
     // ----------------------------------------------------------------------------------------------------- Unidades --
 
@@ -574,6 +853,10 @@ public sealed class GetProductsTemplateDataQueryHandler(IApplicationDbContext db
             .Include(p => p.Units).ThenInclude(u => u.Unit)
             .Include(p => p.Barcodes).ThenInclude(b => b.ProductUnit).ThenInclude(u => u!.Unit)
             .Include(p => p.Taxes)
+            .Include(p => p.ParentProduct)
+            .Include(p => p.VariantValues).ThenInclude(v => v.VariantAttribute)
+            .Include(p => p.VariantValues).ThenInclude(v => v.VariantAttributeValue)
+            .Include(p => p.Components).ThenInclude(c => c.ComponentProduct)
             .OrderBy(p => p.Code)
 
             .ToListAsync(ct);
@@ -592,6 +875,11 @@ public sealed class GetProductsTemplateDataQueryHandler(IApplicationDbContext db
             .Select(u => (IReadOnlyList<object?>)[p.Code, u.Unit?.Code, u.Factor, u.Usage.ToString()])).ToList();
         var filasImpuestos = productos.SelectMany(p => p.Taxes.Where(t => !EsIva(t))
             .Select(t => (IReadOnlyList<object?>)[p.Code, t.TaxRateCode, t.TaxableUnitsPerBaseUnit])).ToList();
+        var filasVariantes = productos.Where(p => p.ParentProduct is not null).SelectMany(p => p.VariantValues
+            .OrderBy(v => v.VariantAttribute?.Code, StringComparer.Ordinal)
+            .Select(v => (IReadOnlyList<object?>)[p.Code, p.ParentProduct!.Code, v.VariantAttribute?.Code, v.VariantAttributeValue?.Code])).ToList();
+        var filasComponentes = productos.SelectMany(p => p.Components.OrderBy(c => c.ComponentProduct?.Code, StringComparer.Ordinal)
+            .Select(c => (IReadOnlyList<object?>)[p.Code, c.ComponentProduct?.Code, c.Quantity])).ToList();
 
         return Result.Success(new DatosDePlantilla(new Dictionary<string, IReadOnlyList<IReadOnlyList<object?>>>(StringComparer.OrdinalIgnoreCase)
         {
@@ -599,6 +887,8 @@ public sealed class GetProductsTemplateDataQueryHandler(IApplicationDbContext db
             [P.HojaCodigos] = filasCodigos,
             [P.HojaUnidades] = filasUnidades,
             [P.HojaImpuestos] = filasImpuestos,
+            [P.HojaVariantes] = filasVariantes,
+            [P.HojaComponentes] = filasComponentes,
         }));
     }
 }

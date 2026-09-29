@@ -26,8 +26,8 @@ namespace IngenIA365ERP.Application.Tests.Inventory.Imports;
 /// Feature 012, T194 (US1-1, US1-4, US1-6; FR-030; contracts/plantillas.md §0.5, §6; quickstart §3.2): la plantilla 6 con la
 /// mecánica común —revisar no guarda, aplicar es todo o nada— y las reglas del alta unitaria. El libro de 500 filas con tres
 /// errores (código de barras de otro producto, unidad inexistente, tarifa inexistente) se revisa con los tres errores por hoja,
-/// fila y columna, no se aplica, y corregido crea las 500; volver a subirlo no cambia nada. Lo de I6 responde
-/// <c>Import.Cell.NotYetAvailable</c>, un dígito de control errado sólo avisa, y el grupo contable de un producto sin
+/// fila y columna, no se aplica, y corregido crea las 500; volver a subirlo no cambia nada. Desde I6 las clases y el seguimiento siguen las reglas del alta (antes respondían
+/// <c>Import.Cell.NotYetAvailable</c>), un dígito de control errado sólo avisa, y el grupo contable de un producto sin
 /// movimientos se cambia como una edición (con movimientos, la reclasificación de US3).
 /// </summary>
 public class ImportProductsCommandTests
@@ -41,6 +41,8 @@ public class ImportProductsCommandTests
     private static readonly string[] EncabezadosCodigos = [P.Producto, P.CodigoDeBarras, P.Unidad];
     private static readonly string[] EncabezadosUnidades = [P.Producto, P.Unidad, P.Factor, P.Uso];
     private static readonly string[] EncabezadosImpuestos = [P.Producto, P.Tarifa, P.UnidadesGravables];
+    private static readonly string[] EncabezadosVariantes = [P.Producto, P.Plantilla, P.Atributo, P.Valor];
+    private static readonly string[] EncabezadosComponentes = [P.Producto, P.Componente, P.Cantidad];
 
     private readonly ITabularFileReader _lector = Substitute.For<ITabularFileReader>();
     private readonly ICurrentUserPermissions _permisos = Substitute.For<ICurrentUserPermissions>();
@@ -67,6 +69,10 @@ public class ImportProductsCommandTests
     private void Unidades(params string?[][] filas) => Hoja(P.HojaUnidades, EncabezadosUnidades, filas);
 
     private void Impuestos(params string?[][] filas) => Hoja(P.HojaImpuestos, EncabezadosImpuestos, filas);
+
+    private void Variantes(params string?[][] filas) => Hoja(P.HojaVariantes, EncabezadosVariantes, filas);
+
+    private void Componentes(params string?[][] filas) => Hoja(P.HojaComponentes, EncabezadosComponentes, filas);
 
     private static string?[] Producto(string codigo, string nombre = "Producto", string tipo = "Inventoriable", string categoria = "ABARROTES",
         string? marca = null, string unidad = "UND", string? grupo = "ABARR", string? estado = null, string? lote = null,
@@ -101,9 +107,9 @@ public class ImportProductsCommandTests
     // --------------------------------------------------------------------------------------------- la plantilla --
 
     [Fact]
-    public void La_plantilla_6_declara_sus_cuatro_hojas_y_es_la_de_CatalogoDePlantillas()
+    public void La_plantilla_6_declara_sus_seis_hojas_y_es_la_de_CatalogoDePlantillas()
     {
-        P.Definicion.Hojas.Select(h => h.Nombre).Should().Equal(P.HojaProductos, P.HojaCodigos, P.HojaUnidades, P.HojaImpuestos);
+        P.Definicion.Hojas.Select(h => h.Nombre).Should().Equal(P.HojaProductos, P.HojaCodigos, P.HojaUnidades, P.HojaImpuestos, P.HojaVariantes, P.HojaComponentes);
         P.Definicion.Hojas.Should().OnlyContain(h => h.Columnas.Count > 0);
         CatalogoDePlantillas.Por(CatalogoDePlantillas.ProductosClave).Definicion.Should().BeSameAs(P.Definicion);
         P.Definicion.Hoja(P.HojaProductos)!.Columna(P.Codigo)!.Largo.Should().Be(20, "el código de producto admite 20 (D1)");
@@ -199,16 +205,66 @@ public class ImportProductsCommandTests
     }
 
     [Fact]
-    public async Task Las_clases_y_el_seguimiento_de_I6_no_estan_disponibles()
+    public async Task Las_clases_y_el_seguimiento_de_I6_siguen_las_reglas_del_alta()
     {
         var c = await CatalogoDePrueba.CrearAsync();
-        Productos(Producto("K1", tipo: "Combo"), Producto("L1", lote: "sí"), Producto("V1", tipo: "variante"));
+        Productos(Producto("K1", tipo: "Combo"), Producto("L1", lote: "sí"), Producto("V1", tipo: "variante"), Producto("T1", tipo: "Template"),
+            Producto("S1", tipo: "Service", unidad: "SRV", lote: "sí"));
 
         var r = await ImportarAsync(c, ModoDeImportacion.Review);
 
-        r.Value.Errors.Should().HaveCount(3, Errores(r.Value));
-        r.Value.Errors.Should().OnlyContain(e => e.Code == ImportErrors.CellNotYetAvailable && e.Message.Contains("I6"));
-        r.Value.Errors.Select(e => e.Column).Should().BeEquivalentTo([P.Tipo, P.ControlaLote, P.Tipo]);
+        r.Value.Errors.Should().NotContain(e => e.Code == ImportErrors.CellNotYetAvailable, "desde I6 no hay nada «todavía no disponible» en productos");
+        r.Value.Errors.Should().HaveCount(2, Errores(r.Value));
+        r.Value.Errors.Should().ContainSingle(e => e.Row == 4 && e.Column == P.Tipo && e.Code == "Inventory.Variant.ParentRequired");
+        r.Value.Errors.Should().ContainSingle(e => e.Row == 6 && e.Column == P.ControlaLote && e.Code == "Inventory.Product.TrackingNotApplicable");
+    }
+
+    /// <summary>T921, T922 (decisión por defecto): variantes con sus valores y componentes de combos y kits en la misma carga.</summary>
+    [Fact]
+    public async Task Las_hojas_Variantes_y_Componentes_crean_plantilla_variantes_y_kit_en_una_carga()
+    {
+        var c = await CatalogoDePrueba.CrearAsync();
+        await new Application.Inventory.Catalog.Variants.SaveVariantAttributeCommandHandler(c.Db, c.Reloj).Handle(
+            new Application.Inventory.Catalog.Variants.SaveVariantAttributeCommand(null, "TALLA", "Talla", [new("S", "Pequeña", 1), new("M", "Mediana", 2)]), default);
+        c.Olvidar();
+        Productos(Producto("CAM-S", "Camisa S", tipo: "Variant"), Producto("CAM", "Camisa", tipo: "Template"), Producto("CAM-M", "Camisa M", tipo: "variante"),
+            Producto("A", "Jabón"), Producto("KIT", "Kit de aseo", tipo: "Kit"));
+        Variantes(["CAM-S", "CAM", "TALLA", "S"], ["CAM-M", "CAM", "talla", "m"]);
+        Componentes(["KIT", "A", "2"], ["KIT", "CAM-S", "1"]);
+
+        var r = await ImportarAsync(c, ModoDeImportacion.Apply);
+
+        r.Value.Valid.Should().BeTrue(Errores(r.Value));
+        var plantilla = await c.Db.Products.SingleAsync(p => p.Code == "CAM");
+        var s = await c.Db.Products.Include(p => p.VariantValues).SingleAsync(p => p.Code == "CAM-S");
+        s.ParentProductId.Should().Be(plantilla.Id);
+        s.VariantKey.Should().Be("TALLA=S");
+        s.VariantValues.Should().ContainSingle();
+        (await c.Db.Products.SingleAsync(p => p.Code == "CAM-M")).VariantKey.Should().Be("TALLA=M");
+        var kit = await c.Db.Products.Include(p => p.Components).ThenInclude(x => x.ComponentProduct).SingleAsync(p => p.Code == "KIT");
+        kit.Components.Select(x => (x.ComponentProduct!.Code, x.Quantity)).Should().BeEquivalentTo([("A", 2m), ("CAM-S", 1m)]);
+    }
+
+    [Fact]
+    public async Task Las_hojas_de_I6_responden_combinacion_repetida_clase_invalida_y_variante_sin_plantilla()
+    {
+        var c = await CatalogoDePrueba.CrearAsync();
+        await new Application.Inventory.Catalog.Variants.SaveVariantAttributeCommandHandler(c.Db, c.Reloj).Handle(
+            new Application.Inventory.Catalog.Variants.SaveVariantAttributeCommand(null, "TALLA", "Talla", [new("S", "Pequeña", 1)]), default);
+        c.Olvidar();
+        Productos(Producto("CAM", "Camisa", tipo: "Template"), Producto("CAM-S", "Camisa S", tipo: "Variant"), Producto("CAM-S2", "Otra S", tipo: "Variant"),
+            Producto("SUELTA", "Sin plantilla", tipo: "Variant"), Producto("FLETE", "Flete", tipo: "Service", unidad: "SRV"), Producto("CMB", "Combo", tipo: "Combo"));
+        Variantes(["CAM-S", "CAM", "TALLA", "S"], ["CAM-S2", "CAM", "TALLA", "S"]);
+        Componentes(["CMB", "FLETE", "1"], ["CMB", "CMB", "1"]);
+
+        var r = await ImportarAsync(c, ModoDeImportacion.Review);
+
+        var e = r.Value.Errors;
+        e.Should().ContainSingle(x => x.Sheet == P.HojaProductos && x.Row == 5 && x.Code == "Inventory.Variant.ParentRequired");
+        e.Should().ContainSingle(x => x.Sheet == P.HojaVariantes && x.Row == 3 && x.Column == P.Valor && x.Code == "Inventory.Variant.CombinationExists");
+        e.Should().ContainSingle(x => x.Sheet == P.HojaComponentes && x.Row == 2 && x.Column == P.Componente && x.Code == "Inventory.Component.InvalidKind");
+        e.Should().ContainSingle(x => x.Sheet == P.HojaComponentes && x.Row == 3 && x.Column == P.Componente && x.Code == "Inventory.Component.Cycle");
+        (await c.Db.Products.CountAsync()).Should().Be(0, "la revisión no guarda");
     }
 
     [Fact]

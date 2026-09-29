@@ -2102,6 +2102,19 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `MotorDeCosteo.{MoverCombo<TClave>, Ensamblar<TClave>, EntradaDeEnsamble}` sobre `Costing/ComboYEnsamble` (interno) con
     `MovimientoDeComponente<TClave>`, `ResultadoDeComponente<TClave>`, `ResultadoDeCompuesto<TClave>` (`Costo`, `ComponenteRechazado`) y
     `ResultadoDeEnsamble<TClave>` (`Kit`, `CostoConsumido`). Reglas en T54a.
+- **I6, aplicación del catálogo avanzado (T918–T922; 2026-09-29) (nuevo)**: en `Application/Inventory/Catalog/`:
+    `Products/ReglasDeProducto` gana `ClasesConSeguimiento`, `CambiaSeguimiento`, `HistoriaAsync`, `TieneDependientesAsync`,
+    `SeguimientoAsync` y la sobrecarga `Aplicar(…, HistoriaDeProducto)` con el record `HistoriaDeProducto` (`TieneMovimientos`,
+    `TieneExistencia`, `Borradores`, `TieneDependientes`, `SeguimientoBloqueado`, `Nueva`); se retiran `ClasesDisponibles` y los errores
+    `ProductKindNotAvailable`/`ProductTrackingNotAvailable` (y `CatalogErrors.EntregaDelCatalogoAvanzado`); `UpdateProductCommand` gana
+    `Kind` opcional (nulo = no cambia). `Variants/`: `SaveVariantAttributeCommand` (+ `ValorDeAtributoPedido`), `ListVariantAttributesQuery`,
+    `VariantAttributeDto`, `VariantAttributeValueDto`, `VistaDeAtributos`; `GenerateProductVariantsCommand` (+ `AtributoElegido`,
+    `VarianteAjustada`), `VariantesGeneradasDto`, `ProductVariantDto`, `ValorDeVarianteDto`, `ListProductVariantsQuery` (para
+    `GET /products/{id}/variants`, T934) y `VistaDeVariantes`. `Components/`: `SetProductComponentsCommand` (+ `ComponentePedido`),
+    `GetProductComponentsQuery`, `ProductComponentsDto`, `ProductComponentDto`, `VistaDeComponentes`. En documentos,
+    `ProductoDelDocumento.EsPlantilla` (la revisan `SaveInventoryDraftCommand` y `ReglasDeLineasDeVenta`). Plantilla 6:
+    `PlantillaDeProductos.{HojaVariantes, HojaComponentes, Plantilla, Atributo, Valor, Componente, Cantidad}` (T922, decisión por defecto).
+    `DeleteProductCommand` también da de baja los valores de variante y los componentes del producto.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2225,6 +2238,15 @@ veces); `Inventory.Variant.AttributesRequired` (sin atributos o un atributo sin 
 `SelectorDeLotes.CodigoLoteVencido` (T908); un texto de `Informes.UmbralesAbc` que no suma 100 es `Parameters.ValueNotAllowed`
 (`UmbralesAbc.CodigoNoAdmitido`). Un combo o ensamble cuyo componente no alcanza responde `Inventory.Stock.Insufficient` nombrando al
 componente (`ResultadoDeCompuesto.ComponenteRechazado`).
+
+Catálogo avanzado, aplicación (I6, T918–T922; todos **(nuevo)**; retirados `Inventory.Product.KindNotAvailable` y `.TrackingNotAvailable`):
+`Inventory.Product.ExpiryRequiresLot`, `.TrackingNotApplicable` (lote o serie en un servicio o un combo), `.TrackingLocked` (`data {
+hasStock, drafts }`), `.KindLocked` (la clase con movimientos, variantes o componentes); `Inventory.Variant.ParentRequired` (una
+variante sólo nace de su plantilla), `.NotATemplate`, `.CombinationExists` (`data { variantKeys }`); `Inventory.VariantAttribute.NotFound`
+(404), `.ValueNotFound`, `.Inactive`, `.InUse` (código de atributo o valor que ya está en un `VariantKey`), `.ValueDuplicate`;
+`Inventory.Lot.Required`, `.ExpiryRequired`, `.ExpiryMismatch`, `.NotTracked`; `Inventory.Serial.Required`, `.NotTracked`,
+`.QuantityNotOne`, `.AlreadyInStock` (las fábricas viven en `CatalogErrors` para que T923 las reuse). Los errores de
+`ValidadorDeComponentes` salen de `SetProductComponentsCommand` con el primero como código y todos en `data.errors[]`.
 
 ### 2.18 Pruebas con nombre fijo
 
@@ -2366,6 +2388,12 @@ rutas de I6 en `SalesEndpoints`, temas del manual) y `TextosDeVentasTests.Cada_c
 `Costing/Casos/18-ensamble-de-kits.json` y `19-venta-de-combo.json` (con `CasosDoradosDeCosteoTests.Estan_los_casos_18_y_19_de_I6`; el
 arnés `CasoDoradoDeCosteo` gana `componentes` en el movimiento y `componentes`, `costoCompuesto` y `componenteRechazado` en lo esperado) y
 `Costing/MotorDeCosteoEnsambleYComboTests` (residuo del kit, PEPS, entradas inválidas, negativo permitido).
+**(nuevos, I6 aplicación del catálogo avanzado, T907 y T921)** `tests/IngenIA365ERP.Application.Tests/Inventory/Catalog/CatalogoAvanzadoTests`;
+en `Imports/ImportProductsCommandTests`, `Las_hojas_Variantes_y_Componentes_crean_plantilla_variantes_y_kit_en_una_carga` y
+`Las_hojas_de_I6_responden_combinacion_repetida_clase_invalida_y_variante_sin_plantilla`; en
+`GoLive/ImportOpeningBalanceCommandHandlerTests`, `Lote_vencimiento_y_serie_siguen_lo_que_controla_el_producto`. Las pruebas de I1 que
+fijaban «hasta I6» (`ProductCommandsTests`, `ImportProductsCommandTests`, `ImportOpeningBalanceCommandHandlerTests`,
+`ImportacionComunTests`) se reescribieron con la regla nueva.
 
 ---
 
@@ -3397,6 +3425,37 @@ cuando el ámbito llega a cero, como el de una salida). (f) La «guarda hasta I6
 `ClasesDeDocumento`, la misma de las otras clases de I6: se retira sola cuando `CatalogoDeParametros.EntregaVigente` sube a I6 (lo hace
 quien cierre I6) y con la estrategia `EfectoDeEnsamble` (T928); el dominio no tiene otra guarda propia del ensamble.
 
+**T54b · Catálogo avanzado en la aplicación: clases, seguimiento, variantes, componentes y plantillas (nuevo, I6, T918–T922;
+2026-09-29; revisar con el dueño).**
+Decisión (dentro de FR-023, FR-026, FR-030 y data-model §1.6/§1.11): (a) **clases**: las seis se crean por el alta de siempre, sin
+depender de `EntregaVigente` (a diferencia de las clases de documento, que sí esperan a que suba); una `Variant` **no** nace por el alta
+ni por una fila suelta de la plantilla sino de su plantilla (`Inventory.Variant.ParentRequired`): por «Generar variantes» o por la hoja
+`Variantes`. La clase de un producto guardado cambia por la edición (`UpdateProductCommand.Kind`, nulo = no cambia) sólo sin
+movimientos, sin variantes, sin componentes y sin ser componente (`.KindLocked`). (b) **seguimiento**: permitido en inventariable,
+variante, kit y plantilla (que lo hereda); nunca en servicio ni combo (`.TrackingNotApplicable`); `TracksExpiry` exige `TracksLot`; las
+marcas no cambian con existencia distinta de cero en alguna bodega ni con documentos en borrador **o en aprobación** que citen el producto
+(`.TrackingLocked`). (c) **variantes**: heredan de la plantilla categoría, marca, unidad base y alternas (con sus defectos), grupo contable,
+tratamiento de IVA e impuestos, concepto de retención, seguimiento, descripción, referencia, peso, volumen y compra/venta; no heredan
+códigos de barras (cada variante trae el suyo, opcional); si la plantilla no tiene grupo o concepto, la variante no nace. Si todas las
+combinaciones pedidas existen → `CombinationExists`; si sólo algunas, se crean las demás y se informan. (d) **atributos**: los valores se
+identifican por código; el código de un atributo o valor que ya está en un `VariantKey` no cambia ni se retira (`.InUse`), el nombre sí.
+(e) **componentes**: el comando reemplaza la lista entera (baja lógica de lo retirado) y responde todos los errores del validador en
+`data.errors[]`; la hoja `Componentes` sólo agrega o cambia (la plantilla nunca borra). (f) **plantilla en documentos**: rechazada con
+`Inventory.Product.NotInventoriable` en el guardado genérico (`SaveInventoryDraftCommand`) y en las reglas de venta
+(`ReglasDeLineasDeVenta`, que cubre el POS al cobrar); un combo entra a las ventas como línea sin existencia propia hasta T926.
+(g) **plantillas de importación** (T921): las clases y marcas de seguimiento se habilitan en la 6; las columnas `lote`, `vencimiento` y
+`serie` en la 14 crean o reutilizan el `Lot` y registran la `Serial` **al aplicar** (sin proyección: `InStock*` la escribe
+`RegistroDeKardex` al confirmar) porque la línea sólo tiene `LotId`/`SerialId`; lote y serie se guardan recortados y en mayúsculas. Las
+seis clases de venta y `Assembly` en la plantilla 8 no se tocan: `ImportDocumentTypesCommand` las rechaza por `ClasesDeDocumento.Operable()`
+y quedan admitidas solas cuando quien cierre I6 suba `CatalogoDeParametros.EntregaVigente`.
+
+**T922 · Hojas de variantes y componentes en la plantilla de productos (decisión por defecto, revisar con el dueño; 2026-09-29).**
+Se adopta la propuesta de la tarea: la plantilla 6 suma las hojas opcionales `Variantes` (`producto`, `plantilla`, `atributo`,
+`valor`; una fila por variante y atributo) y `Componentes` (`producto`, `componente`, `cantidad`), cargadas después de `Productos` con las
+mismas reglas que la pantalla y la API (contracts/plantillas.md §6). Los atributos y sus valores **no** tienen hoja: se crean por
+pantalla o API antes de cargar. Si el dueño prefiere no tener las hojas, basta con retirarlas de `PlantillaDeProductos.Definicion` y
+de `ImportProductsCommand`; nada más depende de ellas.
+
 ---
 
 ## 4. Preguntas al dueño (consolidadas)
@@ -3470,6 +3529,7 @@ qué no puede salir sin una respuesta explícita: una entrega, el ensayo (D-07) 
 | D7 | ¿El documento equivalente POS pertenece a la cadena de ventas de FR-075 y por eso comparte modo de paso con la factura de oficina? | Sí (lectura literal de FR-075) | No |
 | D8 | Puesta en marcha bodega por bodega con ámbito de costeo cooperativa: el saldo inicial de una bodega que se activa después queda fechado antes de ventas ya registradas en otras. ¿Se admite como excepción a `Costeo.RetroactivosPermitidos`, o se exige `Costeo.Ambito = Bodega` mientras haya bodegas no activas? | Excepción: un `OpeningBalance` (y su `Voiding`) de una bodega `NotActivated` no depende del parámetro; el motor lo inserta en `(OperationDate, Id)`, recalcula las salidas posteriores y registra `AjusteDeCostoReconocido` por documento afectado (T18, entregado en I1) | I1 (salida de la segunda bodega) |
 | D9 | Los ajustes que genera un conteo aprobado se fechan en la foto (FR-041) y suelen quedar antes de movimientos de otras bodegas. ¿Se admiten siempre, sin depender de `Costeo.RetroactivosPermitidos`? | Sí, con el mismo soporte retroactivo mínimo de D8 en I1 (precisión aplicada a FR-045) | I1 |
+| D10 | (T922) ¿La plantilla de productos suma hojas para los valores de variante y los componentes? | Sí: hojas opcionales `Variantes` y `Componentes` cargadas después de `Productos` (adoptada por defecto el 2026-09-29, T922; ver §3) | No |
 
 ### E. Compras e impuestos
 
