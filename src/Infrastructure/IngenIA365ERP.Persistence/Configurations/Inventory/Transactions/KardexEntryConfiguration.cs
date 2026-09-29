@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory.Transactions;
 /// <summary>
 /// <c>INV_KardexEntries</c> (feature 012, T250; data-model §3.1): hecho de alto volumen con <c>bigint</c> identidad, sólo
 /// inserción (<c>IHechoInmutable</c>). <c>ReversesEntryId</c> y <c>AffectsEntryId</c> apuntan a la misma tabla; lote y serie
-/// sin FK hasta I6. Índices del motor de costo y los retroactivos <c>(ProductId, CostScopeWarehouseId, OperationDate, Id)</c>, del
+/// con FK desde I6 (<c>ComercioAmpliado</c>). Índices del motor de costo y los retroactivos <c>(ProductId, CostScopeWarehouseId, OperationDate, Id)</c>, del
 /// kardex por bodega y el valorizado a una fecha <c>(ProductId, WarehouseId, OperationDate, Id)</c>, por fecha, por documento y
 /// el de ajustes por la entrada que corrigen (filtrado). Cantidad (18,4), costo unitario (18,6), monto (18,2). Nace con
 /// <c>InventarioComercialNucleo</c> (T440).
@@ -45,6 +45,10 @@ public class KardexEntryConfiguration : IEntityTypeConfiguration<KardexEntry>
         builder.HasOne<WarehouseLocation>().WithMany().HasForeignKey(e => e.LocationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.ReversesEntry).WithMany().HasForeignKey(e => e.ReversesEntryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.AffectsEntry).WithMany().HasForeignKey(e => e.AffectsEntryId).OnDelete(DeleteBehavior.Restrict);
+
+        // I6 (ComercioAmpliado, T857; data-model §3.0): la columna nació en I1 sin FK; los índices únicos no cambian.
+        builder.HasOne(e => e.Lot).WithMany().HasForeignKey(e => e.LotId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Serial).WithMany().HasForeignKey(e => e.SerialId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.ProductId, e.CostScopeWarehouseId, e.OperationDate, e.Id })
             .HasDatabaseName("IX_INV_KardexEntries_Product_Scope_Date");

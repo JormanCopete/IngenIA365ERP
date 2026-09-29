@@ -27,6 +27,9 @@ public class StockDetailConfiguration : IEntityTypeConfiguration<StockDetail>
         builder.HasOne<Warehouse>().WithMany().HasForeignKey(e => e.WarehouseId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<WarehouseLocation>().WithMany().HasForeignKey(e => e.LocationId).OnDelete(DeleteBehavior.Restrict);
 
+        // I6 (ComercioAmpliado, T857; data-model §3.0): la columna nació en I1 sin FK; los índices únicos no cambian.
+        builder.HasOne(e => e.Lot).WithMany().HasForeignKey(e => e.LotId).OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(e => new { e.ProductId, e.WarehouseId, e.LocationId }).IsUnique()
             .HasDatabaseName(UnicoSinLote).HasFilter("[LotId] IS NULL");
         builder.HasIndex(e => new { e.ProductId, e.WarehouseId, e.LocationId, e.LotId }).IsUnique()

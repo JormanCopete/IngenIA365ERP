@@ -17,8 +17,10 @@ public class StockDetail : AuditableEntity
 
     public int LocationId { get; set; }
 
-    /// <summary>Sin FK hasta I6 (data-model §3.0); siempre nulo en I1.</summary>
+    /// <summary>Nace en I1 sin FK; <c>ComercioAmpliado</c> (I6) agrega la FK a <c>INV_Lots</c> (data-model §3.0).</summary>
     public int? LotId { get; set; }
+
+    public Catalog.Lot? Lot { get; set; }
 
     /// <summary>Σ del kardex de la combinación.</summary>
     public decimal Quantity { get; set; }

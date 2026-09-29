@@ -62,7 +62,10 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         [DocumentClass.NegativeAdjustment] = ("CONN", "Ajuste de conteo (faltante)"),
     };
 
-    /// <summary>Código y nombre del tipo sembrado de cada clase de I1, de las dos de caja de I3 (T588) y de las tres de compras de I5 (T785).</summary>
+    /// <summary>
+    /// Código y nombre del tipo sembrado de cada clase de I1, de las dos de caja de I3 (T588), de las tres de compras de I5 (T785) y de
+    /// las seis de I6 (T861).
+    /// </summary>
     public static readonly IReadOnlyDictionary<DocumentClass, (string Codigo, string Nombre)> Sembrados = new Dictionary<DocumentClass, (string, string)>
     {
         [DocumentClass.PurchaseReceipt] = ("REC", "Recepción de compra"),
@@ -90,7 +93,21 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         [DocumentClass.PurchaseRequest] = ("SOC", "Solicitud de compra"),
         [DocumentClass.PurchaseOrder] = ("ORC", "Orden de compra"),
         [DocumentClass.LandedCost] = ("CAD", "Costos adicionales de compra"),
+        // I6 (T861; contracts/plantillas.md §8, filas I6): el ciclo comercial y el ensamble. Cotización, pedido, remisión, nota débito
+        // y ensamble con su consecutivo propio (T16: las notas no usan resolución); la factura desde remisiones numera por la
+        // resolución Invoice y no lleva consecutivo (NumberedBy.DianResolution). Códigos propuestos: el dueño los confirma con la
+        // contadora. Se siembran cuando la entrega vigente llega a I6; en las cooperativas que ya tienen los de I1 a I5 sólo se
+        // agregan éstos (idempotente por código). La remisión lleva además su fila por tipo en inventory-voucher-mappings.json.
+        [DocumentClass.SalesQuote] = ("COT", "Cotización"),
+        [DocumentClass.SalesOrder] = ("PED", "Pedido"),
+        [DocumentClass.Shipment] = (CodigoDeLaRemision, "Remisión"),
+        [DocumentClass.SalesInvoiceFromShipments] = ("FVR", "Factura desde remisiones"),
+        [DocumentClass.DebitNote] = ("NDV", "Nota débito"),
+        [DocumentClass.Assembly] = ("ENS", "Ensamble"),
     };
+
+    /// <summary>I6 (T861): el código del tipo sembrado de la remisión, que el mapeo contable nombra (contracts/contabilidad.md §2.6).</summary>
+    public const string CodigoDeLaRemision = "REM";
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)
     {

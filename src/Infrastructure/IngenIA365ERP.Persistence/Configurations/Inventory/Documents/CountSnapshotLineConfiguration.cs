@@ -34,6 +34,9 @@ public class CountSnapshotLineConfiguration : IEntityTypeConfiguration<CountSnap
         builder.HasOne<InventoryDocument>().WithMany().HasForeignKey(e => e.DocumentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Product>().WithMany().HasForeignKey(e => e.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<WarehouseLocation>().WithMany().HasForeignKey(e => e.LocationId).OnDelete(DeleteBehavior.Restrict);
+
+        // I6 (ComercioAmpliado, T857; data-model §3.0): la columna nació en I1 sin FK; los índices únicos no cambian.
+        builder.HasOne(e => e.Lot).WithMany().HasForeignKey(e => e.LotId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(e => e.Captures).WithOne(c => c.SnapshotLine).HasForeignKey(c => c.SnapshotLineId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.DocumentId, e.ProductId, e.LocationId }).IsUnique()

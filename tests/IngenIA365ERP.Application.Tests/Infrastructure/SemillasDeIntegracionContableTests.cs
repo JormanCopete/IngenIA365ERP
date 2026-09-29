@@ -39,12 +39,15 @@ public class SemillasDeIntegracionContableTests
     [Fact]
     public void El_mapeo_por_defecto_cubre_cada_operacion_con_un_tipo_de_inventario_y_cruces_que_existen()
     {
-        var mapeo = InventoryVoucherMappingsSeeder.Semillas();
+        var todas = InventoryVoucherMappingsSeeder.Semillas();
+        // I6 (T861; contracts/contabilidad.md §2.6): la única fila por tipo de documento es la de la remisión hacia SI.
+        todas.Where(m => m.InventoryDocumentTypeCode != null).Should().ContainSingle()
+            .Which.Should().Be(new InventoryVoucherMappingsSeeder.Semilla("CostoDeVenta", "SI", null, InventoryDocumentTypesSeeder.CodigoDeLaRemision));
+        var mapeo = todas.Where(m => m.InventoryDocumentTypeCode == null).ToList();
         var tiposInv = VoucherTypesSeeder.Semillas().Where(t => t.Module == "INV").Select(t => t.Code).ToHashSet();
         var cruces = CrossDocumentTypesSeeder.Semillas().Select(c => c.Code).ToHashSet();
 
         mapeo.Select(m => m.Operation).Should().BeEquivalentTo(Operaciones);
-        mapeo.Should().OnlyContain(m => m.InventoryDocumentTypeCode == null, "la semilla sólo deja filas por operación; las excepciones por tipo son de la cooperativa");
         mapeo.Should().OnlyContain(m => tiposInv.Contains(m.VoucherTypeCode));
         mapeo.Where(m => m.CrossDocumentTypeCode != null).Should().OnlyContain(m => cruces.Contains(m.CrossDocumentTypeCode!));
 
@@ -69,7 +72,7 @@ public class SemillasDeIntegracionContableTests
         await SembrarTiposAsync(db);
 
         var primera = await InventoryVoucherMappingsSeeder.AplicarAsync(db, NullLogger(), CancellationToken.None);
-        primera.Should().Be(Operaciones.Length);
+        primera.Should().Be(Operaciones.Length + FilasPorTipo, "una por operación y la de la remisión (I6)");
 
         // La cooperativa lleva los ajustes de costo a Salidas.
         var si = await db.VoucherTypes.SingleAsync(v => v.Code == "SI");
@@ -79,7 +82,7 @@ public class SemillasDeIntegracionContableTests
 
         var segunda = await InventoryVoucherMappingsSeeder.AplicarAsync(db, NullLogger(), CancellationToken.None);
         segunda.Should().Be(0);
-        (await db.InventoryVoucherMappings.CountAsync()).Should().Be(Operaciones.Length);
+        (await db.InventoryVoucherMappings.CountAsync()).Should().Be(Operaciones.Length + FilasPorTipo);
         (await db.InventoryVoucherMappings.SingleAsync(m => m.MappingKey == "AjusteDeCosto|*")).VoucherTypeId.Should().Be(si.Id);
 
         var fv = await db.InventoryVoucherMappings.SingleAsync(m => m.MappingKey == "Venta|*");
@@ -110,10 +113,13 @@ public class SemillasDeIntegracionContableTests
         await db.SaveChangesAsync();
         var logMapeo = new LogEnLista();
         var mapeadas = await InventoryVoucherMappingsSeeder.AplicarAsync(db, logMapeo, CancellationToken.None);
-        mapeadas.Should().Be(Operaciones.Length - 2, "DespachoTraslado y RecepcionTraslado apuntan a TR, que no es de Inventario");
+        mapeadas.Should().Be(Operaciones.Length + FilasPorTipo - 2, "DespachoTraslado y RecepcionTraslado apuntan a TR, que no es de Inventario");
         logMapeo.Avisos.Should().NotBeEmpty();
         (await db.InventoryVoucherMappings.AnyAsync(m => m.Operation == "DespachoTraslado")).Should().BeFalse();
     }
+
+    /// <summary>I6 (T861): las filas por tipo de documento que trae la semilla (la de la remisión).</summary>
+    private const int FilasPorTipo = 1;
 
     private static async Task SembrarTiposAsync(TestApplicationDbContext db)
     {

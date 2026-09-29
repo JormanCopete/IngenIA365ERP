@@ -11,7 +11,8 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 /// <c>ChangeProductAccountingGroupCommand</c> cuando hay movimientos. <see cref="SearchText"/> es el texto normalizado
 /// (<c>NormalizadorDeBusqueda</c>) de código, nombre, nombre corto, referencia, marca y códigos de barras vivos que
 /// recorre la búsqueda mientras se escribe (T43). Las imágenes son adjuntos del dueño <c>InventoryProduct</c> (sin
-/// columna). <c>ParentProductId</c> y <c>VariantKey</c> llegan con I6.
+/// columna). <see cref="ParentProductId"/> y <see cref="VariantKey"/> llegan con I6 (<c>ComercioAmpliado</c>, T853; data-model §1.11):
+/// una variante apunta a su plantilla y su combinación normalizada es única dentro de ella.
 /// </summary>
 public class Product : AuditableEntity
 {
@@ -76,11 +77,30 @@ public class Product : AuditableEntity
 
     public string SearchText { get; set; } = string.Empty;
 
+    /// <summary>I6: la plantilla de una variante (FK a <c>INV_Products</c>).</summary>
+    public int? ParentProductId { get; set; }
+
+    public Product? ParentProduct { get; set; }
+
+    /// <summary>I6: la combinación normalizada de la variante (<c>COLOR=AZUL;TALLA=M</c>), única dentro de su plantilla entre vivas.</summary>
+    public string? VariantKey { get; set; }
+
+    public const int LargoDeLaClaveDeVariante = 200;
+
     public ICollection<ProductUnit> Units { get; set; } = new List<ProductUnit>();
 
     public ICollection<ProductBarcode> Barcodes { get; set; } = new List<ProductBarcode>();
 
     public ICollection<ProductTax> Taxes { get; set; } = new List<ProductTax>();
+
+    /// <summary>I6: los componentes de un combo o de un kit.</summary>
+    public ICollection<ProductComponent> Components { get; set; } = new List<ProductComponent>();
+
+    /// <summary>I6: los valores de atributo de una variante.</summary>
+    public ICollection<ProductVariantValue> VariantValues { get; set; } = new List<ProductVariantValue>();
+
+    /// <summary>I6: las variantes de una plantilla.</summary>
+    public ICollection<Product> Variants { get; set; } = new List<Product>();
 
     /// <summary>Maneja existencias: inventariable o variante (un servicio nunca produce kardex; un combo no tiene existencia propia).</summary>
     public bool EsInventariable => Kind is ProductKind.Inventoriable or ProductKind.Variant;

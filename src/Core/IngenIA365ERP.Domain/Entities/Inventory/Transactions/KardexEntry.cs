@@ -32,11 +32,15 @@ public class KardexEntry : AuditableEntityLong, IHechoInmutable
 
     public int LocationId { get; init; }
 
-    /// <summary>Sin FK hasta I6 (data-model §3.0); siempre nulo en I1.</summary>
+    /// <summary>Nace en I1 sin FK; <c>ComercioAmpliado</c> (I6) agrega la FK a <c>INV_Lots</c> (data-model §3.0).</summary>
     public int? LotId { get; init; }
 
-    /// <summary>Sin FK hasta I6 (data-model §3.0); siempre nulo en I1.</summary>
+    public Catalog.Lot? Lot { get; init; }
+
+    /// <summary>Nace en I1 sin FK; <c>ComercioAmpliado</c> (I6) agrega la FK a <c>INV_Serials</c> (data-model §3.0).</summary>
     public int? SerialId { get; init; }
+
+    public Catalog.Serial? Serial { get; init; }
 
     /// <summary>La del documento; en un ajuste por retroactivo, la de la salida afectada.</summary>
     public DateOnly OperationDate { get; init; }

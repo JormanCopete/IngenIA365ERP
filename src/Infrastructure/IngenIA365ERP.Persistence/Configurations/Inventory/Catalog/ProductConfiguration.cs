@@ -51,6 +51,14 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasIndex(e => e.BrandId).HasDatabaseName("IX_INV_Products_BrandId");
         builder.HasIndex(e => e.AccountingGroupId).HasDatabaseName("IX_INV_Products_AccountingGroupId");
         builder.HasIndex(e => e.Status).HasDatabaseName("IX_INV_Products_Status");
+
+        // I6 (ComercioAmpliado, T857; data-model §1.6, §1.11): la variante apunta a su plantilla y su combinación es única en ella.
+        builder.Property(e => e.VariantKey).HasMaxLength(Product.LargoDeLaClaveDeVariante);
+        builder.HasOne(e => e.ParentProduct).WithMany(p => p.Variants).HasForeignKey(e => e.ParentProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(e => e.Components).WithOne(c => c.Product).HasForeignKey(c => c.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(e => e.VariantValues).WithOne(v => v.Product).HasForeignKey(v => v.ProductId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.ParentProductId, e.VariantKey }).IsUnique().HasDatabaseName("UK_INV_Products_Parent_VariantKey")
+            .HasFilter("[ParentProductId] IS NOT NULL AND [IsDeleted] = 0");
     }
 }
 

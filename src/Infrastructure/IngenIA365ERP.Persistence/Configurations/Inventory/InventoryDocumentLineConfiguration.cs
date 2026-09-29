@@ -7,7 +7,7 @@ namespace IngenIA365ERP.Persistence.Configurations.Inventory;
 /// <summary>
 /// <c>INV_DocumentLines</c> (feature 012, T17, T136; data-model §5.4). Único <c>(DocumentId, LineNumber)</c> e índice
 /// por producto. Cantidades (18,4), factor (18,6), precio y costo unitario (18,6), montos (18,2). Las FK a producto,
-/// unidad, ubicación y causa las declara la configuración de esas entidades (US1); lote y serie no tienen FK hasta I6.
+/// unidad, ubicación y causa las declara la configuración de esas entidades (US1); lote y serie, desde I6 (<c>ComercioAmpliado</c>), las declara ésta.
 /// </summary>
 public class InventoryDocumentLineConfiguration : IEntityTypeConfiguration<InventoryDocumentLine>
 {
@@ -43,6 +43,10 @@ public class InventoryDocumentLineConfiguration : IEntityTypeConfiguration<Inven
         builder.HasIndex(e => new { e.DocumentId, e.LineNumber }).IsUnique().HasDatabaseName("UK_INV_DocumentLines_Document_LineNumber")
             .HasFilter("[IsDeleted] = 0");
         builder.HasIndex(e => e.ProductId).HasDatabaseName("IX_INV_DocumentLines_ProductId");
+
+        // I6 (ComercioAmpliado, T857; data-model §3.0): la columna nació en I1 sin FK; los índices únicos no cambian.
+        builder.HasOne(e => e.Lot).WithMany().HasForeignKey(e => e.LotId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.Serial).WithMany().HasForeignKey(e => e.SerialId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(e => e.RowVersion).IsRowVersion();
 

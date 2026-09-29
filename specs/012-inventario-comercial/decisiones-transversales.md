@@ -829,7 +829,7 @@ JSON embebidos versionados (T40), no semillas.
 | I3 | `VentasYPuntoDeVenta` | aditiva | `COR_PaymentMeans`, `COR_Card*`, `COR_CashDenominations`, tablas `INV_` de I3. |
 | I4 | `DocumentosElectronicos` | aditiva | `COR_ElectronicEmissionSettings`, `COR_DianNumberingResolutions`, `COR_DianResolutionChannels`, `COR_ElectronicDocuments`, `COR_ElectronicDocumentVersions`, `COR_ElectronicDocumentTransmissions`, `COR_DianContingencyEvents`. |
 | I5 | `ComprasYCosteoAvanzado` | aditiva | `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`, `INV_LayerConsumptions`; columnas `BalanceClosedAt`, `BalanceClosedByUserId` (FK `SEC_Users`, `IX_INV_Documents_BalanceClosedByUserId`), `BalanceClosedReason` y `ExpectedDate` (data-model §5.1, I5; la necesitan la solicitud y la orden de T787/T790 y no se puede sumar después sin otra migración) en `INV_Documents`. Generada el 2026-09-28 (T835); `AllocationMethod` **no** va en `INV_Documents` (vive por fila en `INV_LandedCostAllocations`, T778). |
-| I6 | `ComercioAmpliado` | aditiva | variantes, componentes, lotes, series, reservas, promociones. |
+| I6 | `ComercioAmpliado` | aditiva | variantes, componentes, lotes, series, reservas, promociones: `INV_ProductComponents`, `INV_VariantAttributes`, `INV_VariantAttributeValues`, `INV_ProductVariantValues`, `INV_Lots`, `INV_Serials`, `INV_Reservations`, `INV_Promotions`, `INV_PromotionScopes` (con el `CHECK` **(nuevo)** `CK_INV_PromotionScopes_OneTarget`: una sola columna destino por fila), `INV_PromotionTiers`; columnas `INV_Products.ParentProductId`/`VariantKey` (`UK_INV_Products_Parent_VariantKey` filtrado) e `INV_DocumentLineDiscounts.PromotionId`; FK de `LotId` en `INV_KardexEntries`, `INV_DocumentLines`, `INV_StockDetails`, `INV_CountSnapshotLines` e `INV_TransferDiscrepancies` (ésta **(nuevo)**: §0 «FK `Restrict` siempre») y de `SerialId` en las dos primeras, sin tocar los índices únicos de las proyecciones. Generada el 2026-09-29 (T860): el lado SQL Server con `add-migration.ps1`; el de PostgreSQL con `dotnet ef` y el ensamblado de migraciones como arranque (la API no tiene cadena de PostgreSQL en el worktree), como en I4 e I5. Scaffold revisado sin cambios ajenos; paridad verificada. Los `CHECK` se escriben en T-SQL con corchetes y `ProviderModelConventions.ApplyPortableIndexFilters` los traduce a PostgreSQL igual que los filtros de índice **(nuevo)**. |
 
 ### 2.16 Componentes con nombre fijo
 
@@ -2264,6 +2264,13 @@ las escrituras, sin `Authorization`) y `tests/IngenIA365ERP.Application.Tests/In
 `ComprasCompletasTests` (escenario «comprasi5»: el ciclo solicitud → orden aprobada → recepciones → factura retenida → aprobación, y el
 flete prorrateado por valor), `EventosRadianEmitidosTests` (sobre `EscenarioDeFacturacionElectronica` «radiani5» con `CanalSimulado`) y
 `CosteoAvanzadoTests` (cooperativas «costeoretro» con contabilidad, «costeocerrado» y «costeopeps»).
+**(nuevos, I6 fundacional, T850/T851/T861)** e2e `tests/IngenIA365ERP.API.IntegrationTests/Inventory/ComercioAmpliadoMigracionTests`
+(colección «Inventario e2e», escenario «comercioampliado»: baja y sube el par con un ajuste de I1 confirmado, filas idénticas, índices y FK
+de data-model §1.11/§3.0/§14; verde en PostgreSQL y SQL Server el 2026-09-29), `tests/IngenIA365ERP.Application.Tests/Infrastructure/SemillasDeComercioAmpliadoTests`
+(un tipo por clase de I6, la factura desde remisiones sin consecutivo, idempotente sobre I1–I5, y la fila por tipo de la remisión hacia `SI`)
+y `LasCantidadesYCostosTienenSuPrecision` (+ componentes, reservas y promociones). Tipos sembrados de I6 **(nuevo, códigos propuestos a
+confirmar con la contadora)**: `COT` cotización, `PED` pedido, `REM` remisión (`InventoryDocumentTypesSeeder.CodigoDeLaRemision`), `FVR`
+factura desde remisiones, `NDV` nota débito, `ENS` ensamble; `SemillasDeIntegracionContableTests` cuenta ahora la fila por tipo de la remisión.
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 

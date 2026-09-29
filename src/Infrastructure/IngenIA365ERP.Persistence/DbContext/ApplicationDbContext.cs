@@ -378,6 +378,17 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer> CostLayers => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption>();
+    // Feature 012, I6 (T859; ComercioAmpliado): catálogo avanzado, lotes y series, reservas y promociones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent> ProductComponents => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute> VariantAttributes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue> VariantAttributeValues => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue> ProductVariantValues => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot> Lots => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial> Serials => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation> Reservations => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion> Promotions => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope> PromotionScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier> PromotionTiers => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier>();
     // Feature 012 (T585, I3): medios de pago de Core, punto de venta y caja, precios y satélites de la venta (VentasYPuntoDeVenta).
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans => Set<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork> CardNetworks => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork>();

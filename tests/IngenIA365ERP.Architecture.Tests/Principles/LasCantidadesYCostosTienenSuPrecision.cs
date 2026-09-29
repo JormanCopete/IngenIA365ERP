@@ -116,6 +116,18 @@ public class LasCantidadesYCostosTienenSuPrecision
         (Inv + "Projections/CostLayerConfiguration.cs", "UnitCost", "CostoUnitario"),
         (Inv + "Transactions/LayerConsumptionConfiguration.cs", "Quantity", "Cantidad"),
         (Inv + "Transactions/LayerConsumptionConfiguration.cs", "UnitCost", "CostoUnitario"),
+        // Comercio ampliado, I6 (T851; data-model §1.11, §14): componentes, reservas y promociones.
+        (Inv + "Catalog/ProductComponentConfiguration.cs", "Quantity", "Cantidad"),
+        (Inv + "Warehousing/ReservationConfiguration.cs", "QuantityBase", "Cantidad"),
+        (Inv + "Warehousing/ReservationConfiguration.cs", "ConsumedQuantityBase", "Cantidad"),
+        (Inv + "Pricing/PromotionConfiguration.cs", "Rate", "Tarifa"),
+        (Inv + "Pricing/PromotionConfiguration.cs", "Amount", "Monto"),
+        (Inv + "Pricing/PromotionConfiguration.cs", "BuyQuantity", "Cantidad"),
+        (Inv + "Pricing/PromotionConfiguration.cs", "PayQuantity", "Cantidad"),
+        (Inv + "Pricing/PromotionConfiguration.cs", "BundlePrice", "Monto"),
+        (Inv + "Pricing/PromotionScopeConfiguration.cs", "RequiredQuantity", "Cantidad"),
+        (Inv + "Pricing/PromotionTierConfiguration.cs", "MinQuantity", "Cantidad"),
+        (Inv + "Pricing/PromotionTierConfiguration.cs", "UnitPrice", "Monto"),
     ];
 
     /// <summary>Espacios de nombres de entidades cuyos decimales tienen que declarar su precisión (T19).</summary>

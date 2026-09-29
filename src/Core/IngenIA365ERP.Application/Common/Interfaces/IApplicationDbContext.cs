@@ -252,6 +252,18 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations { get; }
     DbSet<Domain.Entities.Inventory.Projections.CostLayer> CostLayers { get; }
     DbSet<Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions { get; }
+    // Feature 012, I6 (T859; ComercioAmpliado): catálogo avanzado, lotes y series, reservas y promociones. La proyección de la serie
+    // (InStock*) la escribe sólo RegistroDeKardex.
+    DbSet<Domain.Entities.Inventory.Catalog.ProductComponent> ProductComponents { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.VariantAttribute> VariantAttributes { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.VariantAttributeValue> VariantAttributeValues { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductVariantValue> ProductVariantValues { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Lot> Lots { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Serial> Serials { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.Reservation> Reservations { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.Promotion> Promotions { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PromotionScope> PromotionScopes { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PromotionTier> PromotionTiers { get; }
     // Feature 012 (T585, I3): medios de pago de Core, punto de venta y caja, precios y satélites de la venta. INV_UserPointOfSaleScopes
     // se lee y escribe solo por IAsignacionesDePuntoDeVenta; las redenciones de bonos, sólo al confirmar la venta.
     DbSet<Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans { get; }
