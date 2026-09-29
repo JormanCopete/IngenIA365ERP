@@ -92,12 +92,12 @@
         @if (!DesdeRemisiones)
         {
             <div class="info-card">
-                <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync" />
             </div>
         }
         <div class="tabla-desplazable">
             <table class="data-grid">
-                <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio (vacío: el de la lista)</th><th class="numero">Descuento %</th><th class="numero">Total</th><th></th></tr></thead>
+                <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio (vacío: el de la lista)</th><th class="numero">Descuento %</th>@if (_lineas.Any(x => x.ControlaLote || x.ControlaSerie)) { <th>Lote / serie</th> }<th class="numero">Total</th><th></th></tr></thead>
                 <tbody>
                     @for (var i = 0; i < _lineas.Count; i++)
                     {
@@ -109,6 +109,17 @@
                             <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@DesdeRemisiones" @bind="l.Cantidad" /></td>
                             <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@DesdeRemisiones" @bind="l.Precio" placeholder="@guardada?.ListPrice.ToString("N0")" /></td>
                             <td class="numero"><input class="e-input numero" type="number" min="0" max="100" step="any" disabled="@(DesdeRemisiones || l.ConPromocion)" @bind="l.Descuento" /></td>
+                            @if (_lineas.Any(x => x.ControlaLote || x.ControlaSerie))
+                            {
+                                <td>
+                                    @if (l.ControlaLote || l.ControlaSerie)
+                                    {
+                                        @* I6 (T938): la venta es una salida: propone el lote que vence primero y marca vencidos; la serie, con el lector. *@
+                                        <SelectorDeLote Producto="@l.ProductPublicId" Bodega="@_bodega" ControlaLote="@l.ControlaLote" ControlaSerie="@l.ControlaSerie"
+                                                        Deshabilitado="@DesdeRemisiones" @bind-Lote="l.Lote" @bind-Serie="l.Serie" />
+                                    }
+                                </td>
+                            }
                             <td class="numero">@guardada?.Total.ToString("N0")@(FormularioDelCiclo.Promociones(guardada) is { Length: > 0 } promo ? $" · {promo}" : "")</td>
                             <td>@if (!DesdeRemisiones) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
                         </tr>
@@ -161,6 +172,7 @@
     private bool DesdeRemisiones => _desdeRemisiones || _doc?.Class == TextosDeVentas.ClaseFacturaDesdeRemisiones;
     private CobroDelPos _cobro = new(0m);
     private Guid? _tipo, _bodega, _vendedor;
+    private readonly HashSet<Guid> _productosRevisados = [];
     private DateOnly? _fecha = DateOnly.FromDateTime(DateTime.Today), _vence;
     private PersonSearchPicker.PersonSearchItem? _cliente;
     private string? _referencia, _notas;
@@ -212,7 +224,17 @@
         _cliente = d.Counterparty is { IsFinalConsumer: false } c
             ? new PersonSearchPicker.PersonSearchItem { PublicId = c.PersonPublicId, FullName = c.Name, IdentificationNumber = c.IdNumber ?? "" }
             : null;
+        var antes = _lineas;
         _lineas = FormularioDelCiclo.Lineas(d);
+        FormularioDelCiclo.ConservarSeguimiento(antes, _lineas);
+        // I6 (T938): las marcas de seguimiento de los productos que no las traen (un borrador recién abierto).
+        foreach (var producto in _lineas.Where(x => !x.ControlaLote && !x.ControlaSerie).Select(x => x.ProductPublicId).Distinct()
+                     .Where(_productosRevisados.Add).ToList())
+        {
+            var leido = await Inventario.ObtenerProductoAsync(producto);
+            if (leido.Value is not { } p || !(p.TracksLot || p.TracksSerial)) continue;
+            foreach (var x in _lineas.Where(x => x.ProductPublicId == producto)) (x.ControlaLote, x.ControlaSerie) = (p.TracksLot, p.TracksSerial);
+        }
         _origenes = [.. d.Origins ?? []];
         var cobro = new CobroDelPos(d.Totals.AmountDue);
         foreach (var p in d.Payments.Where(x => x.Direction == 1))
@@ -240,6 +262,7 @@
         _lineas.Add(new LineaDelCiclo
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            ControlaLote = p.TracksLot, ControlaSerie = p.TracksSerial,
         });
     }
 

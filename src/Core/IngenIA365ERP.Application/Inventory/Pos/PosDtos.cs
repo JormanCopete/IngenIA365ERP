@@ -72,7 +72,13 @@ public sealed record PosLineDto(
     IReadOnlyList<PosLineTaxDto> Taxes,
     decimal Total,
     decimal? Available,
-    bool BelowCost);
+    bool BelowCost,
+    string? LotCode = null,
+    DateOnly? LotExpiryDate = null,
+    bool LotExpired = false,
+    string? SerialNumber = null,
+    bool TracksLot = false,
+    bool TracksSerial = false);
 
 /// <summary>Los totales de la venta (T26). (nuevo)</summary>
 public sealed record PosTotalsDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);

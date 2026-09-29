@@ -10,8 +10,8 @@
 <PageTitle>Productos - IngenIA365ERP</PageTitle>
 
 @* Feature 012, T234 (FR-023 a FR-030; contracts/api.md §3.5; plantilla 6): el catálogo de productos paginado con filtros y
-   la búsqueda del lector (SelectorDeProducto) para ir al detalle; el alta con CampoCodigo de 20 (inventariable o servicio en
-   I1: las demás clases y el control de lote, serie o vencimiento llegan con I6), grupo contable obligatorio, concepto de
+   la búsqueda del lector (SelectorDeProducto) para ir al detalle; el alta con CampoCodigo de 20 (desde I6, T937: inventariable,
+   servicio, combo, kit o plantilla —la variante nace de su plantilla— y el control de lote, serie o vencimiento), grupo contable, concepto de
    retención e IVA; el estado (activo, inactivo, bloqueado) cambia con motivo; borrar sólo un producto sin historia, y si
    la tiene la pantalla ofrece inactivarlo o bloquearlo (Inventory.Product.HasHistory). Las unidades alternas, los códigos
    de barras, los impuestos y las imágenes se editan en el detalle. La plantilla 6 carga todo por archivo. *@
@@ -104,7 +104,7 @@
                     <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_f.Name" maxlength="200" /></label>
                     <label class="campo">Clase *
                         <select class="e-input" @bind="_f.Kind">
-                            @foreach (var k in TextosDeInventario.ClasesDeProductoDeI1) { <option value="@k">@TextosDeInventario.Texto(TextosDeInventario.ClasesDeProducto, k)</option> }
+                            @foreach (var k in TextosDeInventario.ClasesDeProductoAlCrear) { <option value="@k">@TextosDeInventario.Texto(TextosDeInventario.ClasesDeProducto, k)</option> }
                         </select>
                     </label>
                     <label class="campo">Categoría *
@@ -153,7 +153,14 @@
                     }
                     <label class="campo">Referencia <input class="e-input" @bind="_f.Reference" maxlength="60" /></label>
                     <label class="campo">Código de barras <input class="e-input" @bind="_f.Barcode" maxlength="48" placeholder="opcional; más en el detalle" /></label>
-                    <p class="texto-tenue campo-ancho">Combos, kits, variantes y el control de lote, serie o vencimiento llegan con la entrega I6.</p>
+                    @if (Seguimiento)
+                    {
+                        <label class="campo"><SfCheckBox @bind-Checked="_f.TracksLot" Label="Controla lote" /></label>
+                        <label class="campo"><SfCheckBox @bind-Checked="_f.TracksExpiry" Label="Controla vencimiento (exige lote)" Disabled="@(!_f.TracksLot)" /></label>
+                        <label class="campo"><SfCheckBox @bind-Checked="_f.TracksSerial" Label="Controla serie" /></label>
+                    }
+                    <p class="texto-tenue campo-ancho">Una plantilla genera sus variantes (talla, color…) desde su detalle; un combo o un kit recibe allí sus componentes.
+                    La plantilla no lleva grupo contable ni concepto de retención; el combo tampoco concepto de retención.</p>
                 </div>
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _codigoRepetido)" OnClick="@CrearAsync">Guardar</SfButton>
@@ -326,7 +333,8 @@
         IReadOnlyList<CodigoDelAltaRequest>? codigos = string.IsNullOrWhiteSpace(_f.Barcode) ? null : [new CodigoDelAltaRequest(_f.Barcode.Trim(), null)];
         var r = await Inventario.CrearProductoAsync(new CrearProductoRequest(
             _f.Code.Trim().ToUpperInvariant(), _f.Name.Trim(), null, null, _f.Kind, _f.CategoryPublicId.Value, _f.BrandPublicId, _f.BaseUnitPublicId.Value,
-            _f.AccountingGroupPublicId, _f.VatSaleTreatment, _f.WithholdingConceptPublicId, _f.Reference, null, null, false, false, false,
+            _f.AccountingGroupPublicId, _f.VatSaleTreatment, _f.WithholdingConceptPublicId, _f.Reference, null, null,
+            Seguimiento && _f.TracksLot, Seguimiento && _f.TracksSerial, Seguimiento && _f.TracksLot && _f.TracksExpiry,
             null, codigos, impuestos), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el producto."); return; }
         _mostrarAlta = false;
@@ -377,6 +385,9 @@
         await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo borrar el producto.");
     }
 
+    /// <summary>El seguimiento por lote o serie aplica al inventariable, al kit y a la plantilla (que lo hereda a sus variantes).</summary>
+    private bool Seguimiento => _f.Kind is 1 or TextosDeInventario.ClaseKit or TextosDeInventario.ClasePlantilla;
+
     private sealed class FormProducto
     {
         public string? Code { get; set; }
@@ -391,5 +402,8 @@
         public Guid? VatRatePublicId { get; set; }
         public string? Reference { get; set; }
         public string? Barcode { get; set; }
+        public bool TracksLot { get; set; }
+        public bool TracksSerial { get; set; }
+        public bool TracksExpiry { get; set; }
     }
 }

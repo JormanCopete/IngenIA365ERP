@@ -11,6 +11,9 @@
 //   ahí imprime la implementación nativa (IImpresionDeDocumentos de la app).
 // - La caja del equipo en localStorage con try/catch: puede no haber almacenamiento (ventana privada, datos bloqueados) y decide el
 //   servidor igual.
+// - I6 (T941): la serie de un producto que la controla llega por el mismo camino que cualquier lectura (el campo o la ráfaga): quien
+//   decide que esa lectura es una serie es PuntoDeVenta.razor, que la espera tras Inventory.Serial.Required. Aquí no cambia nada: el
+//   lector no distingue un código de producto de una serie, y no debe hacerlo.
 // El interop se prueba a mano: no hay pruebas de navegador en el repositorio.
 (function () {
     const RAFAGA_MS = 30;

@@ -10,7 +10,8 @@
    2) ver sus bodegas, ubicaciones y lo que va en tránsito, 3) abrir su kardex—, y la lista por producto y bodega del
    alcance con filtros. Física, reservada (0 hasta los pedidos de I6), disponible y en tránsito hacia la bodega; mínimo,
    punto de reorden y posición cuando la bodega tiene política. Los valores (promedio, valor, estado de costo) sólo llegan
-   con Inventory.Costs.Read: la pantalla los pinta si llegan, nunca los deduce. *@
+   con Inventory.Costs.Read: la pantalla los pinta si llegan, nunca los deduce. I6 (T940): la existencia por ubicación trae el lote,
+   se filtra por lote y cada lote enlaza a su kardex (kardex?lot=). *@
 <PermissionGate Required="Inventory.Stock.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -75,13 +76,21 @@
                 @if (d.ByLocation.Count > 0)
                 {
                     <h5>Por ubicación</h5>
+                    @if (d.ByLocation.Any(u => u.Lot is not null))
+                    {
+                        <label class="campo">Lote <input class="e-input" @bind="_filtroDeLote" @bind:event="oninput" maxlength="40" placeholder="todos" /></label>
+                    }
                     <div class="tabla-desplazable">
                         <table class="data-grid">
                             <thead><tr><th>Bodega</th><th>Ubicación</th><th>Lote</th><th class="numero">Cantidad</th></tr></thead>
                             <tbody>
-                                @foreach (var u in d.ByLocation)
+                                @foreach (var u in d.ByLocation.Where(u => string.IsNullOrWhiteSpace(_filtroDeLote) || (u.Lot ?? "").Contains(_filtroDeLote.Trim(), StringComparison.OrdinalIgnoreCase)))
                                 {
-                                    <tr><td>@u.Warehouse.Code</td><td>@u.Location.Code</td><td>@u.Lot</td><td class="numero">@Cantidad(u.Quantity)</td></tr>
+                                    <tr>
+                                        <td>@u.Warehouse.Code</td><td>@u.Location.Code</td>
+                                        <td>@if (u.Lot is { } lote) { <a href="@($"/inventario/kardex?product={d.Product.PublicId}&lot={Uri.EscapeDataString(lote)}")">@lote</a> }</td>
+                                        <td class="numero">@Cantidad(u.Quantity)</td>
+                                    </tr>
                                 }
                             </tbody>
                         </table>
@@ -171,6 +180,7 @@
     private ExistenciaDelProductoDto? _detalle;
     private Guid? _bodega;
     private string? _buscar;
+    private string? _filtroDeLote;
     private bool _conExistencia = true, _bajoReorden;
     private int _pagina = 1;
     private long _total;

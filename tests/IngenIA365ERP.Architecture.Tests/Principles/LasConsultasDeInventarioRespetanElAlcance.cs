@@ -108,6 +108,9 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "GetDayCloseQueryHandler",
         "GetCashCountReportQueryHandler",
         "GetCashMovementReceiptQueryHandler",
+        // I6, US15 (T934): los lotes con existencia (FEFO) y las series de un producto, por bodega.
+        "ListLotsQueryHandler",
+        "ListSerialsQueryHandler",
     ];
 
     /// <summary>

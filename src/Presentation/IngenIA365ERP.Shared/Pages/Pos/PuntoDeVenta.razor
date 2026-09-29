@@ -19,7 +19,12 @@
    multiplica y un código desconocido abre la búsqueda. Cada lectura es UNA petición y la venta vive en el servidor desde la primera,
    ligada a la sesión abierta del usuario, que se busca al arrancar. La caja del equipo se recuerda en localStorage (con try/catch; decide
    el servidor). Tres pasos: cobrar (F10 abre el panel), confirmar (F10 otra vez) y entregar la tirilla. Un descuento sobre el tope o una
-   política dejan la venta esperando: se consulta cada 2 s o decide el aprobador presente. Un punto sin POS cobra en oficina (FR-058). *@
+   política dejan la venta esperando: se consulta cada 2 s o decide el aprobador presente. Un punto sin POS cobra en oficina (FR-058).
+   I6 (T941; FR-026, US15-2, US15-4, US15-5): cada línea muestra su lote asignado (el que vence primero, cambiable con SelectorDeLote en la
+   línea elegida) y si está vencido; un producto con serie deja la lectura esperando la serie (Inventory.Serial.Required): la siguiente
+   lectura del lector —por el campo o por la ráfaga de pos.js— es la serie de la unidad, y Esc la cancela; un lote vencido con Bloquear lo
+   rechaza el servidor (Inventory.Lot.Expired) y con Advertir sale con aviso; un combo es una sola línea que al confirmar descuenta sus
+   componentes. *@
 <PermissionGate Required="Inventory.Pos.Sell" MostrarAviso="true">
 <div class="pos-barra">
     <span class="pos-marca">Punto de venta</span>
@@ -69,13 +74,27 @@
                             @(_modo == Modo.Cobrando ? "Tecla del medio de pago" : "Lectura")
                             @if (_multiplicador is { } x) { <span class="pos-multiplicador"> × @x.ToString("0.####")</span> }
                             <input id="pos-lectura" class="e-input" autocomplete="off" @bind="_lectura" @bind:event="oninput" @onkeydown="@AlPulsarAsync"
-                                   disabled="@(_modo is Modo.Esperando)" placeholder="@(_modo == Modo.Cobrando ? "Tecla rápida del medio y Enter" : "Lea el código o escriba 3* y lea")" />
+                                   disabled="@(_modo is Modo.Esperando)"
+                                   placeholder="@(_modo == Modo.Cobrando ? "Tecla rápida del medio y Enter" : _pideSerie is { } ps ? $"Lea la serie de {ps}" : "Lea el código o escriba 3* y lea")" />
                         </label>
                     </div>
                     <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…" Compacto="true">
+                        @if (_pideSerie is { } pide)
+                        {
+                            @* I6 (T941): el producto controla serie: la siguiente lectura es su serie, sin tocar el ratón. Esc la cancela. *@
+                            <p class="aviso aviso-info">@pide controla serie: lea la serie de la unidad (Esc cancela).</p>
+                        }
                         @if (_venta is { Lines.Count: > 0 } v)
                         {
                             <LineasDeVenta Lineas="@v.Lines" @bind-Elegida="_elegida" Ultima="@v.LastLine?.LinePublicId" />
+                            @if (LineaElegida is { TracksLot: true, SerialNumber: null } conLote && _modo == Modo.Vendiendo)
+                            {
+                                @* I6 (T941): el lote de la línea elegida, visible y cambiable (el vencido con Bloquear lo rechaza el servidor). *@
+                                <div class="toolbar">
+                                    <SelectorDeLote Producto="@conLote.Product.PublicId" Bodega="@_venta?.Warehouse.PublicId" ControlaLote="true"
+                                                    Lote="@conLote.LotCode" LoteChanged="@(lote => CambiarLineaAsync(conLote.LinePublicId, new LineaRequest(LotCode: lote)))" />
+                                </div>
+                            }
                         }
                         else if (_modo is Modo.Vendiendo)
                         {
@@ -245,6 +264,9 @@
     private Dialogo _dialogo = Dialogo.Ninguno;
     private bool _mostrarDialogo, _sinPos, _montado, _descuentoDeLinea = true, _volverAlPrecioDeLista;
     private string? _lectura, _avisoCaja, _rotulo, _motivo;
+
+    /// <summary>I6 (T941): el código del producto que controla serie y espera que se lea la serie de la unidad.</summary>
+    private string? _pideSerie;
     private decimal? _multiplicador, _cantidad, _porcentaje, _valorDescuento, _precio;
     private Guid? _elegida, _ultimoDocumento;
     private PersonSearchPicker.PersonSearchItem? _cliente;
@@ -405,6 +427,15 @@
 
     private async Task LeerLoEscritoAsync()
     {
+        // I6 (T941): si el último producto leído controla serie, esta lectura es su serie.
+        if (_pideSerie is { } producto && !string.IsNullOrWhiteSpace(_lectura))
+        {
+            var serie = _lectura.Trim();
+            _lectura = null;
+            await LeerCodigoAsync(serie, null);
+            if (_pideSerie == producto) _pideSerie = null;
+            return;
+        }
         var lectura = LecturaDelPos.Interpretar(_lectura).ConMultiplicador(_multiplicador);
         _lectura = null;
         if (lectura.Error is { } error) { await Notification.WarningAsync(error); return; }
@@ -417,12 +448,17 @@
     private async Task LeerCodigoAsync(string codigo, decimal? cantidad)
     {
         using var trabajo = _trabajo.Iniciar();
+        // I6 (T941): la serie leída viaja como código: el servidor reconoce una serie en existencia y agrega su unidad.
         var r = _venta is null
             ? await Ventas.AbrirVentaAsync(new AbrirVentaRequest(SesionId, new PrimeraLecturaRequest(codigo, cantidad)), _claveAbrir)
             : await Ventas.LeerAsync(_venta.DraftPublicId, new LecturaRequest(codigo, Quantity: cantidad), _claveLectura);
-        if (r.IsSuccess && r.Value is { } venta) { Mostrar(venta); return; }
+        if (r.IsSuccess && r.Value is { } venta) { _pideSerie = null; Mostrar(venta); return; }
         switch (r.ErrorCode)
         {
+            case "Inventory.Serial.Required":
+                // I6 (T941): pedir la serie sin ratón: la siguiente lectura va como serie de este producto.
+                _pideSerie = codigo;
+                break;
             case "Inventory.Product.NotFound":
                 await Notification.WarningAsync($"«{codigo}» no es un código conocido: búsquelo.");
                 await AbrirAsync(Dialogo.Buscar);
@@ -699,6 +735,7 @@
         if (_mostrarDialogo) { _mostrarDialogo = false; return; }
         if (_modo == Modo.Cobrando) { VolverAVender(); return; }
         if (_modo == Modo.Entregada) { NuevaVenta(); return; }
+        if (_pideSerie is not null) { _pideSerie = null; _lectura = null; return; }
         _multiplicador = null;
         _lectura = null;
         await EnfocarLecturaAsync();

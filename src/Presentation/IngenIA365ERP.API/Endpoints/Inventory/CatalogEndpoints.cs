@@ -6,9 +6,12 @@ using IngenIA365ERP.Application.Inventory.Catalog.AccountingGroups;
 using IngenIA365ERP.Application.Inventory.Catalog.AdjustmentCauses;
 using IngenIA365ERP.Application.Inventory.Catalog.Brands;
 using IngenIA365ERP.Application.Inventory.Catalog.Categories;
+using IngenIA365ERP.Application.Inventory.Catalog.Components;
+using IngenIA365ERP.Application.Inventory.Catalog.Lots;
 using IngenIA365ERP.Application.Inventory.Catalog.Products;
 using IngenIA365ERP.Application.Inventory.Catalog.SalesChannels;
 using IngenIA365ERP.Application.Inventory.Catalog.UnitsOfMeasure;
+using IngenIA365ERP.Application.Inventory.Catalog.Variants;
 using IngenIA365ERP.Application.Inventory.Imports;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -26,8 +29,11 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// junto a su catálogo: descarga con <c>Catalog.View</c>, con datos además <c>Catalog.Export</c>, importar con
 /// <c>Catalog.Import</c>. La lista de plantillas es de <c>TemplatesEndpoints</c>. El cambio de grupo contable de un producto
 /// (<c>/products/{id}/accounting-group</c>, US3 T292): historial con <c>Catalog.View</c> y cambio con
-/// <c>Inventory.Catalog.ReclassifyAccountingGroup</c>, motivo e <c>Idempotency-Key</c>. Cada ruta sólo reenvía al
-/// <see cref="ISender"/>. (nuevo)
+/// <c>Inventory.Catalog.ReclassifyAccountingGroup</c>, motivo e <c>Idempotency-Key</c>. El catálogo avanzado de I6 (US15, T934; rutas nuevas,
+/// contracts/api.md §17.1): atributos de variante (<c>/variant-attributes</c>), variantes de una plantilla (<c>/products/{id}/variants</c>),
+/// componentes de un combo o kit (<c>/products/{id}/components</c>) con <c>Catalog.View</c>/<c>Catalog.Manage</c>, y los lotes y las series de
+/// un producto (<c>/lots</c>, <c>/serials</c>) con <c>Inventory.Stock.View</c> y el alcance por bodega (fuera de él, 404). Cada ruta sólo reenvía
+/// al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class CatalogEndpoints : ICarterModule
 {
@@ -46,6 +52,8 @@ public class CatalogEndpoints : ICarterModule
         Productos(app);
         CausasDeAjuste(app);
         CanalesDeVenta(app);
+        AtributosDeVariante(app);
+        LotesYSeries(app);
     }
 
     private static RouteGroupBuilder Grupo(IEndpointRouteBuilder app, string ruta, string etiqueta) =>
@@ -184,8 +192,10 @@ public class CatalogEndpoints : ICarterModule
             .WithName("Inventory_Products_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
         // La búsqueda va antes que /{id:guid}: «search» no es un Guid, pero el orden lo deja explícito.
-        g.MapGet("/search", async (string? q, Guid? warehousePublicId, string? kinds, bool? includeInactive, int? take, ISender sender, CancellationToken ct) =>
-                await sender.Send(new SearchProductsQuery(q ?? string.Empty, warehousePublicId, Clases(kinds), includeInactive ?? false, take), ct))
+        g.MapGet("/search", async (string? q, Guid? warehousePublicId, string? kinds, bool? includeInactive, int? take, bool? forSale, ISender sender,
+                    CancellationToken ct) =>
+                await sender.Send(new SearchProductsQuery(q ?? string.Empty, warehousePublicId, Clases(kinds), includeInactive ?? false, take)
+                    { ForSale = forSale ?? false }, ct))
             .WithName("Inventory_Products_Search").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
         g.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetProductQuery(id), ct))
@@ -212,7 +222,8 @@ public class CatalogEndpoints : ICarterModule
                 await sender.Send(new UpdateProductCommand(
                     id, body.Name ?? string.Empty, body.ShortName, body.Description, body.CategoryPublicId, body.BrandPublicId, body.BaseUnitPublicId,
                     body.AccountingGroupPublicId, body.VatSaleTreatment, body.WithholdingConceptPublicId, body.Reference, body.Weight, body.Volume,
-                    body.TracksLot ?? false, body.TracksSerial ?? false, body.TracksExpiry ?? false, body.IsPurchasable ?? true, body.IsSellable ?? true)
+                    body.TracksLot ?? false, body.TracksSerial ?? false, body.TracksExpiry ?? false, body.IsPurchasable ?? true, body.IsSellable ?? true,
+                    body.Kind)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -290,6 +301,33 @@ public class CatalogEndpoints : ICarterModule
                 }, ct))
             .WithName("Inventory_Products_Taxes_Set").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
 
+        // I6, US15 (T934): variantes de una plantilla y componentes de un combo o kit.
+        g.MapGet("/{id:guid}/variants", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new ListProductVariantsQuery(id), ct))
+            .WithName("Inventory_Products_Variants_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
+
+        g.MapPost("/{id:guid}/variants", async (Guid id, GenerarVariantesRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var r = await sender.Send(new GenerateProductVariantsCommand(id,
+                    (body.Attributes ?? []).Select(a => new AtributoElegido(a.AttributePublicId, a.ValuePublicIds ?? [])).ToList(),
+                    body.Adjustments?.Select(a => new VarianteAjustada(a.VariantKey ?? string.Empty, a.Code, a.Name, a.Barcode)).ToList())
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct);
+                return r.IsSuccess ? (object)Results.Created($"/api/inventory/products/{id}/variants", r.Value) : r;
+            })
+            .WithName("Inventory_Products_Variants_Generate").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+
+        g.MapGet("/{id:guid}/components", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetProductComponentsQuery(id), ct))
+            .WithName("Inventory_Products_Components_Get").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
+
+        g.MapPut("/{id:guid}/components", async (Guid id, ComponentesRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SetProductComponentsCommand(id,
+                    (body.Components ?? []).Select(c => new ComponentePedido(c.ComponentProductPublicId, c.Quantity)).ToList())
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Inventory_Products_Components_Set").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+
         g.MapPlantilla(Ver, Importar, PlantillaDeProductos.Clave, "Inventory_Products",
             importar: (modo, archivo, motivo, clave) => new ImportProductsCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
             datos: () => new GetProductsTemplateDataQuery(),
@@ -354,6 +392,53 @@ public class CatalogEndpoints : ICarterModule
         Estado(g, "Inventory_SalesChannels", (id, activa, motivo, clave) => new SetSalesChannelActiveCommand(id, activa, motivo) { OperationKey = clave });
     }
 
+    // ------------------------------------------------------------------------------- catálogo avanzado (I6) --
+
+    /// <summary>Los atributos de variante —talla, color— con sus valores (T934; <c>SaveVariantAttributeCommand</c> crea y cambia).</summary>
+    private static void AtributosDeVariante(IEndpointRouteBuilder app)
+    {
+        var g = Grupo(app, "variant-attributes", "Inventory Variant Attributes");
+
+        g.MapGet("/", async (bool? includeInactive, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListVariantAttributesQuery(includeInactive ?? false), ct))
+            .WithName("Inventory_VariantAttributes_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
+
+        g.MapPost("/", async (AtributoDeVarianteRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var r = await sender.Send(Atributo(null, body, http), ct);
+                return r.IsSuccess ? (object)Results.Created($"/api/inventory/variant-attributes/{r.Value.PublicId}", r.Value) : r;
+            })
+            .WithName("Inventory_VariantAttributes_Create").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+
+        g.MapPut("/{id:guid}", async (Guid id, AtributoDeVarianteRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(Atributo(id, body, http), ct))
+            .WithName("Inventory_VariantAttributes_Update").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+    }
+
+    private static SaveVariantAttributeCommand Atributo(Guid? id, AtributoDeVarianteRequest body, HttpContext http) =>
+        new(id, body.Code ?? string.Empty, body.Name ?? string.Empty,
+            (body.Values ?? []).Select(v => new ValorDeAtributoPedido(v.Code ?? string.Empty, v.Name ?? string.Empty, v.SortOrder ?? 0)).ToList(),
+            body.IsActive ?? true)
+        {
+            OperationKey = http.ClaveDeOperacion(),
+        };
+
+    /// <summary>Los lotes con existencia (FEFO, con el sugerido) y las series de un producto, con el alcance por bodega (T934).</summary>
+    private static void LotesYSeries(IEndpointRouteBuilder app)
+    {
+        const string verExistencias = StockEndpoints.VerExistencias;
+
+        Grupo(app, "lots", "Inventory Lots")
+            .MapGet("/", async (Guid productPublicId, Guid? warehousePublicId, bool? includeExpired, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListLotsQuery(productPublicId, warehousePublicId, includeExpired ?? false), ct))
+            .WithName("Inventory_Lots_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(verExistencias);
+
+        Grupo(app, "serials", "Inventory Serials")
+            .MapGet("/", async (Guid productPublicId, Guid? warehousePublicId, bool? inStock, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListSerialsQuery(productPublicId, warehousePublicId, inStock), ct))
+            .WithName("Inventory_Serials_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(verExistencias);
+    }
+
     /// <summary><c>POST /{id}/deactivate</c> y <c>/reactivate</c> con <c>{ reason }</c> (§3), con la clave de la operación.</summary>
     private static void Estado(RouteGroupBuilder g, string nombre,
         Func<Guid, bool, string, Guid, IRequest<IngenIA365ERP.Application.Common.Models.Result>> comando)
@@ -395,11 +480,36 @@ public class CatalogEndpoints : ICarterModule
         IReadOnlyList<UnidadDelAltaRequest>? Units, IReadOnlyList<CodigoDelAltaRequest>? Barcodes, IReadOnlyList<ImpuestoRequest>? Taxes,
         bool? IsPurchasable, bool? IsSellable);
 
-    /// <summary><c>UpdateProductRequest</c> (§3.5): sin código, clase, unidades, códigos ni impuestos.</summary>
+    /// <summary>
+    /// <c>UpdateProductRequest</c> (§3.5): sin código, unidades, códigos ni impuestos. <c>kind?</c> desde I6 (T918): nulo no cambia la clase;
+    /// con movimientos o dependientes, <c>Inventory.Product.KindLocked</c>.
+    /// </summary>
     public sealed record EditarProductoRequest(
         string? Name, string? ShortName, string? Description, Guid CategoryPublicId, Guid? BrandPublicId, Guid BaseUnitPublicId,
         Guid? AccountingGroupPublicId, VatSaleTreatment VatSaleTreatment, Guid? WithholdingConceptPublicId, string? Reference,
-        decimal? Weight, decimal? Volume, bool? TracksLot, bool? TracksSerial, bool? TracksExpiry, bool? IsPurchasable, bool? IsSellable);
+        decimal? Weight, decimal? Volume, bool? TracksLot, bool? TracksSerial, bool? TracksExpiry, bool? IsPurchasable, bool? IsSellable,
+        ProductKind? Kind = null);
+
+    /// <summary>Un valor de un atributo de variante: código (10), nombre y orden en la matriz (I6, T934).</summary>
+    public sealed record ValorDeAtributoRequest(string? Code, string? Name, int? SortOrder);
+
+    /// <summary>El cuerpo de <c>POST/PUT /variant-attributes</c> (I6, T934): los valores que no vienen se retiran.</summary>
+    public sealed record AtributoDeVarianteRequest(string? Code, string? Name, IReadOnlyList<ValorDeAtributoRequest>? Values, bool? IsActive);
+
+    /// <summary>Un atributo elegido para generar y los valores que se combinan.</summary>
+    public sealed record AtributoElegidoRequest(Guid AttributePublicId, IReadOnlyList<Guid>? ValuePublicIds);
+
+    /// <summary>Lo que se cambia de una variante propuesta antes de crearla, por su <c>variantKey</c>.</summary>
+    public sealed record VarianteAjustadaRequest(string? VariantKey, string? Code, string? Name, string? Barcode);
+
+    /// <summary>El cuerpo de <c>POST /products/{id}/variants</c> (I6, T934).</summary>
+    public sealed record GenerarVariantesRequest(IReadOnlyList<AtributoElegidoRequest>? Attributes, IReadOnlyList<VarianteAjustadaRequest>? Adjustments);
+
+    /// <summary>Un componente de un combo o kit y su cantidad en la unidad base del componente.</summary>
+    public sealed record ComponenteRequest(Guid ComponentProductPublicId, decimal Quantity);
+
+    /// <summary>El cuerpo de <c>PUT /products/{id}/components</c> (I6, T934): la lista nueva completa.</summary>
+    public sealed record ComponentesRequest(IReadOnlyList<ComponenteRequest>? Components);
 
     public sealed record EstadoDeProductoRequest(ProductStatus Status, string? Reason);
 

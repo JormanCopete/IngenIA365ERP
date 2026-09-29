@@ -58,7 +58,10 @@ public sealed record LineaDeCompraRequest(
     decimal? Amount = null,
     bool? AffectsCost = null,
     Guid? OrderLinePublicId = null,
-    Guid? RequestLinePublicId = null);
+    Guid? RequestLinePublicId = null,
+    string? LotCode = null,
+    string? SerialNumber = null,
+    DateOnly? ExpiryDate = null);
 
 /// <summary>El borrador de un documento de compras (§14.2, §14.4–§14.6): el del ciclo común más lo propio de compras.</summary>
 public sealed record BorradorDeCompraRequest(

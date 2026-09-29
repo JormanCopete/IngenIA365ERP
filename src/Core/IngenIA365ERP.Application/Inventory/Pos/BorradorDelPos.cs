@@ -565,6 +565,13 @@ public sealed class BorradorDelPos(
         var vivas = venta.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
         var productoIds = vivas.Select(l => l.ProductId).Distinct().ToList();
         var productos = await db.Products.AsNoTracking().Where(p => productoIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => new PosRefDto(p.PublicId, p.Code, p.Name), ct);
+        // I6 (T941): el lote asignado, la serie y el seguimiento de cada producto, para que la pantalla los muestre.
+        var seguimiento = await db.Products.AsNoTracking().Where(p => productoIds.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => (p.TracksLot, p.TracksSerial), ct);
+        var loteIds = vivas.Select(l => l.LotId).OfType<int>().Distinct().ToList();
+        var lotesDeLinea = await db.Lots.AsNoTracking().Where(x => loteIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => (x.Code, x.ExpiryDate), ct);
+        var serieIds = vivas.Select(l => l.SerialId).OfType<int>().Distinct().ToList();
+        var seriesDeLinea = await db.Serials.AsNoTracking().Where(x => serieIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.SerialNumber, ct);
         var unidadIds = vivas.Select(l => l.UnitId).Distinct().ToList();
         var unidades = await db.UnitsOfMeasure.AsNoTracking().Where(u => unidadIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => new PosRefDto(u.PublicId, u.Code, u.Name), ct);
         var listaIds = vivas.Select(l => l.PriceListId).OfType<int>().Distinct().ToList();
@@ -600,7 +607,12 @@ public sealed class BorradorDelPos(
             lineas.Add(new PosLineDto(l.PublicId, l.LineNumber, productos[l.ProductId], unidades[l.UnitId], l.Factor, l.Quantity, l.QuantityBase,
                 l.RoundingQuantity, l.ListPrice ?? l.UnitPrice, l.UnitPrice, l.ListPriceIncludesTaxes,
                 l.PriceListId is int li && listas.TryGetValue(li, out var lr) ? lr : null, descuentos, impuestos,
-                l.NetAmount + impuestos.Sum(i => i.Amount), p?.Available, p?.BelowCost ?? false));
+                l.NetAmount + impuestos.Sum(i => i.Amount), p?.Available, p?.BelowCost ?? false,
+                l.LotId is int lid && lotesDeLinea.TryGetValue(lid, out var lote) ? lote.Code : null,
+                l.LotId is int lid2 && lotesDeLinea.TryGetValue(lid2, out var lote2) ? lote2.ExpiryDate : null,
+                l.LotId is int lid3 && lotesDeLinea.TryGetValue(lid3, out var lote3) && Domain.Inventory.Tracking.SelectorDeLotes.EstaVencido(lote3.ExpiryDate, reloj.HoyLocal),
+                l.SerialId is int serieDeLinea ? seriesDeLinea.GetValueOrDefault(serieDeLinea) : null,
+                seguimiento.GetValueOrDefault(l.ProductId).TracksLot, seguimiento.GetValueOrDefault(l.ProductId).TracksSerial));
         }
 
         // Descuento por total, aprobaciones pendientes y avisos.

@@ -13,7 +13,8 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// conteo ciego (<c>Counts.View</c>); definir, editar la definición, abrir con la foto y descartar (<c>Counts.Open</c>); capturar por
 /// tandas (<c>Counts.Capture</c>) y consultar las capturas (<c>Counts.View</c>); cerrar con su número, generar el ajuste y anular un
 /// conteo cerrado (<c>Counts.Close</c>); la vista previa del ajuste (<c>Counts.View</c>). Toda escritura exige <c>Idempotency-Key</c>
-/// (<c>LosComandosDeInventarioLlevanClave</c>); sin permiso o fuera del alcance, el mismo 404. (nuevo)
+/// (<c>LosComandosDeInventarioLlevanClave</c>); sin permiso o fuera del alcance, el mismo 404. Desde I6 (T935) la definición admite el alcance
+/// <c>AbcClass</c> con <c>abcClass</c> (A, B o C, contracts/api.md §12) en <see cref="PhysicalCountRequest"/>, y la captura el <c>lotCode</c> de cada lectura. (nuevo)
 /// </summary>
 public class CountsEndpoints : ICarterModule
 {

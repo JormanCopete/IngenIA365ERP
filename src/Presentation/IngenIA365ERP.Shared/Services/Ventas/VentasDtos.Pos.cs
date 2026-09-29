@@ -97,7 +97,13 @@ public sealed record LineaDelPosDto(
     IReadOnlyList<ImpuestoDeLineaPosDto> Taxes,
     decimal Total,
     decimal? Available,
-    bool BelowCost)
+    bool BelowCost,
+    string? LotCode = null,
+    DateOnly? LotExpiryDate = null,
+    bool LotExpired = false,
+    string? SerialNumber = null,
+    bool TracksLot = false,
+    bool TracksSerial = false)
 {
     /// <summary>La suma de sus descuentos (el manual, el prorrateado del total y la diferencia de un precio digitado).</summary>
     public decimal Descuento => Discounts.Sum(d => d.Amount);
@@ -171,9 +177,13 @@ public sealed record CabeceraDeVentaRequest(Guid? CustomerPersonPublicId = null,
     bool? ClearSalesperson = null, string? Role = null, DescuentoRequest? DocumentDiscount = null, string? Notes = null);
 
 /// <summary>Una lectura: por código (el de empaque trae su unidad) o por producto y unidad.</summary>
-public sealed record LecturaRequest(string? Code, Guid? ProductPublicId = null, Guid? UnitPublicId = null, decimal? Quantity = null);
+/// <summary>Una lectura del POS. I6 (T941): <see cref="SerialNumber"/> es la serie de un producto que la controla; <see cref="LotCode"/>, el lote elegido.</summary>
+public sealed record LecturaRequest(string? Code, Guid? ProductPublicId = null, Guid? UnitPublicId = null, decimal? Quantity = null,
+    string? SerialNumber = null, string? LotCode = null);
 
-public sealed record LineaRequest(decimal? Quantity = null, decimal? UnitPrice = null, DescuentoRequest? Discount = null, bool? ClearUnitPrice = null);
+/// <summary>El cambio de una línea del POS. I6 (T941): <see cref="LotCode"/> cambia su lote.</summary>
+public sealed record LineaRequest(decimal? Quantity = null, decimal? UnitPrice = null, DescuentoRequest? Discount = null, bool? ClearUnitPrice = null,
+    string? LotCode = null);
 
 public sealed record RotuloRequest(string? Label);
 

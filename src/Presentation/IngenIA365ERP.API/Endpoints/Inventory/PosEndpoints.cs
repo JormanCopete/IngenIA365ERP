@@ -71,6 +71,8 @@ public class PosEndpoints : ICarterModule
         group.MapPost("/drafts/{id:guid}/lines", async (Guid id, LecturaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new AddPosLineCommand(id, body.Code, body.ProductPublicId, body.UnitPublicId, body.Quantity)
                 {
+                    SerialNumber = body.SerialNumber,
+                    LotCode = body.LotCode,
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
             .WithName("Inventory_Pos_Lines_Add")
@@ -81,6 +83,7 @@ public class PosEndpoints : ICarterModule
         group.MapPatch("/drafts/{id:guid}/lines/{lineId:guid}", async (Guid id, Guid lineId, LineaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new UpdatePosLineCommand(id, lineId, body.Quantity, body.UnitPrice, body.Discount, body.ClearUnitPrice ?? false)
                 {
+                    LotCode = body.LotCode,
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
             .WithName("Inventory_Pos_Lines_Update")
@@ -136,10 +139,12 @@ public class PosEndpoints : ICarterModule
         PosDiscountInput? DocumentDiscount, string? Notes);
 
     /// <summary>Una lectura: por código (el de empaque trae su unidad; «3*» multiplica) o por producto y unidad.</summary>
-    public sealed record LecturaRequest(string? Code, Guid? ProductPublicId, Guid? UnitPublicId, decimal? Quantity);
+    /// <remarks>I6 (T941): <c>serialNumber</c> —la serie de un producto que la controla— y <c>lotCode</c> —el lote elegido; sin él, el sugerido—.</remarks>
+    public sealed record LecturaRequest(string? Code, Guid? ProductPublicId, Guid? UnitPublicId, decimal? Quantity, string? SerialNumber = null, string? LotCode = null);
 
     /// <summary>El cambio de una línea: cantidad, precio digitado (o volver al de la lista) y descuento.</summary>
-    public sealed record LineaRequest(decimal? Quantity, decimal? UnitPrice, PosDiscountInput? Discount, bool? ClearUnitPrice);
+    /// <remarks>I6 (T941): <c>lotCode</c> cambia el lote de la línea (el vencido con <c>Bloquear</c> es <c>Inventory.Lot.Expired</c>).</remarks>
+    public sealed record LineaRequest(decimal? Quantity, decimal? UnitPrice, PosDiscountInput? Discount, bool? ClearUnitPrice, string? LotCode = null);
 
     /// <summary>El rótulo con que se suspende la venta.</summary>
     public sealed record SuspenderRequest(string? Label);

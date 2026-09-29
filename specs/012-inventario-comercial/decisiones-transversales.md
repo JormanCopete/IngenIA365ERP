@@ -633,7 +633,7 @@ en `appsettings`, sección `Integration` (T10).
 
 | Área | Prefijo | Archivo de rutas |
 |---|---|---|
-| Catálogo | `/api/inventory/{units, product-categories, brands, accounting-groups, products, products/search, products/{id}/barcodes, products/{id}/units, products/{id}/taxes, products/{id}/accounting-group, adjustment-causes, sales-channels}` | `Endpoints/Inventory/CatalogEndpoints.cs` |
+| Catálogo | `/api/inventory/{units, product-categories, brands, accounting-groups, products, products/search, products/{id}/barcodes, products/{id}/units, products/{id}/taxes, products/{id}/accounting-group, adjustment-causes, sales-channels}`; I6 (T934, nuevas) `variant-attributes`, `products/{id}/variants`, `products/{id}/components`, `lots`, `serials` y `products/search?forSale=` | `Endpoints/Inventory/CatalogEndpoints.cs` |
 | Bodegas y existencias | `/api/inventory/{warehouse-types, warehouses, warehouses/{id}/locations, warehouses/{id}/activation, reorder-policies, stock, integrity/verify, integrity/rebuild}` | `WarehousesEndpoints.cs`, `StockEndpoints.cs` |
 | Tipos y documentos genéricos | `/api/inventory/{document-types, documents}` (lista y detalle con alcance; sin escritura); I5 `documents/{id}/cost-impact` (consulta sin clave: `MotorDeCosteo.SimularImpacto`, sin guardar) | `DocumentTypesEndpoints.cs`, `DocumentsEndpoints.cs` |
 | Ajustes, consumos, bajas, ensamble, ubicaciones | `/api/inventory/adjustments` (+ `/{id}`, `/{id}/confirm`, `/{id}/void`, `/{id}/discard`) | `AdjustmentsEndpoints.cs` |
@@ -2131,6 +2131,23 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `ImpairmentReportQueryHandler.{MotivoVencido, MotivoProximoAVencer}` (T933). Contratos que crecen: `SalesLineInput.{LotCode,
     SerialNumber}`, `SearchProductsQuery.ForSale`, `AddPosLineCommand.{SerialNumber, LotCode}`, `UpdatePosLineCommand.LotCode`,
     `ProductoLeido.SerialId`, `BorradorDelPos.AsignarLoteAsync`. Reglas en T54c y T931.
+- **I6, catálogo avanzado en la API y en Shared (T934–T941; 2026-09-29) (nuevo)**: en Application, `Catalog/Lots/LotQueries.cs` con
+    `ListLotsQuery` → `LotDto` (FEFO, `Suggested`, `State`) y `EstadosDeLote` (`Current`, `ExpiringSoon`, `Expired`, `NoExpiry`), y
+    `ListSerialsQuery` → `SerialDto`, los dos con alcance por bodega (en `LasConsultasDeInventarioRespetanElAlcance`); `ProductDto.{Parent,
+    VariantValues, Components}` (en `VistaDeProductos`); `ProductStockByLocationDto.Lot` ya llega lleno; `KardexReportQuery.Lot` (filtro
+    `lot` de la vista `kardex`, con la columna «Lote/serie» llena); `PosLineDto.{LotCode, LotExpiryDate, LotExpired, SerialNumber, TracksLot,
+    TracksSerial}`. En la API, `CatalogEndpoints.{AtributosDeVariante, LotesYSeries}` con los cuerpos `AtributoDeVarianteRequest`,
+    `ValorDeAtributoRequest`, `GenerarVariantesRequest`, `AtributoElegidoRequest`, `VarianteAjustadaRequest`, `ComponentesRequest`,
+    `ComponenteRequest`, `EditarProductoRequest.Kind`, y en `PosEndpoints` `LecturaRequest.{SerialNumber, LotCode}` y `LineaRequest.LotCode`.
+    En Shared, `InventarioClient.CatalogoAvanzado` (`RutaDeAtributosDeVariante`, `RutaDeLotes`, `RutaDeSeries`) con
+    `InventarioDtos.CatalogoAvanzado` (`AtributoDeVarianteDto`, `ValorDeAtributoDto`, `VarianteDto`, `VariantesGeneradasDto`,
+    `ComponentesDelProductoDto`, `ComponenteDelProductoDto`, `LoteDto`, `SerieDto`, `EnsambleRequest`…), `VistaPreviaDeVariantes`,
+    `Components/Inventario/{AtributosDeVarianteDialog, SelectorDeLote}.razor`, `SelectorDeProducto.SinPlantillas`,
+    `TextosDeInventario.{ClasesDeProductoAlCrear, ClaseCombo, ClaseKit, ClasePlantilla, ClaseVariante, LoteVigente, LoteProximoAVencer,
+    LoteVencido, LoteSinVencimiento, EstadoDeLote, AlcancesDeConteoDesdeI6, AlcancePorClaseAbc}`, `BorradorDeInventarioRequest.Assembly`,
+    `LineaDeCompraRequest.{LotCode, SerialNumber, ExpiryDate}`, `LineaDeVentaRequest.{LotCode, SerialNumber}`,
+    `LineaDelCiclo.{Lote, Serie, ControlaLote, ControlaSerie}` y `FormularioDelCiclo.ConservarSeguimiento`, y el tema del manual
+    `inventario-catalogo-avanzado`. Reglas en T54d.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -3507,6 +3524,21 @@ producto con serie no se agrega sin ella); a un producto con lote se le asigna e
 (visible y cambiable por `UpdatePosLineCommand.LotCode`); si no, queda sin lote y la confirmación reparte. (g) **conteo por lote**: la
 captura de un producto con lote exige un lote que exista (un lote nuevo encontrado en el conteo se registra por una entrada). (h) **la
 proyección de la serie** se verifica y se reconstruye desde el kardex: la serie está donde su kardex suma una unidad.
+
+**T54d · El catálogo avanzado en la API y en las pantallas (nuevo, I6, T934–T941; 2026-09-29; revisar con el dueño).**
+Reglas fijadas sin consultar al dueño: (a) **`GET /lots`** devuelve sólo los lotes **con existencia** del producto en la bodega pedida (o
+sumando las del alcance), en orden FEFO; un lote nuevo se escribe en la entrada, no se elige de una lista. Los vencidos sólo con
+`includeExpired` y nunca son el sugerido; «próximo a vencer» usa `Informes.DiasProximoAVencer` (antes de I6, cero días). (b) **`GET
+/serials`** sin bodega devuelve las series en bodegas del alcance **y las que ya no están en existencia** (vendidas o dadas de baja, sin
+bodega); con bodega, sólo las de esa bodega. (c) Las dos rutas exigen `Inventory.Stock.View` (no `Catalog.View`): dicen cuánto hay y dónde.
+(d) **El kardex con lote** muestra sólo los movimientos del lote y lleva el saldo del lote (en las bodegas visibles), valorado al promedio
+visible. (e) **El POS** manda la serie como una lectura más (el servidor reconoce la serie en existencia): tras
+`Inventory.Serial.Required` la pantalla espera la serie en el mismo campo, sin ratón; Esc la cancela. `pos.js` no cambia: el lector no
+distingue un código de una serie. (f) **La venta de oficina** no recibe el lote de vuelta en `LineaDeVentaDto`: la pantalla conserva el
+lote y la serie elegidos por línea al releer el borrador (`FormularioDelCiclo.ConservarSeguimiento`). (g) **La ficha** ofrece en el alta
+inventariable, servicio, combo, kit y plantilla (la variante nace de su plantilla) y las marcas de seguimiento para inventariable, kit y
+plantilla; al guardar Datos manda la clase sólo si cambió. (h) Los clientes tipados no ponen `Authorization` y toda escritura lleva su
+clave (`CatalogoAvanzadoClientTests`).
 
 **T931 · Base de la clasificación ABC para los conteos (decisión por defecto, revisar con el dueño; 2026-09-29).**
 Se adopta la propuesta de la tarea: el **valor al costo de las salidas** (kardex `Exit`, sin ajustes de costo) **de la bodega del conteo**

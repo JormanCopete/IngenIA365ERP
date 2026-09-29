@@ -98,6 +98,12 @@ public sealed record ProductoDto
     public DateTime CreatedAt { get; init; }
     public string? CreatedBy { get; init; }
     public DateTime? UpdatedAt { get; init; }
+    /// <summary>I6 (T934): la plantilla de una variante.</summary>
+    public ReferenciaDeInventarioDto? Parent { get; init; }
+    /// <summary>I6 (T934): los pares atributo–valor de una variante.</summary>
+    public IReadOnlyList<ValorDeVarianteDto> VariantValues { get; init; } = [];
+    /// <summary>I6 (T934): los componentes vigentes de un combo o kit.</summary>
+    public IReadOnlyList<ComponenteDelProductoDto> Components { get; init; } = [];
 }
 
 /// <summary>El empaque que identifica el código leído (US1-5).</summary>
@@ -123,11 +129,11 @@ public sealed record CrearProductoRequest(
     bool TracksLot, bool TracksSerial, bool TracksExpiry, IReadOnlyList<UnidadDelAltaRequest>? Units, IReadOnlyList<CodigoDelAltaRequest>? Barcodes,
     IReadOnlyList<ImpuestoRequest>? Taxes, bool IsPurchasable = true, bool IsSellable = true);
 
-/// <summary><c>UpdateProductRequest</c> (§3.5).</summary>
+/// <summary><c>UpdateProductRequest</c> (§3.5). <see cref="Kind"/> (I6): nula no cambia la clase.</summary>
 public sealed record EditarProductoRequest(
     string Name, string? ShortName, string? Description, Guid CategoryPublicId, Guid? BrandPublicId, Guid BaseUnitPublicId,
     Guid? AccountingGroupPublicId, int VatSaleTreatment, Guid? WithholdingConceptPublicId, string? Reference, decimal? Weight, decimal? Volume,
-    bool TracksLot, bool TracksSerial, bool TracksExpiry, bool IsPurchasable = true, bool IsSellable = true);
+    bool TracksLot, bool TracksSerial, bool TracksExpiry, bool IsPurchasable = true, bool IsSellable = true, int? Kind = null);
 
 public sealed record EstadoDeProductoRequest(int Status, string Reason);
 

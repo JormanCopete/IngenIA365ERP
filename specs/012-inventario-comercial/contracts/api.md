@@ -1708,6 +1708,17 @@ alcance (lo demás es 404). Es la pestaña «Alcance comercial» de `/admin/usua
   `GET /alert-types/{typeCode}/history`, `POST /alert-types/{typeCode}/versions`,
   `GET /parameters/{module}/{key}/history`, `POST /parameters/{module}/{key}/versions`,
   `POST /api/inventory/integrity/verify|rebuild` con cuerpo de filtros.
+- **Catálogo avanzado (I6, T934; `CatalogEndpoints.cs`)**: `GET|POST /api/inventory/variant-attributes` y `PUT /variant-attributes/{id}`
+  (`Catalog.View` / `Catalog.Manage`; cuerpo `{ code, name, values: [{ code, name, sortOrder }], isActive }`, los valores que no vienen se
+  retiran), `GET /products/{id}/variants` y `POST /products/{id}/variants` (genera: `{ attributes: [{ attributePublicId, valuePublicIds }],
+  adjustments?: [{ variantKey, code?, name?, barcode? }] }` → 201 `{ templatePublicId, created[], alreadyExisting[] }`), `GET|PUT
+  /products/{id}/components` (`{ components: [{ componentProductPublicId, quantity }] }`, la lista completa), `GET
+  /lots?productPublicId=&warehousePublicId=&includeExpired=` → `[{ publicId, code, expiryDate?, manufactureDate?, quantity, state:
+  Current | ExpiringSoon | Expired | NoExpiry, suggested }]` en orden FEFO y `GET /serials?productPublicId=&warehousePublicId=&inStock=` →
+  `[{ publicId, serialNumber, lotCode?, warehouse?, location?, inStock }]` (`Stock.View`, alcance por bodega, fuera de él 404); `GET
+  /products/search?forSale=true` quita las plantillas. `ProductDto` suma `parent?`, `variantValues[]` y `components[]`, `UpdateProductRequest`
+  `kind?`, y la vista `kardex` el filtro `lot`. En el POS, `POST /pos/drafts/{id}/lines` acepta `serialNumber` y `lotCode` y `PATCH
+  …/lines/{lineId}` `lotCode`; cada línea devuelve `lotCode`, `lotExpiryDate`, `lotExpired`, `serialNumber`, `tracksLot` y `tracksSerial`.
 - **Eventos de auditoría**: `Inventory.Catalog.Exported`, `Inventory.Integrity.Verified`.
 - **Reporte**: la orden de compra en PDF (I5) necesita una clase `PurchaseOrderReport`, que no está en la
   lista de reportes de las decisiones.

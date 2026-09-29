@@ -98,7 +98,7 @@
         @if (Editable)
         {
             <div class="info-card">
-                <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_f.Origen" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_f.Origen" SinPlantillas="true" Elegido="@AgregarLineaAsync" />
             </div>
         }
 
@@ -107,6 +107,7 @@
                 <thead>
                     <tr>
                         <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th>
+                        @if (ConSeguimiento) { <th>Lote / serie</th> }
                         @if (_traslado is not null)
                         {
                             <th class="numero">Despachado</th><th class="numero">Recibido</th><th class="numero">Faltante</th><th class="numero">Sobrante</th><th class="numero">En tránsito</th>
@@ -132,6 +133,18 @@
                                 }
                                 else { @l.Cantidad.ToString("N4") }
                             </td>
+                            @if (ConSeguimiento)
+                            {
+                                <td>
+                                    @if (Editable && (l.ControlaLote || l.ControlaSerie))
+                                    {
+                                        @* I6 (T938): el despacho es una salida del origen: propone el lote que vence primero. *@
+                                        <SelectorDeLote Producto="@l.ProductPublicId" Bodega="@_f.Origen" ControlaLote="@l.ControlaLote" ControlaSerie="@l.ControlaSerie"
+                                                        @bind-Lote="l.Lote" @bind-Serie="l.Serie" SerieLeida="@(serie => SerieLeida(indice, serie))" />
+                                    }
+                                    else { @string.Join(" · ", new[] { l.Lote, l.Serie }.Where(x => !string.IsNullOrEmpty(x))) }
+                                </td>
+                            }
                             @if (_traslado is not null)
                             {
                                 <td class="numero">@linea?.DispatchedBase.ToString("N4")</td>
@@ -319,6 +332,38 @@
         public string Unidad { get; set; } = "";
         public decimal Cantidad { get; set; } = 1m;
         public Guid? Ubicacion { get; set; }
+        public string? Lote { get; set; }
+        public string? Serie { get; set; }
+        public bool ControlaLote { get; set; }
+        public bool ControlaSerie { get; set; }
+    }
+
+    // I6 (T938): el seguimiento por lote y serie de cada producto de las líneas.
+    private readonly Dictionary<Guid, (bool Lote, bool Serie)> _seguimiento = [];
+    private bool ConSeguimiento => _f.Lineas.Any(l => l.ControlaLote || l.ControlaSerie || l.Lote is not null || l.Serie is not null);
+
+    private async Task CargarSeguimientoAsync()
+    {
+        foreach (var producto in _f.Lineas.Select(l => l.ProductPublicId).Distinct().Where(p => !_seguimiento.ContainsKey(p)).ToList())
+        {
+            var r = await Inventario.ObtenerProductoAsync(producto);
+            if (r.IsSuccess && r.Value is { } p) _seguimiento[producto] = (p.TracksLot, p.TracksSerial);
+        }
+        foreach (var l in _f.Lineas)
+            if (_seguimiento.TryGetValue(l.ProductPublicId, out var x)) (l.ControlaLote, l.ControlaSerie) = x;
+    }
+
+    /// <summary>Cada serie es una unidad: una lectura en una línea que ya tiene la suya abre otra línea del mismo producto.</summary>
+    private void SerieLeida(int indice, string serie)
+    {
+        var l = _f.Lineas[indice];
+        l.Cantidad = 1m;
+        if (!string.IsNullOrEmpty(l.Serie) && l.Serie != serie)
+            _f.Lineas.Add(new LineaForm
+            {
+                ProductPublicId = l.ProductPublicId, Producto = l.Producto, UnitPublicId = l.UnitPublicId, Unidad = l.Unidad, Serie = serie,
+                ControlaLote = l.ControlaLote, ControlaSerie = l.ControlaSerie, Ubicacion = l.Ubicacion,
+            });
     }
 
     private sealed class Formulario
@@ -416,6 +461,7 @@
         }
         Mostrar(r.Value.Dispatch);
         _traslado = r.Value;
+        if (Editable) await CargarSeguimientoAsync();
         // El destino puede estar fuera del alcance y de la lista de destinos (quien sólo recibe): se agrega para mostrarlo.
         if (_doc?.DestinationWarehouse is { } destino && _destinos.All(d => d.PublicId != destino.PublicId))
             _destinos.Add(new DestinoDeTrasladoDto(destino.PublicId, destino.Code, destino.Name, new SucursalDeDestinoDto(Guid.Empty, null, "")));
@@ -434,8 +480,11 @@
             {
                 LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
                 UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Ubicacion = l.Location?.PublicId,
+                Lote = l.Lot, Serie = l.Serial,
             }).ToList(),
         };
+        foreach (var l in _f.Lineas)
+            if (_seguimiento.TryGetValue(l.ProductPublicId, out var x)) (l.ControlaLote, l.ControlaSerie) = x;
     }
 
     private async Task AgregarLineaAsync(ProductoElegido elegido)
@@ -448,10 +497,12 @@
         }
         var p = producto.Value;
         var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        _seguimiento[p.PublicId] = (p.TracksLot, p.TracksSerial);
         _f.Lineas.Add(new LineaForm
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            ControlaLote = p.TracksLot, ControlaSerie = p.TracksSerial,
         });
     }
 
@@ -467,7 +518,8 @@
         var request = new BorradorDeInventarioRequest(tipo, _f.Fecha, _f.Origen, _f.Destino, null, null,
             string.IsNullOrWhiteSpace(_f.Referencia) ? null : _f.Referencia, string.IsNullOrWhiteSpace(_f.Motivo) ? null : _f.Motivo, null, null, null, null,
             _doc?.RowVersion,
-            _f.Lineas.Select(l => new LineaDeBorradorRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, LocationPublicId: l.Ubicacion)).ToList());
+            _f.Lineas.Select(l => new LineaDeBorradorRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, LocationPublicId: l.Ubicacion,
+                LotCode: l.Lote, SerialNumber: l.Serie)).ToList());
         var r = await Inventario.GuardarTrasladoAsync(_doc?.PublicId, request, _claveGuardar);
         if (!r.IsSuccess || r.Value is null)
         {

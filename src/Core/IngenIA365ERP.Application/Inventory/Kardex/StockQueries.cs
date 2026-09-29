@@ -249,6 +249,9 @@ public sealed class GetProductStockQueryHandler(
         var ubicacionIds = detalles.Select(d => d.LocationId).Distinct().ToList();
         var ubicaciones = await db.WarehouseLocations.AsNoTracking().Where(l => ubicacionIds.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id, l => new StockLocationRefDto(l.PublicId, l.Code), ct);
+        // I6 (T934): el lote de cada fila por ubicación (contracts/api.md §5, byLocation[].lot).
+        var loteIds = detalles.Select(d => d.LotId).OfType<int>().Distinct().ToList();
+        var lotes = await db.Lots.AsNoTracking().Where(l => loteIds.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => l.Code, ct);
 
         var conCostos = await permisos.HasPermissionAsync(PermisosDeGrupo.LeerCostos, ct);
         var valorados = conCostos ? await valores.PorBodegaAsync([producto.Id], ct) : null;
@@ -261,7 +264,8 @@ public sealed class GetProductStockQueryHandler(
             .ToList();
         var porUbicacion = detalles
             .OrderBy(d => bodegas[d.WarehouseId].Code, StringComparer.Ordinal).ThenBy(d => ubicaciones[d.LocationId].Code, StringComparer.Ordinal)
-            .Select(d => new ProductStockByLocationDto(bodegas[d.WarehouseId], ubicaciones[d.LocationId], null, d.Quantity))
+            .ThenBy(d => d.LotId is int l ? lotes.GetValueOrDefault(l) : null, StringComparer.Ordinal)
+            .Select(d => new ProductStockByLocationDto(bodegas[d.WarehouseId], ubicaciones[d.LocationId], d.LotId is int l ? lotes.GetValueOrDefault(l) : null, d.Quantity))
             .ToList();
         var enTransito = transito.OrderBy(t => t.DispatchedOn)
             .Select(t => new ProductStockInTransitDto(t.TransferPublicId, t.DispatchNumber, bodegas.GetValueOrDefault(t.FromWarehouseId), bodegas[t.ToWarehouseId], t.Quantity, t.DispatchedOn))

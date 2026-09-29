@@ -99,6 +99,7 @@
                 <thead>
                     <tr>
                         <th>#</th><th>Producto</th><th>Unidad</th><th>Orden</th><th class="numero">Cantidad</th><th class="numero">En unidad base</th><th class="numero">Precio</th><th class="numero">Descuento</th>
+                        @if (ConSeguimiento) { <th>Lote / serie</th> }
                         @if (_doc?.Document.Lines.Any(l => l.UnitCost is not null) == true) { <th class="numero">Costo unitario</th> }
                         @if (_doc?.LineBalances.Count > 0) { <th class="numero">Por facturar</th><th class="numero">Devuelto</th> }
                         @if (Editable) { <th></th> }
@@ -120,6 +121,18 @@
                             <td class="numero">@guardada?.QuantityBase.ToString("N4")</td>
                             <td class="numero">@CampoNumero(l.Precio, v => l.Precio = v)</td>
                             <td class="numero">@CampoNumero(l.Descuento, v => l.Descuento = v)</td>
+                            @if (ConSeguimiento)
+                            {
+                                <td>
+                                    @if (Editable && (l.ControlaLote || l.ControlaSerie))
+                                    {
+                                        @* I6 (T938): la recepción es una entrada: pide lote y vencimiento; la serie con el lector, una unidad por serie. *@
+                                        <SelectorDeLote Producto="@l.ProductPublicId" Entrada="true" ControlaLote="@l.ControlaLote" ControlaVencimiento="@l.ControlaVencimiento"
+                                                        ControlaSerie="@l.ControlaSerie" @bind-Lote="l.Lote" @bind-Vencimiento="l.Vencimiento" @bind-Serie="l.Serie" />
+                                    }
+                                    else { @string.Join(" · ", new[] { l.Lote, l.Vencimiento?.ToString("dd/MM/yyyy"), l.Serie }.Where(x => !string.IsNullOrEmpty(x))) }
+                                </td>
+                            }
                             @if (_doc?.Document.Lines.Any(x => x.UnitCost is not null) == true) { <td class="numero">@guardada?.UnitCost?.ToString("N6")</td> }
                             @if (_doc?.LineBalances.Count > 0) { <td class="numero">@saldo?.PendingToInvoice.ToString("N4")</td><td class="numero">@saldo?.Returned.ToString("N4")</td> }
                             @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => QuitarAsync(indice))" title="Quitar la línea" /></td> }
@@ -173,6 +186,27 @@
         public decimal Descuento { get; set; }
         public Guid? OrderLinePublicId { get; set; }
         public string? Orden { get; set; }
+        public string? Lote { get; set; }
+        public DateOnly? Vencimiento { get; set; }
+        public string? Serie { get; set; }
+        public bool ControlaLote { get; set; }
+        public bool ControlaVencimiento { get; set; }
+        public bool ControlaSerie { get; set; }
+    }
+
+    // I6 (T938): el seguimiento de cada producto de las líneas.
+    private readonly Dictionary<Guid, (bool Lote, bool Vencimiento, bool Serie)> _seguimiento = [];
+    private bool ConSeguimiento => _lineas.Any(l => l.ControlaLote || l.ControlaSerie || l.Lote is not null || l.Serie is not null);
+
+    private async Task CargarSeguimientoAsync()
+    {
+        foreach (var producto in _lineas.Select(l => l.ProductPublicId).Distinct().Where(p => !_seguimiento.ContainsKey(p)).ToList())
+        {
+            var r = await Inventario.ObtenerProductoAsync(producto);
+            if (r.IsSuccess && r.Value is { } p) _seguimiento[producto] = (p.TracksLot, p.TracksExpiry, p.TracksSerial);
+        }
+        foreach (var l in _lineas)
+            if (_seguimiento.TryGetValue(l.ProductPublicId, out var x)) (l.ControlaLote, l.ControlaVencimiento, l.ControlaSerie) = x;
     }
 
     [Parameter] public Guid? Id { get; set; }
@@ -272,6 +306,7 @@
         var r = await Compras.ObtenerRecepcionAsync(id);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la recepción."); return; }
         Mostrar(r.Value);
+        if (Editable) await CargarSeguimientoAsync();
     }
 
     private void Mostrar(DocumentoDeCompraDto doc)
@@ -291,7 +326,10 @@
             UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Precio = l.UnitPrice ?? 0m, Descuento = l.DiscountAmount ?? 0m,
             OrderLinePublicId = l.Links.FirstOrDefault(v => v.Kind == VinculoDesdeOrden)?.LinePublicId,
             Orden = l.Links.FirstOrDefault(v => v.Kind == VinculoDesdeOrden)?.DisplayNumber,
+            Lote = l.Lot, Vencimiento = l.ExpiryDate, Serie = l.Serial,
         }).ToList();
+        foreach (var l in _lineas)
+            if (_seguimiento.TryGetValue(l.ProductPublicId, out var x)) (l.ControlaLote, l.ControlaVencimiento, l.ControlaSerie) = x;
     }
 
     private async Task AgregarLineaAsync(ProductoElegido elegido)
@@ -300,10 +338,12 @@
         if (!producto.IsSuccess || producto.Value is null) { await Notification.ErrorAsync(producto.ErrorMessage ?? "No se pudo leer el producto."); return; }
         var p = producto.Value;
         var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        _seguimiento[p.PublicId] = (p.TracksLot, p.TracksExpiry, p.TracksSerial);
         _lineas.Add(new LineaForm
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            ControlaLote = p.TracksLot, ControlaVencimiento = p.TracksExpiry, ControlaSerie = p.TracksSerial,
         });
         if (_doc is not null) await GuardarAsync(true);
     }
@@ -331,7 +371,8 @@
     private BorradorDeCompraRequest Pedido() => new(_tipo!.Value, _fecha, _bodega, _proveedor?.PublicId,
         string.IsNullOrWhiteSpace(_remision) ? null : _remision, null, string.IsNullOrWhiteSpace(_notas) ? null : _notas, _doc?.Document.RowVersion,
         _lineas.Select(l => new LineaDeCompraRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null,
-            OrderLinePublicId: l.OrderLinePublicId)).ToList(),
+            OrderLinePublicId: l.OrderLinePublicId, LotCode: l.Lote, SerialNumber: l.Serie,
+            ExpiryDate: l.ControlaVencimiento ? l.Vencimiento : null)).ToList(),
         OperationMunicipalityDaneCode: string.IsNullOrWhiteSpace(_municipio) ? null : _municipio.Trim());
 
     private async Task<bool> GuardarAsync(bool silencioso)

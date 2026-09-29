@@ -19,6 +19,12 @@ public sealed class LineaDelCiclo
 
     /// <summary>La línea tiene una promoción aplicada: el servidor rechaza un descuento manual sobre ella (<c>Inventory.Discount.PromotionApplied</c>).</summary>
     public bool ConPromocion { get; set; }
+
+    /// <summary>I6 (T938): el lote elegido (vacío = el que vence primero) y la serie leída, si el producto los controla.</summary>
+    public string? Lote { get; set; }
+    public string? Serie { get; set; }
+    public bool ControlaLote { get; set; }
+    public bool ControlaSerie { get; set; }
 }
 
 /// <summary>
@@ -47,7 +53,23 @@ public static class FormularioDelCiclo
     public static IReadOnlyList<LineaDeVentaRequest> Pedido(IEnumerable<LineaDelCiclo> lineas) => lineas.Select((l, i) => new LineaDeVentaRequest(
         l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio,
         l.Descuento is > 0 && !l.ConPromocion ? new DescuentoRequest(Percent: l.Descuento / 100m) : null,
-        LinePublicId: l.LinePublicId, LineNumber: i + 1, OriginLinePublicId: l.OriginLinePublicId)).ToList();
+        LinePublicId: l.LinePublicId, LineNumber: i + 1, OriginLinePublicId: l.OriginLinePublicId, LotCode: l.Lote, SerialNumber: l.Serie)).ToList();
+
+    /// <summary>
+    /// I6 (T938): el documento de venta no devuelve el lote ni la serie de sus líneas; al releerlo se conservan los elegidos en pantalla, por
+    /// línea (<c>LinePublicId</c>, o la posición en una línea nueva).
+    /// </summary>
+    public static void ConservarSeguimiento(IReadOnlyList<LineaDelCiclo> antes, IReadOnlyList<LineaDelCiclo> despues)
+    {
+        for (var i = 0; i < despues.Count; i++)
+        {
+            var d = despues[i];
+            var a = antes.FirstOrDefault(x => x.LinePublicId is not null && x.LinePublicId == d.LinePublicId)
+                ?? (i < antes.Count && antes[i].ProductPublicId == d.ProductPublicId ? antes[i] : null);
+            if (a is null) continue;
+            (d.Lote, d.Serie, d.ControlaLote, d.ControlaSerie) = (a.Lote, a.Serie, a.ControlaLote, a.ControlaSerie);
+        }
+    }
 
     /// <summary>Lo que dice la línea sobre sus promociones: «3x2 · 2.000» por cada una (FR-055: el documento muestra cuál se aplicó).</summary>
     public static string Promociones(LineaDeVentaDto? linea) =>

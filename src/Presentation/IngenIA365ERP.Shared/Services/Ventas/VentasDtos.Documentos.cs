@@ -196,7 +196,7 @@ public sealed class FiltroDeVentas
 }
 
 public sealed record LineaDeVentaRequest(Guid ProductPublicId, Guid UnitPublicId, decimal Quantity, decimal? UnitPrice = null, DescuentoRequest? Discount = null,
-    string? Notes = null, Guid? LinePublicId = null, int? LineNumber = null, Guid? OriginLinePublicId = null);
+    string? Notes = null, Guid? LinePublicId = null, int? LineNumber = null, Guid? OriginLinePublicId = null, string? LotCode = null, string? SerialNumber = null);
 
 /// <summary>
 /// El borrador de una factura o comprobante de oficina (<c>SalesDraftInput</c>, §18.2), con sus pagos. I6 (§18.4): el mismo cuerpo sirve a
