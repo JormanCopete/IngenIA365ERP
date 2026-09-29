@@ -126,10 +126,10 @@ public sealed class ConteosDePrueba
 
     public ConfirmacionDeDocumento Confirmacion() => new(
         Db, K.Maestros(), K.Actor, K.C.Reloj, Efectos(), Motor, K.Cerrojo, new Numerador(Db, K.Cerrojo),
-        new EmisorDeMensajes(Db, K.Actor, K.C.Reloj), K.Lector(), K.Vista(), [], [], Bloqueo());
+        new EmisorDeMensajes(Db, K.Actor, K.C.Reloj), K.Lector(), K.Vista(), [], [], Bloqueo(), seguimiento: K.Seguimiento());
 
     public SaveInventoryDraftCommandHandler Guardar() =>
-        new(Db, K.Maestros(), K.Alcance, K.Actor, K.C.Reloj, Efectos(), K.Vista(), null, Bloqueo());
+        new(Db, K.Maestros(), K.Alcance, K.Actor, K.C.Reloj, Efectos(), K.Vista(), null, Bloqueo(), K.Seguimiento());
 
     public VoidInventoryDocumentCommandHandler Anular() => new(Db, K.Actor, K.C.Reloj, K.Vista(), Confirmacion());
 
@@ -206,8 +206,8 @@ public sealed class ConteosDePrueba
         new CapturePhysicalCountCommandHandler(Db, K.Actor, K.C.Reloj, K.Maestros(), K.Cerrojo, Vista())
             .Handle(new CapturePhysicalCountCommand(conteo, ronda, lecturas), default);
 
-    public CountReadRequest Lectura(Guid producto, decimal? cantidad = null, WarehouseLocation? ubicacion = null) =>
-        new(null, producto, null, cantidad, (ubicacion ?? General).PublicId);
+    public CountReadRequest Lectura(Guid producto, decimal? cantidad = null, WarehouseLocation? ubicacion = null, string? lote = null) =>
+        new(null, producto, null, cantidad, (ubicacion ?? General).PublicId, lote);
 
     public Task<Result<ClosePhysicalCountResultDto>> CerrarAsync(Guid conteo) =>
         new ClosePhysicalCountCommandHandler(Db, K.Cerrojo, Vista(), K.Vista(), Confirmacion())
@@ -256,10 +256,10 @@ public sealed class ConteosDePrueba
 
     /// <summary>Una entrada confirmada con costo, en la fecha dada.</summary>
     public async Task<Guid> EntradaAsync(Guid producto, decimal cantidad, decimal costo, Warehouse? bodega = null, DateOnly? fecha = null,
-        WarehouseLocation? ubicacion = null)
+        WarehouseLocation? ubicacion = null, string? lote = null, DateOnly? vence = null)
     {
         var (documento, r) = await AjusteAsync(K.Borrador("AJP", bodega, fecha: fecha,
-            lineas: [K.Linea(producto, cantidad, costo) with { LocationPublicId = ubicacion?.PublicId }]));
+            lineas: [K.Linea(producto, cantidad, costo) with { LocationPublicId = ubicacion?.PublicId, LotCode = lote, ExpiryDate = vence }]));
         if (r.IsFailure) throw new InvalidOperationException($"{r.Error.Code}: {r.Error.Message}");
         return documento;
     }

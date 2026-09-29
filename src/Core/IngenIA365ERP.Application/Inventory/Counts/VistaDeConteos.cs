@@ -26,6 +26,15 @@ public sealed record CriterioDelConteo
     public IReadOnlyList<int> Ubicaciones { get; init; } = [];
     public IReadOnlyList<int> Productos { get; init; } = [];
     public string? ClaseAbc { get; init; }
+
+    /// <summary>
+    /// I6 (T930): los productos que la clase ABC resolvió al congelar la foto (sobre el valor de las salidas de la bodega en los doce
+    /// meses anteriores, con <c>Informes.UmbralesAbc</c>); vacío mientras el conteo no tiene foto.
+    /// </summary>
+    public IReadOnlyList<int> ProductosDeLaClase { get; init; } = [];
+
+    /// <summary>I6 (T930, T931): la base con que se clasificó y su período, en palabras (sellado al abrir).</summary>
+    public string? BaseAbc { get; init; }
     public IReadOnlyList<int> Contadores { get; init; } = [];
 
     /// <summary>Sellado al abrir; nulo mientras el conteo no tiene foto.</summary>
@@ -148,6 +157,10 @@ public sealed class VistaDeConteos(IApplicationDbContext db, VistaDeDocumentos v
                 var deLasCategorias = await db.Products.AsNoTracking().IgnoreQueryFilters()
                     .Where(p => productos.Contains(p.Id) && categorias.Contains(p.CategoryId)).Select(p => p.Id).ToListAsync(ct);
                 resultado.UnionWith(deLasCategorias);
+                break;
+            case CountScope.AbcClass:
+                // I6 (T930): la lista que la clase resolvió al abrir (la clase no se recalcula: la foto es fija).
+                resultado.UnionWith(productos.Where(criterio.ProductosDeLaClase.Contains));
                 break;
         }
         return resultado;

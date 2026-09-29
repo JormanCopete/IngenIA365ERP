@@ -220,6 +220,30 @@ public sealed class RebuildInventoryProjectionsCommandHandler(
         }
         _capas += capas.Count;
 
+        // ------------------------------------------------------------------------- series (I6, T924) --
+        // Cada serie del producto queda donde su kardex suma una unidad (o fuera de existencia). Las filas de la serie no se crean aquí:
+        // nacen con el borrador que la cita.
+        var seriesDelProducto = await db.Serials.Where(s => s.ProductId == producto).ToListAsync(ct);
+        if (seriesDelProducto.Count > 0)
+        {
+            var porSerie = kardex.Where(k => k.SerialId is not null && k.Kind != KardexEntryKind.CostAdjustment)
+                .GroupBy(k => (SerialId: k.SerialId!.Value, k.WarehouseId, k.LocationId))
+                .Select(g => (g.Key.SerialId, g.Key.WarehouseId, g.Key.LocationId, Cantidad: g.Sum(k => k.QuantityBase)))
+                .Where(x => x.Cantidad > 0m)
+                .ToList();
+            foreach (var serie in seriesDelProducto)
+            {
+                var donde = porSerie.Where(x => x.SerialId == serie.Id).OrderByDescending(x => x.Cantidad).FirstOrDefault();
+                int? bodega = donde.SerialId == 0 ? null : donde.WarehouseId;
+                int? ubicacion = donde.SerialId == 0 ? null : donde.LocationId;
+                if (bodegas is not null && !(bodega is int b1 && bodegas.Contains(b1)) && !(serie.InStockWarehouseId is int b2 && bodegas.Contains(b2))) continue;
+                if (serie.InStockWarehouseId != bodega)
+                    correcciones.Add((TiposDeIncidente.Serial, producto, bodega ?? serie.InStockWarehouseId, "InStockWarehouseId", serie.InStockWarehouseId ?? 0, bodega ?? 0));
+                serie.InStockWarehouseId = bodega;
+                serie.InStockLocationId = ubicacion;
+            }
+        }
+
         await db.SaveChangesAsync(ct);
         return (existentes.Count, detallesExistentes.Count, costosExistentes.Count);
     }

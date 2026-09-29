@@ -2115,6 +2115,22 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `ProductoDelDocumento.EsPlantilla` (la revisan `SaveInventoryDraftCommand` y `ReglasDeLineasDeVenta`). Plantilla 6:
     `PlantillaDeProductos.{HojaVariantes, HojaComponentes, Plantilla, Atributo, Valor, Componente, Cantidad}` (T922, decisión por defecto).
     `DeleteProductCommand` también da de baja los valores de variante y los componentes del producto.
+- **I6, lotes, series, combos, ensamble y conteo en la aplicación (T923–T933; 2026-09-29) (nuevo)**: `Documents/ReglasDeSeguimiento`
+    (`ResolverAsync`, `EvaluarAsync`, `ValidarAsync`, `SugerirAsync`, `SugerirParaVenderAsync`, `DisponiblesAsync`, `PoliticaAsync`,
+    `PoliticaVigenteAsync`, `Entra`, `Normalizar`, `ClasesConSeguimientoEnLaLinea`) con `SeguimientoPedido` y `VeredictoDeSeguimiento`; la
+    usan `SaveInventoryDraftCommandHandler` y `ConfirmacionDeDocumento` (parámetro opcional `seguimiento`) y el POS. `MovimientoDeKardex`
+    gana `ProductId` (el componente de un combo), `LotId`, `SerialId`, `AlCostoConsumidoDe` (el kit de un ensamble) y las lecturas
+    `Producto`, `Lote`, `Serie`; `RegistroDeKardex` gana `ClasesDeVenta`, `PoliticaDeLoteVencidoAsync`, `FilasProvisionalesDeAsync` y el paso
+    privado de seguimiento (reparto FEFO, herencia del tránsito, reglas de la serie, proyección `INV_Serials.InStock*`). `PedidoDeCerrojo.Series`
+    y `SqlDelCerrojo.TablaSeries` (T925). `TiposDeIncidente.Serial` en la verificación y la reconstrucción (T924).
+    `Documents/Efectos/ExpansionDeCombos` (`ComponentesAsync`, `Cantidad`, `Salidas`, `SalidasDeVentaAsync`, `DisponibleDeCombosAsync`) con
+    `ComponenteDelCompuesto` (T926, T927); `Documents/Efectos/EfectoDeEnsamble` con `AssemblyRequest` (en `SaveInventoryDraftRequest.Assembly`),
+    `PropuestaDeEnsamble` y `ErroresDeEnsamble` (T928). `Counts/ClasificacionAbcDelConteo` (`MesesDeLaBase`, `Base`, `ProductosAsync`) y
+    `CriterioDelConteo.{ProductosDeLaClase, BaseAbc}` (T930). `Catalog/Lots/RaiseExpiringLotAlertsCommand` (+ validador vacío) y la tarea
+    `TareaDeLotesProximosAVencer` (`inventario.lotes`, sólo desde I6, registrada en `Program.cs`) (T932).
+    `ImpairmentReportQueryHandler.{MotivoVencido, MotivoProximoAVencer}` (T933). Contratos que crecen: `SalesLineInput.{LotCode,
+    SerialNumber}`, `SearchProductsQuery.ForSale`, `AddPosLineCommand.{SerialNumber, LotCode}`, `UpdatePosLineCommand.LotCode`,
+    `ProductoLeido.SerialId`, `BorradorDelPos.AsignarLoteAsync`. Reglas en T54c y T931.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2247,6 +2263,11 @@ variante sólo nace de su plantilla), `.NotATemplate`, `.CombinationExists` (`da
 `Inventory.Lot.Required`, `.ExpiryRequired`, `.ExpiryMismatch`, `.NotTracked`; `Inventory.Serial.Required`, `.NotTracked`,
 `.QuantityNotOne`, `.AlreadyInStock` (las fábricas viven en `CatalogErrors` para que T923 las reuse). Los errores de
 `ValidadorDeComponentes` salen de `SetProductComponentsCommand` con el primero como código y todos en `data.errors[]`.
+
+Lotes, series, combos, ensamble y conteo (I6, T923–T933; todos **(nuevo)**; retirado `Inventory.Count.ScopeNotAvailable`):
+`Inventory.Lot.Expired` (`CatalogErrors.LotExpired`, con `data { productCode, lotCode, expiryDate }`), `Inventory.Lot.NotFound`,
+`Inventory.Serial.NotInStock`, `Inventory.Serial.NotFound`; `Inventory.Assembly.NotAKit`, `.ComponentsMissing`, `.NotAComponent`
+(`ErroresDeEnsamble`); `Inventory.Count.AbcClassInvalid`.
 
 ### 2.18 Pruebas con nombre fijo
 
@@ -2394,6 +2415,12 @@ en `Imports/ImportProductsCommandTests`, `Las_hojas_Variantes_y_Componentes_crea
 `GoLive/ImportOpeningBalanceCommandHandlerTests`, `Lote_vencimiento_y_serie_siguen_lo_que_controla_el_producto`. Las pruebas de I1 que
 fijaban «hasta I6» (`ProductCommandsTests`, `ImportProductsCommandTests`, `ImportOpeningBalanceCommandHandlerTests`,
 `ImportacionComunTests`) se reescribieron con la regla nueva.
+**(nuevos, I6 lotes, series, combos, ensamble y conteo, T908–T910, T923–T933)** en `tests/IngenIA365ERP.Application.Tests/Inventory/`:
+`Documents/LotesYSeriesTests`, `Documents/ComboYEnsambleTests`, `Counts/ConteoPorClaseAbcTests`,
+`Reports/ImpairmentReportQueryTests.Los_lotes_vencidos_y_proximos_a_vencer_salen_por_lote_con_su_motivo` y
+`Common/CerrojoDeInventarioSqlTests.Las_series_se_bloquean_en_exclusivo_por_Id_despues_de_los_detalles`. `AbrirConteoTests` dejó de fijar
+`.ScopeNotAvailable`; `KardexDePrueba` (`Seguimiento()`), `ConteosDePrueba`, `TrasladosDePrueba` y `VentasDePrueba` pasan
+`ReglasDeSeguimiento` al guardado y a la confirmación.
 
 ---
 
@@ -3456,6 +3483,38 @@ mismas reglas que la pantalla y la API (contracts/plantillas.md §6). Los atribu
 pantalla o API antes de cargar. Si el dueño prefiere no tener las hojas, basta con retirarlas de `PlantillaDeProductos.Definicion` y
 de `ImportProductsCommand`; nada más depende de ellas.
 
+**T54c · Lotes, series, combos, ensamble y conteo en la aplicación (nuevo, I6, T923–T933; 2026-09-29; revisar con el dueño).**
+Decisión (dentro de FR-026, FR-036, FR-040, FR-044 y data-model §1.11, §13): (a) **el lote y la serie nacen al guardar el borrador** de
+una línea que entra (`ReglasDeSeguimiento.ResolverAsync`): la línea sólo guarda `LotId`/`SerialId`, así que el código que digitó la persona
+no tiene dónde esperar a la confirmación; un borrador descartado deja un lote o una serie sin movimientos, que no estorba (el índice único
+es el árbitro). En una línea que sale, el lote y la serie tienen que existir (`.NotFound`). (b) **dónde manda `Ventas.LoteVencido`**: sólo
+en las cuatro clases de venta que sacan mercancía (remisión, factura, documento equivalente POS, comprobante); las demás salidas (ajustes,
+bajas, consumos, traslados) toman el lote que vence primero **aunque esté vencido** —la baja existe para sacarlo—. Leído antes de I6, el
+parámetro da su defecto `Bloquear`. (c) **reparto FEFO dentro del cerrojo**: una salida sin lote de un producto con lote se parte por
+`SelectorDeLotes` en la ubicación de la línea; si sólo lo vencido alcanzaría y la política es `Bloquear`, `Inventory.Lot.Expired` con el
+primer lote vencido; si ni así alcanza, `Inventory.Stock.Insufficient`. La entrada al tránsito o a otra ubicación hereda lote y serie de
+su salida, partida igual; la recepción del traslado toma el lote y la serie de la entrada al tránsito cuando la línea del despacho tuvo
+una sola, y si tuvo varias reparte en el tránsito por el que vence primero. (d) **combo**: la línea del documento es la del combo (precio y
+`VentaFacturada` por el grupo del combo); el kardex tiene una fila por componente con la línea del combo (su `CostoDeVentaReconocido` por
+el grupo de cada componente); la línea del combo guarda el costo total y el unitario = total ÷ cantidad de combos. La nota crédito que
+devuelve mercancía de una línea que salió por varias filas (componentes, lotes) o con lote o serie reingresa **por cada fila de origen, en
+proporción** (cantidad devuelta ÷ vendida), al costo, lote y serie con que salió; la anulación revierte cada fila en su producto. El
+disponible de un combo (búsqueda con `forSale` y lector del POS) es el mínimo entero de (disponible del componente ÷ cantidad).
+(e) **ensamble**: exactamente una línea de kit; las demás, componentes vigentes del kit (`.NotAComponent` si no lo son; las cantidades
+propuestas se pueden cambiar); el kit entra por exactamente lo consumido con el residuo en su propia línea `RoundingResidue`; el monto de
+aprobación es el valor al costo consumido. (f) **POS**: el lector reconoce una serie en existencia y agrega una unidad con esa serie (un
+producto con serie no se agrega sin ella); a un producto con lote se le asigna el lote sugerido **sólo si uno solo alcanza** para la línea
+(visible y cambiable por `UpdatePosLineCommand.LotCode`); si no, queda sin lote y la confirmación reparte. (g) **conteo por lote**: la
+captura de un producto con lote exige un lote que exista (un lote nuevo encontrado en el conteo se registra por una entrada). (h) **la
+proyección de la serie** se verifica y se reconstruye desde el kardex: la serie está donde su kardex suma una unidad.
+
+**T931 · Base de la clasificación ABC para los conteos (decisión por defecto, revisar con el dueño; 2026-09-29).**
+Se adopta la propuesta de la tarea: el **valor al costo de las salidas** (kardex `Exit`, sin ajustes de costo) **de la bodega del conteo**
+en los **doce meses** anteriores a la fecha de la foto, clasificado por `ClasificacionAbc` con `Informes.UmbralesAbc`; los productos con
+existencia y sin salidas valen cero y son C. La clase y la lista resuelta se congelan en `CountScopeJson` con la base en palabras
+(`BaseAbc`). La alternativa (el valor de ventas, como `abc?basis=sales`) se cambia sólo en `ClasificacionAbcDelConteo`. Que la base sea
+la bodega y no toda la cooperativa también es propuesta: un conteo es de una bodega.
+
 ---
 
 ## 4. Preguntas al dueño (consolidadas)
@@ -3530,6 +3589,7 @@ qué no puede salir sin una respuesta explícita: una entrega, el ensayo (D-07) 
 | D8 | Puesta en marcha bodega por bodega con ámbito de costeo cooperativa: el saldo inicial de una bodega que se activa después queda fechado antes de ventas ya registradas en otras. ¿Se admite como excepción a `Costeo.RetroactivosPermitidos`, o se exige `Costeo.Ambito = Bodega` mientras haya bodegas no activas? | Excepción: un `OpeningBalance` (y su `Voiding`) de una bodega `NotActivated` no depende del parámetro; el motor lo inserta en `(OperationDate, Id)`, recalcula las salidas posteriores y registra `AjusteDeCostoReconocido` por documento afectado (T18, entregado en I1) | I1 (salida de la segunda bodega) |
 | D9 | Los ajustes que genera un conteo aprobado se fechan en la foto (FR-041) y suelen quedar antes de movimientos de otras bodegas. ¿Se admiten siempre, sin depender de `Costeo.RetroactivosPermitidos`? | Sí, con el mismo soporte retroactivo mínimo de D8 en I1 (precisión aplicada a FR-045) | I1 |
 | D10 | (T922) ¿La plantilla de productos suma hojas para los valores de variante y los componentes? | Sí: hojas opcionales `Variantes` y `Componentes` cargadas después de `Productos` (adoptada por defecto el 2026-09-29, T922; ver §3) | No |
+| D11 | (T931) ¿Con qué base se clasifica la clase ABC de un conteo cíclico? | El valor al costo de las salidas de la bodega en los doce meses anteriores a la foto, con `Informes.UmbralesAbc` (adoptada por defecto el 2026-09-29, T931; ver §3) | No |
 
 ### E. Compras e impuestos
 

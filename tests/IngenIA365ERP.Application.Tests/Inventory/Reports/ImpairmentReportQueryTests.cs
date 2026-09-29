@@ -51,6 +51,32 @@ public class ImpairmentReportQueryTests
     }
 
     [Fact]
+    public async Task Los_lotes_vencidos_y_proximos_a_vencer_salen_por_lote_con_su_motivo()
+    {
+        // I6, T933 (FR-026; api.md §27 fila impairment): vencido = todo su valor al costo; próximo a vencer = aviso sin valor.
+        var v = await VentasDePrueba.CrearAsync();
+        v.K.Entrega = Domain.Common.Parametros.EntregaDelComercio.I6;
+        var leche = (await v.Compras.C.ProductoAsync(v.Compras.C.Alta("LCH", "Leche") with { TracksLot = true, TracksExpiry = true })).PublicId;
+        var hoy = Catalog.CatalogoDePrueba.Hoy;
+        var (_, r) = await v.K.AjusteAsync(v.K.Borrador("AJP", lineas:
+        [
+            v.K.Linea(leche, 4m, 2_000m) with { LotCode = "VIEJO", ExpiryDate = hoy.AddDays(-3) },
+            v.K.Linea(leche, 6m, 2_000m) with { LotCode = "PRONTO", ExpiryDate = hoy.AddDays(10) },
+            v.K.Linea(leche, 5m, 2_000m) with { LotCode = "LEJOS", ExpiryDate = hoy.AddDays(200) },
+        ]));
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+
+        var t = (await ConsultarAsync(v)).Value;
+
+        var deLotes = t.Filas.Where(f => ((string)Celda(t, f, "Motivo")!).Contains("lote ")).ToList();
+        deLotes.Select(f => ((string)Celda(t, f, "Motivo")!, Celda(t, f, "Cantidad"), Celda(t, f, "Indicio (valor)"))).Should().BeEquivalentTo(new (string, object?, object?)[]
+        {
+            ($"{ImpairmentReportQueryHandler.MotivoVencido}: lote VIEJO venció el {hoy.AddDays(-3):yyyy-MM-dd}", 4m, 8_000m),
+            ($"{ImpairmentReportQueryHandler.MotivoProximoAVencer}: lote PRONTO vence el {hoy.AddDays(10):yyyy-MM-dd}", 6m, null),
+        }, "el lote que vence en 200 días no es indicio (Informes.DiasProximoAVencer = 30)");
+    }
+
+    [Fact]
     public async Task Sin_gastos_de_venta_nada_cuesta_mas_de_lo_que_se_recupera()
     {
         var v = await VentasDePrueba.CrearAsync();

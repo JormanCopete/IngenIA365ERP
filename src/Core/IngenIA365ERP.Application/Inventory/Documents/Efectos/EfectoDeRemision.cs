@@ -70,7 +70,8 @@ public sealed class EfectoDeRemision(
                 pedidos.Select(p => p.Id).ToList());
         }
 
-        var movimientos = Movimientos(documento, productos.Value);
+        // I6 (T926): un combo sale por sus componentes.
+        var movimientos = await ExpansionDeCombos.SalidasDeVentaAsync(db, documento, productos.Value, ct);
         if (movimientos.Count == 0) return Result.Success();
         var preparado = await registro.PrepararAsync(documento, movimientos, ct);
         if (preparado.IsFailure) return Result.Failure(preparado.Error);
@@ -113,24 +114,14 @@ public sealed class EfectoDeRemision(
     {
         if (contexto.EsAnulacion) return await MensajesDeAnulacionAsync(contexto, ct);
         var documento = contexto.Documento;
-        if (documento.WarehouseId is not int bodega || !_preparados.TryGetValue(documento.PublicId, out var p)) return [];
-        var lineas = p.Movimientos.Select(m => m.Linea.Id).ToHashSet();
-        var filas = (await registro.FilasProvisionalesAsync(documento, bodega, KardexEntryKind.Exit, null, ct)).Where(f => lineas.Contains(f.DocumentLineId)).ToList();
+        if (!_preparados.TryGetValue(documento.PublicId, out var p)) return [];
+        var filas = await registro.FilasProvisionalesDeAsync(documento, p.Movimientos, ct);
         return filas.Count == 0 ? [] : [await emision.CostoDeVentaAsync(documento, filas, ct)];
     }
 
     public override Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct) => anulacion.RevertirAsync(contexto, ct);
 
     public override Task<IReadOnlyList<object>> MensajesDeAnulacionAsync(ContextoDeEfecto contexto, CancellationToken ct) => anulacion.MensajesAsync(contexto, ct);
-
-    /// <summary>Una salida por línea viva de producto inventariable, al promedio vigente, en la bodega de la remisión.</summary>
-    private static IReadOnlyList<MovimientoDeKardex> Movimientos(InventoryDocument documento, IReadOnlySet<int> inventariables)
-    {
-        if (documento.WarehouseId is not int bodega) return [];
-        return documento.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m && inventariables.Contains(l.ProductId)).OrderBy(l => l.LineNumber)
-            .Select(l => new MovimientoDeKardex(l, bodega, -l.QuantityBase, ValoracionDelMovimiento.AlCostoVigente, LocationId: l.LocationId))
-            .ToList();
-    }
 
     private async Task<List<KardexEntry>> KardexAsync(InventoryDocument documento, CancellationToken ct)
     {

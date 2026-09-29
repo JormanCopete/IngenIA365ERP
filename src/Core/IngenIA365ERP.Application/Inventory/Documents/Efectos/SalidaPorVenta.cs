@@ -71,7 +71,10 @@ public abstract class SalidaPorVenta(
         if (delPedido.IsFailure) return delPedido;
 
         // I4 (T739): la factura que reemplaza al documento equivalente no escribe kardex: la salida ya la hizo el original (ReplacementOf).
-        var movimientos = !DescargaExistencia || reglas.EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento) ? [] : Movimientos(contexto.Documento, productos.Value);
+        // I6 (T926): un combo sale por sus componentes.
+        var movimientos = !DescargaExistencia || reglas.EsFacturaEnLugarDelDocumentoEquivalente(contexto.Documento)
+            ? []
+            : await ExpansionDeCombos.SalidasDeVentaAsync(db, contexto.Documento, productos.Value, ct);
         if (movimientos.Count == 0) return Result.Success();
         var preparado = await registro.PrepararAsync(contexto.Documento, movimientos, ct);
         if (preparado.IsFailure) return Result.Failure(preparado.Error);
@@ -144,11 +147,8 @@ public abstract class SalidaPorVenta(
         if (contexto.EsAnulacion) return await MensajesDeAnulacionAsync(contexto, ct);
         var documento = contexto.Documento;
         IReadOnlyList<KardexEntry> filas = [];
-        if (documento.WarehouseId is int bodega && _preparados.TryGetValue(documento.PublicId, out var p))
-        {
-            var lineas = p.Movimientos.Select(m => m.Linea.Id).ToHashSet();
-            filas = (await registro.FilasProvisionalesAsync(documento, bodega, KardexEntryKind.Exit, null, ct)).Where(f => lineas.Contains(f.DocumentLineId)).ToList();
-        }
+        if (_preparados.TryGetValue(documento.PublicId, out var p))
+            filas = await registro.FilasProvisionalesDeAsync(documento, p.Movimientos, ct);
         return await ContenidosAsync(documento, filas, ct);
     }
 
@@ -166,15 +166,6 @@ public abstract class SalidaPorVenta(
         // I4 (T724): el reemplazo del caso b ajusta el crédito del rechazado (Replacement) en vez de registrar uno nuevo.
         contenidos.AddRange(await emision.CreditoDeLaVentaAsync(documento, pagos, ct));
         return contenidos;
-    }
-
-    /// <summary>Una salida por línea viva de producto inventariable, al promedio vigente, en la bodega de la venta.</summary>
-    private static IReadOnlyList<MovimientoDeKardex> Movimientos(InventoryDocument documento, IReadOnlySet<int> inventariables)
-    {
-        if (documento.WarehouseId is not int bodega) return [];
-        return documento.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m && inventariables.Contains(l.ProductId)).OrderBy(l => l.LineNumber)
-            .Select(l => new MovimientoDeKardex(l, bodega, -l.QuantityBase, ValoracionDelMovimiento.AlCostoVigente, LocationId: l.LocationId))
-            .ToList();
     }
 
     private async Task<List<KardexEntry>> KardexAsync(InventoryDocument documento, CancellationToken ct)
@@ -213,7 +204,8 @@ public sealed class EfectoComprobanteDeVenta(
 
 /// <summary>
 /// Las reglas de producto de una línea de venta o nota: existe, no es una plantilla de variantes (I6), no está inactivo ni bloqueado.
-/// Devuelve los inventariables; un combo entra como línea de venta sin existencia propia (su salida por componentes es de T926). (nuevo)
+/// Devuelve los inventariables; un combo entra como línea de venta sin existencia propia y sale por sus componentes (T926,
+/// <see cref="ExpansionDeCombos"/>). (nuevo)
 /// </summary>
 public static class ReglasDeLineasDeVenta
 {

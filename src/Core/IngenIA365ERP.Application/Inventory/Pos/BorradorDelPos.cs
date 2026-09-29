@@ -31,8 +31,11 @@ public sealed record SesionDelPos(CashSession Sesion, CashRegister Caja, PointOf
 /// </summary>
 public sealed record CambioDeLinea(decimal? Quantity = null, decimal? PrecioDigitado = null, PosDiscountInput? Descuento = null, bool QuitarPrecioDigitado = false);
 
-/// <summary>Un producto encontrado por código: la unidad que el código trae (la de empaque o la base) y su factor. (nuevo)</summary>
-public sealed record ProductoLeido(Product Producto, int UnitId, Guid UnitPublicId, string UnitCode, decimal Factor);
+/// <summary>
+/// Un producto encontrado por código: la unidad que el código trae (la de empaque o la base) y su factor. <see cref="SerialId"/> (I6,
+/// T929): lo leído era la serie de una unidad en existencia. (nuevo)
+/// </summary>
+public sealed record ProductoLeido(Product Producto, int UnitId, Guid UnitPublicId, string UnitCode, decimal Factor, int? SerialId = null);
 
 /// <summary>
 /// El borrador de la venta del POS (feature 012, I3, T603–T606; contracts/api.md §20.2; T50): la venta vive en el servidor desde la
@@ -60,7 +63,8 @@ public sealed class BorradorDelPos(
     PrecificacionDeVenta precificacion,
     AprobacionDeDescuentos aprobaciones,
     IMotorDeAprobaciones motor,
-    IPermissionChecker permisos)
+    IPermissionChecker permisos,
+    ReglasDeSeguimiento? seguimiento = null)
 {
     public const string PermisoCredito = "Inventory.Sales.SellOnCredit";
 
@@ -174,8 +178,24 @@ public sealed class BorradorDelPos(
         else
         {
             producto = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Code == normalizado, ct);
-            if (producto is null) return Result.Failure<ProductoLeido>(ErroresDelPos.ProductNotFound(codigo!.Trim()));
+            int? serieLeida = null;
+            if (producto is null)
+            {
+                // I6 (T929): la serie de una unidad en existencia; cada lectura de serie es una unidad.
+                var numero = ReglasDeSeguimiento.Normalizar(codigo);
+                var serie = await db.Serials.AsNoTracking().Include(s => s.Product)
+                    .Where(s => s.SerialNumber == numero && s.InStockWarehouseId != null && s.Product != null && !s.Product.IsDeleted && s.Product.TracksSerial)
+                    .OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
+                if (serie is null) return Result.Failure<ProductoLeido>(ErroresDelPos.ProductNotFound(codigo!.Trim()));
+                producto = serie.Product!;
+                serieLeida = serie.Id;
+            }
             unidad = producto.BaseUnitId;
+            if (serieLeida is not null)
+            {
+                var deLaSerie = await db.UnitsOfMeasure.AsNoTracking().Where(x => x.Id == unidad).Select(x => new { x.PublicId, x.Code }).FirstAsync(ct);
+                return Result.Success(new ProductoLeido(producto, unidad, deLaSerie.PublicId, deLaSerie.Code, 1m, serieLeida));
+            }
         }
         var u = await db.UnitsOfMeasure.AsNoTracking().Where(x => x.Id == unidad).Select(x => new { x.PublicId, x.Code }).FirstAsync(ct);
         return Result.Success(new ProductoLeido(producto, unidad, u.PublicId, u.Code, factor));
@@ -198,14 +218,38 @@ public sealed class BorradorDelPos(
     /// descuento manual (misma unidad, precio y descuento, §20.2). Devuelve el número de la línea y si ya existía.
     /// </summary>
     public async Task<Result<(int LineNumber, bool Sumada)>> AgregarAsync(InventoryDocument venta, int productoId, int unidadId, Guid unidadPublicId,
-        decimal cantidad, CancellationToken ct)
+        decimal cantidad, CancellationToken ct, int? serieId = null, string? codigoDeLote = null)
     {
         if (cantidad <= 0m) return Result.Failure<(int, bool)>(new Error(Error.Validation.Code, "La cantidad debe ser mayor que cero."));
         var producto = await db.Products.AsNoTracking().FirstAsync(p => p.Id == productoId, ct);
         if (producto.Status == ProductStatus.Inactive) return Result.Failure<(int, bool)>(InventoryErrors.ProductInactive(0, producto.Code));
         if (producto.Status == ProductStatus.Blocked) return Result.Failure<(int, bool)>(InventoryErrors.ProductBlocked(0, producto.Code));
+        // I6 (T927): una plantilla de variantes no se vende.
+        if (producto.Kind == ProductKind.Template) return Result.Failure<(int, bool)>(InventoryErrors.ProductNotInventoriable(0, producto.Code));
 
         var vivas = venta.Lines.Where(l => !l.IsDeleted).ToList();
+
+        // I6 (T929): con serie, una línea por unidad leída; sin la serie, el lector la pide.
+        if (producto.TracksSerial)
+        {
+            if (serieId is not int serie) return Result.Failure<(int, bool)>(Catalog.CatalogErrors.SerialRequired(producto.Code));
+            var registrada = await db.Serials.AsNoTracking().FirstAsync(s => s.Id == serie, ct);
+            if (cantidad != 1m) return Result.Failure<(int, bool)>(Catalog.CatalogErrors.SerialQuantityNotOne(producto.Code, registrada.SerialNumber));
+            if (registrada.InStockWarehouseId != venta.WarehouseId || vivas.Any(l => l.SerialId == serie))
+                return Result.Failure<(int, bool)>(Catalog.CatalogErrors.SerialNotInStock(producto.Code, registrada.SerialNumber));
+            var deLaSerie = new InventoryDocumentLine
+            {
+                Document = venta, DocumentId = venta.Id, LineNumber = vivas.Count == 0 ? 1 : vivas.Max(l => l.LineNumber) + 1,
+                ProductId = productoId, UnitId = unidadId, LocationId = registrada.InStockLocationId ?? await UbicacionPorDefectoAsync(venta.WarehouseId, ct),
+                SerialId = serie, LotId = registrada.LotId,
+            };
+            var unidadDeLaSerie = await ConvertirAsync(deLaSerie.LineNumber, productoId, producto.Code, unidadPublicId, 1m, ct);
+            if (unidadDeLaSerie.IsFailure) return Result.Failure<(int, bool)>(unidadDeLaSerie.Error);
+            venta.Lines.Add(deLaSerie);
+            Cantidades(deLaSerie, unidadDeLaSerie.Value);
+            return Result.Success((deLaSerie.LineNumber, false));
+        }
+
         var conDescuento = await LineasConDescuentoManualAsync(venta, ct);
         var previa = vivas.FirstOrDefault(l => l.ProductId == productoId && l.UnitId == unidadId && !conDescuento.Contains(l.Id));
         var nueva = previa is null;
@@ -221,7 +265,41 @@ public sealed class BorradorDelPos(
             venta.Lines.Add(linea);
         }
         Cantidades(linea, convertida.Value);
+
+        // I6 (T929): el lote pedido o el sugerido (el que vence primero), visible y cambiable.
+        if (producto.TracksLot)
+        {
+            var lote = await AsignarLoteAsync(linea, producto, codigoDeLote, ct);
+            if (lote.IsFailure) return Result.Failure<(int, bool)>(lote.Error);
+        }
         return Result.Success((linea.LineNumber, !nueva));
+    }
+
+    /// <summary>
+    /// El lote de una línea del POS (I6, T929; FR-026): el que pidió el cajero —vencido y con <c>Ventas.LoteVencido = Bloquear</c>,
+    /// <c>Inventory.Lot.Expired</c>— o el que sugiere <see cref="Domain.Inventory.Tracking.SelectorDeLotes"/> si uno solo alcanza para la
+    /// línea; si la línea se reparte entre lotes, queda sin lote y la confirmación los reparte por el que vence primero. Los tres pasos del
+    /// cobro no cambian: el lote va con la línea.
+    /// </summary>
+    public async Task<Result> AsignarLoteAsync(InventoryDocumentLine linea, Product producto, string? codigoDeLote, CancellationToken ct)
+    {
+        if (seguimiento is null || venta(linea) is not { WarehouseId: int bodega }) return Result.Success();
+        var codigo = ReglasDeSeguimiento.Normalizar(codigoDeLote);
+        if (codigo is not null)
+        {
+            var lote = await db.Lots.AsNoTracking().FirstOrDefaultAsync(l => l.ProductId == producto.Id && l.Code == codigo, ct);
+            if (lote is null) return Result.Failure(Catalog.CatalogErrors.LotNotFound(producto.Code, codigo));
+            if (Domain.Inventory.Tracking.SelectorDeLotes.EstaVencido(lote.ExpiryDate, reloj.HoyLocal)
+                && await seguimiento.PoliticaVigenteAsync(ct) == Domain.Inventory.Tracking.PoliticaDeLoteVencido.Bloquear)
+                return Result.Failure(Catalog.CatalogErrors.LotExpired(producto.Code, lote.Code, lote.ExpiryDate));
+            linea.LotId = lote.Id;
+            return Result.Success();
+        }
+        var sugerencia = await seguimiento.SugerirParaVenderAsync(producto.Id, bodega, linea.QuantityBase, ct);
+        linea.LotId = sugerencia.Completo && sugerencia.Asignaciones.Count == 1 ? sugerencia.Asignaciones[0].Lote.LotId : null;
+        return Result.Success();
+
+        static InventoryDocument? venta(InventoryDocumentLine l) => l.Document;
     }
 
     /// <summary>Cambia la cantidad de la línea (con la conversión y los decimales de su unidad).</summary>

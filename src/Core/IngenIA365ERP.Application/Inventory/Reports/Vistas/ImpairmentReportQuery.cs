@@ -29,8 +29,11 @@ namespace IngenIA365ERP.Application.Inventory.Reports.Vistas;
 /// indicio = (costo − VNR) × cantidad.</item>
 /// <item>Un producto con existencia y sin precio en la lista general sale con el motivo que dice qué precio falta (producto y unidad):
 /// sin él no se puede medir.</item>
+/// <item>I6 (T933, US15; FR-026): una fila <b>por lote</b> con existencia vencido a la fecha —motivo «Vencido», indicio = todo su valor al
+/// costo— o que vence dentro de <c>Informes.DiasProximoAVencer</c> —motivo «Próximo a vencer», sin valor: es un aviso—. El lote sale de la
+/// existencia por lote vigente (<c>INV_StockDetails</c>).</item>
 /// </list>
-/// En I6 le suman «vencido o próximo a vencer» (T933, US15) y «sin movimiento» (T963, US17). Exige <c>Inventory.Costs.Read</c> (sin él,
+/// «Sin movimiento» llega con las vistas de US17 (T963). Exige <c>Inventory.Costs.Read</c> (sin él,
 /// el 404 genérico) y respeta el alcance por bodega; las bodegas de tránsito no entran. (nuevo)
 /// </summary>
 public sealed record ImpairmentReportQuery(FiltrosDeInformeDeInventario Filtros) : IRequest<Result<TablaExportable>>;
@@ -45,6 +48,12 @@ public sealed class ImpairmentReportQueryHandler(
     : IRequestHandler<ImpairmentReportQuery, Result<TablaExportable>>
 {
     public const string MotivoCostoSobreVnr = "Costo sobre valor neto realizable";
+
+    /// <summary>I6 (T933): el lote ya venció a la fecha. (nuevo)</summary>
+    public const string MotivoVencido = "Vencido";
+
+    /// <summary>I6 (T933): el lote vence dentro de <c>Informes.DiasProximoAVencer</c>. (nuevo)</summary>
+    public const string MotivoProximoAVencer = "Próximo a vencer";
 
     /// <summary>Lo que la vista declara al publicarse (T625): <c>asOf</c>, <c>warehouse</c> y <c>product</c>; exige <c>Inventory.Costs.Read</c>.</summary>
     public static readonly VistaDeInformeDeInventario Vista = new(
@@ -138,6 +147,48 @@ public sealed class ImpairmentReportQueryHandler(
                 Resaltada: true)));
         }
 
+        // I6 (T933): los lotes vencidos o próximos a vencer, por lote y bodega.
+        var diasLeidos = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.InformesDiasProximoAVencer, fecha, ct: ct);
+        var dias = diasLeidos.IsSuccess ? diasLeidos.Value.Como<int>() : 0;
+        var limite = fecha.AddDays(Math.Max(0, dias));
+        var porLote = db.StockDetails.AsNoTracking().Where(s => s.LotId != null && s.Quantity > 0m);
+        if (bodegaFiltro is int soloBodega) porLote = porLote.Where(s => s.WarehouseId == soloBodega);
+        if (productosFiltro is not null) porLote = porLote.Where(s => productosFiltro.Contains(s.ProductId));
+        var lotes = await porLote
+            .GroupBy(s => new { s.ProductId, s.WarehouseId, LotId = s.LotId!.Value })
+            .Select(g => new { g.Key.ProductId, g.Key.WarehouseId, g.Key.LotId, Cantidad = g.Sum(s => s.Quantity) })
+            .Join(db.Lots.AsNoTracking().Where(l => l.ExpiryDate != null && l.ExpiryDate <= limite), x => x.LotId, l => l.Id,
+                (x, l) => new { x.ProductId, x.WarehouseId, x.Cantidad, l.Code, Vence = l.ExpiryDate!.Value })
+            .ToListAsync(ct);
+        lotes = lotes.Where(x => alcance.IncluyeBodega(x.WarehouseId)).ToList();
+        if (lotes.Count > 0)
+        {
+            var faltanBodegas = lotes.Select(x => x.WarehouseId).Where(w => !bodegas.ContainsKey(w)).Distinct().ToList();
+            foreach (var w in await db.Warehouses.AsNoTracking().IgnoreQueryFilters().Where(w => faltanBodegas.Contains(w.Id)).ToListAsync(ct))
+                bodegas[w.Id] = new { w.Code, w.Behavior };
+            var faltanProductos = lotes.Select(x => x.ProductId).Where(p => !productos.ContainsKey(p)).Distinct().ToList();
+            var otros = await db.Products.AsNoTracking().IgnoreQueryFilters().Where(p => faltanProductos.Contains(p.Id))
+                .Select(p => new { p.Id, p.PublicId, p.Code, p.Name, p.BaseUnitId, Unidad = p.BaseUnit != null ? p.BaseUnit.Code : string.Empty })
+                .ToListAsync(ct);
+            foreach (var p in otros) productos[p.Id] = p;
+            var costos = existencias.ToDictionary(x => (x.ProductId, x.WarehouseId), x => x.AverageCost);
+            foreach (var x in lotes)
+            {
+                if (bodegas[x.WarehouseId].Behavior == WarehouseBehavior.Transit) continue;
+                var p = productos[x.ProductId];
+                var texto = $"{p.Code} · {p.Name}";
+                var bodega = bodegas[x.WarehouseId].Code;
+                var costo = costos.GetValueOrDefault((x.ProductId, x.WarehouseId));
+                var vencido = x.Vence < fecha;
+                var motivo = vencido
+                    ? $"{MotivoVencido}: lote {x.Code} venció el {x.Vence:yyyy-MM-dd}"
+                    : $"{MotivoProximoAVencer}: lote {x.Code} vence el {x.Vence:yyyy-MM-dd}";
+                decimal? indicio = vencido ? Math.Round(costo * x.Cantidad, 2, MidpointRounding.AwayFromZero) : null;
+                filas.Add(($"{texto}|{bodega}|{x.Vence:yyyyMMdd}|{x.Code}", new FilaExportable(
+                    [texto, bodega, x.Cantidad, costo, null, null, null, indicio, motivo, p.PublicId.ToString()], Resaltada: vencido)));
+            }
+        }
+
         var ordenadas = filas.OrderBy(x => x.Orden, StringComparer.Ordinal).Select(x => x.Fila).ToList();
         var total = ordenadas.Sum(r => r.Valores[7] is decimal d ? d : 0m);
         var totales = new FilaExportable(["Total", null, null, null, null, null, null, total, null, null]);
@@ -146,6 +197,7 @@ public sealed class ImpairmentReportQueryHandler(
         [
             "Valor neto realizable = precio de la lista general (sin IVA) − gastos de venta estimados (Informes.DeterioroPorcentajeGastosVenta).",
             "Es un indicio para el cálculo del deterioro (NIC 2 / sección 13): no registra ningún ajuste.",
+            $"Lotes: vencido a la fecha (indicio = su valor al costo) o próximo a vencer dentro de {dias} días (Informes.DiasProximoAVencer, sin valor), sobre la existencia por lote vigente.",
         ]));
     }
 

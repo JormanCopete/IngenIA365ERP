@@ -194,6 +194,12 @@ public sealed class UpdatePosDraftCommandHandler(IApplicationDbContext db, Borra
 public sealed record AddPosLineCommand(Guid DraftPublicId, string? Code = null, Guid? ProductPublicId = null, Guid? UnitPublicId = null, decimal? Quantity = null)
     : IRequest<Result<PosDraftDto>>, IOperacionIdempotente, IOperacionDePuntoDeVenta
 {
+    /// <summary>I6 (T929; nuevo): la serie leída de un producto que la controla (también llega como <see cref="Code"/> leído por el lector).</summary>
+    public string? SerialNumber { get; init; }
+
+    /// <summary>I6 (T929; nuevo): el lote que elige el cajero; sin él, el sugerido (el que vence primero).</summary>
+    public string? LotCode { get; init; }
+
     public Guid OperationKey { get; init; }
 
     public Guid CashSessionPublicId { get; init; }
@@ -224,7 +230,7 @@ public sealed class AddPosLineCommandHandler(IApplicationDbContext db, BorradorD
             Result<(int LineNumber, bool Sumada)> agregada;
             if (!string.IsNullOrWhiteSpace(request.Code))
             {
-                agregada = await PosDraftComun.AgregarPorCodigoAsync(pos, venta, request.Code, request.Quantity, ct);
+                agregada = await PosDraftComun.AgregarPorCodigoAsync(pos, venta, request.Code, request.Quantity, ct, request.LotCode);
             }
             else
             {
@@ -234,7 +240,13 @@ public sealed class AddPosLineCommandHandler(IApplicationDbContext db, BorradorD
                     ? await db.UnitsOfMeasure.AsNoTracking().Where(x => x.PublicId == u).Select(x => new { x.Id, x.PublicId }).FirstOrDefaultAsync(ct)
                     : await db.UnitsOfMeasure.AsNoTracking().Where(x => x.Id == producto.BaseUnitId).Select(x => new { x.Id, x.PublicId }).FirstOrDefaultAsync(ct);
                 if (unidad is null) return Result.Failure<PosDraftDto>(InventoryErrors.UnitNotForProduct(0, producto.Code, string.Empty));
-                agregada = await pos.AgregarAsync(venta, producto.Id, unidad.Id, unidad.PublicId, request.Quantity ?? 1m, ct);
+                int? serie = null;
+                if (Documents.ReglasDeSeguimiento.Normalizar(request.SerialNumber) is { } numero)
+                {
+                    serie = await db.Serials.AsNoTracking().Where(s => s.ProductId == producto.Id && s.SerialNumber == numero).Select(s => (int?)s.Id).FirstOrDefaultAsync(ct);
+                    if (serie is null) return Result.Failure<PosDraftDto>(Catalog.CatalogErrors.SerialNotFound(producto.Code, numero));
+                }
+                agregada = await pos.AgregarAsync(venta, producto.Id, unidad.Id, unidad.PublicId, request.Quantity ?? 1m, ct, serie, request.LotCode);
             }
             if (agregada.IsFailure) return Result.Failure<PosDraftDto>(agregada.Error);
 
@@ -258,6 +270,9 @@ public sealed record UpdatePosLineCommand(Guid DraftPublicId, Guid LinePublicId,
     bool ClearUnitPrice = false)
     : IRequest<Result<PosDraftDto>>, IOperacionIdempotente, IOperacionDePuntoDeVenta
 {
+    /// <summary>I6 (T929; nuevo): cambiar el lote de la línea (el vencido con <c>Bloquear</c> es <c>Inventory.Lot.Expired</c>).</summary>
+    public string? LotCode { get; init; }
+
     public Guid OperationKey { get; init; }
 
     public Guid CashSessionPublicId { get; init; }
@@ -292,6 +307,16 @@ public sealed class UpdatePosLineCommandHandler(IApplicationDbContext db, Borrad
             {
                 var cambiada = await pos.CambiarCantidadAsync(linea, cantidad, ct);
                 if (cambiada.IsFailure) return Result.Failure<PosDraftDto>(cambiada.Error);
+            }
+            // I6 (T929): el lote elegido o, si cambió la cantidad, el sugerido de nuevo.
+            if (request.LotCode is not null || request.Quantity is not null)
+            {
+                var producto = await db.Products.AsNoTracking().FirstAsync(p => p.Id == linea.ProductId, ct);
+                if (producto.TracksLot)
+                {
+                    var lote = await pos.AsignarLoteAsync(linea, producto, request.LotCode, ct);
+                    if (lote.IsFailure) return Result.Failure<PosDraftDto>(lote.Error);
+                }
             }
             var cambio = new CambioDeLinea(request.Quantity, request.UnitPrice, request.Discount, request.ClearUnitPrice);
             var r = await pos.PrecificarAsync(venta, new Dictionary<int, CambioDeLinea> { [linea.LineNumber] = cambio }, resolverListas: false, null, aplicar: true, ct);
@@ -503,12 +528,13 @@ internal static class PosDraftComun
 
     /// <summary>Lee el código («3*» multiplica) y agrega o suma la línea.</summary>
     public static async Task<Result<(int LineNumber, bool Sumada)>> AgregarPorCodigoAsync(BorradorDelPos pos, InventoryDocument venta, string codigo, decimal? cantidad,
-        CancellationToken ct)
+        CancellationToken ct, string? codigoDeLote = null)
     {
         var (veces, limpio) = BorradorDelPos.Multiplicador(codigo, cantidad);
         var leido = await pos.LeerAsync(limpio, ct);
         if (leido.IsFailure) return Result.Failure<(int, bool)>(leido.Error);
-        return await pos.AgregarAsync(venta, leido.Value.Producto.Id, leido.Value.UnitId, leido.Value.UnitPublicId, veces, ct);
+        // I6 (T929): leer una serie agrega una unidad con esa serie.
+        return await pos.AgregarAsync(venta, leido.Value.Producto.Id, leido.Value.UnitId, leido.Value.UnitPublicId, veces, ct, leido.Value.SerialId, codigoDeLote);
     }
 
     /// <summary>El vendedor: una fila viva de <c>INV_Salespeople</c> cuya persona no está eliminada (FR-057). Nulo si no lo es.</summary>

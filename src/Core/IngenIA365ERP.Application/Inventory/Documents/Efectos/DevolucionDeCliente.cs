@@ -53,11 +53,40 @@ public abstract class DevolucionDeCliente(
         // Cada línea entra al costo con que salió su línea original (UnitCost que dejó el kardex de la venta).
         var vinculos = await db.DocumentLineLinks.AsNoTracking()
             .Where(x => !x.IsDeleted && x.DocumentLink!.TargetDocumentId == nota.Id && x.DocumentLink.Kind == DocumentLinkKind.NoteOf && !x.DocumentLink.IsDeleted)
-            .Select(x => new { x.TargetLineId, x.SourceLine!.UnitCost }).ToListAsync(ct);
-        var movimientos = nota.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m && productos.Value.Contains(l.ProductId)).OrderBy(l => l.LineNumber)
-            .Select(l => new MovimientoDeKardex(l, bodega, l.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen,
-                vinculos.FirstOrDefault(v => v.TargetLineId == l.Id)?.UnitCost ?? 0m, LocationId: l.LocationId))
-            .ToList();
+            .Select(x => new { x.TargetLineId, x.SourceLineId, x.SourceLine!.UnitCost, Vendida = x.SourceLine.QuantityBase }).ToListAsync(ct);
+        // I6 (T926, T923): la línea vendida que salió por varias filas —los componentes de un combo, varios lotes— o con lote o serie reingresa
+        // por cada una de ellas, en proporción, al costo con que salió y con su lote y su serie.
+        var fuentes = vinculos.Select(v => v.SourceLineId).Distinct().ToList();
+        var salidas = fuentes.Count == 0
+            ? []
+            : await db.KardexEntries.AsNoTracking().Where(k => fuentes.Contains(k.DocumentLineId) && k.Kind == KardexEntryKind.Exit).OrderBy(k => k.Id).ToListAsync(ct);
+        var movimientos = new List<MovimientoDeKardex>();
+        foreach (var l in nota.Lines.Where(l => !l.IsDeleted && l.QuantityBase > 0m).OrderBy(l => l.LineNumber))
+        {
+            var vinculo = vinculos.FirstOrDefault(v => v.TargetLineId == l.Id);
+            var filas = vinculo is null ? [] : salidas.Where(k => k.DocumentLineId == vinculo.SourceLineId).ToList();
+            var detallada = filas.Count > 1 || filas.Any(f => f.ProductId != l.ProductId || f.LotId is not null || f.SerialId is not null);
+            if (detallada && vinculo!.Vendida > 0m)
+            {
+                var proporcion = l.QuantityBase / vinculo.Vendida;
+                foreach (var f in filas)
+                {
+                    var cantidad = Math.Round(Math.Abs(f.QuantityBase) * proporcion, 4, MidpointRounding.AwayFromZero);
+                    if (cantidad <= 0m) continue;
+                    movimientos.Add(new MovimientoDeKardex(l, bodega, cantidad, ValoracionDelMovimiento.AlCostoDeOrigen, f.UnitCost, LocationId: l.LocationId)
+                    {
+                        ProductId = f.ProductId != l.ProductId ? f.ProductId : null,
+                        LotId = f.LotId,
+                        SerialId = f.SerialId,
+                    });
+                }
+            }
+            else if (productos.Value.Contains(l.ProductId))
+            {
+                movimientos.Add(new MovimientoDeKardex(l, bodega, l.QuantityBase, ValoracionDelMovimiento.AlCostoDeOrigen, vinculo?.UnitCost ?? 0m,
+                    LocationId: l.LocationId));
+            }
+        }
         if (movimientos.Count == 0) return Result.Success();
         var preparado = await registro.PrepararAsync(nota, movimientos, ct);
         if (preparado.IsFailure) return Result.Failure(preparado.Error);

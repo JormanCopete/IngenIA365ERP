@@ -242,6 +242,26 @@ public static class CatalogErrors
     public static Error SerialAlreadyInStock(string productCode, string serialNumber) => new ErrorConDatos("Inventory.Serial.AlreadyInStock",
         $"La serie {serialNumber} del producto {productCode} ya está en existencia: no entra dos veces.", new { productCode, serialNumber });
 
+    /// <summary>
+    /// I6 (T923, T908; FR-026): vender un lote vencido con <c>Ventas.LoteVencido = Bloquear</c> —el lote elegido, o el único que queda
+    /// cuando los demás no alcanzan—. La baja por vencimiento sí lo saca. (nuevo)
+    /// </summary>
+    public static Error LotExpired(string productCode, string lotCode, DateOnly? expiryDate) => new ErrorConDatos(Domain.Inventory.Tracking.SelectorDeLotes.CodigoLoteVencido,
+        $"El lote {lotCode} del producto {productCode} venció{(expiryDate is { } f ? $" el {f:yyyy-MM-dd}" : string.Empty)}: no se vende (Ventas.LoteVencido = Bloquear). Sáquelo con una baja.",
+        new { productCode, lotCode, expiryDate });
+
+    /// <summary>I6 (T923): una salida o una devolución cita un lote que el producto no tiene. (nuevo)</summary>
+    public static Error LotNotFound(string productCode, string lotCode) => new ErrorConDatos("Inventory.Lot.NotFound",
+        $"El producto {productCode} no tiene el lote {lotCode}.", new { productCode, lotCode });
+
+    /// <summary>I6 (T923, T908; data-model §13): sacar una serie que no está en existencia en esa bodega. (nuevo)</summary>
+    public static Error SerialNotInStock(string productCode, string serialNumber) => new ErrorConDatos("Inventory.Serial.NotInStock",
+        $"La serie {serialNumber} del producto {productCode} no está en existencia en esta bodega: no puede salir.", new { productCode, serialNumber });
+
+    /// <summary>I6 (T923): una salida cita una serie que el producto no tiene. (nuevo)</summary>
+    public static Error SerialNotFound(string productCode, string serialNumber) => new ErrorConDatos("Inventory.Serial.NotFound",
+        $"El producto {productCode} no tiene la serie {serialNumber}.", new { productCode, serialNumber });
+
     private static Error NoExiste(string codigo, string que, string? cual) =>
         new(codigo, cual is null ? $"{que} no existe." : $"{que} «{cual}» no existe.");
 }

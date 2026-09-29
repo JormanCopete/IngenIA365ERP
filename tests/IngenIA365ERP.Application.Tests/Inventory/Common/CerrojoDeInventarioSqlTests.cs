@@ -69,6 +69,19 @@ public class CerrojoDeInventarioSqlTests
             .Should().Be("SELECT \"Id\" FROM \"dbo\".\"INV_DocumentSequences\" WHERE \"Id\" IN (4) ORDER BY \"Id\" FOR UPDATE;");
     }
 
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Las_series_se_bloquean_en_exclusivo_por_Id_despues_de_los_detalles(DatabaseProvider motor)
+    {
+        // I6, T925: la fila de la serie la creó el borrador (el índice único es el árbitro); aquí sólo se bloquea, al final del paso 4.
+        var sentencias = SqlDelCerrojo.Sentencias(motor, Pedido with { Series = [15, 8, 15] }, "Ana", Ahora);
+
+        sentencias.Select(s => s.Tabla).Should().EndWith(["INV_StockDetails", "INV_StockDetails", "INV_Serials"]);
+        sentencias[^1].Sql.Should().Be(motor == DatabaseProvider.PostgreSql
+            ? "SELECT \"Id\" FROM \"dbo\".\"INV_Serials\" WHERE \"Id\" IN (8, 15) ORDER BY \"Id\" FOR UPDATE;"
+            : "SELECT [Id] FROM [dbo].[INV_Serials] WITH (UPDLOCK, ROWLOCK, HOLDLOCK) WHERE [Id] IN (8, 15) ORDER BY [Id];");
+    }
+
     [Fact]
     public void La_resolucion_fiscal_se_bloquea_en_exclusivo_al_final_como_la_secuencia()
     {

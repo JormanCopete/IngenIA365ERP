@@ -189,6 +189,30 @@ public sealed class VerificacionDeIntegridad(IApplicationDbContext db, IngenIA36
             }
         }
 
+        // ------------------------------------------------------------------------- series (I6, T924) --
+        // data-model §1.11, §3.7: una serie está en la bodega (y la ubicación) donde su kardex suma una unidad; en ninguna, fuera de
+        // existencia. La proyección de INV_Serials tiene que decir lo mismo.
+        var seriesKardex = db.KardexEntries.AsNoTracking().Where(k => k.SerialId != null && k.Kind != KardexEntryKind.CostAdjustment);
+        if (productos is not null) seriesKardex = seriesKardex.Where(k => productos.Contains(k.ProductId));
+        var porSerie = await seriesKardex.GroupBy(k => new { SerialId = k.SerialId!.Value, k.WarehouseId, k.LocationId })
+            .Select(g => new { g.Key.SerialId, g.Key.WarehouseId, g.Key.LocationId, Cantidad = g.Sum(k => k.QuantityBase) })
+            .ToListAsync(ct);
+        var seriesReales = db.Serials.AsNoTracking().AsQueryable();
+        if (productos is not null) seriesReales = seriesReales.Where(s => productos.Contains(s.ProductId));
+        var realesSeries = await seriesReales.Select(s => new { s.Id, s.ProductId, s.InStockWarehouseId, s.InStockLocationId }).ToListAsync(ct);
+        foreach (var serie in realesSeries)
+        {
+            var donde = porSerie.Where(x => x.SerialId == serie.Id && x.Cantidad > 0m).OrderByDescending(x => x.Cantidad).FirstOrDefault();
+            var bodegaEsperada = donde?.WarehouseId;
+            if (bodegas is not null && !(bodegaEsperada is int be && bodegas.Contains(be)) && !(serie.InStockWarehouseId is int br && bodegas.Contains(br))) continue;
+            if (serie.InStockWarehouseId != bodegaEsperada)
+                incidentes.Add(new IncidenteDeKardex(TiposDeIncidente.Serial, serie.ProductId, bodegaEsperada ?? serie.InStockWarehouseId, donde?.LocationId, null,
+                    "InStockWarehouseId", bodegaEsperada ?? 0, serie.InStockWarehouseId ?? 0));
+            else if (donde is not null && serie.InStockLocationId != donde.LocationId)
+                incidentes.Add(new IncidenteDeKardex(TiposDeIncidente.Serial, serie.ProductId, bodegaEsperada, donde.LocationId, null,
+                    "InStockLocationId", donde.LocationId, serie.InStockLocationId ?? 0));
+        }
+
         return new ResultadoDeVerificacion(reales.Count, realesDetalle.Count, realesCosto.Count, incidentes) { CostLayers = realesCapas.Count };
     }
 }

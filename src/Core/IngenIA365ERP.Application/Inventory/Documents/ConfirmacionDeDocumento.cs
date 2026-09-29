@@ -66,7 +66,8 @@ public sealed class ConfirmacionDeDocumento(
     MensajesDelDocumento? mensajesDelDocumento = null,
     IEnumerable<IAvisoAlConfirmar>? avisosAlConfirmar = null,
     Kardex.RegistroDeKardex? registroDeKardex = null,
-    EmisionDeInventario? emisionDeInventario = null)
+    EmisionDeInventario? emisionDeInventario = null,
+    ReglasDeSeguimiento? seguimiento = null)
 {
     private readonly MensajesDelDocumento _mensajes = mensajesDelDocumento ?? new MensajesDelDocumento(db, parametros);
 
@@ -118,6 +119,15 @@ public sealed class ConfirmacionDeDocumento(
 
         var reglas = await efecto.ValidarAsync(contexto, ct);
         if (reglas.IsFailure) return Falla(reglas.Error);
+
+        // I6 (T923): lote, vencimiento y serie fuera del cerrojo (el registro los repite dentro); los avisos van en warnings[].
+        IReadOnlyList<Error> avisosDeSeguimiento = [];
+        if (seguimiento is not null)
+        {
+            var deSeguimiento = await seguimiento.ValidarAsync(contexto, ct);
+            if (deSeguimiento.IsFailure) return Falla(deSeguimiento.Error);
+            avisosDeSeguimiento = deSeguimiento.Value;
+        }
 
         // --------------------------------------------------------------------------------------- 2. aprobación --
         // I3 (T618): la diferencia de arqueo dentro de la tolerancia se confirma sin aprobación y el cajero nunca la aprueba.
@@ -292,6 +302,7 @@ public sealed class ConfirmacionDeDocumento(
         // I3 (T611): los avisos de la clase después del guardado (la venta bajo costo con «Alertar»); nunca bloquean.
         foreach (var aviso in avisosAlConfirmar ?? []) avisos = [.. avisos, .. await aviso.AvisarAsync(documento, ct)];
         if (validacion.Outcome == PrevalidationOutcome.NoResponse) avisos = [.. validacion.Warnings, .. avisos];
+        if (avisosDeSeguimiento.Count > 0) avisos = [.. avisosDeSeguimiento.Select(ReglasDelDocumento.ComoAviso), .. avisos];
 
         var mensajes = await vista.TieneAsync(PermisosDeGrupo.VerMensajes, ct)
             ? (await vista.MensajesAsync(documento.PublicId, ct)).Select(x => new MensajeEmitidoDto(x.MessagePublicId, x.Type, x.Destination, x.DeliveryStatus)).ToList()

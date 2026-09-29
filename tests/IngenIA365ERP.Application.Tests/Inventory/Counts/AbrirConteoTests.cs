@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Application.Tests.Inventory.Counts;
 /// <c>INV_StockDetails</c> del alcance (todo, categoría, ubicación, selección) a <c>INV_CountSnapshotLines</c> con el costo de su ámbito,
 /// guarda <c>CountSnapshotAt</c> y <c>CountSnapshotKardexEntryId</c> sin número, toma la bodega en exclusivo y sella
 /// <c>Conteo.BloquearMovimientos</c>; un producto ya en otro conteo abierto de la bodega es <c>Inventory.Count.Overlaps</c>, un alcance
-/// sin existencias <c>.EmptyScope</c> y la clase ABC <c>.ScopeNotAvailable</c>.
+/// sin existencias <c>.EmptyScope</c>. La clase ABC (I6, T930) la prueba <c>ConteoPorClaseAbcTests</c>.
 /// </summary>
 public class AbrirConteoTests
 {
@@ -99,17 +99,13 @@ public class AbrirConteoTests
     }
 
     [Fact]
-    public async Task Un_alcance_sin_existencias_es_EmptyScope_y_la_clase_ABC_ScopeNotAvailable()
+    public async Task Un_alcance_sin_existencias_es_EmptyScope()
     {
         var c = await ConteosDePrueba.CrearAsync();
         await c.EntradaAsync(c.K.P1, 10m, 1_000m);
 
         var vacio = await c.DefinirAsync(c.Definicion(CountScope.Location, ubicaciones: [c.A01.PublicId]));
         (await c.AbrirAsync(vacio.Value.PublicId)).Error.Code.Should().Be("Inventory.Count.EmptyScope");
-
-        var abc = await c.DefinirAsync(c.Definicion(CountScope.AbcClass));
-        abc.IsSuccess.Should().BeTrue("la definición la admite; la clase ABC llega en I6");
-        (await c.AbrirAsync(abc.Value.PublicId)).Error.Code.Should().Be("Inventory.Count.ScopeNotAvailable");
     }
 
     [Fact]

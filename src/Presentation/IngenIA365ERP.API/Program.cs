@@ -235,6 +235,9 @@ try
         new IngenIA365ERP.Application.Inventory.Sales.Reservas.TareaDeReservasVencidas());
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Inventory.Sales.Shipments.TareaDeRemisionesSinFacturar());
+    // Feature 012 (T932, I6): la alerta diaria de los lotes con existencia proximos a vencer (no corre antes de I6).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Catalog.Lots.TareaDeLotesProximosAVencer());
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

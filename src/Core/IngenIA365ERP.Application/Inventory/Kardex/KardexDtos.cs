@@ -62,6 +62,9 @@ public static class TiposDeIncidente
     public const string StockDetail = nameof(StockDetail);
     public const string CostState = nameof(CostState);
     public const string CostLayer = nameof(CostLayer);
+
+    /// <summary>I6 (T924): la proyección de una serie (<c>INV_Serials.InStockWarehouseId</c>) contra su kardex. (nuevo)</summary>
+    public const string Serial = nameof(Serial);
 }
 
 /// <summary>Una referencia corta de un producto o una bodega. (nuevo)</summary>

@@ -40,7 +40,35 @@ public sealed record MovimientoDeKardex(
     KardexEntry? Origen = null,
     bool EsAnulacion = false,
     int? LocationId = null,
-    MovimientoDeKardex? AlCostoDe = null);
+    MovimientoDeKardex? AlCostoDe = null)
+{
+    /// <summary>
+    /// I6 (T926; nuevo): el producto que se mueve cuando no es el de la línea —un componente de un combo o de un ensamble—. Nulo = el de
+    /// la línea.
+    /// </summary>
+    public int? ProductId { get; init; }
+
+    /// <summary>I6 (T923, T924; nuevo): el lote que se mueve cuando no es el de la línea ni el del origen (el reparto FEFO de una salida).</summary>
+    public int? LotId { get; init; }
+
+    /// <summary>I6 (T923, T924; nuevo): la serie que se mueve cuando no es la de la línea ni la del origen.</summary>
+    public int? SerialId { get; init; }
+
+    /// <summary>
+    /// I6 (T928; nuevo): la entrada del kit de un ensamble, al costo de lo que consumieron <b>estas salidas de esta misma llamada</b>
+    /// (Σ de su valor ÷ la cantidad, con el residuo por <c>Redondeo</c>: <c>MotorDeCosteo.EntradaDeEnsamble</c>). Va después de ellas.
+    /// </summary>
+    public IReadOnlyList<MovimientoDeKardex>? AlCostoConsumidoDe { get; init; }
+
+    /// <summary>El producto que se mueve.</summary>
+    public int Producto => ProductId ?? Linea.ProductId;
+
+    /// <summary>El lote que se mueve: el propio, el de la fila de origen o el de la línea (sólo si el producto es el de la línea).</summary>
+    public int? Lote => LotId ?? Origen?.LotId ?? (ProductId is null ? Linea.LotId : null);
+
+    /// <summary>La serie que se mueve: la propia, la de la fila de origen o la de la línea (sólo si el producto es el de la línea).</summary>
+    public int? Serie => SerialId ?? Origen?.SerialId ?? (ProductId is null ? Linea.SerialId : null);
+}
 
 /// <summary>
 /// Los parámetros con que el registro valora a la fecha de operación: <c>Costeo.Metodo</c>, <c>Costeo.Ambito</c>,
@@ -233,6 +261,46 @@ public sealed class RegistroDeKardex(
         }).ToList();
     }
 
+    /// <summary>
+    /// Filas provisionales de unos <b>movimientos</b> (I6, T926): una por movimiento, en su producto —el componente de un combo— y su
+    /// bodega, al promedio vigente leído sin bloqueo (o al costo que traen). Como <see cref="FilasProvisionalesAsync"/>, nunca se agregan al
+    /// contexto: sólo alimentan la validación previa contable. (nuevo)
+    /// </summary>
+    public async Task<IReadOnlyList<KardexEntry>> FilasProvisionalesDeAsync(InventoryDocument documento, IReadOnlyList<MovimientoDeKardex> movimientos, CancellationToken ct)
+    {
+        if (movimientos.Count == 0) return [];
+        var productos = movimientos.Select(m => m.Producto).Distinct().ToList();
+        var estados = await db.CostStates.AsNoTracking().Where(c => productos.Contains(c.ProductId)).ToListAsync(ct);
+        var filas = new Dictionary<MovimientoDeKardex, KardexEntry>(ReferenceEqualityComparer.Instance);
+        foreach (var m in movimientos)
+        {
+            var estado = estados.FirstOrDefault(e => e.ProductId == m.Producto && e.ScopeWarehouseId == m.WarehouseId)
+                         ?? estados.FirstOrDefault(e => e.ProductId == m.Producto && e.ScopeWarehouseId == 0);
+            var vigente = estado is null ? 0m : (estado.Quantity > 0m ? estado.AverageCost : estado.LastUnitCost);
+            var unitario = m.CostoUnitario is decimal traido and > 0m ? traido : vigente;
+            decimal? total = null;
+            if (m.AlCostoConsumidoDe is { Count: > 0 } consumidas)
+            {
+                // El kit de un ensamble (T928): lo que consumieron sus componentes en esta misma lista.
+                total = Math.Abs(consumidas.Where(filas.ContainsKey).Sum(c => filas[c].TotalCost));
+                unitario = m.QuantityBase == 0m ? 0m : Redondeo.CostoUnitario(total.Value / Math.Abs(m.QuantityBase));
+            }
+            filas[m] = new KardexEntry
+            {
+                DocumentId = documento.Id,
+                DocumentLineId = m.Linea.Id,
+                ProductId = m.Producto,
+                WarehouseId = m.WarehouseId,
+                OperationDate = documento.OperationDate,
+                Kind = m.QuantityBase < 0m ? KardexEntryKind.Exit : KardexEntryKind.Entry,
+                QuantityBase = m.QuantityBase,
+                UnitCost = unitario,
+                TotalCost = total ?? Math.Round(m.QuantityBase * unitario, 2, MidpointRounding.AwayFromZero),
+            };
+        }
+        return movimientos.Select(m => filas[m]).ToList();
+    }
+
     /// <summary>Lo que hay que bloquear y el valor al costo estimado (para la política de aprobación), sin escribir nada.</summary>
     public async Task<Result<PreparacionDelRegistro>> PrepararAsync(InventoryDocument documento, IReadOnlyList<MovimientoDeKardex> movimientos, CancellationToken ct)
     {
@@ -242,13 +310,13 @@ public sealed class RegistroDeKardex(
         var ubicaciones = await UbicacionesPorDefectoAsync(movimientos, ct);
         if (ubicaciones.IsFailure) return Result.Failure<PreparacionDelRegistro>(ubicaciones.Error);
 
-        var productos = movimientos.Select(m => m.Linea.ProductId).Distinct().ToList();
+        var productos = movimientos.Select(m => m.Producto).Distinct().ToList();
         var estados = await db.CostStates.AsNoTracking().Where(c => productos.Contains(c.ProductId)).ToListAsync(ct);
 
         var valor = 0m;
         foreach (var m in movimientos)
         {
-            var estado = estados.FirstOrDefault(e => e.ProductId == m.Linea.ProductId && e.ScopeWarehouseId == p.AmbitoDe(m.WarehouseId));
+            var estado = estados.FirstOrDefault(e => e.ProductId == m.Producto && e.ScopeWarehouseId == p.AmbitoDe(m.WarehouseId));
             var vigente = estado is null ? 0m : (estado.Quantity > 0m ? estado.AverageCost : estado.LastUnitCost);
             valor += Math.Abs(m.QuantityBase) * (m.CostoUnitario ?? vigente);
         }
@@ -256,10 +324,14 @@ public sealed class RegistroDeKardex(
         var cerrojo = new PedidoDeCerrojo
         {
             Bodegas = movimientos.Select(m => m.WarehouseId).Distinct().ToList(),
-            EstadosDeCosto = movimientos.Select(m => new ClaveDeEstadoDeCosto(m.Linea.ProductId, p.AmbitoDe(m.WarehouseId), p.Metodo)).Distinct().ToList(),
-            Existencias = movimientos.Select(m => new ClaveDeExistencia(m.Linea.ProductId, m.WarehouseId)).Distinct().ToList(),
-            Detalles = movimientos.Select(m => new ClaveDeDetalleDeExistencia(m.Linea.ProductId, m.WarehouseId, UbicacionDe(m, ubicaciones.Value), null))
+            EstadosDeCosto = movimientos.Select(m => new ClaveDeEstadoDeCosto(m.Producto, p.AmbitoDe(m.WarehouseId), p.Metodo)).Distinct().ToList(),
+            Existencias = movimientos.Select(m => new ClaveDeExistencia(m.Producto, m.WarehouseId)).Distinct().ToList(),
+            // I6 (T924): el detalle del lote que se mueve (el reparto FEFO de una salida sin lote se hace dentro del cerrojo, sobre
+            // filas que ya existen y que protege la fila de existencia del producto en la bodega).
+            Detalles = movimientos.Select(m => new ClaveDeDetalleDeExistencia(m.Producto, m.WarehouseId, UbicacionDe(m, ubicaciones.Value), m.Lote))
                 .Distinct().ToList(),
+            // I6 (T925): las series que se mueven, por Id y en exclusivo, después de los detalles.
+            Series = movimientos.Select(m => m.Serie).OfType<int>().Distinct().ToList(),
         };
         return Result.Success(new PreparacionDelRegistro(cerrojo, Math.Round(valor, 2, MidpointRounding.AwayFromZero)));
     }
@@ -282,14 +354,26 @@ public sealed class RegistroDeKardex(
         var porDefecto = await UbicacionesPorDefectoAsync(movimientos, ct);
         if (porDefecto.IsFailure) return Result.Failure<RegistroHecho>(porDefecto.Error);
 
+        // I6 (T923, T924): lote y serie dentro del cerrojo —el reparto FEFO de las salidas sin lote, lo que hereda la entrada que viaja al
+        // costo de su salida, las reglas de la serie—. Sin productos con seguimiento, los movimientos siguen iguales.
+        var seguimiento = await SeguimientoAsync(documento, movimientos, porDefecto.Value, ct);
+        if (seguimiento.IsFailure)
+        {
+            _simulando = false;
+            return Result.Failure<RegistroHecho>(seguimiento.Error);
+        }
+        movimientos = seguimiento.Value.Movimientos;
+        var series = seguimiento.Value.Series;
+
         // Las filas bloqueadas, seguidas (el cerrojo ya las creó; si falta alguna, se crea al escribir).
-        var productos = movimientos.Select(m => m.Linea.ProductId).Distinct().ToList();
+        var productos = movimientos.Select(m => m.Producto).Distinct().ToList();
         var costos = (await db.CostStates.Where(c => productos.Contains(c.ProductId)).ToListAsync(ct))
             .ToDictionary(c => (c.ProductId, c.ScopeWarehouseId));
         var existencias = (await db.StockBalances.Where(s => productos.Contains(s.ProductId) && bodegas.Contains(s.WarehouseId)).ToListAsync(ct))
             .ToDictionary(s => (s.ProductId, s.WarehouseId));
-        var detalles = (await db.StockDetails.Where(s => productos.Contains(s.ProductId) && bodegas.Contains(s.WarehouseId) && s.LotId == null).ToListAsync(ct))
-            .ToDictionary(s => (s.ProductId, s.WarehouseId, s.LocationId));
+        // I6 (T924): la existencia por ubicación y lote (lote nulo en los productos sin seguimiento, como hasta I5).
+        var detalles = (await db.StockDetails.Where(s => productos.Contains(s.ProductId) && bodegas.Contains(s.WarehouseId)).ToListAsync(ct))
+            .ToDictionary(s => (s.ProductId, s.WarehouseId, s.LocationId, s.LotId));
 
         // PEPS (I5, T836): las capas vivas de los productos, seguidas (las protege la fila de INV_CostStates de su ámbito, ya bloqueada),
         // y las de los consumos que devuelve la anulación de una salida (aunque ya estén agotadas).
@@ -335,18 +419,25 @@ public sealed class RegistroDeKardex(
         });
         var fisicos = existencias.ToDictionary(e => e.Key, e => (Fisico: e.Value.Physical, Reservado: e.Value.Reserved));
         var porUbicacion = detalles.ToDictionary(d => d.Key, d => d.Value.Quantity);
+        // Lo que hay en la ubicación: la del lote que se mueve o, en una salida sin lote de un producto con lote (no alcanzó el reparto), la
+        // suma de sus lotes.
+        decimal EnUbicacion(MovimientoDeKardex m, int ubicacion) =>
+            m.Lote is null && seguimiento.Value.ConLote.Contains(m.Producto)
+                ? porUbicacion.Where(x => x.Key.ProductId == m.Producto && x.Key.WarehouseId == m.WarehouseId && x.Key.LocationId == ubicacion).Sum(x => x.Value)
+                : porUbicacion.GetValueOrDefault((m.Producto, m.WarehouseId, ubicacion, m.Lote));
         var plan = new List<(MovimientoDeKardex Mov, int Ubicacion, int Ambito, ResultadoDeCosteo Costo)>(movimientos.Count);
         var faltantes = new List<(MovimientoDeKardex Mov, int Ubicacion, decimal Disponible, bool PorUbicacion)>();
 
         foreach (var m in movimientos)
         {
-            var producto = m.Linea.ProductId;
+            var producto = m.Producto;
             var ubicacion = UbicacionDe(m, porDefecto.Value);
             var ambito = p.AmbitoDe(m.WarehouseId);
             var negativo = p.NegativoPermitido(m.WarehouseId);
 
             var (fisico, reservado) = fisicos.GetValueOrDefault((producto, m.WarehouseId));
-            var enUbicacion = porUbicacion.GetValueOrDefault((producto, m.WarehouseId, ubicacion));
+            var clave = (producto, m.WarehouseId, ubicacion, m.Lote);
+            var enUbicacion = EnUbicacion(m, ubicacion);
             if (m.QuantityBase < 0m && !negativo)
             {
                 var disponible = fisico - reservado;
@@ -361,7 +452,7 @@ public sealed class RegistroDeKardex(
             {
                 // El ámbito se recalcula entero con el retroactivo, después de esta pasada.
                 fisicos[(producto, m.WarehouseId)] = (fisico + m.QuantityBase, reservado);
-                porUbicacion[(producto, m.WarehouseId, ubicacion)] = enUbicacion + m.QuantityBase;
+                porUbicacion[clave] = porUbicacion.GetValueOrDefault(clave) + m.QuantityBase;
                 retroactivos.Add((m, ubicacion, ambito));
                 continue;
             }
@@ -380,13 +471,24 @@ public sealed class RegistroDeKardex(
                 (valoracion, costoQueTrae) = (ValoracionDelMovimiento.AlCostoDeOrigen, CostoUnitarioDe(previa.Costo));
                 mismoAmbitoQueSuSalida = previa.Ambito == ambito;
             }
-            var costo = MotorDeCosteo.Aplicar(estado,
-                new MovimientoDeCosto(m.QuantityBase, valoracion, costoQueTrae, origen, m.EsAnulacion)
-                {
-                    OperationDate = documento.OperationDate,
-                    ConsumosDelOrigen = m.EsAnulacion && m.Origen is { Id: > 0 } o && consumosDelOrigen.TryGetValue(o.Id, out var devueltos) ? devueltos : [],
-                },
-                new ParametrosDeCosteo(p.Metodo, p.Montos, negativo));
+            ResultadoDeCosteo costo;
+            if (m.AlCostoConsumidoDe is { Count: > 0 } consumidas)
+            {
+                // I6 (T928): el kit entra por exactamente lo que salió de sus componentes en esta llamada (con el residuo visible).
+                if (faltantes.Any(f => consumidas.Any(c => ReferenceEquals(f.Mov, c)))) continue;
+                var consumido = Math.Abs(plan.Where(x => consumidas.Any(c => ReferenceEquals(x.Mov, c))).Sum(x => x.Costo.Valor));
+                costo = MotorDeCosteo.EntradaDeEnsamble(estado, m.QuantityBase, consumido, new ParametrosDeCosteo(p.Metodo, p.Montos, negativo), documento.OperationDate);
+            }
+            else
+            {
+                costo = MotorDeCosteo.Aplicar(estado,
+                    new MovimientoDeCosto(m.QuantityBase, valoracion, costoQueTrae, origen, m.EsAnulacion)
+                    {
+                        OperationDate = documento.OperationDate,
+                        ConsumosDelOrigen = m.EsAnulacion && m.Origen is { Id: > 0 } o && consumosDelOrigen.TryGetValue(o.Id, out var devueltos) ? devueltos : [],
+                    },
+                    new ParametrosDeCosteo(p.Metodo, p.Montos, negativo));
+            }
             if (!costo.Admitido)
             {
                 faltantes.Add((m, ubicacion, costo.Rechazo!.Disponible, false));
@@ -397,13 +499,13 @@ public sealed class RegistroDeKardex(
 
             estados[(producto, ambito)] = costo.Estado;
             fisicos[(producto, m.WarehouseId)] = (fisico + m.QuantityBase, reservado);
-            porUbicacion[(producto, m.WarehouseId, ubicacion)] = enUbicacion + m.QuantityBase;
+            porUbicacion[clave] = porUbicacion.GetValueOrDefault(clave) + m.QuantityBase;
             plan.Add((m, ubicacion, ambito, costo));
         }
 
         var recalculados = new List<(MovimientoDeKardex Primero, int Ambito, ResultadoRetroactivo Resultado, IReadOnlyDictionary<long, KardexEntry> Afectadas)>();
         var impactos = new List<ImpactoPorAmbito>();
-        foreach (var grupo in retroactivos.GroupBy(r => (r.Mov.Linea.ProductId, r.Ambito)))
+        foreach (var grupo in retroactivos.GroupBy(r => (ProductId: r.Mov.Producto, r.Ambito)))
         {
             var deLaClave = grupo.ToList();
             var (pedido, afectadas) = await PedidoRetroactivoAsync(documento, grupo.Key.ProductId, grupo.Key.Ambito, deLaClave.Select(r => r.Mov).ToList(),
@@ -467,11 +569,11 @@ public sealed class RegistroDeKardex(
                 {
                     DocumentId = documento.Id,
                     DocumentLineId = m.Linea.Id,
-                    ProductId = m.Linea.ProductId,
+                    ProductId = m.Producto,
                     WarehouseId = m.WarehouseId,
                     LocationId = ubicacion,
-                    LotId = m.Linea.LotId,
-                    SerialId = m.Linea.SerialId,
+                    LotId = m.Lote,
+                    SerialId = m.Serie,
                     OperationDate = propuesta.OperationDate ?? documento.OperationDate,
                     RegisteredAt = ahora,
                     Kind = propuesta.Kind,
@@ -490,7 +592,7 @@ public sealed class RegistroDeKardex(
                 propuestas[propuesta] = fila;
                 filas.Add(fila);
 
-                var clave = (m.Linea.ProductId, m.WarehouseId);
+                var clave = (m.Producto, m.WarehouseId);
                 if (!fechas.TryGetValue(clave, out var ultima) || fila.OperationDate > ultima) fechas[clave] = fila.OperationDate;
             }
             escritos.Add(new MovimientoEscrito(m, ubicacion, filas, costo.Explicacion));
@@ -510,7 +612,7 @@ public sealed class RegistroDeKardex(
                     {
                         DocumentId = documento.Id,
                         DocumentLineId = primero.Linea.Id,
-                        ProductId = primero.Linea.ProductId,
+                        ProductId = primero.Producto,
                         WarehouseId = afectada.WarehouseId,
                         LocationId = afectada.LocationId,
                         OperationDate = propuesta.OperationDate ?? afectada.OperationDate,
@@ -533,7 +635,7 @@ public sealed class RegistroDeKardex(
 
         // PEPS (T836): las capas que nacieron, los consumos y lo que queda de cada capa según el estado final del ámbito.
         if (p.Metodo == CostMethod.Fifo)
-            EscribirCapas(plan.Select(x => (x.Mov.Linea.ProductId, x.Ambito, x.Costo)).ToList(), estados, capasPorEntrada, propuestas, documento.OperationDate);
+            EscribirCapas(plan.Select(x => (x.Mov.Producto, x.Ambito, x.Costo)).ToList(), estados, capasPorEntrada, propuestas, documento.OperationDate);
 
         if (ajustesRetroactivos.Count > 0)
         {
@@ -542,7 +644,7 @@ public sealed class RegistroDeKardex(
         }
 
         // Proyecciones: el estado final de cada ámbito, la existencia de cada bodega y ubicación tocada.
-        foreach (var (producto, ambito) in plan.Select(x => (x.Mov.Linea.ProductId, x.Ambito)).Distinct())
+        foreach (var (producto, ambito) in plan.Select(x => (x.Mov.Producto, x.Ambito)).Distinct())
         {
             if (!costos.TryGetValue((producto, ambito), out var fila))
             {
@@ -557,7 +659,7 @@ public sealed class RegistroDeKardex(
             fila.AverageCost = final.AverageCost;
             fila.LastUnitCost = final.LastUnitCost;
         }
-        foreach (var (producto, bodega) in plan.Select(x => (x.Mov.Linea.ProductId, x.Mov.WarehouseId)).Distinct())
+        foreach (var (producto, bodega) in plan.Select(x => (x.Mov.Producto, x.Mov.WarehouseId)).Distinct())
         {
             if (!existencias.TryGetValue((producto, bodega), out var fila))
             {
@@ -569,15 +671,23 @@ public sealed class RegistroDeKardex(
             var fecha = fechas[(producto, bodega)];
             if (fila.LastMovementDate is null || fecha > fila.LastMovementDate) fila.LastMovementDate = fecha;
         }
-        foreach (var (producto, bodega, ubicacion) in plan.Select(x => (x.Mov.Linea.ProductId, x.Mov.WarehouseId, x.Ubicacion)).Distinct())
+        foreach (var (producto, bodega, ubicacion, lote) in plan.Select(x => (x.Mov.Producto, x.Mov.WarehouseId, x.Ubicacion, x.Mov.Lote)).Distinct())
         {
-            if (!detalles.TryGetValue((producto, bodega, ubicacion), out var fila))
+            if (!detalles.TryGetValue((producto, bodega, ubicacion, lote), out var fila))
             {
-                fila = new StockDetail { ProductId = producto, WarehouseId = bodega, LocationId = ubicacion };
+                fila = new StockDetail { ProductId = producto, WarehouseId = bodega, LocationId = ubicacion, LotId = lote };
                 db.StockDetails.Add(fila);
-                detalles[(producto, bodega, ubicacion)] = fila;
+                detalles[(producto, bodega, ubicacion, lote)] = fila;
             }
-            fila.Quantity = porUbicacion[(producto, bodega, ubicacion)];
+            fila.Quantity = porUbicacion[(producto, bodega, ubicacion, lote)];
+        }
+
+        // I6 (T924): la proyección de la serie —dónde está— en el orden de los movimientos (sale del origen, entra al tránsito).
+        foreach (var (m, ubicacion, _, _) in plan)
+        {
+            if (m.Serie is not int serieId || !series.TryGetValue(serieId, out var serie)) continue;
+            serie.InStockWarehouseId = m.QuantityBase > 0m ? m.WarehouseId : null;
+            serie.InStockLocationId = m.QuantityBase > 0m ? ubicacion : null;
         }
 
         // La línea del documento: su costo (el valor de lo que movió) y la ubicación por defecto si no traía.
@@ -586,9 +696,12 @@ public sealed class RegistroDeKardex(
             var primero = porLinea.First();
             var linea = porLinea.Key;
             linea.LocationId ??= primero.LocationId;
-            var principales = primero.Lineas.Where(l => l.Kind != KardexEntryKind.CostAdjustment).ToList();
+            // I6: los movimientos de la línea en el mismo sentido que el primero —los lotes de una salida repartida, los componentes de un
+            // combo—; el otro sentido (la entrada al tránsito o a la otra ubicación) no es el costo de la línea.
+            var mismoSentido = porLinea.Where(e => Math.Sign(e.Movimiento.QuantityBase) == Math.Sign(primero.Movimiento.QuantityBase)).ToList();
+            var principales = mismoSentido.SelectMany(e => e.Lineas).Where(l => l.Kind != KardexEntryKind.CostAdjustment).ToList();
             var total = Math.Abs(principales.Sum(l => l.TotalCost));
-            var cantidad = Math.Abs(principales.Sum(l => l.QuantityBase));
+            var cantidad = mismoSentido.Any(e => e.Movimiento.ProductId is not null) ? linea.QuantityBase : Math.Abs(principales.Sum(l => l.QuantityBase));
             linea.TotalCost = total;
             linea.UnitCost = principales.Count == 1 ? principales[0].UnitCost
                 : cantidad == 0m ? 0m : Redondeo.CostoUnitario(total / cantidad);
@@ -820,7 +933,7 @@ public sealed class RegistroDeKardex(
     private async Task<Result<HashSet<(int ProductId, int Ambito)>>> AmbitosRetroactivosAsync(
         InventoryDocument documento, IReadOnlyList<MovimientoDeKardex> movimientos, ParametrosDelKardex p, CancellationToken ct)
     {
-        var claves = movimientos.Select(m => (m.Linea.ProductId, Ambito: p.AmbitoDe(m.WarehouseId))).ToHashSet();
+        var claves = movimientos.Select(m => (ProductId: m.Producto, Ambito: p.AmbitoDe(m.WarehouseId))).ToHashSet();
         var productos = claves.Select(c => c.ProductId).Distinct().ToList();
         var fecha = documento.OperationDate;
         var posteriores = (await db.KardexEntries.AsNoTracking()
@@ -838,7 +951,7 @@ public sealed class RegistroDeKardex(
             .ToList();
         if (posteriores.Count == 0) return Result.Success(new HashSet<(int, int)>());
 
-        var primero = movimientos.First(m => posteriores.Any(x => x.ProductId == m.Linea.ProductId && x.CostScopeWarehouseId == p.AmbitoDe(m.WarehouseId)));
+        var primero = movimientos.First(m => posteriores.Any(x => x.ProductId == m.Producto && x.CostScopeWarehouseId == p.AmbitoDe(m.WarehouseId)));
         var ambito = p.AmbitoDe(primero.WarehouseId);
         var admitidos = posteriores.Select(x => (x.ProductId, x.CostScopeWarehouseId)).ToHashSet();
 
@@ -847,13 +960,13 @@ public sealed class RegistroDeKardex(
         if (entrega >= EntregaDelComercio.I5 && (p.Metodo == CostMethod.Fifo || posteriores.Any(x => x.ConPeps)))
         {
             var conPeps = p.Metodo == CostMethod.Fifo ? primero
-                : movimientos.First(m => posteriores.Any(x => x.ConPeps && x.ProductId == m.Linea.ProductId && x.CostScopeWarehouseId == p.AmbitoDe(m.WarehouseId)));
+                : movimientos.First(m => posteriores.Any(x => x.ConPeps && x.ProductId == m.Producto && x.CostScopeWarehouseId == p.AmbitoDe(m.WarehouseId)));
             return Result.Failure<HashSet<(int, int)>>(await RequierePromedioAsync(conPeps, ct));
         }
 
         if (await EsExentoAsync(documento, ct)) return Result.Success(admitidos);
 
-        var fechaPosterior = posteriores.First(x => x.ProductId == primero.Linea.ProductId && x.CostScopeWarehouseId == ambito).Fecha;
+        var fechaPosterior = posteriores.First(x => x.ProductId == primero.Producto && x.CostScopeWarehouseId == ambito).Fecha;
 
         // US16 (T838): desde I5 el retroactivo general, con el parámetro y sus días máximos a la fecha de operación (FR-045). El
         // período cerrado ya lo rechazó el paso 1 (Inventory.Period.Closed).
@@ -873,11 +986,11 @@ public sealed class RegistroDeKardex(
             }
         }
         var posterior = await db.KardexEntries.AsNoTracking()
-            .Where(k => k.ProductId == primero.Linea.ProductId && k.CostScopeWarehouseId == ambito && k.OperationDate == fechaPosterior)
+            .Where(k => k.ProductId == primero.Producto && k.CostScopeWarehouseId == ambito && k.OperationDate == fechaPosterior)
             .OrderBy(k => k.Id)
             .Join(db.InventoryDocuments, k => k.DocumentId, d => d.Id, (k, d) => new { d.PublicId, d.Prefix, d.Number })
             .FirstAsync(ct);
-        var codigo = await db.Products.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == primero.Linea.ProductId).Select(x => x.Code).FirstAsync(ct);
+        var codigo = await db.Products.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == primero.Producto).Select(x => x.Code).FirstAsync(ct);
         return Result.Failure<HashSet<(int, int)>>(InventoryErrors.RetroactiveNotAllowed(primero.Linea.LineNumber, codigo, posterior.PublicId,
             Documents.VistaDeDocumentos.NumeroVisible(posterior.Prefix, posterior.Number), fechaPosterior));
     }
@@ -1050,7 +1163,7 @@ public sealed class RegistroDeKardex(
     /// <summary>D6: el rechazo con PEPS, nombrando la línea y el producto.</summary>
     private async Task<Error> RequierePromedioAsync(MovimientoDeKardex m, CancellationToken ct)
     {
-        var codigo = await db.Products.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == m.Linea.ProductId).Select(x => x.Code).FirstAsync(ct);
+        var codigo = await db.Products.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == m.Producto).Select(x => x.Code).FirstAsync(ct);
         return InventoryErrors.RetroactiveRequiresWeightedAverage(m.Linea.LineNumber, codigo);
     }
 
@@ -1196,10 +1309,185 @@ public sealed class RegistroDeKardex(
         return m.Origen is { } origen ? (null, origen) : (null, null);
     }
 
+    // ------------------------------------------------------------------------------ lotes y series (I6) --
+
+    /// <summary>
+    /// Las clases de venta en las que manda <c>Ventas.LoteVencido</c> (I6, T923; FR-026): la remisión, la factura, el documento equivalente
+    /// del POS y el comprobante no electrónico. En las demás salidas (ajustes, bajas, traslados) un lote vencido sale sin política: la baja
+    /// por vencimiento existe justamente para sacarlo. (nuevo)
+    /// </summary>
+    public static readonly IReadOnlySet<DocumentClass> ClasesDeVenta = new HashSet<DocumentClass>
+    {
+        DocumentClass.Shipment, DocumentClass.SalesInvoice, DocumentClass.PosEquivalentDocument, DocumentClass.NonElectronicSalesReceipt,
+    };
+
+    /// <summary>
+    /// Lo que dejó el seguimiento: los movimientos con su lote y su serie, las series que tocan (seguidas: su proyección la escribe el
+    /// registro) y los productos que se controlan por lote. (nuevo)
+    /// </summary>
+    private sealed record SeguimientoDelRegistro(
+        IReadOnlyList<MovimientoDeKardex> Movimientos,
+        IReadOnlyDictionary<int, Domain.Entities.Inventory.Catalog.Serial> Series,
+        IReadOnlySet<int> ConLote);
+
+    /// <summary>El valor de <c>Ventas.LoteVencido</c> a la fecha; si no se puede leer (una entrega anterior a I6), el defecto seguro <c>Bloquear</c>.</summary>
+    public Task<Domain.Inventory.Tracking.PoliticaDeLoteVencido> PoliticaDeLoteVencidoAsync(DateOnly fecha, CancellationToken ct) =>
+        Documents.ReglasDeSeguimiento.PoliticaAsync(parametros, fecha, ct);
+
+    /// <summary>
+    /// Lote y serie de los movimientos, dentro del cerrojo (I6, T923, T924; FR-026; data-model §1.11, §13):
+    /// <list type="bullet">
+    /// <item>una salida sin lote de un producto con lote se reparte por <see cref="Domain.Inventory.Tracking.SelectorDeLotes"/> (el que vence
+    /// primero) sobre la existencia por lote de su ubicación; en una clase de venta con <c>Bloquear</c> los vencidos quedan fuera y, si sólo
+    /// ellos alcanzan, <c>Inventory.Lot.Expired</c>; si ni así alcanza, la salida queda sin repartir y la disponibilidad la rechaza;</item>
+    /// <item>un lote elegido y vencido en una venta con <c>Bloquear</c>: <c>Inventory.Lot.Expired</c>;</item>
+    /// <item>una entrada de un producto con lote sin lote: <c>Inventory.Lot.Required</c>;</item>
+    /// <item>la entrada que viaja al costo de una salida (tránsito, otra ubicación) hereda su lote y su serie, partida como ella;</item>
+    /// <item>serie: obligatoria, de una unidad, y en orden: no entra la que ya está en existencia (<c>.AlreadyInStock</c>) ni sale la que no
+    /// está en esa bodega (<c>.NotInStock</c>). La fila de la serie ya está bloqueada (T925).</item>
+    /// </list>
+    /// </summary>
+    private async Task<Result<SeguimientoDelRegistro>> SeguimientoAsync(InventoryDocument documento, IReadOnlyList<MovimientoDeKardex> movimientos,
+        IReadOnlyDictionary<int, int> porDefecto, CancellationToken ct)
+    {
+        var ids = movimientos.Select(m => m.Producto).Distinct().ToList();
+        var productos = await db.Products.AsNoTracking().IgnoreQueryFilters()
+            .Where(x => ids.Contains(x.Id) && (x.TracksLot || x.TracksSerial))
+            .Select(x => new { x.Id, x.Code, x.TracksLot, x.TracksSerial })
+            .ToDictionaryAsync(x => x.Id, ct);
+        var vacio = new Dictionary<int, Domain.Entities.Inventory.Catalog.Serial>();
+        if (productos.Count == 0) return Result.Success(new SeguimientoDelRegistro(movimientos, vacio, new HashSet<int>()));
+
+        var conLote = productos.Values.Where(x => x.TracksLot).Select(x => x.Id).ToHashSet();
+        var esVenta = ClasesDeVenta.Contains(documento.Class);
+        var hoy = reloj.HoyLocal;
+        var politica = esVenta ? await PoliticaDeLoteVencidoAsync(hoy, ct) : Domain.Inventory.Tracking.PoliticaDeLoteVencido.Advertir;
+
+        // La existencia por lote de las salidas que hay que repartir (y de los lotes elegidos, para su vencimiento).
+        var aRepartir = movimientos.Where(m => m.QuantityBase < 0m && conLote.Contains(m.Producto) && m.Lote is null && m.AlCostoDe is null).ToList();
+        var productosARepartir = aRepartir.Select(m => m.Producto).Distinct().ToList();
+        var bodegasARepartir = aRepartir.Select(m => m.WarehouseId).Distinct().ToList();
+        var porLote = aRepartir.Count == 0
+            ? []
+            : await db.StockDetails.AsNoTracking()
+                .Where(s => productosARepartir.Contains(s.ProductId) && bodegasARepartir.Contains(s.WarehouseId) && s.LotId != null && s.Quantity > 0m)
+                .ToListAsync(ct);
+        var lotesCitados = porLote.Select(s => s.LotId!.Value).Concat(movimientos.Select(m => m.Lote).OfType<int>()).Distinct().ToList();
+        var lotes = await db.Lots.AsNoTracking().IgnoreQueryFilters().Where(l => lotesCitados.Contains(l.Id))
+            .ToDictionaryAsync(l => l.Id, ct);
+        var tomado = new Dictionary<(int, int, int, int), decimal>();
+
+        var expandidos = new Dictionary<MovimientoDeKardex, IReadOnlyList<MovimientoDeKardex>>(ReferenceEqualityComparer.Instance);
+        var resultado = new List<MovimientoDeKardex>(movimientos.Count);
+        foreach (var m in movimientos)
+        {
+            if (!productos.TryGetValue(m.Producto, out var producto))
+            {
+                var propio = m.AlCostoConsumidoDe is { Count: > 0 } c
+                    ? m with { AlCostoConsumidoDe = c.SelectMany(x => expandidos.TryGetValue(x, out var e) ? e : [x]).ToList() }
+                    : m;
+                expandidos[m] = [propio];
+                resultado.Add(propio);
+                continue;
+            }
+
+            IReadOnlyList<MovimientoDeKardex> nuevos;
+            if (m.AlCostoDe is { } salida)
+            {
+                // La entrada al tránsito o a la otra ubicación: una por cada parte de su salida, con su lote y su serie.
+                var partes = expandidos.TryGetValue(salida, out var e) ? e : [salida];
+                nuevos = partes.Select(s => m with
+                {
+                    QuantityBase = Math.Abs(s.QuantityBase),
+                    AlCostoDe = s,
+                    LotId = m.LotId ?? s.Lote,
+                    SerialId = m.SerialId ?? s.Serie,
+                }).ToList();
+            }
+            else if (producto.TracksLot && m.QuantityBase < 0m && m.Lote is null)
+            {
+                var ubicacion = UbicacionDe(m, porDefecto);
+                var disponibles = porLote
+                    .Where(s => s.ProductId == m.Producto && s.WarehouseId == m.WarehouseId && s.LocationId == ubicacion)
+                    .Select(s =>
+                    {
+                        var lote = lotes[s.LotId!.Value];
+                        var libre = s.Quantity - tomado.GetValueOrDefault((m.Producto, m.WarehouseId, ubicacion, lote.Id));
+                        return new Domain.Inventory.Tracking.LoteDisponible(lote.Id, lote.Code, lote.ExpiryDate, libre);
+                    })
+                    .ToList();
+                var reparto = Domain.Inventory.Tracking.SelectorDeLotes.Repartir(
+                    new Domain.Inventory.Tracking.PedidoDeLotes(disponibles, Math.Abs(m.QuantityBase), hoy, politica) { AdmiteVencidos = !esVenta });
+                if (!reparto.Completo)
+                {
+                    // Sólo lo vencido alcanzaría: en una venta con Bloquear, el lote vencido es el motivo.
+                    if (reparto.Excluidos.Sum(x => x.Disponible) >= reparto.Faltante && reparto.Excluidos.Count > 0)
+                    {
+                        var vencido = reparto.Excluidos[0];
+                        return Result.Failure<SeguimientoDelRegistro>(Catalog.CatalogErrors.LotExpired(producto.Code, vencido.Codigo, vencido.Vencimiento));
+                    }
+                    nuevos = [m];
+                }
+                else
+                {
+                    nuevos = reparto.Asignaciones.Select(a => m with { QuantityBase = -a.Cantidad, LotId = a.Lote.LotId }).ToList();
+                    foreach (var a in reparto.Asignaciones)
+                    {
+                        var clave = (m.Producto, m.WarehouseId, ubicacion, a.Lote.LotId);
+                        tomado[clave] = tomado.GetValueOrDefault(clave) + a.Cantidad;
+                    }
+                }
+            }
+            else
+            {
+                nuevos = [m];
+            }
+
+            foreach (var n in nuevos)
+            {
+                if (producto.TracksLot && n.Lote is null && n.QuantityBase > 0m)
+                    return Result.Failure<SeguimientoDelRegistro>(Catalog.CatalogErrors.LotRequired(producto.Code));
+                if (producto.TracksLot && n.Lote is int elegido && n.QuantityBase < 0m && esVenta && !n.EsAnulacion
+                    && politica == Domain.Inventory.Tracking.PoliticaDeLoteVencido.Bloquear
+                    && lotes.TryGetValue(elegido, out var delLote) && Domain.Inventory.Tracking.SelectorDeLotes.EstaVencido(delLote.ExpiryDate, hoy))
+                    return Result.Failure<SeguimientoDelRegistro>(Catalog.CatalogErrors.LotExpired(producto.Code, delLote.Code, delLote.ExpiryDate));
+            }
+            expandidos[m] = nuevos;
+            resultado.AddRange(nuevos);
+        }
+
+        // Series: obligatorias, de una unidad, y en el orden de los movimientos.
+        var seriesCitadas = resultado.Where(m => productos.TryGetValue(m.Producto, out var x) && x.TracksSerial).Select(m => m.Serie).OfType<int>().Distinct().ToList();
+        var series = seriesCitadas.Count == 0
+            ? vacio
+            : await db.Serials.Where(s => seriesCitadas.Contains(s.Id)).ToDictionaryAsync(s => s.Id, ct);
+        var donde = series.ToDictionary(s => s.Key, s => s.Value.InStockWarehouseId);
+        foreach (var m in resultado)
+        {
+            if (!productos.TryGetValue(m.Producto, out var producto) || !producto.TracksSerial) continue;
+            if (m.Serie is not int serieId || !series.TryGetValue(serieId, out var serie))
+                return Result.Failure<SeguimientoDelRegistro>(Catalog.CatalogErrors.SerialRequired(producto.Code));
+            if (Math.Abs(m.QuantityBase) != 1m)
+                return Result.Failure<SeguimientoDelRegistro>(Catalog.CatalogErrors.SerialQuantityNotOne(producto.Code, serie.SerialNumber));
+            if (m.QuantityBase > 0m)
+            {
+                if (donde[serieId] is not null) return Result.Failure<SeguimientoDelRegistro>(Catalog.CatalogErrors.SerialAlreadyInStock(producto.Code, serie.SerialNumber));
+                donde[serieId] = m.WarehouseId;
+            }
+            else
+            {
+                if (donde[serieId] != m.WarehouseId) return Result.Failure<SeguimientoDelRegistro>(Catalog.CatalogErrors.SerialNotInStock(producto.Code, serie.SerialNumber));
+                donde[serieId] = null;
+            }
+        }
+
+        return Result.Success(new SeguimientoDelRegistro(resultado, series, conLote));
+    }
+
     private async Task<Error> ErrorDeExistenciaAsync(
         List<(MovimientoDeKardex Mov, int Ubicacion, decimal Disponible, bool PorUbicacion)> faltantes, string? sugerencia, CancellationToken ct)
     {
-        var productoIds = faltantes.Select(f => f.Mov.Linea.ProductId).Distinct().ToList();
+        var productoIds = faltantes.Select(f => f.Mov.Producto).Distinct().ToList();
         var bodegaIds = faltantes.Select(f => f.Mov.WarehouseId).Distinct().ToList();
         var ubicacionIds = faltantes.Select(f => f.Ubicacion).Distinct().ToList();
         var productos = await db.Products.AsNoTracking().Where(x => productoIds.Contains(x.Id)).Select(x => new { x.Id, x.PublicId, x.Code }).ToDictionaryAsync(x => x.Id, ct);
@@ -1208,7 +1496,7 @@ public sealed class RegistroDeKardex(
 
         var lineas = faltantes.Select(f =>
         {
-            var producto = productos.GetValueOrDefault(f.Mov.Linea.ProductId);
+            var producto = productos.GetValueOrDefault(f.Mov.Producto);
             return new InventoryErrors.LineaSinExistencia(
                 f.Mov.Linea.LineNumber,
                 producto?.PublicId ?? Guid.Empty,

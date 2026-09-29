@@ -182,6 +182,10 @@ public static class DependencyInjection
         // reconstruccion); las estrategias de ajuste (Scoped: recuerdan lo preparado por documento) se registran por clase; la
         // existencia real reemplaza a ExistenciasSinKardex; PosicionDeReposicion es el unico lector de la posicion de reposicion.
         services.AddScoped<Inventory.Kardex.RegistroDeKardex>();
+        // Feature 012, I6 (T923): las reglas de lote, vencimiento y serie del borrador y de la confirmacion (el registro las repite en el cerrojo).
+        services.AddScoped<Inventory.Documents.ReglasDeSeguimiento>();
+        // I6 (T928): el ensamble de kits (grupo Adjustments); opera cuando el despliegue llega a I6.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeEnsamble>();
         services.AddScoped<Inventory.Kardex.ReversionDeKardex>();
         services.AddScoped<Inventory.Kardex.VerificacionDeIntegridad>();
         services.AddScoped<Inventory.Kardex.ValorDeExistencias>();

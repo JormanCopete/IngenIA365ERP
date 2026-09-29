@@ -32,6 +32,9 @@ public static class SqlDelCerrojo
     public const string TablaDetalles = "INV_StockDetails";
     public const string TablaSecuencias = "INV_DocumentSequences";
 
+    /// <summary>Las series (I6, T925): exclusivas, por Id, después de los detalles. (nuevo)</summary>
+    public const string TablaSeries = "INV_Serials";
+
     /// <summary>La resolución DIAN que numera un documento fiscal electrónico (I4, T705). (nuevo)</summary>
     public const string TablaResoluciones = "COR_DianNumberingResolutions";
 
@@ -96,6 +99,11 @@ public static class SqlDelCerrojo
             sentencias.Add(new(TablaDetalles, q.Asegurar(TablaDetalles, clave, clave, ["Quantity"], valores), creacion));
             sentencias.Add(new(TablaDetalles, q.BloquearPorClave(TablaDetalles, clave, valores), []));
         }
+
+        // 4b. Series (I6, T925): sólo se bloquean —la fila la creó el borrador con el índice único como árbitro—.
+        var series = Ordenados(pedido.Series);
+        if (series.Count > 0)
+            sentencias.Add(new(TablaSeries, q.Bloquear(TablaSeries, series, exclusivo: true), []));
 
         return sentencias;
     }
