@@ -1,0 +1,48 @@
+{
+  // T821, research R10: PEPS con el negativo permitido. Lo que la salida no encuentra en capas sale en su propia línea al
+  // último costo y queda pendiente; la entrada que la cubre crea su capa, le anota a esa salida el consumo (así Σ consumos
+  // de la salida = |QuantityBase|) y agrega la diferencia como NegativeRegularization sobre ella.
+  "nombre": "PEPS: negativo permitido y regularización",
+  "descripcion": "C1 5 × 1.000 (01/09). V1 vende 8 el 02/09: 5 salen de C1 (5.000) y 3 en negativo al último costo 1.000 (3.000): −3 por −3.000. C2 compra 10 × 1.200 el 03/09 (12.000): cubre las 3 de V1 con su capa (consumo de V1#2, 3 × 1.200 = 3.600) y la diferencia 3.000 − 3.600 = −600 es NegativeRegularization sobre V1#2. Estado 7 por 8.400 = C2 7 × 1.200. V2 vende 7 el 04/09 a 1.200: 0 por 0.",
+  "parametros": { "metodo": "Fifo", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": true },
+  "movimientos": [
+    { "id": "C1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 5, "costoUnitario": 1000 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-02", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -8,
+      "esperado": {
+        "lineas": [
+          { "kind": "Exit", "cantidad": -5, "costoUnitario": 1000, "costoTotal": -5000 },
+          { "kind": "Exit", "cantidad": -3, "costoUnitario": 1000, "costoTotal": -3000 }
+        ],
+        "consumos": [ { "salida": "V1", "capa": "C1", "cantidad": 5, "costoUnitario": 1000 } ],
+        "capas": [],
+        "estado": { "cantidad": -3, "valor": -3000, "promedio": 1000, "ultimoCosto": 1000 },
+        "explicacion": [ "Sale en negativo al último costo" ]
+      }
+    },
+    {
+      "id": "C2", "documento": "EC-2", "fecha": "2026-09-03", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1200,
+      "esperado": {
+        "lineas": [
+          { "kind": "Entry", "cantidad": 10, "costoUnitario": 1200, "costoTotal": 12000 },
+          { "kind": "CostAdjustment", "reason": "NegativeRegularization", "cantidad": 0, "costoUnitario": 1200, "costoTotal": -600, "afecta": "V1#2" }
+        ],
+        "consumos": [ { "salida": "V1#2", "capa": "C2", "cantidad": 3, "costoUnitario": 1200 } ],
+        "capas": [ { "capa": "C2", "original": 10, "restante": 7, "costoUnitario": 1200 } ],
+        "estado": { "cantidad": 7, "valor": 8400, "promedio": 1200, "ultimoCosto": 1200 },
+        "explicacion": [ "NegativeRegularization" ]
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-04", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -7,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -7, "costoUnitario": 1200, "costoTotal": -8400 } ],
+        "consumos": [ { "salida": "V2", "capa": "C2", "cantidad": 7, "costoUnitario": 1200 } ],
+        "capas": [],
+        "estado": { "cantidad": 0, "valor": 0, "promedio": 1200 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 0, "valor": 0, "promedio": 1200 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 0 } ]
+}

@@ -10,9 +10,9 @@ public sealed record BorradorEnCurso(InventoryDocument Documento, InventoryDocum
 
 /// <summary>
 /// Lo que agrega el grupo al guardar: avisos que sólo él conoce y la vista previa de los impuestos (compras: <c>taxLines</c>
-/// del borrador, que no se guardan hasta confirmar). (nuevo)
+/// del borrador, que no se guardan hasta confirmar) y, en unos costos adicionales (I5, T799), la vista previa del reparto. (nuevo)
 /// </summary>
-public sealed record ResultadoDelBorrador(IReadOnlyList<Error> Avisos, IReadOnlyList<DocumentTaxLineDto> ImpuestosPrevistos)
+public sealed record ResultadoDelBorrador(IReadOnlyList<Error> Avisos, IReadOnlyList<DocumentTaxLineDto> ImpuestosPrevistos, LandedCostDto? CostosAdicionales = null)
 {
     public static ResultadoDelBorrador Vacio { get; } = new([], []);
 }

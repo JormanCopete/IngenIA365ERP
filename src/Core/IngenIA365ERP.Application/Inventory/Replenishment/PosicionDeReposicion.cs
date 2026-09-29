@@ -7,7 +7,10 @@ namespace IngenIA365ERP.Application.Inventory.Replenishment;
 /// <summary>La posición de un producto en una bodega (FR-035; contracts/api.md §4.4, §27). (nuevo)</summary>
 /// <param name="Disponible">Físico − reservado de <c>INV_StockBalances</c> (el mismo de <c>GetStockQuery</c>).</param>
 /// <param name="EnTransito">Despachado hacia la bodega y todavía sin recibir, devolver ni dar de baja.</param>
-/// <param name="PorRecibir">Pedido a proveedores sin recibir: 0 hasta I5 (T793).</param>
+/// <param name="PorRecibir">
+/// Pedido a proveedores sin recibir (I5, T793): lo pendiente de las órdenes de compra <c>Confirmed</c> sin el saldo cerrado, por
+/// <see cref="Purchasing.PendientesDeCompra"/>.
+/// </param>
 public sealed record Posicion(decimal Disponible, decimal EnTransito, decimal PorRecibir)
 {
     /// <summary>Disponible + en tránsito + por recibir.</summary>
@@ -24,7 +27,8 @@ public sealed record DespachoEnTransito(
 /// <b>El único lector</b> de la posición de reposición por (producto, bodega) (feature 012, T257; FR-035; contracts/api.md §4.4):
 /// disponible, en tránsito hacia la bodega —las líneas de <c>TransferDispatch</c> confirmados con destino en ella, menos lo
 /// recibido, devuelto al origen o dado de baja por sus <c>INV_DocumentLineLinks</c> hacia documentos confirmados— y por recibir
-/// (0 hasta I5), en lote para varias parejas. No aplica alcance: lo aplica quien la llama. La usan
+/// (desde I5, T793: lo pendiente de las órdenes de compra confirmadas y con el saldo abierto, por <see cref="Purchasing.PendientesDeCompra"/>),
+/// en lote para varias parejas. No aplica alcance: lo aplica quien la llama. La usan
 /// <c>ListReorderPoliciesQuery</c>, <c>GetStockQuery</c>/<c>GetProductStockQuery</c> y, después, <c>AvisoDeReposicionAlConfirmar</c>
 /// (T953), <c>RevisionDeReorden</c> (T954) y <c>ReorderAlertsReportQuery</c> (T956): ninguna recalcula la posición por su
 /// cuenta. (nuevo)
@@ -51,12 +55,15 @@ public sealed class PosicionDeReposicion(IApplicationDbContext db)
             .GroupBy(d => (d.ProductId, d.ToWarehouseId))
             .ToDictionary(g => g.Key, g => g.Sum(d => d.Quantity));
 
+        // I5 (T793): lo pedido a proveedores sin recibir, con la bodega que recibe de la orden.
+        var porRecibir = await new Purchasing.PendientesDeCompra(db).PorRecibirAsync(productos, bodegas, ct);
+
         foreach (var pareja in parejas.Distinct())
         {
             resultado[pareja] = new Posicion(
                 porDisponible.GetValueOrDefault(pareja),
                 transito.GetValueOrDefault(pareja),
-                0m);
+                porRecibir.GetValueOrDefault(pareja));
         }
         return resultado;
     }

@@ -105,7 +105,7 @@ public class LectorDeParametrosTests
     {
         Guardar(Inv, ParametrosDeInventario.CosteoMetodo, "Peps", new DateOnly(2026, 1, 1));
 
-        var r = await Lector().LeerAsync(Inv, ParametrosDeInventario.CosteoMetodo, Hoy);
+        var r = await new LectorDeParametros(_db, EntregaDelComercio.I4).LeerAsync(Inv, ParametrosDeInventario.CosteoMetodo, Hoy);
 
         r.Error.Code.Should().Be(ErroresDeParametros.CodigoValorNoAdmitido);
     }
@@ -183,7 +183,7 @@ public class LectorDeParametrosTests
     public void El_catalogo_tiene_las_claves_de_data_model_sin_repetir()
     {
         CatalogoDeParametros.Todas.Select(d => (d.Modulo, d.Clave)).Should().OnlyHaveUniqueItems();
-        ParametrosDeInventario.Definiciones.Should().HaveCount(41);
+        ParametrosDeInventario.Definiciones.Should().HaveCount(42, "41 de data-model §4.2 más Costeo.CambioExigeActa (I5, T842)");
         ParametrosTributarios.Definiciones.Should().HaveCount(6);
         ParametrosDeFacturacionElectronica.Definiciones.Should().HaveCount(10);
         CatalogoDeParametros.Todas.Should().OnlyContain(d => d.AmbitosAdmitidos.Contains(ParameterScopeKind.None));

@@ -187,6 +187,10 @@ public static class AuditEventTypes
     // Feature 012, I3 (T612): el reintegro de una nota por un medio que no fue de la venta (Inventory.Sales.RefundOtherMeans).
     public const string InventorySalesRefundOtherMeans = "Inventory.Sales.RefundOtherMeans";
 
+    // Feature 012, I5 (T791): el envio de una orden de compra al proveedor (correo y numero). Lo emite InventoryAuditEmitter despues
+    // del envio; el cierre del saldo de la orden (ClosePurchaseOrderBalanceCommand) lo audita el AuditBehavior con su motivo.
+    public const string InventoryPurchaseOrderSent = "Inventory.PurchaseOrder.Sent";
+
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el
     // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.

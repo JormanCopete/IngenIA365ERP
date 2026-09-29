@@ -328,9 +328,16 @@ Reglas del constructor:
 | `PosAdjustmentNote` | `PosAdjustmentNote` | 94 (**por cotejar**) | CUDE | consecutivo propio | I4 |
 | `SupportDocument` | `SupportDocument` | 05 | CUDS | resolución `SupportDocument` | I4 |
 | `SupportDocumentAdjustmentNote` | `SupportDocumentAdjustmentNote` | 95 | CUDS | consecutivo propio (la Res. 167 art. 5 habla de numeración: **por cotejar**) | I4 |
-| `RadianEvent030` · `RadianEvent032` | registro de factura del proveedor (`INV_SupplierInvoiceEvents`) | 96 (`ApplicationResponse`) | CUDE | propia del evento (la define I5) | I5 |
+| `RadianEvent030` · `RadianEvent032` | registro de factura del proveedor (`INV_SupplierInvoiceEvents`) | 96 (`ApplicationResponse`) | CUDE | propia del evento (I5, T802: abajo) | I5 |
 
 Los códigos no están en el código: los da `CatalogoDian` desde su JSON vigente a la fecha.
+
+**Numeración propia de los eventos (I5, T802; decisiones-transversales T42f).** Prefijo **fijo por tipo** del catálogo vigente
+(`tiposDeDocumento.porTipo[].prefijoDeEvento`: `EV030` y `EV032`, «por cotejar») y consecutivo por (`Environment`, `Prefix`) = el mayor
+de `COR_ElectronicDocuments` más uno, asignado por `NumeradorFiscal.NumerarEventoAsync` bajo un candado por esa pareja, en la
+transacción que pide la emisión. Se guarda en `COR_ElectronicDocuments (Environment, Prefix, Consecutive)`: sin tabla nueva ni
+resolución (T2). Un evento rechazado que se reintenta conserva su número (versión siguiente). El código del evento (030, 032) también
+sale del catálogo (`codigoDeEvento`). **(dueño)** cotejar con el proveedor tecnológico contratado si él numera el `ApplicationResponse`.
 
 ### 4.4 Correspondencias y datos faltantes
 
@@ -887,8 +894,10 @@ el contador y el proveedor, y su generación la dispararía `ProgramadorDeTareas
 - **Desde I5**: `EmitRadianEventCommand` crea un `COR_ElectronicDocuments` de
   `Kind = RadianEvent030/032`, emite por `EmitirEventoAsync` del canal vigente (el evento es un
   documento nuevo), con la misma tabla de transmisiones y la máquina simplificada, y lo enlaza en
-  `INV_SupplierInvoiceEvents.ElectronicDocumentPublicId` (T42). La numeración propia del evento la
-  define I5. Criterio de contratación: que el canal reciba facturas y emita eventos para el mismo NIT.
+  `INV_SupplierInvoiceEvents.ElectronicDocumentPublicId` (T42). La numeración propia del evento está en
+  §4.3. Criterio de contratación: que el canal reciba facturas y emita eventos para el mismo NIT.
+  Implementado en I5 sobre `CanalSimulado` (T802–T806; reglas en decisiones-transversales T42f); el adaptador del proveedor
+  tecnológico (T807) espera la decisión del canal real.
 
 ## 15. Modo software propio: el servicio central de la 010
 

@@ -186,6 +186,8 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Kardex.VerificacionDeIntegridad>();
         services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
         services.AddScoped<Inventory.Integration.EmisionDeInventario>();
+        // Feature 012, I5 (T841): el cambio de metodo o de ambito de costeo corre dentro de AddParameterVersionCommand (la unica via).
+        services.AddScoped<Common.Parameters.IEfectoDeAltaDeParametro, Inventory.Costing.CambioDeMetodoDeCosteo>();
         // Feature 012, I2 (T519-T521): el lado de Inventario de la integracion contable. Las dimensiones que Contabilidad le pide
         // a Inventario (lo unico de Inventario que conoce, T31), como se arman y emiten los mensajes de un documento, y la
         // validacion previa contable: el paso 5 de la confirmacion y la consulta /prevalidate preguntan por el mismo objeto.
@@ -218,6 +220,9 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Purchasing.Common.CalculoTributarioDeCompra>();
         services.AddScoped<Inventory.Purchasing.Common.VinculosDeCompra>();
         services.AddScoped<Inventory.Purchasing.Common.DiferenciasDePrecioDeCompra>();
+        // I5 (T799, T800): los costos adicionales (flete, seguro) y su estrategia.
+        services.AddScoped<Inventory.Purchasing.Common.CostosAdicionalesDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeCostosAdicionales>();
         services.AddScoped<Inventory.Purchasing.Common.ContextoDeCompraDirecta>();
         services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Purchasing.Common.BorradorDeCompra>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoRecepcionDeCompra>();
@@ -229,6 +234,16 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDevolucionAProveedor>();
         services.AddScoped<Inventory.Documents.IConfirmacionEncadenada, Inventory.Purchasing.CompraDirectaEncadenada>();
         services.AddScoped<Inventory.Purchasing.LectorDeFacturaUbl>();
+        // I5 (T787-T793): solicitudes y ordenes de compra (operan cuando la entrega vigente llega a I5), los pendientes por sus
+        // vinculos, las reglas de la recepcion contra orden y el modelo de la orden en PDF (lo dibuja la API: IOrdenDeCompraEnPdf).
+        services.AddScoped<Inventory.Purchasing.PendientesDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.RecepcionContraOrden>();
+        // I5 (T794-T796): el cruce a tres vías de la factura del proveedor y la decisión de sus excepciones (SourceType PurchaseMatchLine).
+        services.AddScoped<Inventory.Purchasing.CruceATresVias>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Purchasing.DecisionDeCruce>();
+        services.AddScoped<Inventory.Purchasing.ModeloDeOrdenDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeSolicitudDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeOrdenDeCompra>();
         // Feature 012 (US10, T367-T374): traslados en dos pasos y movimiento entre ubicaciones. Las tres estrategias, el cierre de las
         // diferencias (confirma o descarta el documento que las resuelve) y su fuente de aprobación (SourceType TransferDiscrepancy).
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDespachoDeTraslado>();
@@ -275,6 +290,10 @@ public static class DependencyInjection
         // fuentes pueden convivir y se eligen por SourceModule).
         services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
         services.AddScoped<ElectronicInvoicing.Canonical.IFuenteDeDocumentoElectronico, Inventory.Integration.FuenteDeEmisionDeInventario>();
+        // Feature 012, I5 (T803–T806): los eventos RADIAN que emite el ERP. Compras los prepara, los enlaza y registra su resultado (por el
+        // puerto de la fuente); la plataforma arma el evento, lo numera (T802) y lo lleva por el procesador con la máquina simplificada.
+        services.AddScoped<Inventory.Purchasing.EventosRadianDeInventario>();
+        services.AddScoped<ElectronicInvoicing.Documents.CicloDelEventoRadian>();
         // Feature 012, I4 (T705, T710): el único escritor de LastIssuedNumber y los prefijos de notas de Inventario (la plataforma no lee
         // INV_: pregunta por el puerto).
         services.AddScoped<ElectronicInvoicing.Numeracion.NumeradorFiscal>();

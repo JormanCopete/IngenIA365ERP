@@ -27,6 +27,13 @@ namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 /// <item>el monto que se aprueba es el <c>Total</c> (§1.3);</item>
 /// <item>anularla revierte al costo con que entró (<see cref="ReversionDeKardex"/>); con factura o devolución vigente el ciclo
 /// común responde <c>Inventory.Document.HasDependents</c>.</item>
+/// <item>I5 (T789; FR-049; api.md §14.9): contra órdenes (<c>orderLinePublicId</c>, vínculo <c>FromOrder</c>), cada orden del mismo
+/// proveedor (<c>Inventory.Purchase.OrderFromOtherSupplier</c>), confirmada y con su saldo abierto (<c>Inventory.PurchaseOrder.NotOpen</c>),
+/// y lo recibido de más sólo dentro de la tolerancia de cantidad vigente a la fecha de operación
+/// (<c>Inventory.Purchase.OverReceiptBeyondTolerance</c>, por <see cref="RecepcionContraOrden"/> y <c>CruceDeCompra</c>). Las órdenes
+/// entran al cerrojo como documentos de origen y la regla se vuelve a mirar dentro de él: dos recepciones a la vez contra la misma
+/// línea no se pasan juntas de lo pendiente. Anular la recepción devuelve su cantidad a lo pendiente de la orden (los vínculos de un
+/// documento anulado no cuentan).</item>
 /// </list>
 /// Scoped: lo preparado y lo registrado se recuerdan por documento dentro de la petición.
 /// </summary>
@@ -36,11 +43,13 @@ public sealed class EfectoRecepcionDeCompra(
     EmisionDeInventario emision,
     IMaestrosDelDocumento maestros,
     CalculoTributarioDeCompra calculo,
-    IApplicationDbContext db) : EfectoDeClaseBase
+    IApplicationDbContext db,
+    RecepcionContraOrden contraOrden) : EfectoDeClaseBase
 {
     private readonly Dictionary<Guid, (PreparacionDelRegistro Preparacion, IReadOnlyList<MovimientoDeKardex> Movimientos, CalculoDeCompra Calculo)> _preparados = [];
     private readonly Dictionary<Guid, RegistroHecho> _registrados = [];
     private readonly Dictionary<Guid, ReversionHecha> _revertidos = [];
+    private readonly Dictionary<Guid, IReadOnlyList<int>> _ordenes = [];
 
     public override DocumentClass Clase => DocumentClass.PurchaseReceipt;
 
@@ -65,6 +74,11 @@ public sealed class EfectoRecepcionDeCompra(
         var productos = await ReglasDeCompra.ProductosDeMercanciaAsync(documento, maestros, ct);
         if (productos.Count > 0) return Result.Failure(productos[0]);
 
+        // I5 (T789): contra órdenes, del mismo proveedor, abiertas y sin pasar de la tolerancia.
+        var ordenes = await contraOrden.ExigirAsync(documento, ct);
+        if (ordenes.IsFailure) return Result.Failure(ordenes.Error);
+        _ordenes[documento.PublicId] = ordenes.Value.Select(o => o.Id).ToList();
+
         var calculado = await calculo.CalcularAsync(documento, contexto.Tipo, ct);
         if (calculado.IsFailure) return Result.Failure(calculado.Error);
         CalculoTributarioDeCompra.AplicarTotales(documento, calculado.Value.Totales);
@@ -80,14 +94,26 @@ public sealed class EfectoRecepcionDeCompra(
     public override decimal MontoParaAprobar(ContextoDeEfecto contexto) =>
         contexto.EsAnulacion && _preparados.TryGetValue(contexto.Documento.PublicId, out var p) ? p.Preparacion.ValorEstimado : contexto.Documento.Total;
 
-    public override PedidoDeCerrojo Cerrojo(ContextoDeEfecto contexto) =>
-        _preparados.TryGetValue(contexto.Documento.PublicId, out var p)
+    public override PedidoDeCerrojo Cerrojo(ContextoDeEfecto contexto)
+    {
+        var pedido = _preparados.TryGetValue(contexto.Documento.PublicId, out var p)
             ? p.Preparacion.Cerrojo with { Bodegas = base.Cerrojo(contexto).Bodegas.Concat(p.Preparacion.Cerrojo.Bodegas).Distinct().ToList() }
             : base.Cerrojo(contexto);
+        // I5 (T789, T786): las órdenes de las que nace la recepción, en exclusivo y en orden de Id (data-model §5.5).
+        return _ordenes.TryGetValue(contexto.Documento.PublicId, out var ordenes) && ordenes.Count > 0
+            ? pedido with { DocumentosDeOrigen = pedido.DocumentosDeOrigen.Concat(ordenes).Distinct().OrderBy(id => id).ToList() }
+            : pedido;
+    }
 
     public override async Task<Result> AplicarAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {
         var documento = contexto.Documento;
+        // I5 (T789): con la orden bloqueada, otra recepción u otro cierre del saldo ya terminaron: la regla se mira otra vez.
+        if (_ordenes.TryGetValue(documento.PublicId, out var ordenes) && ordenes.Count > 0)
+        {
+            var otraVez = await contraOrden.ExigirAsync(documento, ct);
+            if (otraVez.IsFailure) return Result.Failure(otraVez.Error);
+        }
         var (_, movimientos, calculado) = _preparados[documento.PublicId];
         var registrado = await registro.RegistrarAsync(documento, movimientos, ct);
         if (registrado.IsFailure) return Result.Failure(registrado.Error);
@@ -178,6 +204,30 @@ public static class ReglasDeCompra
         if (documento.WarehouseId is int b && (await maestros.BodegasPorIdAsync([b], ct)).FirstOrDefault() is { EsTransito: true } transito)
             return InventoryErrors.TransitNotAllowed(transito.Code);
         return null;
+    }
+
+    /// <summary>La bodega del documento no es la de tránsito (I5: la solicitud, que no tiene proveedor). Nulo si procede. (nuevo)</summary>
+    public static async Task<Error?> TransitoAsync(InventoryDocument documento, IMaestrosDelDocumento maestros, CancellationToken ct) =>
+        documento.WarehouseId is int b && (await maestros.BodegasPorIdAsync([b], ct)).FirstOrDefault() is { EsTransito: true } transito
+            ? InventoryErrors.TransitNotAllowed(transito.Code)
+            : null;
+
+    /// <summary>
+    /// Lo que se puede pedir o comprar (I5: solicitud y orden, T787): producto activo y no bloqueado. A diferencia de la recepción, admite
+    /// servicios (un flete también se ordena). (nuevo)
+    /// </summary>
+    public static async Task<IReadOnlyList<Error>> ProductosComprablesAsync(InventoryDocument documento, IMaestrosDelDocumento maestros, CancellationToken ct)
+    {
+        var errores = new List<Error>();
+        var vivas = documento.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
+        var productos = (await maestros.ProductosPorIdAsync(vivas.Select(l => l.ProductId).Distinct().ToList(), ct)).ToDictionary(p => p.Id);
+        foreach (var linea in vivas)
+        {
+            if (!productos.TryGetValue(linea.ProductId, out var producto)) continue;
+            if (producto.Status == ProductStatus.Blocked) errores.Add(InventoryErrors.ProductBlocked(linea.LineNumber, producto.Code));
+            else if (producto.Status == ProductStatus.Inactive) errores.Add(InventoryErrors.ProductInactive(linea.LineNumber, producto.Code));
+        }
+        return errores;
     }
 
     /// <summary>Las líneas que mueven mercancía: producto inventariable, activo y no bloqueado.</summary>

@@ -294,6 +294,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture> CountCaptures => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>();
+    // Feature 012, I5 (T835): cruce a tres vías, reparto de costos adicionales, capas PEPS y sus consumos.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine> PurchaseMatchLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer> CostLayers => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption>();
     // Feature 012 (T585, I3): medios de pago, punto de venta y caja, precios y satélites de la venta.
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans => Set<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans>();
     public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork> CardNetworks => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork>();
@@ -468,6 +473,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
             b.HasMany(x => x.Captures).WithOne(c => c.SnapshotLine).HasForeignKey(c => c.SnapshotLineId);
         });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        // I5 (T835): cruce, reparto de costos adicionales, capas PEPS y consumos.
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition>(b =>
         {
             b.Ignore("RowVersion");

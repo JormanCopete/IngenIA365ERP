@@ -18,7 +18,11 @@
    2.1, AttachedDocument o ZIP: el archivo se lee en el servidor y NO se guarda); el proveedor con el buscador y, si no existe
    —también cuando el XML trae un NIT desconocido—, el alta con la autorización de datos (T46). Impuestos y retenciones con su
    explicación (vista previa en el borrador, foto al confirmar), las diferencias de costo con Inventory.Costs.Read y el panel de
-   eventos RADIAN con «Registrar que se emitió por fuera» (Inventory.Purchases.RegisterRadianEvent). *@
+   eventos RADIAN con «Registrar que se emitió por fuera» (Inventory.Purchases.RegisterRadianEvent).
+   I5 (T815; FR-049, FR-050; api.md §14.8, §14.9): la pestaña «Cruce» con la factura cruzada línea por línea contra lo ordenado y lo
+   recibido (retenida, aprobada, rechazada y la tolerancia usada) y el botón «Emitir acuse y recibo» (Inventory.Purchases.EmitRadianEvent),
+   que emite por el canal de facturación electrónica los eventos pendientes, junto al registro externo. I5 (T847): con fecha anterior, el
+   impacto en costos antes de confirmar. *@
 <PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -40,6 +44,56 @@
     <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
         @* US7 (T539): lo que dijo Contabilidad antes de confirmar, con quién corrige cada hallazgo. *@
         <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_doc?.Document.PublicId" />
+        <ImpactoEnCostos Documento="@_doc?.Document.PublicId" Fecha="@_doc?.Document.OperationDate" Borrador="@(_doc?.Document.Status == 0)" Version="@_doc?.Document.RowVersion" />
+        @if (_doc?.Document is { Status: 1 } && _doc.Match?.Any(m => m.Status == EstadosDelCruce.Retenida) == true)
+        {
+            <p class="aviso aviso-info">En aprobación: hay líneas retenidas por el cruce a tres vías. Véalas en la pestaña «Cruce» y decídalas en <a href="/inventario/aprobaciones">Aprobaciones</a>.</p>
+        }
+        @if (_doc?.Match is { Count: > 0 })
+        {
+            <div class="toolbar" role="tablist">
+                <button type="button" role="tab" class="@(_pestana == 0 ? "e-btn e-primary" : "e-btn e-outline")" aria-selected="@(_pestana == 0)" @onclick="@(() => _pestana = 0)">Factura</button>
+                <button type="button" role="tab" class="@(_pestana == 1 ? "e-btn e-primary" : "e-btn e-outline")" aria-selected="@(_pestana == 1)" @onclick="@(() => _pestana = 1)">Cruce</button>
+            </div>
+        }
+        @if (_pestana == 1 && _doc?.Match is { Count: > 0 } cruce)
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Línea</th><th>Producto</th><th class="numero">Ordenado</th><th class="numero">Recibido</th><th class="numero">Facturado</th>
+                            <th class="numero">Precio orden</th><th class="numero">Precio recepción</th><th class="numero">Precio factura</th>
+                            <th class="numero">Dif. cantidad</th><th class="numero">Dif. precio</th><th>Razones</th><th>Tolerancia usada</th><th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var m in cruce)
+                        {
+                            <tr class="@(m.Status == EstadosDelCruce.Retenida ? "resaltada" : "")">
+                                <td>@m.LineNumber</td>
+                                <td>@m.Product.Code · @m.Product.Name</td>
+                                <td class="numero">@m.Ordered.ToString("N4")</td>
+                                <td class="numero">@m.Received.ToString("N4")</td>
+                                <td class="numero">@m.Invoiced.ToString("N4")</td>
+                                <td class="numero">@m.OrderPrice?.ToString("N2")</td>
+                                <td class="numero">@m.ReceiptPrice?.ToString("N2")</td>
+                                <td class="numero">@m.InvoicePrice?.ToString("N2")</td>
+                                <td class="numero">@m.QuantityVariance.ToString("N4")</td>
+                                <td class="numero">@(m.PriceVariance is { } dp ? dp.ToString("P2") : "")</td>
+                                <td>@string.Join(", ", m.Reasons.Select(EstadosDelCruce.Razon))</td>
+                                <td><span class="texto-tenue">@m.Tolerance</span></td>
+                                <td>@EstadosDelCruce.Texto(m.Status)@if (m.ApprovalRequestPublicId is not null && m.Status == EstadosDelCruce.Retenida) { <text> · </text><a href="/inventario/aprobaciones">decidir</a> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="texto-tenue">Cantidades en la unidad base. Facturar más de lo recibido nunca entra por tolerancia. Todas las líneas cruzadas en <a href="/compras/cruce">Compras → Cruce a tres vías</a>.</p>
+        }
+        else
+        {
+        <div>
         @if (_doc?.Document.Warnings is { Count: > 0 } avisos)
         {
             <div class="aviso aviso-alerta"><b>Lo que hoy impediría confirmarla:</b><ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul></div>
@@ -154,6 +208,17 @@
                 </table>
             </div>
         }
+        @if (EventosPorEmitir.Count > 0)
+        {
+            <PermissionGate Required="Inventory.Purchases.EmitRadianEvent">
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@EmitirAsync">Emitir acuse y recibo</SfButton>
+                    <span class="texto-tenue">El ERP emite @string.Join(" y ", EventosPorEmitir.Select(EventosRadian.Evento)) por el canal de facturación electrónica; el recibo del bien exige la recepción confirmada.</span>
+                </div>
+            </PermissionGate>
+        }
+        </div>
+        }
     </IndicadorDeCarga>
 </div>
 
@@ -228,7 +293,13 @@
     private string? _prefijo, _numero, _cufe, _municipio, _motivo, _nitDesconocido, _eventoCude, _eventoNotas;
     private string _forma = "Cash", _eventoFuente = "DianPortal";
     private bool _electronica, _mostrarMotivo, _anular, _mostrarEvento, _cargado;
-    private int _evento;
+    private int _evento, _pestana;
+    private readonly ClaveDeOperacion _claveEmision = new();
+
+    /// <summary>Los eventos RADIAN pendientes (o rechazados) que el ERP puede emitir, en orden: el 030 antes que el 032.</summary>
+    private IReadOnlyList<int> EventosPorEmitir => _doc?.RadianEvents is { Count: > 0 } eventos && _doc.Document.Status == 2
+        ? [.. eventos.Where(e => e.Status is 0 or 3).Select(e => e.EventCode).OrderBy(c => c)]
+        : [];
     private bool _corregir;
 
     private string Titulo => _doc is null ? "Registrar factura de proveedor" : $"Factura de proveedor {_doc.Document.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Document.Status)}";
@@ -402,6 +473,23 @@
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el evento."); return; }
         _mostrarEvento = false;
         await Notification.SuccessAsync("Evento registrado.");
+        await CargarAsync(_doc.Document.PublicId);
+    }
+
+    /// <summary>I5 (T815; api.md §14.8): el ERP emite los eventos pendientes por el canal (202: quedan pendientes y los lleva el procesador).</summary>
+    private async Task EmitirAsync()
+    {
+        if (_doc is null || EventosPorEmitir.Count == 0) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.EmitirEventosRadianAsync(_doc.Document.PublicId, EventosPorEmitir, _claveEmision);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "ElectronicInvoicing.NotReady"
+                ? $"{r.ErrorMessage} Falta: {string.Join(", ", r.Dato<List<string>>("missing") ?? [])}."
+                : r.ErrorMessage ?? "No se pudieron emitir los eventos.");
+            return;
+        }
+        await Notification.SuccessAsync($"{r.Value?.Events.Count ?? 0} evento(s) enviados al canal: se verán emitidos cuando la DIAN los valide.");
         await CargarAsync(_doc.Document.PublicId);
     }
 

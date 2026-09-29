@@ -104,4 +104,71 @@ public class TransicionesDeEventoRadianTests
         TransicionesDeEventoRadian.QuedaPendiente(Eventos(SupplierInvoiceEventStatus.RegisteredExternally, SupplierInvoiceEventStatus.RegisteredExternally)).Should().BeFalse();
         TransicionesDeEventoRadian.QuedaPendiente(Eventos(SupplierInvoiceEventStatus.NotApplicable, SupplierInvoiceEventStatus.NotApplicable)).Should().BeFalse();
     }
+
+    // ------------------------------------------------------------------------------ I5 (T804, T805): emitir desde el ERP --
+
+    private static readonly SupplierInvoiceEventCode[] SoloAcuse = [SupplierInvoiceEventCode.Receipt030];
+    private static readonly SupplierInvoiceEventCode[] Ambos = [SupplierInvoiceEventCode.Receipt030, SupplierInvoiceEventCode.GoodsReceived032];
+    private static readonly SupplierInvoiceEventCode[] SoloRecibo = [SupplierInvoiceEventCode.GoodsReceived032];
+
+    [Fact]
+    public void Pedir_la_emision_del_030_pendiente_procede_y_de_contado_no_aplica()
+    {
+        TransicionesDeEventoRadian.PedirEmision(Eventos(SupplierInvoiceEventStatus.Pending, SupplierInvoiceEventStatus.Pending),
+            SupplierInvoiceEventCode.Receipt030, SoloAcuse, Emision, Hoy, recepcionConfirmada: false).Should().BeNull();
+        TransicionesDeEventoRadian.PedirEmision(Eventos(SupplierInvoiceEventStatus.NotApplicable, SupplierInvoiceEventStatus.NotApplicable),
+            SupplierInvoiceEventCode.Receipt030, SoloAcuse, Emision, Hoy, true).Should().Be(TransicionesDeEventoRadian.CodigoNoAplica);
+    }
+
+    [Fact]
+    public void El_032_exige_el_030_hecho_en_emision_o_pedido_a_la_vez_y_una_recepcion_confirmada()
+    {
+        var pendientes = Eventos(SupplierInvoiceEventStatus.Pending, SupplierInvoiceEventStatus.Pending);
+        TransicionesDeEventoRadian.PedirEmision(pendientes, SupplierInvoiceEventCode.GoodsReceived032, SoloRecibo, Emision, Hoy, true)
+            .Should().Be(TransicionesDeEventoRadian.CodigoFueraDeOrden);
+        TransicionesDeEventoRadian.PedirEmision(pendientes, SupplierInvoiceEventCode.GoodsReceived032, Ambos, Emision, Hoy, true).Should().BeNull();
+        TransicionesDeEventoRadian.PedirEmision(pendientes, SupplierInvoiceEventCode.GoodsReceived032, Ambos, Emision, Hoy, false)
+            .Should().Be(TransicionesDeEventoRadian.CodigoRecepcionSinConfirmar);
+
+        List<EventoRadianActual> acuseEnEmision =
+        [
+            new(SupplierInvoiceEventCode.Receipt030, SupplierInvoiceEventStatus.Pending, null, EnEmision: true),
+            new(SupplierInvoiceEventCode.GoodsReceived032, SupplierInvoiceEventStatus.Pending, null),
+        ];
+        TransicionesDeEventoRadian.PedirEmision(acuseEnEmision, SupplierInvoiceEventCode.GoodsReceived032, SoloRecibo, Emision, Hoy, true).Should().BeNull();
+        TransicionesDeEventoRadian.PedirEmision(Eventos(SupplierInvoiceEventStatus.RegisteredExternally, SupplierInvoiceEventStatus.Pending),
+            SupplierInvoiceEventCode.GoodsReceived032, SoloRecibo, Emision, Hoy, true).Should().BeNull();
+    }
+
+    [Fact]
+    public void Un_evento_hecho_o_en_emision_ya_esta_registrado_y_un_rechazado_se_reintenta()
+    {
+        TransicionesDeEventoRadian.PedirEmision(Eventos(SupplierInvoiceEventStatus.Emitted, SupplierInvoiceEventStatus.Pending),
+            SupplierInvoiceEventCode.Receipt030, SoloAcuse, Emision, Hoy, true).Should().Be(TransicionesDeEventoRadian.CodigoYaRegistrado);
+        List<EventoRadianActual> enEmision =
+        [
+            new(SupplierInvoiceEventCode.Receipt030, SupplierInvoiceEventStatus.Pending, null, EnEmision: true),
+            new(SupplierInvoiceEventCode.GoodsReceived032, SupplierInvoiceEventStatus.Pending, null),
+        ];
+        TransicionesDeEventoRadian.PedirEmision(enEmision, SupplierInvoiceEventCode.Receipt030, SoloAcuse, Emision, Hoy, true)
+            .Should().Be(TransicionesDeEventoRadian.CodigoYaRegistrado);
+        TransicionesDeEventoRadian.PedirEmision(Eventos(SupplierInvoiceEventStatus.Rejected, SupplierInvoiceEventStatus.Pending),
+            SupplierInvoiceEventCode.Receipt030, SoloAcuse, Emision, Hoy, true).Should().BeNull();
+    }
+
+    [Fact]
+    public void La_factura_emitida_despues_de_hoy_no_admite_eventos()
+    {
+        TransicionesDeEventoRadian.PedirEmision(Eventos(SupplierInvoiceEventStatus.Pending, SupplierInvoiceEventStatus.Pending),
+            SupplierInvoiceEventCode.Receipt030, SoloAcuse, Hoy.AddDays(1), Hoy, true).Should().Be(TransicionesDeEventoRadian.CodigoFechaInvalida);
+    }
+
+    [Theory]
+    [InlineData(SupplierInvoiceEventStatus.Pending, true, SupplierInvoiceEventStatus.Emitted)]
+    [InlineData(SupplierInvoiceEventStatus.Pending, false, SupplierInvoiceEventStatus.Rejected)]
+    [InlineData(SupplierInvoiceEventStatus.RegisteredExternally, true, null)]
+    [InlineData(SupplierInvoiceEventStatus.Emitted, true, null)]
+    public void La_respuesta_de_la_DIAN_lleva_el_pendiente_a_emitido_o_rechazado(SupplierInvoiceEventStatus actual, bool validado,
+        SupplierInvoiceEventStatus? esperado) =>
+        TransicionesDeEventoRadian.TrasLaRespuesta(actual, validado).Should().Be(esperado);
 }

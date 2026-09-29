@@ -20,7 +20,12 @@ public sealed record PedidoDeDiferenciaDePrecio(ReferenciaDeKardex Entrada, deci
 /// </summary>
 public static class DiferenciaDePrecio
 {
-    public static ResultadoDeCosteo Aplicar(EstadoDeCosto estado, PedidoDeDiferenciaDePrecio pedido, RedondeoDeMontos montos)
+    /// <param name="metodo">
+    /// Con PEPS (I5, T843) la porción en existencia es lo que queda de la capa de esa entrada (<see cref="Peps.ProporcionEnExistencia"/>)
+    /// y se suma al costo de esa capa (<see cref="Peps.AjusteSobreEntrada"/>).
+    /// </param>
+    public static ResultadoDeCosteo Aplicar(EstadoDeCosto estado, PedidoDeDiferenciaDePrecio pedido, RedondeoDeMontos montos,
+        CostMethod metodo = CostMethod.WeightedAverage)
     {
         ArgumentNullException.ThrowIfNull(estado);
         ArgumentNullException.ThrowIfNull(pedido);
@@ -31,6 +36,12 @@ public static class DiferenciaDePrecio
             .Paso("Cantidad facturada", pedido.CantidadFacturada)
             .Paso("Existencia del ámbito", estado.Quantity);
         if (pedido.Diferencia == 0m) return new ResultadoDeCosteo([], estado, explicacion.Nota("Regla", "Sin diferencia: no hay ajuste."));
+
+        if (metodo == CostMethod.Fifo)
+        {
+            var enCapa = Redondeo.Monto(pedido.Diferencia * Peps.ProporcionEnExistencia(estado, pedido.Entrada), montos);
+            return Peps.AjusteSobreEntrada(estado, pedido.Entrada, KardexReason.PriceDifference, pedido.Diferencia, enCapa, montos, explicacion);
+        }
 
         var proporcion = estado.Quantity <= 0m ? 0m : Math.Min(1m, estado.Quantity / pedido.CantidadFacturada);
         var enExistencia = Redondeo.Monto(pedido.Diferencia * proporcion, montos);

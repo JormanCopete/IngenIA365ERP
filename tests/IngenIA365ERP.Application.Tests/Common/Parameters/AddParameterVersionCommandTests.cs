@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Common.Parameters.AddParameterVersion;
 using IngenIA365ERP.Application.Common.Parameters.GetParameterHistory;
 using IngenIA365ERP.Application.Common.Parameters.ListParameters;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.ElectronicInvoicing;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Enums.Parameters;
@@ -87,7 +88,9 @@ public class AddParameterVersionCommandTests
     [Fact]
     public async Task Peps_es_ValueNotAllowed_mientras_no_este_disponible()
     {
-        var r = await Enviar(Alta(ParametrosDeInventario.CosteoMetodo, "Peps", new DateOnly(2026, 10, 1)));
+        // Fijado en I4: desde el cierre de I5 (EntregaVigente = I5) Peps se admite.
+        var r = await new AddParameterVersionCommandHandler(_db, _permisos, _resolutor, _reglas, entrega: EntregaDelComercio.I4)
+            .Handle(Alta(ParametrosDeInventario.CosteoMetodo, "Peps", new DateOnly(2026, 10, 1)), CancellationToken.None);
 
         r.Error.Code.Should().Be("Parameters.ValueNotAllowed");
         Admitidos(r.Error).Should().Equal("PromedioPonderado");
@@ -348,7 +351,7 @@ public class AddParameterVersionCommandTests
         reloj.HoyLocal.Returns(Hoy);
         var handler = new ListParametersQueryHandler(new LectorDeParametros(_db), _resolutor, reloj);
 
-        (await handler.Handle(new ListParametersQuery(), CancellationToken.None)).Value.Should().HaveCount(57);
+        (await handler.Handle(new ListParametersQuery(), CancellationToken.None)).Value.Should().HaveCount(58);
         (await handler.Handle(new ListParametersQuery(ParametrosTributarios.Modulo), CancellationToken.None)).Value.Should().HaveCount(6);
         (await handler.Handle(new ListParametersQuery(Inv, "No.Existe"), CancellationToken.None)).Error.Code.Should().Be("Parameters.KeyNotFound");
     }

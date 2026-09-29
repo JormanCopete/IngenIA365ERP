@@ -34,7 +34,8 @@ public sealed record ReceiptLineBalanceDto(Guid LinePublicId, int LineNumber, de
 
 /// <summary>
 /// El detalle de un documento de compras: el genérico (<see cref="InventoryDocumentDto"/>) más lo propio de la clase —el
-/// documento del proveedor y sus eventos RADIAN, o los saldos por línea de una recepción—.
+/// documento del proveedor y sus eventos RADIAN, o los saldos por línea de una recepción— y, en una factura cruzada contra una
+/// orden, su cruce a tres vías (<see cref="Match"/>, api.md §14.9, T797; nulo si no se cruzó).
 /// </summary>
 public sealed record PurchaseDocumentDto(
     InventoryDocumentDto Document,
@@ -42,7 +43,28 @@ public sealed record PurchaseDocumentDto(
     IReadOnlyList<RadianEventDto> RadianEvents,
     IReadOnlyList<ReceiptLineBalanceDto> LineBalances,
     string? OperationMunicipalityDaneCode,
-    IReadOnlyList<AjusteDeCostoDeAnulacionDto>? CostAdjustments = null);
+    IReadOnlyList<AjusteDeCostoDeAnulacionDto>? CostAdjustments = null,
+    PurchasePlanInfoDto? Plan = null,
+    IReadOnlyList<PurchasePendingLineDto>? PendingLines = null,
+    IReadOnlyList<Consultas.PurchaseMatchLineDto>? Match = null);
+
+/// <summary>
+/// Lo propio de una solicitud o una orden en su detalle (I5, T787, T792; api.md §14.9): para cuándo se necesita (<c>neededBy</c>) o la
+/// entrega esperada (<c>expectedDate</c>), las condiciones de pago de la orden (sus notas) y el cierre de su saldo. (nuevo)
+/// </summary>
+public sealed record PurchasePlanInfoDto(
+    DateOnly? NeededBy,
+    DateOnly? ExpectedDate,
+    string? PaymentTerms,
+    DateTime? BalanceClosedAt,
+    UsuarioDto? BalanceClosedBy,
+    string? BalanceClosedReason);
+
+/// <summary>
+/// Por línea de una solicitud (<see cref="PendingToOrder"/>) o de una orden (<see cref="PendingToReceive"/>), en unidad base: lo pedido,
+/// lo que ya consumieron sus vínculos vigentes y lo que queda. Se calculan, nunca se guardan (T788). (nuevo)
+/// </summary>
+public sealed record PurchasePendingLineDto(Guid LinePublicId, int LineNumber, decimal Quantity, decimal Consumed, decimal? PendingToOrder, decimal? PendingToReceive);
 
 /// <summary>Una fila de la lista de facturas del proveedor (§14.4): el resumen genérico más el documento y los eventos.</summary>
 public sealed record SupplierInvoiceSummaryDto(

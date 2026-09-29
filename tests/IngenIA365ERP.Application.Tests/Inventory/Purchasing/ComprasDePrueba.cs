@@ -44,6 +44,12 @@ public sealed class ComprasDePrueba
     public Guid P1 { get; private set; }
     public Guid P3 { get; private set; }
     public ContextoDeCompraDirecta CompraDirecta { get; } = new();
+
+    /// <summary>
+    /// La entrega con que opera el ciclo de estas pruebas: la del despliegue salvo que la prueba pida una posterior (I5: la solicitud y
+    /// la orden de compra, que no operan hasta que el cierre de I5 suba <c>CatalogoDeParametros.EntregaVigente</c>).
+    /// </summary>
+    public Domain.Common.Parametros.EntregaDelComercio Entrega { get; set; } = Domain.Common.Parametros.CatalogoDeParametros.EntregaVigente;
     public AlertasDePrueba Alertas { get; } = new();
 
     private ComprasDePrueba(KardexDePrueba k) => K = k;
@@ -58,6 +64,10 @@ public sealed class ComprasDePrueba
                  {
                      ("REC", DocumentClass.PurchaseReceipt), ("FCP", DocumentClass.SupplierInvoice),
                      ("NCP", DocumentClass.SupplierNote), ("DVP", DocumentClass.SupplierReturn),
+                     // I5 (T785): la solicitud y la orden (operan con la entrega I5: ver Entrega).
+                     ("SOC", DocumentClass.PurchaseRequest), ("ORC", DocumentClass.PurchaseOrder),
+                     // I5 (T799): los costos adicionales.
+                     ("CAD", DocumentClass.LandedCost),
                  })
         {
             var tipo = new InventoryDocumentType { Code = codigo, Name = codigo, Class = clase, IsActive = true };
@@ -106,6 +116,17 @@ public sealed class ComprasDePrueba
 
     public VinculosDeCompra Vinculos() => new(C.Db, C.Reloj);
 
+    public PendientesDeCompra Pendientes() => new(C.Db);
+
+    /// <summary>Las reglas de la recepción contra orden (I5, T789).</summary>
+    public RecepcionContraOrden ContraOrden() => new(C.Db, Pendientes(), K.Lector());
+
+    /// <summary>El cruce a tres vías de la factura del proveedor (I5, T794), con el motor de aprobaciones de prueba.</summary>
+    public CruceATresVias Cruce() => new(C.Db, K.Motor, K.Lector(), Vinculos(), C.Reloj);
+
+    /// <summary>Los costos adicionales (I5, T799).</summary>
+    public CostosAdicionalesDeCompra Costos() => new(C.Db, K.Lector(), K.Registro());
+
     public EfectosDeClase Efectos()
     {
         var registro = K.Registro();
@@ -118,14 +139,17 @@ public sealed class ComprasDePrueba
         [
             new EfectoDeAjustePositivo(registro, reversion, emision, maestros, K.Permisos, C.Db),
             new EfectoDeAjusteNegativo(registro, reversion, emision, maestros, K.Permisos, C.Db),
-            new EfectoRecepcionDeCompra(registro, reversion, emision, maestros, Calculo(), C.Db),
-            new EfectoFacturaDeProveedor(registro, emision, maestros, Calculo(), vinculos, diferencias, C.Db),
+            new EfectoRecepcionDeCompra(registro, reversion, emision, maestros, Calculo(), C.Db, ContraOrden()),
+            new EfectoFacturaDeProveedor(registro, emision, maestros, Calculo(), vinculos, diferencias, C.Db, Cruce()),
             new EfectoNotaDeProveedor(registro, emision, maestros, Calculo(), vinculos, diferencias, C.Db),
             new EfectoDevolucionAProveedor(registro, reversion, emision, maestros, vinculos, C.Db),
-        ]);
+            new EfectoDeSolicitudDeCompra(maestros),
+            new EfectoDeOrdenDeCompra(maestros, Calculo(), vinculos),
+            new EfectoDeCostosAdicionales(registro, emision, Costos(), vinculos, C.Db, C.Reloj),
+        ], Entrega);
     }
 
-    public BorradorDeCompra Borrador() => new(C.Db, C.Reloj, Calculo(), Vinculos(), CompraDirecta);
+    public BorradorDeCompra Borrador() => new(C.Db, C.Reloj, Calculo(), Vinculos(), CompraDirecta, ContraOrden(), Costos());
 
     public SaveInventoryDraftCommandHandler Guardar(EfectosDeClase? efectos = null) =>
         new(C.Db, K.Maestros(), K.Alcance, K.Actor, C.Reloj, efectos ?? Efectos(), K.Vista(), [Borrador()]);

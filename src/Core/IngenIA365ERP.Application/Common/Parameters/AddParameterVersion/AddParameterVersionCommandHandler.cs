@@ -29,7 +29,9 @@ public sealed class AddParameterVersionCommandHandler(
     IApplicationDbContext db,
     IPermissionChecker permisos,
     IResolutorDeAmbitoDeParametro resolutor,
-    IReglasDeParametros reglas)
+    IReglasDeParametros reglas,
+    IEnumerable<IEfectoDeAltaDeParametro>? efectosDeAlta = null,
+    EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente)
     : IRequestHandler<AddParameterVersionCommand, Result<AddParameterVersionResponse>>
 {
     public async Task<Result<AddParameterVersionResponse>> Handle(AddParameterVersionCommand request, CancellationToken ct)
@@ -44,9 +46,9 @@ public sealed class AddParameterVersionCommandHandler(
         if (!definicion.AdmiteAmbito(request.ScopeKind))
             return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.AmbitoNoAdmitido(definicion));
 
-        var valor = definicion.Interpretar(request.Value, CatalogoDeParametros.EntregaVigente);
+        var valor = definicion.Interpretar(request.Value, entrega);
         if (!valor.Admitido)
-            return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.ValorNoAdmitido(definicion, request.Value));
+            return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.ValorNoAdmitido(definicion, request.Value, entrega));
 
         if (definicion.ExigeFuenteLegal && string.IsNullOrWhiteSpace(request.LegalSource))
             return Result.Failure<AddParameterVersionResponse>(ErroresDeParametros.FuenteLegalRequerida(definicion));
@@ -81,6 +83,13 @@ public sealed class AddParameterVersionCommandHandler(
             request.Reason, request.LegalSource, ct);
         if (agregadas.IsFailure) return Result.Failure<AddParameterVersionResponse>(agregadas.Error);
         var (creadas, cerradaEl) = agregadas.Value;
+
+        // I5 (T841): lo que el módulo hace además de guardar la vigencia (el cambio de método de costeo), en la misma transacción.
+        foreach (var efecto in efectosDeAlta ?? [])
+        {
+            var aplicado = await efecto.AplicarAsync(alta, request.Reason, request.LegalSource, ct);
+            if (aplicado.IsFailure) return Result.Failure<AddParameterVersionResponse>(aplicado.Error);
+        }
 
         await db.SaveChangesAsync(ct);
 

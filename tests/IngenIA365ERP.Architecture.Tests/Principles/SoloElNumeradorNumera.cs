@@ -118,6 +118,42 @@ public class SoloElNumeradorNumera
             "DianNumberingResolution.LastIssuedNumber lo escribe sólo NumeradorFiscal (T671). Lo escriben:\n  " + string.Join("\n  ", escritores));
     }
 
+    /// <summary>
+    /// I5, T773 (T802, T42f; dian.md §4.3): el consecutivo de un evento RADIAN (030 o 032) lo calcula sólo
+    /// <c>NumeradorFiscal.NumerarEventoAsync</c> —el siguiente por (ambiente, prefijo del evento) bajo su cerrojo— y sólo lo pide
+    /// <c>EmitRadianEventCommand</c>. Ningún otro archivo que conozca los eventos RADIAN saca el máximo de <c>Consecutive</c>: sería una
+    /// segunda numeración con saltos o repetidos (el índice único del documento electrónico lo haría fallar tarde).
+    /// </summary>
+    [Fact]
+    public void El_consecutivo_de_los_eventos_RADIAN_solo_lo_escribe_el_NumeradorFiscal()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var llamada = new Regex(@"\bNumerarEventoAsync\s*\(", RegexOptions.Compiled);
+        var maximo = new Regex(@"\bMax(Async)?\s*\([^;]*\.Consecutive\b", RegexOptions.Compiled);
+        var conoceEventos = new Regex(@"\bRadianEvent0(30|32)\b", RegexOptions.Compiled);
+        var permitidosParaPedir = new[] { "NumeradorFiscal.cs", "EmitRadianEventCommand.cs" };
+        var infractores = new List<string>();
+        var pedidos = 0;
+
+        foreach (var archivo in RepoPath.ProductionCSharpFiles())
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            var nombre = Path.GetFileName(archivo);
+            var relativo = Path.GetRelativePath(root, archivo);
+            if (llamada.IsMatch(texto))
+            {
+                if (!permitidosParaPedir.Contains(nombre, StringComparer.Ordinal)) infractores.Add($"{relativo}: pide el número de un evento RADIAN");
+                else if (nombre == "EmitRadianEventCommand.cs") pedidos++;
+            }
+            if (nombre != "NumeradorFiscal.cs" && conoceEventos.IsMatch(texto) && maximo.IsMatch(texto))
+                infractores.Add($"{relativo}: calcula el siguiente consecutivo de un evento fuera del NumeradorFiscal");
+        }
+
+        Assert.True(pedidos == 1, "EmitRadianEventCommand debe pedir el número del evento a NumeradorFiscal.NumerarEventoAsync (T802).");
+        Assert.True(infractores.Count == 0,
+            "Consecutivos de eventos RADIAN fuera del NumeradorFiscal (FR-038, T16, T802):\n  " + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void Solo_el_reemplazo_del_caso_b_reutiliza_un_numero_fiscal()
     {

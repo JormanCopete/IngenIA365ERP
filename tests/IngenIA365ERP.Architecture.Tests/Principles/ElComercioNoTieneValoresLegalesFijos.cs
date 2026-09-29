@@ -94,6 +94,44 @@ public class ElComercioNoTieneValoresLegalesFijos
         (new Regex(@"""\d{2}""", RegexOptions.Compiled), "código DIAN como texto (sale de CatalogoDian)"),
     ];
 
+    /// <summary>
+    /// I5, T773 (FR-046, FR-049, FR-050; decisiones-transversales T42a, T42d): el cruce a tres vías y el prorrateo de los costos
+    /// adicionales no escriben ninguna tolerancia ni plazo. Las tolerancias son <c>Compras.Tolerancia{Cantidad,Precio}{Porcentaje,Valor}</c>
+    /// y <c>Compras.ReglaDeTolerancia</c> con vigencia y llegan por parámetro; el reparto no tiene números propios. En estos dos archivos,
+    /// más estrictos que el resto del comercio, sólo se admiten los decimales <c>0m</c> y <c>1m</c> (cero y la unidad de la proporción),
+    /// y ningún tiempo (<c>TimeSpan</c>, <c>Add/From{Days,Hours,…}</c> con un número).
+    /// </summary>
+    [Fact]
+    public void El_cruce_y_el_prorrateo_no_escriben_tolerancias_ni_plazos()
+    {
+        var root = RepoPath.FindRepoRoot();
+        string[] archivos =
+        [
+            "src/Core/IngenIA365ERP.Domain/Inventory/Purchasing/CruceDeCompra.cs",
+            "src/Core/IngenIA365ERP.Domain/Inventory/Costing/Prorrateo.cs",
+        ];
+        var admitidos = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "0m", "1m", "0.0m", "1.0m" };
+        var tiempo = new Regex(@"\bTimeSpan\b|\b(Add|From)(Days|Hours|Minutes|Seconds|Months|Years)\(\s*\d", RegexOptions.Compiled);
+        var infractores = new List<string>();
+
+        foreach (var relativo in archivos)
+        {
+            var ruta = Path.Combine(root, relativo);
+            Assert.True(File.Exists(ruta), $"No existe {relativo}: si se movió, actualizá la lista (T773).");
+            var lineas = FuenteSinComentarios.Leer(ruta).Split('\n');
+            for (var i = 0; i < lineas.Length; i++)
+            {
+                foreach (Match m in LiteralDecimal.Matches(lineas[i]))
+                    if (!admitidos.Contains(m.Value)) infractores.Add($"{relativo}:{i + 1}: literal decimal '{m.Value}'");
+                if (tiempo.IsMatch(lineas[i])) infractores.Add($"{relativo}:{i + 1}: plazo escrito: {lineas[i].Trim()}");
+            }
+        }
+
+        Assert.True(infractores.Count == 0,
+            "Tolerancias o plazos escritos en el cruce o el prorrateo (FR-049, FR-050, T773): van en los parámetros Compras.*:\n  "
+            + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void La_facturacion_electronica_no_escribe_plazos_ni_codigos_DIAN()
     {

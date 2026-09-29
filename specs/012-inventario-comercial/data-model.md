@@ -652,6 +652,7 @@ no admitido es `Parameters.ValueNotAllowed`, nunca el defecto.
 | INV | `Costeo.Ambito` | `Cooperativa`, `Bodega` | Cooperativa | None (misma regla) | I1 | 042 |
 | INV | `Costeo.RetroactivosPermitidos` | bool | false | None | I5 | 045 (no alcanza al saldo inicial de una bodega no activa ni a los ajustes de conteo, §3.1) |
 | INV | `Costeo.RetroactivosDiasMaximos` | int | 0 | None | I5 | 045 |
+| INV | `Costeo.CambioExigeActa` **(nuevo, T842; a confirmar)** | bool | false | None | I5 | 043 (con `true`, cambiar `Costeo.Metodo`/`Costeo.Ambito` exige `legalSource`: `Parameters.LegalSourceRequired`) |
 | INV | `Existencias.StockNegativoPermitido` | bool | false | None, Warehouse | I1 | 034 |
 | INV | `Redondeo.Montos` | `Centavo`, `Peso` | Centavo | None | I1 | 017 |
 | INV | `Redondeo.Residuo` | `MayorValor`, `UltimaLinea` | MayorValor | None | I1 | 017 |
@@ -2853,7 +2854,7 @@ remiten a ella. El `Module` es siempre `Inventory`:
 | `DiscountOverCap` | `DocumentLineDiscount` | regla fija de un nivel: `Inventory.Discounts.Authorize` y tope del aprobador ≥ el descuento; si la cooperativa registra una política para el sujeto, rige la política | el cajero que lo pidió |
 | `ProvisionalCredit` | `DocumentPayment` | regla fija de un nivel: `Inventory.Sales.SellOnCredit` con monto máximo ≥ el valor a crédito (o política del sujeto) | el cajero (T32) |
 | `TransferDiscrepancy` | `TransferDiscrepancy` | la política del tipo del documento que la resuelve (el que crea `ResolveTransferDiscrepancyCommand`: recepción hacia el origen o el destino, baja desde el tránsito o ajuste positivo); sin política, un nivel con `Inventory.Transfers.Approve` | quien despachó, quien recibió y quien propone la resolución |
-| `PurchaseMatchException` (I5) | `PurchaseMatchLine` | la política del tipo de la factura del proveedor | quien registró la factura |
+| `PurchaseMatchException` (I5) | `PurchaseMatchLine` | la política del sujeto para el tipo de la factura del proveedor; sin política, un nivel con `Inventory.Purchases.Approve` (api.md §14.9; decisiones-transversales T42d) | quien registró la factura |
 
 ---
 

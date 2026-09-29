@@ -1,0 +1,52 @@
+{
+  // US16-4, FR-043 (T820; api.md §27 method-change-valuation): desde el kardex de cada producto y ámbito se reconstruye el
+  // valorizado por promedio ponderado y por PEPS al INICIO de cada fecha (lo anterior a ella), agrupado por grupo contable.
+  // Un producto cuya historia empieza en el saldo inicial (corte del sistema anterior) no se puede valorar antes de ese corte
+  // ni en él: queda con la nota y fuera de las sumas del grupo.
+  "nombre": "Valorizado por los dos métodos",
+  "descripcion": "Promedio ponderado registrado, ámbito cooperativa. G1 = P1 y P3; G2 = P2. P1: 10 × 1.000 (10/05), 10 × 1.300 (20/05), vende 15 a 1.150 (05/07), 10 × 1.400 (10/08), vende 3 a 1.316,666667 = 3.950 (15/09): promedio 12 por 15.800; PEPS: C2 2 × 1.300 + C3 10 × 1.400 = 16.600. P2: 20 × 500 (01/04), vende 5 (10/06, 2.500), 5 × 800 (01/08) → 20 por 11.500 (575), vende 10 (01/09, 5.750): promedio 5.750; PEPS: 5 × 500 + 5 × 800 = 6.500. P3: saldo inicial 8 × 2.000 el 01/06 (corte), 2 × 2.500 (01/07) → 10 por 21.000 (2.100), vende 4 (20/08, 8.400): promedio 12.600; PEPS: 4 × 2.000 + 2 × 2.500 = 13.000. Al 01/06 (inicio del período comparativo): G1 P1 23.000 por los dos métodos y P3 sin calcular (su historia empieza el 01/06); G2 10.000 por los dos. Al 01/10 (fecha del cambio): G1 28.400 promedio y 29.600 PEPS (diferencia 1.200); G2 5.750 y 6.500 (750).",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "P2E1", "producto": "P2", "documento": "EC-1", "fecha": "2026-04-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 20, "costoUnitario": 500 },
+    { "id": "P1E1", "producto": "P1", "documento": "EC-2", "fecha": "2026-05-10", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "P1E2", "producto": "P1", "documento": "EC-3", "fecha": "2026-05-20", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    { "id": "P3SI", "producto": "P3", "documento": "SI-1", "fecha": "2026-06-01", "clase": "OpeningBalance", "bodega": "PRINCIPAL", "cantidad": 8, "costoUnitario": 2000 },
+    { "id": "P2V1", "producto": "P2", "documento": "FV-1", "fecha": "2026-06-10", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -5 },
+    { "id": "P3E1", "producto": "P3", "documento": "EC-4", "fecha": "2026-07-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 2, "costoUnitario": 2500 },
+    {
+      "id": "P1V1", "producto": "P1", "documento": "FV-2", "fecha": "2026-07-05", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -15,
+      "esperado": { "lineas": [ { "kind": "Exit", "cantidad": -15, "costoUnitario": 1150, "costoTotal": -17250 } ] }
+    },
+    { "id": "P2E2", "producto": "P2", "documento": "EC-5", "fecha": "2026-08-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 5, "costoUnitario": 800 },
+    { "id": "P1E3", "producto": "P1", "documento": "EC-6", "fecha": "2026-08-10", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1400 },
+    {
+      "id": "P3V1", "producto": "P3", "documento": "FV-3", "fecha": "2026-08-20", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -4,
+      "esperado": { "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 2100, "costoTotal": -8400 } ] }
+    },
+    {
+      "id": "P2V2", "producto": "P2", "documento": "FV-4", "fecha": "2026-09-01", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -10,
+      "esperado": { "lineas": [ { "kind": "Exit", "cantidad": -10, "costoUnitario": 575, "costoTotal": -5750 } ] }
+    },
+    {
+      "id": "P1V2", "producto": "P1", "documento": "FV-5", "fecha": "2026-09-15", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -3,
+      "esperado": { "lineas": [ { "kind": "Exit", "cantidad": -3, "costoUnitario": 1316.666667, "costoTotal": -3950 } ] }
+    }
+  ],
+  "final": [
+    { "ambito": "P1@COOPERATIVA", "cantidad": 12, "valor": 15800, "promedio": 1316.666667 },
+    { "ambito": "P2@COOPERATIVA", "cantidad": 10, "valor": 5750, "promedio": 575 },
+    { "ambito": "P3@COOPERATIVA", "cantidad": 6, "valor": 12600, "promedio": 2100 }
+  ],
+  "valorizacion": {
+    "grupos": { "P1": "G1", "P2": "G2", "P3": "G1" },
+    "cortes": { "P3": "2026-06-01" },
+    "fechas": [ "2026-10-01", "2026-06-01" ],
+    "esperado": [
+      { "grupo": "G1", "fecha": "2026-06-01", "promedioPonderado": 23000, "peps": 23000, "diferencia": 0, "sinCalcular": [ "P3" ] },
+      { "grupo": "G2", "fecha": "2026-06-01", "promedioPonderado": 10000, "peps": 10000, "diferencia": 0, "sinCalcular": [] },
+      { "grupo": "G1", "fecha": "2026-10-01", "promedioPonderado": 28400, "peps": 29600, "diferencia": 1200, "sinCalcular": [] },
+      { "grupo": "G2", "fecha": "2026-10-01", "promedioPonderado": 5750, "peps": 6500, "diferencia": 750, "sinCalcular": [] }
+    ],
+    "nota": "No se puede calcular"
+  }
+}

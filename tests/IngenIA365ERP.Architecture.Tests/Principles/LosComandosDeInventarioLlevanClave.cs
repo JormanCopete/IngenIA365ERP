@@ -116,6 +116,11 @@ public class LosComandosDeInventarioLlevanClave
         "CloseContingencyCommand",
         "ReplacePosDocumentWithInvoiceCommand",
         "GenerateWeeklySupportDocumentsCommand",
+        // I5, US13 (T773; api.md §14.8, §14.9): el envío de la orden al proveedor, el cierre de su saldo y la emisión RADIAN desde el ERP.
+        // Solicitudes, órdenes y costos adicionales se guardan por el ciclo común (SaveInventoryDraftCommand y sus vecinos, ya con clave).
+        "SendPurchaseOrderCommand",
+        "ClosePurchaseOrderBalanceCommand",
+        "EmitRadianEventCommand",
     ];
 
     /// <summary>
@@ -195,6 +200,66 @@ public class LosComandosDeInventarioLlevanClave
 
         Assert.True(revisadas >= 12, $"Se esperaban al menos 12 escrituras en Endpoints/ElectronicInvoicing; se encontraron {revisadas}.");
         Assert.True(infractores.Count == 0, "Escrituras de facturación electrónica sin Idempotency-Key (FR-016, T13):\n  " + string.Join("\n  ", infractores));
+    }
+
+    /// <summary>Las rutas de compras de I5 (T808; api.md §14.8, §14.9) que tienen que estar publicadas en <c>PurchasesEndpoints</c>.</summary>
+    private static readonly string[] RutasDeComprasDeI5 =
+    [
+        "\"/requests\"", "\"/orders\"", "\"/{id:guid}/pdf\"", "\"/{id:guid}/send\"", "\"/{id:guid}/close-balance\"",
+        "\"/matches\"", "\"/{id:guid}/match\"", "\"/landed-costs\"", "\"/{id:guid}/radian-events/emit\"",
+    ];
+
+    /// <summary>
+    /// I5, T773 (T808; api.md §2.3, §14): toda escritura de <c>/api/inventory/purchases</c> (POST o PUT publicada en <c>PurchasesEndpoints</c>)
+    /// lleva <c>ConClaveDeOperacion()</c>, salvo el prellenado desde el XML, que es una consulta. El ciclo común de solicitudes, órdenes y
+    /// costos adicionales la pone adentro de <c>CicloDeDocumentoRutas</c>. Además, las rutas de I5 están todas.
+    /// </summary>
+    [Fact]
+    public void Las_escrituras_de_compras_exigen_la_clave_y_estan_las_rutas_de_I5()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var archivo = Path.Combine(root, "src", "Presentation", "IngenIA365ERP.API", "Endpoints", "Inventory", "PurchasesEndpoints.cs");
+        var texto = FuenteSinComentarios.Leer(archivo);
+        var escritura = new Regex(@"^\.Map(Post|Put)\(\s*""(?<ruta>[^""]*)""", RegexOptions.Compiled);
+        var infractores = new List<string>();
+        var revisadas = 0;
+
+        foreach (var tramo in LosEndpointsProtegidosExigenPermiso.Tramos(texto))
+        {
+            var m = escritura.Match(tramo);
+            if (!m.Success) continue;
+            revisadas++;
+            if (m.Groups["ruta"].Value == "/prefill") continue;
+            if (!tramo.Contains(".ConClaveDeOperacion()", StringComparison.Ordinal))
+                infractores.Add($"{m.Groups["ruta"].Value} sin ConClaveDeOperacion()");
+        }
+
+        foreach (var ruta in RutasDeComprasDeI5.Where(r => !texto.Contains(r, StringComparison.Ordinal)))
+            infractores.Add($"falta la ruta {ruta} (T808)");
+        var ciclos = Regex.Matches(texto, @"\.MapCicloDeDocumento\(").Count;
+        if (ciclos < 8) infractores.Add($"se esperaban 8 ciclos comunes (5 de I1/I4 más solicitudes, órdenes y costos adicionales); hay {ciclos}");
+
+        Assert.True(revisadas >= 6, $"Se esperaban al menos 6 escrituras propias en PurchasesEndpoints; se encontraron {revisadas}.");
+        Assert.True(infractores.Count == 0, "Compras de I5 (FR-016, T13, T808):\n  " + string.Join("\n  ", infractores));
+    }
+
+    /// <summary>
+    /// I5, T845 (api.md §2.3, §9.3): el impacto en costos es una <b>consulta</b> por POST: se llama <c>*Query</c>, su ruta existe en
+    /// <c>DocumentsEndpoints</c> con <c>Inventory.Costs.Read</c> y no exige la clave.
+    /// </summary>
+    [Fact]
+    public void El_impacto_en_costos_es_una_consulta_sin_clave()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var archivo = Path.Combine(root, "src", "Presentation", "IngenIA365ERP.API", "Endpoints", "Inventory", "DocumentsEndpoints.cs");
+        var tramo = LosEndpointsProtegidosExigenPermiso.Tramos(FuenteSinComentarios.Leer(archivo))
+            .FirstOrDefault(t => t.Contains("\"/{id:guid}/cost-impact\"", StringComparison.Ordinal));
+
+        Assert.True(tramo is not null, "Falta POST /api/inventory/documents/{id}/cost-impact (T845).");
+        Assert.StartsWith(".MapPost(", tramo);
+        Assert.Contains("GetDocumentCostImpactQuery", tramo);
+        Assert.Contains("LeerCostos", tramo);
+        Assert.DoesNotContain(".ConClaveDeOperacion()", tramo);
     }
 
     /// <summary>

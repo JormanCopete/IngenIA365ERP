@@ -1,0 +1,21 @@
+{
+  "nombre": "Por cantidad: el mismo reparto con el residuo a la última línea",
+  "descripcion": "Igual que el anterior con Redondeo.Residuo = UltimaLinea: la tercera línea queda en 33,34 con RoundingResidue = 0,01.",
+  "monto": 100,
+  "metodo": "Quantity",
+  "montos": "Centavo",
+  "residuo": "UltimaLinea",
+  "lineas": [
+    { "linea": 1, "producto": 10, "cantidad": 1, "valor": 500, "existencia": 1 },
+    { "linea": 2, "producto": 11, "cantidad": 1, "valor": 700, "existencia": 1 },
+    { "linea": 3, "producto": 12, "cantidad": 1, "valor": 900, "existencia": 1 }
+  ],
+  "esperado": {
+    "roundingResidue": 0.01,
+    "lineas": [
+      { "linea": 1, "basis": 1, "allocated": 33.33, "residue": 0, "existingRatio": 1, "existing": 33.33, "sold": 0 },
+      { "linea": 2, "basis": 1, "allocated": 33.33, "residue": 0, "existingRatio": 1, "existing": 33.33, "sold": 0 },
+      { "linea": 3, "basis": 1, "allocated": 33.34, "residue": 0.01, "existingRatio": 1, "existing": 33.34, "sold": 0 }
+    ]
+  }
+}

@@ -246,6 +246,12 @@ public interface IApplicationDbContext
     // US11 (T391): la foto y las capturas de los conteos físicos (INV_CountSnapshotLines, INV_CountCaptures).
     DbSet<Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines { get; }
     DbSet<Domain.Entities.Inventory.Documents.CountCapture> CountCaptures { get; }
+    // Feature 012, I5 (T835): el cruce a tres vías, el reparto de los costos adicionales y las capas PEPS con sus consumos.
+    // Las capas y los consumos los escriben sólo RegistroDeKardex y RebuildInventoryProjectionsCommand.
+    DbSet<Domain.Entities.Inventory.Purchasing.PurchaseMatchLine> PurchaseMatchLines { get; }
+    DbSet<Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations { get; }
+    DbSet<Domain.Entities.Inventory.Projections.CostLayer> CostLayers { get; }
+    DbSet<Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions { get; }
     // Feature 012 (T585, I3): medios de pago de Core, punto de venta y caja, precios y satélites de la venta. INV_UserPointOfSaleScopes
     // se lee y escribe solo por IAsignacionesDePuntoDeVenta; las redenciones de bonos, sólo al confirmar la venta.
     DbSet<Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans { get; }

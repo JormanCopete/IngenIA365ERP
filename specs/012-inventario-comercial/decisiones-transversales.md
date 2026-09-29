@@ -441,6 +441,8 @@ de `data-model.md`; ninguna columna de enum es `tinyint`). La FK a la unidad de 
 - `SupplierInvoiceEventCode` { Receipt030=30, GoodsReceived032=32 } · `SupplierInvoiceEventStatus`
   { Pending=0, RegisteredExternally=1, Emitted=2, Rejected=3, NotApplicable=4 }
 - `PurchaseMatchStatus` { Held=1, Approved=2, Rejected=3 } (I5, nuevo; data-model §9.6; lo agrega US13, T776)
+- `LandedCostAllocationMethod` { Value=1, Quantity=2, Weight=3, Volume=4, Manual=5 } (I5, nuevo; data-model §9.7, api.md §17.1; lo
+  agrega US13, T776; se guarda por fila en `INV_LandedCostAllocations.AllocationMethod`)
 - `CreditOrigin` { ProvisionalCredit=1, LendingNoResponse=2, Validated=3 } · `PromotionScopeKind` { Product=1,
   Category=2, Segment=3, Channel=4 } · `DayCloseStatus` { Closed=1, Reopened=2 } **(nuevos en §2.5; data-model §26;
   creados en T025)**
@@ -572,6 +574,7 @@ confirmar.
 | INV | `Costeo.Ambito` | `Cooperativa`, `Bodega` | Cooperativa | None (misma regla) | I1 |
 | INV | `Costeo.RetroactivosPermitidos` | bool | false (no rige para el saldo inicial de una bodega `NotActivated` ni para los ajustes de un conteo aprobado: T18) | None | I5 |
 | INV | `Costeo.RetroactivosDiasMaximos` | int | 0 | None | I5 |
+| INV | `Costeo.CambioExigeActa` **(nuevo, T842; a confirmar por el dueño)** | bool | false | None | I5 |
 | INV | `Existencias.StockNegativoPermitido` | bool | false | None, Warehouse | I1 |
 | INV | `Redondeo.Montos` | `Centavo`, `Peso` | Centavo | None | I1 |
 | INV | `Redondeo.Residuo` | `MayorValor`, `UltimaLinea` | MayorValor | None | I1 |
@@ -729,7 +732,7 @@ Administración.
 | Inventario | `/inventario/tablero` | I6 |
 | Compras | `/compras/recepciones`, `/compras/recepciones/{id:guid}`, `/compras/compra-directa`, `/compras/facturas-proveedor`, `/compras/facturas-proveedor/{id:guid}`, `/compras/notas-proveedor`, `/compras/devoluciones` | I1 |
 | Compras | `/compras/documentos-soporte`, `/compras/documentos-soporte/nuevo`, `/compras/documentos-soporte/{id:guid}` (nuevas, T757) | I4 |
-| Compras | `/compras/solicitudes`, `/compras/ordenes`, `/compras/cruce`, `/compras/costos-adicionales` | I5 |
+| Compras | `/compras/solicitudes`, `/compras/ordenes`, `/compras/cruce`, `/compras/costos-adicionales`; de paso, sin enlace de menú: `/compras/solicitudes/nueva`, `/compras/solicitudes/{id:guid}`, `/compras/ordenes/nueva` (`?request=`), `/compras/ordenes/{id:guid}`, `/compras/costos-adicionales/nueva`, `/compras/costos-adicionales/{id:guid}`; `/compras/recepciones/nueva?order=` (T811–T815) | I5 |
 | Ventas | `/ventas/vendedores`, `/ventas/canales` | I1 |
 | Ventas | `/ventas/documentos`, `/ventas/documentos/{id:guid}`, `/ventas/facturas/nueva`, `/ventas/notas-credito/nueva`, `/ventas/puntos-de-venta`, `/ventas/listas-de-precios`, `/ventas/listas-de-precios/{id:guid}`, `/ventas/topes-de-descuento`, `/ventas/informes?vista=` | I3 |
 | Ventas | `/ventas/documentos-electronicos`, `/ventas/contingencias-dian` | I4 |
@@ -802,7 +805,7 @@ Sin destinatario activo: se enruta a los titulares de `CompanyAdmin` y se marca 
 | 77 | `InventoryUnitsSeeder` | `Data/inventario-unidades.json` (con código Rec. 20) | I1 |
 | 78 | `WarehouseTypesSeeder` | principal, punto de venta, averías, cuarentena, tránsito | I1 |
 | 79 | `AdjustmentCausesSeeder` | causas de FR-037 + reclamación al transportador | I1 |
-| 80 | `InventoryDocumentTypesSeeder` | un tipo por defecto por clase de I1 (incluido `Voiding`) con su secuencia | I1 |
+| 80 | `InventoryDocumentTypesSeeder` | un tipo por defecto por clase de I1 (incluido `Voiding`) con su secuencia; en I3 `MC` y `DA`; en I5 (T785) `SOC` solicitud de compra (sin contraparte obligatoria), `ORC` orden de compra y `CAD` costos adicionales de compra (nuevo; códigos propuestos, los confirma el dueño con la contadora), idempotente por código | I1 |
 | 81 | `TaxCatalogSeeder` | `Data/impuestos-co.json` (IVA 19/5/exento/excluido, INC, bolsas por unidad, ReteFuente por concepto en UVT, ReteIVA; ReteICA sin semilla), «pendiente de validar por la contadora» | I1 |
 | 82 | `DivipolaSeeder` | `Data/divipola.json` → `COR_Cities.DaneCode` | I1 |
 | 83 | `AlertTypesSeeder` | los tipos de §2.13 con permisos destinatarios por defecto | I1 |
@@ -825,7 +828,7 @@ JSON embebidos versionados (T40), no semillas.
 | I2 | `IntegracionContableDeInventario` | aditiva | `COR_IntegrationDeliveryAttempts`, `COR_IntegrationBatches`, `COR_IntegrationBatchCounters`, `ACC_InventoryPostingRules`, `ACC_InventoryVoucherMappings`, `ACC_InventoryPostings`, `ACC_AccountTaxRates.Rate` (9,6). |
 | I3 | `VentasYPuntoDeVenta` | aditiva | `COR_PaymentMeans`, `COR_Card*`, `COR_CashDenominations`, tablas `INV_` de I3. |
 | I4 | `DocumentosElectronicos` | aditiva | `COR_ElectronicEmissionSettings`, `COR_DianNumberingResolutions`, `COR_DianResolutionChannels`, `COR_ElectronicDocuments`, `COR_ElectronicDocumentVersions`, `COR_ElectronicDocumentTransmissions`, `COR_DianContingencyEvents`. |
-| I5 | `ComprasYCosteoAvanzado` | aditiva | `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`, `INV_LayerConsumptions`; columnas `BalanceClosedAt`, `BalanceClosedByUserId`, `BalanceClosedReason` en `INV_Documents`. |
+| I5 | `ComprasYCosteoAvanzado` | aditiva | `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`, `INV_LayerConsumptions`; columnas `BalanceClosedAt`, `BalanceClosedByUserId` (FK `SEC_Users`, `IX_INV_Documents_BalanceClosedByUserId`), `BalanceClosedReason` y `ExpectedDate` (data-model §5.1, I5; la necesitan la solicitud y la orden de T787/T790 y no se puede sumar después sin otra migración) en `INV_Documents`. Generada el 2026-09-28 (T835); `AllocationMethod` **no** va en `INV_Documents` (vive por fila en `INV_LandedCostAllocations`, T778). |
 | I6 | `ComercioAmpliado` | aditiva | variantes, componentes, lotes, series, reservas, promociones. |
 
 ### 2.16 Componentes con nombre fijo
@@ -1899,6 +1902,151 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     rango») porque la guardia bloquea antes que el `NumeradorFiscal` (que diría `.Resolution.Exhausted`); la confirmación de oficina
     responde `ConfirmationResultDto` (sin el bloque `electronic` de `SalesConfirmationDto`: se lee de `GET /sales/documents/{id}`); el
     borrador de reemplazo del caso b copia las líneas y no los pagos (los pone quien lo edita). Pruebas: ver §2.18.
+- **I5, dominio de compras (T776–T782, pruebas T766–T768; 2026-09-28) (nuevo)**: enums `PurchaseMatchStatus` y
+    `LandedCostAllocationMethod` (§2.5); entidades `PurchaseMatchLine` (`Registrar`, `AsignarSolicitud`, `Aprobar`, `Rechazar`,
+    `EstaRetenida`, `Aprobable`; `Status` y `ApprovalRequestPublicId` sólo por sus métodos) y `LandedCostAllocation` (`Desde`,
+    `VerificarSuma`; `AllocationMethod` por fila) en `Domain/Entities/Inventory/Purchasing`; el motor puro
+    `Domain/Inventory/Purchasing/CruceDeCompra` con `ReglaDeTolerancia { AmbasCondiciones = 1, CualquieraDeLas = 2 }` (no se guarda:
+    es el valor de `Compras.ReglaDeTolerancia`), `ToleranciasDelCruce` (`Ninguna`, `ComoJson()` = el `ToleranceJson` con las cinco
+    claves del parámetro), `LineaAlCruce`, `ResultadoDelCruce` (`Razones`, `Reasons`, `Status`, `Aprobable`, `FacturaSobreLoRecibido`,
+    `ToleranciaDePrecio`), `PedidoDeRecepcionContraOrden`, `ResultadoDeRecepcionContraOrden`, `CruceDeCompra.{Cruzar, Recepcion,
+    ToleranciaPermitida, ReglaDesde, RazonCantidad = "Quantity", RazonPrecio = "Price", CodigoRecibidoDeMas,
+    CodigoCantidadNoAprobable}`; el reparto puro `Domain/Inventory/Costing/Prorrateo` (`LineaAProrratear`, `PedidoDeProrrateo`,
+    `RepartoDeLinea`, `RechazoDeProrrateo`, `ResultadoDeProrrateo`, `Prorrateo.{Repartir, AlKardex, EnExistencia, Vendida,
+    CodigoBaseFaltante, CodigoManualNoCuadra}`) y `MotorDeCosteo.CostoAdicional` (dos líneas `CostAdjustment` `LandedCost` con
+    `AffectsEntryId`, en el molde de `DiferenciaDePrecio`: lo asignado completo con porción `EnExistencia` y lo vendido con signo
+    contrario y porción `Vendida`; Σ = lo que queda en el ámbito). `ClasesDeDocumento`: `LandedCost` pasa a la cadena `Purchases`
+    (T781); `PurchaseRequest` y `PurchaseOrder` ya estaban como pide FR-036. `CatalogoDeParametros.EntregaVigente` **sigue en I4**: la
+    sube quien cierre I5 con sus e2e (precedente de I4), porque subirla ahora habilita `Costeo.Metodo = Peps` sin el motor PEPS.
+    Configuraciones EF `PurchaseMatchLineConfiguration` y `LandedCostAllocationConfiguration` adelantadas de T783–T784 (lo exige
+    `LasCantidadesYCostosTienenSuPrecision`); `Basis` usa el alias `Factor` (18,6). Sin DbSet ni migración: los pone la sección de
+    persistencia con el par `ComprasYCosteoAvanzado` (T835).
+- **I5, dominio de costeo (T827–T832, pruebas T818–T822; 2026-09-28) (nuevo)**: entidades `CostLayer` (proyección,
+    `AuditableEntityLong` como el kardex, `[SinDiffDeAuditoria]`; `Desde`, `Consumir` —negativo devuelve—, `Reconstruir`;
+    `RemainingQuantity` sólo por esos métodos) en `Entities/Inventory/Projections` y `LayerConsumption` (hecho, `IHechoInmutable`, sólo
+    `init`: `ExitKardexEntryId`, `LayerId` bigint, `Quantity`, `UnitCost`) en `Entities/Inventory/Transactions`. En
+    `Domain/Inventory/Costing`: `Peps` (`Aplicar`, `CambioDeMetodo`), `CapaDeCosto` (`Entrada`, `OperationDate`, `OriginalQuantity`,
+    `RemainingQuantity`, `UnitCost`, `Origen`, `Valor(montos)`, `Es`, `MismaLinea`), `ConsumoDeCapa` (`Salida`, `Capa`, `Quantity`,
+    `UnitCost`, `Valor`), `EstadoDeCosto.Capas`, `MovimientoDeCosto.OperationDate` y `.ConsumosDelOrigen`,
+    `ResultadoDeCosteo.Consumos` y `.CapasNuevas`; `MotorDeCosteo.CambiarMetodo` y `MotorDeCosteo.SimularImpacto` →
+    `ImpactoEnCostos` (`EsRetroactivo`, `Afectados` = `AjusteRetroactivoPorDocumento`, `Total`, `Resultado`, `Rechazo`);
+    `Retroactivo.PrimerMovimientoPosterior` y `Retroactivo.CodigoRequierePromedioPonderado`; `ValorizacionPorDosMetodos.Calcular` con
+    `ClaseAValorizar { Entrada, Salida, AjusteSobreEntrada, OtroAjuste }`, `MovimientoAValorizar`, `HistoriaParaValorizar`
+    (`CorteDelSistemaAnterior`), `ValorDeProducto`, `ValorizacionDeGrupo` (`Nota`) y `ResultadoDeValorizacion`. Configuraciones EF
+    `Projections/CostLayerConfiguration` y `Transactions/LayerConsumptionConfiguration` adelantadas de T833 (lo exige
+    `LasCantidadesYCostosTienenSuPrecision`); sin DbSet ni migración (T835). `ParametrosDeInventario` ya declaraba `Peps` desde I5 y las
+    dos claves de retroactivos (T832); `CatalogoDeParametros.EntregaVigente` **sigue en I4** hasta el cierre de I5. Reglas en T42b.
+- **I5, persistencia (T785, T835; verificación del cerrojo T786/T834; 2026-09-28) (nuevo)**: DbSets `PurchaseMatchLines`,
+    `LandedCostAllocations`, `CostLayers` y `LayerConsumptions` en `IApplicationDbContext`, `ApplicationDbContext` y el contexto de
+    pruebas; columnas `InventoryDocument.ExpectedDate` (editable en borrador) y `BalanceClosedAt`/`BalanceClosedByUserId`/
+    `BalanceClosedReason` (`private set`: las escribe sólo el cierre del saldo, T792, que además debe sumarlas a
+    `IInmutableTrasConfirmar.PropiedadesMutablesTrasConfirmar`, porque la orden ya está confirmada); `InventoryDocumentTypesSeeder`
+    siembra `SOC`, `ORC` y `CAD` cuando la entrega vigente llega a I5. El cerrojo **no cambia**: la orden y la factura del flete entran
+    como `DocumentosDeOrigen`, las capas PEPS las protege la fila exclusiva de `INV_CostStates` y el retroactivo pasa en el pedido los
+    estados de costo y las existencias de todos los productos que recalcula (lo arma la aplicación, T836–T838). Par
+    `ComprasYCosteoAvanzado` (T835).
+- **I5, Application de solicitudes y órdenes (T787–T793, prueba T769; 2026-09-28) (nuevo)**: estrategias
+    `Inventory/Documents/Efectos/EfectoDeSolicitudDeCompra` y `EfectoDeOrdenDeCompra` (sin kardex ni mensajes; la orden recalcula
+    impuestos y totales y se aprueba con su `Total`); `ReglasDeCompra.{ProductosComprablesAsync, TransitoAsync}`;
+    `Inventory/Purchasing/PendientesDeCompra` (`PendienteDeLinea`; `ConsumidoAsync`, `DeDocumentoAsync`, `PorRecibirAsync`),
+    `Purchasing/Common/RecepcionContraOrden` (`ParDeOrden`; `ParesAsync`, `OrdenesAsync`, `RecibidoDeMasAsync`, `ExigirAsync`) y
+    `Purchasing/Common/ToleranciasVigentesDeCompra` (el único lector de las cinco claves `Compras.Tolerancia*`/`ReglaDeTolerancia`
+    para `CruceDeCompra`); `BorradorDeCompra.{CampoNecesarioPara = "neededBy", CampoEntregaEsperada = "expectedDate"}`; campos del
+    borrador `SaveInventoryDraftRequest.{NeededBy, RequestedByPersonPublicId, ExpectedDate, PaymentTerms}` y
+    `SaveInventoryDraftLine.{OrderLinePublicId, RequestLinePublicId}` (entran en `Origen`); `InventoryDocument.CerrarSaldo` y
+    `.OrdenAbierta`, y las tres columnas `BalanceClosed*` en `IInmutableTrasConfirmar.PropiedadesMutablesTrasConfirmar`;
+    `ClosePurchaseOrderBalanceCommand`, `SendPurchaseOrderCommand`, `GetPurchaseOrderPdfQuery`, `ModeloDeOrdenDeCompra`,
+    `IOrdenDeCompraEnPdf`, `OrdenDeCompraImprimible` (`CooperativaDeLaOrden`, `ProveedorDeLaOrden`, `BodegaDeEntrega`,
+    `LineaDeLaOrden`, `ImpuestoDeLaOrden`), `OrdenDeCompraEnPdfDto`, `OrdenesDeCompraEnPdf`; en el detalle de compras
+    `PurchaseDocumentDto.{Plan, PendingLines}` con `PurchasePlanInfoDto` y `PurchasePendingLineDto`; evento de auditoría
+    `Inventory.PurchaseOrder.Sent` (`AuditEventTypes.InventoryPurchaseOrderSent`). API: `Reports/PurchaseOrderReport` y
+    `PurchaseOrderPdfRenderer` (registrado en `Program.cs`). `PosicionDeReposicion` ya llena «por recibir». Reglas en T42c.
+- **I5, Application del cruce a tres vías (T794–T798, prueba T770; 2026-09-28) (nuevo)**: `Inventory/Purchasing/CruceATresVias`
+    (`LineaCruzada`; `OrdenDeLasRecepcionesAsync`, `CruzarAsync`, `VivasAsync`, `DarDeBajaAnterioresAsync`, `SolicitarAsync`,
+    `PrecioPorUnidadBase`, `Monto`, `Huella`), inyectado **opcional** en `EfectoFacturaDeProveedor` (el documento soporte no lo recibe:
+    no se cruza) y usado por su `AprobacionPropiaAsync`; `Inventory/Purchasing/DecisionDeCruce` (`IFuenteDeAprobacion` +
+    `IFuenteConAprobador` de `SourceType = PurchaseMatchLine`); `ErroresDeCompras.QuantityNotApprovable`; la regla fija del sujeto
+    `PurchaseMatchException` en `EvaluadorDePolitica.ReglaFija` (un nivel con `Inventory.Purchases.Approve`); consultas
+    `Inventory/Purchasing/Consultas/{ListPurchaseMatchesQuery, GetSupplierInvoiceMatchQuery}` con `PurchaseMatchLineDto`,
+    `PurchaseMatchInvoiceDto` y `ConsultasDelCruce` (`Visibles`, `DtosAsync`); `PurchaseDocumentDto.Match`; la vista
+    `Inventory/Reports/PurchaseMatchesReportQuery` (`purchase-matches`; la ruta la registra T809). Reglas en T42d.
+- **I5, Application de costos adicionales (T799–T801, prueba T771; 2026-09-28) (nuevo)**: la estrategia
+    `Inventory/Documents/Efectos/EfectoDeCostosAdicionales` (clase `LandedCost`); `Inventory/Purchasing/Common/CostosAdicionalesDeCompra`
+    (`LineaConCostoAdicional`; `FacturaAsync`, `FacturaDeAsync`, `ValidarFacturaAsync`, `DisponibleAsync`, `RecepcionesAsync`,
+    `ConfirmadasAsync`, `LineasAsync`, `RepartirAsync`, `Vista`, `ComoReparto`, `FilasAsync`, `EscribirFilasAsync`, `EsFacturaDeFlete`),
+    inyectado **opcional** en `BorradorDeCompra` y `GetPurchaseDocumentQueryHandler`; en `RegistroDeKardex`, `CerrojoDeEntradasAsync` y
+    `RegistrarCostosAdicionalesAsync` con `CostoAdicionalPedido` y `CostoAdicionalRegistrado`; `EmisionDeInventario.AjusteDeCostosAdicionalesAsync`;
+    en el contrato del borrador `SaveInventoryDraftRequest.{ReceiptPublicIds, Amount, Method, ManualAllocations}` con
+    `ManualAllocationRequest`; en la respuesta `InventoryDocumentDto.LandedCost` (`LandedCostDto`, `LandedCostAllocationDto`,
+    `LandedCostReceiptLineDto`) y `ResultadoDelBorrador.CostosAdicionales`; la navegación `LandedCostAllocation.Document` (sólo navegación,
+    la tabla no cambia); errores `ErroresDeCompras.{LandedCostInvoiceNotService, LandedCostInvoiceNotConfirmed, LandedCostExceedsInvoice,
+    LandedCostBasisMissing (ProductoSinBase), LandedCostManualNotBalanced}` y la sobrecarga `ReceiptNotConfirmed(receiptPublicId,
+    displayNumber)`. Reglas en T42e.
+- **I5, eventos RADIAN emitidos por el ERP (T802–T806, prueba T772; 2026-09-28) (nuevo)**: en la plataforma,
+    `ElectronicInvoicing/Documents/EmitRadianEventCommand` (`IOperacionIdempotente`, validador, `RadianEmissionDto`,
+    `RadianEmissionEventDto`, `ModuloDeCompras = "INV"`) y `ElectronicInvoicing/Documents/CicloDelEventoRadian` (`EsEvento`, `InstanteDe`,
+    `ReconstruirAsync`, `VerificadoAsync`, `CerrarAsync`), inyectado **opcional** en `IntentoAnteElCanal` (parámetro `eventosRadian`);
+    `EventoRadianCanonico` **se mudó** de `Channels` a `Canonical` y ganó `Receipt` (`RecepcionCanonica`), `IssuedBy` y `Origin`;
+    `EntradaDeEventoRadian`, `ProveedorDelEvento`, `NumeracionDelEvento`, `EventoConstruido` y `ConstructorDelCanonico.{ConstruirEventoAsync,
+    ConstruirEvento}`; `NumeradorFiscal.NumerarEventoAsync` con `NumeroDeEvento`, `ClaveDeEvento` y `EventPrefixMissingCode` (el
+    `ICerrojoPorClave` entra **opcional** al numerador); `GuardiaDeEmisionFiscal.{EvaluarEventoAsync, DecidirEvento, EventsNotSupportedCode,
+    EventsNotActiveCode}`; `ErroresDeFacturacionElectronica.NotReady`; en `CatalogoDian`, `TipoDeDocumentoDian.{CodigoDeEvento,
+    PrefijoDeEvento}` (JSON `codigoDeEvento`, `prefijoDeEvento`: `EV030`, `EV032`). El puerto `IFuenteDeDocumentoElectronico` gana
+    `PrepararEventosRadianAsync`, `LeerEventoRadianAsync`, `EnlazarEventoRadianAsync` y `RegistrarResultadoDeEventoRadianAsync` con
+    `EventoRadianPreparado` y `ResultadoDeEventoRadian`. En Compras, `Inventory/Purchasing/EventosRadianDeInventario` (`CodigoDe`, `TipoDe`,
+    `PrepararAsync`, `LeerAsync`, `EnlazarAsync`, `RegistrarResultadoAsync`), inyectado **opcional** en `FuenteDeEmisionDeInventario`
+    (`RadianNotAvailableCode`); en el dominio `TransicionesDeEventoRadian.{PedirEmision, TrasLaRespuesta, CodigoRecepcionSinConfirmar}` y
+    `EventoRadianActual.EnEmision`. `CanalSimulado` declara `RadianEvent030/032` y los emite con su tabla del último dígito. La ruta y la
+    pantalla son de T808 y T815. Reglas en T42f.
+- **I5, costeo en la aplicación (T836–T844; 2026-09-28) (nuevo)**: en `RegistroDeKardex` el parámetro de constructor `entrega`
+    (`EntregaDelComercio`, por defecto la vigente, como `EfectosDeClase`), `Simular()`/`Simulado` con `ImpactoDelBorrador`
+    (`EsRetroactivo`, `PorAmbito`) e `ImpactoPorAmbito` y el código interno `CodigoSimulacionTerminada`
+    (`Inventory.Costing.SimulationDone`, nunca llega a la pantalla), `TomarAjustesRetroactivos(documento)`, `RegistrarCambioDeMetodoAsync`
+    con `LineaDeCambioDeMetodo` y `CerrojoDelCambio`, `RestantePorEntradaAsync` (T843), y la escritura PEPS privada `EscribirCapas`; en
+    `ConfirmacionDeDocumento` los parámetros opcionales `registroDeKardex` y `emisionDeInventario` (T839); `Inventory/Costing/
+    GetDocumentCostImpactQuery` (+ `CostImpactDto`, `CostImpactAffectedDto`, `CostImpactProductDto`) y `Inventory/Costing/
+    CambioDeMetodoDeCosteo`, que implementa el gancho de plataforma `Common/Parameters/IEfectoDeAltaDeParametro` (corre dentro de
+    `AddParameterVersionCommandHandler`, que gana `efectosDeAlta` y `entrega`); `LectorDeParametros` gana el parámetro `entrega`;
+    `ReglasDePlataformaDeInventario` gana `reloj`; `Inventory/Reports/MethodChangeValuationReportQuery`; en el dominio
+    `Peps.{ProporcionEnExistencia, CapaDe, AjusteSobreEntrada}`, `CostLayer.{EntryKardexEntry, Revaluar, Desde(…, KardexEntry, …)}`
+    (`UnitCost` pasa a `private set`), `LayerConsumption.{ExitKardexEntry, Layer}` (navegaciones sin columnas nuevas) y el parámetro
+    `metodo` en `DiferenciaDePrecio.Aplicar`, `Prorrateo.AlKardex`, `MotorDeCosteo.DiferenciaDePrecio` y `MotorDeCosteo.CostoAdicional`;
+    `ResultadoDeVerificacion.CostLayers`. Clave `Costeo.CambioExigeActa` (§2.8). Reglas en T42g.
+- **I5, API de compras y costeo (T808, T809, T845, T846; 2026-09-28) (nuevo)**: en `API/Endpoints/Inventory/PurchasesEndpoints` los
+    grupos `/requests`, `/orders` y `/landed-costs` (lista por clase con `FiltrosDeComprasRequest`, detalle por `GetPurchaseDocumentQuery`
+    con su clase y el ciclo común de §9.3 por `MapCicloDeDocumento`), `GET /orders/{id}/pdf` (`GetPurchaseOrderPdfQuery` → archivo),
+    `POST /orders/{id}/send` (`SendPurchaseOrderCommand`, cuerpo `EnviarOrdenRequest (Email)`), `POST /orders/{id}/close-balance`
+    (`ClosePurchaseOrderBalanceCommand`, cuerpo `MotivoRequest`), `GET /matches` (`ListPurchaseMatchesQuery`), `GET
+    /supplier-invoices/{id}/match` (`GetSupplierInvoiceMatchQuery`) y `POST /supplier-invoices/{id}/radian-events/emit`
+    (`EmitRadianEventCommand`, cuerpo `EmitirEventosRadianRequest (EventCodes)`, 202 con `Location` en la lista de eventos, permiso
+    `Inventory.Purchases.EmitRadianEvent`); el ayudante privado `DeClase` arma los filtros de una lista por clase (también la de
+    devoluciones). En `DocumentsEndpoints`, `POST /api/inventory/documents/{id}/cost-impact` (`GetDocumentCostImpactQuery`, sin clave,
+    `Inventory.Costs.Read` en la ruta; el `{Grupo}.Create` y el alcance, en la consulta). En `InventoryReportsEndpoints`, las vistas
+    `purchase-matches` («Cruce de compras a tres vías», archivo `cruce-de-compras`, filtros `from`/`to`, propios `supplier`/`status`) y
+    `method-change-valuation` («Valorizado por cambio de método», archivo `valorizado-cambio-de-metodo`, filtro `asOf`, propio
+    `comparativeFrom`, exige `Inventory.Costs.Read`).
+- **I5, Shared (T810–T816, T847–T849; 2026-09-28) (nuevo)**: el parcial `Services/Compras/ComprasClient.Completas.cs`
+    (`ListarSolicitudesAsync`, `ObtenerSolicitudAsync`, `ListarOrdenesAsync`, `ObtenerOrdenAsync`, `DescargarOrdenEnPdfAsync`,
+    `EnviarOrdenAsync`, `CerrarSaldoDeOrdenAsync`, `ListarCruceAsync`, `CruceDeFacturaAsync`, `ListarCostosAdicionalesAsync`,
+    `ObtenerCostosAdicionalesAsync`, `EmitirEventosRadianAsync`) y las rutas `ComprasClient.Rutas.{Solicitudes, Ordenes, Cruce,
+    CostosAdicionales}`; `Services/Inventario/InventarioClient.Costeo.cs` (`ImpactoEnCostosAsync`, `ImpactoEnCostosDto`,
+    `DocumentoAfectadoDto`); los DTO espejo de `Models/Compras/ComprasDtos.Completas.cs` (`PlanDeCompraDto`, `PendienteDeLineaDeCompraDto`,
+    `LineaDelCruceDto`, `FacturaDelCruceDto`, `CostosAdicionalesDto`, `RepartoDeCostoAdicionalDto`, `LineaDeRecepcionDelRepartoDto`,
+    `RepartoManualRequest`, `EnviarOrdenRequest`, `CerrarSaldoRequest`, `EmitirEventosRadianRequest`, `EmisionRadianDto`,
+    `EventoRadianEmitidoDto`) con los textos `EstadosDelCruce` y `MetodosDeReparto`; `ClasesDeCompra.{Solicitud, Orden,
+    CostosAdicionales}`; `DocumentoDeInventarioDto.LandedCost`; los campos de I5 en `BorradorDeCompraRequest`/`LineaDeCompraRequest` y
+    `DocumentoDeCompraDto.{Plan, PendingLines, Match}`. Pantallas `Pages/Compras/{Solicitudes, Ordenes, Cruce, CostosAdicionales}.razor`;
+    componentes `Components/Inventario/ImpactoEnCostos.razor` y `Components/Inventario/CambioDeMetodoDialog.razor`. En la vista
+    `kardex` (`KardexReportQuery`) la columna visible **«Capas consumidas»** (índice 15, antes de las ocultas). Temas del manual
+    `compras-solicitudes`, `compras-ordenes`, `compras-cruce`, `compras-costos-adicionales` e `inventario-costeo-avanzado`. Reglas en T42h.
+- **I5, cierre de las e2e (T774, T775, T826; 2026-09-28) (nuevo)**: `CatalogoDeParametros.EntregaVigente` sube a **I5** (las clases
+    `PurchaseRequest`, `PurchaseOrder` y `LandedCost` se operan, la semilla siembra `SOC`, `ORC` y `CAD`, `Costeo.Metodo = Peps` se admite y
+    rige el retroactivo general). Corrección que destapó: `ErroresDeParametros.ValorNoAdmitido(definicion, valor, entrega)` gana el
+    parámetro `entrega` (lo pasan `AddParameterVersionCommandHandler` y `LectorDeParametros`): la lista `allowed` salía siempre con la entrega
+    vigente aunque el manejador evaluara otra. Las pruebas que fijaban el comportamiento anterior a I5 pasan la entrega I4 explícita
+    (`AddParameterVersionCommandTests`, `LectorDeParametrosTests`, `RetroactivoMinimoTests`) y las de clases operables
+    (`DocumentTypeCommandsTests`, e2e `TiposDeDocumentoTests`) esperan la orden y los costos adicionales operables y el ensamble no. Todo
+    sobre `CanalSimulado`. Pruebas: ver §2.18.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -1964,6 +2112,42 @@ activa), `Inventory.TransferDiscrepancy.NotFound` (nuevo: 404 de la diferencia, 
 `Inventory.TransferDiscrepancy.CauseNotAllowed` (nuevo, T371: la causa no admite bajas desde el tránsito —`AllowsTransitWriteOff`— o
 entradas —`AllowsPositive`—; `data { causeCode, resolution }`); conteos (US11) → `Inventory.Count.AlreadyOpen` (nuevo, T392: abrir o editar un conteo con foto) y
 `Inventory.Count.RoundNotOpen` (nuevo, T394: ronda 2 sin reconteo pendiente); punto de venta sin POS (`INV_PointsOfSale.PosEnabled = false`) en `POST /pos/drafts`, `GET /pos/lookup` y `resume` → `Inventory.Pos.NotEnabled` (nuevo; FR-058: el punto conserva cajas y sesiones para el cobro de oficina); pagos → `Payments.AmountInvalid` (nuevo, T579: un pago con valor cero o negativo; `ValidadorDePagos`), y `last4` que no son cuatro dígitos responde `Payments.ReferenceInvalid` con `data.field = "last4"`.
+
+Costeo avanzado (I5, T829; **(nuevo)**): `Inventory.Costing.RetroactiveRequiresWeightedAverage` (D6: un documento con fecha anterior
+a otro ya registrado del ámbito con PEPS vigente; `Retroactivo.CodigoRequierePromedioPonderado`, antes de calcular nada). Los otros dos
+de T838 (`Inventory.Costing.RetroactiveNotAllowed`, `.RetroactiveTooOld`) los publica la aplicación. Desde la aplicación (T838, T841,
+T842; **(nuevo)**): `Inventory.Costing.RetroactiveTooOld` (`data { maxDays, earliestAllowed, operationDate }`), el mismo
+`.RetroactiveRequiresWeightedAverage` con `data { lineNumber, productCode }` (también si hay PEPS o un cambio de método después de la
+fecha), `Inventory.Costing.MethodChangeInFuture` (`data { key, validFrom, today }`: el cambio de método o de ámbito no se programa) y
+`Parameters.LegalSourceRequired` (`data { key }`: `Costeo.CambioExigeActa` y sin `legalSource`).
+
+Cruce a tres vías (I5, T796; **(nuevo)**): `Inventory.PurchaseMatch.QuantityNotApprovable` (aprobar por excepción una línea retenida
+por cantidad —se factura más de lo recibido—; sólo sale rechazando la factura o registrando otra recepción). Lo publica `DecisionDeCruce` en cualquier
+nivel (la decisión no queda), con `data { lineNumber, receivedNotInvoiced, invoiced }`, y la confirmación de la factura si la política
+vigente no pidiera aprobación para esa línea (T42d).
+
+Costos adicionales (I5, T799; **(nuevo)**): `Inventory.LandedCost.InvoiceNotConfirmed` (la factura del flete en borrador, en
+aprobación o anulada; `data { invoicePublicId, displayNumber, status }`). Los de api.md §14.9 quedan con su `data`:
+`.InvoiceNotService` (`{ invoicePublicId, displayNumber }`), `.ExceedsInvoice` (`{ available }`), `.BasisMissing`
+(`{ products: [{ publicId, code }] }`), `.ManualNotBalanced` (`{ amount, allocated }`) e `Inventory.Purchase.ReceiptNotConfirmed` sin
+línea (`{ receiptPublicId, displayNumber }`) (T42e).
+
+Solicitudes y órdenes (I5, T787–T792; **(nuevo)** los que api.md §14.9 nombra sin definir): `Inventory.Purchase.OrderFromOtherSupplier`
+(`data { lineNumber, orderPublicId, displayNumber }`), `Inventory.PurchaseOrder.NotOpen` (ahora también recibir contra una orden sin
+confirmar, anulada o con el saldo cerrado; `data { lineNumber?, orderPublicId, displayNumber, status, balanceClosedAt }`),
+`Inventory.Purchase.OverReceiptBeyondTolerance` (`data { lineNumber, ordered, received, tolerance }`, en unidad base),
+`Inventory.PurchaseOrder.NotConfirmed` (`data.status`), `Inventory.PurchaseOrder.SupplierEmailMissing` (`data.supplierPersonPublicId`) e
+`Inventory.PurchaseRequest.NotConfirmed` (**nuevo**, no estaba en api.md: una orden desde una solicitud que no está aprobada;
+`data { lineNumber, requestPublicId, displayNumber, status }`). El PDF sin quien lo dibuje responde
+`Inventory.Document.RepresentationUnavailable`, el mismo de la carta de ventas.
+
+Eventos RADIAN emitidos (I5, T804; **(nuevo)**): `Inventory.RadianEvent.ReceiptNotConfirmed` (api.md §14.8 lo nombra; el 032 sin
+recepción confirmada enlazada), `ElectronicInvoicing.Readiness.EventsNotSupported` (api.md §24.7; en `data.missing[]` de
+`ElectronicInvoicing.NotReady`), `ElectronicInvoicing.Readiness.EventsNotActive` (**nuevo**: la entrega vigente es anterior a I5),
+`ElectronicInvoicing.Numbering.EventPrefixMissing` (**nuevo**: el catálogo DIAN vigente no trae el prefijo del evento) e
+`Inventory.RadianEvent.NotAvailable` (**nuevo**, técnico: la fuente se armó sin los eventos). `.AlreadyRegistered` también cubre un
+evento **en emisión** (pendiente con documento electrónico). Un evento sin CUFE de la factura responde
+`ElectronicInvoicing.Document.MissingData` (`referencedInvoice.uniqueCode`) (T42f).
 
 Cierre de las e2e de I4 (T685–T687; **(nuevo)**): `Inventory.DocumentType.ContingencyNotByResolution` (`data.class`: un tipo de contingencia en una clase que no numera por resolución DIAN).
 
@@ -2059,6 +2243,27 @@ aislada por caso) sobre `EscenarioDeFacturacionElectronica` (`PrepararAsync(fx, 
 `CentralIdentityApiFixture.DirectorioDeCredenciales` (`ElectronicInvoicing:CredentialsPath` temporal por fixture). El volumen de 30
 emisiones a la vez (`Treinta_emisiones_a_la_vez_responden_con_p95_de_a_lo_sumo_5_segundos`) es `[FactDeRendimiento]`: omitida con su
 motivo sin `RUN_PERF_TESTS=1`.
+**(nuevos, I5, T785/T786/T834)** `tests/IngenIA365ERP.Application.Tests/Infrastructure/SemillasDeComprasTests` (los tres tipos de I5,
+idempotente sobre una cooperativa con los de I1 a I4) y `tests/IngenIA365ERP.Application.Tests/Inventory/Common/CerrojoDeComprasYCosteoTests`
+(el SQL del cerrojo cubre la recepción contra orden, los costos adicionales, las capas PEPS y el retroactivo sin un paso nuevo).
+**(nuevos, I5, T773/T825)** pruebas de arquitectura: `LosComandosDeInventarioLlevanClave` (+ `SendPurchaseOrderCommand`,
+`ClosePurchaseOrderBalanceCommand`, `EmitRadianEventCommand` en `ComandosConRuta`; `Las_escrituras_de_compras_exigen_la_clave_y_estan_las_rutas_de_I5`,
+`El_impacto_en_costos_es_una_consulta_sin_clave`), `SoloElNumeradorNumera.El_consecutivo_de_los_eventos_RADIAN_solo_lo_escribe_el_NumeradorFiscal`,
+`LasCantidadesYCostosTienenSuPrecision` (+ columnas de `INV_PurchaseMatchLines`, `INV_LandedCostAllocations`, `INV_CostLayers`,
+`INV_LayerConsumptions`), `ElComercioNoTieneValoresLegalesFijos.El_cruce_y_el_prorrateo_no_escriben_tolerancias_ni_plazos`,
+`LosHechosInmutablesNoSeModifican` (+ `LayerConsumption`; `El_consumo_de_capa_es_un_hecho_y_la_capa_es_proyeccion`),
+`NadieEscribeElKardexFueraDelRegistro.Solo_el_registro_y_la_reconstruccion_escriben_las_capas_y_sus_consumos`,
+`PrincipioXI_ContableImmutable` (+ `Entities/Inventory/Transactions/LayerConsumption`; `Nadie_borra_consumos_de_capa`) y
+`LosParametrosSeLeenEnUnSoloSitio.Los_retroactivos_se_leen_solo_en_el_registro_del_kardex`.
+**(nuevos, I5 Shared, T810–T816, T847–T849)** `tests/IngenIA365ERP.Architecture.Tests/Principles/LasPantallasDeComprasCompletasEstanEnElMenu`
+(las cuatro pantallas con `PermissionGate`, `IndicadorDeCarga` y su enlace del menú; recepción contra orden, pestaña del cruce y emisión
+RADIAN en la factura; `ImpactoEnCostos` en las cuatro pantallas; el diálogo del cambio de método desde Parámetros; las capas en el kardex
+y los filtros propios en los informes), `tests/IngenIA365ERP.Shared.Tests/Inventario/ComprasCompletasClientTests` (rutas, clave sólo en
+las escrituras, sin `Authorization`) y `tests/IngenIA365ERP.Application.Tests/Inventory/Kardex/KardexConCapasTests`.
+**(nuevos, I5, T774/T775/T826)** e2e en `tests/IngenIA365ERP.API.IntegrationTests/Inventory/` (colección «Inventario e2e»):
+`ComprasCompletasTests` (escenario «comprasi5»: el ciclo solicitud → orden aprobada → recepciones → factura retenida → aprobación, y el
+flete prorrateado por valor), `EventosRadianEmitidosTests` (sobre `EscenarioDeFacturacionElectronica` «radiani5» con `CanalSimulado`) y
+`CosteoAvanzadoTests` (cooperativas «costeoretro» con contabilidad, «costeocerrado» y «costeopeps»).
 **(nuevo, T186)** `ReintentoPorConcurrenciaBehavior.IndicesDeConsecutivo`: índices únicos de un consecutivo cuyo
 choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy `UK_ACC_Documents_Type_Number`.
 
@@ -2701,6 +2906,232 @@ estados, enlazado por `ElectronicDocumentPublicId`, por una sola ruta de compras
 /api/inventory/purchases/supplier-invoices/{id}/radian-events/emit` (`{ eventCodes }`, 202; errores
 `Inventory.RadianEvent.OutOfOrder`, `.ReceiptNotConfirmed`, `.DateInvalid`). No se crea tabla de eventos
 en `COR_`.
+
+**T42a · Cruce a tres vías: tolerancias y factura sobre lo recibido (I5, T779, T782, T796; 2026-09-28; a revisar por el dueño).**
+Dos huecos de la spec que el dominio tuvo que cerrar:
+- *La regla de tolerancia* (`Compras.ReglaDeTolerancia`, pregunta E5): una tolerancia en cero **no participa**; con
+  `AmbasCondiciones` la permitida es la **menor** de las configuradas (porcentaje × referencia, valor), con `CualquieraDeLas` la
+  **mayor**, y sin ninguna es cero (el defecto: toda diferencia retiene). Sin esto, `AmbasCondiciones` con sólo el porcentaje
+  configurado no toleraría nada. La tolerancia de **precio** se mide por unidad contra el precio de la orden (sin él, el costo de la
+  recepción) y en valor absoluto: una factura más barata que la orden también retiene. La de **cantidad** se aplica a la recepción
+  contra la orden (Σ recibido ≤ ordenado + tolerancia, FR-049), no a la factura.
+- *Factura por encima de lo recibido con orden* (US13-1 frente a api.md §14.4 y data-model §9.6): se adopta la propuesta de T796.
+  Con orden, la línea se guarda `Held` con razón `Quantity` y esa razón **no se aprueba** (`Inventory.PurchaseMatch.QuantityNotApprovable`,
+  nuevo): sale rechazando o con otra recepción. Sin orden sigue el 422 `Inventory.Purchase.InvoiceExceedsReceived` de I1. Es lo que
+  mejor concilia la spec («queda retenida por cantidad») con data-model («nunca se aprueba por tolerancia»).
+- `Reasons` lista los motivos por los que la línea **se retiene**; una diferencia dentro de la tolerancia (o sin orden) no lleva razón.
+
+**T42b · PEPS, retroactivo general y valorizado por los dos métodos: reglas del dominio (I5, T827–T832; 2026-09-28; a revisar
+por el dueño y la contadora).** Lo que la spec y data-model §3.5 dejaban abierto y el motor tuvo que fijar:
+- *Una línea por salida.* La salida PEPS es **una** línea del kardex con el costo unitario ponderado de lo consumido
+  (`Σ consumido / cantidad`, 6 decimales) y un `LayerConsumption` por capa; si `round(cantidad × costo)` no da exactamente lo
+  consumido, el centavo va en una línea `RoundingResidue` sobre la salida. Así cada línea de documento sigue dando una línea de
+  kardex (la devolución de cliente y el tránsito viajan al costo de esa línea) y se cumple `TotalCost = round(QuantityBase × UnitCost)`.
+  Alternativa descartada: una línea por capa (partía la línea de venta y el costo de origen de sus devoluciones).
+- *Valor de una capa* = `round(RemainingQuantity × UnitCost)`; un consumo toma el valor antes menos el valor después (el que agota
+  la capa se lleva lo que quedaba). Con existencia no negativa, Σ valor de las capas vivas = `CostState.Value` al centavo: lo que
+  compara la verificación de integridad (T837).
+- *Identificación específica.* La devolución a proveedor y la anulación de una entrada consumen **primero la capa de esa entrada**;
+  la salida del tránsito, la capa creada desde **su misma línea de despacho** (`CapaDeCosto.Origen`), así el tránsito queda en cero
+  exacto aunque las recepciones lleguen en otro orden. Si esa capa ya no alcanza, siguen en orden PEPS y la diferencia entre el costo
+  de la línea y lo consumido es `VoidDifference` sobre el origen (caso `peps-devolucion-a-proveedor`).
+- *Anulación de una salida.* Entra al costo de la línea anulada y **devuelve sus consumos a las mismas capas** en orden inverso (la
+  agotada reaparece en su lugar); los consumos negativos se escriben **bajo la línea de la anulación** (`ExitKardexEntryId` = la
+  anulación), no bajo la salida original, que es un hecho: así Σ consumos de la salida sigue = |`QuantityBase`| y Σ consumos de la
+  anulación = −`QuantityBase`. Si el ámbito está en negativo al anular, la anulación entra como una entrada común (cubre el negativo).
+- *Negativo permitido.* Lo que no encuentra capa sale al último costo en su propia línea (como en promedio) y queda pendiente; la
+  entrada que lo cubre crea su capa, anota el consumo **a esa salida** y la diferencia como `NegativeRegularization`; al quedar la
+  existencia en cero o más, el centavo de redondeo va en la última regularización para que capas y valor cuadren.
+- *Cambio de método.* A PEPS: una línea `MethodChange` (`QuantityBase = 0`, costo = promedio) que abre una sola capa con toda la
+  existencia al promedio y lleva sólo la diferencia de redondeo entre esa capa y el valor (normalmente 0). A promedio: la línea va en 0
+  y las capas se cierran. Sin existencia no hay capa.
+- *D6 también para las dos excepciones de I1.* Con PEPS vigente, `Retroactivo` rechaza **todo** documento con fecha anterior
+  (`Inventory.Costing.RetroactiveRequiresWeightedAverage`), incluidos el saldo inicial de una bodega `NotActivated` y el ajuste de un
+  conteo fechado en la foto: el motor no sabe reinsertar capas en el pasado. Consecuencia a revisar: una cooperativa en PEPS no puede
+  activar una bodega nueva con saldo fechado antes de movimientos ya registrados del ámbito, ni fechar el ajuste de conteo en la foto
+  si hubo movimientos después (debe usar `Conteo.FechaDelAjuste = Aprobacion`). Abrir D6 es trabajo aparte.
+- *Valorizado por los dos métodos* (FR-043, api.md §27): se valora **al inicio** de cada fecha (lo anterior a ella: el cambio es el
+  primer día de un período y el comparativo empieza un primer día). El método con que se registró la historia sale del libro (Σ
+  `TotalCost`); el otro se reconstruye: promedio con entradas a su costo, salidas al promedio de 6 decimales y el ajuste completo
+  sobre una entrada en proporción `min(1, existencia / cantidad de la entrada)` (la regla de `DiferenciaDePrecio`); PEPS con una capa
+  por entrada, salidas en orden y el ajuste sobre una entrada en proporción a lo que queda de su capa (la regla que T843 propone). No se
+  calcula —con nota— un producto cuya historia empieza en el corte del sistema anterior en esa fecha o después, ni por PEPS uno cuya
+  historia deja la existencia en negativo; quedan fuera de las sumas de su grupo y se listan en la columna Nota. La aplicación (T844)
+  manda el ajuste completo sobre una entrada una sola vez por documento y entrada (la primera línea que escribió el motor).
+- *Pendiente en T843.* `DiferenciaDePrecio` y `CostoAdicional` todavía no mueven capas: con PEPS vigente dejarían el estado sin capas.
+  No puede pasar mientras `EntregaVigente` siga en I4 (PEPS no se puede elegir), pero T843 tiene que resolverlo antes del cierre de I5.
+
+**T42c · Solicitud y orden de compra: dónde vive cada campo y qué se valida (I5, T787–T793; 2026-09-28; a revisar por el dueño).**
+Lo que api.md §14.9 pide en el cuerpo y data-model no ubicaba (sin columnas nuevas: la migración `ComprasYCosteoAvanzado` ya salió):
+- `neededBy` de la solicitud y `expectedDate` de la orden van en `INV_Documents.ExpectedDate`; `requestedByPersonPublicId` es la
+  **contraparte** de la solicitud (opcional: quien pide; la solicitud no tiene proveedor ni admite `supplierPersonPublicId`).
+- `paymentTerms` de la orden **son sus notas** (data-model §9.8 «condiciones en `Notes`»): traer `paymentTerms` y `notes` a la vez es
+  `Validation.Invalid`, para que ninguno pise al otro sin avisar. El detalle las devuelve en `plan.paymentTerms`.
+- La solicitud no lleva precios ni descuentos; la orden exige precio por línea (`Validation.Invalid` con `lineNumber`) y admite
+  servicios (un flete se ordena), pero no productos inactivos o bloqueados.
+- La orden desde una solicitud (`requestLinePublicId`) exige la solicitud **confirmada** (`Inventory.PurchaseRequest.NotConfirmed`,
+  nuevo); **no** se valida que lo ordenado quepa en lo pendiente por ordenar (comprar más de lo pedido es decisión del comprador y la
+  spec no la prohíbe); `pendingToOrder` queda en cero, nunca negativo.
+- La recepción contra orden toma de la línea de la orden producto, unidad, precio y, si no trae otro, **el descuento en porcentaje**
+  (partido en proporción a lo recibido). Proveedor y orden abierta se exigen ya en el borrador; lo recibido de más fuera de la tolerancia
+  es aviso en el borrador y rechazo al confirmar, **otra vez dentro del cerrojo** con la orden bloqueada como documento de origen.
+- La tolerancia de cantidad se mide contra lo ordenado de la línea (`CruceDeCompra.Recepcion`); sin vigencias, cero: no se recibe nada
+  de más. Anular una recepción devuelve su cantidad a lo pendiente.
+- Una orden en borrador o en aprobación **no** cuenta como «por recibir» (sólo `Confirmed` sin saldo cerrado); cerrada o anulada,
+  `pendingToReceive` = 0. El PDF calcula los impuestos a la fecha de la orden (estimados; sin retenciones) y no guarda foto
+  tributaria: la foto la guarda la factura del proveedor.
+
+**T42d · Cruce a tres vías en la confirmación y decisión de sus excepciones (I5, T794–T798; 2026-09-28; a revisar por el dueño).**
+Lo que T794/T795 y api.md §14.9 dejaban abierto y la aplicación tuvo que fijar:
+- *Cuándo se cruza.* Sólo si alguna recepción enlazada a la factura viene de una orden (vínculo `FromOrder`); entonces se escriben
+  filas para **todas** las líneas enlazadas a recepciones (las de recepciones sin orden, en dos vías, nunca retienen). Sin orden no se
+  escribe nada y todo sigue como en I1 (E6). El documento soporte no se cruza (T794 nombra sólo `SupplierInvoice`).
+- *Dónde, en el flujo.* El cálculo va en el paso 2 (`ValidarAsync`, sin escribir); las filas y las solicitudes, en el paso de
+  aprobaciones como **aprobación propia de la clase** (`AprobacionPropiaAsync`, el mismo punto que el crédito provisional de I3),
+  **después** de la política del tipo (`DocumentConfirmation`): si el tipo pide aprobación, el cruce se escribe al reentrar con esa
+  aprobación. Un intento nuevo (la factura en borrador) da de baja lógica las filas del anterior y cancela sus solicitudes pendientes;
+  la reentrada reutiliza las del intento en curso.
+- *Una solicitud por línea retenida*, con la política del sujeto `PurchaseMatchException` para el tipo de la factura o, sin ella, la
+  **regla fija** de un nivel con `Inventory.Purchases.Approve` (api.md §14.9; se agregó a `EvaluadorDePolitica.ReglaFija`, data-model
+  §21 actualizado). El **monto** que evalúa la política es `|PriceDifferenceAmount| + round(QuantityDifference × precio facturado)`; el
+  alcance, la bodega de la recepción; la huella, la fila del cruce con la factura. Si la política vigente no pide aprobación para ese
+  monto, la excepción de precio pasa sola (`Approved`) y la de cantidad responde `QuantityNotApprovable`.
+- *Precios comparados*: el neto de descuento por unidad base (`NetAmount / QuantityBase`, 6 decimales) de la orden, la recepción y la
+  factura; los impuestos que van al costo no entran al cruce (sí a la diferencia de precio que se reconoce, como en E6).
+- *Decisión* (`DecisionDeCruce`): la aprobación marca la línea `Approved`; mientras quede otra `Held` la factura sigue en
+  `PendingApproval`; la última reentra por el flujo canónico en la transacción del aprobador y la diferencia de precio se reconoce
+  con la misma regla de E6 (kardex `CostAdjustment` `PriceDifference` sobre lo que sigue en existencia, lo vendido va al costo de
+  ventas del mensaje, un `AjusteDeCostoReconocido` por recepción). Rechazar **o retirar** una línea la marca `Rejected`, devuelve la
+  factura a borrador y cancela las demás solicitudes del cruce de esa factura; las filas quedan como historia hasta el siguiente intento.
+- *Consultas*: `PurchaseMatchLineDto` agrega `exceedsTolerance` y `tolerance` (el `ToleranceJson`) **(nuevos)** para que la pantalla del
+  cruce muestre la tolerancia usada; precios y diferencia de precio nulos sin `Inventory.Costs.Read`, en las consultas y en la vista
+  `purchase-matches`, cuyo rango de fechas (el común, el mes en curso sin fechas) filtra por la fecha de la factura.
+
+**T42e · Costos adicionales: borrador, confirmación y anulación (I5, T799–T801; 2026-09-28; a revisar por el dueño).**
+Lo que T799/T800 y api.md §14.9 dejaban abierto y la aplicación tuvo que fijar:
+- *Dónde vive el método mientras es borrador.* `INV_Documents` no tiene columna para el método (T778 lo dejó en cada fila de
+  `INV_LandedCostAllocations` y la migración ya salió), así que **el borrador escribe la propuesta del reparto** en esa tabla —una fila
+  por línea de recepción, con el método y, en `Manual`, lo digitado en `Basis`— y la confirmación la **reescribe en su sitio** bajo el
+  cerrojo con la existencia de ese momento. Para escribirla antes de que el documento tenga `Id` se agregó la navegación
+  `LandedCostAllocation.Document` (no cambia la tabla). Volver a guardar actualiza cada fila en su sitio (nunca conviven dos vivas con
+  la misma `(DocumentId, ReceiptLineId)`).
+- *Las líneas no se digitan*: el servidor arma una por cada línea de recepción que dejó entrada en el kardex (producto, unidad y cantidad
+  de la recepción, vínculo `LandedCostOf` por línea); su valor es lo que le toca. El documento no factura: `Subtotal = Total = monto`,
+  sin impuestos (van en la factura del flete). La **contraparte** es el proveedor del flete; **sin bodega**; la sucursal, la de la
+  primera recepción. La factura se enlaza con un `LandedCostOf` a nivel de documento (sin líneas).
+- *La factura del flete*: una `SupplierInvoice` o un `SupportDocument` (un transportador no obligado a facturar), **confirmada**
+  (`Inventory.LandedCost.InvoiceNotConfirmed`, **nuevo**) y con algún renglón de un producto `Service` (`.InvoiceNotService`).
+- *Lo que queda sin repartir* (`ExceedsInvoice`, `data.available`): los renglones de servicio de la factura —**neto más lo que fue al
+  costo**, lo mismo que la factura llevó a la cuenta de costos por distribuir— menos el `Subtotal` de los otros `LandedCost`
+  `PendingApproval` o `Confirmed` que la reparten. Sin `amount`, el borrador propone lo que queda.
+- *Qué bloquea y qué avisa*: la factura y las recepciones (existen, confirmadas, de servicio) bloquean el borrador; lo que depende de otros
+  documentos o de la existencia (`ExceedsInvoice`, `BasisMissing`, `ManualNotBalanced`) vuelve como **aviso** y la confirmación lo
+  rechaza con el mismo código, repitiéndolo bajo el cerrojo (orígenes: las recepciones **y la factura del flete**, así dos costos
+  adicionales sobre la misma factura se confirman uno detrás del otro).
+- *Base del reparto por valor o cantidad*: la entrada que la línea de recepción dejó en el kardex (su `TotalCost` y su `QuantityBase`),
+  no el precio de la línea. Proporción en existencia (D5) con la existencia del ámbito de costo al confirmar.
+- *Mensajes*: un `AjusteDeCostoReconocido` `LandedCost` por recepción afectada (`Confirmation:{recepción:N}`, hereda el destino de esa
+  recepción). Recepciones con modos de paso distintos **sí** se pueden reunir: cada ajuste sigue el de la suya. El documento copia el
+  modo de la primera (derivado, FR-075).
+- *Anular* (`Voiding`): las **mismas porciones con el signo contrario**, sin recalcular D5 (lo que fue a costo de venta vuelve de costo
+  de venta), sobre las mismas entradas, y un ajuste por recepción con los signos contrarios. Las filas del original no cambian. La
+  recepción con costos adicionales vigentes no se anula (`HasDependents`, T801); la orden de la que viene nunca la bloquea.
+- *Vista*: `allocations[]` lleva además `roundingResidue` por línea; `basis`, `toInventory` y `toCostOfSales` no se ocultan sin
+  `Inventory.Costs.Read` (son el reparto de una factura, no el costo del producto) — a revisar si el dueño los quiere ocultos.
+
+**T42f · Eventos RADIAN emitidos por el ERP: numeración, reglas y ciclo (I5, T802–T806; 2026-09-28; a revisar por el dueño).**
+Lo que T802–T805, api.md §14.8/§24.7 y dian.md §4.3/§5.1 dejaban abierto y la aplicación tuvo que fijar:
+- *Numeración propia (T802, la decisión que pedía dian.md §4.3).* Prefijo **fijo por tipo** leído de `CatalogoDian` (`EV030`, `EV032`,
+  marcados «por cotejar») y consecutivo por (`Environment`, `Prefix`) = el mayor de `COR_ElectronicDocuments` más uno, bajo un candado
+  por esa pareja (`ICerrojoPorClave`, `COR_ElectronicDocuments:{ambiente}:{prefijo}`) en la transacción que pide; sin tabla nueva y sin
+  resolución (T2). El índice único `(Environment, Prefix, Consecutive)` es la última defensa. **(dueño)** cotejar con el proveedor
+  tecnológico contratado si él numera el `ApplicationResponse`: si lo hace, el prefijo del catálogo se cambia por dato y el adaptador
+  traduce.
+- *Qué se valida al pedir* (en Compras, `TransicionesDeEventoRadian.PedirEmision`): sólo a crédito y confirmada (`NotApplicable`); un evento
+  hecho **o en emisión** (pendiente con documento electrónico) es `AlreadyRegistered`; el 032 exige el 030 hecho, en emisión o **pedido
+  en la misma solicitud** (`OutOfOrder`) y una recepción **confirmada** enlazada con `InvoiceOfReceipt` (`ReceiptNotConfirmed`); la fecha
+  del evento es hoy y va entre la emisión de la factura y hoy (`DateInvalid`). Con un error no se crea ningún evento. La guardia de eventos
+  no mira resoluciones ni `Dian.ObligadaAFacturar` (el adquirente emite eventos aunque no facture), sí la configuración vigente, el canal y
+  **sus capacidades** (`EventsNotSupported`), la credencial y los datos del emisor; antes de I5 responde `EventsNotActive`.
+- *El documento electrónico del evento.* Uno por (factura, tipo): `SourceModule = INV`, `SourceDocumentPublicId` = el registro de la
+  factura, `SourceDocumentTypeCode` = su tipo, `Kind = RadianEvent030/032`, tipo DIAN 96, sin resolución, `TotalAmount = 0`,
+  contraparte = el proveedor, **canal vigente sellado** (es un documento nuevo, api.md §24.7), `IssuedAt` sin fracciones de segundo
+  (entra al canónico y debe sobrevivir el viaje a la base). El 032 pedido junto con el 030, o con el 030 aún en emisión, **espera** a ése
+  (`WaitsForDocumentId`, el mecanismo de I4): sale después. El canónico lo vuelve a armar el procesador con la entrada que da Compras
+  (`LeerEventoRadianAsync`) y se compara con el SHA-256 de la versión; «quién lo emite» es el nombre de usuario de
+  `RegisteredByUserId`, leído igual al pedir y al volver a armar. Sin CUFE en la factura no hay evento (`MissingData`).
+- *Máquina simplificada* (dian.md §5.1): la misma tabla de transiciones; un «la DIAN no está» deja el evento `Sent` (se consulta), nunca
+  en contingencia 04; sin representación gráfica ni entrega al comprador. Con la respuesta definitiva, `CicloDelEventoRadian.CerrarAsync`
+  le avisa a Compras por el puerto: `Pending → Emitted` (CUDE, fecha del evento, fuente `Erp`) o `→ Rejected`.
+- *Reintento de un rechazado*: pedir otra vez el mismo evento lo deja `Pending` en Compras y, en la plataforma, **el mismo documento con
+  el mismo número** pasa a `Pending` con la versión siguiente (la transición del caso a, motivo `CaseA`, «Reintento del evento RADIAN
+  rechazado») y se atiende la alerta `Dian.DocumentoRechazado` de ese documento. No se crea otro documento: el índice único
+  `(SourceModule, SourceDocumentPublicId, Kind)` lo impide y la numeración no queda con huecos.
+- *La alerta* `Compras.EventosRadianFaltantes`: se atiende sola cuando los dos están hechos (emitidos o registrados por fuera); un
+  rechazado **sigue faltando**, y la revisión diaria ahora lo cuenta junto con los pendientes.
+- *Después del commit* el comando intenta cada evento por el canal (`EmitElectronicDocumentCommand`, en orden); el procesador retoma lo
+  que quede.
+
+**T42g · Costeo avanzado en la aplicación: retroactivo general, PEPS escrito, cambio de método y valorizado (I5, T836–T844; 2026-09-28;
+a revisar por el dueño y la contadora).** Lo que T836–T844, api.md §7/§9.3/§27 y data-model §3.5 dejaban abierto:
+- *Dónde vive la puerta del retroactivo (T838).* No en el paso 1 de la confirmación, que no conoce el ámbito de costo de cada movimiento,
+  sino en `RegistroDeKardex` (paso 5, dentro del cerrojo), donde ya se detectaba el retroactivo de I1: mismo lugar, mismo orden. El
+  período cerrado lo sigue rechazando el paso 1 (`Inventory.Period.Closed`). El orden es: PEPS vigente, o PEPS o un cambio de método
+  **después** de la fecha del documento → `.RetroactiveRequiresWeightedAverage` (también para las dos excepciones de I1, T42b); las dos
+  excepciones de I1 pasan; `Costeo.RetroactivosPermitidos` apagado → `.RetroactiveNotAllowed` (el código de I1); fecha anterior a
+  hoy − `Costeo.RetroactivosDiasMaximos` → `.RetroactiveTooOld`. **`RetroactivosDiasMaximos = 0` significa «sólo hoy»**, no «sin
+  límite» (defecto seguro). La puerta rige sólo con la entrega vigente en I5 o después: hasta el cierre de I5 se comporta como en I1.
+- *Mensajes del retroactivo (T839).* La confirmación (no cada estrategia) toma del registro los ajustes `Retroactive` del documento y agrega
+  un `AjusteDeCostoReconocido` por documento afectado, fechado en la salida afectada y con el destino del mensaje de ése; si la clase ya
+  los armó (saldo inicial, ajuste de conteo), no se duplican.
+- *`cost-impact` (T840).* Corre las reglas de la clase y **su efecto real** con el registro en modo simulación: calcula todo —incluidos los
+  rechazos de la puerta y de existencia— y, en lugar de escribir, deja `SimularImpacto` por ámbito y termina; la consulta descarta lo que el
+  efecto tocó (`DescartarCambios`). Por eso muestra exactamente lo que escribirá la confirmación. Un documento que no pasa por el kardex
+  (sólo costo) responde `retroactive = false`.
+- *PEPS escrito (T836).* Una `INV_CostLayers` por capa nueva (también la que nace consumida), un `INV_LayerConsumptions` por consumo —el de
+  la anulación, con cantidad negativa y bajo la línea de la anulación— y lo que queda de cada capa sale del estado final del ámbito. Las
+  capas se enlazan a su línea por navegación (`CostLayer.EntryKardexEntry`, `LayerConsumption.ExitKardexEntry/Layer`): no hay columnas
+  nuevas. La salida del tránsito todavía no nombra su línea de despacho (el efecto no le pasa origen): consume en orden PEPS y la diferencia
+  queda como `VoidDifference` sin `AffectsEntryId`; afinarlo es tocar `EfectoRecepcionDeTraslado` (pendiente).
+- *Cambio de método o de ámbito (T841).* **No se programa**: `validFrom` tiene que ser hoy o antes (además del primer día de un período
+  abierto sin movimientos desde ese día), porque la capa única y el reparto por bodega salen de la existencia real de ese día
+  (`Inventory.Costing.MethodChangeInFuture`). El documento `CostAdjustment` del sistema (el primer tipo activo de la clase, numerado,
+  fechado en `validFrom`, en la primera sucursal, con el motivo y el acta en sus notas) se guarda como borrador dentro de la transacción del
+  alta, se escribe y se confirma. Método: una línea `MethodChange` sin cantidad por ámbito con existencia o valor (T42b). Ámbito: la
+  existencia de cada bodega y ubicación pasa del ámbito anterior al nuevo con un par de líneas `MethodChange` **con cantidad** (salida del
+  anterior, entrada al nuevo) al costo vigente del anterior, el centavo del reparto en la última; así Σ del kardex por ámbito sigue igual a
+  `INV_CostStates` y la existencia por bodega no cambia. Con PEPS cada ámbito nuevo abre su capa única. Las capas del régimen anterior se
+  cierran (restante 0 sin consumos: la verificación no lo cuenta como diferencia).
+- *El acta (T842, decisión a confirmar).* Se adopta la propuesta: clave `Costeo.CambioExigeActa` (bool, defecto `false`, `Inventory.Costing.Manage`);
+  con `true`, sin `legalSource` → `Parameters.LegalSourceRequired`. La alternativa (acta siempre opcional) es borrar la clave.
+- *PEPS en la diferencia de precio y los costos adicionales (T843, D5; la contadora valida).* La porción en existencia es lo que queda de
+  **la capa de esa recepción** (restante / original); se suma a esa capa (su costo unitario pasa a `round6((valor + porción) / restante)`) y
+  lo demás va a costo de venta. El centavo que ese costo no alcanza a dar va en una línea del mismo motivo, en existencia, para que Σ capas
+  = valor del ámbito. Si la capa ya se agotó (la anulación de unos costos adicionales después de vender), todo va a lo vendido. Caso dorado
+  `peps-prorrateo`.
+- *Integridad (T837).* La verificación compara, por capa, restante contra original − Σ consumos, y por ámbito PEPS con existencia no
+  negativa, Σ `round(restante × costo)` contra `CostState.Value` (tipo `CostLayer`). La reconstrucción rehace el restante desde los consumos;
+  no crea capas ni consumos (nacen con su línea).
+- *Valorizado (T844).* Una fila por grupo contable y fecha (`asOf`, por defecto hoy, y `comparativeFrom`), con el grupo del producto a cada
+  fecha y como corte del sistema anterior la fecha de su primer saldo inicial.
+
+**T42h · Pantallas de compras completas y costeo avanzado (I5, T810–T816, T847–T849; 2026-09-28; a revisar por el dueño).**
+- *Fecha propuesta del cambio de método (T848).* La tarea pide «el primer día del próximo período abierto», pero T42g/T841 no admiten una
+  vigencia futura. El diálogo propone el día siguiente al último período cerrado (sin cierres, el primer día del mes de arranque del
+  inventario o, sin él, el del mes en curso), nunca después de hoy; si el servidor responde `Parameters.RequiresPeriodStart` con
+  `earliestAllowed`, la ofrece, y si esa fecha no ha llegado lo dice («regístrelo ese día»). El acta se pide siempre y es obligatoria
+  sólo si la clave la exige (`Costeo.CambioExigeActa`, `RequiresLegalSource`). Parámetros ya no abre «Nueva vigencia» para
+  `Costeo.Metodo` ni `Costeo.Ambito`: sólo «Cambiar…» con `Inventory.Costing.Manage`.
+- *Cuándo se ve el impacto (T847).* La pantalla no sabe cuál es el último movimiento de cada producto; el componente pregunta a
+  `cost-impact` (una consulta) cada vez que el borrador guardado tiene fecha anterior a hoy y la persona tiene `Inventory.Costs.Read`, y
+  sólo muestra el aviso con «Ver impacto en costos» si el servidor dice `retroactive = true`. Si la puerta del retroactivo lo rechaza
+  (`Inventory.Costing.*`) lo dice antes de confirmar; los demás rechazos los dice la confirmación.
+- *Capas en el kardex (T849).* Mostrarlas exigía que el informe las trajera: se tocó `KardexReportQuery` (fuera de la sección Shared, lo
+  mínimo) con una columna visible más; los índices de las columnas existentes no cambian.
+- *Solicitud y emisión.* «Enviar a aprobación» es la confirmación del ciclo común (la política del tipo decide si queda en aprobación).
+  «Emitir acuse y recibo» manda los eventos en estado pendiente o rechazado, en orden 030 → 032; el servidor sigue siendo quien valida.
+- *Informes.* En `purchase-matches` el filtro «status» son los estados del cruce (retenida, aprobada, rechazada), no los del documento;
+  al cambiar de vista se limpian `status` y `supplier`.
 
 **T43 · Búsqueda de productos.**
 Decisión (ventas 5, adelantada a I1 porque FR-020 rige en toda pantalla): lectura exacta por igualdad

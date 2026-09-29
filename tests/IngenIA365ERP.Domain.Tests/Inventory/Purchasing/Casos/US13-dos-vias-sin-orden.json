@@ -1,0 +1,35 @@
+{
+  "nombre": "Dos vías (sin orden): la diferencia de precio sólo ajusta el costo, sin retención (E6)",
+  "descripcion": "Recepción de 50 a $1.000 sin orden; la factura trae 50 a $1.100. La referencia es el costo recibido: diferencia de $100 por unidad (10 %), $5.000 en total, pero sin orden no hay cruce a tres vías y nada se retiene, aun con tolerancia cero.",
+  "tolerancias": {
+    "cantidadPorcentaje": 0,
+    "cantidadValor": 0,
+    "precioPorcentaje": 0,
+    "precioValor": 0,
+    "regla": "AmbasCondiciones"
+  },
+  "lineas": [
+    {
+      "id": "L1",
+      "ordenado": null,
+      "recibidoNoFacturado": 50,
+      "facturado": 50,
+      "precioOrdenado": null,
+      "costoRecibido": 1000,
+      "precioFacturado": 1100,
+      "esperado": {
+        "conOrden": false,
+        "quantityDifference": 0,
+        "priceDifferenceAmount": 5000,
+        "priceDifferenceRate": 0.1,
+        "exceedsTolerance": false,
+        "razones": [],
+        "reasons": null,
+        "status": null,
+        "aprobable": true,
+        "facturaSobreLoRecibido": false,
+        "explicacion": [ "Sin orden", "dos vías" ]
+      }
+    }
+  ]
+}

@@ -20,7 +20,10 @@
    _producto…) no se pintan ni se exportan. Exportar exige Inventory.Reports.Export y, en las vistas con datos de
    clientes, además Inventory.Reports.ExportPersonalData. Enlace en el menú desde US2 (T267), con las vistas kardex y stock.
    US17 (T958): selector de bodega para las vistas que filtran por ella y de clase y estado para «documents»; profundizar por la
-   fila —_documento abre el documento según su clase (DestinoDeDocumentoDeInventario), _producto/_bodega el kardex—. *@
+   fila —_documento abre el documento según su clase (DestinoDeDocumentoDeInventario), _producto/_bodega el kardex—.
+   I5 (T816, T849): las vistas «purchase-matches» (cruce a tres vías) y «method-change-valuation» (valorizado por los dos métodos, sólo con
+   Inventory.Costs.Read) llegan por el registro; aquí se suman sus filtros propios: el proveedor y el estado del cruce (retenida, aprobada,
+   rechazada, que no son los estados del documento) y el corte comparativo. *@
 <PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -80,7 +83,26 @@
                         </select>
                     </label>
                 }
-                @if (UsaPropio("status"))
+                @if (UsaPropio("supplier"))
+                {
+                    <label class="campo">Proveedor
+                        <IngenIA365ERP.Shared.Components.Compras.SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@(p => { _proveedor = p; PonerOtro("supplier", p?.PublicId.ToString()); })" />
+                    </label>
+                }
+                @if (UsaPropio("comparativeFrom"))
+                {
+                    <label class="campo">Comparar con el corte al <input type="date" class="e-input" value="@Otro("comparativeFrom")" @onchange="@(e => PonerOtro("comparativeFrom", e.Value?.ToString()))" /></label>
+                }
+                @if (UsaPropio("status") && EsDelCruce)
+                {
+                    <label class="campo">Estado del cruce
+                        <select class="e-input" value="@Otro("status")" @onchange="@(e => PonerOtro("status", e.Value?.ToString()))">
+                            <option value="">Todos</option>
+                            @foreach (var (valor, texto) in IngenIA365ERP.Shared.Models.Compras.EstadosDelCruce.Todos) { <option value="@valor">@texto</option> }
+                        </select>
+                    </label>
+                }
+                else if (UsaPropio("status"))
                 {
                     <label class="campo">Estado
                         <select class="e-input" value="@Otro("status")" @onchange="@(e => PonerOtro("status", e.Value?.ToString()))">
@@ -121,6 +143,10 @@
     private FiltrosDeInformeDeInventarioModelo _aplicados = new();
     private TablaReporteDto? _tabla;
     private bool _iniciado, _puedeExportar;
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+
+    /// <summary>La vista del cruce a tres vías: su «status» es el de la línea del cruce, no el del documento.</summary>
+    private bool EsDelCruce => _vista?.Key == "purchase-matches";
 
     [SupplyParameterFromQuery(Name = "vista")] public string? Vista { get; set; }
 
@@ -161,6 +187,10 @@
         if (string.IsNullOrWhiteSpace(clave) || clave == _vista?.Key) return;
         _vista = _vistas.FirstOrDefault(v => v.Key == clave);
         _tabla = null;
+        // El «status» y el proveedor de una vista no significan lo mismo en otra (el cruce tiene sus propios estados).
+        _filtros.Otros.Remove("status");
+        _filtros.Otros.Remove("supplier");
+        _proveedor = null;
         await EvaluarExportacionAsync();
     }
 

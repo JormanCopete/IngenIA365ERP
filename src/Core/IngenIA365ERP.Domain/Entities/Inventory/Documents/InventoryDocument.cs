@@ -19,8 +19,8 @@ namespace IngenIA365ERP.Domain.Entities.Inventory.Documents;
 /// <see cref="Prefix"/> y <see cref="Number"/> los asigna sólo <c>Numerador</c> (o <c>NumeradorFiscal</c>, I4); lo vigila
 /// <c>SoloElNumeradorNumera</c>. Las FK hacia bodegas, ubicaciones, productos, unidades, canales y causas son
 /// columnas <c>int</c> sin navegación: las declara la configuración de esas entidades (US1). Las columnas de I3
-/// (punto, caja, sesión, suspensión) y de I5 (<c>AllocationMethod</c>, <c>BalanceClosed*</c>, <c>ExpectedDate</c>) las
-/// agrega su entrega.
+/// (punto, caja, sesión, suspensión) y de I5 (<c>BalanceClosed*</c>, <c>ExpectedDate</c>) las agrega su entrega; el método
+/// de reparto de los costos adicionales no vive aquí sino en cada fila de <c>INV_LandedCostAllocations</c> (T778).
 /// </para>
 /// </summary>
 public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
@@ -132,6 +132,24 @@ public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
     public long? CountSnapshotKardexEntryId { get; set; }
     public byte? CountRound { get; set; }
 
+    // ---- solicitud y orden de compra (I5, T835; data-model §5.1 y §9.8) ----
+
+    /// <summary>Solicitud: para cuándo se necesita (<c>neededBy</c>); orden: la entrega esperada (<c>expectedDate</c>).</summary>
+    public DateOnly? ExpectedDate { get; set; }
+
+    /// <summary>
+    /// Sólo <c>PurchaseOrder</c>: el saldo pendiente de recibir se cerró (decisión del dueño, data-model §9.8). Desde ese
+    /// instante la orden no admite recepciones y su saldo deja de contar como «por recibir». Lo escribe sólo el cierre
+    /// del saldo (<c>ClosePurchaseOrderBalanceCommand</c>, T792), sobre una orden ya confirmada.
+    /// </summary>
+    public DateTime? BalanceClosedAt { get; private set; }
+
+    /// <summary><c>SEC_Users.Id</c> de quien cerró el saldo de la orden.</summary>
+    public int? BalanceClosedByUserId { get; private set; }
+
+    /// <summary>El motivo, obligatorio, del cierre del saldo de la orden.</summary>
+    public string? BalanceClosedReason { get; private set; }
+
     // ---- nacen en I1 y se usan después (§14) ----
     public DateOnly? ValidUntil { get; set; }
     public DateOnly? DueDate { get; set; }
@@ -182,6 +200,27 @@ public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
         DiscardedAt = descartadoEnUtc;
         DiscardReason = motivo.Trim();
     }
+
+    /// <summary>
+    /// Cierra el saldo pendiente de recibir de una orden de compra confirmada (feature 012, I5, T792; data-model §9.8): desde ahora no
+    /// admite recepciones y su saldo deja de contar como «por recibir». No mueve kardex ni cambia lo recibido o facturado. Sólo lo llama
+    /// <c>ClosePurchaseOrderBalanceCommand</c>, que antes responde <c>Inventory.PurchaseOrder.NotOpen</c> si la orden no está abierta. (nuevo)
+    /// </summary>
+    public void CerrarSaldo(int cerradoPor, DateTime cerradoEnUtc, string motivo)
+    {
+        if (Class != DocumentClass.PurchaseOrder)
+            throw new InvalidOperationException("Sólo una orden de compra cierra su saldo pendiente de recibir.");
+        if (Status != DocumentStatus.Confirmed || BalanceClosedAt is not null)
+            throw new InvalidOperationException("Sólo se cierra el saldo de una orden confirmada que todavía lo tiene abierto.");
+        if (string.IsNullOrWhiteSpace(motivo))
+            throw new ArgumentException("Cerrar el saldo de una orden exige el motivo.", nameof(motivo));
+        BalanceClosedAt = cerradoEnUtc;
+        BalanceClosedByUserId = cerradoPor;
+        BalanceClosedReason = motivo.Trim();
+    }
+
+    /// <summary>¿La orden admite recepciones? Confirmada y con el saldo abierto (data-model §9.8). (nuevo)</summary>
+    public bool OrdenAbierta => Class == DocumentClass.PurchaseOrder && Status == DocumentStatus.Confirmed && BalanceClosedAt is null;
 
     /// <summary>Lo pone sólo la confirmación de su anulación (FR-006): referencia el documento contrario.</summary>
     public void MarcarAnulado(int anuladoPorDocumentoId)

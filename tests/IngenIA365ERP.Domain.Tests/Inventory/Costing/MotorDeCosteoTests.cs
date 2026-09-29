@@ -6,7 +6,7 @@ namespace IngenIA365ERP.Domain.Tests.Inventory.Costing;
 
 /// <summary>
 /// Feature 012, T280–T282: lo que los casos dorados no cubren de <see cref="MotorDeCosteo"/>, <see cref="Redondeo"/> y
-/// <see cref="Retroactivo"/> —PEPS todavía no, el reparto del residuo por bodega, el rechazo que nombra el movimiento
+/// <see cref="Retroactivo"/> —el reparto del residuo por bodega, el rechazo que nombra el movimiento
 /// donde el retroactivo deja el ámbito en negativo y los valores admitidos de los parámetros de redondeo—.
 /// </summary>
 public class MotorDeCosteoTests
@@ -14,11 +14,15 @@ public class MotorDeCosteoTests
     private static readonly ParametrosDeCosteo Defecto = new();
 
     [Fact]
-    public void Peps_llega_en_I5()
+    public void Con_PEPS_la_entrada_crea_su_capa()
     {
-        var acto = () => MotorDeCosteo.Aplicar(EstadoDeCosto.Vacio,
-            new MovimientoDeCosto(1m, ValoracionDelMovimiento.AlCostoIndicado, 100m), Defecto with { Metodo = CostMethod.Fifo });
-        acto.Should().Throw<NotSupportedException>().WithMessage("*I5*");
+        var r = MotorDeCosteo.Aplicar(EstadoDeCosto.Vacio,
+            new MovimientoDeCosto(1m, ValoracionDelMovimiento.AlCostoIndicado, 100m) { OperationDate = new DateOnly(2026, 9, 1) },
+            Defecto with { Metodo = CostMethod.Fifo });
+
+        r.Admitido.Should().BeTrue();
+        r.CapasNuevas.Should().ContainSingle().Which.RemainingQuantity.Should().Be(1m);
+        r.Estado.Capas.Should().ContainSingle().Which.Entrada.Linea.Should().BeSameAs(r.Principal);
     }
 
     [Fact]

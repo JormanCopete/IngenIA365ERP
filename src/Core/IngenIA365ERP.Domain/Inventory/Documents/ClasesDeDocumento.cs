@@ -256,7 +256,9 @@ public static class ClasesDeDocumento
         C(DocumentClass.SupportDocumentAdjustmentNote, Compras, InventoryEffect.None, FiscalDirection.Emitted,
             [FacturaProveedorRegistrada, AjusteDeCostoReconocido], PostingChain.Purchases, I4, SinBodega,
             "Ninguno; ajusta el costo si cambia el precio.");
-        C(DocumentClass.LandedCost, Compras, InventoryEffect.CostOnly, null, [AjusteDeCostoReconocido], PostingChain.None, I5, SinBodega,
+        // I5 (T781): los costos adicionales van en la cadena de compras —su modo de paso es el de la recepción y la factura que
+        // reparten (FR-075)—; la solicitud y la orden no mueven nada, no son fiscales ni emiten mensajes, y no tienen cadena.
+        C(DocumentClass.LandedCost, Compras, InventoryEffect.CostOnly, null, [AjusteDeCostoReconocido], PostingChain.Purchases, I5, SinBodega,
             "Sólo costo: reparte fletes y otros costos entre lo recibido.");
         C(DocumentClass.SupplierReturn, Compras, InventoryEffect.Exit, null, [DevolucionRegistrada, AjusteDeCostoReconocido],
             PostingChain.Purchases, I1, Operativa, "Salida de la bodega hacia el proveedor.");

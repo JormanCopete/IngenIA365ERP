@@ -47,3 +47,14 @@ public sealed class ReglasDeParametrosVacias : IReglasDeParametros
     public Task<Result<DecisionDeReglasDeParametro>> EvaluarAsync(AltaDeParametro alta, CancellationToken ct) =>
         Task.FromResult(Result.Success(DecisionDeReglasDeParametro.Adelante));
 }
+
+/// <summary>
+/// Lo que un módulo hace <b>además</b> de guardar la vigencia (feature 012, I5, T841): corre dentro de <c>AddParameterVersionCommand</c>,
+/// después de agregar las vigencias y antes del <c>SaveChanges</c>, en la misma transacción. Inventario lo usa para el cambio de método
+/// o de ámbito de costeo (<c>CambioDeMetodoDeCosteo</c>, la única vía, T21): genera el documento de ajuste de costo del sistema y rehace
+/// los estados de costo y las capas. Un fallo no deja nada guardado. (nuevo)
+/// </summary>
+public interface IEfectoDeAltaDeParametro
+{
+    Task<Result> AplicarAsync(AltaDeParametro alta, string motivo, string? fuenteLegal, CancellationToken ct);
+}

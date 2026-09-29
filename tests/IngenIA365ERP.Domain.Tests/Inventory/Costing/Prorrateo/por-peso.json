@@ -1,0 +1,19 @@
+{
+  "nombre": "Por peso: la base es cantidad recibida × peso unitario del producto",
+  "descripcion": "Línea 1: 10 unidades × 1,5 kg = 15 kg; línea 2: 5 unidades × 1 kg = 5 kg; total 20 kg. $2.000 × 15 / 20 = 1.500 y $2.000 × 5 / 20 = 500.",
+  "monto": 2000,
+  "metodo": "Weight",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "lineas": [
+    { "linea": 1, "producto": 10, "cantidad": 10, "valor": 1000, "peso": 1.5, "existencia": 10 },
+    { "linea": 2, "producto": 11, "cantidad": 5, "valor": 9000, "peso": 1, "existencia": 5 }
+  ],
+  "esperado": {
+    "roundingResidue": 0,
+    "lineas": [
+      { "linea": 1, "basis": 15, "allocated": 1500, "residue": 0, "existingRatio": 1, "existing": 1500, "sold": 0 },
+      { "linea": 2, "basis": 5, "allocated": 500, "residue": 0, "existingRatio": 1, "existing": 500, "sold": 0 }
+    ]
+  }
+}

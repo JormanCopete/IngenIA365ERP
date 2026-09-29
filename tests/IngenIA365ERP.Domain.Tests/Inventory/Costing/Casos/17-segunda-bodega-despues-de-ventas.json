@@ -32,7 +32,7 @@
           { "documento": "TR-1", "enExistencia": 0, "vendida": 0 }
         ],
         "estado": { "cantidad": 14, "valor": 16100, "promedio": 1150, "ultimoCosto": 1150 },
-        "explicacion": [ "Retroactivo mínimo de I1" ]
+        "explicacion": [ "Retroactivo" ]
       }
     },
     {

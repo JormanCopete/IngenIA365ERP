@@ -725,6 +725,7 @@ guarda vigencias. Leer un valor en el servidor es sólo `LectorDeParametros` (T2
 | `Parameters.KeyNotFound` | 404 | clave inexistente en el catálogo del módulo | |
 | `Parameters.ValueNotAllowed` · `.ScopeNotAllowed` | 422 | valor o ámbito fuera de lo admitido | `{ allowed[] }` |
 | `Parameters.Overlaps` · `.ValidFromInClosedPeriod` · `.RequiresPeriodStart` · `.PermissionRequired` | 422 | ver reglas | |
+| `Inventory.Costing.MethodChangeInFuture` **(nuevo, I5, T841)** · `Parameters.LegalSourceRequired` **(nuevo, I5, T842)** | 422 | `Costeo.Metodo`/`Costeo.Ambito` con `validFrom` futuro (el cambio no se programa: se registra el día que empieza o después, sin movimientos desde ese día); con `Costeo.CambioExigeActa` y sin `legalSource` | `{ key, validFrom, today }` · `{ key }` |
 | `Inventory.PostingMode.ChainMismatch` · `.FiscalRequiresConfirmation` | 422 | FR-075 | ver reglas |
 
 ## 8. Tipos de documento — `/api/inventory/document-types` (`DocumentTypesEndpoints.cs`, I1)
@@ -1488,7 +1489,7 @@ lineNumber, ordered, received, tolerance }`).
 
 | Ruta | Permiso | Cuerpo / respuesta |
 |---|---|---|
-| `GET /purchases/matches?status=&supplierPersonPublicId=&page=&pageSize=` | Purchases.View | `PagedResult<PurchaseMatchLineDto { publicId, supplierInvoice { publicId, displayNumber, supplierNumber }, lineNumber, product, ordered, received, invoiced, orderPrice, receiptPrice, invoicePrice, quantityVariance, priceVariance, reasons: [Quantity, Price], status: Held \| Approved \| Rejected, approvalRequestPublicId? }>` |
+| `GET /purchases/matches?status=&supplierPersonPublicId=&page=&pageSize=` | Purchases.View | `PagedResult<PurchaseMatchLineDto { publicId, supplierInvoice { publicId, displayNumber, supplierNumber }, lineNumber, product, ordered, received, invoiced, orderPrice, receiptPrice, invoicePrice, quantityVariance, priceVariance, reasons: [Quantity, Price], status: Held \| Approved \| Rejected, approvalRequestPublicId?, exceedsTolerance, tolerance }>` (precios nulos sin `Inventory.Costs.Read`; `exceedsTolerance` y `tolerance` **(nuevos)**, T42d) |
 | `GET /purchases/supplier-invoices/{id}/match` | Purchases.View | el cruce de esa factura, línea por línea |
 
 Al confirmar una factura contra recepciones con orden, `CruceDeCompra` compara por línea lo ordenado, lo
@@ -1504,7 +1505,9 @@ servicio), receiptPublicIds[], amount?, method: Value \| Quantity \| Weight \| V
 manualAllocations?: [{ receiptLinePublicId, amount }] }`. El borrador devuelve `allocations: [{
 receiptLine, product, basis, allocated, toInventory, toCostOfSales }]` y `roundingResidue` (`Prorrateo`:
 suma exacta por residuo mayor y diferencia visible; US13-3: $100.000 por valor sobre $600.000 y $400.000
-reparte $60.000 y $40.000). Confirmar emite un `AjusteDeCostoReconocido` por documento afectado. Errores:
+reparte $60.000 y $40.000). Las líneas las arma el servidor (una por línea de recepción); el borrador y el detalle devuelven
+`landedCost: { supplierInvoice, method, amount, available, allocations[], roundingResidue }` **(nuevo, T42e)**, con `roundingResidue`
+también por línea. Confirmar emite un `AjusteDeCostoReconocido` por documento afectado. Errores:
 `Inventory.LandedCost.BasisMissing` (`data: { products[] }`: sin peso o volumen),
 `.ManualNotBalanced` (`data: { amount, allocated }`), `.ExceedsInvoice` (`data: { available }`: más de lo
 que queda sin repartir de la factura), `.InvoiceNotService`, `Inventory.Purchase.ReceiptNotConfirmed`.
@@ -1521,7 +1524,7 @@ que queda sin repartir de la factura), `.InvoiceNotService`, `Inventory.Purchase
 | `Inventory.Purchase.GoodsWithoutReceipt` · `Inventory.SupplierInvoice.IssueDateInvalid` · `Inventory.SupplierNote.InvoiceFromOtherSupplier` · `.InvoiceNotConfirmed` · `.InvoiceLineRequired` **(nuevos, US9)** | 422 | §14.4, §14.5 | `{ lineNumber, productCode }` · `{ today }` · `{ invoicePublicId, displayNumber }` · `{ lineNumber }` |
 | `Inventory.Return.ReceiptLineRequired` · `.ExceedsReceived` | 422 | §14.6 | `{ received, alreadyReturned }` |
 | `Inventory.RadianEvent.NotApplicable` · `.OutOfOrder` · `.DateInvalid` · `.AlreadyRegistered` · `.ReceiptNotConfirmed` | 422 | §14.8 | |
-| `Inventory.LandedCost.BasisMissing` · `.ManualNotBalanced` · `.ExceedsInvoice` · `.InvoiceNotService` | 422 | §14.9 | |
+| `Inventory.LandedCost.BasisMissing` · `.ManualNotBalanced` · `.ExceedsInvoice` · `.InvoiceNotService` · `.InvoiceNotConfirmed` **(nuevo, T42e)** | 422 | §14.9 | `{ products[] }` · `{ amount, allocated }` · `{ available }` · `{ invoicePublicId, displayNumber, status? }` |
 | `Inventory.ProductTax.RateNotInForce` · `Taxation.Uvt.Missing` | 422 | §14.1 | `{ lineNumber, taxCode, date }` · `{ date }` |
 | `Inventory.Numbering.ResolutionUnavailable` · `ElectronicInvoicing.NotReady` | 422 | §14.7, §14.8 | `{ missing[] }` |
 

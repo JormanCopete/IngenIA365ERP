@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.ElectronicInvoicing.Canonical;
 using IngenIA365ERP.Application.ElectronicInvoicing.Channels;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.ElectronicInvoicing;

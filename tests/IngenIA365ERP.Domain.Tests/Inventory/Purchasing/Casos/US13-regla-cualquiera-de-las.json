@@ -1,0 +1,34 @@
+{
+  "nombre": "Compras.ReglaDeTolerancia = CualquieraDeLas: basta con caber en el porcentaje O en el valor",
+  "descripcion": "Las mismas tolerancias (1 % y $15 por unidad sobre $1.000): con CualquieraDeLas manda la más amplia, $15. $1.012 entra; $1.020 (diferencia 20) no cabe en ninguna y queda retenida.",
+  "tolerancias": {
+    "cantidadPorcentaje": 0,
+    "cantidadValor": 0,
+    "precioPorcentaje": 0.01,
+    "precioValor": 15,
+    "regla": "CualquieraDeLas"
+  },
+  "lineas": [
+    {
+      "id": "DENTRO",
+      "ordenado": 10, "recibidoNoFacturado": 10, "facturado": 10,
+      "precioOrdenado": 1000, "costoRecibido": 1000, "precioFacturado": 1012,
+      "esperado": {
+        "quantityDifference": 0, "priceDifferenceAmount": 120, "priceDifferenceRate": 0.012,
+        "exceedsTolerance": false, "razones": [], "reasons": null, "status": null, "aprobable": true,
+        "facturaSobreLoRecibido": false, "toleranciaDePrecio": 15,
+        "toleranceJson": "{\"Compras.ToleranciaCantidadPorcentaje\":0,\"Compras.ToleranciaCantidadValor\":0,\"Compras.ToleranciaPrecioPorcentaje\":0.01,\"Compras.ToleranciaPrecioValor\":15,\"Compras.ReglaDeTolerancia\":\"CualquieraDeLas\"}"
+      }
+    },
+    {
+      "id": "FUERA",
+      "ordenado": 10, "recibidoNoFacturado": 10, "facturado": 10,
+      "precioOrdenado": 1000, "costoRecibido": 1000, "precioFacturado": 1020,
+      "esperado": {
+        "quantityDifference": 0, "priceDifferenceAmount": 200, "priceDifferenceRate": 0.02,
+        "exceedsTolerance": true, "razones": [ "Price" ], "reasons": "Price", "status": "Held", "aprobable": true,
+        "facturaSobreLoRecibido": false, "toleranciaDePrecio": 15
+      }
+    }
+  ]
+}

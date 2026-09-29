@@ -115,6 +115,10 @@ public class EnumeracionesDelComercioTests
         Fija((SupplierInvoiceEventCode.Receipt030, 30), (SupplierInvoiceEventCode.GoodsReceived032, 32));
         Fija((SupplierInvoiceEventStatus.Pending, 0), (SupplierInvoiceEventStatus.RegisteredExternally, 1),
              (SupplierInvoiceEventStatus.Emitted, 2), (SupplierInvoiceEventStatus.Rejected, 3), (SupplierInvoiceEventStatus.NotApplicable, 4));
+        // I5 (T776; api.md §17.1, data-model §9.6 y §9.7).
+        Fija((PurchaseMatchStatus.Held, 1), (PurchaseMatchStatus.Approved, 2), (PurchaseMatchStatus.Rejected, 3));
+        Fija((LandedCostAllocationMethod.Value, 1), (LandedCostAllocationMethod.Quantity, 2), (LandedCostAllocationMethod.Weight, 3),
+             (LandedCostAllocationMethod.Volume, 4), (LandedCostAllocationMethod.Manual, 5));
     }
 
     // ------------------------------------------------------------- Core: impuestos (T026) --

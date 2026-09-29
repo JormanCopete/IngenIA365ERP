@@ -14,6 +14,7 @@ using IngenIA365ERP.Application.Inventory.Replenishment;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Tests.Inventory.Catalog;
 using IngenIA365ERP.Domain.Approvals;
+using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Inventory.Warehousing;
@@ -117,17 +118,23 @@ public sealed class KardexDePrueba
 
     // ------------------------------------------------------------------------------------------- servicios --
 
-    public LectorDeParametros Lector() => new(C.Db);
+    /// <summary>
+    /// La entrega del comercio con que se leen los parámetros y se registra el kardex (por defecto, la vigente del despliegue). Las
+    /// pruebas de I5 (PEPS, el retroactivo general) la suben antes de que el cierre de I5 suba <c>CatalogoDeParametros.EntregaVigente</c>.
+    /// </summary>
+    public EntregaDelComercio Entrega { get; set; } = CatalogoDeParametros.EntregaVigente;
 
-    public RegistroDeKardex Registro() => new(C.Db, Lector(), C.Reloj);
+    public LectorDeParametros Lector() => new(C.Db, Entrega);
+
+    public RegistroDeKardex Registro() => new(C.Db, Lector(), C.Reloj, Entrega);
 
     public IMaestrosDelDocumento Maestros() => new MaestrosDelDocumentoEnBase(C.Db);
 
     public VistaDeDocumentos Vista() => new(C.Db, Maestros(), Permisos, Alcance);
 
-    public EfectosDeClase Efectos()
+    public EfectosDeClase Efectos(RegistroDeKardex? compartido = null)
     {
-        var registro = Registro();
+        var registro = compartido ?? Registro();
         var reversion = new ReversionDeKardex(C.Db, registro);
         var emision = new EmisionDeInventario(C.Db);
         var maestros = Maestros();
@@ -137,15 +144,24 @@ public sealed class KardexDePrueba
             new EfectoDeAjusteNegativo(registro, reversion, emision, maestros, Permisos, C.Db),
             new EfectoDeConsumoInterno(registro, reversion, emision, maestros, Permisos, C.Db),
             new EfectoDeBaja(registro, reversion, emision, maestros, Permisos, C.Db),
-        ]);
+        ], Entrega);
     }
 
     /// <summary>El aviso de reposición que la confirmación llama después del kardex (US17, T953); nulo = sin aviso.</summary>
     public AvisoDeReposicionAlConfirmar? AvisoDeReposicion { get; set; }
 
-    public ConfirmacionDeDocumento Confirmacion(EfectosDeClase? efectos = null) => new(
-        C.Db, Maestros(), Actor, C.Reloj, efectos ?? Efectos(), Motor, Cerrojo, new Numerador(C.Db, Cerrojo),
-        new EmisorDeMensajes(C.Db, Actor, C.Reloj), Lector(), Vista(), [], [], avisoDeReposicion: AvisoDeReposicion);
+    /// <summary>
+    /// El ciclo común con UN registro del kardex compartido entre las estrategias y la confirmación (como en el contenedor, donde es
+    /// Scoped): así la confirmación toma los ajustes retroactivos que dejó el registro (US16, T839).
+    /// </summary>
+    public ConfirmacionDeDocumento Confirmacion(EfectosDeClase? efectos = null, RegistroDeKardex? compartido = null)
+    {
+        var registro = compartido ?? Registro();
+        return new(
+            C.Db, Maestros(), Actor, C.Reloj, efectos ?? Efectos(registro), Motor, Cerrojo, new Numerador(C.Db, Cerrojo),
+            new EmisorDeMensajes(C.Db, Actor, C.Reloj), Lector(), Vista(), [], [], avisoDeReposicion: AvisoDeReposicion,
+            registroDeKardex: registro, emisionDeInventario: new EmisionDeInventario(C.Db));
+    }
 
     public SaveInventoryDraftCommandHandler Guardar(EfectosDeClase? efectos = null) =>
         new(C.Db, Maestros(), Alcance, Actor, C.Reloj, efectos ?? Efectos(), Vista());

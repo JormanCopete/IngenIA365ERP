@@ -29,8 +29,11 @@ public sealed class FuenteDeEmisionDeInventario(
     IDateTimeService reloj,
     ILectorDeParametros parametros,
     ConfirmacionDeDocumento confirmacion,
-    RechazoFiscalEnCurso? rechazoEnCurso = null) : IFuenteDeDocumentoElectronico
+    RechazoFiscalEnCurso? rechazoEnCurso = null,
+    Purchasing.EventosRadianDeInventario? eventosRadian = null) : IFuenteDeDocumentoElectronico
 {
+    /// <summary>La fuente se armó sin los eventos RADIAN de compras (sólo en pruebas que no los usan). (nuevo)</summary>
+    public const string RadianNotAvailableCode = "Inventory.RadianEvent.NotAvailable";
     /// <summary>El módulo fuente que se sella en <c>COR_ElectronicDocuments.SourceModule</c>.</summary>
     public const string Modulo = "INV";
 
@@ -424,7 +427,27 @@ public sealed class FuenteDeEmisionDeInventario(
 
     public string PermisoDeConfirmar(ElectronicDocumentKind tipo) =>
         (tipo is ElectronicDocumentKind.SupportDocument or ElectronicDocumentKind.SupportDocumentAdjustmentNote
+            or ElectronicDocumentKind.RadianEvent030 or ElectronicDocumentKind.RadianEvent032
             ? PermisosDeGrupo.De(DocumentClassGroup.Purchases)
             : PermisosDeGrupo.De(DocumentClassGroup.Sales)).Confirm!;
+
+    // ------------------------------------------------------------------------------ eventos RADIAN (I5, T803–T805) --
+
+    public Task<Result<IReadOnlyList<EventoRadianPreparado>>> PrepararEventosRadianAsync(Guid sourceDocumentPublicId,
+        IReadOnlyList<ElectronicDocumentKind> tipos, CancellationToken ct) =>
+        eventosRadian?.PrepararAsync(sourceDocumentPublicId, tipos, ct)
+        ?? Task.FromResult(Result.Failure<IReadOnlyList<EventoRadianPreparado>>(SinEventos()));
+
+    public Task<Result<EntradaDeEventoRadian>> LeerEventoRadianAsync(Guid sourceDocumentPublicId, ElectronicDocumentKind tipo, CancellationToken ct) =>
+        eventosRadian?.LeerAsync(sourceDocumentPublicId, tipo, ct) ?? Task.FromResult(Result.Failure<EntradaDeEventoRadian>(SinEventos()));
+
+    public Task<Result> EnlazarEventoRadianAsync(Guid sourceDocumentPublicId, ElectronicDocumentKind tipo, Guid electronicDocumentPublicId, CancellationToken ct) =>
+        eventosRadian?.EnlazarAsync(sourceDocumentPublicId, tipo, electronicDocumentPublicId, ct) ?? Task.FromResult(Result.Failure(SinEventos()));
+
+    public Task<Result> RegistrarResultadoDeEventoRadianAsync(Guid sourceDocumentPublicId, ElectronicDocumentKind tipo, ResultadoDeEventoRadian resultado,
+        CancellationToken ct) =>
+        eventosRadian?.RegistrarResultadoAsync(sourceDocumentPublicId, tipo, resultado, ct) ?? Task.FromResult(Result.Failure(SinEventos()));
+
+    private static Error SinEventos() => new(RadianNotAvailableCode, "Los eventos RADIAN de compras no están disponibles en esta instalación.");
 }
 

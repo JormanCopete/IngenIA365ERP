@@ -62,7 +62,7 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         [DocumentClass.NegativeAdjustment] = ("CONN", "Ajuste de conteo (faltante)"),
     };
 
-    /// <summary>Código y nombre del tipo sembrado de cada clase de I1, y de las dos de caja de I3 (T588).</summary>
+    /// <summary>Código y nombre del tipo sembrado de cada clase de I1, de las dos de caja de I3 (T588) y de las tres de compras de I5 (T785).</summary>
     public static readonly IReadOnlyDictionary<DocumentClass, (string Codigo, string Nombre)> Sembrados = new Dictionary<DocumentClass, (string, string)>
     {
         [DocumentClass.PurchaseReceipt] = ("REC", "Recepción de compra"),
@@ -84,6 +84,12 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         // los confirma con la contadora (quickstart.md §2.5). Se siembran cuando la entrega vigente llega a I3 (Operable).
         [DocumentClass.CashMovement] = ("MC", "Movimiento de caja"),
         [DocumentClass.CashCountDifference] = ("DA", "Diferencia de arqueo"),
+        // I5 (T785): la solicitud y la orden de compra y los costos adicionales, con su consecutivo. Códigos propuestos: el dueño
+        // los confirma con la contadora. Se siembran cuando la entrega vigente llega a I5; en las cooperativas que ya tienen los de
+        // I1 a I4 sólo se agregan éstos (idempotente por código).
+        [DocumentClass.PurchaseRequest] = ("SOC", "Solicitud de compra"),
+        [DocumentClass.PurchaseOrder] = ("ORC", "Orden de compra"),
+        [DocumentClass.LandedCost] = ("CAD", "Costos adicionales de compra"),
     };
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)
@@ -144,7 +150,8 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
                 Name = sembrado.Nombre,
                 Class = clase.Class,
                 RequiresReason = clase.Class is DocumentClass.WriteOff or DocumentClass.Voiding or DocumentClass.CashMovement,
-                RequiresCounterparty = clase.Group == DocumentClassGroup.Purchases,
+                // La solicitud de compra la hace la bodega, sin proveedor (data-model §5.2).
+                RequiresCounterparty = clase.Group == DocumentClassGroup.Purchases && clase.Class != DocumentClass.PurchaseRequest,
                 AllWarehouses = true,
                 IsSeeded = true,
                 IsActive = true,

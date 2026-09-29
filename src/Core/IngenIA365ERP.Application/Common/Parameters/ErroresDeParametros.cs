@@ -17,6 +17,7 @@ public static class ErroresDeParametros
     public const string CodigoPermisoRequerido = "Parameters.PermissionRequired";
     public const string CodigoRequiereInicioDePeriodo = "Parameters.RequiresPeriodStart";
     public const string CodigoEnPeriodoCerrado = "Parameters.ValidFromInClosedPeriod";
+    public const string CodigoActaRequerida = "Parameters.LegalSourceRequired";
 
     /// <summary>§7 (US3, T286): <c>Costeo.Metodo</c> y <c>Costeo.Ambito</c> sólo desde el primer día de un período abierto sin movimientos posteriores.</summary>
     public static Error RequiereInicioDePeriodo(string clave, DateOnly? earliestAllowed) => new ErrorConDatos(CodigoRequiereInicioDePeriodo,
@@ -33,9 +34,10 @@ public static class ErroresDeParametros
     public static Error ClaveInexistente(string? modulo, string? clave) => new(CodigoClaveInexistente,
         $"No existe el parámetro «{modulo}/{clave}».");
 
-    public static Error ValorNoAdmitido(DefinicionDeParametro definicion, string? valor) => new ErrorConDatos(CodigoValorNoAdmitido,
+    public static Error ValorNoAdmitido(DefinicionDeParametro definicion, string? valor,
+        EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente) => new ErrorConDatos(CodigoValorNoAdmitido,
         $"El valor «{valor}» no es admitido en «{definicion.Clave}». Elegí uno de los admitidos.",
-        new { allowed = definicion.Admitidos(CatalogoDeParametros.EntregaVigente) });
+        new { allowed = definicion.Admitidos(entrega) });
 
     public static Error AmbitoNoAdmitido(DefinicionDeParametro definicion) => new ErrorConDatos(CodigoAmbitoNoAdmitido,
         $"«{definicion.Clave}» no admite ese ámbito.",
@@ -48,6 +50,14 @@ public static class ErroresDeParametros
     public static Error PermisoRequerido(string permiso) => new ErrorConDatos(CodigoPermisoRequerido,
         "Este parámetro exige un permiso que no tenés. Pedíselo al administrador de la cooperativa.",
         new { permissionCode = permiso });
+
+    /// <summary>
+    /// I5 (T842, nuevo): el módulo exige la referencia al acta para este cambio (en Inventario, <c>Costeo.CambioExigeActa</c> al cambiar
+    /// el método o el ámbito de costeo) y no vino <c>legalSource</c>.
+    /// </summary>
+    public static Error ActaRequerida(string clave) => new ErrorConDatos(CodigoActaRequerida,
+        $"La cooperativa exige la referencia al acta que aprueba el cambio de «{clave}»: indicala en legalSource.",
+        new { key = clave });
 
     public static Error FuenteLegalRequerida(DefinicionDeParametro definicion) => new(Error.Validation.Code,
         $"«{definicion.Clave}» exige la norma o el acta que respalda el valor (legalSource).");

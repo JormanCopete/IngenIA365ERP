@@ -1,0 +1,39 @@
+{
+  "nombre": "US13-1: la factura dice 100 y sólo se recibieron 98 contra la orden de 100",
+  "descripcion": "Orden de 100 unidades a $1.000; dos recepciones contra ella (60 y 38) caben en lo pendiente. La factura trae 100 al mismo precio: QuantityDifference = 100 - 98 = 2. Aunque la tolerancia de cantidad (5 % o 5 unidades) lo cubriría, facturar más de lo recibido nunca entra por tolerancia (data-model §9.6): la línea queda retenida por cantidad y esa razón no se aprueba (T796).",
+  "tolerancias": {
+    "cantidadPorcentaje": 0.05,
+    "cantidadValor": 5,
+    "precioPorcentaje": 0,
+    "precioValor": 0,
+    "regla": "AmbasCondiciones"
+  },
+  "recepciones": [
+    { "id": "R1", "ordenado": 100, "yaRecibido": 0, "estaRecepcion": 60, "esperado": { "admitida": true, "recibido": 60, "excedente": 0, "tolerancia": 5, "pendiente": 100 } },
+    { "id": "R2", "ordenado": 100, "yaRecibido": 60, "estaRecepcion": 38, "esperado": { "admitida": true, "recibido": 98, "excedente": 0, "tolerancia": 5, "pendiente": 40 } }
+  ],
+  "lineas": [
+    {
+      "id": "L1",
+      "ordenado": 100,
+      "recibidoNoFacturado": 98,
+      "facturado": 100,
+      "precioOrdenado": 1000,
+      "costoRecibido": 1000,
+      "precioFacturado": 1000,
+      "esperado": {
+        "quantityDifference": 2,
+        "priceDifferenceAmount": 0,
+        "priceDifferenceRate": 0,
+        "exceedsTolerance": true,
+        "razones": [ "Quantity" ],
+        "reasons": "Quantity",
+        "status": "Held",
+        "aprobable": false,
+        "facturaSobreLoRecibido": true,
+        "toleranceJson": "{\"Compras.ToleranciaCantidadPorcentaje\":0.05,\"Compras.ToleranciaCantidadValor\":5,\"Compras.ToleranciaPrecioPorcentaje\":0,\"Compras.ToleranciaPrecioValor\":0,\"Compras.ReglaDeTolerancia\":\"AmbasCondiciones\"}",
+        "explicacion": [ "Facturado de más sobre lo recibido: 2", "nunca entra por tolerancia" ]
+      }
+    }
+  ]
+}

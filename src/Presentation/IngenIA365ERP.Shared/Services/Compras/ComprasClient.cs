@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Shared.Services.Compras;
 /// <summary>
 /// Cliente tipado de Compras (feature 012, T352; contracts/api.md §14), en el molde de <see cref="InventarioClient"/>. Es
 /// <c>partial</c>: la base (este archivo) pone el envío común y el ciclo de cada clase; <c>.Recepciones</c>, <c>.Facturas</c>
-/// (facturas, notas, prellenado y eventos RADIAN) y <c>.Devoluciones</c> suman lo suyo. <c>.DocumentosSoporte</c> (I4) suma el documento soporte. (nuevo)
+/// (facturas, notas, prellenado y eventos RADIAN) y <c>.Devoluciones</c> suman lo suyo. <c>.DocumentosSoporte</c> (I4) suma el documento soporte; <c>.Completas</c> (I5) las solicitudes, órdenes, cruce, costos adicionales y la emisión RADIAN. (nuevo)
 /// <list type="bullet">
 /// <item>La cabecera <c>Authorization</c> la pone el handler de la sesión (<c>ElTokenDeSesionLoPoneElHandler</c>).</item>
 /// <item>Toda escritura lleva la <c>Idempotency-Key</c> de la operación de pantalla (<see cref="ClaveDeOperacion"/>); el
@@ -32,6 +32,12 @@ public sealed partial class ComprasClient(HttpClient http, CentralAuthClient aut
 
         /// <summary>El documento soporte y su nota de ajuste (I4, §14.7).</summary>
         public const string DocumentosSoporte = Base + "/support-documents";
+
+        /// <summary>Solicitudes, órdenes, cruce a tres vías y costos adicionales (I5, §14.9).</summary>
+        public const string Solicitudes = Base + "/requests";
+        public const string Ordenes = Base + "/orders";
+        public const string Cruce = Base + "/matches";
+        public const string CostosAdicionales = Base + "/landed-costs";
     }
 
     // ---------------------------------------------------------------------------------- ciclo común --

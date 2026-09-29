@@ -1153,6 +1153,69 @@ public static class ManualCatalogo
             ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
             ["compras-recepciones"], [], TipoDeTema.Proceso));
 
+        // ----------------------------------------------------- Compras completas y costeo avanzado (feature 012, I5) --
+        t.Add(Proceso("compras-solicitudes", "Solicitudes de compra", Modulos.Compras, "/compras/solicitudes",
+            "Lo que una dependencia necesita, para cuándo y quién lo pide. La solicitud no mueve inventario: deja constancia de la necesidad hasta que se ordena.",
+            [
+                P("Compras → Solicitudes", "Filtros por estado, fechas y número.", "/compras/solicitudes", "Abrir Solicitudes"),
+                P("Nueva solicitud", "Tipo, bodega que la necesita, para cuándo, quién la pide y los productos leídos con el lector (el empaque leído es la unidad).", "/compras/solicitudes/nueva", "Nueva solicitud"),
+                P("Enviar a aprobación", "La política del tipo decide si queda en aprobación; sin política se confirma."),
+                P("Crear orden", "Confirmada, cada línea muestra lo pendiente por ordenar y «Crear orden» abre la orden con ese pendiente."),
+            ],
+            ["solicitud", "requisicion", "necesidad", "compra", "pendiente por ordenar"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
+            ["compras-ordenes", "inventario-aprobaciones"], ["/compras/solicitudes/nueva", "/compras/solicitudes/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-ordenes", "Órdenes de compra", Modulos.Compras, "/compras/ordenes",
+            "La orden al proveedor con precios, entrega esperada y condiciones de pago. Se aprueba por la política del tipo y por el límite de monto de quien confirma, se envía al proveedor en PDF y se recibe en una o varias entregas.",
+            [
+                P("Compras → Órdenes de compra", "Filtros por proveedor, estado, fechas y número.", "/compras/ordenes", "Abrir Órdenes"),
+                P("Nueva orden", "Proveedor, bodega que recibe, entrega esperada, condiciones y líneas con precio. Desde una solicitud llega prellenada con lo pendiente por ordenar.", "/compras/ordenes/nueva", "Nueva orden"),
+                P("Confirmar", "Si el monto pasa el límite de quien confirma o la política lo pide, queda en aprobación y la pantalla dice por qué."),
+                P("Ver PDF y enviar al proveedor", "El PDF de la orden confirmada; el envío va al correo del proveedor en el maestro o al que se indique."),
+                P("Recibir contra esta orden", "Abre la recepción prellenada con lo pendiente por recibir de cada línea. Lo recibido de más sólo entra dentro de la tolerancia de la cooperativa."),
+                P("Cerrar saldo", "Con motivo, cierra lo pendiente por recibir: la orden ya no admite recepciones."),
+            ],
+            ["orden de compra", "pedido", "proveedor", "pdf", "pendiente por recibir", "aprobacion por monto"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create; confirmar, enviar y cerrar el saldo, Inventory.Purchases.Confirm."],
+            ["compras-solicitudes", "compras-recepciones", "compras-cruce"], ["/compras/ordenes/nueva", "/compras/ordenes/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-cruce", "Cruce a tres vías", Modulos.Compras, "/compras/cruce",
+            "Al confirmar una factura de proveedor cuyas recepciones vienen de una orden, cada línea se compara con lo ordenado y lo recibido, en cantidad y en precio, con las tolerancias vigentes. Lo que excede queda retenido hasta que se aprueba.",
+            [
+                P("Compras → Cruce a tres vías", "Las líneas retenidas, aprobadas y rechazadas con lo ordenado, recibido y facturado, los precios, las diferencias y la tolerancia que se usó. Los precios se ven con el permiso de costos.", "/compras/cruce", "Abrir el cruce"),
+                P("Decidir", "Una línea retenida se aprueba o rechaza en Inventario → Aprobaciones. Aprobada la última, la factura se confirma y la diferencia de precio ajusta el costo de lo que sigue en existencia y el costo de venta de lo vendido; rechazada, la factura vuelve a borrador.", "/inventario/aprobaciones", "Abrir Aprobaciones"),
+                P("Facturado de más", "Facturar más de lo recibido nunca entra por tolerancia: se corrige la factura o se registra otra recepción."),
+                P("En la factura", "La pestaña «Cruce» de la factura de proveedor muestra su cruce línea por línea; el informe «Cruce de compras a tres vías» lo exporta."),
+            ],
+            ["cruce", "tres vias", "tolerancia", "diferencia de precio", "retenida", "factura de proveedor"],
+            ["Permiso Inventory.Purchases.View; decidir, el permiso del nivel de aprobación. Las tolerancias se registran en Parámetros de inventario (Compras.Tolerancia*)."],
+            ["compras-ordenes", "compras-facturas-proveedor", "inventario-aprobaciones", "inventario-parametros"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("compras-costos-adicionales", "Costos adicionales de compra", Modulos.Compras, "/compras/costos-adicionales",
+            "El flete o el seguro de una compra se reparte entre lo recibido por valor, cantidad, peso, volumen o a mano. Lo que sigue en existencia sube de costo y lo ya vendido va a costo de venta.",
+            [
+                P("Compras → Costos adicionales", null, "/compras/costos-adicionales", "Abrir Costos adicionales"),
+                P("Repartir un flete o seguro", "La factura del servicio (confirmada), las recepciones que cubre, el método y el monto (por defecto lo que queda sin repartir de esa factura).", "/compras/costos-adicionales/nueva", "Repartir"),
+                P("Calcular el reparto", "Una fila por línea de recepción con la base, lo asignado y el residuo del redondeo; con el permiso de costos, la porción a inventario y a costo de venta."),
+                P("Confirmar", "Ajusta el costo en el kardex sin reescribir las recepciones. Una recepción con costos adicionales vigentes no se anula."),
+            ],
+            ["flete", "seguro", "prorrateo", "costos adicionales", "landed cost", "reparto"],
+            ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create; confirmar, Inventory.Purchases.Confirm."],
+            ["compras-recepciones", "compras-facturas-proveedor", "inventario-kardex"], ["/compras/costos-adicionales/nueva", "/compras/costos-adicionales/{Id}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("inventario-costeo-avanzado", "Costeo: PEPS, fechas anteriores y cambio de método", Modulos.Inventario, "/inventario/parametros",
+            "La cooperativa elige promedio ponderado o PEPS y el ámbito del costo. Con fechas anteriores permitidas, un documento puede registrarse antes de movimientos ya confirmados: el costo de esos documentos se ajusta sin reescribirlos.",
+            [
+                P("Ver el impacto antes de confirmar", "En recepciones, facturas de proveedor, ajustes y devoluciones, si la fecha es anterior al último movimiento de algún producto, la pantalla lo avisa y «Ver impacto en costos» muestra los documentos afectados con la porción a inventario y a costo de venta."),
+                P("Cambiar el método o el ámbito", "En Parámetros de inventario, «Cambiar…» en Costeo.Metodo o Costeo.Ambito: el primer día de un período abierto, sin movimientos desde ese día, con justificación y acta. No se deshace.", "/inventario/parametros", "Abrir Parámetros"),
+                P("Comparar los dos valorizados", "El informe «Valorizado por cambio de método» muestra por grupo contable el valor por promedio ponderado y por PEPS.", "/inventario/informes?vista=method-change-valuation", "Abrir el informe"),
+                P("En el kardex", "«Motivo» distingue los ajustes de costo (retroactivo, diferencia de precio, costos adicionales, cambio de método) y, en PEPS, «Capas consumidas» dice de qué entradas salió cada salida.", "/inventario/kardex", "Abrir el kardex"),
+            ],
+            ["peps", "fifo", "promedio ponderado", "retroactivo", "fecha anterior", "cambio de metodo", "capas", "impacto en costos"],
+            ["Ver el impacto, Inventory.Costs.Read; cambiar el método, Inventory.Parameters.Manage e Inventory.Costing.Manage."],
+            ["inventario-parametros", "inventario-kardex", "inventario-informes"], [], TipoDeTema.Proceso));
+
         // ------------------------------------------------- Ventas y punto de venta (feature 012, I3, T644) --
         t.Add(Proceso("ventas-pos", "Vender en el punto de venta", Modulos.Ventas, "/pos",
             "La venta en caja, pensada para el lector y el teclado: cada lectura suma una línea, la venta vive en el servidor desde la primera y se cobra con uno o varios medios. Un doble clic o una conexión que se cae no venden dos veces.",

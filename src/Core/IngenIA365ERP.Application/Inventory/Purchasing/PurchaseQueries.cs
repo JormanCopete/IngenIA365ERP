@@ -199,7 +199,8 @@ public sealed class ListSupplierInvoicesQueryHandler(
 public sealed record GetPurchaseDocumentQuery(Guid DocumentPublicId, DocumentClass? Clase = null) : IRequest<Result<PurchaseDocumentDto>>;
 
 public sealed class GetPurchaseDocumentQueryHandler(
-    IApplicationDbContext db, VistaDeDocumentos vista, VinculosDeCompra vinculos, CalculoTributarioDeCompra calculo)
+    IApplicationDbContext db, VistaDeDocumentos vista, VinculosDeCompra vinculos, CalculoTributarioDeCompra calculo, PendientesDeCompra pendientes,
+    CostosAdicionalesDeCompra? costos = null)
     : IRequestHandler<GetPurchaseDocumentQuery, Result<PurchaseDocumentDto>>
 {
     public async Task<Result<PurchaseDocumentDto>> Handle(GetPurchaseDocumentQuery request, CancellationToken ct)
@@ -210,7 +211,7 @@ public sealed class GetPurchaseDocumentQueryHandler(
             return Result.Failure<PurchaseDocumentDto>(InventoryErrors.DocumentNotFound());
 
         var detalle = await vista.DetalleAsync(documento, [], ct);
-        if (documento.Status == DocumentStatus.Draft && documento.Class is DocumentClass.PurchaseReceipt or DocumentClass.SupplierInvoice
+        if (documento.Status == DocumentStatus.Draft && documento.Class is DocumentClass.PurchaseReceipt or DocumentClass.SupplierInvoice or DocumentClass.PurchaseOrder
             && documento.CounterpartyPersonId is not null && documento.DocumentType is { } tipo)
         {
             var previa = await calculo.CalcularAsync(documento, tipo, ct);
@@ -224,13 +225,61 @@ public sealed class GetPurchaseDocumentQueryHandler(
             }
         }
 
+        // I5 (T799): los costos adicionales, con su reparto (la propuesta del borrador o lo que quedó escrito al confirmar).
+        if (documento.Class == DocumentClass.LandedCost && costos is not null && await CostosAdicionalesAsync(costos, documento, ct) is { } reparto)
+            detalle = detalle with { LandedCost = reparto };
+
         var proveedor = await db.SupplierInvoiceDetails.AsNoTracking().FirstOrDefaultAsync(d => d.DocumentId == documento.Id, ct);
         var eventos = documento.Class == DocumentClass.SupplierInvoice ? await ConsultasDeCompras.EventosAsync(db, documento.Id, ct) : [];
         var saldos = documento.Class == DocumentClass.PurchaseReceipt
             ? await ConsultasDeCompras.SaldosDeRecepcionAsync(vinculos, documento.Lines.ToList(), ct)
             : [];
+        var (plan, pendientesDeLinea) = await PlanAsync(documento, ct);
+        // I5 (T797): el cruce a tres vías de la factura, si se cruzó contra una orden.
+        var cruce = documento.Class == DocumentClass.SupplierInvoice
+            ? await Consultas.GetSupplierInvoiceMatchQueryHandler.DeFacturaAsync(db, vista, documento.Id, ct)
+            : [];
         return Result.Success(new PurchaseDocumentDto(detalle, ConsultasDeCompras.Info(proveedor), eventos, saldos, documento.OperationMunicipalityDaneCode,
-            await AjustesDeCostoAsync(documento, ct)));
+            await AjustesDeCostoAsync(documento, ct), plan, pendientesDeLinea, cruce.Count == 0 ? null : cruce));
+    }
+
+    /// <summary>
+    /// <c>landedCost</c> del detalle (api.md §14.9): la factura del flete, el método y el monto, lo que queda sin repartir de la factura sin
+    /// contar este documento y las filas vivas de <c>INV_LandedCostAllocations</c> (la propuesta del borrador o las definitivas). (I5, T799)
+    /// </summary>
+    private async Task<LandedCostDto?> CostosAdicionalesAsync(CostosAdicionalesDeCompra costos, InventoryDocument documento, CancellationToken ct)
+    {
+        var factura = await costos.FacturaDeAsync(documento, ct);
+        if (factura is null) return null;
+        var filas = await costos.FilasAsync(documento, ct);
+        var recepciones = await vinculos.OrigenesAsync(documento, DocumentLinkKind.LandedCostOf, ct);
+        var lineas = await costos.LineasAsync(recepciones, ct);
+        var disponible = await costos.DisponibleAsync(factura, documento.Id, ct);
+        return CostosAdicionalesDeCompra.Vista(factura, filas.FirstOrDefault()?.AllocationMethod ?? LandedCostAllocationMethod.Value, documento.Subtotal,
+            Math.Max(0m, disponible), lineas, filas.Select(CostosAdicionalesDeCompra.ComoReparto).ToList());
+    }
+
+    /// <summary>
+    /// I5 (T788): en una solicitud, <c>neededBy</c> y <c>pendingToOrder</c> por línea; en una orden, <c>expectedDate</c>, sus condiciones,
+    /// el cierre del saldo y <c>pendingToReceive</c> por línea. Nulos en las demás clases.
+    /// </summary>
+    private async Task<(PurchasePlanInfoDto?, IReadOnlyList<PurchasePendingLineDto>?)> PlanAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        if (documento.Class is not (DocumentClass.PurchaseRequest or DocumentClass.PurchaseOrder)) return (null, null);
+        var esOrden = documento.Class == DocumentClass.PurchaseOrder;
+        UsuarioDto? cerradoPor = null;
+        if (documento.BalanceClosedByUserId is int usuario)
+            cerradoPor = await db.Users.AsNoTracking().Where(u => u.Id == usuario).Select(u => new UsuarioDto(u.PublicId, u.Username)).FirstOrDefaultAsync(ct);
+        var plan = new PurchasePlanInfoDto(
+            esOrden ? null : documento.ExpectedDate,
+            esOrden ? documento.ExpectedDate : null,
+            esOrden ? documento.Notes : null,
+            documento.BalanceClosedAt, cerradoPor, documento.BalanceClosedReason);
+        var lineas = (await pendientes.DeDocumentoAsync(documento, ct))
+            .Select(p => new PurchasePendingLineDto(p.LinePublicId, p.LineNumber, p.Cantidad, p.Consumido,
+                esOrden ? null : p.Pendiente, esOrden ? p.Pendiente : null))
+            .ToList();
+        return (plan, lineas);
     }
 
     /// <summary>

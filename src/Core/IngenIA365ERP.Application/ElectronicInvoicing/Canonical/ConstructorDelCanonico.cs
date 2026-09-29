@@ -50,6 +50,15 @@ public sealed record NumeracionDelCanonico(
     ElectronicDocument? Corregido = null,
     SoftwarePosCanonico? SoftwarePos = null);
 
+/// <summary>
+/// Lo sellado que entra al constructor de un evento RADIAN (I5, T803): la configuración, la numeración propia del evento (T802) y el
+/// instante en que se pidió (el <c>IssuedAt</c> del documento electrónico). (nuevo)
+/// </summary>
+public sealed record NumeracionDelEvento(ElectronicEmissionSetting Configuracion, string Prefijo, long Consecutivo, DateTimeOffset EmitidoEn);
+
+/// <summary>El evento RADIAN construido con su JSON, su SHA-256 y su huella (I5, T803). (nuevo)</summary>
+public sealed record EventoConstruido(EventoRadianCanonico Evento, string Json, string CanonicalSha256, string EconomicFingerprint);
+
 /// <summary>El canónico construido con su JSON, su SHA-256 (<c>CanonicalSha256</c>) y su huella económica (<c>EconomicFingerprint</c>). (nuevo)</summary>
 public sealed record CanonicoConstruido(DocumentoElectronicoCanonico Documento, string Json, string CanonicalSha256, string EconomicFingerprint);
 
@@ -294,6 +303,88 @@ public sealed class ConstructorDelCanonico(ILectorDeParametros parametros)
             new TotalesFiscales(documento.Totals.LineExtension, documento.Totals.Allowances, documento.Totals.TaxExclusive,
                 documento.Totals.Taxes, documento.Totals.TaxInclusive, documento.Totals.Charges, documento.Totals.Rounding,
                 documento.Totals.Payable, documento.Totals.Withholdings, documento.Totals.AmountDue));
+    }
+
+    // ------------------------------------------------------------------------------------------ eventos RADIAN (I5, T803) --
+
+    /// <summary>
+    /// Arma el evento RADIAN (030 o 032) con la condición tributaria de la cooperativa leída de los parámetros <c>TAX</c> vigentes a la fecha
+    /// del evento. La misma entrada y la misma numeración dan los mismos bytes (el procesador lo vuelve a armar antes de transmitirlo). (nuevo)
+    /// </summary>
+    public async Task<Result<EventoConstruido>> ConstruirEventoAsync(EntradaDeEventoRadian entrada, NumeracionDelEvento numeracion, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(entrada);
+        ArgumentNullException.ThrowIfNull(numeracion);
+        var fecha = DateOnly.FromDateTime(numeracion.EmitidoEn.ToOffset(IDateTimeService.DesfaseColombia).DateTime);
+        var emisor = new CondicionTributariaDelEmisor(
+            await LeerAsync(ParametrosTributarios.ResponsableIva, fecha, ct),
+            await LeerAsync(ParametrosTributarios.GranContribuyente, fecha, ct),
+            await LeerAsync(ParametrosTributarios.AgenteRetencionIva, fecha, ct),
+            await LeerAsync(ParametrosTributarios.Autorretenedor, fecha, ct));
+        return ConstruirEvento(entrada, numeracion, emisor);
+    }
+
+    /// <summary>
+    /// La regla pura del evento (contracts/dian.md §4.3, §14.3): tipo 96 y código del evento de <see cref="CatalogoDian"/> a la fecha, emisor
+    /// de la configuración sellada, proveedor de la entrada, factura referenciada con su CUFE (sin él → <c>MissingData</c>) y, en el 032, la
+    /// recepción. La huella económica del evento es la de lo que refiere: tipo, factura y CUFE. (nuevo)
+    /// </summary>
+    public static Result<EventoConstruido> ConstruirEvento(EntradaDeEventoRadian entrada, NumeracionDelEvento numeracion, CondicionTributariaDelEmisor emisor)
+    {
+        ArgumentNullException.ThrowIfNull(entrada);
+        ArgumentNullException.ThrowIfNull(numeracion);
+        var catalogo = CatalogoDian.Embebido;
+        var emitidoEn = new DateTimeOffset(DateTime.SpecifyKind(numeracion.EmitidoEn.UtcDateTime, DateTimeKind.Utc))
+            .ToOffset(IDateTimeService.DesfaseColombia);
+        emitidoEn = emitidoEn.AddTicks(-(emitidoEn.Ticks % TimeSpan.TicksPerSecond));
+        var fecha = DateOnly.FromDateTime(emitidoEn.DateTime);
+        var faltan = new List<DatoFaltante>();
+
+        var tipo = catalogo.TipoDeDocumento(entrada.Kind, null, fecha);
+        if (tipo?.CodigoDeEvento is null)
+            faltan.Add(new DatoFaltante("eventCode", Configuracion, PermisoConfiguracion,
+                $"El catálogo DIAN vigente el {fecha:dd/MM/yyyy} no trae el código del evento {entrada.Kind}."));
+        if (string.IsNullOrWhiteSpace(entrada.InvoiceCufe))
+            faltan.Add(new DatoFaltante("referencedInvoice.uniqueCode", "Compras › Facturas del proveedor", "Inventory.Purchases.Create",
+                $"La factura del proveedor {entrada.InvoiceNumber} no tiene CUFE: sin él no hay evento RADIAN. Regístrelo en la factura."));
+        if (entrada.Kind == ElectronicDocumentKind.RadianEvent032 && string.IsNullOrWhiteSpace(entrada.ReceiptNumber))
+            faltan.Add(new DatoFaltante("receipt.number", "Compras › Recepciones", "Inventory.Purchases.Confirm",
+                $"La factura del proveedor {entrada.InvoiceNumber} no tiene una recepción confirmada: el recibo del bien (032) la exige."));
+
+        var contexto = new ContextoDelCanonico { Configuracion = numeracion.Configuracion, Emisor = emisor };
+        var cooperativa = Emisor(contexto, catalogo, fecha, faltan);
+        if (faltan.Count > 0) return Result.Failure<EventoConstruido>(ErroresDeFacturacionElectronica.MissingData(faltan));
+
+        var s = entrada.Supplier;
+        var evento = new EventoRadianCanonico(
+            1,
+            entrada.Kind,
+            tipo!.Codigo,
+            tipo.CodigoDeEvento!,
+            numeracion.Configuracion.Environment,
+            new NumeroCanonico(numeracion.Prefijo, numeracion.Consecutivo, numeracion.Prefijo + numeracion.Consecutivo.ToString(CultureInfo.InvariantCulture)),
+            emitidoEn,
+            cooperativa,
+            new ParteCanonica
+            {
+                Role = RolProveedor,
+                TaxId = s.TaxId.Trim(),
+                CheckDigit = string.IsNullOrWhiteSpace(s.CheckDigit) ? null : s.CheckDigit.Trim(),
+                IdTypeCode = s.IdTypeCode,
+                PersonTypeCode = s.PersonTypeCode,
+                Name = s.Name.Trim(),
+            },
+            new DocumentoCorregidoCanonico(entrada.InvoiceNumber, entrada.InvoiceCufe!.Trim().ToLowerInvariant(), entrada.InvoiceIssueDate, null),
+            entrada.Kind == ElectronicDocumentKind.RadianEvent032 && entrada.ReceiptDate is { } recibida
+                ? new RecepcionCanonica(entrada.ReceiptNumber!, recibida)
+                : null,
+            entrada.IssuedBy,
+            new OrigenCanonico(entrada.SourceModule, entrada.DocumentPublicId, entrada.DocumentClass, entrada.DocumentNumber),
+            []);
+
+        var json = SerializadorCanonico.Serializar(evento);
+        var huella = SerializadorCanonico.Sha256(SerializadorCanonico.Serializar(new { evento.Kind, evento.EventCode, evento.ReferencedInvoice }));
+        return Result.Success(new EventoConstruido(evento, json, SerializadorCanonico.Sha256(json), huella));
     }
 
     /// <summary>¿Es una nota (sin resolución, con consecutivo propio y documento corregido)?</summary>

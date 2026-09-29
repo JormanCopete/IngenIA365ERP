@@ -55,6 +55,9 @@ public class InventoryErrorsTests
         yield return InventoryErrors.PeriodNotLastClosed(2026, 7, new InventoryErrors.MesDeInventario(2026, 8));
         yield return InventoryErrors.PeriodNotClosed(2026, 9);
         yield return InventoryErrors.RetroactiveNotAllowed(1, "P1", guid, "AJN-4", hoy);
+        yield return InventoryErrors.RetroactiveTooOld(30, hoy.AddDays(-30), hoy.AddDays(-40));
+        yield return InventoryErrors.RetroactiveRequiresWeightedAverage(1, "P1");
+        yield return InventoryErrors.MethodChangeInFuture("Costeo.Metodo", hoy.AddDays(5), hoy);
         yield return InventoryErrors.PostingModeChainMismatch(PostingChain.Purchases, [new(guid, "FCP", "Factura", "SupplierInvoice")]);
         yield return InventoryErrors.PostingModeFiscalRequiresConfirmation([new(guid, "FCP", "Factura", "SupplierInvoice")]);
         yield return InventoryErrors.WarehouseNotActive(guid, "B01");
@@ -94,6 +97,7 @@ public class InventoryErrorsTests
             "Inventory.Period.NotStarted", "Inventory.Period.NotNext", "Inventory.Period.NotEnded", "Inventory.Period.OpenCounts",
             "Inventory.Period.WarningsNotAcknowledged", "Inventory.Period.UnbilledShipmentsNotAccepted", "Inventory.Period.AcceptUnbilledNotAllowed",
             "Inventory.Period.NotLastClosed", "Inventory.Period.NotClosed", "Inventory.Costing.RetroactiveNotAllowed",
+            "Inventory.Costing.RetroactiveTooOld", "Inventory.Costing.RetroactiveRequiresWeightedAverage", "Inventory.Costing.MethodChangeInFuture",
             "Inventory.PostingMode.ChainMismatch", "Inventory.PostingMode.FiscalRequiresConfirmation", "Inventory.Warehouse.NotActive",
             "Inventory.Warehouse.Inactive", "Inventory.Product.NotInventoriable", "Inventory.Product.Inactive",
             "Inventory.Product.Blocked", "Inventory.Unit.NotForProduct", "Inventory.Unit.DecimalsNotAllowed",

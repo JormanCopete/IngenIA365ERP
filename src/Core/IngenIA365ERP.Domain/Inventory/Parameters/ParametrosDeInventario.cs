@@ -22,6 +22,12 @@ public static class ParametrosDeInventario
     public const string CosteoAmbito = "Costeo.Ambito";
     public const string CosteoRetroactivosPermitidos = "Costeo.RetroactivosPermitidos";
     public const string CosteoRetroactivosDiasMaximos = "Costeo.RetroactivosDiasMaximos";
+
+    /// <summary>
+    /// I5 (T842, a confirmar por el dueño): si la cooperativa exige la referencia al acta (<c>legalSource</c>) al cambiar
+    /// <c>Costeo.Metodo</c> o <c>Costeo.Ambito</c> (FR-043: «si la cooperativa lo exige»). (nuevo)
+    /// </summary>
+    public const string CosteoCambioExigeActa = "Costeo.CambioExigeActa";
     public const string ExistenciasStockNegativoPermitido = "Existencias.StockNegativoPermitido";
     public const string RedondeoMontos = "Redondeo.Montos";
     public const string RedondeoResiduo = "Redondeo.Residuo";
@@ -82,6 +88,8 @@ public static class ParametrosDeInventario
             false, I5) with { PermisoAdicional = PermisoDeCosteo },
         Entero(Modulo, CosteoRetroactivosDiasMaximos, "Días hacia atrás que admite un movimiento retroactivo.",
             "0", I5) with { PermisoAdicional = PermisoDeCosteo },
+        SiNo(Modulo, CosteoCambioExigeActa, "Cambiar el método o el ámbito de costeo exige la referencia al acta que lo aprueba.",
+            false, I5) with { PermisoAdicional = PermisoDeCosteo },
 
         // ------------------------------------------------------------------------------ existencias --
         SiNo(Modulo, ExistenciasStockNegativoPermitido, "Se permite dejar existencias negativas (general, con excepción por bodega).",

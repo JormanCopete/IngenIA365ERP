@@ -99,13 +99,15 @@ public static class EvaluadorDePolitica
     /// <summary>
     /// La regla fija de un nivel de un sujeto sin política (data-model §21): el descuento sobre el tope con
     /// <c>Inventory.Discounts.Authorize</c>, el crédito provisional con <c>Inventory.Sales.SellOnCredit</c> y la
-    /// diferencia de traslado con <c>Inventory.Transfers.Approve</c>, desde el primer peso. Los demás sujetos no tienen.
+    /// diferencia de traslado con <c>Inventory.Transfers.Approve</c> y la excepción del cruce de compras con
+    /// <c>Inventory.Purchases.Approve</c> (I5, T794; contracts/api.md §14.9), desde el primer peso. La confirmación de documentos no tiene.
     /// </summary>
     public static NivelDeAprobacion? ReglaFija(string sujeto) => sujeto switch
     {
         ApprovalSubjects.DiscountOverCap => new NivelDeAprobacion(1, 0m, "Inventory.Discounts.Authorize"),
         ApprovalSubjects.ProvisionalCredit => new NivelDeAprobacion(1, 0m, "Inventory.Sales.SellOnCredit"),
         ApprovalSubjects.TransferDiscrepancy => new NivelDeAprobacion(1, 0m, "Inventory.Transfers.Approve"),
+        ApprovalSubjects.PurchaseMatchException => new NivelDeAprobacion(1, 0m, "Inventory.Purchases.Approve"),
         _ => null,
     };
 

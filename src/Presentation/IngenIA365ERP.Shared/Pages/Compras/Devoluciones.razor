@@ -70,6 +70,8 @@
                 </div>
                 @* US7 (T539): lo que dijo Contabilidad antes de confirmar. *@
                 <ResultadoDeValidacionPrevia @ref="_validacion" Documento="@_borrador?.PublicId" />
+                @* I5 (T847): con fecha anterior al último movimiento, el impacto en costos antes de confirmar. *@
+                <ImpactoEnCostos Documento="@_borrador?.PublicId" Fecha="@_borrador?.OperationDate" Borrador="@(_borrador?.Status == 0)" Version="@_borrador?.RowVersion" />
                 @if (_borrador?.Warnings is { Count: > 0 } avisos)
                 {
                     <div class="aviso aviso-alerta"><ul>@foreach (var a in avisos) { <li>@a.Message</li> }</ul></div>

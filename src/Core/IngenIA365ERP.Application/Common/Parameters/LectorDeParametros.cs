@@ -12,7 +12,11 @@ namespace IngenIA365ERP.Application.Common.Parameters;
 /// (<c>LosParametrosSeLeenEnUnSoloSitio</c>). Scoped: memoriza cada lectura por petición, así que un documento de
 /// cien líneas no consulta cien veces la misma clave.
 /// </summary>
-public sealed class LectorDeParametros(IApplicationDbContext db) : ILectorDeParametros
+/// <remarks>
+/// <paramref name="entrega"/> es la entrega del comercio con que se interpretan los valores (por defecto, la vigente del despliegue):
+/// las pruebas de una entrega posterior (I5: <c>Peps</c>) la fijan, como <c>EfectosDeClase</c>.
+/// </remarks>
+public sealed class LectorDeParametros(IApplicationDbContext db, EntregaDelComercio entrega = CatalogoDeParametros.EntregaVigente) : ILectorDeParametros
 {
     private readonly Dictionary<(string, string, ParameterScopeKind, int, DateOnly), Result<ValorDeParametro>> _memoria = [];
     private readonly Dictionary<(string, string), IReadOnlyList<VigenciaDeParametro>> _vigenciasPorClave = [];
@@ -38,17 +42,17 @@ public sealed class LectorDeParametros(IApplicationDbContext db) : ILectorDePara
         Result<ValorDeParametro> resultado;
         if (vigente is null)
         {
-            var defecto = definicion.Interpretar(definicion.DefectoSeguro, CatalogoDeParametros.EntregaVigente);
+            var defecto = definicion.Interpretar(definicion.DefectoSeguro, entrega);
             resultado = Result.Success(new ValorDeParametro(definicion, defecto.Texto ?? definicion.DefectoSeguro, defecto.Valor, null));
         }
         else
         {
             // Lo guardado que la definición no admite (un valor de una entrega posterior, un catálogo que cambió)
             // es un error nombrado: caer al defecto escondería una configuración que alguien hizo a propósito.
-            var interpretado = definicion.Interpretar(vigente.Value, CatalogoDeParametros.EntregaVigente);
+            var interpretado = definicion.Interpretar(vigente.Value, entrega);
             resultado = interpretado.Admitido
                 ? Result.Success(new ValorDeParametro(definicion, interpretado.Texto!, interpretado.Valor, vigente))
-                : Result.Failure<ValorDeParametro>(ErroresDeParametros.ValorNoAdmitido(definicion, vigente.Value));
+                : Result.Failure<ValorDeParametro>(ErroresDeParametros.ValorNoAdmitido(definicion, vigente.Value, entrega));
         }
 
         _memoria[llave] = resultado;

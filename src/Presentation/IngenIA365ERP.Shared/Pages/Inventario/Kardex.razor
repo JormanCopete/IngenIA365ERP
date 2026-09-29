@@ -13,7 +13,10 @@
    informes (no hay ruta de kardex bajo /api/inventory). Producto obligatorio, bodega, rango (hasta 5 años) y si muestra las
    líneas de ajuste de costo. La primera fila es el saldo al día anterior a «desde»; el orden es el del kardex (fecha de
    operación y registro). Las columnas de costo y valor llegan vacías sin Inventory.Costs.Read, y la nota lo dice. El
-   documento de cada línea abre su pantalla por la columna oculta _documento. Exportar exige Inventory.Reports.Export. *@
+   documento de cada línea abre su pantalla por la columna oculta _documento. Exportar exige Inventory.Reports.Export.
+   I5 (T849; FR-042, FR-045, FR-046): la columna «Motivo» distingue cada ajuste de costo (retroactivo, diferencia de precio, costos
+   adicionales, cambio de método) y, en PEPS, «Capas consumidas» dice qué capas consumió cada salida, con su fecha y, con
+   Inventory.Costs.Read, su costo. Las dos las arma el servidor; aquí sólo se explican. *@
 <PermissionGate Required="Inventory.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -89,6 +92,11 @@
                 </table>
             </div>
             @foreach (var nota in _tabla.Notas) { <p class="texto-tenue">@nota</p> }
+            <p class="texto-tenue">
+                «Motivo» distingue los ajustes de costo: retroactivo (un documento con fecha anterior), diferencia de precio (la factura del proveedor
+                frente a la recepción), costos adicionales (flete o seguro repartido) y cambio de método. Ninguno reescribe la línea que ajusta.
+                Con el método PEPS, «Capas consumidas» dice de qué entradas salió cada salida.
+            </p>
         }
     </IndicadorDeCarga>
 </div>
