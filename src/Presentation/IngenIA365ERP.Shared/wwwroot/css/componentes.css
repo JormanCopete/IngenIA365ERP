@@ -1147,3 +1147,20 @@ input[type="checkbox"], input[type="radio"] {
 }
 /* Conteo por denominaciones y lotes de datáfono en el cierre de la sesión. */
 .conteo-denominaciones input, .lotes-datafono input { width: 7rem; text-align: right; }
+
+/* Tablero de inventario (feature 012, I6, T969): cada ficha es un botón que lleva a su detalle con un clic; la severidad
+   (Info, Warning, Critical de las alertas) sólo cambia el borde y el color de la cifra, con los tokens de aviso. */
+.ficha-tablero {
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    width: 100%;
+}
+.ficha-tablero:hover,
+.ficha-tablero:focus-visible { border-color: var(--acento); outline: none; }
+.ficha-tablero.severidad-info     { border-color: var(--info); }
+.ficha-tablero.severidad-warning  { border-color: var(--alerta); }
+.ficha-tablero.severidad-warning .kpi-value { color: var(--alerta-texto); }
+.ficha-tablero.severidad-critical { border-color: var(--peligro); background: var(--peligro-fondo); }
+.ficha-tablero.severidad-critical .kpi-value { color: var(--peligro-texto); }
+.ficha-tablero .kpi-anterior { font-size: var(--texto-xs); color: var(--texto-tenue); }

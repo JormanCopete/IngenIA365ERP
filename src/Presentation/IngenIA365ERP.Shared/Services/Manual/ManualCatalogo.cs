@@ -1091,9 +1091,23 @@ public static class ManualCatalogo
                 P("Consultar y profundizar", "La fila de un documento abre el documento; la de un producto o una bodega, su kardex."),
                 P("Exportar", "Excel, Word o PDF con Inventory.Reports.Export; las vistas con datos de clientes piden además Inventory.Reports.ExportPersonalData."),
             ],
-            ["informes", "reportes", "valorizado", "documentos", "reorden", "quiebres", "exportar"],
+            ["informes", "reportes", "valorizado", "documentos", "reorden", "quiebres", "exportar", "margen", "rotacion", "abc", "sin movimiento",
+             "por vencer", "sugerido de compras", "faltantes"],
             ["Permiso Inventory.Reports.View."],
-            ["inventario-kardex", "centro-de-reportes"], [], TipoDeTema.Reporte));
+            ["inventario-kardex", "inventario-tablero", "centro-de-reportes"], [], TipoDeTema.Reporte));
+
+        // I6, US17 (T969): el tablero (§28).
+        t.Add(Proceso("inventario-tablero", "Tablero de inventario", Modulos.Inventario, "/inventario/tablero",
+            "Las cifras clave del inventario y del comercio en una pantalla, por sucursal y bodega: valor del inventario, rotación y días, margen del mes, ventas del día y del mes frente al período anterior, reorden, quiebres, próximos a vencer, mensajes, lotes, documentos DIAN, tipos fiscales sin paso a contabilidad y alertas. Cada ficha lleva a su detalle con un clic.",
+            [
+                P("Inventario → Tablero", "Filtrá por sucursal o bodega (sólo las de su alcance) y la fecha de corte.", "/inventario/tablero", "Abrir el tablero"),
+                P("Leer las fichas", "El borde dice la severidad: amarillo pide atención, rojo es un problema (quiebres, rechazos, margen negativo). Las ventas muestran el período anterior debajo."),
+                P("Ir al detalle", "Un clic en la ficha abre el informe o la bandeja con los mismos filtros: valorizado, rotación, margen por categoría, ventas por caja, reorden, por vencer, mensajes, lotes, documentos electrónicos, parámetros o alertas."),
+                P("Tipos de alerta sin destinatario", "Si una alerta se levantó sin nadie activo con su permiso, el aviso lo dice: asigne el permiso destinatario del tipo en Alertas."),
+            ],
+            ["tablero", "indicadores", "kpi", "rotacion", "margen", "ventas del dia", "quiebres", "vencer", "sin destinatario"],
+            ["Permiso Inventory.Dashboard.View; las fichas de valor y margen, además Inventory.Costs.Read; mensajes y lotes, Inventory.Messages.View; DIAN, ElectronicInvoicing.Documents.View; alertas, Inventory.Alerts.View; tipos sin paso, Inventory.DocumentTypes.View."],
+            ["inventario-informes", "inventario-alertas"], [], TipoDeTema.Consulta));
 
         t.Add(Proceso("inventario-plantillas", "Plantillas de parametrización", Modulos.Inventario, "/inventario/plantillas",
             "Las dieciséis plantillas de la puesta en marcha en su orden de carga: cada una sólo cita lo que cargaron las anteriores. Las que todavía no se importan dicen desde qué entrega.",

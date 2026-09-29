@@ -111,6 +111,15 @@ public class LasConsultasDeInventarioRespetanElAlcance
         // I6, US15 (T934): los lotes con existencia (FEFO) y las series de un producto, por bodega.
         "ListLotsQueryHandler",
         "ListSerialsQueryHandler",
+        // I6, US17 (T960–T965, T967): las vistas de analítica, el sugerido de compras, el tope de faltantes y el tablero.
+        "MarginReportQueryHandler",
+        "TurnoverReportQueryHandler",
+        "AbcReportQueryHandler",
+        "NoMovementReportQueryHandler",
+        "ExpiringReportQueryHandler",
+        "PurchaseSuggestionReportQueryHandler",
+        "ShrinkageCapReportQueryHandler",
+        "GetInventoryDashboardQueryHandler",
     ];
 
     /// <summary>

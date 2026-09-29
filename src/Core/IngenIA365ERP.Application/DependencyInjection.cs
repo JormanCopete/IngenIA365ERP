@@ -208,6 +208,9 @@ public static class DependencyInjection
         // Feature 012 (US3, T287-T291): el valorizado a una fecha (cierre y vista valuation), la revision del cierre y la
         // reclasificacion de grupo contable (comando y plantilla de productos).
         services.AddScoped<Inventory.Periods.ValorizadoALaFecha>();
+        // Feature 012, I6, US17 (T960-T967): la analitica de inventario (margen, rotacion, consumo, sin movimiento, por vencer) que
+        // comparten las vistas de I6, el motivo «sin movimiento» de impairment y el tablero.
+        services.AddScoped<Inventory.Reports.AnaliticaDeInventario>();
         services.AddScoped<Inventory.Periods.RevisionDeCierre>();
         services.AddScoped<Inventory.Catalog.Products.ReclasificacionDeGrupo>();
         services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();

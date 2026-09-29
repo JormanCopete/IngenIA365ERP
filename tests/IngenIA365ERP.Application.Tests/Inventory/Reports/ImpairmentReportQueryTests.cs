@@ -26,7 +26,8 @@ public class ImpairmentReportQueryTests
     private static object? Celda(TablaExportable tabla, FilaExportable fila, string titulo) => fila.Valores[Columna(tabla, titulo)];
 
     private static Task<Result<TablaExportable>> ConsultarAsync(VentasDePrueba v, FiltrosDeInformeDeInventario? filtros = null) =>
-        new ImpairmentReportQueryHandler(v.Db, v.K.Alcance, v.K.Permisos, new ValorizadoALaFecha(v.Db, v.K.Lector()), v.K.Lector(), v.Compras.C.Reloj)
+        new ImpairmentReportQueryHandler(v.Db, v.K.Alcance, v.K.Permisos, new ValorizadoALaFecha(v.Db, v.K.Lector()), v.K.Lector(), v.Compras.C.Reloj,
+                new AnaliticaDeInventario(v.Db, new ValorizadoALaFecha(v.Db, v.K.Lector())))
             .Handle(new ImpairmentReportQuery(filtros ?? new FiltrosDeInformeDeInventario()), default);
 
     [Fact]

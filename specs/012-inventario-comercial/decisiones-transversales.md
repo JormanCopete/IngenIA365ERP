@@ -2148,6 +2148,23 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `LineaDeCompraRequest.{LotCode, SerialNumber, ExpiryDate}`, `LineaDeVentaRequest.{LotCode, SerialNumber}`,
     `LineaDelCiclo.{Lote, Serie, ControlaLote, ControlaSerie}` y `FormularioDelCiclo.ConservarSeguimiento`, y el tema del manual
     `inventario-catalogo-avanzado`. Reglas en T54d.
+- **I6, analítica, reposición y tablero (US17, T959–T970; 2026-09-29) (nuevo)**: en Domain, `Inventory/Analytics/IndicadoresDeRotacion`
+    (`Decimales`, `InventarioPromedio`, `DiasDelPeriodo`, `Calcular`) con el record `IndicadorDeRotacion` (`CostoDeVenta`, `InventarioPromedio`,
+    `DiasDelPeriodo`, `Rotacion?`, `DiasDeInventario?`, `SinDato`). En Application, `Inventory/Reports/AnaliticaDeInventario` (el único cálculo de
+    la analítica: `AmbitoAsync`, `LineasDeVentaAsync`, `CostoDeVentaPorProductoAsync`, `ConsumoPorProductoAsync`, `ExistenciasAsync`,
+    `InventarioPromedioPorProductoAsync`, `FechasDeSaldo`, `SinMovimientoAsync`, `LotesPorVencerAsync`, `CostosPromedioAsync`,
+    `PorcentajeDeMargen`, `ClasesDeCostoDeVenta`, `ClasesQueNoSonConsumo`, `FiltroInvalidoCodigo`, `PermisoDeCostos`, `NotaSinCostos`) con los
+    records `AmbitoDeAnalitica`, `ProductoDeAnalitica`, `LineaDeMargen`, `LotePorVencer` y `ExistenciaSinMovimiento`; las vistas
+    `Reports/Vistas/{MarginReportQuery, TurnoverReportQuery, AbcReportQuery, NoMovementReportQuery, ExpiringReportQuery,
+    PurchaseSuggestionReportQuery, ShrinkageCapReportQuery}` (cada una con su `Vista` y sus `Columnas`; `MarginReportQueryHandler.{SinCategoria,
+    SinVendedor, SinCliente, SinPunto}`, `ShrinkageCapReportQueryHandler.{TopeNoParametrizado, ClasesDeCompra, ClasesDeFaltantes}`);
+    `ImpairmentReportQueryHandler.MotivoSinMovimiento`; `AccountingBatchesReportQueryHandler.{Visibles, Limite, Tarde}` (la regla de «tarde» que
+    comparten la vista y el tablero); `Reports/Dashboard/GetInventoryDashboardQuery` con `InventoryDashboardDto`, `DashboardTileDto`,
+    `DashboardLinkDto`, `DashboardScopeDto`, `DashboardScopeItemDto` y `DashboardWithoutRecipientDto`. En la API,
+    `Endpoints/Inventory/DashboardEndpoints` (`GET /api/inventory/dashboard`, `Inventory_Dashboard_Get`). En Shared, `Pages/Inventario/Tablero.razor`,
+    `InventarioClient.{RutaDelTablero, TableroAsync}` con `InventarioDtos.Tablero` (`TableroDeInventarioDto`, `FichaDelTableroDto`,
+    `EnlaceDeFichaDto`, `AlcanceDelTableroDto`, `ElementoDelTableroDto`, `SinDestinatarioDto`), `DestinoDeDocumentoDeInventario.Kardex(…, lote)`, las
+    clases `.ficha-tablero` y `.severidad-{info,warning,critical}` de `componentes.css` y el tema `inventario-tablero` del manual. Reglas en T54e.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2204,7 +2221,8 @@ requested }`), `Inventory.Sales.OriginInvalid` (nuevo, `data { class, originClas
 remisiones con modos distintos en una factura → `Inventory.PostingMode.ChainMismatch` (`data { chain, shipments }`); plantillas → `Import.Cell.Ignored` (nuevo,
 T286: aviso de una celda que la clase ignora, como el modo de paso del saldo inicial);
 informes de inventario → `Inventory.Report.RangeInvalid` y `Inventory.Report.RangeTooLong` (nuevo, T182: rango al revés o de
-más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
+más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009) y `Inventory.Report.FilterInvalid` (nuevo, I6, T960–T965: un filtro propio
+—`by`, `basis`, `days`, `year`— con un valor que la vista no admite, 422 con los admitidos en el mensaje); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
 data-model §1.6) → `Inventory.Product.WithholdingConceptRequired` (nuevo, T217); vendedores → `Inventory.Salesperson.AlreadyActive`; puesta en marcha (US4) → `Inventory.OpeningBalance.{WarehouseActive,
 TransitNotAllowed, AlreadyConfirmed (data.documents[])}`, `Inventory.OpeningBalance.ZeroCost` (nuevo, T308: aviso de fila, costo
 unitario cero), `Inventory.LegacyFigures.CodeUnresolved` (aviso), `Inventory.LegacyFigures.GroupMismatch` (nuevo, T311: aviso, el
@@ -3546,6 +3564,30 @@ en los **doce meses** anteriores a la fecha de la foto, clasificado por `Clasifi
 existencia y sin salidas valen cero y son C. La clase y la lista resuelta se congelan en `CountScopeJson` con la base en palabras
 (`BaseAbc`). La alternativa (el valor de ventas, como `abc?basis=sales`) se cambia sólo en `ClasificacionAbcDelConteo`. Que la base sea
 la bodega y no toda la cooperativa también es propuesta: un conteo es de una bodega.
+
+**T54e · Cómo mide la analítica de inventario y el tablero (nuevo, I6, T959–T970; 2026-09-29; revisar con el dueño).** Reglas que la
+implementación fijó sin pregunta al dueño, todas en `AnaliticaDeInventario` para que la vista y la ficha digan lo mismo: (a) **venta neta** =
+`NetAmount` de las líneas vivas de los documentos confirmados de las clases de venta menos las de devolución (sin impuestos, con los
+descuentos de la línea); el **costo de venta** del margen es el del kardex de esas líneas y, en la factura desde remisiones —que no mueve el
+kardex—, el de las líneas de remisión que factura en proporción a la cantidad; los ajustes retroactivos posteriores quedan en el kardex del
+documento que los causó y no se reparten a la venta. (b) El margen por punto de venta atribuye cada documento a **su** punto: una nota que
+reintegra en la sesión de un punto resta en ese punto, aunque la venta haya sido de oficina. (c) La **rotación** toma el costo de venta del kardex
+por fecha de operación de ventas, remisiones y devoluciones, y el **inventario promedio** es el promedio de los saldos del día anterior al período,
+de cada fin de mes dentro de él y del último día (cada uno por `ValorizadoALaFecha`, que parte de los cierres); un grupo (categoría, grupo contable,
+total) se mide con sus sumas, no con el promedio de las rotaciones; se muestran a dos decimales. (d) El **ABC por consumo** es el costo de las
+salidas normales sin traslados, movimientos entre ubicaciones ni anulaciones (una devolución de cliente no descuenta consumo); sólo entran
+productos con valor en el período; sin `Inventory.Costs.Read` el valor sale vacío y la clase no. (e) **Sin movimiento**: días desde la última
+entrada o salida del kardex hasta el corte, ≥ N; sin bodegas de tránsito. **Por vencer**: lotes que vencen entre el corte y N días después; los ya
+vencidos salen sólo en `impairment`. `_lote` lleva el **código** del lote (es lo que filtra el kardex con `?lot=`), no un Id. (f) **Sugerido de
+compras**: sólo las filas que piden reorden (no las que sólo están en quiebre); último costo y proveedor habitual son los de la última
+recepción de compra confirmada del producto en cualquier bodega; el filtro `supplier` deja lo que habitualmente se le compra. (g) **Tope de
+faltantes**: compras = kardex de recepciones, facturas y notas del proveedor, documentos soporte y sus notas, costos adicionales, menos
+devoluciones; faltantes = salidas de ajustes negativos y bajas, detallados por causa en las notas (la tabla es una sola fila con las columnas de
+§27); el porcentaje se lee vigente al 31 de diciembre del año. (h) **Tablero**: rotación, días y margen son del mes del corte; ventas del día contra
+el día anterior y del mes contra el mismo tramo del mes anterior; las fichas de mensajes y lotes exigen `Inventory.Messages.View`, las DIAN
+`ElectronicInvoicing.Documents.View`, las alertas `Inventory.Alerts.View` y la de tipos sin paso `Inventory.DocumentTypes.View` (§28 sólo exigía
+costos para las de valor); `messagesPending`/`messagesRejected` cuentan `Pending`/`Rejected` (no `InBatch` ni `ValidationFailed`), y
+`fiscalTypesNotPosted` cuenta los tipos fiscales activos con `NoPasa` **guardado** (el defecto `NoPasa` sin contabilidad iniciada no cuenta).
 
 ---
 

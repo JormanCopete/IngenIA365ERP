@@ -188,7 +188,21 @@ public class InventoryReportsEndpoints : ICarterModule
                 RequiredPermission: ValuationReportQueryHandler.PermisoDeCostos),
             (f, q) => new MethodChangeValuationReportQuery(f,
                 DateOnly.TryParse(q["comparativeFrom"].ToString(), System.Globalization.CultureInfo.InvariantCulture, out var comparativo) ? comparativo : null));
+
+        // US17 (I6, T966): la analítica, el sugerido de compras y el tope de faltantes. margin, turnover y shrinkage-cap exigen además
+        // Inventory.Costs.Read (la vista lo declara; la consulta responde el 404); margin con by=customer exige ExportPersonalData al exportar.
+        // by, basis, days y year son propios; un valor que la vista no admite responde 422 Inventory.Report.FilterInvalid.
+        group.MapVistaDeInventario(MarginReportQueryHandler.Vista, (f, q) => new MarginReportQuery(f, Texto(q, "by")));
+        group.MapVistaDeInventario(TurnoverReportQueryHandler.Vista, (f, q) => new TurnoverReportQuery(f, Texto(q, "by")));
+        group.MapVistaDeInventario(AbcReportQueryHandler.Vista, (f, q) => new AbcReportQuery(f, Texto(q, "basis")));
+        group.MapVistaDeInventario(NoMovementReportQueryHandler.Vista, (f, q) => new NoMovementReportQuery(f, Entero(q, "days")));
+        group.MapVistaDeInventario(ExpiringReportQueryHandler.Vista, (f, q) => new ExpiringReportQuery(f, Entero(q, "days")));
+        group.MapVistaDeInventario(PurchaseSuggestionReportQueryHandler.Vista, (f, q) => new PurchaseSuggestionReportQuery(f, Id(q, "supplier")));
+        group.MapVistaDeInventario(ShrinkageCapReportQueryHandler.Vista, (f, q) => new ShrinkageCapReportQuery(f, Entero(q, "year")));
     }
+
+    private static int? Entero(IQueryCollection q, string clave) =>
+        int.TryParse(q[clave].ToString(), System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
 
     private static Guid? Id(IQueryCollection q, string clave) => Guid.TryParse(q[clave].ToString(), out var id) ? id : null;
 

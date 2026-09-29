@@ -33,7 +33,10 @@ namespace IngenIA365ERP.Application.Inventory.Reports.Vistas;
 /// costo— o que vence dentro de <c>Informes.DiasProximoAVencer</c> —motivo «Próximo a vencer», sin valor: es un aviso—. El lote sale de la
 /// existencia por lote vigente (<c>INV_StockDetails</c>).</item>
 /// </list>
-/// «Sin movimiento» llega con las vistas de US17 (T963). Exige <c>Inventory.Costs.Read</c> (sin él,
+/// <item>I6 (T963, US17): una fila por producto y bodega con existencia que no se movió en <c>Informes.DiasSinMovimiento</c> días —motivo
+/// «Sin movimiento», sin valor: es un aviso—, con el mismo cálculo de la vista <c>no-movement</c>
+/// (<see cref="AnaliticaDeInventario.SinMovimientoAsync"/>).</item>
+/// Exige <c>Inventory.Costs.Read</c> (sin él,
 /// el 404 genérico) y respeta el alcance por bodega; las bodegas de tránsito no entran. (nuevo)
 /// </summary>
 public sealed record ImpairmentReportQuery(FiltrosDeInformeDeInventario Filtros) : IRequest<Result<TablaExportable>>;
@@ -44,7 +47,8 @@ public sealed class ImpairmentReportQueryHandler(
     IPermissionChecker permisos,
     ValorizadoALaFecha valorizado,
     ILectorDeParametros parametros,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    AnaliticaDeInventario analitica)
     : IRequestHandler<ImpairmentReportQuery, Result<TablaExportable>>
 {
     public const string MotivoCostoSobreVnr = "Costo sobre valor neto realizable";
@@ -54,6 +58,9 @@ public sealed class ImpairmentReportQueryHandler(
 
     /// <summary>I6 (T933): el lote vence dentro de <c>Informes.DiasProximoAVencer</c>. (nuevo)</summary>
     public const string MotivoProximoAVencer = "Próximo a vencer";
+
+    /// <summary>I6 (T963): la existencia no se movió en <c>Informes.DiasSinMovimiento</c> días. (nuevo)</summary>
+    public const string MotivoSinMovimiento = "Sin movimiento";
 
     /// <summary>Lo que la vista declara al publicarse (T625): <c>asOf</c>, <c>warehouse</c> y <c>product</c>; exige <c>Inventory.Costs.Read</c>.</summary>
     public static readonly VistaDeInformeDeInventario Vista = new(
@@ -189,6 +196,29 @@ public sealed class ImpairmentReportQueryHandler(
             }
         }
 
+        // I6 (T963): lo que no se movió en Informes.DiasSinMovimiento días, con el cálculo de la vista no-movement.
+        var diasQuietoLeidos = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.InformesDiasSinMovimiento, fecha, ct: ct);
+        var diasQuieto = diasQuietoLeidos.IsSuccess ? diasQuietoLeidos.Value.Como<int>() : 0;
+        var ambito = await analitica.AmbitoAsync(new FiltrosDeInformeDeInventario { Warehouse = f.Warehouse, Product = f.Product }, alcance, ct);
+        if (ambito.IsFailure) return Result.Failure<TablaExportable>(ambito.Error);
+        IReadOnlyList<ExistenciaSinMovimiento> quietos = diasQuieto > 0 ? await analitica.SinMovimientoAsync(ambito.Value, fecha, diasQuieto, ct) : [];
+        if (quietos.Count > 0)
+        {
+            var datosQuietos = await analitica.ProductosAsync(quietos.Select(q => q.ProductId), ct);
+            var bodegasQuietas = await analitica.BodegasAsync(quietos.Select(q => q.WarehouseId), ct);
+            foreach (var q in quietos)
+            {
+                var p = datosQuietos[q.ProductId];
+                var bodega = bodegasQuietas[q.WarehouseId].Code;
+                var motivo = q.UltimoMovimiento is { } ultimo
+                    ? $"{MotivoSinMovimiento}: {q.Dias} días desde el {ultimo:yyyy-MM-dd}"
+                    : $"{MotivoSinMovimiento}: sin movimientos registrados";
+                filas.Add(($"{p.Texto}|{bodega}|~{motivo}", new FilaExportable(
+                    [p.Texto, bodega, q.Cantidad, q.Cantidad == 0m ? 0m : Math.Round(q.Valor / q.Cantidad, 6, MidpointRounding.AwayFromZero), null, null, null, null,
+                     motivo, p.PublicId.ToString()])));
+            }
+        }
+
         var ordenadas = filas.OrderBy(x => x.Orden, StringComparer.Ordinal).Select(x => x.Fila).ToList();
         var total = ordenadas.Sum(r => r.Valores[7] is decimal d ? d : 0m);
         var totales = new FilaExportable(["Total", null, null, null, null, null, null, total, null, null]);
@@ -198,6 +228,7 @@ public sealed class ImpairmentReportQueryHandler(
             "Valor neto realizable = precio de la lista general (sin IVA) − gastos de venta estimados (Informes.DeterioroPorcentajeGastosVenta).",
             "Es un indicio para el cálculo del deterioro (NIC 2 / sección 13): no registra ningún ajuste.",
             $"Lotes: vencido a la fecha (indicio = su valor al costo) o próximo a vencer dentro de {dias} días (Informes.DiasProximoAVencer, sin valor), sobre la existencia por lote vigente.",
+            $"Sin movimiento: existencia cuyo último movimiento es de hace {diasQuieto} días o más (Informes.DiasSinMovimiento, sin valor: es un aviso).",
         ]));
     }
 

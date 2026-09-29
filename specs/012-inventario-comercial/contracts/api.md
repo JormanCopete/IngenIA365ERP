@@ -3274,6 +3274,9 @@ Total es el del documento; en los valorados al costo (sin precio: ajustes, trasl
 sale con `Inventory.Costs.Read` (la nota lo dice). Un rango de más de cinco años responde `Inventory.Report.RangeTooLong`, el
 código común de §27 (T946 decía `Validation.Invalid`; manda el código de la base, T182).
 
+Filtros propios de I6 (T960–T965): un valor de `by`, `basis`, `days` (negativo) o `year` que la vista no admite responde 422
+`Inventory.Report.FilterInvalid` con los admitidos. `expiring` lleva en `_lote` el código del lote (lo que filtra el kardex con `?lot=`).
+
 `shrinkage-cap` es opcional, para el régimen ordinario de renta. Su porcentaje sale del parámetro
 `Informes.TopeFaltantesPorcentaje` (fracción, por defecto 0, con vigencia y `LegalSource`; data-model
 §4.2); con 0 la vista dice que el tope no está parametrizado.
@@ -3318,6 +3321,11 @@ InventoryDashboardDto {
 
 Las fichas de valor y margen exigen `Inventory.Costs.Read`; sin él no salen. `withoutRecipient` lista
 los tipos de alerta levantados sin destinatario activo, que se enrutaron a `CompanyAdmin` (SC-022).
+
+Precisión de I6 (T967, 2026-09-29; T54e de decisiones-transversales): las fichas de un área salen sólo con el permiso que abre esa área —
+mensajes y lotes con `Inventory.Messages.View`, DIAN con `ElectronicInvoicing.Documents.View`, alertas y `withoutRecipient` con
+`Inventory.Alerts.View`, `fiscalTypesNotPosted` con `Inventory.DocumentTypes.View`—; `value` es nulo cuando no hay dato (rotación sin inventario);
+la rotación, los días y el margen son del mes del corte. `scope` trae `{ publicId, code, name }` de las sucursales y bodegas activas del alcance.
 
 ## 29. Cambios en rutas existentes
 

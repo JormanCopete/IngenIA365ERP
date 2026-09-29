@@ -105,6 +105,10 @@
 
         @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@
         <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
+            @* I6, US17 (T969): el tablero de inventario (§28), primero del grupo. *@
+            <PermissionGate Required="Inventory.Dashboard.View">
+                <NavLink href="/inventario/tablero" class="nav-subitem">Tablero</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Inventory.Catalog.View">
                 <NavLink href="/inventario/productos" class="nav-subitem">Productos</NavLink>
                 <NavLink href="/inventario/categorias" class="nav-subitem">Categorías</NavLink>
