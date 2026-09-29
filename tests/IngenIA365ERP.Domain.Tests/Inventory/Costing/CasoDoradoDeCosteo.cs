@@ -52,10 +52,13 @@ public sealed class CasoDoradoDeCosteo
         ?? throw new InvalidOperationException($"El caso {ruta} está vacío.");
 
     /// <summary>El ámbito del movimiento; con <c>producto</c> (I5, caso 16), «producto@ámbito».</summary>
-    public string AmbitoDe(MovimientoJson m)
+    public string AmbitoDe(MovimientoJson m) => AmbitoDe(m.Producto, m.Bodega);
+
+    /// <summary>El ámbito de un producto en una bodega (I6: los componentes de un combo o de un ensamble).</summary>
+    public string AmbitoDe(string? producto, string bodega)
     {
-        var ambito = Parametros.Ambito == CostScope.Cooperative ? AmbitoCooperativa : m.Bodega;
-        return m.Producto is { } producto ? $"{producto}@{ambito}" : ambito;
+        var ambito = Parametros.Ambito == CostScope.Cooperative ? AmbitoCooperativa : bodega;
+        return producto is { } p ? $"{p}@{ambito}" : ambito;
     }
 
     public ParametrosDeCosteo ParametrosDelMotor() => new(Parametros.Metodo, Parametros.Montos, Parametros.NegativoPermitido);
@@ -94,6 +97,15 @@ public sealed class CasoDoradoDeCosteo
         /// <summary>I5 (T820): el producto, cuando el caso lleva varios (el ámbito pasa a ser «producto@ámbito»).</summary>
         public string? Producto { get; set; }
 
+        /// <summary>
+        /// I6 (T904): los componentes de un combo o de un kit, con su cantidad por unidad. Con clase <c>Assembly</c> el movimiento es el
+        /// ensamble de <see cref="Cantidad"/> kits (<see cref="MotorDeCosteo.Ensamblar{TClave}"/>): salen los componentes y entra el kit
+        /// (<see cref="Producto"/>). Con otra clase es la venta (cantidad negativa) o la devolución (positiva, con <see cref="Origen"/> la
+        /// venta) de un combo (<see cref="MotorDeCosteo.MoverCombo{TClave}"/>), que no tiene kardex propio. Las líneas de cada componente
+        /// se nombran «{id}:{producto}».
+        /// </summary>
+        public List<ComponenteJson> Componentes { get; set; } = [];
+
         public EsperadoJson Esperado { get; set; } = new();
 
         public string DocumentoOId => Documento ?? Id;
@@ -101,6 +113,21 @@ public sealed class CasoDoradoDeCosteo
         /// <summary>Por defecto, una salida deja el inventario salvo en los traslados, que lo mueven por dentro.</summary>
         public bool DejaElInventario => SaleDelInventario
             ?? Clase is not (DocumentClass.TransferDispatch or DocumentClass.TransferReceipt);
+    }
+
+    /// <summary>I6: un componente de un combo o kit y su cantidad por unidad del combo o del kit.</summary>
+    public sealed class ComponenteJson
+    {
+        public string Producto { get; set; } = string.Empty;
+        public decimal Cantidad { get; set; }
+    }
+
+    /// <summary>I6: lo que se espera de un componente: sus líneas y el estado de su ámbito.</summary>
+    public sealed class ComponenteEsperadoJson
+    {
+        public string Producto { get; set; } = string.Empty;
+        public List<LineaJson>? Lineas { get; set; }
+        public EstadoJson? Estado { get; set; }
     }
 
     /// <summary>La cantidad viene en una unidad de empaque y se convierte con <see cref="ConversionDeUnidades"/>.</summary>
@@ -164,6 +191,15 @@ public sealed class CasoDoradoDeCosteo
 
         public string? Rechazo { get; set; }
         public List<string> Explicacion { get; set; } = [];
+
+        /// <summary>I6: por componente de un combo o de un ensamble.</summary>
+        public List<ComponenteEsperadoJson> Componentes { get; set; } = [];
+
+        /// <summary>I6: el costo de venta del combo (Σ de sus componentes) o el costo consumido del ensamble.</summary>
+        public decimal? CostoCompuesto { get; set; }
+
+        /// <summary>I6: el componente que no alcanzó, en un combo o ensamble rechazado.</summary>
+        public string? ComponenteRechazado { get; set; }
     }
 
     public sealed class CostoDeEntradaJson

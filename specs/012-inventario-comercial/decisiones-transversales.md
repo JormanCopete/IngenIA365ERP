@@ -2088,6 +2088,20 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `Pages/Ventas/{Cotizaciones, Pedidos, Remisiones, NotasDebito, Promociones}`; `NuevaFactura` gana `?pedido=` y `?remisiones=`; el detalle
     de la venta y `LineasDeVenta` del POS dicen la promoción; cinco temas `ventas-{cotizaciones, pedidos, remisiones, notas-debito,
     promociones}` en `ManualCatalogo`.
+- **I6, dominio del catálogo avanzado (T913–T917; 2026-09-29) (nuevo)**: motores puros en `Domain/Inventory/`:
+    `Catalog/GeneradorDeVariantes` (`Generar`, `ClaveDe`, `Normalizar`, `LargoDelCodigo`, `CodigoSinAtributos`, `CodigoAtributoRepetido`,
+    `CodigoAtributosDistintos`) con `PedidoDeVariantes`, `AtributoParaVariantes`, `ValorDeAtributo`, `ValorDeVariante`, `VariantePropuesta`
+    (`CodigoRecortado`, `CodigoRepetido`), `RechazoDeVariantes` y `ResultadoDeVariantes`; `Catalog/ValidadorDeComponentes` (`Validar` y los
+    códigos `CodigoClaseInvalida`, `CodigoCiclo`, `CodigoSinComponentes`, `CodigoNoEsComboNiKit`, `CodigoCantidadInvalida`, `CodigoRepetido`)
+    con `PedidoDeComponentes`, `ProductoDelGrafo`, `ComponentePropuesto`, `ErrorDeComponente` y `ResultadoDeComponentes`;
+    `Tracking/SelectorDeLotes` (`Repartir`, `Ordenar`, `Veredicto`, `EstaVencido`, `PoliticaDesde`, `CodigoLoteVencido`) con los enums
+    `PoliticaDeLoteVencido { Bloquear, Advertir }` y `VeredictoDeLote { Vigente, Bloqueado, Advertido }` (no se guardan), `LoteDisponible`,
+    `PedidoDeLotes` (`AdmiteVencidos`), `LoteOrdenado`, `AsignacionDeLote` y `ResultadoDeLotes` (`Sugerido`, `Completo`, `HayVencidos`,
+    `Excluidos`); `Analytics/ClasificacionAbc` (`Clasificar<TClave>`) con el enum `ClaseAbc { A, B, C }` (no se guarda), `UmbralesAbc`
+    (`Interpretar`, `CodigoNoAdmitido`), `UmbralesInterpretados`, `ValorParaAbc<TClave>` y `FilaAbc<TClave>`. En el costeo,
+    `MotorDeCosteo.{MoverCombo<TClave>, Ensamblar<TClave>, EntradaDeEnsamble}` sobre `Costing/ComboYEnsamble` (interno) con
+    `MovimientoDeComponente<TClave>`, `ResultadoDeComponente<TClave>`, `ResultadoDeCompuesto<TClave>` (`Costo`, `ComponenteRechazado`) y
+    `ResultadoDeEnsamble<TClave>` (`Kit`, `CostoConsumido`). Reglas en T54a.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2202,6 +2216,15 @@ Promociones (I6, T873–T875; todos **(nuevo)** salvo `.InUse`): `Inventory.Prom
 (`data.fields[]`: lo pedido que no puede cambiar), `Inventory.Promotion.ScopeTargetNotFound` (`data { kind, publicId }`) e
 `Inventory.Discount.PromotionApplied` (`data { lines[], promotions[] }`: un manual en una línea con promoción, o un descuento por total
 cuando todas las líneas la tienen). Un segmento desconocido responde el `Inventory.PriceList.SegmentUnknown` de las listas (T51).
+
+Catálogo avanzado, dominio (I6, T913–T917; todos **(nuevo)** salvo los que ya nombraban T908 y T920): `Inventory.Component.InvalidKind` y
+`.Cycle` (T920), `Inventory.Component.Required` (combo o kit sin componentes), `.NotAComboOrKit` (componentes a un producto que no es combo
+ni kit), `.InvalidQuantity` (cero, negativa o con más decimales que la unidad base del componente) y `.Duplicate` (el mismo componente dos
+veces); `Inventory.Variant.AttributesRequired` (sin atributos o un atributo sin valores), `.AttributeRepeated` (atributo o valor repetido) y
+`.AttributesMismatch` (las variantes existentes de la plantilla usan otros atributos); `Inventory.Lot.Expired` lo publica
+`SelectorDeLotes.CodigoLoteVencido` (T908); un texto de `Informes.UmbralesAbc` que no suma 100 es `Parameters.ValueNotAllowed`
+(`UmbralesAbc.CodigoNoAdmitido`). Un combo o ensamble cuyo componente no alcanza responde `Inventory.Stock.Insufficient` nombrando al
+componente (`ResultadoDeCompuesto.ComponenteRechazado`).
 
 ### 2.18 Pruebas con nombre fijo
 
@@ -2338,6 +2361,11 @@ el escenario `CicloComercialDePrueba` (ventas + crédito provisional + factura e
 `tests/IngenIA365ERP.Shared.Tests/Ventas/CicloComercialClientTests` y `FormularioDelCicloTests`, y las de arquitectura
 `LasPantallasDelCicloComercialEstanEnElMenu` (páginas, permisos, indicador, menú, origen de la factura, promoción en el detalle y el POS,
 rutas de I6 en `SalesEndpoints`, temas del manual) y `TextosDeVentasTests.Cada_clase_de_promocion`.
+**(nuevos, I6 dominio del catálogo avanzado, T902–T906)** en `tests/IngenIA365ERP.Domain.Tests/Inventory/`: `Catalog/GeneradorDeVariantesTests`,
+`Catalog/ValidadorDeComponentesTests`, `Tracking/SelectorDeLotesTests`, `Analytics/ClasificacionAbcTests`, los casos dorados
+`Costing/Casos/18-ensamble-de-kits.json` y `19-venta-de-combo.json` (con `CasosDoradosDeCosteoTests.Estan_los_casos_18_y_19_de_I6`; el
+arnés `CasoDoradoDeCosteo` gana `componentes` en el movimiento y `componentes`, `costoCompuesto` y `componenteRechazado` en lo esperado) y
+`Costing/MotorDeCosteoEnsambleYComboTests` (residuo del kit, PEPS, entradas inválidas, negativo permitido).
 
 ---
 
@@ -3344,6 +3372,30 @@ propia `VentaACreditoRegistrada`; cobrada de contado sobre una venta a crédito 
 confirmadas **del mes** con saldo, valoradas al neto de la línea del pedido (`Order`) o, sin pedido, al de la remisión, que se precificó con la
 lista vigente al guardarla (`PriceList`); (h) la alerta `Inventario.RemisionSinFacturar` se levanta una sola vez por remisión aunque la
 anterior esté atendida; las dos tareas programadas corren una vez al día y no corren antes de que el despliegue llegue a I6.
+
+**T54a · Catálogo avanzado en el dominio: variantes, componentes, lotes, ABC, combo y ensamble (nuevo, I6, T913–T917; 2026-09-29;
+revisar con el dueño).**
+Decisión (dentro de FR-023, FR-026, FR-040, FR-086 y data-model §1.6/§1.11; ninguna pregunta nueva al dueño): (a) **variantes**: la
+`VariantKey` va en mayúsculas y ordenada por código de atributo (`COLOR=AZUL;TALLA=M`), pero el código y el nombre propuestos siguen el
+**orden en que la persona eligió los atributos** («CAMISA-M-AZUL», «Camisa M Azul»); dentro de un atributo los valores van por `SortOrder` y
+código; el código se recorta a 20 sin dejar guion colgando y la propuesta avisa si quedó recortado o repetido con otra (la persona lo cambia;
+el duplicado contra la base lo responde la aplicación con `Catalogo.CodigoDuplicado`); si las variantes que ya tiene la plantilla usan otros
+atributos, no se generan (`Inventory.Variant.AttributesMismatch`). (b) **componentes**: se validan todos los errores a la vez; un componente
+que cierra un ciclo se informa como ciclo aunque además sea de una clase inválida; la cantidad no admite más decimales que la unidad base del
+componente (`Inventory.Component.InvalidQuantity`, no `Inventory.Unit.DecimalsNotAllowed`, para que el error nombre al componente). (c) **lotes**:
+un lote vence el día **siguiente** a su `ExpiryDate` (la fecha de vencimiento es el último día en que sirve); el orden de salida es
+vencimiento, código y Id, con los lotes sin vencimiento al final; con `Advertir` los vencidos entran en su lugar FEFO —es decir, primero— y
+marcados, y la baja por vencimiento los saca sin mirar la política (`AdmiteVencidos`). (d) **ABC**: un producto es A si el acumulado **con
+él** no pasa del umbral A, B si no pasa de A + B y C si no —el que cruza un umbral pasa a la clase siguiente—, salvo el primero, que siempre
+es A; un grupo de valores iguales toma la clase que le da el acumulado con su primer miembro; valores cero o negativos son C y participan con
+cero; los umbrales son enteros que suman 100 con A mayor que cero. (e) **combo y ensamble**: el motor mueve cada componente en su propio ámbito por
+`MotorDeCosteo.Aplicar` (la venta al costo vigente; la devolución de la nota crédito al costo con que salió cada componente) y el conjunto es
+**todo o nada**; el kit entra a `round6(consumido ÷ cantidad)` y, si `round(cantidad × costo)` no da lo consumido, la diferencia va en una
+línea `RoundingResidue` sobre la entrada del kit (FR-017): `Redondeo.Residuo` no interviene porque el ensamble tiene una sola línea de kit
+(con cantidades menores que 10.000 al centavo el residuo no aparece; en PEPS la capa del kit lleva el costo unitario y el residuo se libera
+cuando el ámbito llega a cero, como el de una salida). (f) La «guarda hasta I6» de `Assembly` es su `AvailableFrom = I6` en
+`ClasesDeDocumento`, la misma de las otras clases de I6: se retira sola cuando `CatalogoDeParametros.EntregaVigente` sube a I6 (lo hace
+quien cierre I6) y con la estrategia `EfectoDeEnsamble` (T928); el dominio no tiene otra guarda propia del ensamble.
 
 ---
 

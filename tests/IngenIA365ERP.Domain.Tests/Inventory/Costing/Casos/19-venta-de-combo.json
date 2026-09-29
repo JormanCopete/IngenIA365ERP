@@ -1,0 +1,83 @@
+{
+  // I6, T904 (SC-007, US15-2, FR-044, data-model §1.11): el combo no tiene existencia ni kardex propio. Su venta saca cada componente
+  // (cantidad por combo × combos) al promedio de su ámbito y el costo de venta es la suma; la devolución por nota crédito reingresa los
+  // componentes al costo con que salieron, aunque el promedio haya cambiado. Si un componente no alcanza, no sale ninguno.
+  "nombre": "Venta de combo",
+  "descripcion": "A: 10 × 1.000 + 10 × 1.200 = 20 por 22.000 (1.100). B: 5 × 3.000 = 15.000. V1 vende 2 combos (1 A + 1 B): salen 2 A × 1.100 = 2.200 y 2 B × 3.000 = 6.000; costo de venta 8.200. Compra A 2 × 1.500 → A 20 por 22.800 (1.140). D1 devuelve 1 combo de V1: entran 1 A a 1.100 (no a 1.140) → A 21 por 23.900 (1.138,095238) y 1 B a 3.000 → B 4 por 12.000; costo reingresado 4.100. V2 pide 5 combos: B tiene 4 → se rechaza y A no se mueve. V3 vende 4: salen 4 A × 1.138,095238 = 4.552,38 (A 17 por 19.347,62, promedio 1.138,095294) y 4 B × 3.000 = 12.000 (B en cero); costo de venta 16.552,38.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "A", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "A", "cantidad": 10, "costoUnitario": 1200 },
+    { "id": "E3", "documento": "EC-2", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "B", "cantidad": 5, "costoUnitario": 3000 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-02", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "producto": "COMBO", "cantidad": -2,
+      "componentes": [ { "producto": "A", "cantidad": 1 }, { "producto": "B", "cantidad": 1 } ],
+      "esperado": {
+        "componentes": [
+          {
+            "producto": "A",
+            "lineas": [ { "kind": "Exit", "cantidad": -2, "costoUnitario": 1100, "costoTotal": -2200 } ],
+            "estado": { "cantidad": 18, "valor": 19800, "promedio": 1100 }
+          },
+          {
+            "producto": "B",
+            "lineas": [ { "kind": "Exit", "cantidad": -2, "costoUnitario": 3000, "costoTotal": -6000 } ],
+            "estado": { "cantidad": 3, "valor": 9000, "promedio": 3000 }
+          }
+        ],
+        "costoCompuesto": 8200,
+        "explicacion": [ "Costo del combo (Σ de sus componentes): 8200" ]
+      }
+    },
+    { "id": "E4", "documento": "EC-3", "fecha": "2026-09-03", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "A", "cantidad": 2, "costoUnitario": 1500,
+      "esperado": { "estado": { "cantidad": 20, "valor": 22800, "promedio": 1140, "ultimoCosto": 1500 } } },
+    {
+      "id": "D1", "documento": "NC-1", "fecha": "2026-09-04", "clase": "CreditNote", "bodega": "PRINCIPAL", "producto": "COMBO", "cantidad": 1, "origen": "V1",
+      "componentes": [ { "producto": "A", "cantidad": 1 }, { "producto": "B", "cantidad": 1 } ],
+      "esperado": {
+        "componentes": [
+          {
+            "producto": "A",
+            "lineas": [ { "kind": "Entry", "cantidad": 1, "costoUnitario": 1100, "costoTotal": 1100 } ],
+            "estado": { "cantidad": 21, "valor": 23900, "promedio": 1138.095238 }
+          },
+          {
+            "producto": "B",
+            "lineas": [ { "kind": "Entry", "cantidad": 1, "costoUnitario": 3000, "costoTotal": 3000 } ],
+            "estado": { "cantidad": 4, "valor": 12000, "promedio": 3000 }
+          }
+        ],
+        "costoCompuesto": 4100
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-05", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "producto": "COMBO", "cantidad": -5,
+      "componentes": [ { "producto": "A", "cantidad": 1 }, { "producto": "B", "cantidad": 1 } ],
+      "esperado": { "rechazo": "Inventory.Stock.Insufficient", "componenteRechazado": "B" }
+    },
+    {
+      "id": "V3", "documento": "FV-3", "fecha": "2026-09-06", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "producto": "COMBO", "cantidad": -4,
+      "componentes": [ { "producto": "A", "cantidad": 1 }, { "producto": "B", "cantidad": 1 } ],
+      "esperado": {
+        "componentes": [
+          {
+            "producto": "A",
+            "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 1138.095238, "costoTotal": -4552.38 } ],
+            "estado": { "cantidad": 17, "valor": 19347.62, "promedio": 1138.095294 }
+          },
+          {
+            "producto": "B",
+            "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 3000, "costoTotal": -12000 } ],
+            "estado": { "cantidad": 0, "valor": 0, "promedio": 3000 }
+          }
+        ],
+        "costoCompuesto": 16552.38
+      }
+    }
+  ],
+  "final": [
+    { "ambito": "A@COOPERATIVA", "cantidad": 17, "valor": 19347.62, "promedio": 1138.095294 },
+    { "ambito": "B@COOPERATIVA", "cantidad": 0, "valor": 0, "promedio": 3000 }
+  ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 17 } ]
+}
