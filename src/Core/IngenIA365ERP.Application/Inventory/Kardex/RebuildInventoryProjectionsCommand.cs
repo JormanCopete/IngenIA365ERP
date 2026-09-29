@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Application.Inventory.Kardex;
 
 /// <summary>
 /// <c>POST /api/inventory/integrity/rebuild</c> (feature 012, T258; contracts/api.md §6.2; FR-003; data-model §3.7): recalcula
-/// <c>INV_StockBalances</c>, <c>INV_StockDetails</c> e <c>INV_CostStates</c> desde el kardex, con motivo y
+/// <c>INV_StockBalances</c> (con <c>Reserved</c> desde las reservas vivas, I6), <c>INV_StockDetails</c> e <c>INV_CostStates</c> desde el kardex, con motivo y
 /// <c>Inventory.Integrity.Rebuild</c>. <b>Nunca toca el kardex</b>: no inserta, modifica ni borra una <c>KardexEntry</c>. Es, con
 /// <c>RegistroDeKardex</c>, el único que escribe las proyecciones (<c>NadieEscribeElKardexFueraDelRegistro</c>). (nuevo)
 ///
@@ -131,6 +131,20 @@ public sealed class RebuildInventoryProjectionsCommandHandler(
         {
             correcciones.Add((TiposDeIncidente.StockBalance, producto, huerfana.WarehouseId, "Physical", huerfana.Physical, 0m));
             huerfana.Physical = 0m;
+        }
+
+        // I6 (T877; data-model §3.2, §3.6; SC-006): Reserved = Σ (QuantityBase − ConsumedQuantityBase) de las reservas Active.
+        var reservadas = (await db.Reservations.AsNoTracking()
+                .Where(r => r.ProductId == producto && r.Status == ReservationStatus.Active && !r.IsDeleted && (bodegas == null || bodegas.Contains(r.WarehouseId)))
+                .Select(r => new { r.WarehouseId, Pendiente = r.QuantityBase - r.ConsumedQuantityBase })
+                .ToListAsync(ct))
+            .GroupBy(r => r.WarehouseId).ToDictionary(g => g.Key, g => g.Sum(r => r.Pendiente));
+        foreach (var fila in existentes)
+        {
+            var esperado = reservadas.GetValueOrDefault(fila.WarehouseId);
+            if (fila.Reserved == esperado) continue;
+            correcciones.Add((TiposDeIncidente.StockBalance, producto, fila.WarehouseId, "Reserved", fila.Reserved, esperado));
+            fila.Reserved = esperado;
         }
 
         // ------------------------------------------------------------------------- ubicación y lote --

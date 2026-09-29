@@ -55,7 +55,9 @@ public sealed class FuenteDeEmisionDeInventario(
     /// <summary>La ruta de la API donde se edita el borrador de una clase (api.md §24.5, <c>editRoute</c>).</summary>
     public static string RutaDeEdicion(DocumentClass clase, Guid publicId) => clase switch
     {
-        DocumentClass.CreditNote or DocumentClass.PosAdjustmentNote or DocumentClass.DebitNote => $"/api/inventory/sales/credit-notes/{publicId}",
+        DocumentClass.CreditNote or DocumentClass.PosAdjustmentNote => $"/api/inventory/sales/credit-notes/{publicId}",
+        // I6 (T888): la nota débito tiene su propia ruta (contracts/api.md §18.4).
+        DocumentClass.DebitNote => $"/api/inventory/sales/debit-notes/{publicId}",
         DocumentClass.SupportDocument or DocumentClass.SupportDocumentAdjustmentNote => $"/api/inventory/purchases/support-documents/{publicId}",
         _ => $"/api/inventory/sales/invoices/{publicId}",
     };

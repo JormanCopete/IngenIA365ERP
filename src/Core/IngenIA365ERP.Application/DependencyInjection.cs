@@ -352,6 +352,15 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaCreditoDeVenta>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeAjustePos>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeVentaNoElectronica>();
+        // I6 (T877-T889): el ciclo comercial. Las reservas (único escritor de INV_Reservations y de Reserved), los vínculos del ciclo y
+        // las estrategias de cotización, pedido, remisión, factura desde remisiones y nota débito. Operan cuando el despliegue llega a I6.
+        services.AddScoped<Inventory.Sales.Reservas.ReservasDeInventario>();
+        services.AddScoped<Inventory.Sales.CicloComercial.VinculosDelCiclo>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeCotizacion>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDePedido>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeRemision>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeFacturaDesdeRemisiones>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDebito>();
         // I3 (T617-T620): la caja. El grupo Cash por el ciclo común (borrador del movimiento, sus dos estrategias) y los servicios que
         // comparten las sesiones, el arqueo y los movimientos.
         services.AddScoped<Inventory.Cash.SesionesDeCaja>();

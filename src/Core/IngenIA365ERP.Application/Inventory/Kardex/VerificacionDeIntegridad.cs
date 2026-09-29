@@ -29,7 +29,7 @@ public sealed record ResultadoDeVerificacion(int StockBalances, int StockDetails
 /// La verificación de integridad del kardex (feature 012, T258; FR-003; data-model §3.7; SC-006): compara por <c>GROUP BY</c> cada
 /// proyección con la suma de sus hechos —<c>StockBalance.Physical</c> por (producto, bodega), <c>StockDetail.Quantity</c> por
 /// (producto, bodega, ubicación, lote) y <c>CostState.Quantity/Value</c> por (producto, ámbito)— y devuelve una diferencia por
-/// fila y campo, incluidas las filas que faltan de un lado. Capas y reservas se agregan en I5/I6. Sólo lee; la alerta y la
+/// fila y campo, incluidas las filas que faltan de un lado; <c>StockBalance.Reserved</c> contra las reservas <c>Active</c> (I6, T877). Sólo lee; la alerta y la
 /// auditoría las pone <see cref="VerifyInventoryIntegrityQuery"/>. (nuevo)
 /// </summary>
 public sealed class VerificacionDeIntegridad(IApplicationDbContext db, IngenIA365ERP.Application.Common.Parameters.ILectorDeParametros? parametros = null, IDateTimeService? reloj = null)
@@ -64,6 +64,26 @@ public sealed class VerificacionDeIntegridad(IApplicationDbContext db, IngenIA36
         var conKardex = esperadas.Select(e => (e.ProductId, e.WarehouseId)).ToHashSet();
         foreach (var r in reales.Where(r => r.Physical != 0m && !conKardex.Contains((r.ProductId, r.WarehouseId))))
             incidentes.Add(new IncidenteDeKardex(TiposDeIncidente.StockBalance, r.ProductId, r.WarehouseId, null, null, "Physical", 0m, r.Physical));
+
+        // ---------------------------------------------------------------- reservado (I6, T877; SC-006) --
+        // Reserved = Σ (QuantityBase − ConsumedQuantityBase) de las reservas Active de (producto, bodega); sin reservas, cero.
+        var reservasVivas = db.Reservations.AsNoTracking().Where(r => r.Status == ReservationStatus.Active && !r.IsDeleted);
+        if (productos is not null) reservasVivas = reservasVivas.Where(r => productos.Contains(r.ProductId));
+        if (bodegas is not null) reservasVivas = reservasVivas.Where(r => bodegas.Contains(r.WarehouseId));
+        var reservadas = (await reservasVivas.GroupBy(r => new { r.ProductId, r.WarehouseId })
+                .Select(g => new { g.Key.ProductId, g.Key.WarehouseId, Cantidad = g.Sum(r => r.QuantityBase - r.ConsumedQuantityBase) })
+                .ToListAsync(ct))
+            .ToDictionary(r => (r.ProductId, r.WarehouseId), r => r.Cantidad);
+        var realesReservado = await existencias.Select(s => new { s.ProductId, s.WarehouseId, s.Reserved }).ToListAsync(ct);
+        foreach (var r in realesReservado)
+        {
+            var esperado = reservadas.GetValueOrDefault((r.ProductId, r.WarehouseId));
+            if (r.Reserved != esperado)
+                incidentes.Add(new IncidenteDeKardex(TiposDeIncidente.StockBalance, r.ProductId, r.WarehouseId, null, null, "Reserved", esperado, r.Reserved));
+        }
+        var conFila = realesReservado.Select(r => (r.ProductId, r.WarehouseId)).ToHashSet();
+        foreach (var ((producto, bodega), cantidad) in reservadas.Where(x => x.Value != 0m && !conFila.Contains(x.Key)))
+            incidentes.Add(new IncidenteDeKardex(TiposDeIncidente.StockBalance, producto, bodega, null, null, "Reserved", cantidad, 0m));
 
         // ------------------------------------------------------------------ por ubicación y lote --
         var esperadosDetalle = await kardexDeBodegas

@@ -43,9 +43,12 @@ public sealed class VentaElectronicaDePrueba
 
     private VentaElectronicaDePrueba(VentasDePrueba v) => V = v;
 
-    public static async Task<VentaElectronicaDePrueba> CrearAsync()
+    public static async Task<VentaElectronicaDePrueba> CrearAsync() => await SobreAsync(await VentasDePrueba.CrearAsync());
+
+    /// <summary>La misma preparación sobre una cooperativa de ventas ya creada (I6: el ciclo comercial la combina con el crédito).</summary>
+    public static async Task<VentaElectronicaDePrueba> SobreAsync(VentasDePrueba v)
     {
-        var e = new VentaElectronicaDePrueba(await VentasDePrueba.CrearAsync());
+        var e = new VentaElectronicaDePrueba(v);
         var db = e.Db;
         foreach (var p in db.ParameterVersions.Where(p => p.Key == ParametrosDeFacturacionElectronica.ObligadaAFacturar)) p.Value = "true";
         foreach (var u in db.UnitsOfMeasure) u.DianUnitCode ??= "94";

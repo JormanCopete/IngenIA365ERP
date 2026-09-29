@@ -2058,6 +2058,19 @@ AlcanceDeInventarioDeLaPeticion}`; `Shared/Services/Http/CanalDeOrigenHandler` (
     `DescuentoCalculado` gana `Source`, `PromotionId` y `Explicacion`; `SalesLineDiscountDto` y `PosLineDiscountDto` ganan
     `PromotionPublicId` y `PromotionName`; `ResolvedPriceDto` gana `Promotions` (`ResolvedPromotionDto`: las vigentes que alcanzan al
     producto). Slug `promociones` en `BuscarCodigoDeCatalogoQuery`. Reglas en T51a.
+- **I6, documentos del ciclo comercial (T877–T890; 2026-09-29) (nuevo)**: `Application/Inventory/Sales/Reservas/ReservasDeInventario`
+    (`Reservar`, `ConsumirAsync`, `LiberarAsync`, `VencidasAsync`, `VencerAsync`, `Claves`, `Pendiente`; `ConsumoDeReserva`), único escritor de
+    `INV_Reservations` y de `Reserved`; `ReleaseExpiredReservationsCommand` y `TareaDeReservasVencidas` (`inventario.reservas`);
+    `Sales/Shipments/RaiseUnbilledShipmentAlertsCommand` (condición `RemisionSinFacturar:{shipmentPublicId}`) y `TareaDeRemisionesSinFacturar`
+    (`inventario.remisiones`), las dos tareas sólo desde I6; `Sales/Quotes/ConvertQuoteToOrderCommand`; `Sales/CicloComercial/VinculosDelCiclo`
+    (`ReemplazarAsync`, `ParesAsync`, `OrigenesAsync`, `PendientePorDespacharAsync`, `PendientePorFacturarAsync`; `ParDelCiclo`) y
+    `ErroresDelCicloComercial`; en `SalesDraftCommands`, `RutasDeVenta` (`Facturas`, `Cotizaciones`, `Pedidos`, `Remisiones`, `NotasDebito`,
+    `OrigenDe`, `Cobra`), `SalesLineInput.OriginLinePublicId`, `SalesDraftInput.{ValidUntil, CorrectionConceptCode}` y
+    `ComoBorrador(clasesDeLaRuta)`, `DatosDeVentaDelBorrador.{OriginPublicIds, ValidUntil, ClasesAdmitidas}`. Estrategias
+    `Documents/Efectos/EfectoDeCotizacion`, `EfectoDePedido`, `EfectoDeRemision`, `EfectoDeFacturaDesdeRemisiones` (sobre `SalidaPorVenta`, que
+    gana `DescargaExistencia`, `ValidarOrigenesAsync`, `OrigenesQueBloquea` y el consumo de reservas desde `FromOrder`) y `EfectoDeNotaDebito`;
+    `EmisionDeInventario.{NotaDebitoAsync, CreditoDeLaNotaDebitoAsync}`; `ReglasDeConfirmacionDeVenta.VeredictoFiscalAsync`;
+    `RevisionDeCierre.RemisionesSinFacturarAsync`. Reglas en T53a.
 
 ### 2.17 Códigos de error principales (familias)
 
@@ -2107,7 +2120,11 @@ ya registrado del mismo producto y ámbito, fuera del saldo inicial de bodega no
 lineNumber, productCode, laterMovement { documentPublicId, displayNumber, operationDate } }`); períodos →
 `Inventory.Period.NotStarted` (nuevo, T289: cerrar sin `INV_Setup`), `.NotNext` (`data.nextToClose { year, month }`),
 `.NotEnded`, `.OpenCounts`, `.WarningsNotAcknowledged` (`data.warnings`), `.UnbilledShipmentsNotAccepted`,
-`.AcceptUnbilledNotAllowed`, `.NotLastClosed` (`data.lastClosed`), `.NotClosed`; plantillas → `Import.Cell.Ignored` (nuevo,
+`.AcceptUnbilledNotAllowed`, `.NotLastClosed` (`data.lastClosed`), `.NotClosed`; ciclo comercial (I6, T877–T884) →
+`Inventory.Quote.Expired` y `.ValidUntilInvalid` (nuevos), `Inventory.Shipment.AlreadyInvoiced` (`data.lines[] { shipmentLinePublicId,
+pending, requested }`) y `.CustomerMismatch` (nuevos), `Inventory.Order.ExceedsPending` (nuevo, `data.lines[] { orderLinePublicId, pending,
+requested }`), `Inventory.Sales.OriginInvalid` (nuevo, `data { class, originClass }`), `Inventory.DebitNote.OriginInvalid` (nuevo), y
+remisiones con modos distintos en una factura → `Inventory.PostingMode.ChainMismatch` (`data { chain, shipments }`); plantillas → `Import.Cell.Ignored` (nuevo,
 T286: aviso de una celda que la clase ignora, como el modo de paso del saldo inicial);
 informes de inventario → `Inventory.Report.RangeInvalid` y `Inventory.Report.RangeTooLong` (nuevo, T182: rango al revés o de
 más de 5 años, como el `Accounting.Report.RangeTooLong` de la 009); sucursales → `Branch.MunicipalityUnknown`; producto sin concepto de retención (obligatorio salvo plantillas y combos,
@@ -2292,6 +2309,13 @@ choque (`DbUpdateException`) se reintenta como una carrera de `RowVersion`; hoy 
 **(nuevos, I6 promociones, T862/T867)** `tests/IngenIA365ERP.Domain.Tests/Sales/Promotions/MotorDePromocionesTests` sobre los casos
 dorados `Sales/Promotions/Casos/01..08-*.json` (3×2 con residuo, porcentaje por categoría y segmento, precio por cantidad, paquete, no
 acumulables, acumulable, vigencia y canal, nunca precio cero) y `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/PromocionesEnLaVentaTests`.
+**(nuevos, I6 documentos del ciclo, T863–T866, T868, T869)** el caso dorado `Inventory/Costing/Casos/20-remision-y-factura-desde-remisiones.json`
+(y `CasosDoradosDeCosteoTests.Esta_el_caso_20_de_I6_y_la_factura_desde_remisiones_no_mueve_kardex`); en `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/`
+el escenario `CicloComercialDePrueba` (ventas + crédito provisional + factura electrónica, tipos `COT`, `PED`, `REM`, `FVR`, `NDV`, entrega I6;
+`VentaElectronicaDePrueba.SobreAsync`, `CreditoDePrueba.SobreAsync` y `CreditoDePrueba.ConfirmacionDelMotor` para combinarlos),
+`ReservasDePedidoTests`, `RemisionesYFacturaDesdeRemisionesTests`, `CotizacionYNotaDebitoTests` y `TareasDeRemisionYReservaTests`;
+`ConstructorDelCanonicoTests.La_nota_debito_es_el_tipo_92_y_referencia_la_factura_con_su_concepto`; y la de arquitectura
+`SoloLasReservasEscribenLoReservado` (`NadieEscribeElKardexFueraDelRegistro` admite `.Reserved` en `ReservasDeInventario.cs`).
 
 ---
 
@@ -3277,6 +3301,27 @@ Decisión: `ConsumidorFinalSeeder` (I3) crea la persona genérica del maestro; l
 fiscal de la contraparte es `INV_DocumentPartySnapshots`, sólo inserción, versión 1 al confirmar; el caso
 a de FR-066 agrega la versión siguiente con antes y después auditados (y queda también en la versión del
 documento electrónico). Reimpresiones y representación gráfica usan la copia vigente o el archivo firmado.
+
+**T53a · Cómo corre el ciclo comercial (nuevo, I6, T877–T890; 2026-09-29).**
+Decisión (dentro de FR-033, FR-047, FR-052, FR-060, FR-075 y data-model §14; ninguna pregunta nueva al dueño, **revisar con el dueño**):
+(a) **las rutas eligen las clases** (`RutasDeVenta`): `/invoices` admite `SalesInvoice`, `NonElectronicSalesReceipt` y
+`SalesInvoiceFromShipments`; `/quotes`, `/orders`, `/shipments` y `/debit-notes` la suya; el documento nace de otros por `originPublicIds` y,
+en cada línea, `originLinePublicId` —cotización → pedido (`FromOrder`), pedido → remisión (`DispatchOf`) o factura (`FromOrder`), remisiones →
+factura (`FromShipment`), factura → nota débito (`NoteOf`)—, sólo desde orígenes **confirmados**; sin líneas, el borrador propone lo pendiente de
+cada línea origen a su precio, y una línea con origen toma de él producto, unidad y precio; sin contraparte ni bodega, las del origen;
+(b) la cotización, el pedido y la remisión **no cobran** (sin pagos ni regla de persona inactiva de contado); (c) la reserva es **todo o nada**
+por pedido y usa el disponible (`Physical − Reserved`); la salida desde un pedido consume primero su reserva y lo que pida de más —la reserva ya
+venció o se liberó— sale del disponible como cualquier salida; ninguna salida pasa de lo pendiente de su línea de pedido; el vencimiento vence
+**el día siguiente** a `ExpiresOn` (el propio día todavía reserva); (d) anular una cotización o un pedido **no mira dependientes** (lo tomado
+queda tomado; el pedido libera lo que falte); anular una remisión facturada → `Inventory.Document.HasDependents`, y la remisión anulada no
+vuelve a reservar; (e) una nota crédito de una factura desde remisiones deja pendiente **sólo lo que acredita por su valor completo** —una
+rebaja de precio no devuelve la mercancía a «por facturar»—; (f) la nota débito sólo confirma con veredicto `Electronic` (una sobre comprobante
+no electrónico es pregunta abierta del dueño, Apéndice fases 18–20); cobrada a crédito, pide la aprobación `ProvisionalCredit` y ajusta la
+`VentaACreditoRegistrada` de la venta (mismo medio primero); si la venta no fue a crédito —o su crédito no se registró— la nota registra su
+propia `VentaACreditoRegistrada`; cobrada de contado sobre una venta a crédito no hay ajuste; (g) remisiones sin facturar del cierre: las
+confirmadas **del mes** con saldo, valoradas al neto de la línea del pedido (`Order`) o, sin pedido, al de la remisión, que se precificó con la
+lista vigente al guardarla (`PriceList`); (h) la alerta `Inventario.RemisionSinFacturar` se levanta una sola vez por remisión aunque la
+anterior esté atendida; las dos tareas programadas corren una vez al día y no corren antes de que el despliegue llegue a I6.
 
 ---
 

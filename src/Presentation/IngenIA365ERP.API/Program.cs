@@ -230,6 +230,11 @@ try
     // Feature 012 (T721, I4): las alertas DIAN que dependen del tiempo (sin validar, plazo de contingencia, resoluciones por agotar o vencer).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.ElectronicInvoicing.Documents.TareaDeAlertasDeFacturacionElectronica>();
+    // Feature 012 (T889, I6): liberar las reservas vencidas y alertar las remisiones sin facturar (no corren antes de I6).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Sales.Reservas.TareaDeReservasVencidas());
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Sales.Shipments.TareaDeRemisionesSinFacturar());
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

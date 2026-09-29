@@ -47,6 +47,22 @@ public class CasosDoradosDeCosteoTests
             nombres.Should().Contain(archivo, "los casos dorados de US16 (T818–T821, research R10)");
     }
 
+    /// <summary>
+    /// I6, T863 (SC-007, FR-044, FR-052): el caso 20 de la remisión existe y ninguno de sus movimientos es de la factura desde remisiones ni de
+    /// una nota crédito: esas clases no producen kardex (lo facturado ya salió por la remisión, y la nota de esa factura no devuelve mercancía).
+    /// </summary>
+    [Fact]
+    public void Esta_el_caso_20_de_I6_y_la_factura_desde_remisiones_no_mueve_kardex()
+    {
+        var archivo = CasoDoradoDeCosteo.Archivos().SingleOrDefault(f => Path.GetFileName(f) == "20-remision-y-factura-desde-remisiones.json");
+        archivo.Should().NotBeNull("falta el caso 20 «remisión y factura desde remisiones» (T863)");
+        var caso = CasoDoradoDeCosteo.Cargar(archivo!);
+        caso.Movimientos.Should().Contain(m => m.Clase == DocumentClass.Shipment);
+        caso.Movimientos.Should().NotContain(m => m.Clase == DocumentClass.SalesInvoiceFromShipments || m.Clase == DocumentClass.CreditNote);
+        caso.Movimientos.Should().Contain(m => m.Anulacion && m.Valoracion == ValoracionDelMovimiento.AlCostoDeOrigen,
+            "la anulación de la remisión no facturada entra al costo con que salió");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_motor_coincide_al_peso_con_el_calculo_manual(string archivo)

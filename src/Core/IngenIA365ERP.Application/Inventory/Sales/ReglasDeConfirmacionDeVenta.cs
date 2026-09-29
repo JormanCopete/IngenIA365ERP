@@ -230,6 +230,12 @@ public sealed class ReglasDeConfirmacionDeVenta(
 
     // ------------------------------------------------------------------------------------------------ apoyo --
 
+    /// <summary>
+    /// El veredicto fiscal sobre la clase del documento; nulo si confirma. Público para la nota débito (I6, T884), que lo pide antes de mirar su
+    /// original: sólo confirma con <c>Electronic</c>.
+    /// </summary>
+    public Task<Error?> VeredictoFiscalAsync(ContextoDeEfecto contexto, CancellationToken ct) => FiscalAsync(contexto, ct);
+
     /// <summary>El veredicto fiscal sobre la clase del documento; nulo si confirma.</summary>
     private async Task<Error?> FiscalAsync(ContextoDeEfecto contexto, CancellationToken ct)
     {

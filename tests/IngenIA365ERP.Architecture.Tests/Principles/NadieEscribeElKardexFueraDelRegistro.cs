@@ -41,7 +41,9 @@ public class NadieEscribeElKardexFueraDelRegistro
             .Where(f => !EscritoresAutorizados.Contains(Path.GetFileName(f), StringComparer.Ordinal))
             .Where(f => f.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Application{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 || f.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Persistence{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(f => AsignacionDeProyeccion.IsMatch(File.ReadAllText(f)))
+            .Where(f => AsignacionDeProyeccion.Matches(File.ReadAllText(f))
+                // I6 (T877): Reserved lo escriben además las reservas (SoloLasReservasEscribenLoReservado vigila ese campo).
+                .Any(m => !(m.Groups[1].Value == "Reserved" && Path.GetFileName(f) == SoloLasReservasEscribenLoReservado.EscritorDeLasReservas)))
             .Select(f => $"{Path.GetRelativePath(root, f)}: modifica una proyección del kardex")
             .ToList();
 
