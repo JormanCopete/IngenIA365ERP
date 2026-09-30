@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using IngenIA365ERP.Application.Audit.Common;
 using IngenIA365ERP.Audit.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace IngenIA365ERP.Audit.Services;
@@ -15,9 +16,17 @@ public sealed class AuditSignatureService : IAuditSignatureService
     private readonly AuditSignatureSettings _settings;
     private readonly Dictionary<string, byte[]> _keyMaterialByVersion;
 
-    public AuditSignatureService(IOptions<AuditSignatureSettings> settings)
+    public AuditSignatureService(IOptions<AuditSignatureSettings> settings, ILogger<AuditSignatureService>? logger = null)
     {
         _settings = settings.Value;
+        if (_settings.UsaClavesDeDesarrollo)
+        {
+            // T986: fuera de desarrollo esto significa que falta el Secret erp-audit-signature del ambiente.
+            logger?.LogWarning(
+                "[Auditoria.ClavesDeDesarrollo] Los PDF de auditoría se firman con la clave de desarrollo '{Version}', " +
+                "cuyo secreto está en el repositorio. Configurar AuditSignature con claves propias " +
+                "(tools/scripts/crear-secreto-firma-auditoria.ps1).", _settings.CurrentKeyVersion);
+        }
         _keyMaterialByVersion = _settings.Keys.ToDictionary(
             k => k.Version,
             k => Convert.FromBase64String(k.SecretBase64),
