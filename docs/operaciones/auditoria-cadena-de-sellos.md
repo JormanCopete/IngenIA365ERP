@@ -143,7 +143,7 @@ La sección `AuditSignature` de la API tiene `CurrentKeyVersion` (la de los PDF 
 del código son de desarrollo**: `dev-v1` para los PDF y `dev-anclas-v1` para las anclas, **con su secreto
 en el repositorio**. En un ambiente compartido hay que configurar las dos con secretos propios, por el
 Secret del clúster, nunca en un JSON del repositorio. Antes de desplegar I1 en producción hay que
-comprobar que la de producción no es la de desarrollo; si lo es, se rota (T986, del dueño).
+comprobar que la de producción no es la de desarrollo; el procedimiento es el de §8a (T986).
 
 Rotar la clave de anclas:
 
@@ -157,6 +157,38 @@ Rotar la clave de anclas:
 
 Si se sospecha que una clave de anclas se filtró, se rota igual y se anota desde qué fecha rige la nueva:
 las anclas anteriores a esa fecha prueban menos.
+
+## 8a. Auditoría protegida por ambiente (T986)
+
+Hasta T986 los tres ambientes tenían dos puertas abiertas: **Mongo sin autenticación** (la API entraba sin
+usuario) y la API **firmando con las claves de desarrollo**. Se cierran por ambiente, en este orden, desde
+el repositorio del ERP y con el ambiente en marcha:
+
+1. `tools/scripts/crear-secreto-firma-auditoria.ps1 -Ambiente <amb>`: genera las dos claves (PDF y anclas,
+   versiones `erp-<amb>-pdf-AAAAMM` y `erp-<amb>-anclas-AAAAMM`), guarda una copia local cifrada con DPAPI
+   en `%USERPROFILE%\.ingenia365\` y crea el Secret `erp-audit-signature`. Con claves propias, **las de
+   desarrollo dejan de valer** en ese ambiente (`QuitarClavesDeDesarrolloSiHayPropias`): un PDF exportado
+   antes con `dev-v1` ya no verifica. Es lo correcto: ese secreto es público.
+2. `tools/scripts/preparar-autenticacion-mongo.ps1 -Ambiente <amb>`: con Mongo **todavía abierto** crea el
+   rol `erp_auditoria_api` (insertar, leer, crear colecciones e índices, listar bases; **nunca** update ni
+   remove) y los usuarios `erp-admin` (root: sondas, arranque del replica set, soporte), `erp-api` y
+   `erp-respaldo` (rol `backup`), y los Secrets `erp-mongo-keyfile`, `erp-mongo-admin`, `erp-mongo-api` y
+   `erp-mongo-respaldo`. No corta nada.
+3. GitOps: el overlay del ambiente incluye el componente `auditoria-protegida` y el respaldo
+   (`infrastructure/<clúster>/backup-mongo.yaml`) toma `erp-mongo-respaldo`. Mongo se reinicia con
+   `--keyFile` (que activa la autenticación) y la API con la cadena del Secret y las claves propias.
+
+Comprobaciones después: la API sin errores de Mongo en el log y `/health/ready` verde; una conexión sin
+usuario ya no lista bases (`Unauthorized`); una exportación PDF firma con `erp-<amb>-pdf-…`; el respaldo
+manual (`kubectl create job --from=cronjob/mongo-respaldo-diario`) termina bien.
+
+Nadie lee las claves: están en los Secrets. La de firma tiene además su copia local
+(`crear-secreto-firma-auditoria.ps1 -Ambiente <amb> -Mostrar` la muestra para guardarla en el gestor de
+contraseñas). **Un ambiente nuevo** (volumen de Mongo vacío) arranca sin el componente, se inicia el replica
+set y se corren los dos guiones; después se activa.
+
+El estampado de `expiresAt` a los documentos anteriores (§ retención de la 009) necesita update: con el
+usuario de la API sólo se intenta si queda algún documento sin la fecha; si queda, lo hace `erp-admin`.
 
 ## 9. Lo que queda abierto
 

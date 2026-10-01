@@ -115,7 +115,10 @@ internal sealed class AuditIndexBootstrap(
         var etapas = new[] { new BsonDocument("$set", new BsonDocument("expiresAt", vencimiento)) };
         try
         {
-            await coll.UpdateManyAsync(sinVencimiento, Builders<BsonDocument>.Update.Pipeline(etapas), cancellationToken: ct);
+            // T986: el usuario de la API sólo inserta y lee (erp_auditoria_api). Se pregunta primero si queda algo
+            // por estampar —leer sí puede— para no pedir un update, que se le niega, en cada arranque y en cada base.
+            if (await coll.CountDocumentsAsync(sinVencimiento, new CountOptions { Limit = 1 }, ct) > 0)
+                await coll.UpdateManyAsync(sinVencimiento, Builders<BsonDocument>.Update.Pipeline(etapas), cancellationToken: ct);
         }
         catch (MongoCommandException ex)
         {

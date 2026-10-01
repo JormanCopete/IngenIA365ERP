@@ -21,6 +21,9 @@ public sealed class AuditSignatureSettings
 {
     public const string SectionName = "AuditSignature";
 
+    /// <summary>Prefijo de las claves de desarrollo, públicas en el repositorio (T986).</summary>
+    public const string PrefijoDeDesarrollo = "dev-";
+
     /// <summary>Versión activa para firmar nuevos PDFs.</summary>
     public string CurrentKeyVersion { get; set; } = "dev-v1";
 
@@ -49,6 +52,22 @@ public sealed class AuditSignatureSettings
             SecretBase64 = "ZGV2LWFuY2xhcy1zb2xvLWRlc2Fycm9sbG8tbm8tdXNhci1lbi1wcm9k"
         }
     ];
+
+    /// <summary>¿Firma con una clave de desarrollo (pública en el repositorio)?</summary>
+    public bool UsaClavesDeDesarrollo =>
+        CurrentKeyVersion.StartsWith(PrefijoDeDesarrollo, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Feature 012, T986: si la configuración trae claves propias, las de desarrollo salen de la lista. El
+    /// enlazador de configuración <b>agrega</b> a una lista que ya tiene elementos, así que sin esto un ambiente
+    /// con su Secret seguiría aceptando PDF y anclas firmados con los secretos publicados en el repositorio: cualquiera
+    /// podría falsificarlos. Sin claves propias (desarrollo, pruebas) la lista queda como está.
+    /// </summary>
+    public void QuitarClavesDeDesarrolloSiHayPropias()
+    {
+        if (Keys.Exists(k => !k.Version.StartsWith(PrefijoDeDesarrollo, StringComparison.Ordinal)))
+            Keys.RemoveAll(k => k.Version.StartsWith(PrefijoDeDesarrollo, StringComparison.Ordinal));
+    }
 }
 
 public sealed class AuditSignatureKey

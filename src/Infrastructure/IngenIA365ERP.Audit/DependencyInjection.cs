@@ -19,6 +19,8 @@ public static class DependencyInjection
     {
         services.Configure<MongoDbSettings>(configuration.GetSection(MongoDbSettings.SectionName));
         services.Configure<AuditSignatureSettings>(configuration.GetSection(AuditSignatureSettings.SectionName));
+        // T986: con claves propias (Secret erp-audit-signature) las de desarrollo dejan de valer.
+        services.PostConfigure<AuditSignatureSettings>(s => s.QuitarClavesDeDesarrolloSiHayPropias());
 
         var mongoSettings = configuration.GetSection(MongoDbSettings.SectionName).Get<MongoDbSettings>()
             ?? new MongoDbSettings();
