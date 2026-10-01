@@ -1,4 +1,6 @@
 @inject NavigationManager Navigation
+@inject IngenIA365ERP.Shared.Services.Ventas.VentasClient Ventas
+@inject IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario Permisos
 
 <div class="nav-menu">
     <div class="brand">
@@ -28,7 +30,7 @@
         <NavMenuGroup Icon="e-chart" Title="Contabilidad" Expanded="SidebarOpen">
             @* Feature 009: el modulo reescrito bajo NIIF. Las rutas heredadas (plan-cuentas,
                movimientos, saldos, grupos, categorias de riesgo, lineas IVA, formatos DIAN,
-               codigos de impuestos, cierre) desaparecieron con el modelo de SOLIDO; lo que
+               codigos de impuestos, cierre) desaparecieron con el modelo del sistema anterior; lo que
                vuelve en E2-E4 (conciliacion, presupuesto, impuestos, exogena, activos) se
                agrega en su entrega. *@
             <NavLink href="/contabilidad/configuracion" class="nav-subitem">Configuracion inicial</NavLink>
@@ -50,6 +52,17 @@
             <NavLink href="/contabilidad/informes" class="nav-subitem">Informes</NavLink>
             <NavLink href="/contabilidad/estados-financieros" class="nav-subitem">Estados financieros</NavLink>
             <NavLink href="/contabilidad/terceros" class="nav-subitem">Estado de cuenta del tercero</NavLink>
+            @* Feature 012, US7 (T540): el lado contable de la integración con Inventario (enmienda de la 009). El detalle de un
+               lote (/contabilidad/inventario/lotes/{id}) se abre desde la lista, sin enlace propio. *@
+            <span class="nav-subgroup-title">Inventario</span>
+            <PermissionGate Required="Accounting.InventoryRules.View">
+                <NavLink href="/contabilidad/inventario/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/inventario/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/inventario/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Accounting.InventoryBatches.View">
+                <NavLink href="/contabilidad/inventario/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
@@ -90,26 +103,173 @@
             <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
         </NavMenuGroup>
 
+        @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@
         <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
-            <NavLink href="/inventario/productos" class="nav-subitem">Productos</NavLink>
-            <NavLink href="/inventario/movimientos" class="nav-subitem">Movimientos</NavLink>
-            <NavLink href="/inventario/facturacion" class="nav-subitem">Facturacion</NavLink>
-            <NavLink href="/inventario/grupos" class="nav-subitem">Grupos</NavLink>
-            <NavLink href="/inventario/grupos-primarios" class="nav-subitem">Grupos Primarios</NavLink>
-            <NavLink href="/inventario/tipos-movimiento" class="nav-subitem">Tipos Movimiento</NavLink>
-            <NavLink href="/inventario/bodegas" class="nav-subitem">Bodegas</NavLink>
-            <NavLink href="/inventario/ubicaciones" class="nav-subitem">Ubicaciones</NavLink>
-            <NavLink href="/inventario/puntos-venta" class="nav-subitem">Puntos de Venta</NavLink>
-            <NavLink href="/inventario/turnos" class="nav-subitem">Turnos</NavLink>
-            <NavLink href="/inventario/vendedores" class="nav-subitem">Vendedores</NavLink>
-            <NavLink href="/inventario/tipos-descuento" class="nav-subitem">Tipos Descuento</NavLink>
-            <NavLink href="/inventario/tipos-lista-precios" class="nav-subitem">Listas Precios</NavLink>
-            <NavLink href="/inventario/parametros-comisiones" class="nav-subitem">Comisiones</NavLink>
-            <NavLink href="/inventario/movimientos/nuevo" class="nav-subitem">Nuevo Movimiento</NavLink>
-            <NavLink href="/inventario/kardex" class="nav-subitem">Kardex</NavLink>
-            <span class="nav-subgroup-title">Reportes</span>
-            <NavLink href="/reportes/inventario-valorizado" class="nav-subitem">Inventario Valorizado</NavLink>
+            @* I6, US17 (T969): el tablero de inventario (§28), primero del grupo. *@
+            <PermissionGate Required="Inventory.Dashboard.View">
+                <NavLink href="/inventario/tablero" class="nav-subitem">Tablero</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Catalog.View">
+                <NavLink href="/inventario/productos" class="nav-subitem">Productos</NavLink>
+                <NavLink href="/inventario/categorias" class="nav-subitem">Categorías</NavLink>
+                <NavLink href="/inventario/marcas" class="nav-subitem">Marcas</NavLink>
+                <NavLink href="/inventario/unidades" class="nav-subitem">Unidades de medida</NavLink>
+                <NavLink href="/inventario/grupos-contables" class="nav-subitem">Grupos contables</NavLink>
+                <NavLink href="/inventario/causas-de-ajuste" class="nav-subitem">Causas de ajuste</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Warehouses.View">
+                <NavLink href="/inventario/bodegas" class="nav-subitem">Bodegas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.DocumentTypes.View">
+                <NavLink href="/inventario/tipos-de-documento" class="nav-subitem">Tipos de documento</NavLink>
+            </PermissionGate>
+            @* US2 (T267): existencias, kardex, ajustes, integridad y el centro de informes (ya tiene vistas: kardex, existencias). *@
+            <PermissionGate Required="Inventory.Stock.View">
+                <NavLink href="/inventario/existencias" class="nav-subitem">Existencias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reports.View">
+                <NavLink href="/inventario/kardex" class="nav-subitem">Kardex</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Adjustments.View">
+                <NavLink href="/inventario/ajustes" class="nav-subitem">Ajustes</NavLink>
+            </PermissionGate>
+            @* US10 (T381): traslados en dos pasos y sus diferencias. *@
+            <PermissionGate Required="Inventory.Transfers.View">
+                <NavLink href="/inventario/traslados" class="nav-subitem">Traslados</NavLink>
+            </PermissionGate>
+            @* US11 (T405): conteos físicos, captura con lector y ajuste aprobado. *@
+            <PermissionGate Required="Inventory.Counts.View">
+                <NavLink href="/inventario/conteos" class="nav-subitem">Conteos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Integrity.Verify">
+                <NavLink href="/inventario/integridad" class="nav-subitem">Integridad del kardex</NavLink>
+            </PermissionGate>
+            @* US3 (T295): cierre y reapertura de meses y valorizado a una fecha. *@
+            <PermissionGate Required="Inventory.Periods.View">
+                <NavLink href="/inventario/periodos" class="nav-subitem">Períodos</NavLink>
+            </PermissionGate>
+            @* US4 (T323): saldo inicial bodega por bodega y cifras de referencia para comparar. *@
+            <PermissionGate Required="Inventory.OpeningBalance.Load">
+                <NavLink href="/inventario/saldo-inicial" class="nav-subitem">Saldo inicial</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.LegacyFigures.Import">
+                <NavLink href="/inventario/cifras-de-referencia" class="nav-subitem">Cifras de referencia</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reports.View">
+                <NavLink href="/inventario/informes" class="nav-subitem">Informes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Catalog.View">
+                <NavLink href="/inventario/plantillas" class="nav-subitem">Plantillas</NavLink>
+            </PermissionGate>
+            @* US12 (T437): parámetros con vigencia, aprobaciones, políticas y montos, alcance por bodega y alertas. *@
+            <PermissionGate Required="Inventory.Parameters.View">
+                <NavLink href="/inventario/parametros" class="nav-subitem">Parámetros</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Approvals.View">
+                <NavLink href="/inventario/aprobaciones" class="nav-subitem">Aprobaciones</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.ApprovalPolicies.View">
+                <NavLink href="/inventario/politicas-de-aprobacion" class="nav-subitem">Políticas de aprobación</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Scopes.Manage">
+                <NavLink href="/inventario/alcances" class="nav-subitem">Alcance comercial</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Alerts.View">
+                <NavLink href="/inventario/alertas" class="nav-subitem">Alertas</NavLink>
+            </PermissionGate>
+            @* US7 (T540): la integración con Contabilidad —bandeja, conciliación y activación con cuadre—. *@
+            <PermissionGate Required="Inventory.Messages.View">
+                <NavLink href="/inventario/bandeja-de-mensajes" class="nav-subitem">Bandeja de mensajes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reconciliation.View">
+                <NavLink href="/inventario/conciliacion" class="nav-subitem">Conciliación con Contabilidad</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Warehouses.Activate">
+                <NavLink href="/inventario/activacion" class="nav-subitem">Activación de bodegas</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
+
+        @* US9 (T357): compras de I1. Sólo enlaces con su página publicada (TodoEnlaceDelMenuTieneSuPagina). *@
+        <PermissionGate Required="Inventory.Purchases.View">
+        <NavMenuGroup Icon="e-grid-view" Title="Compras" Expanded="SidebarOpen">
+            <PermissionGate Required="Inventory.Purchases.Confirm">
+                <NavLink href="/compras/compra-directa" class="nav-subitem">Compra directa</NavLink>
+            </PermissionGate>
+            <NavLink href="/compras/recepciones" class="nav-subitem">Recepciones</NavLink>
+            <NavLink href="/compras/facturas-proveedor" class="nav-subitem">Facturas de proveedor</NavLink>
+            <NavLink href="/compras/notas-proveedor" class="nav-subitem">Notas de proveedor</NavLink>
+            <NavLink href="/compras/devoluciones" class="nav-subitem">Devoluciones</NavLink>
+            @* I4 (T759): el documento soporte y su nota de ajuste. *@
+            <PermissionGate Required="Inventory.Purchases.View">
+                <NavLink href="/compras/documentos-soporte" class="nav-subitem">Documentos soporte</NavLink>
+            </PermissionGate>
+            @* I5 (T816): el ciclo completo —solicitud, orden, cruce a tres vías y costos adicionales—; la vista purchase-matches está en
+               /inventario/informes por el registro de vistas. *@
+            <PermissionGate Required="Inventory.Purchases.View">
+                <NavLink href="/compras/solicitudes" class="nav-subitem">Solicitudes</NavLink>
+                <NavLink href="/compras/ordenes" class="nav-subitem">Órdenes de compra</NavLink>
+                <NavLink href="/compras/cruce" class="nav-subitem">Cruce a tres vías</NavLink>
+                <NavLink href="/compras/costos-adicionales" class="nav-subitem">Costos adicionales</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+        </PermissionGate>
+
+        <NavMenuGroup Icon="e-grid-view" Title="Ventas" Expanded="SidebarOpen">
+            @* I3 (T644): las ventas de oficina, los puntos de venta, los precios y los informes de ventas. I6 (T901): cotizaciones, pedidos, remisiones, notas débito y promociones. *@
+            <PermissionGate Required="Inventory.Sales.View">
+                <NavLink href="/ventas/documentos" class="nav-subitem">Documentos de venta</NavLink>
+                <NavLink href="/ventas/cotizaciones" class="nav-subitem">Cotizaciones</NavLink>
+                <NavLink href="/ventas/pedidos" class="nav-subitem">Pedidos</NavLink>
+                <NavLink href="/ventas/remisiones" class="nav-subitem">Remisiones</NavLink>
+                <NavLink href="/ventas/notas-debito" class="nav-subitem">Notas débito</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Sales.Create">
+                <NavLink href="/ventas/facturas/nueva" class="nav-subitem">Nueva factura</NavLink>
+            </PermissionGate>
+            @* I4 (T759): la bandeja de documentos electrónicos ante la DIAN y las contingencias. *@
+            <PermissionGate Required="ElectronicInvoicing.Documents.View">
+                <NavLink href="/ventas/documentos-electronicos" class="nav-subitem">Documentos electrónicos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="ElectronicInvoicing.Contingencies.View">
+                <NavLink href="/ventas/contingencias-dian" class="nav-subitem">Contingencias DIAN</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.PointsOfSale.View">
+                <NavLink href="/ventas/puntos-de-venta" class="nav-subitem">Puntos de venta</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Prices.View">
+                <NavLink href="/ventas/listas-de-precios" class="nav-subitem">Listas de precios</NavLink>
+                <NavLink href="/ventas/topes-de-descuento" class="nav-subitem">Topes de descuento</NavLink>
+                <NavLink href="/ventas/promociones" class="nav-subitem">Promociones</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Reports.View">
+                <NavLink href="/ventas/informes" class="nav-subitem">Informes de ventas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Inventory.Catalog.View">
+                <NavLink href="/ventas/canales" class="nav-subitem">Canales de venta</NavLink>
+            </PermissionGate>
+            @* US12 (T436, T437): el rol vendedor se administra en Ventas (antes /inventario/vendedores). *@
+            <PermissionGate Required="Inventory.Salespeople.View">
+                <NavLink href="/ventas/vendedores" class="nav-subitem">Vendedores</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+
+        @* I3 (T644, T645): el punto de venta y la caja. «Vender en el POS» se oculta cuando la sesión abierta del usuario es de un punto
+           que cobra en oficina (FR-058). *@
+        <PermissionGate Required="Inventory.CashSessions.View" AnyOf="@(new[] { "Inventory.CashSessions.View", "Inventory.Pos.Sell" })">
+        <NavMenuGroup Icon="e-grid-view" Title="Punto de venta" Expanded="SidebarOpen">
+            @if (!_sesionSinPos)
+            {
+                <PermissionGate Required="Inventory.Pos.Sell">
+                    <NavLink href="/pos" class="nav-subitem" Match="NavLinkMatch.All">Vender en el POS</NavLink>
+                </PermissionGate>
+            }
+            <PermissionGate Required="Inventory.CashSessions.View">
+                <NavLink href="/pos/sesiones" class="nav-subitem">Sesiones de caja</NavLink>
+                <NavLink href="/pos/movimientos-de-caja" class="nav-subitem">Movimientos de caja</NavLink>
+                <NavLink href="/pos/cierre-del-dia" class="nav-subitem">Cierre del día</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+        </PermissionGate>
 
         <NavMenuGroup Icon="e-people" Title="Nomina" Expanded="SidebarOpen">
             <NavLink href="/nomina/empleados" class="nav-subitem">Empleados</NavLink>
@@ -178,6 +338,15 @@
             <NavLink href="/maestros/ciudades" class="nav-subitem">Ciudades</NavLink>
             <NavLink href="/maestros/bancos" class="nav-subitem">Bancos</NavLink>
             <NavLink href="/maestros/formatos-bancarios" class="nav-subitem">Formatos bancarios</NavLink>
+            <NavLink href="/maestros/impuestos" class="nav-subitem">Impuestos y retenciones</NavLink>
+            @* I3 (T644): el catálogo de medios de pago de Core (franquicias, adquirentes, datáfonos y denominaciones). *@
+            <PermissionGate Required="Core.PaymentMeans.View">
+                <NavLink href="/maestros/medios-de-pago" class="nav-subitem">Medios de pago</NavLink>
+            </PermissionGate>
+            @* I4 (T759): las resoluciones de numeración de la DIAN. *@
+            <PermissionGate Required="ElectronicInvoicing.Resolutions.View">
+                <NavLink href="/maestros/resoluciones-dian" class="nav-subitem">Resoluciones DIAN</NavLink>
+            </PermissionGate>
             <NavLink href="/maestros/empresas" class="nav-subitem">Empresas</NavLink>
             <NavLink href="/maestros/centros-costo" class="nav-subitem">Centros de Costo</NavLink>
             <NavLink href="/maestros/secciones" class="nav-subitem">Secciones</NavLink>
@@ -224,6 +393,10 @@
             <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
             <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
+            @* I4 (T759): la configuración de emisión electrónica, su canal y su credencial. *@
+            <PermissionGate Required="ElectronicInvoicing.Settings.View">
+                <NavLink href="/admin/facturacion-electronica" class="nav-subitem">Facturación electrónica</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
         }
 
@@ -270,6 +443,8 @@
     private bool _isTenantAdmin;
     private bool _isMaster;
     private string _activeTenantId = "";
+    private string? _cooperativaRevisada;
+    private bool _sesionSinPos;
 
     /// <summary>
     /// Hay cooperativa activa en el token. Es lo que decide si se muestran las
@@ -284,5 +459,20 @@
         _isTenantAdmin = bool.TryParse(user.FindFirst("tenant_admin")?.Value, out var admin) && admin;
         _isMaster = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var master) && master;
         _activeTenantId = user.FindFirst("active_tenant_id")?.Value ?? "";
+        await RevisarSesionDeCajaAsync();
+    }
+
+    /// <summary>
+    /// T645 (FR-058): si la sesión abierta del usuario es de un punto sin POS, «Vender en el POS» no se ofrece (ese punto cobra en
+    /// oficina). Se pregunta una vez por cooperativa y sólo a quien ve sesiones de caja; si la consulta falla, el enlace queda.
+    /// </summary>
+    private async Task RevisarSesionDeCajaAsync()
+    {
+        if (!_tieneCooperativa || _cooperativaRevisada == _activeTenantId) return;
+        _cooperativaRevisada = _activeTenantId;
+        _sesionSinPos = false;
+        if (!await Permisos.TieneAsync("Inventory.CashSessions.View")) return;
+        var r = await Ventas.MiSesionAbiertaAsync();
+        _sesionSinPos = r is { IsSuccess: true, Value.PointOfSale.PosEnabled: false };
     }
 }

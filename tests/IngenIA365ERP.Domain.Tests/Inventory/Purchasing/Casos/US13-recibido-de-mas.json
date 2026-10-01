@@ -1,0 +1,18 @@
+{
+  "nombre": "FR-049: lo recibido de más contra la orden sólo entra dentro de la tolerancia de cantidad",
+  "descripcion": "Orden de 100 con Compras.ToleranciaCantidadPorcentaje = 0,02 (2 unidades) y ToleranciaCantidadValor = 5. Con AmbasCondiciones la tolerancia es 2: tras recibir 60, otra recepción de 42 (total 102) entra y una de 43 (total 103, 3 de más) se rechaza con Inventory.Purchase.OverReceiptBeyondTolerance. Con CualquieraDeLas la tolerancia es 5 y 43 entra. Con las dos en cero no se admite ni una unidad de más.",
+  "tolerancias": {
+    "cantidadPorcentaje": 0.02,
+    "cantidadValor": 5,
+    "precioPorcentaje": 0,
+    "precioValor": 0,
+    "regla": "AmbasCondiciones"
+  },
+  "recepciones": [
+    { "id": "CABE", "ordenado": 100, "yaRecibido": 60, "estaRecepcion": 42, "esperado": { "admitida": true, "recibido": 102, "excedente": 2, "tolerancia": 2, "pendiente": 40 } },
+    { "id": "NO-CABE", "ordenado": 100, "yaRecibido": 60, "estaRecepcion": 43, "esperado": { "admitida": false, "recibido": 103, "excedente": 3, "tolerancia": 2, "pendiente": 40, "rechazo": "Inventory.Purchase.OverReceiptBeyondTolerance" } },
+    { "id": "CUALQUIERA", "regla": "CualquieraDeLas", "ordenado": 100, "yaRecibido": 60, "estaRecepcion": 43, "esperado": { "admitida": true, "recibido": 103, "excedente": 3, "tolerancia": 5, "pendiente": 40 } },
+    { "id": "SIN-TOLERANCIA", "sinTolerancia": true, "ordenado": 100, "yaRecibido": 99, "estaRecepcion": 2, "esperado": { "admitida": false, "recibido": 101, "excedente": 1, "tolerancia": 0, "pendiente": 1, "rechazo": "Inventory.Purchase.OverReceiptBeyondTolerance" } }
+  ],
+  "lineas": []
+}

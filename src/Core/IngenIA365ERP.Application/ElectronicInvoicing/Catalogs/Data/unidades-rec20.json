@@ -1,0 +1,105 @@
+{
+  "catalogo": "unidades",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tabla 13.3.6 (UN/ECE Recomendación 20)",
+      "porCotejar": false,
+      "notas": "Subconjunto de uso comercial de la Rec. 20; T702 (US8) lo amplía sin recrearlo.",
+      "codigos": [
+        {
+          "codigo": "94",
+          "nombre": "Unidad"
+        },
+        {
+          "codigo": "NIU",
+          "nombre": "Número de unidades internacionales"
+        },
+        {
+          "codigo": "C62",
+          "nombre": "Uno (unidad)"
+        },
+        {
+          "codigo": "KGM",
+          "nombre": "Kilogramo"
+        },
+        {
+          "codigo": "GRM",
+          "nombre": "Gramo"
+        },
+        {
+          "codigo": "LBR",
+          "nombre": "Libra"
+        },
+        {
+          "codigo": "TNE",
+          "nombre": "Tonelada métrica"
+        },
+        {
+          "codigo": "LTR",
+          "nombre": "Litro"
+        },
+        {
+          "codigo": "MLT",
+          "nombre": "Mililitro"
+        },
+        {
+          "codigo": "GLL",
+          "nombre": "Galón (EE. UU.)"
+        },
+        {
+          "codigo": "MTR",
+          "nombre": "Metro"
+        },
+        {
+          "codigo": "CMT",
+          "nombre": "Centímetro"
+        },
+        {
+          "codigo": "MMT",
+          "nombre": "Milímetro"
+        },
+        {
+          "codigo": "MTK",
+          "nombre": "Metro cuadrado"
+        },
+        {
+          "codigo": "MTQ",
+          "nombre": "Metro cúbico"
+        },
+        {
+          "codigo": "HUR",
+          "nombre": "Hora"
+        },
+        {
+          "codigo": "DAY",
+          "nombre": "Día"
+        },
+        {
+          "codigo": "MON",
+          "nombre": "Mes"
+        },
+        {
+          "codigo": "DZN",
+          "nombre": "Docena"
+        },
+        {
+          "codigo": "PR",
+          "nombre": "Par"
+        },
+        {
+          "codigo": "SET",
+          "nombre": "Juego"
+        },
+        {
+          "codigo": "KWH",
+          "nombre": "Kilovatio hora"
+        },
+        {
+          "codigo": "ZZ",
+          "nombre": "Mutuamente definido"
+        }
+      ]
+    }
+  ]
+}

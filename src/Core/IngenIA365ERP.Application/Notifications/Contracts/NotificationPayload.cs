@@ -11,7 +11,8 @@ public sealed record NotificationPayload(
     NotificationType Type,
     string Subject,
     string Body,
-    NotificationChannels Channels);
+    NotificationChannels Channels,
+    Guid? AlertPublicId = null);
 
 public enum NotificationType
 {
@@ -21,7 +22,13 @@ public enum NotificationType
     RoleAssigned,
     SuspiciousSessionActivity,
     UserInvitationCreated,
-    Generic
+    Generic,
+
+    /// <summary>
+    /// La entrega de una alerta de <c>COR_Alerts</c> (feature 012, T39, T091): la notificación lleva
+    /// <see cref="NotificationPayload.AlertPublicId"/> para abrirla. Se guarda por nombre en <c>COR_Notifications.Type</c>.
+    /// </summary>
+    Alert
 }
 
 [Flags]

@@ -224,8 +224,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Rate")
-                        .HasPrecision(9, 4)
-                        .HasColumnType("decimal(9,4)");
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -1998,6 +1998,214 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("ACC_FixedAssetInstallments", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryPostingRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccountId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AccountingGroupCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CostCenterId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DimensionKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("PaymentMeansCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("PointOfSaleCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<short>("SpecificityWeight")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal?>("TaxRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<string>("TaxRateCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<string>("WarehouseCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("IX_ACC_InventoryPostingRules_Account");
+
+                    b.HasIndex("BranchId")
+                        .HasDatabaseName("IX_ACC_InventoryPostingRules_Branch");
+
+                    b.HasIndex("CostCenterId")
+                        .HasDatabaseName("IX_ACC_InventoryPostingRules_CostCenter");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_ACC_InventoryPostingRules_PublicId");
+
+                    b.HasIndex("DimensionKey", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_ACC_InventoryPostingRules_DimensionKey_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("Operation", "Role", "ValidFrom")
+                        .HasDatabaseName("IX_ACC_InventoryPostingRules_Operation_Role_ValidFrom");
+
+                    b.ToTable("ACC_InventoryPostingRules", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryVoucherMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("CrossDocumentTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("InventoryDocumentTypeCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MappingKey")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("VoucherTypeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CrossDocumentTypeId")
+                        .HasDatabaseName("IX_ACC_InventoryVoucherMappings_CrossDocumentType");
+
+                    b.HasIndex("MappingKey")
+                        .IsUnique()
+                        .HasDatabaseName("UK_ACC_InventoryVoucherMappings_MappingKey")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_ACC_InventoryVoucherMappings_PublicId");
+
+                    b.HasIndex("VoucherTypeId")
+                        .HasDatabaseName("IX_ACC_InventoryVoucherMappings_VoucherType");
+
+                    b.ToTable("ACC_InventoryVoucherMappings", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.TaxForm", b =>
                 {
                     b.Property<int>("Id")
@@ -2282,6 +2490,148 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasFilter("[Number] IS NOT NULL");
 
                     b.ToTable("ACC_Documents", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Transactions.InventoryPosting", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AccountingDocumentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("ActorKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ActorName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("BatchPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("MessageKind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("MessagePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("MessageType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<short>("MessageVersion")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("NoVoucherReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateOnly>("OperationDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("OriginUserCentralId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OriginUserName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("RelatedDocumentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceDocumentClass")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("SourceDocumentNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("SourceDocumentTypeCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("SourceModule")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<Guid>("SourcePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountingDocumentId")
+                        .HasDatabaseName("IX_ACC_InventoryPostings_AccountingDocument");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("IX_ACC_InventoryPostings_ActorUser");
+
+                    b.HasIndex("BatchPublicId")
+                        .HasDatabaseName("IX_ACC_InventoryPostings_Batch");
+
+                    b.HasIndex("MessagePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_ACC_InventoryPostings_MessagePublicId");
+
+                    b.HasIndex("OperationDate")
+                        .HasDatabaseName("IX_ACC_InventoryPostings_OperationDate");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_ACC_InventoryPostings_PublicId");
+
+                    b.HasIndex("RelatedDocumentPublicId")
+                        .HasDatabaseName("IX_ACC_InventoryPostings_Related");
+
+                    b.HasIndex("SourcePublicId")
+                        .HasDatabaseName("IX_ACC_InventoryPostings_Source");
+
+                    b.ToTable("ACC_InventoryPostings", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Transactions.JournalEntry", b =>
@@ -2663,6 +3013,667 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("ACC_WithholdingCertificateLines", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Alerts.Alert", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AlertTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AttendNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("AttendedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AttendedByKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AttendedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("AttendedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DedupKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("EntityPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime>("LastOccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("OccurrenceCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("RaisedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RaisedByKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RaisedByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("RecipientCount")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("ScopePointOfSalePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ScopeWarehousePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("TypeCode")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("WithoutRecipient")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AlertTypeId");
+
+                    b.HasIndex("AttendedByUserId");
+
+                    b.HasIndex("DedupKey")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_Alerts_DedupKey_Pending")
+                        .HasFilter("[Status] = 0 AND [IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_Alerts_PublicId");
+
+                    b.HasIndex("Status", "TypeCode", "RaisedAt")
+                        .HasDatabaseName("IX_COR_Alerts_Status_TypeCode_RaisedAt");
+
+                    b.ToTable("COR_Alerts", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Alerts.AlertType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Channels")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("RecipientPermissions")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ThresholdsJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("TypeCode")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AlertTypes_PublicId");
+
+                    b.HasIndex("TypeCode", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AlertTypes_TypeCode_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_AlertTypes", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalPolicy", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("DocumentTypePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("PolicyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalPolicies_PublicId");
+
+                    b.HasIndex("PolicyKey", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalPolicies_PolicyKey_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_ApprovalPolicies", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalPolicyLevel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte>("Order")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("PermissionCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("PolicyId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("Threshold")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalPolicyLevels_PublicId");
+
+                    b.HasIndex("PolicyId", "Order")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalPolicyLevels_PolicyId_Order");
+
+                    b.ToTable("COR_ApprovalPolicyLevels", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("char(3)")
+                        .IsFixedLength();
+
+                    b.Property<byte>("CurrentLevel")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExcludedUserIdsJson")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateOnly>("OperationDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("PolicyId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequiredLevelsJson")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("ScopePointOfSalePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ScopeWarehousePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceLabel")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("SourcePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("PolicyId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalRequests_PublicId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("SourceType", "SourcePublicId", "Subject")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalRequests_Source_Subject_Pending")
+                        .HasFilter("[Status] = 0 AND [IsDeleted] = 0");
+
+                    b.HasIndex("Status", "Module", "CurrentLevel")
+                        .HasDatabaseName("IX_COR_ApprovalRequests_Status_Module_CurrentLevel");
+
+                    b.ToTable("COR_ApprovalRequests", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.Transactions.ApprovalDecision", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("CredentialPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DecidedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DecidedByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("DecidedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte>("Level")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PermissionCodeUsed")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalDecisions_PublicId");
+
+                    b.HasIndex("RequestId", "Level")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ApprovalDecisions_RequestId_Level_Approved")
+                        .HasFilter("[Decision] = 1");
+
+                    b.ToTable("COR_ApprovalDecisions", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Audit.AccountChange", b =>
                 {
                     b.Property<long>("Id")
@@ -2817,6 +3828,287 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique();
 
                     b.ToTable("AUD_AssignmentChanges", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Audit.AuditAnchor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly?>("AnchorDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("AnchoredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Hash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("Hmac")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("KeyVersion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Stream")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditAnchors_PublicId");
+
+                    b.HasIndex("Stream", "AnchorDate")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditAnchors_Stream_AnchorDate")
+                        .HasFilter("[Kind] = 3");
+
+                    b.HasIndex("Stream", "Kind", "Seq")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditAnchors_Stream_Kind_Seq");
+
+                    b.ToTable("COR_AuditAnchors", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Audit.AuditChainHead", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LastHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<long>("LastSeq")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Stream")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditChainHeads_PublicId");
+
+                    b.HasIndex("Stream")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditChainHeads_Stream");
+
+                    b.ToTable("COR_AuditChainHeads", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Audit.AuditOutboxEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ForwardAttempts")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Forwarded")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("ForwardedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Hash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LastForwardError")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PayloadJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PrevHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<long?>("Seq")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Stream")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditOutbox_EventId");
+
+                    b.HasIndex("Id")
+                        .HasDatabaseName("IX_COR_AuditOutbox_Pending")
+                        .HasFilter("[Forwarded] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditOutbox_PublicId");
+
+                    b.HasIndex("Stream", "Seq")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_AuditOutbox_Stream_Seq")
+                        .HasFilter("[Seq] IS NOT NULL");
+
+                    b.ToTable("COR_AuditOutbox", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Audit.AuditReference", b =>
@@ -5866,6 +7158,75 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("COR_Attachments", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.BackgroundLease", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime>("LeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Owner")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_BackgroundLeases_Name");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_BackgroundLeases_PublicId");
+
+                    b.ToTable("COR_BackgroundLeases", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Bank", b =>
                 {
                     b.Property<int>("Id")
@@ -6418,6 +7779,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<string>("MunicipalityDaneCode")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -6479,6 +7844,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("DaneCode")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -6520,6 +7889,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DaneCode")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_Cities_DaneCode")
+                        .HasFilter("[DaneCode] IS NOT NULL AND [IsDeleted] = 0");
 
                     b.HasIndex("DepartmentId")
                         .HasDatabaseName("IX_COR_Cities_DepartmentId");
@@ -8771,6 +10145,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
+                    b.Property<Guid?>("AlertPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("ArchivedAt")
                         .HasColumnType("datetime2");
 
@@ -9025,6 +10402,94 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("COR_NotificationTemplates", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.OperationKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActorName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<Guid>("CentralUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("Key")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RequestSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_OperationKeys_Key");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_OperationKeys_PublicId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("COR_OperationKeys", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.PaymentMethod", b =>
                 {
                     b.Property<int>("Id")
@@ -9256,6 +10721,513 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("COR_PaymentMethodChecks", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int?>("PersonId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CardAcquirers_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CardAcquirers_PublicId");
+
+                    b.ToTable("COR_CardAcquirers", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CardKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CardNetworks_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CardNetworks_PublicId");
+
+                    b.ToTable("COR_CardNetworks", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CardAcquirerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Serial")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CardTerminals_PublicId");
+
+                    b.HasIndex("CardAcquirerId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CardTerminals_Acquirer_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_CardTerminals", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nchar(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<short>("DisplayOrder")
+                        .HasColumnType("smallint");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CashDenominations_PublicId");
+
+                    b.HasIndex("Currency", "Kind", "Value")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_CashDenominations_Currency_Kind_Value")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_CashDenominations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowsChange")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowsPartial")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CardAcquirerId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CardNetworkId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Class")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("CountMethod")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<short?>("DefaultInstallments")
+                        .HasColumnType("smallint");
+
+                    b.Property<short?>("DefaultTermDays")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DestinationAccountNumber")
+                        .HasMaxLength(25)
+                        .HasColumnType("nvarchar(25)");
+
+                    b.Property<byte?>("DestinationAccountType")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("DianPaymentMeansCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<short>("DisplayOrder")
+                        .HasColumnType("smallint");
+
+                    b.Property<decimal?>("ExpectedCommissionFixed")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ExpectedCommissionRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<short?>("InstallmentPeriodDays")
+                        .HasColumnType("smallint");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<short?>("MaxInstallments")
+                        .HasColumnType("smallint");
+
+                    b.Property<short?>("MaxTermDays")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("OfferedAtAllPointsOfSale")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("OfferedForAllDocumentTypes")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("OfferedInAllChannels")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("QuickKey")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<int?>("ReferenceKind")
+                        .HasColumnType("int");
+
+                    b.Property<byte?>("ReferenceMaxLength")
+                        .HasColumnType("tinyint");
+
+                    b.Property<byte?>("ReferenceMinLength")
+                        .HasColumnType("tinyint");
+
+                    b.Property<bool>("RequiresReference")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresTerminalBatchAtClose")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SuggestedCreditLineCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("ToleranceAmount")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<bool>("UniqueReference")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankId");
+
+                    b.HasIndex("CardAcquirerId");
+
+                    b.HasIndex("CardNetworkId");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_PaymentMeans_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_PaymentMeans_PublicId");
+
+                    b.ToTable("COR_PaymentMeans", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.PensionSeveranceParam", b =>
                 {
                     b.Property<int>("Id")
@@ -9485,6 +11457,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsIncomeTaxFiler")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsInsolvent")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -9495,7 +11472,22 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsObligatedToInvoice")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsSalesperson")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSelfWithholder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSimpleTaxRegime")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
@@ -9506,6 +11498,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDefaultValue(false);
 
                     b.Property<bool>("IsThirdParty")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsVatResponsible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsVatWithholdingAgent")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
@@ -10688,6 +12690,341 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("COR_SystemSettings", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CalculationForm")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianTaxCode")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsWithholding")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("TaxedOnDefinitionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_TaxDefinitions_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_TaxDefinitions_PublicId");
+
+                    b.HasIndex("TaxedOnDefinitionId")
+                        .HasDatabaseName("IX_COR_TaxDefinitions_TaxedOnDefinitionId");
+
+                    b.ToTable("COR_TaxDefinitions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActivityCode")
+                        .HasMaxLength(6)
+                        .HasColumnType("nvarchar(6)");
+
+                    b.Property<bool?>("AgentIsLargeContributor")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("AgentIsVatWithholdingAgent")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("AmountPerUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("AppliesTo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LegalSource")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("MinimumBasePesos")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinimumBaseUvt")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("MunicipalityDaneCode")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<short>("Priority")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)0);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Rate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<bool>("ReviewPending")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<bool?>("SubjectIsIncomeTaxFiler")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("SubjectIsLargeContributor")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("SubjectIsSelfWithholder")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("SubjectIsSimpleTaxRegime")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("SubjectIsVatResponsible")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SubjectPersonType")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<int>("TaxDefinitionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("WithholdingConceptId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MunicipalityDaneCode")
+                        .HasDatabaseName("IX_COR_TaxRates_MunicipalityDaneCode");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_TaxRates_PublicId");
+
+                    b.HasIndex("TaxDefinitionId")
+                        .HasDatabaseName("IX_COR_TaxRates_TaxDefinitionId");
+
+                    b.HasIndex("WithholdingConceptId")
+                        .HasDatabaseName("IX_COR_TaxRates_WithholdingConceptId");
+
+                    b.HasIndex("Code", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_TaxRates_Code_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_TaxRates", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_WithholdingConcepts_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_WithholdingConcepts_PublicId");
+
+                    b.ToTable("COR_WithholdingConcepts", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.WithdrawalReason", b =>
                 {
                     b.Property<int>("Id")
@@ -11484,7 +13821,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("DEB_PosTerminals", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.CommissionParameter", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -11493,271 +13830,83 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CommissionGroupId")
+                    b.Property<string>("ChannelCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("CloseReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("ClosedByKind")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("CommissionRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
+                    b.Property<string>("ClosedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("ClosedByUserId")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("GroupId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("InvoiceTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<decimal>("SalesRangeEnd")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("SalesRangeStart")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("INV_CommissionParameters", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.CommissionPriceParam", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CommissionGroupId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("CommissionRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CustomerType")
-                        .IsRequired()
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("GroupId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("InvoiceTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("INV_CommissionPriceParams", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.DiscountType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("DiscountClass")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<string>("ShortName")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("TypeCode")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
+                    b.Property<DateTime?>("DeadlineAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<short>("DeadlineHoursApplied")
+                        .HasColumnType("smallint");
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("TypeCode")
-                        .IsUnique();
-
-                    b.ToTable("INV_DiscountTypes", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryDiscount", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime?>("DeclaredToDianAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CustomerId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("CustomerType")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
+                    b.Property<string>("DeclaredToDianReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("DiscountClass")
+                    b.Property<int>("DetectedByKind")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("DiscountRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
+                    b.Property<string>("DetectedByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
-                    b.Property<int?>("DiscountTypeId")
+                    b.Property<int?>("DetectedByUserId")
                         .HasColumnType("int");
 
-                    b.Property<DateTime?>("EndDate")
+                    b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("GroupId")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
-                    b.Property<int?>("PaymentClassId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("PeriodCode")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ProductClass")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<int?>("ProductId")
-                        .HasColumnType("int");
+                    b.Property<string>("LegalSource")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<int>("PurchaseAmount")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("PurchasePeriod")
-                        .HasColumnType("int");
-
-                    b.Property<int>("QuantityEnd")
-                        .HasColumnType("int");
-
-                    b.Property<int>("QuantityStart")
-                        .HasColumnType("int");
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -11765,120 +13914,182 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<DateTime?>("StartDate")
+                    b.Property<DateTime>("StartedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DiscountTypeId");
+                    b.HasIndex("ClosedByUserId");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("DetectedByUserId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_DianContingencyEvents_PublicId");
 
-                    b.ToTable("INV_Discounts", "dbo");
+                    b.HasIndex("Type", "ChannelCode")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_DianContingencyEvents_Type_Channel_Open")
+                        .HasFilter("[Status] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("COR_DianContingencyEvents", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryDocument", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution", b =>
                 {
-                    b.Property<long>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
+                        .HasColumnType("int")
                         .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<long?>("AccountingDocumentId")
+                    b.Property<int?>("BacksUpKind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Environment")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<long>("LastIssuedNumber")
                         .HasColumnType("bigint");
 
-                    b.Property<decimal>("AuditAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
-                    b.Property<string>("BankAccountNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
 
-                    b.Property<string>("BankId")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("CashAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<long>("RangeFrom")
+                        .HasColumnType("bigint");
 
-                    b.Property<decimal>("CheckAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<long>("RangeTo")
+                        .HasColumnType("bigint");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("CreditAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("CreditCardAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("DebitCardAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Detail")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<decimal>("DiscountAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateOnly?>("DueDate")
+                    b.Property<DateOnly>("ResolutionDate")
                         .HasColumnType("date");
 
-                    b.Property<DateTime>("EntryDate")
+                    b.Property<string>("ResolutionNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("InvoiceNumber")
-                        .HasColumnType("bigint");
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_DianNumberingResolutions_PublicId");
+
+                    b.HasIndex("Environment", "Prefix", "ResolutionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_DianNumberingResolutions_Environment_Prefix_Number")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("Kind", "Environment", "Prefix", "ValidFrom")
+                        .HasDatabaseName("IX_COR_DianNumberingResolutions_Kind_Environment_Prefix_ValidFrom");
+
+                    b.ToTable("COR_DianNumberingResolutions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ChannelCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("ItemCount")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PaymentClassId")
-                        .HasColumnType("int");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal?>("ReturnSequence")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<int?>("ReturnTypeId")
+                    b.Property<int>("ResolutionId")
                         .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
@@ -11887,18 +14098,203 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<int?>("SalesPersonId")
+                    b.Property<string>("SoftwareId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
+
+                    b.Property<string>("TechnicalKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_DianResolutionChannels_PublicId");
+
+                    b.HasIndex("ResolutionId", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_DianResolutionChannels_Resolution_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_DianResolutionChannels", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttemptCount")
                         .HasColumnType("int");
 
-                    b.Property<int?>("SalesPointId")
+                    b.Property<int?>("CancelledByUserId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("SequenceNumber")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
+                    b.Property<string>("ChannelCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
-                    b.Property<int?>("ShiftId")
+                    b.Property<long>("Consecutive")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("ContingencyEventId")
                         .HasColumnType("int");
+
+                    b.Property<int?>("ContingencyType")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CorrectsDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CounterpartyName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CounterpartyTaxId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("CurrentVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DianDocumentTypeCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<int>("EmailDeliveryBy")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EmailSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("EmissionSettingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Environment")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LastMessagesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("LastOutcome")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LeaseOwner")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("QrContent")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("RejectedBy")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("ResolutionId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SoftwareId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
+
+                    b.Property<Guid>("SourceDocumentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceDocumentTypeCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("SourceModule")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -11907,148 +14303,160 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("TransactionTypeId")
+                    b.Property<DateTime?>("TransmissionDeadline")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UniqueCode")
+                        .HasMaxLength(96)
+                        .HasColumnType("nvarchar(96)");
+
+                    b.Property<int?>("UniqueCodeKind")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("UserId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<DateTime?>("ValidatedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<decimal>("VatAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("WaitsForDocumentId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountingDocumentId");
+                    b.HasIndex("CancelledByUserId");
+
+                    b.HasIndex("ContingencyEventId")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_ContingencyEventId");
+
+                    b.HasIndex("CorrectsDocumentId");
+
+                    b.HasIndex("CurrentVersionId");
+
+                    b.HasIndex("EmissionSettingId");
+
+                    b.HasIndex("IssueDate")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_IssueDate");
 
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicDocuments_PublicId");
 
-                    b.HasIndex("TransactionTypeId", "SequenceNumber")
-                        .IsUnique();
+                    b.HasIndex("ResolutionId");
 
-                    b.ToTable("INV_Documents", "dbo");
+                    b.HasIndex("UniqueCode")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_UniqueCode")
+                        .HasFilter("[UniqueCode] IS NOT NULL");
+
+                    b.HasIndex("WaitsForDocumentId");
+
+                    b.HasIndex("Status", "NextAttemptAt")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_Status_NextAttemptAt");
+
+                    b.HasIndex("Environment", "Prefix", "Consecutive")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicDocuments_Environment_Prefix_Consecutive");
+
+                    b.HasIndex("SourceModule", "SourceDocumentPublicId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicDocuments_Source_Kind");
+
+                    b.ToTable("COR_ElectronicDocuments", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryInvoice", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting", b =>
                 {
-                    b.Property<long>("Id")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
+                        .HasColumnType("int")
                         .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("AdjustmentTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("CommissionGroup")
-                        .HasMaxLength(2)
-                        .HasColumnType("nvarchar(2)");
-
-                    b.Property<decimal>("CommissionWithholdingRate")
-                        .HasPrecision(4, 2)
-                        .HasColumnType("decimal(4,2)");
+                    b.Property<string>("ChannelCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("CreditLineId")
-                        .HasColumnType("int");
+                    b.Property<string>("CredentialKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
-                    b.Property<string>("DeductionType")
-                        .HasMaxLength(2)
-                        .HasColumnType("nvarchar(2)");
+                    b.Property<DateTime?>("CredentialVerifiedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("EmployeeCreditLineId")
+                    b.Property<int>("EmailDeliveryBy")
                         .HasColumnType("int");
 
-                    b.Property<string>("EmployeeDeductionType")
-                        .HasMaxLength(2)
-                        .HasColumnType("nvarchar(2)");
-
-                    b.Property<int?>("EmployeeTerm")
+                    b.Property<int>("Environment")
                         .HasColumnType("int");
-
-                    b.Property<string>("EmployeeVoucherCode")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<int?>("EmployerCreditLineId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("EmployerDeductionType")
-                        .HasMaxLength(2)
-                        .HasColumnType("nvarchar(2)");
-
-                    b.Property<int?>("EmployerTerm")
-                        .HasColumnType("int");
-
-                    b.Property<string>("EmployerVoucherCode")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<string>("FinalNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("InitialNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("InvoiceCode")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<long>("InvoiceConsecutive")
-                        .HasColumnType("bigint");
 
                     b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsEnabled")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("OpensRegister")
-                        .HasColumnType("bit");
+                    b.Property<string>("IssuerAddress")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
-                    b.Property<string>("PortfolioVoucherCode")
+                    b.Property<string>("IssuerBusinessName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("IssuerCheckDigit")
+                        .IsRequired()
+                        .HasMaxLength(1)
+                        .HasColumnType("nvarchar(1)");
+
+                    b.Property<string>("IssuerEmail")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("IssuerMunicipalityDaneCode")
+                        .IsRequired()
                         .HasMaxLength(5)
                         .HasColumnType("nvarchar(5)");
 
-                    b.Property<string>("Prefix")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
+                    b.Property<string>("IssuerTaxId")
+                        .IsRequired()
+                        .HasMaxLength(15)
+                        .HasColumnType("nvarchar(15)");
 
-                    b.Property<bool>("PreventCostUtility")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("PrintsBonusTickets")
-                        .HasColumnType("bit");
+                    b.Property<int>("Mode")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Resolution")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<DateOnly?>("ResolutionDate")
-                        .HasColumnType("date");
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -12056,58 +14464,45 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<bool>("SingleDiscountOnly")
-                        .HasColumnType("bit");
+                    b.Property<string>("SoftwareId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
 
-                    b.Property<int?>("Term")
-                        .HasColumnType("int");
+                    b.Property<DateTime?>("TestSetAcceptedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<string>("ThirdPartyCreditLineId")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<string>("ThirdPartySpecialLineId")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<string>("ThirdPartySpecialVoucher")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<string>("ThirdPartyVoucherCode")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
+                    b.Property<string>("TestSetId")
+                        .HasMaxLength(36)
+                        .HasColumnType("nvarchar(36)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<int>("UpdatesCosts")
-                        .HasColumnType("int");
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
 
-                    b.Property<int>("VatRegime")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("VatWithDiscount")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("VoucherConsecutive")
-                        .HasColumnType("bit");
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("InvoiceCode")
-                        .IsUnique();
-
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicEmissionSettings_PublicId");
 
-                    b.ToTable("INV_Invoices", "dbo");
+                    b.HasIndex("ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicEmissionSettings_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_ElectronicEmissionSettings", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryTransaction", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission", b =>
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
@@ -12116,74 +14511,4926 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
-                    b.Property<decimal>("AdminFee")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
+                    b.Property<Guid?>("ApplicationResponseAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("AdminVat")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("AirportTax")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
+                    b.Property<string>("ChannelCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
-                    b.Property<long>("ConsecutiveNumber")
-                        .HasColumnType("bigint");
+                    b.Property<DateTime>("CompletedAt")
+                        .HasColumnType("datetime2");
 
-                    b.Property<byte>("CostFlag")
-                        .HasColumnType("tinyint");
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("int");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianStatusCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ElectronicDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExternalReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<short?>("HttpStatus")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool?>("IsValid")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProviderCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RawMessagesJson")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RequestSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RequestedByKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestedByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TranslatedMessagesJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("VersionId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicDocumentTransmissions_PublicId");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("VersionId")
+                        .HasDatabaseName("IX_COR_ElectronicDocumentTransmissions_VersionId");
+
+                    b.HasIndex("ElectronicDocumentId", "AttemptNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicDocumentTransmissions_Document_Attempt");
+
+                    b.ToTable("COR_ElectronicDocumentTransmissions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid?>("AttachedDocumentAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CanonicalAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<short>("CanonicalSchemaVersion")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("CanonicalSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CorrectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EconomicFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<int>("ElectronicDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("GraphicPdfAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<Guid?>("SignedXmlAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SourceDocumentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<short>("VersionNumber")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicDocumentVersions_PublicId");
+
+                    b.HasIndex("ElectronicDocumentId", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ElectronicDocumentVersions_Document_Version");
+
+                    b.ToTable("COR_ElectronicDocumentVersions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid?>("CashSessionPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<long?>("CutoffMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly?>("DateFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("DateTo")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("DocumentCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("Granularity")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("MessageCount")
+                        .HasColumnType("int");
+
+                    b.Property<long>("Number")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte?>("PeriodMonth")
+                        .HasColumnType("tinyint");
+
+                    b.Property<short?>("PeriodYear")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("ProcessedCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("RejectedCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("RequestedByCentralUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RequestedByEmail")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("RequestedByIp")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<int>("RequestedByKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ResultSummaryJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ScheduleKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("ScheduledFor")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalCredit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalDebit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Trigger")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("VoucherCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashSessionPublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationBatches_CashSession")
+                        .HasFilter("[Trigger] = 2 AND [IsDeleted] = 0");
+
+                    b.HasIndex("Number")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationBatches_Number");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationBatches_PublicId");
+
+                    b.HasIndex("RequestedByUserId")
+                        .HasDatabaseName("IX_COR_IntegrationBatches_RequestedByUser");
+
+                    b.HasIndex("Destination", "Status")
+                        .HasDatabaseName("IX_COR_IntegrationBatches_Destination_Status");
+
+                    b.HasIndex("ScheduleKey", "ScheduledFor")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationBatches_Schedule")
+                        .HasFilter("[Trigger] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("COR_IntegrationBatches", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationBatchCounter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long>("NextValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationBatchCounters_PublicId");
+
+                    b.ToTable("COR_IntegrationBatchCounters", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationMessageDelivery", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BatchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BatchScopeKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("LastErrorDataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("MessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Mode")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResultReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ResultVoucherNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ResultVoucherTypeCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ScheduleKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Batch");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationMessageDeliveries_PublicId");
+
+                    b.HasIndex("MessageId", "Destination")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationMessageDeliveries_Message_Destination");
+
+                    b.HasIndex("ScheduleKey", "MessageId")
+                        .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_InBatch")
+                        .HasFilter("[Status] = 1");
+
+                    b.HasIndex("Destination", "NextAttemptAt", "MessageId")
+                        .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Eligible")
+                        .HasFilter("[Status] = 0");
+
+                    b.ToTable("COR_IntegrationMessageDeliveries", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationDeliveryAttempt", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ActorKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ActorName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AttemptNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BatchId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DeliveryId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("FinishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Instance")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long>("MessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("IX_COR_IntegrationDeliveryAttempts_ActorUser");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("IX_COR_IntegrationDeliveryAttempts_Batch");
+
+                    b.HasIndex("MessageId")
+                        .HasDatabaseName("IX_COR_IntegrationDeliveryAttempts_Message");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationDeliveryAttempts_PublicId");
+
+                    b.HasIndex("DeliveryId", "AttemptNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationDeliveryAttempts_Delivery_Attempt");
+
+                    b.ToTable("COR_IntegrationDeliveryAttempts", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("BranchPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ChainRootPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CostCenterPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("char(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("EmittedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<string>("FiscalUniqueCode")
+                        .HasMaxLength(96)
+                        .HasColumnType("nvarchar(96)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("OperationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("OriginDocumentClass")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("OriginDocumentTypeCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("OriginEventKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("OriginKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OriginModule")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("OriginNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("OriginPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OriginUserCentralId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OriginUserName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PayloadSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<Guid?>("PersonPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("PrevalidationOutcome")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RelatedDocumentClass")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("RelatedNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("RelatedPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<short>("Version")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("WarehouseCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationDate")
+                        .HasDatabaseName("IX_COR_IntegrationMessages_OperationDate");
+
+                    b.HasIndex("PersonPublicId")
+                        .HasDatabaseName("IX_COR_IntegrationMessages_Person")
+                        .HasFilter("[PersonPublicId] IS NOT NULL");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationMessages_PublicId");
+
+                    b.HasIndex("ChainRootPublicId", "Id")
+                        .HasDatabaseName("IX_COR_IntegrationMessages_ChainRoot");
+
+                    b.HasIndex("Type", "OperationDate")
+                        .HasDatabaseName("IX_COR_IntegrationMessages_Type_OperationDate");
+
+                    b.HasIndex("OriginPublicId", "Type", "OriginEventKey")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationMessages_Origin_Type_EventKey");
+
+                    b.ToTable("COR_IntegrationMessages", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessageDependency", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<long>("DependsOnMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long>("MessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DependsOnMessageId")
+                        .HasDatabaseName("IX_COR_IntegrationMessageDependencies_DependsOn");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationMessageDependencies_PublicId");
+
+                    b.HasIndex("MessageId", "DependsOnMessageId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationMessageDependencies_Message_DependsOn");
+
+                    b.ToTable("COR_IntegrationMessageDependencies", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_AccountingGroups_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_AccountingGroups_PublicId");
+
+                    b.ToTable("INV_AccountingGroups", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Brands_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Brands_PublicId");
+
+                    b.ToTable("INV_Brands", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("ExpiryDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateOnly?>("ManufactureDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Lots_PublicId");
+
+                    b.HasIndex("ProductId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Lots_Product_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("ProductId", "ExpiryDate")
+                        .HasDatabaseName("IX_INV_Lots_Product_ExpiryDate");
+
+                    b.ToTable("INV_Lots", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AccountingGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BaseUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BrandId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsPurchasable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSellable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("ParentProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SearchText")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<string>("ShortName")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("TracksExpiry")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("TracksLot")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("TracksSerial")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("VariantKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("VatSaleTreatment")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Volume")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("Weight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int?>("WithholdingConceptId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountingGroupId")
+                        .HasDatabaseName("IX_INV_Products_AccountingGroupId");
+
+                    b.HasIndex("BaseUnitId");
+
+                    b.HasIndex("BrandId")
+                        .HasDatabaseName("IX_INV_Products_BrandId");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("IX_INV_Products_CategoryId");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Products_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Products_PublicId");
+
+                    b.HasIndex("SearchText")
+                        .HasDatabaseName("IX_INV_Products_SearchText");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("SearchText"), new[] { "Code", "Name", "Status" });
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_INV_Products_Status");
+
+                    b.HasIndex("WithholdingConceptId");
+
+                    b.HasIndex("ParentProductId", "VariantKey")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Products_Parent_VariantKey")
+                        .HasFilter("[ParentProductId] IS NOT NULL AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_Products", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DetailJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("FromAccountingGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("ToAccountingGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromAccountingGroupId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductAccountingGroupChanges_PublicId");
+
+                    b.HasIndex("ToAccountingGroupId");
+
+                    b.HasIndex("ProductId", "EffectiveDate")
+                        .HasDatabaseName("IX_INV_ProductAccountingGroupChanges_Product_Date");
+
+                    b.ToTable("INV_ProductAccountingGroupChanges", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Barcode")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("nvarchar(48)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProductUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductBarcodes_Barcode")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("ProductUnitId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductBarcodes_PublicId");
+
+                    b.HasIndex(new[] { "ProductId" }, "UK_INV_ProductBarcodes_Primary")
+                        .IsUnique()
+                        .HasFilter("[IsPrimary] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_ProductBarcodes", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte>("Level")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int?>("ParentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductCategories_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("IX_INV_ProductCategories_ParentId");
+
+                    b.HasIndex("Path")
+                        .HasDatabaseName("IX_INV_ProductCategories_Path");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductCategories_PublicId");
+
+                    b.ToTable("INV_ProductCategories", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ComponentProductId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ComponentProductId")
+                        .HasDatabaseName("IX_INV_ProductComponents_ComponentProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductComponents_PublicId");
+
+                    b.HasIndex("ProductId", "ComponentProductId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductComponents_Product_Component")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_ProductComponents", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AppliesTo")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("TaxDefinitionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaxRateCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<decimal?>("TaxableUnitsPerBaseUnit")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductTaxes_PublicId");
+
+                    b.HasIndex("TaxDefinitionId");
+
+                    b.HasIndex("ProductId", "TaxDefinitionId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductTaxes_Product_Tax")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_ProductTaxes", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Factor")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<bool>("IsDefaultPurchase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefaultSale")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("UnitId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("UsedForPurchase")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("UsedForSale")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductUnits_PublicId");
+
+                    b.HasIndex("UnitId");
+
+                    b.HasIndex("ProductId", "UnitId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductUnits_Product_Unit")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "ProductId" }, "UK_INV_ProductUnits_DefaultPurchase")
+                        .IsUnique()
+                        .HasFilter("[IsDefaultPurchase] = 1 AND [IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "ProductId" }, "UK_INV_ProductUnits_DefaultSale")
+                        .IsUnique()
+                        .HasFilter("[IsDefaultSale] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_ProductUnits", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("VariantAttributeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VariantAttributeValueId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductVariantValues_PublicId");
+
+                    b.HasIndex("VariantAttributeId");
+
+                    b.HasIndex("VariantAttributeValueId")
+                        .HasDatabaseName("IX_INV_ProductVariantValues_ValueId");
+
+                    b.HasIndex("ProductId", "VariantAttributeId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ProductVariantValues_Product_Attribute")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_ProductVariantValues", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SalesChannels_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SalesChannels_PublicId");
+
+                    b.ToTable("INV_SalesChannels", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("InStockLocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("InStockWarehouseId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int?>("LotId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SerialNumber")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InStockLocationId");
+
+                    b.HasIndex("InStockWarehouseId");
+
+                    b.HasIndex("LotId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Serials_PublicId");
+
+                    b.HasIndex("ProductId", "SerialNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Serials_Product_SerialNumber")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_Serials", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<byte>("AllowedDecimals")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianUnitCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Symbol")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_UnitsOfMeasure_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_UnitsOfMeasure_PublicId");
+
+                    b.ToTable("INV_UnitsOfMeasure", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_VariantAttributes_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_VariantAttributes_PublicId");
+
+                    b.ToTable("INV_VariantAttributes", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("VariantAttributeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_VariantAttributeValues_PublicId");
+
+                    b.HasIndex("VariantAttributeId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_VariantAttributeValues_Attribute_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_VariantAttributeValues", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowsNegative")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowsPositive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowsTransitWriteOff")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsRequiredBySystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RequiresAttachment")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_AdjustmentCauses_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_AdjustmentCauses_PublicId");
+
+                    b.ToTable("INV_AdjustmentCauses", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CapturedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CounterUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsCorrection")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("Reads")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("Round")
+                        .HasColumnType("tinyint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SnapshotLineId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CounterUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CountCaptures_PublicId");
+
+                    b.HasIndex("SnapshotLineId");
+
+                    b.HasIndex("DocumentId", "Round", "SnapshotLineId")
+                        .HasDatabaseName("IX_INV_CountCaptures_Document_Round_Line");
+
+                    b.ToTable("INV_CountCaptures", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AddedDuringCapture")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal?>("CountedQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("Difference")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte>("LastRound")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)0);
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LotId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("MovementsAfterSnapshot")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RecountRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("SnapshotUnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("TheoreticalQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("LotId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CountSnapshotLines_PublicId");
+
+                    b.HasIndex("ProductId", "DocumentId")
+                        .HasDatabaseName("IX_INV_CountSnapshotLines_Product_Document");
+
+                    b.HasIndex("DocumentId", "ProductId", "LocationId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CountSnapshotLines_Location")
+                        .HasFilter("[LotId] IS NULL");
+
+                    b.HasIndex("DocumentId", "ProductId", "LocationId", "LotId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CountSnapshotLines_Location_Lot")
+                        .HasFilter("[LotId] IS NOT NULL");
+
+                    b.ToTable("INV_CountSnapshotLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("ApprovalMethod")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ApprovalRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ApprovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CapRateApplied")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentLineId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("FromDocumentDiscount")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsPriceOverride")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("PromotionId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Rate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("RequiresApproval")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<byte>("Sequence")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovalRequestId");
+
+                    b.HasIndex("ApprovedByUserId");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("IX_INV_DocumentLineDiscounts_DocumentId");
+
+                    b.HasIndex("PromotionId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLineDiscounts_PublicId");
+
+                    b.HasIndex("DocumentLineId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLineDiscounts_Line_Sequence")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DocumentLineDiscounts", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentLinkId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityBase")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SourceLineId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TargetLineId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentLinkId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLineLinks_PublicId");
+
+                    b.HasIndex("TargetLineId")
+                        .HasDatabaseName("IX_INV_DocumentLineLinks_TargetLineId");
+
+                    b.HasIndex("SourceLineId", "TargetLineId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLineLinks_SourceLine_TargetLine")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DocumentLineLinks", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SourceDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TargetDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLinks_PublicId");
+
+                    b.HasIndex("TargetDocumentId")
+                        .HasDatabaseName("IX_INV_DocumentLinks_TargetDocumentId");
+
+                    b.HasIndex("SourceDocumentId", "TargetDocumentId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLinks_Source_Target_Kind")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DocumentLinks", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPartySnapshot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("CheckDigit")
+                        .HasMaxLength(1)
+                        .HasColumnType("nchar(1)")
+                        .IsFixedLength();
+
+                    b.Property<string>("CiiuCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CityName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CountryCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DepartmentName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianIdTypeCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<string>("DianOrganizationType")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<string>("DianResponsibilities")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianTaxSchemeCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IcaWithholdingExempt")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsIncomeTaxFiler")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLargeContributor")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSelfWithholder")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSimpleTaxRegime")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsVatResponsible")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsVatWithholdingAgent")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("MunicipalityDaneCode")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TaxId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("WithholdingExempt")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentPartySnapshots_PublicId");
+
+                    b.HasIndex("DocumentId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentPartySnapshots_Document_Version");
+
+                    b.ToTable("INV_DocumentPartySnapshots", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountsReceivableRecordedBy")
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AmountTendered")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("ApprovalRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AuthorizationCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("BankId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CardAcquirerCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("CardAcquirerPersonId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CardNetworkCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int?>("CardTerminalId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CashSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ChangeGiven")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("CreditOrigin")
+                        .HasColumnType("int");
+
+                    b.Property<short?>("CreditTermDays")
+                        .HasColumnType("smallint");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianPaymentMeansCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ExpectedCommissionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateOnly?>("FinalDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("FirstDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<short?>("InstallmentCount")
+                        .HasColumnType("smallint");
+
+                    b.Property<short?>("InstallmentPeriodDays")
+                        .HasColumnType("smallint");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Last4")
+                        .HasMaxLength(4)
+                        .HasColumnType("nchar(4)")
+                        .IsFixedLength();
+
+                    b.Property<short>("LineNumber")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("MeansClass")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MeansCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("MeansName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("NormalizedReference")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("PendingValidation")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int?>("RefundsPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SuggestedCreditLineCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TerminalBatchNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovalRequestId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentPayments_PublicId");
+
+                    b.HasIndex("RefundsPaymentId");
+
+                    b.HasIndex("CardTerminalId", "TerminalBatchNumber")
+                        .HasDatabaseName("IX_INV_DocumentPayments_Terminal_Batch");
+
+                    b.HasIndex("CashSessionId", "PaymentMeansId")
+                        .HasDatabaseName("IX_INV_DocumentPayments_Session_Means");
+
+                    b.HasIndex("DocumentId", "LineNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentPayments_Document_LineNumber")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PaymentMeansId", "NormalizedReference")
+                        .HasDatabaseName("IX_INV_DocumentPayments_Means_Reference")
+                        .HasFilter("[NormalizedReference] IS NOT NULL");
+
+                    b.ToTable("INV_DocumentPayments", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentSequence", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long>("NextValue")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentSequences_PublicId");
+
+                    b.HasIndex("DocumentTypeId", "Prefix")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentSequences_Type_Prefix")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DocumentSequences", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentTaxLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("AmountPerUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Base")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianTaxCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DocumentLineId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ExplanationJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MunicipalityDaneCode")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Rate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("TaxDefinitionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TaxRateCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("TaxRateId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("TaxableUnits")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("Treatment")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("WithholdingConceptId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("IX_INV_DocumentTaxLines_DocumentId");
+
+                    b.HasIndex("DocumentLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentTaxLines_PublicId");
+
+                    b.HasIndex("TaxRateId");
+
+                    b.HasIndex("WithholdingConceptId");
+
+                    b.HasIndex("TaxDefinitionId", "DocumentId")
+                        .HasDatabaseName("IX_INV_DocumentTaxLines_TaxDefinition_Document");
+
+                    b.ToTable("INV_DocumentTaxLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentTypeWarehouse", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentTypeWarehouses_PublicId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("DocumentTypeId", "WarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentTypeWarehouses_Type_Warehouse")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DocumentTypeWarehouses", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AmountDue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("BalanceClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("BalanceClosedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BalanceClosedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CashRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CashSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Class")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ConfirmedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CorrectionConceptCode")
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)");
+
+                    b.Property<int?>("CostCenterId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CostTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("CountKind")
+                        .HasColumnType("int");
+
+                    b.Property<byte?>("CountRound")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int?>("CountScope")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CountScopeJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<DateTime?>("CountSnapshotAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("CountSnapshotKardexEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("CounterpartyPersonId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("char(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("DestinationWarehouseId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DiscardReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("DiscardedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DiscardedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("DiscountTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("DocumentTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateOnly?>("ExpectedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ExternalReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<bool>("FiscalNumberReleased")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsBlindCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsFullReversal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSuspended")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long?>("Number")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateOnly>("OperationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("OperationMunicipalityDaneCode")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<int?>("PointOfSaleId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PostingMode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("ReturnsGoods")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SalesChannelId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("SalespersonId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("SuspendedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("SuspendedLabel")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<decimal>("TaxTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("TransitWarehouseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("ValidUntil")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("VoidedByDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VoidsDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("WithholdingTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BalanceClosedByUserId");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("CashRegisterId");
+
+                    b.HasIndex("CashSessionId")
+                        .HasDatabaseName("IX_INV_Documents_CashSessionId")
+                        .HasFilter("[CashSessionId] IS NOT NULL");
+
+                    b.HasIndex("ConfirmedByUserId");
+
+                    b.HasIndex("CostCenterId");
+
+                    b.HasIndex("CounterpartyPersonId")
+                        .HasDatabaseName("IX_INV_Documents_CounterpartyPersonId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("DestinationWarehouseId")
+                        .HasDatabaseName("IX_INV_Documents_DestinationWarehouseId")
+                        .HasFilter("[DestinationWarehouseId] IS NOT NULL");
+
+                    b.HasIndex("DiscardedByUserId");
+
+                    b.HasIndex("PointOfSaleId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Documents_PublicId");
+
+                    b.HasIndex("SalesChannelId");
+
+                    b.HasIndex("SalespersonId");
+
+                    b.HasIndex("TransitWarehouseId");
+
+                    b.HasIndex("VoidedByDocumentId");
+
+                    b.HasIndex("VoidsDocumentId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Documents_VoidsDocumentId")
+                        .HasFilter("[VoidsDocumentId] IS NOT NULL AND [Status] <> 4");
+
+                    b.HasIndex("Status", "OperationDate")
+                        .HasDatabaseName("IX_INV_Documents_Status_OperationDate");
+
+                    b.HasIndex("WarehouseId", "OperationDate")
+                        .HasDatabaseName("IX_INV_Documents_Warehouse_OperationDate");
+
+                    b.HasIndex("Class", "Status", "OperationDate")
+                        .HasDatabaseName("IX_INV_Documents_Class_Status_OperationDate");
+
+                    b.HasIndex("DocumentTypeId", "Prefix", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Documents_Type_Prefix_Number")
+                        .HasFilter("[Number] IS NOT NULL AND [FiscalNumberReleased] = 0");
+
+                    b.ToTable("INV_Documents", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AdjustmentCauseId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("AffectsCost")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<decimal>("DiscountAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("DiscountRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("FuelTax")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
+                    b.Property<decimal>("Factor")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
 
-                    b.Property<string>("InvoiceNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<decimal>("GrossAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
-                    b.Property<bool>("IsPosTransaction")
-                        .HasColumnType("bit");
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ListPrice")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<bool>("ListPriceIncludesTaxes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<int?>("LocationId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("NetTotal")
+                    b.Property<int?>("LotId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("NetAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal>("OtherTax")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
+                    b.Property<int?>("PriceListId")
+                        .HasColumnType("int");
 
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("QuantityBase")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("RoundingQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SerialId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToLocationId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("TotalCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<int>("UnitId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdjustmentCauseId");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("LotId");
+
+                    b.HasIndex("PriceListId");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("IX_INV_DocumentLines_ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLines_PublicId");
+
+                    b.HasIndex("SerialId");
+
+                    b.HasIndex("ToLocationId");
+
+                    b.HasIndex("UnitId");
+
+                    b.HasIndex("DocumentId", "LineNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentLines_Document_LineNumber")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DocumentLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllWarehouses")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AllowsFutureDate")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Class")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FiscalPrefix")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsContingency")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsTaxableWithdrawal")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RequiresCostCenter")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresCounterparty")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresExternalReference")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("RequiresReason")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SalesChannelId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("VatNonDeductible")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Class")
+                        .HasDatabaseName("IX_INV_DocumentTypes_Class");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentTypes_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DocumentTypes_PublicId");
+
+                    b.HasIndex("SalesChannelId");
+
+                    b.ToTable("INV_DocumentTypes", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AdjustmentCauseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DispatchDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DispatchLineId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LotId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityBase")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("ReceiptDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Resolution")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ResolutionDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("ResolutionQuantityBase")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ResolutionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ResolutionRequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ResolutionRequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ResolvedQuantityBase")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal?>("UnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdjustmentCauseId");
+
+                    b.HasIndex("DispatchDocumentId")
+                        .HasDatabaseName("IX_INV_TransferDiscrepancies_DispatchDocumentId");
+
+                    b.HasIndex("DispatchLineId");
+
+                    b.HasIndex("LotId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_TransferDiscrepancies_PublicId");
+
+                    b.HasIndex("ResolutionDocumentId");
+
+                    b.HasIndex("ResolvedAt")
+                        .HasDatabaseName("IX_INV_TransferDiscrepancies_ResolvedAt")
+                        .HasFilter("[ResolvedAt] IS NULL");
+
+                    b.HasIndex("ReceiptDocumentId", "DispatchLineId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_TransferDiscrepancies_Receipt_DispatchLine_Kind")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_TransferDiscrepancies", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("NormalizedNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("RedeemedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReleaseReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReleasedByDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("DocumentPaymentId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_VoucherRedemptions_PublicId");
+
+                    b.HasIndex("ReleasedByDocumentId");
+
+                    b.HasIndex(new[] { "PaymentMeansId", "NormalizedNumber" }, "UK_INV_VoucherRedemptions_Means_Number_Active")
+                        .IsUnique()
+                        .HasFilter("[Status] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_VoucherRedemptions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AccountingGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("AsOfDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ImportBatchPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("ProductCodeRaw")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("QuantityIn")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("QuantityOut")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceFileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("Value")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ValueIn")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ValueOut")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("WarehouseCodeRaw")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountingGroupId");
+
+                    b.HasIndex("ImportBatchPublicId")
+                        .HasDatabaseName("IX_INV_LegacyFigures_Batch");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_LegacyFigures_PublicId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("AsOfDate", "WarehouseId")
+                        .HasDatabaseName("IX_INV_LegacyFigures_AsOf_Warehouse");
+
+                    b.ToTable("INV_LegacyFigures", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AcceptanceReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("ActivatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ActivatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ComparisonJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("CutoffDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("DifferenceAcceptedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsBalanced")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("TotalDifference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_WarehouseActivations_PublicId");
+
+                    b.HasIndex("WarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_WarehouseActivations_Warehouse")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_WarehouseActivations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CloseVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CloseWarningsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ClosedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<byte>("Month")
+                        .HasColumnType("tinyint");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReopenReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReopenedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReopenedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UnbilledShipmentsAcceptedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UnbilledShipmentsAcceptedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("UnbilledShipmentsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<short>("Year")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Periods_PublicId");
+
+                    b.HasIndex("Year", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Periods_Year_Month")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_Periods", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateOnly?>("LastClosedDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("StartedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Setup_PublicId");
+
+                    b.ToTable("INV_Setup", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccountingGroupId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PeriodId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<bool>("Superseded")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Value")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountingGroupId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PeriodClosingBalances_PublicId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("PeriodId", "Superseded")
+                        .HasDatabaseName("IX_INV_PeriodClosingBalances_Period_Superseded");
+
+                    b.HasIndex("PeriodId", "Version", "ProductId", "WarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PeriodClosingBalances_Period_Version_Product_Warehouse");
+
+                    b.ToTable("INV_PeriodClosingBalances", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CashSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CountedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CountedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("DifferenceDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsBlind")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<decimal>("TotalCounted")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalDifference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalExpected")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashSessionId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCounts_CashSessionId")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("CountedByUserId");
+
+                    b.HasIndex("DifferenceDocumentId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCounts_PublicId");
+
+                    b.ToTable("INV_CashCounts", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountDenomination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CashCountLineId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CashDenominationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("DenominationValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
@@ -12197,32 +19444,1847 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<int?>("SalesPointId")
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashDenominationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountDenominations_PublicId");
+
+                    b.HasIndex("CashCountLineId", "CashDenominationId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountDenominations_Line_Denomination")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_CashCountDenominations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CashCountId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("SequenceNumber")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<int?>("ShiftId")
+                    b.Property<int>("CountMethod")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("SubTotal")
+                    b.Property<decimal>("CountedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<DateTime>("SystemDate")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal>("TicketVat")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<DateOnly>("TransactionDate")
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("DifferenceAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PaymentCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<decimal>("ToleranceAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("Treatment")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("WithinTolerance")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentMeansId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountLines_PublicId");
+
+                    b.HasIndex("CashCountId", "PaymentMeansId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountLines_Count_Means")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_CashCountLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountReferenceCheck", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CashCountLineId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentPaymentId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountReferenceChecks_PublicId");
+
+                    b.HasIndex("CashCountLineId", "DocumentPaymentId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountReferenceChecks_Line_Payment")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_CashCountReferenceChecks", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountTerminalBatch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<decimal>("BatchTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CardTerminalId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CashCountLineId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("ExpectedTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("VoucherCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CardTerminalId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountTerminalBatches_PublicId");
+
+                    b.HasIndex("CashCountLineId", "CardTerminalId", "BatchNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashCountTerminalBatches_Line_Terminal_Batch")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_CashCountTerminalBatches", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashDocumentLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CashCountLineId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CashierPersonId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CashierUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<short>("LineNumber")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<short>("Sign")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("Treatment")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("WithinTolerance")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashCountLineId");
+
+                    b.HasIndex("CashierPersonId");
+
+                    b.HasIndex("CashierUserId");
+
+                    b.HasIndex("PaymentMeansId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashDocumentLines_PublicId");
+
+                    b.HasIndex("DocumentId", "LineNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashDocumentLines_Document_LineNumber")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_CashDocumentLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashMovementDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CashSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DenominationsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("DepositBankId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Destination")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DestinationCashRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DestinationCashSessionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("ReclassifiedPaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SourcePaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetAuthorizationCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("TargetCardTerminalId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TargetPaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetReference")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashSessionId")
+                        .HasDatabaseName("IX_INV_CashMovementDetails_CashSessionId");
+
+                    b.HasIndex("DepositBankId");
+
+                    b.HasIndex("DestinationCashRegisterId");
+
+                    b.HasIndex("DestinationCashSessionId")
+                        .HasDatabaseName("IX_INV_CashMovementDetails_DestinationCashSessionId")
+                        .HasFilter("[DestinationCashSessionId] IS NOT NULL");
+
+                    b.HasIndex("DocumentId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashMovementDetails_DocumentId")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashMovementDetails_PublicId");
+
+                    b.HasIndex("ReclassifiedPaymentId");
+
+                    b.HasIndex("SourcePaymentMeansId");
+
+                    b.HasIndex("TargetCardTerminalId");
+
+                    b.HasIndex("TargetPaymentMeansId");
+
+                    b.ToTable("INV_CashMovementDetails", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("DefaultCardTerminalId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DianCashRegisterPlate")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("DianCashRegisterTypeCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("PointOfSaleId")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("PrintCopies")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint")
+                        .HasDefaultValue((byte)1);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<short>("ReceiptWidthMm")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasDefaultValue((short)80);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DefaultCardTerminalId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashRegisters_PublicId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("PointOfSaleId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashRegisters_Point_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_CashRegisters", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CashRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentTypeId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashRegisterDocumentTypes_PublicId");
+
+                    b.HasIndex("CashRegisterId", "Role")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashRegisterDocumentTypes_Register_Role")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_CashRegisterDocumentTypes", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BaseIncomeDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BaseMode")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<int>("CashRegisterId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CashierName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("CashierPersonId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CashierUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ClosedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("ExclusiveCashier")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsBlindCount")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("OpenedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("OpeningBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateOnly>("OperatingDate")
                         .HasColumnType("date");
 
-                    b.Property<int>("TransactionTypeId")
+                    b.Property<int>("PointOfSaleId")
                         .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("ShortageTreatment")
+                        .IsRequired()
+                        .HasMaxLength(14)
+                        .HasColumnType("nvarchar(14)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BaseIncomeDocumentId");
+
+                    b.HasIndex("CashierPersonId");
+
+                    b.HasIndex("ClosedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CashSessions_PublicId");
+
+                    b.HasIndex("PointOfSaleId", "OperatingDate")
+                        .HasDatabaseName("IX_INV_CashSessions_Point_OperatingDate");
+
+                    b.HasIndex(new[] { "CashierUserId" }, "UK_INV_CashSessions_Cashier_Open")
+                        .IsUnique()
+                        .HasFilter("[Status] = 1 AND [ExclusiveCashier] = 1 AND [IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "CashRegisterId" }, "UK_INV_CashSessions_Register_Open")
+                        .IsUnique()
+                        .HasFilter("[Status] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_CashSessions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ClosedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateOnly>("OperatingDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("PointOfSaleId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReopenReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("ReopenedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReopenedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<short>("SessionCount")
+                        .HasColumnType("smallint");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalCounted")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalDifference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalExpected")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<short>("Version")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClosedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DayCloses_PublicId");
+
+                    b.HasIndex("ReopenedByUserId");
+
+                    b.HasIndex(new[] { "PointOfSaleId", "OperatingDate" }, "UK_INV_DayCloses_Point_Date_Closed")
+                        .IsUnique()
+                        .HasFilter("[Status] = 1 AND [IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "PointOfSaleId", "OperatingDate", "Version" }, "UK_INV_DayCloses_Point_Date_Version")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DayCloses", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BatchNumbersJson")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int?>("CardAcquirerId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CardTerminalId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CountedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DayCloseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DetailKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("DifferenceAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PaymentCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CardAcquirerId");
+
+                    b.HasIndex("CardTerminalId");
+
+                    b.HasIndex("PaymentMeansId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DayCloseLines_PublicId");
+
+                    b.HasIndex("DayCloseId", "DetailKey")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DayCloseLines_DayClose_DetailKey")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DayCloseLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SalesChannelId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PaymentMeansChannels_PublicId");
+
+                    b.HasIndex("SalesChannelId");
+
+                    b.HasIndex("PaymentMeansId", "SalesChannelId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PaymentMeansChannels_Means_Channel")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_PaymentMeansChannels", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentTypeId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PaymentMeansDocumentTypes_PublicId");
+
+                    b.HasIndex("PaymentMeansId", "DocumentTypeId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PaymentMeansDocumentTypes_Means_Type")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_PaymentMeansDocumentTypes", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PaymentMeansId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PointOfSaleId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PointOfSaleId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PaymentMeansPointsOfSale_PublicId");
+
+                    b.HasIndex("PaymentMeansId", "PointOfSaleId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PaymentMeansPointsOfSale_Means_Point")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_PaymentMeansPointsOfSale", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DefaultWarehouseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<bool>("PosEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SalesChannelId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PointsOfSale_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("DefaultWarehouseId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PointsOfSale_PublicId");
+
+                    b.HasIndex("SalesChannelId");
+
+                    b.ToTable("INV_PointsOfSale", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal>("MaxDocumentRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal>("MaxLineRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DiscountCaps_PublicId");
+
+                    b.HasIndex("RoleId", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_DiscountCaps_Role_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_DiscountCaps", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nchar(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<byte>("DimensionCount")
+                        .HasColumnType("tinyint");
+
+                    b.Property<bool>("IncludesTaxes")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("PersonId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SalesChannelId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Segment")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PriceLists_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PersonId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PriceLists_PublicId");
+
+                    b.HasIndex("SalesChannelId");
+
+                    b.HasIndex("ScopeKey", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PriceLists_Scope_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_PriceLists", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PriceListId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("UnitId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("IX_INV_PriceListItems_ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PriceListItems_PublicId");
+
+                    b.HasIndex("UnitId");
+
+                    b.HasIndex("PriceListId", "ProductId", "UnitId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PriceListItems_List_Product_Unit")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_PriceListItems", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("BundlePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("BuyQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsCumulative")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<decimal?>("PayQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("Rate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Promotions_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Promotions_PublicId");
+
+                    b.HasIndex("ValidFrom", "ValidTo")
+                        .HasDatabaseName("IX_INV_Promotions_Validity");
+
+                    b.ToTable("INV_Promotions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int?>("ProductCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PromotionId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("RequiredQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SalesChannelId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ScopeKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Segment")
+                        .HasMaxLength(4)
+                        .HasColumnType("nvarchar(4)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductCategoryId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PromotionScopes_PublicId");
+
+                    b.HasIndex("SalesChannelId");
+
+                    b.HasIndex("PromotionId", "ScopeKind")
+                        .HasDatabaseName("IX_INV_PromotionScopes_Promotion_Kind");
+
+                    b.ToTable("INV_PromotionScopes", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_INV_PromotionScopes_OneTarget", "([ScopeKind] = 1 AND [ProductId] IS NOT NULL AND [ProductCategoryId] IS NULL AND [Segment] IS NULL AND [SalesChannelId] IS NULL) OR ([ScopeKind] = 2 AND [ProductId] IS NULL AND [ProductCategoryId] IS NOT NULL AND [Segment] IS NULL AND [SalesChannelId] IS NULL) OR ([ScopeKind] = 3 AND [ProductId] IS NULL AND [ProductCategoryId] IS NULL AND [Segment] IS NOT NULL AND [SalesChannelId] IS NULL) OR ([ScopeKind] = 4 AND [ProductId] IS NULL AND [ProductCategoryId] IS NULL AND [Segment] IS NULL AND [SalesChannelId] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal>("MinQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("PromotionId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(18, 2)
@@ -12232,104 +21294,70 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<decimal>("VatAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("VatRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
-
-                    b.Property<int?>("WarehouseId")
-                        .HasColumnType("int");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductId");
-
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PromotionTiers_PublicId");
 
-                    b.HasIndex("TransactionTypeId");
+                    b.HasIndex("PromotionId", "MinQuantity")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PromotionTiers_Promotion_MinQuantity")
+                        .HasFilter("[IsDeleted] = 0");
 
-                    b.ToTable("INV_Transactions", "dbo");
+                    b.ToTable("INV_PromotionTiers", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryTransactionType", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer", b =>
                 {
-                    b.Property<int>("Id")
+                    b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("bigint")
                         .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("AllowsBonus")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("ControlsStock")
-                        .HasColumnType("int");
-
-                    b.Property<string>("CostVoucherCode")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<bool>("CostsProducts")
-                        .HasColumnType("bit");
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("CreditLineId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DeductionType")
-                        .HasMaxLength(2)
-                        .HasColumnType("nvarchar(2)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("DocumentClass")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<string>("InvoiceControl")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
+                    b.Property<long>("EntryKardexEntryId")
+                        .HasColumnType("bigint");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
-                    b.Property<bool>("IsReturn")
-                        .HasColumnType("bit");
+                    b.Property<DateOnly>("OperationDate")
+                        .HasColumnType("date");
 
-                    b.Property<bool>("OrderPedido_SustainPrice")
-                        .HasColumnType("bit");
+                    b.Property<decimal>("OriginalQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
-                    b.Property<string>("PortfolioVoucherCode")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("RemainingQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -12337,51 +21365,37 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<decimal>("SequenceNumber")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<string>("ShortDescription")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<bool>("TotalInPurchase")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("TransactionVoucherCode")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<bool>("TransfersAccounting")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("TypeCode")
+                    b.Property<int>("ScopeWarehouseId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("UpdatesAccounting")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("ValidatesCreditLimit")
-                        .HasColumnType("bit");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EntryKardexEntryId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CostLayers_EntryKardexEntryId");
+
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CostLayers_PublicId");
 
-                    b.HasIndex("TypeCode")
-                        .IsUnique();
+                    b.HasIndex("ProductId", "ScopeWarehouseId", "OperationDate", "EntryKardexEntryId")
+                        .HasDatabaseName("IX_INV_CostLayers_Product_Scope_Order");
 
-                    b.ToTable("INV_TransactionTypes", "dbo");
+                    b.ToTable("INV_CostLayers", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Location", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -12390,341 +21404,34 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal>("AverageCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("LocationCode")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<string>("ShortDescription")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LocationCode")
-                        .IsUnique();
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("INV_Locations", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.OrderDocument", b =>
-                {
-                    b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                    b.Property<decimal>("LastUnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
 
-                    b.Property<decimal>("AuditAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<string>("BankAccountNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("BankId")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<decimal>("CashAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<decimal>("ChangeAmount")
-                        .HasPrecision(17)
-                        .HasColumnType("decimal(17,0)");
-
-                    b.Property<decimal>("CheckAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("CreditAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<decimal>("CreditCardAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("DebitCardAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<int?>("DeductionType")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Detail")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<decimal>("DiscountAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<DateTime?>("DiscountDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateOnly?>("DueDate")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime>("EntryDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal>("IcaAmount")
-                        .HasPrecision(15, 2)
-                        .HasColumnType("decimal(15,2)");
-
-                    b.Property<decimal>("InstallmentAmount")
-                        .HasPrecision(17, 2)
-                        .HasColumnType("decimal(17,2)");
-
-                    b.Property<decimal>("InterestRate")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<long?>("InvoiceNumber")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("ItemCount")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PaymentClassId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("Periodicity")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<decimal?>("ReturnSequence")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<int?>("ReturnTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int?>("SalesPersonId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("SalesPointId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("SequenceNumber")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<int?>("ShiftId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Status")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<decimal>("SubTotalAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<int?>("Term")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<int>("TransactionTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal?>("TransferSequence")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<int?>("TransferTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<decimal>("VatAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<decimal>("WithholdingAmount")
-                        .HasPrecision(15, 2)
-                        .HasColumnType("decimal(15,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("TransactionTypeId", "SequenceNumber")
-                        .IsUnique();
-
-                    b.ToTable("INV_OrderDocuments", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.OrderTransaction", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<decimal>("AdminFee")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<decimal>("AdminVat")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<decimal>("AirportTax")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<long>("ConsecutiveNumber")
-                        .HasColumnType("bigint");
-
-                    b.Property<decimal>("CostAmount")
-                        .HasPrecision(16, 2)
-                        .HasColumnType("decimal(16,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("CustomerId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("DiscountAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<decimal>("DiscountRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
-
-                    b.Property<decimal>("FuelTax")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<decimal>("IcaAmount")
-                        .HasPrecision(15, 2)
-                        .HasColumnType("decimal(15,2)");
-
-                    b.Property<decimal>("IcaRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
-
-                    b.Property<string>("InvoiceNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsOrderApplied")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsPosTransaction")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("LocationId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("MovementClass")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<decimal>("NetTotal")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<decimal>("OtherTax")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<int?>("PeriodCode")
+                    b.Property<int>("Method")
                         .HasColumnType("int");
 
                     b.Property<int>("ProductId")
@@ -12734,8 +21441,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -12743,42 +21450,271 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<string>("SaleType")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<int?>("SalesPointId")
+                    b.Property<int>("ScopeWarehouseId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("SequenceNumber")
-                        .HasPrecision(18)
-                        .HasColumnType("decimal(18,0)");
-
-                    b.Property<int?>("ShiftId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("SubTotal")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<DateTime>("SystemDate")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal>("TicketVat")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<DateOnly>("TransactionDate")
-                        .HasColumnType("date");
-
-                    b.Property<int>("TransactionTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("TransferRecord")
+                    b.Property<string>("UpdatedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<decimal>("UnitPrice")
+                    b.Property<decimal>("Value")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CostStates_PublicId");
+
+                    b.HasIndex("ProductId", "ScopeWarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_CostStates_Product_Scope");
+
+                    b.ToTable("INV_CostStates", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateOnly?>("LastMovementDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Physical")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Reserved")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_StockBalances_PublicId");
+
+                    b.HasIndex("WarehouseId")
+                        .HasDatabaseName("IX_INV_StockBalances_WarehouseId");
+
+                    b.HasIndex("ProductId", "WarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_StockBalances_Product_Warehouse");
+
+                    b.ToTable("INV_StockBalances", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LotId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("IX_INV_StockDetails_LocationId");
+
+                    b.HasIndex("LotId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_StockDetails_PublicId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("ProductId", "WarehouseId", "LocationId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_StockDetails_Location")
+                        .HasFilter("[LotId] IS NULL");
+
+                    b.HasIndex("ProductId", "WarehouseId", "LocationId", "LotId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_StockDetails_Location_Lot")
+                        .HasFilter("[LotId] IS NOT NULL");
+
+                    b.ToTable("INV_StockDetails", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AllocatedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("AllocationMethod")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Basis")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ExistingAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ExistingRatio")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ReceiptDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReceiptLineId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("RoundingResidue")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)")
+                        .HasDefaultValue(0m);
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("SoldAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -12786,262 +21722,265 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("UserId")
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_LandedCostAllocations_PublicId");
+
+                    b.HasIndex("ReceiptDocumentId")
+                        .HasDatabaseName("IX_INV_LandedCostAllocations_ReceiptDocumentId");
+
+                    b.HasIndex("ReceiptLineId");
+
+                    b.HasIndex("DocumentId", "ReceiptLineId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_LandedCostAllocations_Document_ReceiptLine")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_LandedCostAllocations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid?>("ApprovalRequestPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("ExceedsTolerance")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("InvoiceDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("InvoiceLineId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("InvoicedQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("InvoicedUnitPrice")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int?>("OrderLineId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("OrderedQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("OrderedUnitPrice")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<decimal>("PriceDifferenceAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PriceDifferenceRate")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityDifference")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("Reasons")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("ReceivedNotInvoicedQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("ReceivedUnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ToleranceJson")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceDocumentId")
+                        .HasDatabaseName("IX_INV_PurchaseMatchLines_InvoiceDocumentId");
+
+                    b.HasIndex("InvoiceLineId");
+
+                    b.HasIndex("OrderLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_PurchaseMatchLines_PublicId");
+
+                    b.ToTable("INV_PurchaseMatchLines", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Cufe")
+                        .HasMaxLength(96)
+                        .HasColumnType("nvarchar(96)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentClass")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsCredit")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDebitNote")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsElectronic")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReleased")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateOnly>("IssueDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SupplierNumber")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<decimal>("VatAmount")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("decimal(18,3)");
-
-                    b.Property<decimal>("VatRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
-
-                    b.Property<int?>("WarehouseId")
+                    b.Property<int>("SupplierPersonId")
                         .HasColumnType("int");
 
-                    b.Property<decimal>("WithholdingAmount")
-                        .HasPrecision(15, 2)
-                        .HasColumnType("decimal(15,2)");
-
-                    b.Property<decimal>("WithholdingRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("TransactionTypeId");
-
-                    b.ToTable("INV_OrderTransactions", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.PhysicalInventory", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
-
-                    b.Property<decimal>("Cost")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("LocationId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PeriodCode")
+                    b.Property<string>("SupplierPrefix")
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
-                    b.Property<int>("PhysicalCount")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int>("TheoreticalCount")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("WarehouseId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("INV_PhysicalInventory", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Price", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CustomerType")
-                        .IsRequired()
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("EndDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("PriceClass")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PriceListTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("PriceValue")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int>("ProductId")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<DateTime?>("StartDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("PriceListTypeId", "ProductId", "CustomerType")
-                        .IsUnique();
-
-                    b.ToTable("INV_Prices", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.PriceListType", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("PriceClass")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<string>("ShortName")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("TypeCode")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
                     b.HasKey("Id");
 
+                    b.HasIndex("Cufe")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoiceDetails_Cufe")
+                        .HasFilter("[Cufe] IS NOT NULL AND [IsReleased] = 0 AND [IsDeleted] = 0");
+
+                    b.HasIndex("DocumentId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoiceDetails_Document")
+                        .HasFilter("[IsDeleted] = 0");
+
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoiceDetails_PublicId");
 
-                    b.HasIndex("TypeCode")
-                        .IsUnique();
+                    b.HasIndex("SupplierPersonId", "DocumentClass", "SupplierPrefix", "SupplierNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoiceDetails_Supplier_Class_Number")
+                        .HasFilter("[IsReleased] = 0 AND [IsDeleted] = 0");
 
-                    b.ToTable("INV_PriceListTypes", "dbo");
+                    b.ToTable("INV_SupplierInvoiceDetails", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.PrimaryGroup", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -13054,380 +21993,52 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("GroupCode")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<string>("ShortName")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GroupCode")
-                        .IsUnique();
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("INV_PrimaryGroups", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Product", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Barcode")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<bool>("ControlsStock")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal>("CostPrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("CurrentStock")
-                        .HasColumnType("int");
+                    b.Property<string>("Cude")
+                        .HasMaxLength(96)
+                        .HasColumnType("nvarchar(96)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("DiscountTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("DiscountTypeId1")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("GroupId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("MaxSalesQuantity")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MaxStock")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MinStock")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<decimal>("OtherTax")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<int>("ProductCode")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("ProductGroupId")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("RestrictsLimit")
-                        .HasColumnType("bit");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<decimal>("SalePrice")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("ShortName")
-                        .HasMaxLength(80)
-                        .HasColumnType("nvarchar(80)");
-
-                    b.Property<string>("UnitOfMeasure")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("VatRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DiscountTypeId");
-
-                    b.HasIndex("DiscountTypeId1");
-
-                    b.HasIndex("GroupId");
-
-                    b.HasIndex("ProductCode")
-                        .IsUnique();
-
-                    b.HasIndex("ProductGroupId");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.ToTable("INV_Products", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.ProductAccount", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DiscountAccountCode")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("LocationId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("NetAccountCode")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<string>("NonTaxableSalesAccountCode")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<int>("ProductGroupId")
-                        .HasColumnType("int");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<string>("TaxableSalesAccountCode")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<int>("TransactionTypeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("VatAccountCode")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<int>("WarehouseId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("ProductGroupId", "TransactionTypeId", "WarehouseId", "LocationId")
-                        .IsUnique();
-
-                    b.ToTable("INV_ProductAccounts", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.ProductGroup", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("GroupCode")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("MaxSalesQuantity")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<bool>("RestrictsLimit")
-                        .HasColumnType("bit");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int?>("SecondaryGroupId")
+                    b.Property<int>("DocumentId")
                         .HasColumnType("int");
 
-                    b.Property<string>("ShortName")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<Guid?>("ElectronicDocumentPublicId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
+                    b.Property<int>("EventCode")
+                        .HasColumnType("int");
 
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<DateOnly?>("EventDate")
+                        .HasColumnType("date");
 
-                    b.HasKey("Id");
-
-                    b.HasIndex("GroupCode")
-                        .IsUnique();
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("SecondaryGroupId");
-
-                    b.ToTable("INV_ProductGroups", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.SalesPoint", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("BaseAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DateId")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<Guid?>("EvidenceAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
-                    b.Property<int?>("LocationId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PointCode")
-                        .HasColumnType("int");
-
-                    b.Property<string>("PrinterName")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<string>("Notes")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("RegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RegisteredByUserId")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -13435,38 +22046,35 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<int?>("ShiftId")
-                        .HasColumnType("int");
+                    b.Property<string>("Source")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
-                    b.Property<int?>("TransactionTypeId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("UserId")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<int?>("WarehouseId")
-                        .HasColumnType("int");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("PointCode", "Status", "DateId")
                         .IsUnique()
-                        .HasFilter("[DateId] IS NOT NULL");
+                        .HasDatabaseName("UK_INV_SupplierInvoiceEvents_PublicId");
 
-                    b.ToTable("INV_SalesPoints", "dbo");
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_INV_SupplierInvoiceEvents_Status");
+
+                    b.HasIndex("DocumentId", "EventCode")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoiceEvents_Document_EventCode")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_SupplierInvoiceEvents", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Salesperson", b =>
@@ -13526,7 +22134,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("PersonId")
                         .IsUnique()
-                        .HasDatabaseName("UK_INV_Salespeople_PersonId");
+                        .HasDatabaseName("UK_INV_Salespeople_PersonId")
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -13535,7 +22144,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("INV_Salespeople", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.SecondaryGroup", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -13548,26 +22157,25 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("GroupCode")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int?>("PrimaryGroupId")
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PointOfSaleId")
                         .HasColumnType("int");
 
                     b.Property<Guid>("PublicId")
@@ -13579,30 +22187,37 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<string>("ShortName")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GroupCode")
-                        .IsUnique();
-
-                    b.HasIndex("PrimaryGroupId");
+                    b.HasIndex("PointOfSaleId");
 
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_UserPointOfSaleScopes_PublicId");
 
-                    b.ToTable("INV_SecondaryGroups", "dbo");
+                    b.HasIndex("UserId", "PointOfSaleId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_UserPointOfSaleScopes_User_Point")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "UserId" }, "UK_INV_UserPointOfSaleScopes_Default")
+                        .IsUnique()
+                        .HasFilter("[IsDefault] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_UserPointOfSaleScopes", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Shift", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -13615,96 +22230,23 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("EndTime")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<bool>("IsDeleted")
+                    b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<byte[]>("RowVersion")
-                        .IsConcurrencyToken()
-                        .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("rowversion");
-
-                    b.Property<int>("ShiftCode")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StartTime")
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique();
-
-                    b.HasIndex("ShiftCode")
-                        .IsUnique();
-
-                    b.ToTable("INV_Shifts", "dbo");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.VatAccount", b =>
-                {
-                    b.Property<int>("Id")
+                    b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AccountCode")
-                        .HasMaxLength(15)
-                        .HasColumnType("nvarchar(15)");
-
-                    b.Property<string>("AccountType")
-                        .HasMaxLength(5)
-                        .HasColumnType("nvarchar(5)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("LocationId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("ProductGroupId")
-                        .HasColumnType("int");
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
@@ -13715,18 +22257,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<int>("TransactionTypeId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<decimal>("VatRate")
-                        .HasPrecision(6, 3)
-                        .HasColumnType("decimal(6,3)");
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
 
                     b.Property<int>("WarehouseId")
                         .HasColumnType("int");
@@ -13734,12 +22273,235 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_UserWarehouseScopes_PublicId");
 
-                    b.ToTable("INV_VatAccounts", "dbo");
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("UserId", "WarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_UserWarehouseScopes_User_Warehouse")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "UserId" }, "UK_INV_UserWarehouseScopes_Default")
+                        .IsUnique()
+                        .HasFilter("[IsDefault] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_UserWarehouseScopes", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehouse", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AffectsEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("CostMethod")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CostScopeWarehouseId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentLineId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("LotId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("OperationDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityBase")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ReversesEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SerialId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalCost")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AffectsEntryId")
+                        .HasDatabaseName("IX_INV_KardexEntries_AffectsEntryId")
+                        .HasFilter("[AffectsEntryId] IS NOT NULL");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("IX_INV_KardexEntries_DocumentId");
+
+                    b.HasIndex("DocumentLineId");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex("LotId");
+
+                    b.HasIndex("OperationDate")
+                        .HasDatabaseName("IX_INV_KardexEntries_OperationDate");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_KardexEntries_PublicId");
+
+                    b.HasIndex("ReversesEntryId");
+
+                    b.HasIndex("SerialId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("ProductId", "CostScopeWarehouseId", "OperationDate", "Id")
+                        .HasDatabaseName("IX_INV_KardexEntries_Product_Scope_Date");
+
+                    b.HasIndex("ProductId", "WarehouseId", "OperationDate", "Id")
+                        .HasDatabaseName("IX_INV_KardexEntries_Product_Warehouse_Date");
+
+                    b.ToTable("INV_KardexEntries", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<long>("ExitKardexEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<long>("LayerId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExitKardexEntryId")
+                        .HasDatabaseName("IX_INV_LayerConsumptions_ExitKardexEntryId");
+
+                    b.HasIndex("LayerId")
+                        .HasDatabaseName("IX_INV_LayerConsumptions_LayerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_LayerConsumptions_PublicId");
+
+                    b.ToTable("INV_LayerConsumptions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -13752,24 +22514,239 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("DeletedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal>("MaximumQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("MinimumQuantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ReorderPoint")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ReorderPolicies_PublicId");
+
+                    b.HasIndex("WarehouseId")
+                        .HasDatabaseName("IX_INV_ReorderPolicies_WarehouseId");
+
+                    b.HasIndex("ProductId", "WarehouseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_ReorderPolicies_Product_Warehouse")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("INV_ReorderPolicies", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ConsumedQuantityBase")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentLineId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("ExpiresOn")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("QuantityBase")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ReleaseReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ReleasedByDocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("IX_INV_Reservations_DocumentId");
+
+                    b.HasIndex("DocumentLineId");
+
+                    b.HasIndex("ExpiresOn")
+                        .HasDatabaseName("IX_INV_Reservations_ExpiresOn")
+                        .HasFilter("[Status] = 1");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Reservations_PublicId");
+
+                    b.HasIndex("ReleasedByDocumentId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("ProductId", "WarehouseId", "Status")
+                        .HasDatabaseName("IX_INV_Reservations_Product_Warehouse_Status");
+
+                    b.ToTable("INV_Reservations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ActivatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ActivatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ActivationStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Behavior")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("CutoffDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<int>("LocationId")
-                        .HasColumnType("int");
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
@@ -13780,30 +22757,196 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<string>("ShortDescription")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("WarehouseTypeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivatedByUserId");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Warehouses_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_Warehouses_PublicId");
+
+                    b.HasIndex("WarehouseTypeId");
+
+                    b.HasIndex(new[] { "BranchId" }, "IX_INV_Warehouses_BranchId");
+
+                    b.HasIndex(new[] { "BranchId" }, "UK_INV_Warehouses_Branch_Transit")
+                        .IsUnique()
+                        .HasFilter("[Behavior] = 2 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_Warehouses", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<int>("WarehouseCode")
+                    b.Property<int>("WarehouseId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LocationId");
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_WarehouseLocations_PublicId");
+
+                    b.HasIndex("WarehouseId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_WarehouseLocations_Warehouse_Code")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex(new[] { "WarehouseId" }, "UK_INV_WarehouseLocations_Default")
+                        .IsUnique()
+                        .HasFilter("[IsDefault] = 1 AND [IsDeleted] = 0");
+
+                    b.ToTable("INV_WarehouseLocations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Behavior")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSeeded")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_WarehouseTypes_Code")
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.HasIndex("PublicId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_WarehouseTypes_PublicId");
 
-                    b.HasIndex("WarehouseCode", "LocationId")
-                        .IsUnique();
-
-                    b.ToTable("INV_Warehouses", "dbo");
+                    b.ToTable("INV_WarehouseTypes", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.AccrualEntry", b =>
@@ -26538,6 +35681,100 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("LND_ZoneTypes", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Parameters.ParameterVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("LegalSource")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("ScopeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ScopeKind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ParameterVersions_PublicId");
+
+                    b.HasIndex("Module", "Key", "ScopeKind", "ScopeId", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ParameterVersions_Module_Key_Scope_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_ParameterVersions", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Absence", b =>
                 {
                     b.Property<long>("Id")
@@ -34187,6 +43424,94 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("SEC_Permissions", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.PermissionAmountLimit", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("char(3)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<decimal?>("MaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("PermissionCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_SEC_PermissionAmountLimits_PublicId");
+
+                    b.HasIndex("RoleId", "PermissionCode", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_SEC_PermissionAmountLimits_Role_Permission_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("SEC_PermissionAmountLimits", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.RefreshToken", b =>
                 {
                     b.Property<long>("Id")
@@ -36242,6 +45567,43 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Period");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryPostingRule", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", null)
+                        .WithMany()
+                        .HasForeignKey("CostCenterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Inventory.InventoryVoucherMapping", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.CrossDocumentType", "CrossDocumentType")
+                        .WithMany()
+                        .HasForeignKey("CrossDocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.VoucherType", "VoucherType")
+                        .WithMany()
+                        .HasForeignKey("VoucherTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CrossDocumentType");
+
+                    b.Navigation("VoucherType");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.TaxFormLine", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.TaxForm", "Form")
@@ -36283,6 +45645,21 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("ReversesDocument");
 
                     b.Navigation("VoucherType");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Transactions.InventoryPosting", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.Transactions.AccountingDocument", "AccountingDocument")
+                        .WithMany()
+                        .HasForeignKey("AccountingDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AccountingDocument");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Accounting.Transactions.JournalEntry", b =>
@@ -36361,6 +45738,72 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Account");
 
                     b.Navigation("Certificate");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Alerts.Alert", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Alerts.AlertType", "AlertType")
+                        .WithMany()
+                        .HasForeignKey("AlertTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("AttendedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AlertType");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalPolicyLevel", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Approvals.ApprovalPolicy", "Policy")
+                        .WithMany("Levels")
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Policy");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalRequest", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Approvals.ApprovalPolicy", "Policy")
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Policy");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.Transactions.ApprovalDecision", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Approvals.ApprovalRequest", "Request")
+                        .WithMany("Decisions")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Request");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.CDT.CdtAssociateReference", b =>
@@ -36620,6 +46063,55 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Notification");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.OperationKey", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer", "CardAcquirer")
+                        .WithMany("Terminals")
+                        .HasForeignKey("CardAcquirerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CardAcquirer");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
+                        .WithMany()
+                        .HasForeignKey("BankId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer", "CardAcquirer")
+                        .WithMany()
+                        .HasForeignKey("CardAcquirerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork", "CardNetwork")
+                        .WithMany()
+                        .HasForeignKey("CardNetworkId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CardAcquirer");
+
+                    b.Navigation("CardNetwork");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Person", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.City", "City")
@@ -36704,6 +46196,34 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Person");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition", "TaxedOnDefinition")
+                        .WithMany()
+                        .HasForeignKey("TaxedOnDefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("TaxedOnDefinition");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition", "TaxDefinition")
+                        .WithMany("Rates")
+                        .HasForeignKey("TaxDefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept", "WithholdingConcept")
+                        .WithMany()
+                        .HasForeignKey("WithholdingConceptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("TaxDefinition");
+
+                    b.Navigation("WithholdingConcept");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Debit.DebitTransaction", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Debit.DebitCard", "Card")
@@ -36714,153 +46234,1547 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Card");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryDiscount", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.DiscountType", "DiscountType")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
-                        .HasForeignKey("DiscountTypeId")
+                        .HasForeignKey("ClosedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Product", "Product")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("DetectedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution", "Resolution")
+                        .WithMany("Channels")
+                        .HasForeignKey("ResolutionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Resolution");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("CancelledByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent", "ContingencyEvent")
+                        .WithMany()
+                        .HasForeignKey("ContingencyEventId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument", "CorrectsDocument")
+                        .WithMany()
+                        .HasForeignKey("CorrectsDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion", null)
+                        .WithMany()
+                        .HasForeignKey("CurrentVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting", "EmissionSetting")
+                        .WithMany()
+                        .HasForeignKey("EmissionSettingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution", "Resolution")
+                        .WithMany()
+                        .HasForeignKey("ResolutionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument", "WaitsForDocument")
+                        .WithMany()
+                        .HasForeignKey("WaitsForDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ContingencyEvent");
+
+                    b.Navigation("CorrectsDocument");
+
+                    b.Navigation("EmissionSetting");
+
+                    b.Navigation("Resolution");
+
+                    b.Navigation("WaitsForDocument");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument", "ElectronicDocument")
+                        .WithMany("Transmissions")
+                        .HasForeignKey("ElectronicDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion", "Version")
+                        .WithMany()
+                        .HasForeignKey("VersionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ElectronicDocument");
+
+                    b.Navigation("Version");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument", "ElectronicDocument")
+                        .WithMany("Versions")
+                        .HasForeignKey("ElectronicDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ElectronicDocument");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationBatch", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationMessageDelivery", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Integration.IntegrationBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationDeliveryAttempt", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Integration.IntegrationBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Integration.IntegrationMessageDelivery", "Delivery")
+                        .WithMany()
+                        .HasForeignKey("DeliveryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Delivery");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessageDependency", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage", "DependsOnMessage")
+                        .WithMany()
+                        .HasForeignKey("DependsOnMessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DependsOnMessage");
+
+                    b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("DiscountType");
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryDocument", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.Transactions.AccountingDocument", "AccountingDocument")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup", "AccountingGroup")
                         .WithMany()
-                        .HasForeignKey("AccountingDocumentId")
+                        .HasForeignKey("AccountingGroupId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.InventoryTransactionType", "TransactionType")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure", "BaseUnit")
                         .WithMany()
-                        .HasForeignKey("TransactionTypeId")
+                        .HasForeignKey("BaseUnitId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("AccountingDocument");
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand", "Brand")
+                        .WithMany()
+                        .HasForeignKey("BrandId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("TransactionType");
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "ParentProduct")
+                        .WithMany("Variants")
+                        .HasForeignKey("ParentProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept", "WithholdingConcept")
+                        .WithMany()
+                        .HasForeignKey("WithholdingConceptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AccountingGroup");
+
+                    b.Navigation("BaseUnit");
+
+                    b.Navigation("Brand");
+
+                    b.Navigation("Category");
+
+                    b.Navigation("ParentProduct");
+
+                    b.Navigation("WithholdingConcept");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.InventoryTransaction", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Product", "Product")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("FromAccountingGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.InventoryTransactionType", "TransactionType")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup", null)
                         .WithMany()
-                        .HasForeignKey("TransactionTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Product");
-
-                    b.Navigation("TransactionType");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.OrderDocument", b =>
-                {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.InventoryTransactionType", "TransactionType")
-                        .WithMany()
-                        .HasForeignKey("TransactionTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("TransactionType");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.OrderTransaction", b =>
-                {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.InventoryTransactionType", "TransactionType")
-                        .WithMany()
-                        .HasForeignKey("TransactionTypeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Product");
-
-                    b.Navigation("TransactionType");
-                });
-
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.PhysicalInventory", b =>
-                {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
+                        .HasForeignKey("ToAccountingGroupId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Price", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.PriceListType", "PriceListType")
-                        .WithMany()
-                        .HasForeignKey("PriceListTypeId")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
+                        .WithMany("Barcodes")
+                        .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Product", "Product")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit", "ProductUnit")
+                        .WithMany()
+                        .HasForeignKey("ProductUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Product");
+
+                    b.Navigation("ProductUnit");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory", "Parent")
+                        .WithMany()
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "ComponentProduct")
+                        .WithMany()
+                        .HasForeignKey("ComponentProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
+                        .WithMany("Components")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ComponentProduct");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
+                        .WithMany("Taxes")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition", "TaxDefinition")
+                        .WithMany()
+                        .HasForeignKey("TaxDefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("TaxDefinition");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
+                        .WithMany("Units")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure", "Unit")
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Unit");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
+                        .WithMany("VariantValues")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute", "VariantAttribute")
+                        .WithMany()
+                        .HasForeignKey("VariantAttributeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue", "VariantAttributeValue")
+                        .WithMany()
+                        .HasForeignKey("VariantAttributeValueId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("VariantAttribute");
+
+                    b.Navigation("VariantAttributeValue");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", null)
+                        .WithMany()
+                        .HasForeignKey("InStockLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("InStockWarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("PriceListType");
+                    b.Navigation("Lot");
 
                     b.Navigation("Product");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Product", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.DiscountType", "DiscountType")
-                        .WithMany()
-                        .HasForeignKey("DiscountTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute", "VariantAttribute")
+                        .WithMany("Values")
+                        .HasForeignKey("VariantAttributeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.DiscountType", null)
-                        .WithMany("Products")
-                        .HasForeignKey("DiscountTypeId1");
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.ProductGroup", "Group")
-                        .WithMany()
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.ProductGroup", null)
-                        .WithMany("Products")
-                        .HasForeignKey("ProductGroupId");
-
-                    b.Navigation("DiscountType");
-
-                    b.Navigation("Group");
+                    b.Navigation("VariantAttribute");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.ProductGroup", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.SecondaryGroup", "SecondaryGroup")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
-                        .HasForeignKey("SecondaryGroupId")
+                        .HasForeignKey("CounterUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine", "SnapshotLine")
+                        .WithMany("Captures")
+                        .HasForeignKey("SnapshotLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SnapshotLine");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("LotId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("SecondaryGroup");
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Lot");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Approvals.ApprovalRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovalRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", "DocumentLine")
+                        .WithMany()
+                        .HasForeignKey("DocumentLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion", "Promotion")
+                        .WithMany()
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DocumentLine");
+
+                    b.Navigation("Promotion");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineLink", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLink", "DocumentLink")
+                        .WithMany("LineLinks")
+                        .HasForeignKey("DocumentLinkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", "SourceLine")
+                        .WithMany()
+                        .HasForeignKey("SourceLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", "TargetLine")
+                        .WithMany()
+                        .HasForeignKey("TargetLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DocumentLink");
+
+                    b.Navigation("SourceLine");
+
+                    b.Navigation("TargetLine");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLink", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "SourceDocument")
+                        .WithMany()
+                        .HasForeignKey("SourceDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "TargetDocument")
+                        .WithMany()
+                        .HasForeignKey("TargetDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SourceDocument");
+
+                    b.Navigation("TargetDocument");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPartySnapshot", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Approvals.ApprovalRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovalRequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal", null)
+                        .WithMany()
+                        .HasForeignKey("CardTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession", null)
+                        .WithMany()
+                        .HasForeignKey("CashSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", "PaymentMeans")
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment", null)
+                        .WithMany()
+                        .HasForeignKey("RefundsPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Document");
+
+                    b.Navigation("PaymentMeans");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentSequence", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", "DocumentType")
+                        .WithMany("Sequences")
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DocumentType");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentTaxLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("TaxDefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxRate", null)
+                        .WithMany()
+                        .HasForeignKey("TaxRateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Taxes.WithholdingConcept", null)
+                        .WithMany()
+                        .HasForeignKey("WithholdingConceptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentTypeWarehouse", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", "DocumentType")
+                        .WithMany("Warehouses")
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DocumentType");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("BalanceClosedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister", null)
+                        .WithMany()
+                        .HasForeignKey("CashRegisterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession", null)
+                        .WithMany()
+                        .HasForeignKey("CashSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", null)
+                        .WithMany()
+                        .HasForeignKey("CostCenterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("CounterpartyPersonId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationWarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("DiscardedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", null)
+                        .WithMany()
+                        .HasForeignKey("PointOfSaleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("SalesChannelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Salesperson", null)
+                        .WithMany()
+                        .HasForeignKey("SalespersonId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("TransitWarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("VoidedByDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("VoidsDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DocumentType");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentCauseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "Document")
+                        .WithMany("Lines")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList", null)
+                        .WithMany()
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial", "Serial")
+                        .WithMany()
+                        .HasForeignKey("SerialId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", null)
+                        .WithMany()
+                        .HasForeignKey("ToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+
+                    b.Navigation("Lot");
+
+                    b.Navigation("Serial");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("SalesChannelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause", null)
+                        .WithMany()
+                        .HasForeignKey("AdjustmentCauseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DispatchDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", null)
+                        .WithMany()
+                        .HasForeignKey("DispatchLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", null)
+                        .WithMany()
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("ResolutionDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment", "DocumentPayment")
+                        .WithMany()
+                        .HasForeignKey("DocumentPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("ReleasedByDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DocumentPayment");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("AccountingGroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup", null)
+                        .WithMany()
+                        .HasForeignKey("AccountingGroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod", "Period")
+                        .WithMany()
+                        .HasForeignKey("PeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Period");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession", "CashSession")
+                        .WithMany()
+                        .HasForeignKey("CashSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("CountedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DifferenceDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CashSession");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountDenomination", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine", null)
+                        .WithMany("Denominations")
+                        .HasForeignKey("CashCountLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination", null)
+                        .WithMany()
+                        .HasForeignKey("CashDenominationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount", "CashCount")
+                        .WithMany("Lines")
+                        .HasForeignKey("CashCountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CashCount");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountReferenceCheck", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine", null)
+                        .WithMany("ReferenceChecks")
+                        .HasForeignKey("CashCountLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountTerminalBatch", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal", null)
+                        .WithMany()
+                        .HasForeignKey("CardTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine", null)
+                        .WithMany("TerminalBatches")
+                        .HasForeignKey("CashCountLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashDocumentLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine", null)
+                        .WithMany()
+                        .HasForeignKey("CashCountLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("CashierPersonId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("CashierUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashMovementDetail", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession", null)
+                        .WithMany()
+                        .HasForeignKey("CashSessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
+                        .WithMany()
+                        .HasForeignKey("DepositBankId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationCashRegisterId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationCashSessionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment", null)
+                        .WithMany()
+                        .HasForeignKey("ReclassifiedPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
+                        .WithMany()
+                        .HasForeignKey("SourcePaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal", null)
+                        .WithMany()
+                        .HasForeignKey("TargetCardTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
+                        .WithMany()
+                        .HasForeignKey("TargetPaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal", null)
+                        .WithMany()
+                        .HasForeignKey("DefaultCardTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", "PointOfSale")
+                        .WithMany("CashRegisters")
+                        .HasForeignKey("PointOfSaleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PointOfSale");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister", "CashRegister")
+                        .WithMany("DocumentTypes")
+                        .HasForeignKey("CashRegisterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", "DocumentType")
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CashRegister");
+
+                    b.Navigation("DocumentType");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("BaseIncomeDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister", "CashRegister")
+                        .WithMany()
+                        .HasForeignKey("CashRegisterId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("CashierPersonId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("CashierUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ClosedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", null)
+                        .WithMany()
+                        .HasForeignKey("PointOfSaleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CashRegister");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ClosedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", "PointOfSale")
+                        .WithMany()
+                        .HasForeignKey("PointOfSaleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReopenedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PointOfSale");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer", null)
+                        .WithMany()
+                        .HasForeignKey("CardAcquirerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal", null)
+                        .WithMany()
+                        .HasForeignKey("CardTerminalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("DayCloseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", "PaymentMeans")
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("SalesChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PaymentMeans");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", "PaymentMeans")
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PaymentMeans");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", "PaymentMeans")
+                        .WithMany()
+                        .HasForeignKey("PaymentMeansId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", "PointOfSale")
+                        .WithMany()
+                        .HasForeignKey("PointOfSaleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PaymentMeans");
+
+                    b.Navigation("PointOfSale");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", "DefaultWarehouse")
+                        .WithMany()
+                        .HasForeignKey("DefaultWarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel", "SalesChannel")
+                        .WithMany()
+                        .HasForeignKey("SalesChannelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DefaultWarehouse");
+
+                    b.Navigation("SalesChannel");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.Role", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("SalesChannelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList", "PriceList")
+                        .WithMany("Items")
+                        .HasForeignKey("PriceListId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PriceList");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory", null)
+                        .WithMany()
+                        .HasForeignKey("ProductCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion", "Promotion")
+                        .WithMany("Scopes")
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel", null)
+                        .WithMany()
+                        .HasForeignKey("SalesChannelId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Promotion");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion", "Promotion")
+                        .WithMany("Tiers")
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Promotion");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry", "EntryKardexEntry")
+                        .WithMany()
+                        .HasForeignKey("EntryKardexEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("EntryKardexEntry");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", null)
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Lot");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", null)
+                        .WithMany()
+                        .HasForeignKey("OrderLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", "Document")
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("SupplierPersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Salesperson", b =>
@@ -36874,25 +47788,202 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Person");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.SecondaryGroup", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.PrimaryGroup", "PrimaryGroup")
-                        .WithMany("SecondaryGroups")
-                        .HasForeignKey("PrimaryGroupId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", "PointOfSale")
+                        .WithMany()
+                        .HasForeignKey("PointOfSaleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
-                    b.Navigation("PrimaryGroup");
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PointOfSale");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehouse", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope", b =>
                 {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Location", "Location")
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Warehouse");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry", "AffectsEntry")
+                        .WithMany()
+                        .HasForeignKey("AffectsEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", null)
                         .WithMany()
                         .HasForeignKey("LocationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Location");
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot", "Lot")
+                        .WithMany()
+                        .HasForeignKey("LotId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry", "ReversesEntry")
+                        .WithMany()
+                        .HasForeignKey("ReversesEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial", "Serial")
+                        .WithMany()
+                        .HasForeignKey("SerialId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AffectsEntry");
+
+                    b.Navigation("Lot");
+
+                    b.Navigation("ReversesEntry");
+
+                    b.Navigation("Serial");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry", "ExitKardexEntry")
+                        .WithMany()
+                        .HasForeignKey("ExitKardexEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer", "Layer")
+                        .WithMany()
+                        .HasForeignKey("LayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExitKardexEntry");
+
+                    b.Navigation("Layer");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Warehouse");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentLine", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("ReleasedByDocumentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", null)
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActivatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType", "WarehouseType")
+                        .WithMany()
+                        .HasForeignKey("WarehouseTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("WarehouseType");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", "Warehouse")
+                        .WithMany("Locations")
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.AccrualEntry", b =>
@@ -38077,6 +49168,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.PermissionAmountLimit", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.Role", "Role")
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.RefreshToken", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", "User")
@@ -38278,6 +49380,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Lines");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalPolicy", b =>
+                {
+                    b.Navigation("Levels");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalRequest", b =>
+                {
+                    b.Navigation("Decisions");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.CDT.Certificate", b =>
                 {
                     b.Navigation("Entries");
@@ -38337,6 +49449,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Notifications");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer", b =>
+                {
+                    b.Navigation("Terminals");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Person", b =>
                 {
                     b.Navigation("Associate");
@@ -38359,24 +49476,114 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Beneficiaries");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Taxes.TaxDefinition", b =>
+                {
+                    b.Navigation("Rates");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Debit.DebitCard", b =>
                 {
                     b.Navigation("Transactions");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.DiscountType", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution", b =>
                 {
-                    b.Navigation("Products");
+                    b.Navigation("Channels");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.PrimaryGroup", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument", b =>
                 {
-                    b.Navigation("SecondaryGroups");
+                    b.Navigation("Transmissions");
+
+                    b.Navigation("Versions");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.ProductGroup", b =>
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", b =>
                 {
-                    b.Navigation("Products");
+                    b.Navigation("Barcodes");
+
+                    b.Navigation("Components");
+
+                    b.Navigation("Taxes");
+
+                    b.Navigation("Units");
+
+                    b.Navigation("VariantValues");
+
+                    b.Navigation("Variants");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute", b =>
+                {
+                    b.Navigation("Values");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine", b =>
+                {
+                    b.Navigation("Captures");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLink", b =>
+                {
+                    b.Navigation("LineLinks");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocumentType", b =>
+                {
+                    b.Navigation("Sequences");
+
+                    b.Navigation("Warehouses");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine", b =>
+                {
+                    b.Navigation("Denominations");
+
+                    b.Navigation("ReferenceChecks");
+
+                    b.Navigation("TerminalBatches");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister", b =>
+                {
+                    b.Navigation("DocumentTypes");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale", b =>
+                {
+                    b.Navigation("CashRegisters");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion", b =>
+                {
+                    b.Navigation("Scopes");
+
+                    b.Navigation("Tiers");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", b =>
+                {
+                    b.Navigation("Locations");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.CreditLineParameter", b =>

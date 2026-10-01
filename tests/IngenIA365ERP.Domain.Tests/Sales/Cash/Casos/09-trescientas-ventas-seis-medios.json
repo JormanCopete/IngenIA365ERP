@@ -1,0 +1,303 @@
+{
+  "nombre": "SC-025: 300 ventas con 6 medios, totales calculados a mano",
+  "descripcion": "100 en efectivo de 23.450 (2.345.000), 60 Visa de 51.200 (3.072.000), 50 Mastercard de 38.900 (1.945.000), 40 bonos de 20.000 (800.000), 30 transferencias de 64.300 (1.929.000) y 20 créditos de 150.000 (3.000.000). Base 200.000, dos devoluciones en efectivo de 23.450 (46.900) y un retiro a caja fuerte de 1.500.000. Efectivo = 200.000 + 2.345.000 - 46.900 - 1.500.000 = 998.100. Total = 998.100 + 3.072.000 + 1.945.000 + 800.000 + 1.929.000 + 3.000.000 = 11.744.100.",
+  "sesion": 1,
+  "tratamientoDelFaltante": "ShortageToCashier",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 2,
+      "codigo": "VISA",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 1000
+    },
+    {
+      "id": 3,
+      "codigo": "MC",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 1000
+    },
+    {
+      "id": 4,
+      "codigo": "BONO",
+      "clase": "Voucher",
+      "arqueo": "ByReference",
+      "tolerancia": 0
+    },
+    {
+      "id": 5,
+      "codigo": "TRANSF",
+      "clase": "Transfer",
+      "arqueo": "ByReference",
+      "tolerancia": 0
+    },
+    {
+      "id": 6,
+      "codigo": "CRED",
+      "clase": "AssociateCredit",
+      "arqueo": "None",
+      "tolerancia": 0
+    }
+  ],
+  "base": {
+    "medio": "EF",
+    "valor": 200000
+  },
+  "pagos": [
+    {
+      "medio": "EF",
+      "valor": 23450,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 100
+    },
+    {
+      "medio": "VISA",
+      "valor": 51200,
+      "sentido": "Received",
+      "datafono": 7,
+      "referencia": null,
+      "repetir": 60
+    },
+    {
+      "medio": "MC",
+      "valor": 38900,
+      "sentido": "Received",
+      "datafono": 8,
+      "referencia": null,
+      "repetir": 50
+    },
+    {
+      "medio": "BONO",
+      "valor": 20000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 40
+    },
+    {
+      "medio": "TRANSF",
+      "valor": 64300,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 30
+    },
+    {
+      "medio": "CRED",
+      "valor": 150000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 20
+    },
+    {
+      "medio": "EF",
+      "valor": 23450,
+      "sentido": "Refunded",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 2
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "WithdrawalToSafe",
+      "medio": "EF",
+      "valor": 1500000,
+      "confirmado": true,
+      "medioDestino": null,
+      "sesionOrigen": 1,
+      "sesionDestino": null,
+      "datafonoOrigen": null,
+      "datafonoDestino": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 200000,
+      "ventas": 2345000,
+      "devoluciones": 46900,
+      "entradas": 0,
+      "salidas": 1500000,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 998100,
+      "pagos": 102,
+      "datafonos": null,
+      "referencias": null
+    },
+    {
+      "medio": "VISA",
+      "base": 0,
+      "ventas": 3072000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 3072000,
+      "pagos": 60,
+      "datafonos": [
+        {
+          "datafono": 7,
+          "esperado": 3072000,
+          "pagos": 60
+        }
+      ],
+      "referencias": null
+    },
+    {
+      "medio": "MC",
+      "base": 0,
+      "ventas": 1945000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 1945000,
+      "pagos": 50,
+      "datafonos": [
+        {
+          "datafono": 8,
+          "esperado": 1945000,
+          "pagos": 50
+        }
+      ],
+      "referencias": null
+    },
+    {
+      "medio": "BONO",
+      "base": 0,
+      "ventas": 800000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 800000,
+      "pagos": 40,
+      "datafonos": null,
+      "referencias": null
+    },
+    {
+      "medio": "TRANSF",
+      "base": 0,
+      "ventas": 1929000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 1929000,
+      "pagos": 30,
+      "datafonos": null,
+      "referencias": null
+    },
+    {
+      "medio": "CRED",
+      "base": 0,
+      "ventas": 3000000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 3000000,
+      "pagos": 20,
+      "datafonos": null,
+      "referencias": null
+    }
+  ],
+  "total": 11744100,
+  "conteo": [
+    {
+      "medio": "EF",
+      "contado": 998100,
+      "motivo": null
+    },
+    {
+      "medio": "VISA",
+      "contado": 3072000,
+      "motivo": null
+    },
+    {
+      "medio": "MC",
+      "contado": 1945000,
+      "motivo": null
+    },
+    {
+      "medio": "BONO",
+      "contado": 800000,
+      "motivo": null
+    },
+    {
+      "medio": "TRANSF",
+      "contado": 1929000,
+      "motivo": null
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "EF",
+        "contado": 998100,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      },
+      {
+        "medio": "VISA",
+        "contado": 3072000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      },
+      {
+        "medio": "MC",
+        "contado": 1945000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      },
+      {
+        "medio": "BONO",
+        "contado": 800000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      },
+      {
+        "medio": "TRANSF",
+        "contado": 1929000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      },
+      {
+        "medio": "CRED",
+        "contado": 3000000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      }
+    ],
+    "totalEsperado": 11744100,
+    "totalContado": 11744100,
+    "totalDiferencia": 0,
+    "montoAAprobar": 0,
+    "lineasDelDocumento": [],
+    "sinMotivo": []
+  }
+}

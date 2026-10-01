@@ -1,0 +1,50 @@
+{
+  // I6, T863 (SC-007, FR-044, FR-052): la remisión sale al promedio vigente y ahí se reconoce el costo; la factura desde remisiones
+  // (FVR-1, sobre REM-1) y su nota crédito no producen kardex —por eso no son movimientos de este caso—; anular la remisión no facturada
+  // (REM-2) entra al costo con que salió aunque el promedio haya cambiado, sin diferencia.
+  "nombre": "Remisión y factura desde remisiones",
+  "descripcion": "10 × 1.000 + 10 × 1.300 = 20 por 23.000 (1.150). REM-1 despacha 5 al promedio: 5 × 1.150 = 5.750 → 15 por 17.250. REM-2 despacha 4: 4 × 1.150 = 4.600 → 11 por 12.650. FVR-1 factura REM-1: ninguna línea de kardex (ya salió). Compra de 9 × 1.450 = 13.050 → 20 por 25.700, promedio 1.285. AN-1 anula REM-2, que no se facturó: entran 4 al costo con que salieron, 4 × 1.150 = 4.600 (no a 1.285), sin diferencia → 24 por 30.300, promedio 1.262,5. La nota crédito de FVR-1 no devuelve mercancía (la remisión vuelve a quedar pendiente de facturar): ninguna línea. REM-3 despacha 4 al promedio nuevo: 4 × 1.262,5 = 5.050 → 20 por 25.250.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "R1", "documento": "REM-1", "fecha": "2026-09-03", "clase": "Shipment", "bodega": "PRINCIPAL", "cantidad": -5,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -5, "costoUnitario": 1150, "costoTotal": -5750 } ],
+        "estado": { "cantidad": 15, "valor": 17250, "promedio": 1150 }
+      }
+    },
+    {
+      "id": "R2", "documento": "REM-2", "fecha": "2026-09-04", "clase": "Shipment", "bodega": "PRINCIPAL", "cantidad": -4,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 1150, "costoTotal": -4600 } ],
+        "estado": { "cantidad": 11, "valor": 12650, "promedio": 1150 }
+      }
+    },
+    {
+      "id": "E3", "documento": "EC-3", "fecha": "2026-09-06", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 9, "costoUnitario": 1450,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 9, "costoUnitario": 1450, "costoTotal": 13050 } ],
+        "estado": { "cantidad": 20, "valor": 25700, "promedio": 1285, "ultimoCosto": 1450 }
+      }
+    },
+    {
+      "id": "AN1", "documento": "AN-1", "fecha": "2026-09-07", "clase": "Voiding", "bodega": "PRINCIPAL", "cantidad": 4,
+      "valoracion": "AlCostoDeOrigen", "origen": "R2", "anulacion": true,
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 4, "costoUnitario": 1150, "costoTotal": 4600, "revierte": "R2" } ],
+        "estado": { "cantidad": 24, "valor": 30300, "promedio": 1262.5 }
+      }
+    },
+    {
+      "id": "R3", "documento": "REM-3", "fecha": "2026-09-08", "clase": "Shipment", "bodega": "PRINCIPAL", "cantidad": -4,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 1262.5, "costoTotal": -5050 } ],
+        "estado": { "cantidad": 20, "valor": 25250, "promedio": 1262.5 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 20, "valor": 25250, "promedio": 1262.5 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 20 } ]
+}

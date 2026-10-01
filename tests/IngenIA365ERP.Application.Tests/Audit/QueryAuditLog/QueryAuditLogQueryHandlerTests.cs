@@ -201,4 +201,61 @@ public class QueryAuditLogQueryHandlerTests
 
         validator.Validate(query).IsValid.Should().BeTrue();
     }
+
+    // ----------------------------------------------------------------- feature 012, T423 (FR-007) --
+
+    [Fact]
+    public async Task Pasa_los_modulos_encadenados_y_el_resultado_al_servicio()
+    {
+        var (handler, audit, _) = Build();
+        audit.QueryAsync(Arg.Any<AuditQueryParameters>(), Arg.Any<CancellationToken>()).Returns(EmptyPage(1, 50));
+
+        await handler.Handle(new QueryAuditLogQuery(null, null, null, null, null, null, null, new PageRequest())
+        {
+            Modules = ["Inventory", " Approvals ", "", "Inventory"],
+            Outcome = "Rejected",
+        }, CancellationToken.None);
+
+        await audit.Received(1).QueryAsync(
+            Arg.Is<AuditQueryParameters>(p => p.Modules!.SequenceEqual(new[] { "Inventory", "Approvals" }) && p.Outcome == "Rejected"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Proyecta_canal_actor_motivo_rechazo_clave_y_posicion_en_la_cadena()
+    {
+        var (handler, audit, _) = Build();
+        var rechazo = new AuditLogEntry("id-1", "demo", "42", "bodega.a", "Rejected", "DecideApprovalCommand", null, "Approvals",
+            null, "{}", null, "10.0.0.9", "POST /api/inventory/approvals/x/decide", 12, new DateTime(2026, 10, 5, 12, 0, 0, DateTimeKind.Utc),
+            new Dictionary<string, string>
+            {
+                ["Channel"] = "web", ["ActorKind"] = "Person", ["Origin"] = "POST /api/inventory/approvals/x/decide",
+                ["Reason"] = "No cuadra", ["ErrorCode"] = "Approvals.SelfApprovalForbidden", ["OperationKey"] = "k-1",
+            },
+            ChainSeq: 17);
+        var proceso = new AuditLogEntry("id-2", "demo", "system", "Proceso de integración", "Inventory.Reorder.Reviewed", "Warehouse", null,
+            "Inventory", null, null, null, null, null, 0, new DateTime(2026, 10, 5, 3, 0, 0, DateTimeKind.Utc),
+            new Dictionary<string, string> { ["Channel"] = "process", ["ActorKind"] = "Process" });
+        audit.QueryAsync(Arg.Any<AuditQueryParameters>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedList<AuditLogEntry>(new[] { rechazo, proceso }, 2, 1, 50));
+
+        var r = await handler.Handle(new QueryAuditLogQuery(null, null, null, null, null, null, null, new PageRequest()), CancellationToken.None);
+
+        var (a, b) = (r.Value.Items[0], r.Value.Items[1]);
+        (a.Channel, a.ActorKind, a.Reason, a.Result, a.ErrorCode, a.OperationKey, a.ChainSeq, a.IpAddress)
+            .Should().Be(("web", "Person", "No cuadra", "Rejected", "Approvals.SelfApprovalForbidden", "k-1", 17L, "10.0.0.9"));
+        (b.Channel, b.ActorKind, b.Result, b.ErrorCode, b.ChainSeq).Should().Be(("process", "Process", "Accepted", (string?)null, (long?)null));
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("Rejected", true)]
+    [InlineData("Accepted", true)]
+    [InlineData("Otro", false)]
+    public void Validator_solo_admite_Rejected_o_Accepted(string? resultado, bool valido)
+    {
+        new QueryAuditLogQueryValidator()
+            .Validate(new QueryAuditLogQuery(null, null, null, null, null, null, null, new PageRequest()) { Outcome = resultado })
+            .IsValid.Should().Be(valido);
+    }
 }

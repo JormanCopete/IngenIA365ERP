@@ -37,7 +37,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.Salary).HasPrecision(18, 2);
         builder.Property(e => e.WithholdingTaxRate).HasPrecision(7, 4);
         builder.Property(e => e.DeductibleWithholding).HasPrecision(17, 4);
-        // Motivo de retiro. En SOLIDO era un código de 4 caracteres; aquí la pantalla lo pide
+        // Motivo de retiro. En el sistema anterior era un código de 4 caracteres; aquí la pantalla lo pide
         // como texto libre y nada lo interpreta como código, así que desde el 2026-09-13 admite
         // 120 (migración MotivoDeRetiroComoTexto). Antes cualquier motivo de más de 4 daba 500.
         builder.Property(e => e.TerminationCause).HasMaxLength(TerminationCauseMaxLength);

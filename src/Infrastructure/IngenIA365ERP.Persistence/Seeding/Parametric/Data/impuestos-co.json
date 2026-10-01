@@ -1,0 +1,73 @@
+{
+  // Feature 012, T168 (T22; decisiones-transversales §2.14, Order 81): catálogo tributario inicial de una cooperativa
+  // colombiana. TODAS las tarifas quedan «pendientes de validar por la contadora» (ReviewPending, A8, T169): las valida
+  // Rafaela Lastra España antes del ensayo. ReteICA no se siembra (es municipal: la carga la cooperativa con la
+  // plantilla 1). La UVT no va aquí: vive en los parámetros legales de nómina (T23).
+  // Los valores y normas son el punto de partida propuesto; los que dicen «por cotejar» esperan esa validación.
+  "version": "2026-09-25",
+  "conceptos": [
+    { "codigo": "COMPRAS", "nombre": "Compras generales" },
+    { "codigo": "SERVICIOS", "nombre": "Servicios generales" },
+    { "codigo": "HONORARIOS", "nombre": "Honorarios" },
+    { "codigo": "ARRIENDOS", "nombre": "Arrendamiento de bienes inmuebles" },
+    { "codigo": "TRANSPORTE", "nombre": "Transporte de carga" },
+    { "codigo": "OTROS", "nombre": "Otros pagos sujetos a retención" }
+  ],
+  "impuestos": [
+    { "codigo": "IVA", "nombre": "Impuesto sobre las ventas (IVA)", "clase": "Iva", "formaDeCalculo": "PercentOfBase", "codigoDian": "01" },
+    { "codigo": "INC", "nombre": "Impuesto nacional al consumo", "clase": "Inc", "formaDeCalculo": "PercentOfBase", "codigoDian": "04" },
+    { "codigo": "BOLSAS", "nombre": "Impuesto nacional al consumo de bolsas plásticas", "clase": "Inc", "formaDeCalculo": "AmountPerUnit", "codigoDian": "22" },
+    { "codigo": "RETEFUENTE", "nombre": "Retención en la fuente a título de renta", "clase": "ReteFuente", "formaDeCalculo": "PercentOfBase", "codigoDian": "06" },
+    { "codigo": "RETEIVA", "nombre": "Retención en la fuente a título de IVA", "clase": "ReteIva", "formaDeCalculo": "PercentOfTax", "calculadoSobre": "IVA", "codigoDian": "05" }
+  ],
+  "tarifas": [
+    { "codigo": "IVA19", "impuesto": "IVA", "nombre": "IVA 19 %", "tarifa": 0.19, "aplicaA": "Both", "vigenteDesde": "2017-01-01",
+      "norma": "ET art. 468 (Ley 1819 de 2016, art. 184)" },
+    { "codigo": "IVA5", "impuesto": "IVA", "nombre": "IVA 5 %", "tarifa": 0.05, "aplicaA": "Both", "vigenteDesde": "2017-01-01",
+      "norma": "ET art. 468-1" },
+    { "codigo": "IVAEXE", "impuesto": "IVA", "nombre": "IVA exento (0 %)", "tarifa": 0, "aplicaA": "Both", "vigenteDesde": "2017-01-01",
+      "norma": "ET arts. 477 y 481 (bienes y servicios exentos)" },
+    { "codigo": "IVAEXC", "impuesto": "IVA", "nombre": "IVA excluido", "tarifa": 0, "aplicaA": "Both", "vigenteDesde": "2017-01-01",
+      "norma": "ET arts. 424 y 476 (bienes y servicios excluidos)", "notas": "No causa IVA; el producto excluido lleva VatSaleTreatment = Excluded." },
+    { "codigo": "INC8", "impuesto": "INC", "nombre": "INC 8 %", "tarifa": 0.08, "aplicaA": "Sales", "vigenteDesde": "2017-01-01",
+      "norma": "ET arts. 512-1 y 512-9" },
+    { "codigo": "BOLSA", "impuesto": "BOLSAS", "nombre": "Bolsa plástica", "valorPorUnidad": 66, "aplicaA": "Sales", "vigenteDesde": "2026-01-01",
+      "norma": "ET art. 512-15 (valor ajustado por IPC; por cotejar)" },
+    { "codigo": "RFCOMP25", "impuesto": "RETEFUENTE", "concepto": "COMPRAS", "nombre": "ReteFuente compras, declarante", "tarifa": 0.025,
+      "baseMinimaUvt": 27, "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true, "sujetoAutorretenedor": false },
+      "norma": "DUR 1625 de 2016 art. 1.2.4.9.1 (por cotejar con el Decreto 572 de 2025)" },
+    { "codigo": "RFCOMP35", "impuesto": "RETEFUENTE", "concepto": "COMPRAS", "nombre": "ReteFuente compras, no declarante", "tarifa": 0.035,
+      "baseMinimaUvt": 27, "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": false, "sujetoAutorretenedor": false },
+      "norma": "DUR 1625 de 2016 art. 1.2.4.9.1 (por cotejar con el Decreto 572 de 2025)" },
+    { "codigo": "RFSERV4", "impuesto": "RETEFUENTE", "concepto": "SERVICIOS", "nombre": "ReteFuente servicios, declarante", "tarifa": 0.04,
+      "baseMinimaUvt": 4, "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true, "sujetoAutorretenedor": false },
+      "norma": "DUR 1625 de 2016 art. 1.2.4.4.14 (por cotejar con el Decreto 572 de 2025)" },
+    { "codigo": "RFSERV6", "impuesto": "RETEFUENTE", "concepto": "SERVICIOS", "nombre": "ReteFuente servicios, no declarante", "tarifa": 0.06,
+      "baseMinimaUvt": 4, "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": false, "sujetoAutorretenedor": false },
+      "norma": "DUR 1625 de 2016 art. 1.2.4.4.14 (por cotejar con el Decreto 572 de 2025)" },
+    { "codigo": "RFHON11", "impuesto": "RETEFUENTE", "concepto": "HONORARIOS", "nombre": "ReteFuente honorarios, persona jurídica", "tarifa": 0.11,
+      "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoTipoPersona": "02", "sujetoAutorretenedor": false },
+      "norma": "ET art. 392; DUR 1625 de 2016 art. 1.2.4.3.1" },
+    { "codigo": "RFHON10", "impuesto": "RETEFUENTE", "concepto": "HONORARIOS", "nombre": "ReteFuente honorarios, persona natural", "tarifa": 0.10,
+      "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoTipoPersona": "01", "sujetoAutorretenedor": false },
+      "norma": "ET art. 392; DUR 1625 de 2016 art. 1.2.4.3.1 (por cotejar el art. 383 para no declarantes)" },
+    { "codigo": "RFARR35", "impuesto": "RETEFUENTE", "concepto": "ARRIENDOS", "nombre": "ReteFuente arrendamiento de inmuebles", "tarifa": 0.035,
+      "baseMinimaUvt": 27, "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoAutorretenedor": false },
+      "norma": "DUR 1625 de 2016 art. 1.2.4.10.6 (por cotejar con el Decreto 572 de 2025)" },
+    { "codigo": "RFTRA1", "impuesto": "RETEFUENTE", "concepto": "TRANSPORTE", "nombre": "ReteFuente transporte de carga", "tarifa": 0.01,
+      "baseMinimaUvt": 4, "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoAutorretenedor": false },
+      "norma": "DUR 1625 de 2016 art. 1.2.4.4.8" },
+    { "codigo": "RIVA15", "impuesto": "RETEIVA", "nombre": "ReteIVA 15 % del IVA", "tarifa": 0.15, "aplicaA": "Both", "vigenteDesde": "2026-01-01",
+      "condiciones": { "sujetoResponsableIva": true },
+      "norma": "ET arts. 437-1 y 437-2",
+      "notas": "La base mínima (27 UVT en bienes, 4 UVT en servicios) la define la contadora." }
+  ]
+}

@@ -7,14 +7,14 @@ requisitos, 8 decisiones del dueño en Clarifications, sesión 2026-09-14).
 
 ## Summary
 
-Se **reemplaza** el módulo de contabilidad heredado de SOLIDO (33 tablas `ACC_`, libros vacíos en
+Se **reemplaza** el módulo de contabilidad heredado del sistema anterior (33 tablas `ACC_`, libros vacíos en
 los cuatro ambientes) por un núcleo NIIF: catálogos PUC Solidario y Comercial hasta nivel 4 como
 datos (JSON embebido) más importador de catálogo propio; configuración por empresa (catálogo,
 nivel de movimiento 5 o 6, longitudes, grupo NIIF, sucursal principal, cuatro ojos); plan de la
 empresa con auxiliares que llevan **reglas** (módulos habilitados, exige tercero, documento cruce,
 centro, sucursal, base gravable) bloqueadas en cuanto la cuenta tiene movimientos; **un solo
 contrato de contabilización** (`AccountingPoster`, agrega sin guardar; una sola clase de reglas)
-por el que pasan la digitación manual, Nómina, Cartera, Inventario, Tesorería, CDT y los procesos
+por el que pasan la digitación manual, Nómina, Cartera, Inventario por mensajes (012), Tesorería, CDT y los procesos
 propios; documentos inmutables con reversión referenciada, numeración al contabilizar con
 reintento por concurrencia; **saldos derivados** (sin tablas de saldos); períodos por ejercicio,
 apertura y cierre; libro auxiliar con profundización (`SfTreeGrid`), libros oficiales y estados
@@ -39,7 +39,7 @@ mediante la migración destructiva `ContabilidadNiif` (guarda: falla si hay libr
 `MIGRACION-DESTRUCTIVA-APROBADA`); columnas nuevas en `COR_Branches` (`TenantBranchPublicId`),
 `COR_Banks` y los cinco catálogos institucionales de nómina (`PersonId`), `TRS_Concepts`
 (cuentas), `LND_CreditLineParameters`/`LND_SavingsParameters`/`CDT_Parameters` (cuentas de
-provisión/gasto de intereses), `INV_Documents` (`AccountingDocumentId`); semillas JSON en cada
+provisión/gasto de intereses) (*enmienda 012*: sin `INV_Documents.AccountingDocumentId`, el vínculo vive en `ACC_InventoryPostings`); semillas JSON en cada
 base de cooperativa; sin datos históricos que convertir
 **Testing**: Application.Tests (InMemory + NSubstitute; `TestApplicationDbContext` registra los
 DbSets contables nuevos y deja de ignorar `ChartOfAccount`), Architecture.Tests (3 pruebas nuevas,
@@ -134,7 +134,7 @@ Detalle y alternativas en [research.md](research.md).
 |---|---|---|---|
 | **E1 núcleo** | US1, US2, US3, US4 (Nómina), US7 | migración, dominio y contrato, catálogos y semillas, configuración, plan y auxiliares, tipos y períodos (abrir/cerrar mes), digitación con borradores/contabilizar/reversar, Nómina por el contrato con terceros institucionales, permisos, auditoría de accesos, pantallas nuevas y retiro de las 22 heredadas, pruebas | `009-contabilidad-niif` |
 | **E2 consultas, cierres y apertura** | US5, US6, US13 | libro auxiliar con profundización, balance de prueba, libros, estados financieros, saldo diario promedio, exportación auditada, cierre y reapertura de ejercicio, apertura importada | `009-e2-consultas-cierres` |
-| **E3 módulos restantes** | US4 (escenario 7) | Cartera, Inventario, Tesorería, CDT/Ahorros por el contrato; parametrizaciones validadas; anulaciones por vínculo; consulta de parametrizaciones inválidas | `009-e3-modulos` |
+| **E3 módulos restantes** | US4 (escenario 7) | Cartera, Tesorería, CDT/Ahorros por el contrato (*enmienda 012*: sin Inventario, que llega por mensajes con la 012); parametrizaciones validadas; anulaciones por vínculo; consulta de parametrizaciones inválidas | `009-e3-modulos` |
 | **E4 satélites** | US8–US12 | conciliación bancaria, presupuesto, impuestos y certificados, exógena, activos | `009-e4-satelites` |
 
 Cada etapa se mergea a `develop`, se despliega a DEV/QA y se verifica según `quickstart.md`

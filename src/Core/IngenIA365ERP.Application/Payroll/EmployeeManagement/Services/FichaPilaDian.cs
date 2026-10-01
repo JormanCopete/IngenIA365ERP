@@ -17,7 +17,7 @@ public static class FichaPilaDian
         "Un aprendiz o pasante necesita la etapa (lectiva o práctica): decide sus prestaciones y su tipo de cotizante en la PILA.");
 
     /// <summary>
-    /// <c>SalaryType</c> heredado de SOLIDO como código PILA de tipo de salario: 0 fijo (F),
+    /// <c>SalaryType</c> heredado del sistema anterior como código PILA de tipo de salario: 0 fijo (F),
     /// 1 variable (V), 2 integral (X). La clase <c>IntegralSalary</c> manda sobre la columna.
     /// </summary>
     public static string SalaryTypeCode(Employee e) =>

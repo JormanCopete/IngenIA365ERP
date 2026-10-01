@@ -1,0 +1,83 @@
+{
+  "catalogo": "tiposDeIdentificacion",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tabla 13.2.1 (tipos de documento de identidad); consumidor final según la Res. 202/2025",
+      "porCotejar": true,
+      "notas": "Por cotejar con el proveedor tecnológico elegido: el número y el nombre del consumidor final (contracts/dian.md §1).",
+      "codigos": [
+        {
+          "codigo": "11",
+          "nombre": "Registro civil"
+        },
+        {
+          "codigo": "12",
+          "nombre": "Tarjeta de identidad"
+        },
+        {
+          "codigo": "13",
+          "nombre": "Cédula de ciudadanía"
+        },
+        {
+          "codigo": "21",
+          "nombre": "Tarjeta de extranjería"
+        },
+        {
+          "codigo": "22",
+          "nombre": "Cédula de extranjería"
+        },
+        {
+          "codigo": "31",
+          "nombre": "NIT"
+        },
+        {
+          "codigo": "41",
+          "nombre": "Pasaporte"
+        },
+        {
+          "codigo": "42",
+          "nombre": "Documento de identificación extranjero"
+        },
+        {
+          "codigo": "47",
+          "nombre": "PEP (Permiso especial de permanencia)"
+        },
+        {
+          "codigo": "48",
+          "nombre": "PPT (Permiso por protección temporal)"
+        },
+        {
+          "codigo": "50",
+          "nombre": "NIT de otro país"
+        },
+        {
+          "codigo": "91",
+          "nombre": "NUIP"
+        }
+      ],
+      "traduccionIdType": {
+        "C": "13",
+        "CC": "13",
+        "N": "31",
+        "NI": "31",
+        "NIT": "31",
+        "E": "22",
+        "CE": "22",
+        "T": "12",
+        "TI": "12",
+        "R": "11",
+        "RC": "11",
+        "P": "41",
+        "PA": "41",
+        "PE": "47",
+        "X": "42"
+      },
+      "consumidorFinal": {
+        "tipoDeIdentificacion": "13",
+        "numero": "222222222222",
+        "nombre": "Consumidor final"
+      }
+    }
+  ]
+}

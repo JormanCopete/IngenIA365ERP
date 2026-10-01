@@ -1,0 +1,192 @@
+@page "/inventario/aprobaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Aprobaciones - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T431 (FR-010, T33; contracts/api.md §15.2): la bandeja de lo que la persona puede decidir ahora y el
+   seguimiento de lo de su alcance. El detalle muestra los niveles, quién decidió cada uno y, si no puede decidir, por qué
+   (quien crea no aprueba; quien aprobó un nivel no aprueba otro). Aprobar o rechazar (con motivo) decide sobre el contenido
+   que se muestra: si el documento cambió, la API responde Approvals.Request.ContentChanged y hay que volver a mirarlo. La
+   aprobación presencial del punto de venta es de US5. *@
+<PermissionGate Required="Inventory.Approvals.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Aprobaciones</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_mias ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(true))">Por decidir</SfButton>
+            <SfButton CssClass="@(!_mias ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(false))">Seguimiento</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_solicitudes.Count == 0)
+        {
+            <p class="texto-tenue">@(_mias ? "No tiene aprobaciones pendientes." : "No hay solicitudes en su alcance.")</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Documento</th><th>Resumen</th><th class="numero">Monto</th><th>Estado</th><th>Nivel</th><th>Pedida</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _solicitudes)
+                        {
+                            var solicitud = s;
+                            <tr class="@(_detalle?.PublicId == solicitud.PublicId ? "resaltada" : "")">
+                                <td>@(solicitud.Source.DocumentType?.Code) @(solicitud.Source.DisplayNumber ?? "(sin número)")</td>
+                                <td>@solicitud.Source.Summary</td>
+                                <td class="numero">@solicitud.Amount.ToString("N2")</td>
+                                <td>@TextosDeSeguridad.EstadoDeSolicitud(solicitud.Status)</td>
+                                <td>@solicitud.CurrentLevel de @solicitud.Levels.Count</td>
+                                <td>@solicitud.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @solicitud.RequestedBy</td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAsync(solicitud.PublicId))">Ver</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_detalleCarga.Activa" Texto="Leyendo la solicitud…">
+        @if (_detalle is { } d)
+        {
+            <div class="info-card">
+                <h4>@(d.Source.DocumentType?.Name) @(d.Source.DisplayNumber) · @TextosDeSeguridad.EstadoDeSolicitud(d.Status)</h4>
+                <p class="texto-apoyo">
+                    @d.Source.Summary — @d.Amount.ToString("N2") @d.Currency, fecha de la operación @d.Source.OperationDate.ToString("dd/MM/yyyy").
+                    Creado por @(d.CreatedBy ?? "—"); pedido por @(d.RequestedBy ?? "—").
+                    @if (d.Source.Route is { } ruta)
+                    {
+                        <a href="@ruta">Abrir el documento</a>
+                    }
+                </p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Nivel</th><th class="numero">Desde</th><th>Permiso</th><th>Estado</th><th>Decidió</th><th>Cuándo</th></tr></thead>
+                        <tbody>
+                            @foreach (var n in d.Levels)
+                            {
+                                <tr>
+                                    <td>@n.Order</td>
+                                    <td class="numero">@n.Threshold.ToString("N2")</td>
+                                    <td>@n.PermissionCode</td>
+                                    <td>@TextosDeSeguridad.EstadoDeNivel(n.State)</td>
+                                    <td>@n.DecidedBy</td>
+                                    <td>@n.DecidedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (d.Decisions is { Count: > 0 } decisiones)
+                {
+                    <ul>
+                        @foreach (var x in decisiones)
+                        {
+                            <li>Nivel @x.Level: @(x.Decision == "Approve" ? "aprobó" : "rechazó") @x.DecidedBy el @x.DecidedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")@(x.Reason is null ? "" : $" — {x.Reason}")</li>
+                        }
+                    </ul>
+                }
+                @if (!d.CanDecide && d.Status == "Pending" && !string.IsNullOrEmpty(d.ExcludedReason))
+                {
+                    <p class="aviso aviso-alerta">@TextosDeSeguridad.Exclusion(d.ExcludedReason)</p>
+                }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <IndicadorDeCarga Cargando="@_decision.Activa" Texto="Registrando la decisión…">
+                    <div class="toolbar">
+                        @if (d.CanDecide && d.Status == "Pending")
+                        {
+                            <label class="campo campo-ancho">Motivo (obligatorio para rechazar) <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                            <SfButton CssClass="e-primary" Disabled="@_decision.Activa" OnClick="@(() => DecidirAsync(aprobar: true))">Aprobar</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@(_decision.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@(() => DecidirAsync(aprobar: false))">Rechazar</SfButton>
+                        }
+                        @if (!_mias && d.Status == "Pending")
+                        {
+                            <label class="campo campo-ancho">Motivo del retiro <input class="e-input" @bind="_motivoRetiro" maxlength="500" /></label>
+                            <SfButton CssClass="e-outline" Disabled="@(_decision.Activa || string.IsNullOrWhiteSpace(_motivoRetiro))" OnClick="@RetirarAsync">Retirar la solicitud</SfButton>
+                        }
+                    </div>
+                </IndicadorDeCarga>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _detalleCarga = new(), _decision = new();
+    private ClaveDeOperacion _clave = new();
+    private List<SolicitudDeAprobacionDto> _solicitudes = [];
+    private SolicitudDeAprobacionDto? _detalle;
+    private bool _mias = true;
+    private string? _motivo, _motivoRetiro, _error;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CambiarAsync(bool mias)
+    {
+        _mias = mias;
+        _detalle = null;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.AprobacionesAsync(_mias);
+        if (!r.IsSuccess) { _solicitudes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la bandeja de aprobaciones."); return; }
+        _solicitudes = [.. r.Value?.Items ?? []];
+    }
+
+    private async Task AbrirAsync(Guid id)
+    {
+        using var carga = _detalleCarga.Iniciar();
+        _error = null;
+        _motivo = _motivoRetiro = null;
+        _clave = new ClaveDeOperacion();
+        var r = await Inventario.AprobacionAsync(id);
+        if (!r.IsSuccess) { _detalle = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la solicitud."); return; }
+        _detalle = r.Value;
+    }
+
+    private async Task DecidirAsync(bool aprobar)
+    {
+        if (_detalle is not { } d) return;
+        if (!aprobar && string.IsNullOrWhiteSpace(_motivo)) { _error = "Para rechazar escriba el motivo."; return; }
+        using var carga = _decision.Iniciar();
+        _error = null;
+        // Método 1 = sesión propia; el hash es el del contenido que se está mostrando (§15.2).
+        var r = await Inventario.DecidirAprobacionAsync(d.PublicId,
+            new DecidirAprobacionRequest(aprobar ? 1 : 2, string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim(), 1, d.ContentSha256), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Approvals.Request.ContentChanged"
+                ? "El documento cambió después de que lo abrió. Revíselo de nuevo antes de decidir."
+                : r.ErrorMessage ?? "No se pudo registrar la decisión.";
+            return;
+        }
+        var fuente = r.Value!.Source;
+        await Notification.SuccessAsync(r.Value.Status == "Approved"
+            ? $"Aprobada. El documento quedó {(fuente.Status ?? "confirmado").ToLowerInvariant()}{(fuente.DisplayNumber is null ? "" : $" con el número {fuente.DisplayNumber}")}."
+            : r.Value.Status == "Rejected" ? "Rechazada: el documento vuelve a borrador." : $"Nivel aprobado; sigue el nivel {r.Value.CurrentLevel}.");
+        await CargarAsync();
+        await AbrirAsync(d.PublicId);
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_detalle is not { } d || string.IsNullOrWhiteSpace(_motivoRetiro)) return;
+        using var carga = _decision.Iniciar();
+        var r = await Inventario.RetirarAprobacionAsync(d.PublicId, _motivoRetiro.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo retirar la solicitud."; return; }
+        await Notification.SuccessAsync("Solicitud retirada: el documento vuelve a borrador.");
+        await CargarAsync();
+        await AbrirAsync(d.PublicId);
+    }
+}

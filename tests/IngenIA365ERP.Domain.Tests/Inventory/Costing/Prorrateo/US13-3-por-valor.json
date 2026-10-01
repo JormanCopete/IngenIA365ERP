@@ -1,0 +1,19 @@
+{
+  "nombre": "US13-3: flete de $100.000 por valor sobre líneas de $600.000 y $400.000",
+  "descripcion": "Base = valor neto de cada línea recibida. 100.000 × 600.000 / 1.000.000 = 60.000 y 100.000 × 400.000 / 1.000.000 = 40.000; sin residuo. Todo sigue en existencia: todo va a inventario.",
+  "monto": 100000,
+  "metodo": "Value",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "lineas": [
+    { "linea": 1, "producto": 10, "cantidad": 60, "valor": 600000, "existencia": 60 },
+    { "linea": 2, "producto": 11, "cantidad": 40, "valor": 400000, "existencia": 40 }
+  ],
+  "esperado": {
+    "roundingResidue": 0,
+    "lineas": [
+      { "linea": 1, "basis": 600000, "allocated": 60000, "residue": 0, "existingRatio": 1, "existing": 60000, "sold": 0 },
+      { "linea": 2, "basis": 400000, "allocated": 40000, "residue": 0, "existingRatio": 1, "existing": 40000, "sold": 0 }
+    ]
+  }
+}

@@ -101,7 +101,7 @@ Fórmulas que el motor implementa (todas con valores desde `ParameterSet`):
 cada paso (aportes, provisiones, topes) para que no corra en una liquidación; (b) calcular en el
 handler de Application con acceso a BD: difícil de probar con casos dorados y rompe el patrón del
 módulo; (c) reutilizar `VacationLiquidation`, `EmployeeLiquidationMaster/Detail`,
-`SeveranceHistory` del legado SOLIDO: mapeadas y sin uso (`VacationLiquidation.cs:6-7`), sin
+`SeveranceHistory` del legado del sistema anterior: mapeadas y sin uso (`VacationLiquidation.cs:6-7`), sin
 versión ni explicación; sólo sirven como referencia para migrar saldos iniciales.
 
 **Fuentes**: `PayrollCalculationEngine.cs:42-54, 118-305`; `CalculationInput.cs:11-99`;
@@ -172,7 +172,7 @@ o migrado.
 
 **Alternativas consideradas**: migrar desde las tablas legado `nom_antcesantia`/`nom_maeliqemp`
 (`SeveranceHistory`, `EmployeeLiquidationMaster`) con `database/migration/`: sirve como fuente
-para llenar la tabla si COOFLOPAL trae datos de SOLIDO, pero no reemplaza la digitación auditada
+para llenar la tabla si COOFLOPAL trae datos del sistema anterior, pero no reemplaza la digitación auditada
 (la cooperativa hoy lo hace a mano o en otros programas, Contexto); guardar el saldo como
 «novedad» de nómina: mezcla dos naturalezas y la novedad tiene período.
 

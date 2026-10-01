@@ -1,0 +1,6 @@
+{
+  "nombre": "Con I5, lo por recibir suma a la posición (8 + 5 + 10 = 23 > 15): sin sugerido, pero el disponible 8 < 10 sigue en quiebre",
+  "disponible": 8, "enTransito": 5, "porRecibir": 10,
+  "minimo": 10, "maximo": 50, "puntoDeReorden": 15,
+  "esperado": { "posicion": 23, "requiereReorden": false, "sugerido": 0, "quiebre": true }
+}

@@ -1,0 +1,13 @@
+{
+  "descripcion": "El HMAC de un ancla firma stream|seq|hash|anchoredAt con la clave de anclaje y su versión.",
+  "ancla": {
+    "stream": "0f8fad5bd9cb469fa16570867728950e:10y",
+    "seq": 1000,
+    "hash": "403e329971939e1704802c566b766fe66f9c95aa22988695cf8a4dc987f53411",
+    "anchoredAt": "2026-09-25T00:00:00-05:00",
+    "claveBase64": "Y2xhdmUtZGUtcHJ1ZWJhLWRlLWFuY2xhcy0zMi1ieXRlcyEh",
+    "keyVersion": "prueba-anclas-v1",
+    "carga": "0f8fad5bd9cb469fa16570867728950e:10y|1000|403e329971939e1704802c566b766fe66f9c95aa22988695cf8a4dc987f53411|2026-09-25T05:00:00.000Z",
+    "hmac": "etJHRjoTzQNZ5r1trb1I7cnrw/rV6VEmvjz7e8mFNl0="
+  }
+}

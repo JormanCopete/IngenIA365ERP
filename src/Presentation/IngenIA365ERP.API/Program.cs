@@ -11,6 +11,7 @@ using IngenIA365ERP.Application;
 using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
 using IngenIA365ERP.Caching.Services;
+using IngenIA365ERP.ElectronicInvoicing;
 using IngenIA365ERP.Identity;
 using IngenIA365ERP.Identity.CentralIdentity;
 using IngenIA365ERP.Identity.Seed;
@@ -161,9 +162,113 @@ try
     builder.Services.AddSingleton<
         IngenIA365ERP.Application.Common.Interfaces.Identity.ICurrentCentralUserContext,
         CurrentCentralUserContextAccessor>();
+    // Feature 012 (T20): AhoraLocal/HoyLocal con la zona de Plataforma:ZonaHoraria.
+    builder.Services.Configure<PlataformaOptions>(builder.Configuration.GetSection(PlataformaOptions.SectionName));
+    // Feature 012 (T317, api.md §13.3): activar una bodega sin la comparación contable (antes de I2) sólo fuera de producción.
+    builder.Services.Configure<IngenIA365ERP.Application.Inventory.GoLive.PuestaEnMarchaOptions>(o =>
+        o.PermitirActivacionSinComparacion = !builder.Environment.IsProduction());
+    // Feature 012 (I3, T607): fuera de produccion toda tirilla dice «SIN VALIDEZ FISCAL» (quickstart §5.13).
+    builder.Services.Configure<IngenIA365ERP.Application.Inventory.Sales.TirillaOptions>(o =>
+        o.AmbienteDePruebas = !builder.Environment.IsProduction());
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
+    // Feature 012 (T5, T6, T36): origen (IP, User-Agent, canal X-Canal, endpoint) y actor de la
+    // operacion; en segundo plano, los del ContextoAmbiental que fija IEjecutorEnCooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IOrigenDeLaPeticion, IngenIA365ERP.API.Services.OrigenDeLaPeticion>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IActorActual, IngenIA365ERP.API.Services.ActorDeLaPeticion>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa, IngenIA365ERP.API.Integration.EjecutorEnCooperativa>();
+    // Feature 012 (T13, T055, T056): estado por peticion de la idempotencia; ClaveDeOperacionFilter pone la
+    // clave y lee si IdempotencyBehavior respondio con lo guardado (Idempotent-Replayed). Adelanto de T096.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Behaviors.EstadoDeLaOperacion>();
+    // Feature 012 (T10, T078): la senal en proceso que despierta al despachador de mensajes (I2) cuando un guardado
+    // incluyo mensajes; la avisa ApplicationDbContext desde SavedChanges. Singleton: la comparten todas las peticiones.
+    // Adelanto de T096.
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.SenalDeMensajes>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Integration.ISenalDeMensajes>(
+        sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.SenalDeMensajes>());
+    // Feature 012 (T34, T082; T33, T083-T085): montos maximos por permiso del actor, y permiso y alcance del
+    // aprobador presente (el supervisor en la caja). Adelantos de T096.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.ILimitesPorPermiso, IngenIA365ERP.API.Services.LimitesPorPermiso>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Approvals.IAutoridadDeOtroAprobador, IngenIA365ERP.API.Services.AutoridadDeOtroAprobador>();
+    // Feature 012 (T35, T087-T089): el alcance por bodega y punto de la peticion (una lectura por peticion; total en
+    // segundo plano), que lee solo por los puertos de asignacion. Sus implementaciones vacias fallan cerrado hasta que
+    // US1 (AsignacionesDeBodegaEnBase, T224) y US5 (AsignacionesDePuntoDeVentaEnBase, T596) registren las reales: TryAdd
+    // para que su registro, hecho antes, gane. Adelanto de T096.
+    Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<
+        IngenIA365ERP.Application.Common.Interfaces.Security.IAsignacionesDeBodega,
+        IngenIA365ERP.Application.Common.Interfaces.Security.SinAsignacionesDeBodega>(builder.Services);
+    Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<
+        IngenIA365ERP.Application.Common.Interfaces.Security.IAsignacionesDePuntoDeVenta,
+        IngenIA365ERP.Application.Common.Interfaces.Security.SinAsignacionesDePuntoDeVenta>(builder.Services);
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeInventario, IngenIA365ERP.API.Services.AlcanceDeInventarioDeLaPeticion>();
+    // Feature 012 (T39, T092): a quien le llega una alerta (permiso y alcance; sin nadie, CompanyAdmin). Adelanto de T096.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Alerts.IDestinatariosPorPermiso, IngenIA365ERP.API.Services.DestinatariosPorPermiso>();
+
+    // Feature 012 (T10, T47; T047–T051): trabajos de fondo por cooperativa. Se registran SOLO aqui
+    // (el DbMigrator nunca los arranca), cada uno condicionado a su Integration:*:Enabled y esperando
+    // DatabaseReadiness. El servicio queda registrado aunque este apagado, para que las pruebas
+    // conduzcan una pasada a mano (la fixture los apaga todos).
+    builder.Services
+        .AddOptions<IngenIA365ERP.API.Integration.IntegrationOptions>()
+        .Bind(builder.Configuration.GetSection(IngenIA365ERP.API.Integration.IntegrationOptions.SectionName))
+        .Validate(o => o.Problemas().Count == 0, "La sección Integration de la configuración no es válida; ver IntegrationOptions.Problemas.")
+        .ValidateOnStart();
+    var integracion = builder.Configuration.GetSection(IngenIA365ERP.API.Integration.IntegrationOptions.SectionName)
+        .Get<IngenIA365ERP.API.Integration.IntegrationOptions>() ?? new IngenIA365ERP.API.Integration.IntegrationOptions();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Execution.IArrendamientos, IngenIA365ERP.Persistence.Services.ArrendamientosEnBase>();
+
+    // Feature 012 (T259, US2): la verificacion nocturna del kardex (inventario.integridad) en cada cooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Inventory.Kardex.VerificacionNocturnaDeIntegridad>();
+    // Feature 012 (T347, US9): la revision diaria de los eventos RADIAN de las facturas del proveedor a credito.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Inventory.Purchasing.TareaDeEventosRadian>();
+    // Feature 012 (T954, US17): la revision diaria de reorden y quiebre, desde Integration:ReorderReview:StartHour.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Replenishment.TareaDeRevisionDeReorden(new TimeOnly(Math.Clamp(integracion.ReorderReview.StartHour, 0, 23), 0)));
+    // Feature 012 (T721, I4): las alertas DIAN que dependen del tiempo (sin validar, plazo de contingencia, resoluciones por agotar o vencer).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.ElectronicInvoicing.Documents.TareaDeAlertasDeFacturacionElectronica>();
+    // Feature 012 (T889, I6): liberar las reservas vencidas y alertar las remisiones sin facturar (no corren antes de I6).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Sales.Reservas.TareaDeReservasVencidas());
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Sales.Shipments.TareaDeRemisionesSinFacturar());
+    // Feature 012 (T932, I6): la alerta diaria de los lotes con existencia proximos a vencer (no corre antes de I6).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Inventory.Catalog.Lots.TareaDeLotesProximosAVencer());
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
+    if (integracion.ScheduledTasks.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
+
+    // Feature 012, I2 (T527): el despachador de mensajes de integracion (en linea, lotes programados y ordenados) y la
+    // politica de reintentos que aplica RegisterDeliveryResultCommand, desde Integration:Retries (T10).
+    builder.Services.Configure<IngenIA365ERP.Application.Common.Integration.ReintentosDeIntegracion>(
+        builder.Configuration.GetSection($"{IngenIA365ERP.API.Integration.IntegrationOptions.SectionName}:Retries"));
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.DespachadorDeMensajes>();
+    if (integracion.Dispatcher.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.DespachadorDeMensajes>());
+
+    builder.Services.AddSingleton(sp => new IngenIA365ERP.Storage.Services.NotificationEmailDispatcher(
+        sp.GetRequiredService<IServiceScopeFactory>(),
+        sp.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>(),
+        sp.GetRequiredService<ILogger<IngenIA365ERP.Storage.Services.NotificationEmailDispatcher>>(),
+        () => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady,
+        TimeSpan.FromSeconds(integracion.EmailDispatcher.IntervalSeconds)));
+    if (integracion.EmailDispatcher.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.Storage.Services.NotificationEmailDispatcher>());
+
+    // Feature 012 (T37, T38; T065): sella la auditoria de los modulos encadenados y la lleva de
+    // COR_AuditOutbox a Mongo, por cooperativa y con el arrendamiento audit.forward.
+    builder.Services.AddSingleton(sp => new IngenIA365ERP.Audit.Services.AuditOutboxForwarder(
+        sp.GetRequiredService<IServiceScopeFactory>(),
+        sp.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>(),
+        sp.GetRequiredService<IngenIA365ERP.Audit.Services.SelladoDeAuditoria>(),
+        sp.GetRequiredService<ILogger<IngenIA365ERP.Audit.Services.AuditOutboxForwarder>>(),
+        () => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady));
+    if (integracion.AuditForwarder.Enabled)
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.Audit.Services.AuditOutboxForwarder>());
 
     // === Identity & Security ===
     // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).
@@ -262,6 +367,16 @@ try
     // Application layer DI registration (MediatR, FluentValidation, Mapster)
     builder.Services.AddApplicationServices();
 
+    // Feature 012, I4 (T749; contracts/dian.md §2, §11; T40, T47): la facturacion electronica. UNICO sitio que conoce el ensamblado de los
+    // adaptadores (ElProveedorTecnologicoSoloLoConoceSuAdaptador). Va despues de AddApplicationServices porque reemplaza sus defectos
+    // (sin canales, sin credenciales, esperas del contrato) por los de la seccion ElectronicInvoicing. El procesador de fondo se arranca
+    // aqui y solo aqui, esperando DatabaseReadiness; ElectronicInvoicing:Processor:Enabled = false lo deja registrado sin arrancar (la
+    // fixture de pruebas conduce las pasadas a mano).
+    builder.Services.AddElectronicInvoicing(builder.Configuration,
+        sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady);
+    if (builder.Configuration.GetValue("ElectronicInvoicing:Processor:Enabled", true))
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Processor.ProcesadorDeDocumentosElectronicos>());
+
     // Feature 002 — opciones del flujo de identidad central
     // (URL base del frontend para el enlace de invitaciones, lifetime, etc.).
     builder.Services.Configure<IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions>(
@@ -294,6 +409,13 @@ try
     // Feature 010 (US3): el documento de liquidación definitiva para firma, también con QuestPDF.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.ISettlementDocumentRenderer, IngenIA365ERP.API.Reports.SettlementDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Accounting.Documents.IVoucherPdfRenderer, IngenIA365ERP.API.Reports.VoucherPdfRenderer>();
+    // Feature 012 (I3, T626): el comprobante no electrónico en carta y los documentos de caja (arqueo y comprobante de movimiento).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.IRepresentacionDeVentaEnPdf, IngenIA365ERP.API.Reports.SalesDocumentPdfRenderer>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();
+    // Feature 012 (I5, T790): la orden de compra en PDF (la descarga y el envio al proveedor).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
+    // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.IRepresentacionGraficaRenderer, IngenIA365ERP.API.Reports.RepresentacionGraficaRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 

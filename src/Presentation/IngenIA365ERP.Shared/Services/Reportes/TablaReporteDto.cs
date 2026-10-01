@@ -8,7 +8,7 @@ namespace IngenIA365ERP.Shared.Services.Reportes;
 /// </summary>
 public sealed record ColumnaReporteDto(string Nombre, string Tipo, string? Clave)
 {
-    public bool EsNumerica => Tipo is "Entero" or "Moneda" or "Decimal" or "Porcentaje";
+    public bool EsNumerica => Tipo is "Entero" or "Moneda" or "Decimal" or "Porcentaje" or "Cantidad" or "Costo";
     public bool EsOculta => Clave is not null && Clave.StartsWith('_');
 }
 
@@ -37,6 +37,9 @@ public sealed record TablaReporteDto(
                     "Entero" => d.ToString("N0", cultura),
                     "Decimal" => d.ToString("0.##", cultura),
                     "Porcentaje" => d.ToString("N2", cultura) + " %",
+                    // Feature 012 (T157): cantidades a 4 decimales y costos o factores a 6, como en los archivos.
+                    "Cantidad" => d.ToString("N4", cultura),
+                    "Costo" => d.ToString("N6", cultura),
                     _ => d.ToString("N2", cultura),
                 };
             case System.Text.Json.JsonValueKind.True: return "Sí";

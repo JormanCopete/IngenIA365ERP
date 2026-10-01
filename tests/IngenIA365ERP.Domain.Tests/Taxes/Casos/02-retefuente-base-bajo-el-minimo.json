@@ -1,0 +1,27 @@
+{
+  // Feature 012, T097, caso 02 (FR-013): un peso por debajo del mínimo no retiene.
+  // 27 UVT × 52.374 = 1.414.098; base 1.414.097 < 1.414.098 → sin retención.
+  "nombre": "ReteFuente con la base un peso bajo el mínimo",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 2, "codigo": "RETEFUENTE", "nombre": "Retención en la fuente", "clase": "ReteFuente", "forma": "PercentOfBase", "codigoDian": "06" }
+  ],
+  "conceptos": [ { "id": 1, "codigo": "COMPRAS", "nombre": "Compras generales" } ],
+  "tarifas": [
+    { "id": 21, "impuesto": 2, "codigo": "RF25", "tarifa": 0.025, "concepto": 1, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true, "sujetoAutorretenedor": false } }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Compra de 1.414.097 a un proveedor declarante",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 1414097, "concepto": 1, "impuestos": [] } ],
+      "esperado": { "renglones": [] }
+    }
+  ]
+}

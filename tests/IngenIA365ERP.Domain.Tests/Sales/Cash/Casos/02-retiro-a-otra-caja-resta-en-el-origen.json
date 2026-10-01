@@ -1,0 +1,83 @@
+{
+  "nombre": "WithdrawalToRegister resta en la sesión origen",
+  "descripcion": "La sesión 1 entrega 80.000 de efectivo a la caja de la sesión 2. En el origen es una salida.",
+  "sesion": 1,
+  "tratamientoDelFaltante": "ShortageToCashier",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "base": {
+    "medio": "EF",
+    "valor": 100000
+  },
+  "pagos": [
+    {
+      "medio": "EF",
+      "valor": 40000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "WithdrawalToRegister",
+      "medio": "EF",
+      "valor": 80000,
+      "confirmado": true,
+      "medioDestino": null,
+      "sesionOrigen": 1,
+      "sesionDestino": 2,
+      "datafonoOrigen": null,
+      "datafonoDestino": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 100000,
+      "ventas": 40000,
+      "devoluciones": 0,
+      "entradas": 0,
+      "salidas": 80000,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 60000,
+      "pagos": 1,
+      "datafonos": null,
+      "referencias": null
+    }
+  ],
+  "total": 60000,
+  "conteo": [
+    {
+      "medio": "EF",
+      "contado": 60000,
+      "motivo": null
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "EF",
+        "contado": 60000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      }
+    ],
+    "totalEsperado": 60000,
+    "totalContado": 60000,
+    "totalDiferencia": 0,
+    "montoAAprobar": 0,
+    "lineasDelDocumento": [],
+    "sinMotivo": []
+  }
+}

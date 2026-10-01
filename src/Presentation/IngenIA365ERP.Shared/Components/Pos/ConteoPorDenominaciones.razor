@@ -1,0 +1,41 @@
+@using IngenIA365ERP.Shared.Services.Core
+
+@* Feature 012, I3 (T641; FR-099; contracts/api.md §21.1–§21.2): el conteo del efectivo por denominaciones —al abrir con la base y al
+   cerrar— con el total que suma. Las denominaciones son las vigentes de Core; la cantidad de cada una la escribe quien cuenta. (nuevo) *@
+<div class="conteo-denominaciones">
+    <table class="data-grid">
+        <thead><tr><th>Denominación</th><th class="numero">Cantidad</th><th class="numero">Subtotal</th></tr></thead>
+        <tbody>
+            @foreach (var d in Denominaciones.Where(x => x.IsActive).OrderByDescending(x => x.Value))
+            {
+                var id = d.CashDenominationPublicId;
+                var cantidad = Cantidades.TryGetValue(id, out var c) ? c : 0;
+                <tr>
+                    <td>@(d.Kind == 1 ? "Billete" : "Moneda") de @d.Value.ToString("N0")</td>
+                    <td class="numero"><input class="e-input numero" type="number" min="0" step="1" value="@cantidad" @onchange="@(e => FijarAsync(id, e.Value))" /></td>
+                    <td class="numero">@((cantidad * d.Value).ToString("N0"))</td>
+                </tr>
+            }
+        </tbody>
+        <tfoot><tr><th>Total contado</th><th></th><th class="numero">@Total.ToString("N0")</th></tr></tfoot>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DenominacionDto> Denominaciones { get; set; } = [];
+
+    /// <summary>Cantidad por denominación; la pantalla la conserva.</summary>
+    [Parameter, EditorRequired] public Dictionary<Guid, int> Cantidades { get; set; } = [];
+
+    [Parameter] public EventCallback<decimal> TotalChanged { get; set; }
+
+    public decimal Total => Denominaciones.Sum(d => (Cantidades.TryGetValue(d.CashDenominationPublicId, out var c) ? c : 0) * d.Value);
+
+    private async Task FijarAsync(Guid id, object? valor)
+    {
+        var cantidad = int.TryParse(valor?.ToString(), out var n) && n > 0 ? n : 0;
+        if (cantidad == 0) Cantidades.Remove(id);
+        else Cantidades[id] = cantidad;
+        await TotalChanged.InvokeAsync(Total);
+    }
+}

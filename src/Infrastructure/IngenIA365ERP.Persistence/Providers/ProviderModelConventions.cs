@@ -109,6 +109,19 @@ public static class ProviderModelConventions
 
                 index.SetFilter(translated);
             }
+
+            // Los CHECK se escriben igual, en T-SQL con corchetes (feature 012, I6: el de una sola columna destino de
+            // INV_PromotionScopes); en PostgreSQL se traducen del mismo modo. Una restricción no cambia su texto en sitio:
+            // se quita y se vuelve a poner con el traducido.
+            foreach (var check in entityType.GetDeclaredCheckConstraints().ToList())
+            {
+                if (string.IsNullOrEmpty(check.Sql) || !check.Sql.Contains('[', StringComparison.Ordinal))
+                    continue;
+                var nombre = check.ModelName;
+                var sql = System.Text.RegularExpressions.Regex.Replace(check.Sql, @"\[(\w+)\]", "\"$1\"");
+                entityType.RemoveCheckConstraint(nombre);
+                entityType.AddCheckConstraint(nombre, sql);
+            }
         }
     }
 

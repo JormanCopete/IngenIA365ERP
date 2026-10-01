@@ -44,7 +44,7 @@ public sealed class RenovarSubidaDeAdjuntoCommandHandler(
             return Result.Failure<AutorizacionDeSubidaDto>("Generic.NotFound", "Adjunto no encontrado.");
         // Las mismas reglas que pedir la subida: el comprobante tiene que seguir existiendo y la persona
         // poder escribir en él.
-        if (await AdjuntosDeModulo.PuedeSubirAsync(db, permisos, adjunto.OwnerEntityType, adjunto.OwnerEntityPublicId, ct) is { } prohibido)
+        if (await AdjuntosDeModulo.PuedeSubirAsync(db, permisos, adjunto.OwnerEntityType, adjunto.OwnerEntityPublicId, ct, adjunto.ContentType) is { } prohibido)
             return Result.Failure<AutorizacionDeSubidaDto>(prohibido);
 
         var ahora = reloj.UtcNow;

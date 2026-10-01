@@ -161,28 +161,100 @@
         </div>
     </div>
 
-    <!-- Inventario -->
-    <div class="report-section">
-        <h4 class="report-section-title">
-            <span class="e-icons e-box"></span>Inventario
-        </h4>
-        <div class="report-cards">
-            <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
-                <div class="report-card-body">
-                    <h5>Inventario Valorizado</h5>
-                    <p>Existencias por producto con costo unitario y valor total por bodega.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/reportes/inventario-valorizado")'>Generar</SfButton>
+    @* Inventario: «Inventario Valorizado» y «Factura de Venta» eran del modulo heredado, que
+       retiro la feature 012 (RetiroDelInventarioHeredado). Los informes del inventario nuevo
+       viven en /inventario/informes?vista= (su registro de vistas); aqui van las tarjetas de las
+       vistas basicas de US17 (T958) y las de analitica de I6 (T970). *@
+    <PermissionGate Required="Inventory.Reports.View">
+        <div class="report-section">
+            <h4 class="report-section-title">
+                <span class="e-icons e-table"></span>Inventario
+            </h4>
+            <div class="report-cards">
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-description"></span></div>
+                    <div class="report-card-body">
+                        <h5>Documentos de inventario</h5>
+                        <p>Cada documento con su clase, estado, bodegas, contraparte, total, modo de paso y estado del mensaje; se abre desde la fila.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=documents")'>Abrir</SfButton>
+                    </div>
                 </div>
-            </div>
-            <div class="report-card">
-                <div class="report-card-icon"><span class="e-icons e-print-layout"></span></div>
-                <div class="report-card-body">
-                    <h5>Factura de Venta</h5>
-                    <p>Impresion o reimpresion de facturas de venta emitidas.</p>
-                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/facturacion")'>Generar</SfButton>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-warning"></span></div>
+                    <div class="report-card-body">
+                        <h5>Reorden y quiebres</h5>
+                        <p>Productos con la posición en o bajo su punto de reorden, o con el disponible bajo su mínimo, con el sugerido; la fila lleva al kardex.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=reorder-alerts")'>Abrir</SfButton>
+                    </div>
                 </div>
+                @* I6, US17 (T970): la analítica, el sugerido de compras, el tope de faltantes y el tablero. *@
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                    <div class="report-card-body">
+                        <h5>Margen</h5>
+                        <p>Ventas netas contra el costo de venta por producto, categoría, vendedor, cliente o punto de venta (exige ver costos).</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=margin")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-refresh"></span></div>
+                    <div class="report-card-body">
+                        <h5>Rotación</h5>
+                        <p>Costo de venta sobre el inventario promedio y días de inventario, por producto, categoría o grupo contable (exige ver costos).</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=turnover")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-sort-descending"></span></div>
+                    <div class="report-card-body">
+                        <h5>Análisis ABC</h5>
+                        <p>Los productos por ventas o por consumo con su participación, el acumulado y su clase A, B o C.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=abc")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-clock"></span></div>
+                    <div class="report-card-body">
+                        <h5>Sin movimiento</h5>
+                        <p>Lo que tiene existencia y no se movió en los últimos días; la fila lleva al kardex.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=no-movement")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-timeline-today"></span></div>
+                    <div class="report-card-body">
+                        <h5>Próximos a vencer</h5>
+                        <p>Lotes que vencen en los próximos días, con cantidad y valor; la fila lleva al kardex del lote.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=expiring")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-cart"></span></div>
+                    <div class="report-card-body">
+                        <h5>Sugerido de compras</h5>
+                        <p>Lo que está en o bajo su punto de reorden con el sugerido, el último costo y el proveedor habitual.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=purchase-suggestion")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-warning"></span></div>
+                    <div class="report-card-body">
+                        <h5>Tope de faltantes y mermas</h5>
+                        <p>Faltantes y mermas del año frente al tope sobre inventario inicial más compras (opcional, exige ver costos).</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/informes?vista=shrinkage-cap")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <PermissionGate Required="Inventory.Dashboard.View">
+                    <div class="report-card">
+                        <div class="report-card-icon"><span class="e-icons e-grid-view"></span></div>
+                        <div class="report-card-body">
+                            <h5>Tablero de inventario</h5>
+                            <p>Las cifras clave por sucursal y bodega; cada ficha lleva a su detalle con un clic.</p>
+                            <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/inventario/tablero")'>Abrir</SfButton>
+                        </div>
+                    </div>
+                </PermissionGate>
             </div>
         </div>
-    </div>
+    </PermissionGate>
 </div>

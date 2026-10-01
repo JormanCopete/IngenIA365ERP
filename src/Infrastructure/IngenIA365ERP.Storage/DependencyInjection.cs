@@ -62,8 +62,10 @@ public static class DependencyInjection
         // Phase 4b — notificación post-cambio de contraseña.
         services.AddScoped<IPasswordChangedNotifier, PasswordChangedNotifier>();
 
-        // T119 — Background dispatcher de correo para notificaciones US6.
-        services.AddHostedService<NotificationEmailDispatcher>();
+        // T119 — El despachador de correo de las notificaciones (NotificationEmailDispatcher) ya no se
+        // registra aquí: desde la feature 012 (T051, T47) lo registra sólo API/Program.cs, condicionado a
+        // Integration:EmailDispatcher:Enabled, para que ningún otro anfitrión que use esta extensión
+        // (el DbMigrator, una herramienta) lo arranque por su cuenta.
         return services;
     }
 }

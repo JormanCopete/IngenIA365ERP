@@ -1,0 +1,43 @@
+@page "/inventario/causas-de-ajuste"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using static IngenIA365ERP.Shared.Components.Inventario.CatalogoDeInventarioModelo
+@inject InventarioClient Inventario
+
+<PageTitle>Causas de ajuste - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T235 (contracts/api.md §3.7; data-model §5.10): las causas de los ajustes y bajas. El código lo usa la matriz
+   contable (ReasonCode) y no cambia. La que usa el sistema («diferencia de conteo», «reclamación al transportador») no se
+   inactiva. *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+    <CatalogoDeInventario Titulo="Causas de ajuste"
+                          RutaBase="@InventarioClient.RutaDeCausas"
+                          CatalogoDeCodigo="causas-de-ajuste"
+                          AvisoAlInactivar="Las causas que usa el sistema (diferencia de conteo, reclamación al transportador) no se inactivan."
+                          Campos="@_campos"
+                          Cargar="@CargarAsync"
+                          Guardar="@GuardarAsync" />
+</PermissionGate>
+
+@code {
+    private static readonly IReadOnlyList<CampoDeCatalogo> _campos =
+    [
+        new("positivo", "Admite entrada", TipoDeCampoDeCatalogo.SiNo, PorDefecto: "false"),
+        new("negativo", "Admite salida", TipoDeCampoDeCatalogo.SiNo, PorDefecto: "true"),
+        new("transito", "Admite baja en tránsito", TipoDeCampoDeCatalogo.SiNo, PorDefecto: "false"),
+        new("soporte", "Exige soporte adjunto", TipoDeCampoDeCatalogo.SiNo, PorDefecto: "false"),
+    ];
+
+    private async Task<ResultadoDeInventario<IReadOnlyList<FilaDeCatalogo>>> CargarAsync(bool inactivas) =>
+        Filas(await Inventario.ListarCausasAsync(inactivas), c => new FilaDeCatalogo(c.PublicId, c.Code, c.Name, c.IsActive, c.IsSeeded,
+            new Dictionary<string, string?>
+            {
+                ["positivo"] = Bool(c.AllowsPositive), ["negativo"] = Bool(c.AllowsNegative),
+                ["transito"] = Bool(c.AllowsTransitWriteOff), ["soporte"] = Bool(c.RequiresAttachment),
+            },
+            c.IsRequiredBySystem ? "la usa el sistema" : null));
+
+    private async Task<(bool, string?)> GuardarAsync(FilaDeCatalogo? fila, string? codigo, string nombre, IReadOnlyDictionary<string, string?> v, Services.Http.ClaveDeOperacion clave) =>
+        Resultado(await Inventario.GuardarCausaAsync(fila?.PublicId,
+            new CausaDeAjusteRequest(codigo, nombre, SiNo(v, "positivo"), SiNo(v, "negativo"), SiNo(v, "transito"), SiNo(v, "soporte")), clave));
+}

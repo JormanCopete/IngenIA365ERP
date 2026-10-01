@@ -1,0 +1,83 @@
+{
+  "descripcion": "AjusteInventarioAprobado · AjusteNegativo: la contrapartida la decide la causa (VENC).",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "NegativeAdjustment",
+      "documentTypeCode": "AJN",
+      "number": "AJ-2",
+      "publicId": "00000032-0000-4000-8000-000000000032",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000033-0000-4000-8000-000000000033",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000034-0000-4000-8000-000000000034",
+      "type": "AjusteInventarioAprobado",
+      "payload": {
+        "operation": "AjusteNegativo",
+        "causeCode": "VENC",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 900.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "SI",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "53150501",
+        "debito": 900.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 0,
+        "credito": 900.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      }
+    ]
+  }
+}

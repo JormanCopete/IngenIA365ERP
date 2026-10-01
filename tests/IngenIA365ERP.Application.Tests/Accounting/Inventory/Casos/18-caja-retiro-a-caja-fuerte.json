@@ -1,0 +1,73 @@
+{
+  "descripcion": "MovimientoDeCajaRegistrado · WithdrawalToSafe: CajaDestino (Safe) contra el medio del punto de origen.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "CashMovement",
+      "documentTypeCode": "MCJ",
+      "number": "MC-18",
+      "publicId": "00000067-0000-4000-8000-000000000067",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000068-0000-4000-8000-000000000068",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000070-0000-4000-8000-000000000070",
+      "type": "MovimientoDeCajaRegistrado",
+      "payload": {
+        "operation": "MovimientoDeCaja",
+        "movementKind": "WithdrawalToSafe",
+        "paymentMeansCode": "EFECTIVO",
+        "paymentMeansClass": "Cash",
+        "destinationPaymentMeansCode": null,
+        "pointOfSaleCode": "PTO01",
+        "cashRegisterCode": "CAJA03",
+        "cashSessionPublicId": "00000069-0000-4000-8000-000000000069",
+        "destination": "Safe",
+        "destinationPointOfSaleCode": null,
+        "amount": 100000.0,
+        "reason": "Prueba"
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CJ",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "11100501",
+        "debito": 100000.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "11050501",
+        "debito": 0,
+        "credito": 100000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      }
+    ]
+  }
+}

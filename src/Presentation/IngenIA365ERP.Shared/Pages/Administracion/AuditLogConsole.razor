@@ -5,6 +5,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject IngenIA365ERP.Shared.Services.Auditoria.IntegridadDeAuditoriaClient Integridad
 @implements IAsyncDisposable
 
 <PageTitle>Registro de auditoría — IngenIA365ERP</PageTitle>
@@ -14,8 +15,61 @@
         <div class="admin-page">
             <div class="page-header">
                 <h1>Registro de auditoría</h1>
+                @* Feature 012, T435 (FR-007, FR-008, US12-4, US12-5): la pestaña «Integridad» recalcula la cadena de sellos. *@
+                <div class="toolbar">
+                    <button class="@(_pestana == 0 ? "primary" : "")" @onclick="@(() => _pestana = 0)">Eventos</button>
+                    <PermissionGate Required="AuditLog.VerifyIntegrity">
+                        <button class="@(_pestana == 1 ? "primary" : "")" @onclick="@(() => _pestana = 1)">Integridad</button>
+                    </PermissionGate>
+                </div>
             </div>
 
+            @if (_pestana == 1)
+            {
+                <PermissionGate Required="AuditLog.VerifyIntegrity" MostrarAviso="true">
+                    <p class="texto-apoyo">
+                        Recalcula la cadena de sellos de los módulos encadenados (inventario, facturación electrónica, integración,
+                        aprobaciones, alertas, parámetros, impuestos, medios de pago y navegación) contra el testigo de la base y las anclas firmadas.
+                    </p>
+                    <div class="toolbar">
+                        <label>Desde <input type="date" @bind="_verificarDesde" /></label>
+                        <label>Hasta <input type="date" @bind="_verificarHasta" /></label>
+                        <button class="primary" @onclick="VerificarAsync" disabled="@_verificacion.Activa">Verificar</button>
+                    </div>
+                    <IndicadorDeCarga Cargando="@_verificacion.Activa" Texto="Verificando la cadena…">
+                        @if (_errorDeVerificacion is not null) { <p class="aviso aviso-error" role="alert">@_errorDeVerificacion</p> }
+                        @if (_resultado is { } v)
+                        {
+                            <p class="texto-apoyo">
+                                Revisados @v.Checked evento(s)@(v.FromSeq is null ? "" : $" (posiciones {v.FromSeq} a {v.ToSeq})") y @v.AnchorsChecked ancla(s).
+                            </p>
+                            @if (v.Incidents.Count == 0)
+                            {
+                                <p class="aviso aviso-ok">Sin incidentes: la cadena está íntegra en el rango.</p>
+                            }
+                            else
+                            {
+                                <table class="data-grid">
+                                    <thead><tr><th>Hallazgo</th><th>Posición</th><th>Evento</th><th>Fecha (UTC)</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var i in v.Incidents)
+                                        {
+                                            <tr>
+                                                <td>@IngenIA365ERP.Shared.Services.Inventario.TextosDeSeguridad.HallazgoDeIntegridad(i.Kind)</td>
+                                                <td>@i.Seq</td>
+                                                <td>@i.EventId</td>
+                                                <td>@i.OccurredAt?.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        }
+                    </IndicadorDeCarga>
+                </PermissionGate>
+            }
+            else
+            {
             <div class="toolbar">
                 <label>Usuario
                     <input type="text" placeholder="UserId" @bind="_userId" />
@@ -26,6 +80,8 @@
                         <option value="Navigation">Navigation — ingreso a opciones (feature 009)</option>
                         <option value="Security" /><option value="Core" /><option value="Payroll" /><option value="Accounting" />
                         <option value="Lending" /><option value="Inventory" /><option value="Treasury" /><option value="CDT" /><option value="General" />
+                        <option value="ElectronicInvoicing" /><option value="Integration" /><option value="Approvals" /><option value="Alerts" />
+                        <option value="Parameters" /><option value="Taxes" /><option value="PaymentMeans" />
                     </datalist>
                 </label>
                 <label>Acción
@@ -40,6 +96,8 @@
                 <label>Hasta
                     <input type="date" @bind="_to" />
                 </label>
+                <label><input type="checkbox" @bind="_encadenados" /> sólo módulos encadenados</label>
+                <label><input type="checkbox" @bind="_soloRechazos" /> sólo rechazos</label>
                 <button class="primary" @onclick="SearchAsync" disabled="@_loading">Buscar</button>
 
                 <PermissionGate Required="AuditLog.Export">
@@ -50,6 +108,7 @@
                 </PermissionGate>
             </div>
 
+            <IndicadorDeCarga Cargando="@_loading">
             @if (_loading) { <p>Cargando…</p> }
             else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
             else if (_items.Count == 0) { <p>Sin resultados para los filtros aplicados.</p> }
@@ -68,6 +127,11 @@
                             <th>Opción</th>
                             <th>Id</th>
                             <th>IP</th>
+                            <th>Canal</th>
+                            <th>Actor</th>
+                            <th>Resultado</th>
+                            <th>Motivo</th>
+                            <th>Cadena</th>
                             <th>Endpoint</th>
                         </tr>
                     </thead>
@@ -83,6 +147,11 @@
                                 <td>@Opcion(e)</td>
                                 <td>@e.EntityId</td>
                                 <td>@e.IpAddress</td>
+                                <td>@e.Channel</td>
+                                <td>@(e.ActorKind == "Process" ? "Proceso" : e.ActorKind == "Person" ? "Persona" : "")</td>
+                                <td>@(e.Result == "Rejected" ? $"Rechazado: {e.ErrorCode}" : "")</td>
+                                <td>@e.Reason</td>
+                                <td>@e.ChainSeq</td>
                                 <td>@e.Endpoint</td>
                             </tr>
                         }
@@ -93,6 +162,8 @@
                     <button @onclick="PrevPageAsync" disabled="@(_page <= 1 || _loading)">‹ Anterior</button>
                     <button @onclick="NextPageAsync" disabled="@(_page >= TotalPages || _loading)">Siguiente ›</button>
                 </div>
+            }
+            </IndicadorDeCarga>
             }
         </div>
     </ChildContent>
@@ -113,6 +184,25 @@
     private bool _loading;
     private string? _error;
     private List<AuditEntryItem> _items = new();
+    private bool _encadenados, _soloRechazos;
+    private int _pestana;
+    private DateTime? _verificarDesde = DateTime.UtcNow.Date.AddDays(-30), _verificarHasta = DateTime.UtcNow.Date;
+    private readonly EstadoDeCarga _verificacion = new();
+    private IngenIA365ERP.Shared.Services.Auditoria.VerificacionDeAuditoriaDto? _resultado;
+    private string? _errorDeVerificacion;
+
+    /// <summary>Los módulos cuya auditoría va por la cadena de sellos (feature 012, T36–T38).</summary>
+    private const string ModulosEncadenados = "Inventory,ElectronicInvoicing,Integration,Approvals,Alerts,Parameters,Taxes,PaymentMeans,Navigation";
+
+    private async Task VerificarAsync()
+    {
+        if (_verificarDesde is not { } desde || _verificarHasta is not { } hasta) { _errorDeVerificacion = "Indique el rango."; return; }
+        using var carga = _verificacion.Iniciar();
+        _errorDeVerificacion = null;
+        var r = await Integridad.VerificarAsync(DateTime.SpecifyKind(desde, DateTimeKind.Utc), DateTime.SpecifyKind(hasta.AddDays(1).AddTicks(-1), DateTimeKind.Utc));
+        if (!r.IsSuccess) { _resultado = null; _errorDeVerificacion = r.ErrorMessage ?? "No se pudo verificar la cadena."; return; }
+        _resultado = r.Value;
+    }
 
     private int TotalPages => PageSize <= 0 ? 0
         : (int)Math.Ceiling((double)_totalCount / PageSize);
@@ -207,6 +297,8 @@
         AppendIfPresent(qs, "entityType", _entityType);
         if (_from is not null) qs.Add($"from={_from.Value:yyyy-MM-dd}");
         if (_to is not null) qs.Add($"to={_to.Value:yyyy-MM-dd}");
+        if (_encadenados) qs.Add($"modules={Uri.EscapeDataString(ModulosEncadenados)}");
+        if (_soloRechazos) qs.Add("result=Rejected");
         return $"{AppSettings.GetApiBaseUrl()}/api/audit/logs?{string.Join("&", qs)}";
     }
 
@@ -271,7 +363,9 @@
         string Action, string EntityType, string? EntityId, string Module,
         string? IpAddress, string? Endpoint, string? HttpMethod, int? HttpStatusCode,
         long DurationMs, DateTime Timestamp,
-        string? OldValuesJson, string? NewValuesJson, IReadOnlyList<string>? ChangedFields);
+        string? OldValuesJson, string? NewValuesJson, IReadOnlyList<string>? ChangedFields,
+        string? Channel = null, string? ActorKind = null, string? Origin = null, string? Reason = null,
+        string Result = "Accepted", string? ErrorCode = null, string? OperationKey = null, long? ChainSeq = null);
 
     public sealed record PagedDto<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
 

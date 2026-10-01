@@ -1,0 +1,145 @@
+@page "/ventas/notas-debito"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Notas débito - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I6 (T898; FR-052, FR-060; contracts/api.md §18.4, §23; contracts/dian.md, tipo 92): la nota débito aumenta lo cobrado en
+   una factura confirmada —intereses, gastos, un mayor valor— sin mover existencia. Se elige la factura, el concepto de corrección de la
+   DIAN, las líneas y los pagos; con un medio de crédito (la venta a crédito o un cobro a crédito) el pago queda esperando la aprobación del
+   crédito provisional mientras Cartera no responda en línea. Confirmada, se transmite y aquí se ve su estado electrónico. Una nota débito
+   electrónica validada no se anula: se corrige con otra nota. (nuevo) *@
+<PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Notas débito</h3>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <PermissionGate Required="Inventory.Sales.Create">
+            <div class="info-card">
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Factura *
+                        <select class="e-input" value="@(_factura?.ToString() ?? "")" @onchange="@(e => _factura = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija la factura confirmada…</option>
+                            @foreach (var f in _facturas) { <option value="@f.DocumentPublicId">@f.Numero · @f.OperationDate.ToString("dd/MM/yyyy") · @f.CounterpartyName · @f.Total.ToString("N0")</option> }
+                        </select>
+                    </label>
+                    <SfButton CssClass="e-primary" Disabled="@(_factura is null)" OnClick="@Nueva">Nueva nota débito</SfButton>
+                </div>
+            </div>
+        </PermissionGate>
+    </IndicadorDeCarga>
+
+    @if (_editando)
+    {
+        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.NotasDebito" Clases="@([TextosDeVentas.ClaseNotaDebito])" Nombre="nota débito" Documento="@Documento"
+                        Origenes="@(Documento is null && Factura is { } f ? [f] : null)" ConConcepto="true" ConPagos="true"
+                        AvisoDeAnulacion="Se crea el documento contrario con su propia fecha; una nota débito electrónica validada se corrige con otra nota." Cambio="@CambioAsync" />
+        @if (_doc is { Electronico: not null } d)
+        {
+            <EstadoElectronico Electronico="@d.Electronico" DocumentoId="@d.DocumentPublicId" Entregar="@(() => Nav.NavigateTo($"/ventas/documentos/{d.DocumentPublicId}"))" Cambio="@RecargarAsync" />
+        }
+    }
+
+    <IndicadorDeCarga Cargando="@_lista.Activa">
+        <h4>Notas débito</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Estado</th><th>Estado electrónico</th><th class="numero">Total</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var n in _notas)
+                    {
+                        var id = n.DocumentPublicId;
+                        <tr>
+                            <td>@n.Numero</td><td>@n.OperationDate.ToString("dd/MM/yyyy")</td><td>@n.CounterpartyName</td><td>@TextosDeInventario.Estado(n.Status)</td>
+                            <td>@(n.ElectronicStatus ?? "—")</td><td class="numero">@n.Total.ToString("N0")</td>
+                            <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(id))">Abrir</SfButton></td>
+                        </tr>
+                    }
+                    @if (_notas.Count == 0) { <tr><td colspan="7" class="texto-tenue">No hay notas débito.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
+
+    /// <summary>La factura sobre la que se hace la nota (desde el detalle de la venta).</summary>
+    [SupplyParameterFromQuery(Name = "factura")] public Guid? Factura { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _lista = new();
+    private List<ResumenDeVentaDto> _facturas = [], _notas = [];
+    private DocumentoDeVentaDto? _doc;
+    private Guid? _factura;
+    private bool _editando, _cargadas;
+    private Guid _clave = Guid.NewGuid();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _editando = _editando || Documento is not null || Factura is not null;
+        _factura ??= Factura;
+        if (!_cargadas)
+        {
+            _cargadas = true;
+            using var carga = _carga.Iniciar();
+            foreach (var clase in new[] { TextosDeVentas.ClaseFactura, TextosDeVentas.ClaseFacturaDesdeRemisiones })
+            {
+                var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = clase, Status = 2, PageSize = 100 });
+                if (r.IsSuccess) _facturas.AddRange(r.Value!.Items);
+            }
+            _facturas = [.. _facturas.OrderByDescending(f => f.OperationDate)];
+        }
+        await CargarNotasAsync();
+        if (Documento is { } id) await LeerAsync(id);
+        else _doc = null;
+    }
+
+    private async Task CargarNotasAsync()
+    {
+        using var carga = _lista.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClaseNotaDebito, PageSize = 50 });
+        _notas = r.IsSuccess ? [.. r.Value!.Items] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las notas débito.");
+    }
+
+    private async Task LeerAsync(Guid id)
+    {
+        var r = await Ventas.ObtenerDocumentoAsync(id);
+        _doc = r.IsSuccess ? r.Value : null;
+    }
+
+    private async Task RecargarAsync()
+    {
+        if (_doc is { } d) await LeerAsync(d.DocumentPublicId);
+    }
+
+    private void Nueva()
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo($"/ventas/notas-debito?factura={_factura}", replace: true);
+    }
+
+    private void Abrir(Guid id)
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo($"/ventas/notas-debito?documento={id}");
+    }
+
+    private async Task CambioAsync(DocumentoDeVentaDto? doc)
+    {
+        _doc = doc;
+        if (doc is null) { _editando = false; Nav.NavigateTo("/ventas/notas-debito", replace: true); }
+        else if (Documento != doc.DocumentPublicId) Nav.NavigateTo($"/ventas/notas-debito?documento={doc.DocumentPublicId}", replace: true);
+        await CargarNotasAsync();
+    }
+}

@@ -19,6 +19,8 @@ public static class DependencyInjection
     {
         services.Configure<MongoDbSettings>(configuration.GetSection(MongoDbSettings.SectionName));
         services.Configure<AuditSignatureSettings>(configuration.GetSection(AuditSignatureSettings.SectionName));
+        // T986: con claves propias (Secret erp-audit-signature) las de desarrollo dejan de valer.
+        services.PostConfigure<AuditSignatureSettings>(s => s.QuitarClavesDeDesarrolloSiHayPropias());
 
         var mongoSettings = configuration.GetSection(MongoDbSettings.SectionName).Get<MongoDbSettings>()
             ?? new MongoDbSettings();
@@ -44,6 +46,14 @@ public static class DependencyInjection
         // claves se cargan de config una sola vez; el exporter es stateless.
         services.AddSingleton<IAuditSignatureService, AuditSignatureService>();
         services.AddScoped<IAuditPdfExporter, AuditPdfExporter>();
+
+        // Feature 012 (T38; T064–T066): el sello de integridad de la cadena de auditoría, el sellado y
+        // reenvío por cooperativa, y el lector de la verificación. El servicio de fondo que los conduce
+        // (AuditOutboxForwarder) lo registra SOLO la API, condicionado a Integration:AuditForwarder:Enabled.
+        services.AddSingleton<IngenIA365ERP.Audit.Integrity.SelloDeIntegridad>();
+        services.AddSingleton<SelladoDeAuditoria>();
+        services.AddSingleton<IngenIA365ERP.Application.Audit.VerifyIntegrity.ILectorDeCadenaDeAuditoria,
+            IngenIA365ERP.Audit.Integrity.LectorDeCadenaDeAuditoria>();
 
         // T026 — Bootstrap idempotente de índices y TTL al arranque.
         services.AddHostedService<AuditIndexBootstrap>();

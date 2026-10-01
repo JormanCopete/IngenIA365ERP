@@ -1,0 +1,294 @@
+@page "/inventario/periodos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Reportes
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Períodos de inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T295 (FR-047, SC-017; contracts/api.md §13.4, §27): los meses de inventario de toda la cooperativa desde el de la
+   puesta en marcha. Los meses se cierran en orden: la vista previa del siguiente por cerrar muestra lo que bloquea (conteos
+   abiertos con foto, un mes que no terminó) y lo que avisa (borradores, documentos en aprobación, traslados sin recibir,
+   mensajes pendientes, en lote o rechazados); con avisos, cerrar pide reconocerlos. Al cerrar se ve el valorizado fijado por
+   grupo contable y bodega (los valores, con Inventory.Costs.Read). Sólo el último mes cerrado se reabre, con motivo y el
+   permiso especial Inventory.Periods.Reopen. El valorizado a cualquier fecha sale de la vista «valuation». *@
+<PermissionGate Required="Inventory.Periods.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Períodos de inventario</h3>
+        <div class="toolbar">
+            <label class="campo">Año
+                <select class="e-input" value="@(_anio?.ToString() ?? "")" @onchange="@(async e => { _anio = int.TryParse(e.Value?.ToString(), out var a) ? a : null; await CargarAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var a in _anios) { <option value="@a">@a</option> }
+                </select>
+            </label>
+            <a class="e-btn e-outline" href="/inventario/informes?vista=valuation">Informes</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_periodos is null || _periodos.StartDate is null)
+        {
+            <p class="texto-tenue">El inventario todavía no arrancó: los meses aparecen desde la fecha de corte del primer saldo inicial.</p>
+        }
+        else
+        {
+            <p class="texto-apoyo">
+                Inicio: @_periodos.StartDate.Value.ToString("dd/MM/yyyy").
+                Último cierre: @(_periodos.LastClosedDate?.ToString("dd/MM/yyyy") ?? "ninguno").
+            </p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Mes</th><th>Estado</th><th>Cerrado</th><th>Versión</th><th>Reabierto</th><th>Motivo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _periodos.Periods)
+                        {
+                            <tr>
+                                <td>@Mes(p.Year, p.Month)</td>
+                                <td>@(p.Cerrado ? "Cerrado" : "Abierto")</td>
+                                <td>@(p.ClosedAt is { } c ? $"{c.ToLocalTime():dd/MM/yyyy HH:mm} · {p.ClosedBy?.Name}" : "")</td>
+                                <td>@p.ClosingVersion</td>
+                                <td>@(p.ReopenedAt is { } r ? $"{r.ToLocalTime():dd/MM/yyyy HH:mm} · {p.ReopenedBy?.Name}" : "")</td>
+                                <td>@p.ReopenReason</td>
+                                <td>
+                                    @if (EsElSiguiente(p))
+                                    {
+                                        <SfButton CssClass="e-outline" Disabled="@_revision.Activa" OnClick="@(() => RevisarAsync(p.Year, p.Month))">Revisar cierre</SfButton>
+                                    }
+                                    else if (EsElUltimoCerrado(p))
+                                    {
+                                        <PermissionGate Required="Inventory.Periods.Reopen">
+                                            <SfButton CssClass="e-outline" OnClick="@(() => AbrirReapertura(p))">Reabrir…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_revision.Activa" Texto="Revisando el mes…">
+        @if (_check is { } k)
+        {
+            <div class="info-card">
+                <h4>Cierre de @Mes(k.Year, k.Month)</h4>
+                @if (k.Blockers.NotNext is { } siguiente)
+                {
+                    <p class="aviso aviso-error">Los meses se cierran en orden: el siguiente por cerrar es @Mes(siguiente.Year, siguiente.Month).</p>
+                }
+                @if (k.Blockers.NotEnded is { } ultimo)
+                {
+                    <p class="aviso aviso-error">El mes todavía no termina (su último día es el @ultimo.ToString("dd/MM/yyyy")).</p>
+                }
+                @if (k.Blockers.OpenCounts.Count > 0)
+                {
+                    <p class="aviso aviso-error">Hay @k.Blockers.OpenCounts.Count conteo(s) abierto(s) con foto en el mes: ciérrelos o descártelos antes.</p>
+                    <ul>@foreach (var c in k.Blockers.OpenCounts) { <li>@c.DisplayNumber · @c.Warehouse · foto del @c.SnapshotDate.ToString("dd/MM/yyyy")</li> }</ul>
+                }
+                @if (k.Warnings.Hay)
+                {
+                    <p class="aviso aviso-alerta">Avisos del mes (no impiden cerrar, pero hay que reconocerlos):</p>
+                    <ul>
+                        @if (k.Warnings.Drafts > 0) { <li>@k.Warnings.Drafts borrador(es) con fecha en el mes.</li> }
+                        @if (k.Warnings.PendingApproval > 0) { <li>@k.Warnings.PendingApproval documento(s) en aprobación.</li> }
+                        @if (k.Warnings.UnresolvedTransfers.Count > 0) { <li>@k.Warnings.UnresolvedTransfers.Count traslado(s) sin recibir.</li> }
+                        @if (k.Warnings.Messages.Pending + k.Warnings.Messages.InBatch + k.Warnings.Messages.Rejected > 0)
+                        {
+                            <li>Mensajes a Contabilidad: @k.Warnings.Messages.Pending pendiente(s), @k.Warnings.Messages.InBatch en lote, @k.Warnings.Messages.Rejected rechazado(s).</li>
+                        }
+                    </ul>
+                    <SfCheckBox @bind-Checked="_reconocer" TChecked="bool" Label="Reconozco los avisos y cierro de todos modos" />
+                }
+                else if (k.CanClose)
+                {
+                    <p class="aviso aviso-ok">Sin avisos: el mes se puede cerrar.</p>
+                }
+                @if (k.CanClose)
+                {
+                    <PermissionGate Required="Inventory.Periods.Close">
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_cierre.Activa || (k.Warnings.Hay && !_reconocer))" OnClick="@CerrarAsync">Cerrar el mes</SfButton>
+                        </div>
+                    </PermissionGate>
+                }
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_cierre.Activa" Texto="Cerrando el mes y fijando el valorizado…">
+        @if (_cerrado is { } c)
+        {
+            <div class="info-card">
+                <p class="aviso aviso-ok">@Mes(c.Year, c.Month) cerrado (versión @c.ClosingVersion) el @c.ClosedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm").</p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Grupo contable</th><th>Bodega</th><th class="numero">Cantidad</th><th class="numero">Valor</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in c.Valuation)
+                            {
+                                <tr><td>@l.AccountingGroup.Code · @l.AccountingGroup.Name</td><td>@l.Warehouse.Code</td><td class="numero">@l.Quantity.ToString("N4")</td><td class="numero">@(l.Value?.ToString("N2") ?? "—")</td></tr>
+                            }
+                        </tbody>
+                        @if (c.Total is { } total)
+                        {
+                            <tfoot><tr><td colspan="3">Total</td><td class="numero">@total.ToString("N2")</td></tr></tfoot>
+                        }
+                    </table>
+                </div>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Inventory.Costs.Read">
+        <div class="info-card">
+            <h4>Valorizado a una fecha</h4>
+            <div class="toolbar">
+                <label class="campo">Fecha <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+                <SfCheckBox @bind-Checked="_conTransito" TChecked="bool" Label="Incluir tránsito" />
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_valorizado.Activa" OnClick="@ValorizarAsync">Consultar</SfButton>
+                @if (_tabla is not null)
+                {
+                    <PermissionGate Required="Inventory.Reports.Export">
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_valorizado.Activa" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+                    </PermissionGate>
+                }
+            </div>
+            <IndicadorDeCarga Cargando="@_valorizado.Activa">
+                <TablaDeReporte Tabla="@_tabla" TextoSinTabla="Elija la fecha y pulse «Consultar»: a la fecha de un cierre coincide con lo fijado en él." />
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+</div>
+
+<SfDialog @bind-Visible="_mostrarReapertura" Header="Reabrir el mes" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_reapertura.Activa" Texto="Reabriendo…">
+                <p class="texto-apoyo">
+                    Reabrir @(_aReabrir is { } p ? Mes(p.Year, p.Month) : "") deja sin efecto su valorizado fijado (se conserva, marcado como reemplazado),
+                    vuelve a admitir documentos con fecha en el mes y avisa a Contabilidad. Queda auditado con su motivo.
+                </p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_reapertura.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReabrirAsync">Reabrir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReapertura = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _revision = new(), _cierre = new(), _reapertura = new(), _valorizado = new();
+    private readonly ClaveDeOperacion _claveCierre = new(), _claveReapertura = new();
+    private PeriodosDeInventarioDto? _periodos;
+    private List<int> _anios = [];
+    private int? _anio;
+    private RevisionDelCierreDto? _check;
+    private ResultadoDelCierreDto? _cerrado;
+    private bool _reconocer, _mostrarReapertura, _conTransito;
+    private PeriodoDeInventarioDto? _aReabrir;
+    private string? _motivo;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private TablaReporteDto? _tabla;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        if (_periodos?.StartDate is { } inicio)
+            _anios = Enumerable.Range(inicio.Year, DateTime.Today.Year - inicio.Year + 1).Reverse().ToList();
+        if (_periodos?.LastClosedDate is { } cierre) _fecha = cierre;
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.PeriodosAsync(_anio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los períodos."); return; }
+        _periodos = r.Value;
+    }
+
+    /// <summary>El siguiente por cerrar: el primer mes abierto después del último cierre.</summary>
+    private bool EsElSiguiente(PeriodoDeInventarioDto p)
+    {
+        if (p.Cerrado || _periodos?.StartDate is not { } inicio) return false;
+        var siguiente = _periodos.LastClosedDate?.AddDays(1) ?? inicio;
+        return p.Year == siguiente.Year && p.Month == siguiente.Month;
+    }
+
+    private bool EsElUltimoCerrado(PeriodoDeInventarioDto p) =>
+        p.Cerrado && _periodos?.LastClosedDate is { } ultimo && ultimo.Year == p.Year && ultimo.Month == p.Month;
+
+    private async Task RevisarAsync(int anio, int mes)
+    {
+        using var carga = _revision.Iniciar();
+        _cerrado = null;
+        _reconocer = false;
+        var r = await Inventario.RevisarCierreAsync(anio, mes);
+        if (!r.IsSuccess) { _check = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar el mes."); return; }
+        _check = r.Value;
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (_check is not { } k) return;
+        using var carga = _cierre.Iniciar();
+        var r = await Inventario.CerrarPeriodoAsync(k.Year, k.Month, new CerrarPeriodoRequest(_reconocer), _claveCierre);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el mes."); return; }
+        _cerrado = r.Value;
+        _check = null;
+        await Notification.SuccessAsync($"{Mes(k.Year, k.Month)} cerrado.");
+        await CargarAsync();
+    }
+
+    private void AbrirReapertura(PeriodoDeInventarioDto p)
+    {
+        _aReabrir = p;
+        _motivo = null;
+        _mostrarReapertura = true;
+    }
+
+    private async Task ReabrirAsync()
+    {
+        if (_aReabrir is not { } p || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _reapertura.Iniciar();
+        var r = await Inventario.ReabrirPeriodoAsync(p.Year, p.Month, _motivo, _claveReapertura);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reabrir el mes."); return; }
+        _mostrarReapertura = false;
+        _cerrado = null;
+        await Notification.SuccessAsync($"{Mes(p.Year, p.Month)} reabierto.");
+        await CargarAsync();
+    }
+
+    private async Task ValorizarAsync()
+    {
+        using var carga = _valorizado.Iniciar();
+        var r = await Inventario.ValorizadoAsync(_fecha, conTransito: _conTransito);
+        if (!r.IsSuccess) { _tabla = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el valorizado."); return; }
+        _tabla = r.Value;
+    }
+
+    private async Task DescargarAsync(string formato)
+    {
+        using var carga = _valorizado.Iniciar();
+        var r = await Inventario.DescargarValorizadoAsync(_fecha, null, null, _conTransito, formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar el valorizado."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private static string Mes(int anio, int mes) =>
+        new DateTime(anio, mes, 1).ToString("MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("es-CO"));
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

@@ -31,6 +31,12 @@ public sealed class HabeasDataModule : ICarterModule
             .WithName("HabeasData_ListPolicies")
             .RequirePermission("Compliance.HabeasData.ViewHistory");
 
+        // Feature 012 (T46, T175): la política que el POS y Compras muestran al crear una persona. La pide quien crea
+        // personas, no quien administra el registro de consentimientos. Sin política publicada, 404 Generic.NotFound.
+        policies.MapGet("/current", CurrentPolicyAsync)
+            .WithName("HabeasData_CurrentPolicy")
+            .RequirePermission("Core.People.Create");
+
         policies.MapGet("/{publicId:guid}", GetPolicyAsync)
             .WithName("HabeasData_GetPolicy")
             .RequirePermission("Compliance.HabeasData.ViewHistory");
@@ -59,6 +65,9 @@ public sealed class HabeasDataModule : ICarterModule
 
     private static async Task<object?> ListPoliciesAsync(ISender sender, CancellationToken ct) =>
         await sender.Send(new ListPoliciesQuery(), ct);
+
+    private static async Task<object?> CurrentPolicyAsync(ISender sender, CancellationToken ct) =>
+        await sender.Send(new GetCurrentPolicyQuery(), ct);
 
     private static async Task<object?> GetPolicyAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>

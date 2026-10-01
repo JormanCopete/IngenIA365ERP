@@ -1,0 +1,83 @@
+{
+  "descripcion": "AjusteInventarioAprobado · Baja desde la bodega de tránsito: la línea Transit resuelve el rol Transito; la causa ROTURA decide la contrapartida.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "WriteOff",
+      "documentTypeCode": "BAJ",
+      "number": "BJ-1",
+      "publicId": "00000035-0000-4000-8000-000000000035",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000036-0000-4000-8000-000000000036",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000037-0000-4000-8000-000000000037",
+      "type": "AjusteInventarioAprobado",
+      "payload": {
+        "operation": "Baja",
+        "causeCode": "ROTURA",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "TR01",
+            "warehouseBehavior": "Transit",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 300.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "SI",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "53150502",
+        "debito": 300.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "14350590",
+        "debito": 0,
+        "credito": 300.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      }
+    ]
+  }
+}

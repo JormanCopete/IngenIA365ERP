@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Muestra ficticia (feature 012, T332): el AttachedDocument que envuelve la factura (en cbc:Description), como lo manda el proveedor por correo. -->
+<AttachedDocument xmlns="urn:oasis:names:specification:ubl:schema:xsd:AttachedDocument-2"
+                  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+                  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:ID>AD-900123456-SETP88</cbc:ID>
+  <cac:Attachment>
+    <cac:ExternalReference>
+      <cbc:MimeCode>text/xml</cbc:MimeCode>
+      <cbc:EncodingCode>UTF-8</cbc:EncodingCode>
+      <cbc:Description><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:ID>SETP88</cbc:ID>
+  <cbc:UUID>ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff</cbc:UUID>
+  <cbc:IssueDate>2026-09-22</cbc:IssueDate>
+  <cac:AccountingSupplierParty><cac:Party><cac:PartyTaxScheme><cbc:RegistrationName>Proveedor Nuevo Ltda.</cbc:RegistrationName><cbc:CompanyID>901555666</cbc:CompanyID></cac:PartyTaxScheme></cac:Party></cac:AccountingSupplierParty>
+  <cac:PaymentMeans><cbc:ID>1</cbc:ID><cbc:PaymentMeansCode>10</cbc:PaymentMeansCode></cac:PaymentMeans>
+  <cac:LegalMonetaryTotal><cbc:LineExtensionAmount>50000.00</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount>0.00</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount>50000.00</cbc:TaxInclusiveAmount><cbc:PayableAmount>50000.00</cbc:PayableAmount></cac:LegalMonetaryTotal>
+  <cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="94">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount>50000.00</cbc:LineExtensionAmount><cac:Item><cbc:Description>Flete Cali - Palmira</cbc:Description></cac:Item><cac:Price><cbc:PriceAmount>50000.00</cbc:PriceAmount></cac:Price></cac:InvoiceLine>
+</Invoice>]]></cbc:Description>
+    </cac:ExternalReference>
+  </cac:Attachment>
+</AttachedDocument>

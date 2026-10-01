@@ -1,0 +1,49 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject PersonasClient Personas
+@inject PermisosDelUsuario Permisos
+
+@* Feature 012, T353–T355 (FR-011, T46): el proveedor de una compra es una persona del maestro. Se busca con PersonSearchPicker y,
+   si no existe, se da de alta en el diálogo compartido de personas con el aviso de privacidad vigente y la decisión del titular
+   (CapturarAutorizacion, canal «Compras»): Compras no escribe personas. Sin Core.People.Create no ofrece el alta. (nuevo) *@
+<PersonSearchPicker Selected="@Seleccionado" SelectedChanged="@CambiarAsync" ShowHelpText="false" Compacto="@Compacto"
+                    Placeholder="NIT o nombre del proveedor" PermitirCrear="@(_puedeCrear && !Deshabilitado)" OnCrearPersona="@AbrirAlta"
+                    TextoSinResultados="@(_puedeCrear ? "No existe: créela como proveedor." : "Pida que la registren en Maestros › Personas.")" />
+<PersonaDialog @bind-Visible="_mostrarAlta" DocumentoInicial="@_documentoInicial" CapturarAutorizacion="true" CanalDeAutorizacion="Compras"
+               OnGuardado="@PersonaCreadaAsync" />
+
+@code {
+    /// <summary>El proveedor elegido.</summary>
+    [Parameter] public PersonSearchPicker.PersonSearchItem? Seleccionado { get; set; }
+
+    [Parameter] public EventCallback<PersonSearchPicker.PersonSearchItem?> SeleccionadoChanged { get; set; }
+
+    [Parameter] public bool Deshabilitado { get; set; }
+
+    [Parameter] public bool Compacto { get; set; } = true;
+
+    private bool _puedeCrear, _mostrarAlta;
+    private string? _documentoInicial;
+
+    protected override async Task OnInitializedAsync() => _puedeCrear = await Permisos.TieneAsync("Core.People.Create");
+
+    private Task CambiarAsync(PersonSearchPicker.PersonSearchItem? persona) => SeleccionadoChanged.InvokeAsync(persona);
+
+    private void AbrirAlta(string termino)
+    {
+        _documentoInicial = termino.All(char.IsDigit) ? termino : null;
+        _mostrarAlta = true;
+    }
+
+    /// <summary>La persona recién creada queda elegida como proveedor.</summary>
+    private async Task PersonaCreadaAsync(Guid publicId)
+    {
+        _mostrarAlta = false;
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } p)
+            await SeleccionadoChanged.InvokeAsync(new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible });
+    }
+
+    /// <summary>Un proveedor ya conocido por el documento (su contraparte) como elemento del buscador.</summary>
+    public static PersonSearchPicker.PersonSearchItem? Desde(IngenIA365ERP.Shared.Services.Inventario.ContraparteDeInventarioDto? c) =>
+        c is null ? null : new PersonSearchPicker.PersonSearchItem { PublicId = c.PersonPublicId, IdentificationNumber = c.DocumentNumber, FullName = c.Name };
+}

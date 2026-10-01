@@ -22,6 +22,9 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.Property(e => e.Body).IsRequired();
         builder.Property(e => e.ChannelsMask).IsRequired();
         builder.Property(e => e.EmailStatus).HasMaxLength(20).IsRequired().HasDefaultValue("Pending");
+        // Feature 012 (T39, T091): la alerta que entrega la notificación (sin FK: se busca por PublicId). La columna
+        // llega con PlataformaParaInventario.
+        builder.Property(e => e.AlertPublicId);
 
         // Lookup patrón "inbox del usuario X": (TenantId, RecipientUserPublicId, ReadAt).
         builder.HasIndex(e => new { e.TenantId, e.RecipientUserPublicId, e.ReadAt })

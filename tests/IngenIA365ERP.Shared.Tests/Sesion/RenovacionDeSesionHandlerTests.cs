@@ -263,4 +263,40 @@ public class RenovacionDeSesionHandlerTests
         vista.Bearer.Should().BeNull();
         vista.SinSesion.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Al_reintentar_tras_un_401_conserva_la_Idempotency_Key()
+    {
+        // Feature 012 (T13, T057): el reintento es la MISMA operación; con otra clave el servidor la
+        // ejecutaría dos veces.
+        await ConSesionAsync(TimeSpan.FromMinutes(10));
+        var claves = new List<string?>();
+        _servidor.AntesDeResponder = req =>
+        {
+            if (req.RequestUri!.AbsolutePath == "/api/inventory/parameters/INV/Existencias.StockNegativoPermitido/versions")
+                lock (claves) claves.Add(req.Headers.TryGetValues(IngenIA365ERP.Shared.Services.Http.ClaveDeOperacion.Cabecera, out var v) ? v.Single() : null);
+            return Task.CompletedTask;
+        };
+        var vecesAlRecurso = 0;
+        _servidor.Responder = (req, _) =>
+        {
+            if (req.RequestUri!.AbsolutePath == "/api/auth/refresh") return Renovacion("access-2", "refresh-2");
+            return ++vecesAlRecurso == 1
+                ? new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                : new HttpResponseMessage(HttpStatusCode.Created);
+        };
+        var cuerpo = new { scopeKind = "None", value = "true", validFrom = "2026-10-01", reason = "Prueba" };
+        var operacion = new IngenIA365ERP.Shared.Services.Http.ClaveDeOperacion();
+        using var peticion = operacion.Aplicar(
+            new HttpRequestMessage(HttpMethod.Post, "/api/inventory/parameters/INV/Existencias.StockNegativoPermitido/versions")
+            {
+                Content = JsonContent.Create(cuerpo),
+            }, cuerpo);
+
+        var resp = await _http.SendAsync(peticion);
+
+        resp.StatusCode.Should().Be(HttpStatusCode.Created);
+        claves.Should().HaveCount(2);
+        claves.Should().OnlyContain(c => c == operacion.Valor.ToString(), "el clon del reintento lleva las cabeceras del original");
+    }
 }

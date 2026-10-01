@@ -1,0 +1,71 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+
+@* Feature 012, T353–T355 (FR-013, FR-044, FR-050; contracts/api.md §14.1): los impuestos y retenciones de un documento de compras
+   —la vista previa del servidor en el borrador, la foto al confirmar— con su explicación (UVT y fecha, base mínima, tarifa y la
+   condición que decidió), separados el IVA descontable del que va al costo, y los totales (total a pagar = total − retenciones). *@
+@if (Renglones.Count > 0)
+{
+    <h4>Impuestos y retenciones</h4>
+    <div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead><tr><th>Línea</th><th>Impuesto</th><th>Tarifa</th><th>Tratamiento</th><th class="numero">Base</th><th class="numero">Valor</th><th>Explicación</th></tr></thead>
+            <tbody>
+                @foreach (var r in Renglones)
+                {
+                    <tr>
+                        <td>@(r.LineNumber?.ToString() ?? "Documento")</td>
+                        <td>@Clase(r.Kind)@(r.MunicipalityDaneCode is { } m ? $" ({m})" : "")</td>
+                        <td>@r.RateCode@(r.Rate is { } tarifa ? $" · {tarifa * 100m:0.####} %" : "")</td>
+                        <td>@Tratamiento(r.Treatment)</td>
+                        <td class="numero">@r.Base.ToString("N2")</td>
+                        <td class="numero">@r.Amount.ToString("N2")</td>
+                        <td class="texto-tenue">@Resumen(r.ExplanationJson)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+@if (Totales is { } t)
+{
+    <div class="info-card">
+        <span>Subtotal <b>@t.Subtotal.ToString("N2")</b></span> ·
+        <span>Descuentos <b>@t.DiscountTotal.ToString("N2")</b></span> ·
+        <span>Impuestos <b>@t.TaxTotal.ToString("N2")</b></span> ·
+        <span>Total <b>@t.Total.ToString("N2")</b></span> ·
+        <span>Retenciones <b>@t.WithholdingTotal.ToString("N2")</b></span> ·
+        <span>Total a pagar <b>@t.AmountDue.ToString("N2")</b></span>
+        @if (t.CostTotal is { } costo) { <span> · Valor al costo <b>@costo.ToString("N2")</b></span> }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<RenglonDeImpuestoDto> Renglones { get; set; } = [];
+
+    [Parameter] public TotalesDeDocumentoDto? Totales { get; set; }
+
+    private static string Clase(int kind) => kind switch
+    {
+        1 => "IVA", 2 => "INC", 3 => "ReteFuente", 4 => "ReteIVA", 5 => "ReteICA", 6 => "ICA", _ => "Otro",
+    };
+
+    private static string Tratamiento(int tratamiento) => tratamiento switch
+    {
+        1 => "Generado", 2 => "Descontable", 3 => "Al costo", 4 => "Retención practicada", 5 => "Retención sufrida", _ => "",
+    };
+
+    /// <summary>El resumen de la explicación del motor (el JSON de <c>ExplicacionTributaria</c>).</summary>
+    private static string Resumen(string json)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                   && doc.RootElement.TryGetProperty("Resumen", out var r) ? r.GetString() ?? "" : "";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return "";
+        }
+    }
+}

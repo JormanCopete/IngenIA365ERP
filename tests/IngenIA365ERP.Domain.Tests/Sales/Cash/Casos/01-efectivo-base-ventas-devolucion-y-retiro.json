@@ -1,0 +1,118 @@
+{
+  "nombre": "Efectivo: base + ventas - devoluciones - retiro confirmado; el borrador no cuenta",
+  "descripcion": "Base 200.000; tres ventas en efectivo (50.000, 35.500, 14.500) y una devolución de 12.000; retiro a caja fuerte confirmado de 150.000 y otro en borrador de 50.000 que no cuenta. Esperado 200.000 + 100.000 - 12.000 - 150.000 = 138.000. Se cuenta exacto.",
+  "sesion": 1,
+  "tratamientoDelFaltante": "ShortageToCashier",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "base": {
+    "medio": "EF",
+    "valor": 200000
+  },
+  "pagos": [
+    {
+      "medio": "EF",
+      "valor": 50000,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    },
+    {
+      "medio": "EF",
+      "valor": 35500,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    },
+    {
+      "medio": "EF",
+      "valor": 14500,
+      "sentido": "Received",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    },
+    {
+      "medio": "EF",
+      "valor": 12000,
+      "sentido": "Refunded",
+      "datafono": null,
+      "referencia": null,
+      "repetir": 1
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "WithdrawalToSafe",
+      "medio": "EF",
+      "valor": 150000,
+      "confirmado": true,
+      "medioDestino": null,
+      "sesionOrigen": 1,
+      "sesionDestino": null,
+      "datafonoOrigen": null,
+      "datafonoDestino": null
+    },
+    {
+      "tipo": "WithdrawalToSafe",
+      "medio": "EF",
+      "valor": 50000,
+      "confirmado": false,
+      "medioDestino": null,
+      "sesionOrigen": 1,
+      "sesionDestino": null,
+      "datafonoOrigen": null,
+      "datafonoDestino": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 200000,
+      "ventas": 100000,
+      "devoluciones": 12000,
+      "entradas": 0,
+      "salidas": 150000,
+      "reclasificacionesEntrada": 0,
+      "reclasificacionesSalida": 0,
+      "esperado": 138000,
+      "pagos": 4,
+      "datafonos": null,
+      "referencias": null
+    }
+  ],
+  "total": 138000,
+  "conteo": [
+    {
+      "medio": "EF",
+      "contado": 138000,
+      "motivo": null
+    }
+  ],
+  "arqueo": {
+    "lineas": [
+      {
+        "medio": "EF",
+        "contado": 138000,
+        "diferencia": 0,
+        "dentroDeTolerancia": true,
+        "tratamiento": null
+      }
+    ],
+    "totalEsperado": 138000,
+    "totalContado": 138000,
+    "totalDiferencia": 0,
+    "montoAAprobar": 0,
+    "lineasDelDocumento": [],
+    "sinMotivo": []
+  }
+}

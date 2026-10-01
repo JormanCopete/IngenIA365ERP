@@ -1,0 +1,31 @@
+{
+  // Research R10: con existencia cero se conserva LastUnitCost y la siguiente entrada al costo vigente lo usa.
+  "nombre": "Existencia cero",
+  "descripcion": "20 por 23.000 (1.150; último costo 1.300). La venta de los 20 sale a 1.150 = 23.000 y deja 0 por 0; el promedio conserva el último costo, 1.300. Un ajuste positivo de 3 sin costo indicado entra al costo vigente, que sin existencia es el último costo: 3 × 1.300 = 3.900.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -20,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -20, "costoUnitario": 1150, "costoTotal": -23000 } ],
+        "estado": { "cantidad": 0, "valor": 0, "promedio": 1300, "ultimoCosto": 1300 }
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-04", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -1,
+      "esperado": { "rechazo": "Inventory.Stock.Insufficient" }
+    },
+    {
+      "id": "AJ1", "documento": "AJ-1", "fecha": "2026-09-05", "clase": "PositiveAdjustment", "bodega": "PRINCIPAL", "cantidad": 3,
+      "valoracion": "AlCostoVigente",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 3, "costoUnitario": 1300, "costoTotal": 3900 } ],
+        "estado": { "cantidad": 3, "valor": 3900, "promedio": 1300, "ultimoCosto": 1300 },
+        "explicacion": [ "sin existencia, el último costo" ]
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 3, "valor": 3900, "promedio": 1300, "ultimoCosto": 1300 } ]
+}

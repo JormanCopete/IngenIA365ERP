@@ -1,0 +1,150 @@
+@page "/compras/cruce"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject INotificationService Notification
+
+<PageTitle>Cruce a tres vías - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I5, T813 (FR-049, FR-050, SC-007; contracts/api.md §14.9; T42): las líneas de las facturas de proveedor cruzadas contra lo
+   ordenado y lo recibido —en unidad base—, con los precios de la orden, la recepción y la factura, las diferencias, las razones (cantidad,
+   precio), la tolerancia que se usó y el estado: retenida (espera aprobación), aprobada o rechazada; sin estado, la línea quedó dentro de
+   la tolerancia. Precios y diferencia de precio llegan vacíos sin Inventory.Costs.Read. Cada línea enlaza a su factura y, si quedó
+   retenida, a la bandeja de aprobaciones donde se decide. La misma información se exporta en /inventario/informes?vista=purchase-matches. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cruce a tres vías</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <a class="e-btn e-outline" href="/inventario/informes?vista=purchase-matches">Exportar</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Proveedor <SelectorDeProveedor Seleccionado="@_proveedor" SeleccionadoChanged="@CambiarProveedorAsync" /></label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; _pagina = 1; return CargarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (valor, texto) in EstadosDelCruce.Todos) { <option value="@valor">@texto</option> }
+            </select>
+        </label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay líneas cruzadas con estos filtros. Una factura se cruza cuando sus recepciones vienen de una orden.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Factura</th><th>Línea</th><th>Producto</th>
+                            <th class="numero">Ordenado</th><th class="numero">Recibido</th><th class="numero">Facturado</th>
+                            <th class="numero">Precio orden</th><th class="numero">Precio recepción</th><th class="numero">Precio factura</th>
+                            <th class="numero">Dif. cantidad</th><th class="numero">Dif. precio</th>
+                            <th>Razones</th><th>Tolerancia usada</th><th>Estado</th><th>Aprobación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in _filas)
+                        {
+                            <tr class="@(l.Status == EstadosDelCruce.Retenida ? "resaltada" : "")">
+                                <td><a href="@($"/compras/facturas-proveedor/{l.SupplierInvoice.PublicId}")">@(l.SupplierInvoice.DisplayNumber ?? "(borrador)")</a> <span class="texto-tenue">@l.SupplierInvoice.SupplierNumber</span></td>
+                                <td>@l.LineNumber</td>
+                                <td>@l.Product.Code · @l.Product.Name</td>
+                                <td class="numero">@l.Ordered.ToString("N4")</td>
+                                <td class="numero">@l.Received.ToString("N4")</td>
+                                <td class="numero">@l.Invoiced.ToString("N4")</td>
+                                <td class="numero">@l.OrderPrice?.ToString("N2")</td>
+                                <td class="numero">@l.ReceiptPrice?.ToString("N2")</td>
+                                <td class="numero">@l.InvoicePrice?.ToString("N2")</td>
+                                <td class="numero">@l.QuantityVariance.ToString("N4")</td>
+                                <td class="numero">@(l.PriceVariance is { } p ? p.ToString("P2") : "")</td>
+                                <td>@string.Join(", ", l.Reasons.Select(EstadosDelCruce.Razon))</td>
+                                <td><span class="texto-tenue">@Tolerancia(l.Tolerance)</span></td>
+                                <td>@EstadosDelCruce.Texto(l.Status)</td>
+                                <td>
+                                    @if (l.ApprovalRequestPublicId is not null)
+                                    {
+                                        <a href="/inventario/aprobaciones">@(l.Status == EstadosDelCruce.Retenida ? "Decidir" : "Ver")</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                <span class="texto-tenue">Página @_pagina · @_total línea(s)</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+            </div>
+            <p class="texto-tenue">Cantidades en la unidad base del producto. Facturar más de lo recibido nunca entra por tolerancia: se corrige la factura o se registra otra recepción.</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<LineaDelCruceDto> _filas = [];
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
+    private int? _estado = EstadosDelCruce.Retenida;
+    private int _pagina = 1;
+    private long _total;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private Task CambiarProveedorAsync(PersonSearchPicker.PersonSearchItem? proveedor)
+    {
+        _proveedor = proveedor;
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ListarCruceAsync(_estado, _proveedor?.PublicId, _pagina, TamanoDePagina);
+        if (!r.IsSuccess)
+        {
+            _filas = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el cruce.");
+            return;
+        }
+        _filas = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    /// <summary>La tolerancia usada (el JSON guardado) en una línea legible: «clave: valor» separados por «·».</summary>
+    internal static string Tolerancia(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return "";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) return json;
+            return string.Join(" · ", doc.RootElement.EnumerateObject().Select(p => $"{p.Name}: {p.Value}"));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return json;
+        }
+    }
+}

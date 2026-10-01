@@ -1,0 +1,116 @@
+@page "/ventas/pedidos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Pedidos - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I6 (T895; FR-033, FR-052; contracts/api.md §18.4): el pedido del cliente. Al confirmarlo reserva lo pedido en la bodega
+   (el disponible es físico menos reservado; lo que no cabe responde Inventory.Stock.Insufficient) hasta la fecha que sella la confirmación,
+   y la reserva se libera sola al vencer. Cada línea muestra físico, reservado y disponible, y confirmada lo pendiente por despachar o
+   facturar; «Remisionar» abre la remisión y «Facturar» la factura desde el pedido, que consumen la reserva. Anular libera la reserva. (nuevo) *@
+<PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Pedidos</h3>
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(async e => { _estado = int.TryParse(e.Value?.ToString(), out var v) ? v : null; await CargarAsync(); })">
+                    <option value="">Todos</option>
+                    <option value="0">Borrador</option>
+                    <option value="2">Confirmado</option>
+                    <option value="3">Anulado</option>
+                </select>
+            </label>
+            <PermissionGate Required="Inventory.Sales.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nuevo">Nuevo pedido</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_editando)
+    {
+        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Pedidos" Clases="@([TextosDeVentas.ClasePedido])" Nombre="pedido" Masculino="true" Documento="@Documento"
+                        ConExistencias="true" EtiquetaPendiente="Pendiente por despachar o facturar"
+                        AvisoDeAnulacion="Anular el pedido libera lo que todavía tiene reservado; lo ya remisionado o facturado queda como está." Cambio="@CambioAsync">
+            <Acciones Context="doc">
+                @if (doc.Lines.Any(l => l.Pending is > 0))
+                {
+                    <PermissionGate Required="Inventory.Sales.Create">
+                        <a class="e-btn e-outline" href="@($"/ventas/remisiones?pedido={doc.DocumentPublicId}")">Remisionar</a>
+                        <a class="e-btn e-primary" href="@($"/ventas/facturas/nueva?pedido={doc.DocumentPublicId}")">Facturar</a>
+                    </PermissionGate>
+                }
+            </Acciones>
+        </EditorDelCiclo>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="numero">Total</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _pedidos)
+                    {
+                        var id = p.DocumentPublicId;
+                        <tr>
+                            <td>@p.Numero</td><td>@p.OperationDate.ToString("dd/MM/yyyy")</td><td>@p.CounterpartyName</td><td>@(p.SalespersonName ?? "—")</td>
+                            <td>@TextosDeInventario.Estado(p.Status)</td><td class="numero">@p.Total.ToString("N0")</td>
+                            <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(id))">Abrir</SfButton></td>
+                        </tr>
+                    }
+                    @if (_pedidos.Count == 0) { <tr><td colspan="7" class="texto-tenue">No hay pedidos.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<ResumenDeVentaDto> _pedidos = [];
+    private int? _estado;
+    private bool _editando;
+    private Guid _clave = Guid.NewGuid();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _editando = _editando || Documento is not null;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClasePedido, Status = _estado, PageSize = 50 });
+        _pedidos = r.IsSuccess ? [.. r.Value!.Items] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los pedidos.");
+    }
+
+    private void Nuevo()
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo("/ventas/pedidos", replace: true);
+    }
+
+    private void Abrir(Guid id)
+    {
+        _editando = true;
+        _clave = Guid.NewGuid();
+        Nav.NavigateTo($"/ventas/pedidos?documento={id}");
+    }
+
+    private async Task CambioAsync(DocumentoDeVentaDto? doc)
+    {
+        if (doc is null) { _editando = false; Nav.NavigateTo("/ventas/pedidos", replace: true); }
+        else if (Documento != doc.DocumentPublicId) Nav.NavigateTo($"/ventas/pedidos?documento={doc.DocumentPublicId}", replace: true);
+        await CargarAsync();
+    }
+}

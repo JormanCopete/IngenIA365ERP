@@ -1,0 +1,42 @@
+{
+  // T821, data-model §3.5: con PEPS la devolución de cliente crea una capa nueva a su costo de salida (el de la línea de
+  // venta enlazada), en su fecha: queda detrás de las capas anteriores.
+  "nombre": "PEPS: devolución de cliente crea capa a su costo de salida",
+  "descripcion": "C1 10 × 1.000 (01/09), C2 10 × 1.300 (02/09). V1 vende 15 el 03/09 a 1.100 (16.500). DC1 devuelve 3 el 05/09 al costo con que salieron, 1.100: capa nueva 3 × 1.100 = 3.300, detrás de C2. Estado 8 por 9.800. V2 vende 6 el 06/09: C2 5 × 1.300 = 6.500 + DC1 1 × 1.100 = 1.100 → 7.600, costo unitario 1.266,666667 (6 × 1.266,666667 = 7.600,000002 → 7.600,00: sin residuo). Estado 2 por 2.200 = DC1 2 × 1.100.",
+  "parametros": { "metodo": "Fifo", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "C1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "C2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -15,
+      "esperado": { "lineas": [ { "kind": "Exit", "cantidad": -15, "costoUnitario": 1100, "costoTotal": -16500 } ] }
+    },
+    {
+      "id": "DC1", "documento": "NC-1", "fecha": "2026-09-05", "clase": "CreditNote", "bodega": "PRINCIPAL", "cantidad": 3,
+      "valoracion": "AlCostoDeOrigen", "origen": "V1",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 3, "costoUnitario": 1100, "costoTotal": 3300, "revierte": "-" } ],
+        "consumos": [],
+        "capas": [
+          { "capa": "C2", "original": 10, "restante": 5, "costoUnitario": 1300 },
+          { "capa": "DC1", "original": 3, "restante": 3, "costoUnitario": 1100 }
+        ],
+        "estado": { "cantidad": 8, "valor": 9800, "promedio": 1225, "ultimoCosto": 1100 }
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-06", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -6,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -6, "costoUnitario": 1266.666667, "costoTotal": -7600 } ],
+        "consumos": [
+          { "salida": "V2", "capa": "C2", "cantidad": 5, "costoUnitario": 1300 },
+          { "salida": "V2", "capa": "DC1", "cantidad": 1, "costoUnitario": 1100 }
+        ],
+        "capas": [ { "capa": "DC1", "original": 3, "restante": 2, "costoUnitario": 1100 } ],
+        "estado": { "cantidad": 2, "valor": 2200, "promedio": 1100, "ultimoCosto": 1100 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 2, "valor": 2200, "promedio": 1100 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 2 } ]
+}

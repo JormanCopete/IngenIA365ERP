@@ -1,0 +1,32 @@
+{
+  // FR-017, research R10: al agotar, el residuo de redondeo deja valor = 0 con una línea RoundingResidue visible.
+  "nombre": "Residuo de redondeo",
+  "descripcion": "Tornillos: 10.000 × 1 = 10.000,00 y 20.000 × 1,10 = 22.000,00 → 30.000 por 32.000,00; promedio 32.000 / 30.000 = 1,0666666… → 1,066667 (6 decimales). Venta de 10.000: 10.000 × 1,066667 = 10.666,67 → 20.000 por 21.333,33; promedio 1,0666665 → 1,066667 (lejos del cero). Venta de los 20.000: 20.000 × 1,066667 = 21.333,34, un centavo más de lo que hay → valor −0,01 con cantidad 0; la línea RoundingResidue de +0,01 sobre esa salida deja el valor en 0.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10000, "costoUnitario": 1 },
+    {
+      "id": "E2", "documento": "EC-2", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 20000, "costoUnitario": 1.10,
+      "esperado": { "estado": { "cantidad": 30000, "valor": 32000.00, "promedio": 1.066667, "ultimoCosto": 1.10 } }
+    },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-02", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -10000,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -10000, "costoUnitario": 1.066667, "costoTotal": -10666.67 } ],
+        "estado": { "cantidad": 20000, "valor": 21333.33, "promedio": 1.066667 }
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -20000,
+      "esperado": {
+        "lineas": [
+          { "kind": "Exit", "cantidad": -20000, "costoUnitario": 1.066667, "costoTotal": -21333.34 },
+          { "kind": "CostAdjustment", "reason": "RoundingResidue", "cantidad": 0, "costoUnitario": 1.066667, "costoTotal": 0.01, "afecta": "V2" }
+        ],
+        "estado": { "cantidad": 0, "valor": 0, "promedio": 1.10, "ultimoCosto": 1.10 },
+        "explicacion": [ "Residuo de redondeo (RoundingResidue): 0.01" ]
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 0, "valor": 0, "promedio": 1.10 } ]
+}

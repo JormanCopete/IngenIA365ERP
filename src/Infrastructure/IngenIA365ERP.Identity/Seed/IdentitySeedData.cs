@@ -19,7 +19,6 @@ public static class IdentitySeedData
         ("LoanOfficer", "Módulo cartera financiera", true),
         ("Cashier", "Módulo depósitos/caja", true),
         ("PayrollManager", "Módulo nómina", true),
-        ("InventoryManager", "Módulo inventario", true),
         ("ReadOnly", "Solo consultas en todos los módulos", true),
     ];
 
@@ -107,23 +106,6 @@ public static class IdentitySeedData
         ("Payroll", "PayrollReports", "Print"),
         ("Payroll", "PayrollReports", "Export"),
 
-        // === Inventory (Inventario) ===
-        ("Inventory", "Products", "Read"),
-        ("Inventory", "Products", "Create"),
-        ("Inventory", "Products", "Update"),
-        ("Inventory", "Products", "Delete"),
-        ("Inventory", "Warehouses", "Read"),
-        ("Inventory", "Warehouses", "Create"),
-        ("Inventory", "Warehouses", "Update"),
-        ("Inventory", "StockMovements", "Read"),
-        ("Inventory", "StockMovements", "Create"),
-        ("Inventory", "Invoicing", "Read"),
-        ("Inventory", "Invoicing", "Create"),
-        ("Inventory", "Invoicing", "Print"),
-        ("Inventory", "InventoryReports", "Read"),
-        ("Inventory", "InventoryReports", "Print"),
-        ("Inventory", "InventoryReports", "Export"),
-
         // === CDT (Certificados) ===
         ("CDT", "Certificates", "Read"),
         ("CDT", "Certificates", "Create"),
@@ -179,7 +161,6 @@ public static class IdentitySeedData
         ["LoanOfficer"] = ["Lending.*", "Core.*.Read", "Deposits.*.Read"],
         ["Cashier"] = ["Deposits.*", "Core.*.Read"],
         ["PayrollManager"] = ["Payroll.*", "Core.*.Read"],
-        ["InventoryManager"] = ["Inventory.*", "Core.*.Read"],
         ["ReadOnly"] = ["*.Read"],
     };
 

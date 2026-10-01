@@ -1,0 +1,146 @@
+{
+  "descripcion": "CompraRecibida: dos renglones del mismo grupo y bodega se suman en una línea con sus líneas del documento; el de valor cero se descarta; el de la bodega B02 (otra sucursal) toma la regla por bodega y su sucursal.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "PurchaseReceipt",
+      "documentTypeCode": "CO",
+      "number": "REC-10",
+      "publicId": "00000008-0000-4000-8000-000000000008",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000009-0000-4000-8000-000000000009",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "11111111-2222-4333-8444-555555555555",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000010-0000-4000-8000-000000000010",
+      "type": "CompraRecibida",
+      "payload": {
+        "operation": "Compra",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Entry",
+            "quantityBase": 1,
+            "cost": 300.0,
+            "documentLines": [
+              1
+            ]
+          },
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Entry",
+            "quantityBase": 1,
+            "cost": 200.0,
+            "documentLines": [
+              2
+            ]
+          },
+          {
+            "accountingGroupCode": "ASEO",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Entry",
+            "quantityBase": 1,
+            "cost": 0.0,
+            "documentLines": [
+              3
+            ]
+          },
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B02",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": "c8e2f3a4-1b5c-4d6e-9f70-2b3c4d5e6f71",
+            "movement": "Entry",
+            "quantityBase": 1,
+            "cost": 100.0,
+            "documentLines": [
+              4
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "EI",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "14350501",
+        "debito": 500.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ],
+        "sucursal": "principal"
+      },
+      {
+        "cuenta": "22050501",
+        "debito": 0,
+        "credito": 500.0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ],
+        "sucursal": "principal"
+      },
+      {
+        "cuenta": "14350503",
+        "debito": 100.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          4
+        ],
+        "sucursal": "norte"
+      },
+      {
+        "cuenta": "22050501",
+        "debito": 0,
+        "credito": 100.0,
+        "tercero": "11111111-2222-4333-8444-555555555555",
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          4
+        ],
+        "sucursal": "norte"
+      }
+    ]
+  }
+}

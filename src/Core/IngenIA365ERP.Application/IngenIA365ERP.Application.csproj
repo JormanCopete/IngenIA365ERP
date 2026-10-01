@@ -27,6 +27,8 @@
   <ItemGroup>
     <!-- Feature 010 (US5): el layout de la PILA es dato versionado embebido, como la semilla del PUC. -->
     <EmbeddedResource Include="Payroll\Pila\Layouts\*.json" />
+    <!-- Feature 012 (T180): los catálogos DIAN son datos versionados por vigencia, no tablas (CatalogoDian). -->
+    <EmbeddedResource Include="ElectronicInvoicing\Catalogs\Data\*.json" />
   </ItemGroup>
 
 </Project>

@@ -16,10 +16,16 @@ public class CityConfiguration : IEntityTypeConfiguration<City>
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_COR_Cities_PublicId");
 
         builder.Property(e => e.LegacyCode).HasMaxLength(10);
-        // Único cuando existe: los registros migrados del SOLIDO pueden venir sin código.
+        // Único cuando existe: los registros migrados del sistema anterior pueden venir sin código.
         builder.HasIndex(e => e.LegacyCode).IsUnique().HasFilter("[LegacyCode] IS NOT NULL");
         builder.Property(e => e.Name).HasMaxLength(100).IsRequired();
         builder.Property(e => e.DepartmentId).IsRequired();
+
+        // Feature 012 (T176): código DIVIPOLA, único entre las vivas; par PlataformaParaInventario.
+        builder.Property(e => e.DaneCode).HasMaxLength(5);
+        builder.HasIndex(e => e.DaneCode).IsUnique()
+            .HasDatabaseName("UK_COR_Cities_DaneCode")
+            .HasFilter("[DaneCode] IS NOT NULL AND [IsDeleted] = 0");
 
         // FK index
         builder.HasIndex(e => e.DepartmentId).HasDatabaseName("IX_COR_Cities_DepartmentId");

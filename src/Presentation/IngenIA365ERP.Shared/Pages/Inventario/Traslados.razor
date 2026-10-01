@@ -1,0 +1,228 @@
+@page "/inventario/traslados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Traslados - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T380 (FR-039, US10; contracts/api.md §11): los traslados entre bodegas de las que la persona ve el origen o el
+   destino, con su estado derivado (borrador, en aprobación, en tránsito, recibido, recibido con diferencias, anulado), y en la
+   segunda pestaña las diferencias (faltantes y sobrantes) con su estado y el documento que las resuelve. «Nuevo traslado» abre el
+   borrador del despacho; el valor sólo llega con Inventory.Costs.Read. *@
+<PermissionGate Required="Inventory.Transfers.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Traslados entre bodegas</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@(_carga.Activa || _cargaDiferencias.Activa)" OnClick="@ActualizarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Transfers.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/inventario/traslados/nuevo"))">Nuevo traslado</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Traslados</SfButton>
+        <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAPestanaDeDiferenciasAsync())">Diferencias pendientes</SfButton>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" value="@(_estado ?? "")" @onchange="@(e => { _estado = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString(); return BuscarAsync(); })">
+                    <option value="">Todos</option>
+                    @foreach (var (valor, texto) in TextosDeInventario.EstadosDeTraslado) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+            <label class="campo">Origen
+                <select class="e-input" value="@(_origen?.ToString() ?? "")" @onchange="@(e => { _origen = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null; return BuscarAsync(); })">
+                    <option value="">Todas</option>
+                    @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Destino
+                <select class="e-input" value="@(_destino?.ToString() ?? "")" @onchange="@(e => { _destino = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null; return BuscarAsync(); })">
+                    <option value="">Todas</option>
+                    @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = LeerFecha(e.Value); return BuscarAsync(); })" /></label>
+        </div>
+
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (!_carga.Activa && _traslados.Count == 0)
+            {
+                <p class="texto-tenue">No hay traslados con estos filtros en las bodegas de su alcance.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead>
+                            <tr>
+                                <th>Número</th><th>Fecha</th><th>Origen</th><th>Destino</th><th>Tránsito</th><th>Estado</th>
+                                <th class="numero">Despachado</th><th class="numero">Recibido</th><th class="numero">Diferencias</th>
+                                @if (_conValor) { <th class="numero">Valor al costo</th> }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var t in _traslados)
+                            {
+                                <tr>
+                                    <td><a href="@($"/inventario/traslados/{t.DispatchPublicId}")">@(t.DisplayNumber ?? "(borrador)")</a></td>
+                                    <td>@t.OperationDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@t.Origin?.Code</td>
+                                    <td>@t.Destination?.Code</td>
+                                    <td>@t.Transit?.Code</td>
+                                    <td>@EstadoDeTraslado(t.State)</td>
+                                    <td class="numero">@t.QuantityDispatched.ToString("N4")</td>
+                                    <td class="numero">@t.QuantityReceived.ToString("N4")</td>
+                                    <td class="numero">@t.PendingDiscrepancies</td>
+                                    @if (_conValor) { <td class="numero">@t.Value?.ToString("N2")</td> }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+                    <span class="texto-tenue">Página @_pagina · @_total traslado(s)</span>
+                    <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" value="@(_estadoDiferencia ?? "")" @onchange="@(e => { _estadoDiferencia = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString(); return CargarDiferenciasAsync(); })">
+                    <option value="">Todas</option>
+                    @foreach (var (valor, texto) in TextosDeInventario.EstadosDeDiferencia) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaDiferencias.Activa">
+            @if (!_cargaDiferencias.Activa && _diferencias.Count == 0)
+            {
+                <p class="texto-tenue">No hay diferencias de traslado con este estado.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead>
+                            <tr><th>Traslado</th><th>Tipo</th><th>Producto</th><th class="numero">Cantidad</th><th class="numero">Pendiente</th><th>Estado</th><th>Resolución</th><th>Documento</th><th>Destino</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in _diferencias)
+                            {
+                                <tr>
+                                    <td><a href="@($"/inventario/traslados/{d.Transfer.DispatchPublicId}")">@d.Transfer.DisplayNumber</a></td>
+                                    <td>@TextosDeInventario.Texto(TextosDeInventario.TiposDeDiferencia, d.Kind)</td>
+                                    <td>@d.Product.Code · @d.Product.Name</td>
+                                    <td class="numero">@d.QuantityBase.ToString("N4")</td>
+                                    <td class="numero">@d.PendingBase.ToString("N4")</td>
+                                    <td>@EstadoDeDiferencia(d.State)</td>
+                                    <td>@(d.Resolution is { } r ? TextosDeInventario.Texto(TextosDeInventario.ResolucionesDeDiferencia, r) : "—")</td>
+                                    <td>@(d.ResolvingDocument is { } doc ? $"{TextosDeInventario.Clase(doc.Class)} {doc.DisplayNumber ?? TextosDeInventario.Estado(doc.Status)}" : "—")</td>
+                                    <td>@d.DestinationWarehouse?.Code</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDiferencias = new();
+    private List<ResumenDeTrasladoDto> _traslados = [];
+    private List<DiferenciaDeTrasladoDto> _diferencias = [];
+    private List<BodegaDto> _bodegas = [];
+    private int _pestana;
+    private string? _estado, _estadoDiferencia = "Pending";
+    private Guid? _origen, _destino;
+    private DateOnly? _desde, _hasta;
+    private int _pagina = 1;
+    private long _total;
+    private bool _diferenciasCargadas;
+
+    private bool _conValor => _traslados.Any(t => t.Value is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var bodegas = await Inventario.ListarBodegasAsync();
+        _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit)] : [];
+        await CargarAsync();
+    }
+
+    private Task ActualizarAsync() => _pestana == 0 ? CargarAsync() : CargarDiferenciasAsync();
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarTrasladosAsync(new FiltroDeTraslados
+        {
+            State = _estado, OriginWarehousePublicId = _origen, DestinationWarehousePublicId = _destino, From = _desde, To = _hasta,
+            Page = _pagina, PageSize = TamanoDePagina,
+        });
+        if (!r.IsSuccess)
+        {
+            _traslados = [];
+            _total = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los traslados.");
+            return;
+        }
+        _traslados = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task CambiarAPestanaDeDiferenciasAsync()
+    {
+        _pestana = 1;
+        if (!_diferenciasCargadas) await CargarDiferenciasAsync();
+    }
+
+    private async Task CargarDiferenciasAsync()
+    {
+        using var carga = _cargaDiferencias.Iniciar();
+        var r = await Inventario.ListarDiferenciasDeTrasladoAsync(_estadoDiferencia, tamano: 100);
+        _diferenciasCargadas = true;
+        if (!r.IsSuccess)
+        {
+            _diferencias = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las diferencias.");
+            return;
+        }
+        _diferencias = [.. r.Value!.Items];
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private static string EstadoDeTraslado(string estado) => TextosDeInventario.EstadosDeTraslado.TryGetValue(estado, out var t) ? t : estado;
+
+    private static string EstadoDeDiferencia(string estado) => TextosDeInventario.EstadosDeDiferencia.TryGetValue(estado, out var t) ? t : estado;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Audit.Configuration;
@@ -45,6 +46,39 @@ public class MongoAuditService : IAuditService, IDisposable
             TimeSpan.FromSeconds(_settings.FlushIntervalSeconds));
     }
 
+    /// <summary>
+    /// La base de auditoría a la que va (o de la que se lee) este evento: la de la cooperativa, o la
+    /// global cuando la operación no tiene cooperativa (identidad, plataforma).
+    ///
+    /// <para>
+    /// <b>Guarda de segundo plano</b> (feature 012, T5, FR-083, T045): un trabajo de fondo corre por
+    /// <c>IEjecutorEnCooperativa</c>, que fija la cooperativa en <see cref="ContextoAmbiental"/>. Si
+    /// hay contexto y aun así no se resolvió cooperativa, algo está mal cableado, y caer a la global
+    /// escondería el evento donde nadie de esa cooperativa lo ve. Se niega: <c>Critical</c> y
+    /// excepción, nunca <see cref="AuditDatabaseNames.SufijoGlobal"/> desde un trabajo de fondo.
+    /// </para>
+    /// </summary>
+    private string CooperativaOGlobal()
+    {
+        // Vacío cuenta como «sin cooperativa»: AuditDatabaseNames.Para lo manda a la global, que es
+        // justo lo que esta guarda impide desde un trabajo de fondo.
+        var cooperativa = _tenantService.TenantId;
+        if (!string.IsNullOrWhiteSpace(cooperativa)) return cooperativa;
+
+        if (ContextoAmbiental.Activo)
+        {
+            _logger.LogCritical(
+                "[Auditoria.SegundoPlanSinCooperativa] Un trabajo de fondo ({Origen}, actor {Actor}) intentó " +
+                "auditar sin cooperativa resuelta. No se escribe en la base global.",
+                ContextoAmbiental.Origen, ContextoAmbiental.Actor?.Name);
+            throw new InvalidOperationException(
+                $"Auditoría en segundo plano sin cooperativa resuelta ({ContextoAmbiental.Origen}). " +
+                "Nunca se cae a la base Global desde un trabajo de fondo: revisá que corra por IEjecutorEnCooperativa.");
+        }
+
+        return AuditDatabaseNames.SufijoGlobal;
+    }
+
     // === WRITE: Legacy overload ===
 
     public Task LogAsync(string action, string entityType, string entityId,
@@ -74,7 +108,7 @@ public class MongoAuditService : IAuditService, IDisposable
         // IngenIA365ERP_Audit_default y CERO en IngenIA365ERP_Audit_Global, que
         // es la que lee la consola. Los eventos de identidad —inicios de sesion,
         // segundo factor, invitaciones— se escribian y quedaban invisibles.
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
 
         var entry = new AuditLog
         {
@@ -111,7 +145,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public Task LogAccessAsync(AccessLogCommand command, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
 
         var entry = new AccessLog
         {
@@ -136,14 +170,20 @@ public class MongoAuditService : IAuditService, IDisposable
 
     // === FLUSH ===
 
+    /// <summary>
+    /// Vacía las colas ahora: espera al volcado que esté en curso y después vuelca todo lo que había
+    /// pendiente, no una sola tanda. El temporizador y el umbral de tamaño siguen sin esperar.
+    /// </summary>
     public async Task FlushAsync()
     {
-        await FlushInternalAsync();
+        await FlushInternalAsync(esperarAlQueEstaEnCurso: true);
     }
 
-    private async Task FlushInternalAsync()
+    private async Task FlushInternalAsync(bool esperarAlQueEstaEnCurso = false)
     {
-        if (!await _flushLock.WaitAsync(0))
+        if (esperarAlQueEstaEnCurso)
+            await _flushLock.WaitAsync();
+        else if (!await _flushLock.WaitAsync(0))
             return; // Another flush in progress
 
         try
@@ -162,35 +202,54 @@ public class MongoAuditService : IAuditService, IDisposable
         }
     }
 
+    // Cada volcado lleva TODO lo que había en la cola al empezar, en tandas de BatchSize. Antes llevaba
+    // una sola tanda: el alta de una cooperativa encola miles de eventos de sus semillas (el interceptor
+    // audita cada fila) y a una tanda de 100 cada 5 s la cola tardaba minutos en vaciarse; lo que se
+    // auditaba detrás quedaba invisible ese rato (feature 012, T186: lo destaparon las e2e). Lo que llega
+    // durante el volcado espera al siguiente, así un flujo continuo no lo alarga sin fin.
     private async Task FlushAuditQueueAsync()
     {
-        var batch = DequeueBatch(_auditQueue, _settings.BatchSize);
-        if (batch.Count == 0) return;
-
-        // Group by tenant for per-tenant collections
-        foreach (var group in batch.GroupBy(e => e.TenantId))
+        var pendientes = _auditQueue.Count;
+        var volcados = 0;
+        while (volcados < pendientes)
         {
-            var collection = GetAuditCollection(group.Key);
-            // El mismo documento que escribe AppendOnlyAuditWriter, no la clase
-            // serializada: una sola forma en la coleccion de aqui en adelante.
-            await collection.InsertManyAsync(group.Select(AuditDocumentSchema.ToDocument).ToList());
+            var batch = DequeueBatch(_auditQueue, Math.Min(_settings.BatchSize, pendientes - volcados));
+            if (batch.Count == 0) break;
+
+            // Group by tenant for per-tenant collections
+            foreach (var group in batch.GroupBy(e => e.TenantId))
+            {
+                var collection = GetAuditCollection(group.Key);
+                // El mismo documento que escribe AppendOnlyAuditWriter, no la clase
+                // serializada: una sola forma en la coleccion de aqui en adelante.
+                await collection.InsertManyAsync(group.Select(AuditDocumentSchema.ToDocument).ToList());
+            }
+
+            volcados += batch.Count;
         }
 
-        _logger.LogDebug("Flushed {Count} audit log entries", batch.Count);
+        if (volcados > 0) _logger.LogDebug("Flushed {Count} audit log entries", volcados);
     }
 
     private async Task FlushAccessQueueAsync()
     {
-        var batch = DequeueBatch(_accessQueue, _settings.BatchSize);
-        if (batch.Count == 0) return;
-
-        foreach (var group in batch.GroupBy(e => e.TenantId))
+        var pendientes = _accessQueue.Count;
+        var volcados = 0;
+        while (volcados < pendientes)
         {
-            var collection = GetAccessCollection(group.Key);
-            await collection.InsertManyAsync(group.ToList());
+            var batch = DequeueBatch(_accessQueue, Math.Min(_settings.BatchSize, pendientes - volcados));
+            if (batch.Count == 0) break;
+
+            foreach (var group in batch.GroupBy(e => e.TenantId))
+            {
+                var collection = GetAccessCollection(group.Key);
+                await collection.InsertManyAsync(group.ToList());
+            }
+
+            volcados += batch.Count;
         }
 
-        _logger.LogDebug("Flushed {Count} access log entries", batch.Count);
+        if (volcados > 0) _logger.LogDebug("Flushed {Count} access log entries", volcados);
     }
 
     private async Task WriteFallbackAsync()
@@ -228,7 +287,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<PagedList<AuditLogEntry>> QueryAsync(AuditQueryParameters query, CancellationToken cancellationToken = default)
     {
-        var tenantId = query.TenantId ?? _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = query.TenantId ?? CooperativaOGlobal();
         var collection = GetAuditCollection(tenantId);
 
         // Filtro, orden y mapeo entienden las dos formas del documento; ver
@@ -250,7 +309,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByEntityAsync(string entityType, string entityId, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
         var collection = GetAuditCollection(tenantId);
 
         var filter = AuditDocumentSchema.FiltroPorEntidad(entityType, entityId);
@@ -266,7 +325,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AuditLogEntry>> GetByUserAsync(string userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
         var collection = GetAuditCollection(tenantId);
 
         var filter = AuditDocumentSchema.FiltroPorUsuario(userId, from, to);
@@ -282,7 +341,7 @@ public class MongoAuditService : IAuditService, IDisposable
 
     public async Task<IReadOnlyList<AccessLogEntry>> GetAccessLogsAsync(string? userId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
-        var tenantId = _tenantService.TenantId ?? AuditDatabaseNames.SufijoGlobal;
+        var tenantId = CooperativaOGlobal();
         var collection = GetAccessCollection(tenantId);
 
         var filterBuilder = Builders<AccessLog>.Filter;

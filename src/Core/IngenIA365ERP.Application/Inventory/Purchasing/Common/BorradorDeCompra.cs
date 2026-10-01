@@ -1,0 +1,739 @@
+using System.Globalization;
+using System.Text.Json;
+using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Inventory.Common;
+using IngenIA365ERP.Application.Inventory.Documents;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
+using IngenIA365ERP.Domain.Entities.Inventory.Purchasing;
+using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Inventory.Costing;
+using Microsoft.EntityFrameworkCore;
+
+namespace IngenIA365ERP.Application.Inventory.Purchasing.Common;
+
+/// <summary>
+/// La compra directa (T344) arma la factura contra una recepción que puede quedar en aprobación en la misma operación: sólo
+/// entonces el borrador de la factura admite una recepción que todavía no está confirmada. Scoped. (nuevo)
+/// </summary>
+public sealed class ContextoDeCompraDirecta
+{
+    public bool PermiteRecepcionPendiente { get; set; }
+
+    /// <summary>
+    /// Hay una compra directa en curso en esta petición: la recepción no propone su documento soporte (T741), porque la compra directa arma su
+    /// propio documento —factura del proveedor o soporte— en la misma operación. (nuevo, I4)
+    /// </summary>
+    public bool EnCurso { get; set; }
+}
+
+/// <summary>
+/// El borrador de compras (feature 012, T339; contracts/api.md §9.3, §14.1–§14.6): lo que el grupo <c>Purchases</c> agrega al
+/// guardado del ciclo común (<see cref="IBorradorDeGrupo"/>). (nuevo)
+/// <list type="bullet">
+/// <item><b>Campos por clase</b>: el documento del proveedor sólo en factura y nota; la factura de origen y la clase de nota sólo
+/// en la nota; la línea de recepción en factura y devolución; la línea de factura, el valor y <c>affectsCost</c> sólo en la
+/// nota; el costo digitado en ninguna. Lo demás: <c>Validation.Invalid</c>.</item>
+/// <item><b>Líneas desde su origen</b>: producto y unidad de la línea de recepción o de factura; en la nota, la cantidad de la
+/// factura si no viene y el valor en vez del precio.</item>
+/// <item><b>Proveedor</b> obligatorio (en la factura y la nota, porque el número es único por proveedor); <b>municipio</b>
+/// propuesto desde la sucursal de la bodega que recibe, y uno inexistente es <c>Inventory.Purchase.MunicipalityUnknown</c>.</item>
+/// <item><b>Vínculos</b> con sus orígenes (<c>InvoiceOfReceipt</c>, <c>NoteOf</c>, <c>ReturnOf</c>), recepción del mismo
+/// proveedor y confirmada, factura sin mezclar modos de paso; la bodega y la sucursal de una factura, las de sus recepciones.</item>
+/// <item><b>Documento del proveedor</b> (<c>INV_SupplierInvoiceDetails</c>) con su unicidad, CUFE y fechas.</item>
+/// <item><b>Impuestos y totales</b> por <see cref="CalculoTributarioDeCompra"/> en cada guardado, como vista previa.</item>
+/// </list>
+/// Lo que depende de otros documentos y puede cambiar antes de confirmar (lo facturado, lo devuelto, lo que queda de la
+/// factura, la UVT vigente) vuelve como aviso con el código que daría la confirmación.
+/// <para>
+/// I5 (T787, T789; api.md §14.9): la <b>solicitud</b> lleva <c>neededBy</c> (en <c>ExpectedDate</c>) y quién la pide
+/// (<c>requestedByPersonPublicId</c>, su contraparte), sin precios ni proveedor; la <b>orden</b> lleva proveedor, precios y descuentos,
+/// <c>expectedDate</c> y sus condiciones de pago (<c>paymentTerms</c>, que se guardan en sus notas, data-model §9.8) y puede tomar sus
+/// líneas de una solicitud aprobada (<c>requestLinePublicId</c>, vínculo <c>FromOrder</c> orden ← solicitud); la <b>recepción</b> puede
+/// recibir contra órdenes (<c>orderLinePublicId</c>, vínculo <c>FromOrder</c> recepción ← orden) del mismo proveedor y abiertas, y lo
+/// recibido de más fuera de la tolerancia vuelve como aviso (<see cref="RecepcionContraOrden"/>).
+/// </para>
+/// </summary>
+public sealed class BorradorDeCompra(
+    IApplicationDbContext db,
+    IDateTimeService reloj,
+    CalculoTributarioDeCompra calculo,
+    VinculosDeCompra vinculos,
+    ContextoDeCompraDirecta compraDirecta,
+    RecepcionContraOrden contraOrden,
+    CostosAdicionalesDeCompra? costos = null) : IBorradorDeGrupo
+{
+    public DocumentClassGroup Grupo => DocumentClassGroup.Purchases;
+
+    // -------------------------------------------------------------------------------------------- preparar --
+
+    public async Task<Result<SaveInventoryDraftRequest>> PrepararAsync(
+        InventoryDocumentType tipo, SaveInventoryDraftRequest pedido, InventoryDocument? existente, CancellationToken ct)
+    {
+        var clase = tipo.Class;
+        // I4 (T740): el documento soporte se arma como la factura (contra sus recepciones) y su nota de ajuste como la nota del proveedor
+        // (contra el documento soporte), sin documento del proveedor: los numera la cooperativa.
+        var esSoporte = clase is DocumentClass.SupportDocument or DocumentClass.SupportDocumentAdjustmentNote;
+        var esFactura = clase is DocumentClass.SupplierInvoice or DocumentClass.SupportDocument;
+        var esNota = clase is DocumentClass.SupplierNote or DocumentClass.SupportDocumentAdjustmentNote;
+        var esDevolucion = clase == DocumentClass.SupplierReturn;
+        var esSolicitud = clase == DocumentClass.PurchaseRequest;
+        var esOrden = clase == DocumentClass.PurchaseOrder;
+        var esRecepcion = clase == DocumentClass.PurchaseReceipt;
+
+        // I5 (T799): los costos adicionales arman sus líneas desde las recepciones; sus campos sólo en su clase.
+        if (clase == DocumentClass.LandedCost) return await PrepararCostosAdicionalesAsync(pedido, ct);
+        if (pedido.ReceiptPublicIds is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("receiptPublicIds", clase));
+        if (pedido.Amount is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("amount", clase));
+        if (pedido.Method is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("method", clase));
+        if (pedido.ManualAllocations is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("manualAllocations", clase));
+
+        // I5 (T787): los campos de la solicitud y de la orden sólo en su clase.
+        if (pedido.NeededBy is not null && !esSolicitud) return Falla(ErroresDeCompras.CampoNoAdmitido("neededBy", clase));
+        if (pedido.RequestedByPersonPublicId is not null && !esSolicitud) return Falla(ErroresDeCompras.CampoNoAdmitido("requestedByPersonPublicId", clase));
+        if (pedido.ExpectedDate is not null && !esOrden) return Falla(ErroresDeCompras.CampoNoAdmitido("expectedDate", clase));
+        if (pedido.PaymentTerms is not null && !esOrden) return Falla(ErroresDeCompras.CampoNoAdmitido("paymentTerms", clase));
+        if (esSolicitud && (pedido.SupplierPersonPublicId is not null || pedido.CounterpartyPersonPublicId is not null))
+            return Falla(ErroresDeCompras.CampoNoAdmitido(pedido.SupplierPersonPublicId is not null ? "supplierPersonPublicId" : "counterpartyPersonPublicId", clase));
+        if (esSolicitud && pedido.OperationMunicipalityDaneCode is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("operationMunicipalityDaneCode", clase));
+        if (esOrden && !string.IsNullOrWhiteSpace(pedido.PaymentTerms) && !string.IsNullOrWhiteSpace(pedido.Notes)) return Falla(ErroresDeCompras.PaymentTermsAndNotes());
+        // La solicitud: quien la pide es su contraparte; la orden: sus condiciones son sus notas (data-model §9.8).
+        if (esSolicitud && pedido.RequestedByPersonPublicId is { } quienPide) pedido = pedido with { CounterpartyPersonPublicId = quienPide };
+        if (esOrden && !string.IsNullOrWhiteSpace(pedido.PaymentTerms)) pedido = pedido with { Notes = pedido.PaymentTerms };
+
+        if (pedido.Supplier is not null && (esSoporte || (!esFactura && !esNota))) return Falla(ErroresDeCompras.CampoNoAdmitido("supplier", clase));
+        if ((pedido.SupplierInvoicePublicId is not null || pedido.NoteKind is not null) && !esNota)
+            return Falla(ErroresDeCompras.CampoNoAdmitido(pedido.NoteKind is null ? "supplierInvoicePublicId" : "noteKind", clase));
+        if (pedido.OperationMunicipalityDaneCode is not null && esDevolucion)
+            return Falla(ErroresDeCompras.CampoNoAdmitido("operationMunicipalityDaneCode", clase));
+
+        var lineas = new List<SaveInventoryDraftLine>(pedido.Lines.Count);
+        for (var i = 0; i < pedido.Lines.Count; i++)
+        {
+            var l = pedido.Lines[i];
+            var numero = i + 1;
+            if (l.UnitCost is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("lines.unitCost", clase));
+            if (l.ReceiptLinePublicId is not null && !esFactura && !esDevolucion) return Falla(ErroresDeCompras.CampoNoAdmitido("lines.receiptLinePublicId", clase));
+            if ((l.InvoiceLinePublicId is not null || l.Amount is not null || l.AffectsCost is not null) && !esNota)
+                return Falla(ErroresDeCompras.CampoNoAdmitido(l.InvoiceLinePublicId is not null ? "lines.invoiceLinePublicId" : l.Amount is not null ? "lines.amount" : "lines.affectsCost", clase));
+            if (l.OrderLinePublicId is not null && !esRecepcion) return Falla(ErroresDeCompras.CampoNoAdmitido("lines.orderLinePublicId", clase));
+            if (l.RequestLinePublicId is not null && !esOrden) return Falla(ErroresDeCompras.CampoNoAdmitido("lines.requestLinePublicId", clase));
+            if (esSolicitud && (l.UnitPrice is not null || l.DiscountPercent is not null || l.DiscountAmount is not null))
+                return Falla(ErroresDeCompras.CampoNoAdmitido(l.UnitPrice is not null ? "lines.unitPrice" : "lines.discount", clase));
+            if (esSolicitud && l.Origen is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("lines.sourceLinePublicId", clase));
+
+            if (l.Origen is not { } origen)
+            {
+                if (esDevolucion) return Falla(ErroresDeCompras.ReturnReceiptLineRequired(numero));
+                if (esNota) return Falla(ErroresDeCompras.NoteLineRequired(numero));
+                lineas.Add(l);
+                continue;
+            }
+
+            var fuente = await db.InventoryDocumentLines.AsNoTracking().Include(x => x.Document)
+                .FirstOrDefaultAsync(x => x.PublicId == origen && !x.IsDeleted, ct);
+            if (fuente?.Document is null) return Falla(InventoryErrors.DocumentNotFound());
+            var claseEsperada = esNota
+                ? (clase == DocumentClass.SupportDocumentAdjustmentNote ? DocumentClass.SupportDocument : DocumentClass.SupplierInvoice)
+                : esRecepcion ? DocumentClass.PurchaseOrder
+                : esOrden ? DocumentClass.PurchaseRequest
+                : DocumentClass.PurchaseReceipt;
+            if (fuente.Document.Class != claseEsperada)
+                return Falla(esNota ? ErroresDeCompras.NoteLineRequired(numero) : esDevolucion ? ErroresDeCompras.ReturnReceiptLineRequired(numero)
+                    : esRecepcion ? ErroresDeCompras.OrigenDeOtraClase(numero, "una orden de compra")
+                    : esOrden ? ErroresDeCompras.OrigenDeOtraClase(numero, "una solicitud de compra")
+                    : ErroresDeCompras.GoodsWithoutReceipt(numero, string.Empty));
+
+            var producto = await db.Products.AsNoTracking().Where(p => p.Id == fuente.ProductId).Select(p => p.PublicId).FirstAsync(ct);
+            if (l.ProductPublicId != Guid.Empty && l.ProductPublicId != producto)
+                return Falla(new ErrorConDatos("Validation.Invalid", $"Línea {numero}: el producto no es el de la línea de origen.", new { lineNumber = numero }));
+            var unidad = l.UnitPublicId != Guid.Empty
+                ? l.UnitPublicId
+                : await db.UnitsOfMeasure.AsNoTracking().Where(u => u.Id == fuente.UnitId).Select(u => u.PublicId).FirstAsync(ct);
+
+            var cantidad = l.Quantity;
+            var precio = l.UnitPrice;
+            var descuentoPorcentaje = l.DiscountPercent;
+            if (esRecepcion)
+            {
+                // Contra la orden: el precio pactado y, si no viene otro, el descuento de la orden en proporción (su porcentaje).
+                precio ??= fuente.UnitPrice;
+                if (descuentoPorcentaje is null && l.DiscountAmount is null && fuente.DiscountAmount > 0m && fuente.GrossAmount > 0m)
+                    descuentoPorcentaje = Math.Round(fuente.DiscountAmount / fuente.GrossAmount * 100m, 6, MidpointRounding.AwayFromZero);
+            }
+            else if (esNota)
+            {
+                if (cantidad == 0m) cantidad = fuente.Quantity;
+                if (l.Amount is { } valor && precio is null) precio = Math.Round(valor / cantidad, 6, MidpointRounding.AwayFromZero);
+                precio ??= fuente.UnitPrice;
+            }
+            else if (esDevolucion)
+            {
+                precio ??= fuente.UnitPrice;
+            }
+            else
+            {
+                precio ??= fuente.UnitPrice;
+            }
+            lineas.Add(l with { ProductPublicId = producto, UnitPublicId = unidad, Quantity = cantidad, UnitPrice = precio, DiscountPercent = descuentoPorcentaje });
+        }
+        return Result.Success(pedido with { Lines = lineas });
+    }
+
+    // --------------------------------------------------------------------------------------------- aplicar --
+
+    public async Task<Result<ResultadoDelBorrador>> AplicarAsync(BorradorEnCurso borrador, CancellationToken ct)
+    {
+        var documento = borrador.Documento;
+        var pedido = borrador.Pedido;
+        PedidoActual = pedido;
+        var clase = borrador.Tipo.Class;
+        var avisos = new List<Error>();
+        var vivas = documento.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
+
+        // Proveedor: la factura y la nota no se guardan sin él (su número es único por proveedor); lo demás lo avisa.
+        if (documento.CounterpartyPersonId is null && clase != DocumentClass.PurchaseRequest)
+        {
+            if (ColisionDeFacturaDeProveedor.LlevaDocumentoDelProveedor(clase))
+                return Falla<ResultadoDelBorrador>(InventoryErrors.FieldRequired(ReglasDelDocumento.CampoContraparte));
+            avisos.Add(InventoryErrors.FieldRequired(ReglasDelDocumento.CampoContraparte));
+        }
+
+        IReadOnlyList<Domain.Taxes.RenglonTributario>? original = null;
+        Dictionary<int, int>? lineaOriginal = null;
+
+        switch (clase)
+        {
+            case DocumentClass.SupplierInvoice:
+            case DocumentClass.SupportDocument:
+            {
+                var r = await FacturaAsync(documento, vivas, avisos, ct);
+                if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
+                break;
+            }
+            case DocumentClass.SupplierNote:
+            case DocumentClass.SupportDocumentAdjustmentNote:
+            {
+                var r = await NotaAsync(documento, pedido, vivas, avisos, ct);
+                if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
+                (original, lineaOriginal) = r.Value;
+                break;
+            }
+            case DocumentClass.SupplierReturn:
+            {
+                var r = await DevolucionAsync(documento, vivas, avisos, ct);
+                if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
+                break;
+            }
+            case DocumentClass.PurchaseRequest:
+                documento.ExpectedDate = pedido.NeededBy;
+                if (documento.ExpectedDate is null) avisos.Add(InventoryErrors.FieldRequired(CampoNecesarioPara));
+                // La solicitud no tiene proveedor ni impuestos: sin más.
+                return Result.Success(new ResultadoDelBorrador(avisos, []));
+            case DocumentClass.PurchaseOrder:
+            {
+                documento.ExpectedDate = pedido.ExpectedDate;
+                if (documento.ExpectedDate is null) avisos.Add(InventoryErrors.FieldRequired(CampoEntregaEsperada));
+                var r = await OrdenAsync(documento, vivas, ct);
+                if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
+                break;
+            }
+            case DocumentClass.PurchaseReceipt:
+            {
+                var r = await RecepcionAsync(documento, vivas, avisos, ct);
+                if (r.IsFailure) return Falla<ResultadoDelBorrador>(r.Error);
+                break;
+            }
+            case DocumentClass.LandedCost:
+                // I5 (T799): sin municipio, documento del proveedor ni impuestos (los lleva la factura del flete).
+                return await CostosAdicionalesAsync(documento, pedido, vivas, avisos, ct);
+        }
+
+        // Municipio de la operación (ReteICA): el pedido, o el de la sucursal de la bodega que recibe.
+        if (clase != DocumentClass.SupplierReturn)
+        {
+            var municipio = await MunicipioAsync(documento, pedido.OperationMunicipalityDaneCode, ct);
+            if (municipio.IsFailure) return Falla<ResultadoDelBorrador>(municipio.Error);
+        }
+
+        // Documento del proveedor (factura y nota).
+        if (ColisionDeFacturaDeProveedor.LlevaDocumentoDelProveedor(clase))
+        {
+            var detalle = await DetalleAsync(documento, pedido, clase, ct);
+            if (detalle.IsFailure) return Falla<ResultadoDelBorrador>(detalle.Error);
+        }
+
+        // Impuestos y totales: la vista previa del servidor (la devolución no factura: su ajuste lo hace la nota del proveedor).
+        IReadOnlyList<DocumentTaxLineDto> previstos = [];
+        if (clase != DocumentClass.SupplierReturn && documento.CounterpartyPersonId is not null)
+        {
+            var calculado = await calculo.CalcularAsync(documento, borrador.Tipo, ct, original, lineaOriginal);
+            if (calculado.IsFailure)
+            {
+                avisos.Add(calculado.Error);
+            }
+            else
+            {
+                CalculoTributarioDeCompra.AplicarTotales(documento, calculado.Value.Totales);
+                previstos = calculado.Value.Renglones.Select(r => new DocumentTaxLineDto(r.Linea, r.Kind, r.TaxRateCode, r.Rate, r.AmountPerUnit,
+                    r.Base, r.Amount, r.Treatment, r.MunicipalityDaneCode, JsonSerializer.Serialize(r.Explicacion))).ToList();
+            }
+        }
+
+        return Result.Success(new ResultadoDelBorrador(avisos, previstos));
+    }
+
+    public async Task<Error?> TraducirColisionAsync(DbUpdateException ex, BorradorEnCurso borrador, CancellationToken ct)
+    {
+        if (!ColisionDeFacturaDeProveedor.Es(ex)) return null;
+        var detalle = await vinculos.DetalleAsync(borrador.Documento, ct);
+        return detalle is null ? null : await ColisionDeFacturaDeProveedor.TraducirAsync(db, ex, detalle, ct);
+    }
+
+    // ------------------------------------------------------------------------------------------ por clase --
+
+    /// <summary>La factura contra sus recepciones: del mismo proveedor, confirmadas, un solo modo de paso; bodega y sucursal.</summary>
+    private async Task<Result> FacturaAsync(InventoryDocument documento, List<InventoryDocumentLine> vivas, List<Error> avisos, CancellationToken ct)
+    {
+        var pares = new List<(InventoryDocumentLine Origen, InventoryDocumentLine Destino)>();
+        var origenes = await OrigenesDeLasLineasAsync(documento, ct);
+        var idsDeProducto = vivas.Select(l => l.ProductId).Distinct().ToList();
+        var productos = await db.Products.AsNoTracking().Where(p => idsDeProducto.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => new { p.Code, p.Kind }, ct);
+
+        foreach (var linea in vivas)
+        {
+            if (!origenes.TryGetValue(linea.LineNumber, out var origen))
+            {
+                if (productos.TryGetValue(linea.ProductId, out var p) && p.Kind != ProductKind.Service)
+                    return Result.Failure(ErroresDeCompras.GoodsWithoutReceipt(linea.LineNumber, p.Code));
+                continue;
+            }
+            pares.Add((origen, linea));
+        }
+
+        var idsDeRecepcion = pares.Select(p => p.Origen.DocumentId).Distinct().ToList();
+        var recepciones = await db.InventoryDocuments.AsNoTracking().Where(d => idsDeRecepcion.Contains(d.Id)).ToListAsync(ct);
+        foreach (var (origen, linea) in pares)
+        {
+            var recepcion = recepciones.First(r => r.Id == origen.DocumentId);
+            var numero = VistaDeDocumentos.NumeroVisible(recepcion.Prefix, recepcion.Number);
+            if (recepcion.CounterpartyPersonId != documento.CounterpartyPersonId)
+                return Result.Failure(ErroresDeCompras.ReceiptFromOtherSupplier(linea.LineNumber, recepcion.PublicId, numero));
+            var admitida = recepcion.Status == DocumentStatus.Confirmed
+                           || (compraDirecta.PermiteRecepcionPendiente && recepcion.Status is DocumentStatus.PendingApproval or DocumentStatus.Draft);
+            if (!admitida) return Result.Failure(ErroresDeCompras.ReceiptNotConfirmed(linea.LineNumber, recepcion.PublicId, numero));
+        }
+        var modos = recepciones.Where(r => r.Status == DocumentStatus.Confirmed).Select(r => r.PostingMode).Distinct().ToList();
+        if (modos.Count > 1)
+        {
+            return Result.Failure(ErroresDeCompras.MixedPostingDestinations(recepciones
+                .Select(r => new ErroresDeCompras.RecepcionConModo(r.PublicId, VistaDeDocumentos.NumeroVisible(r.Prefix, r.Number), r.PostingMode?.ToString()))
+                .ToList()));
+        }
+
+        await vinculos.ReemplazarAsync(documento, DocumentLinkKind.InvoiceOfReceipt, pares, ct);
+
+        // La bodega y la sucursal: las de sus recepciones (una sola bodega si todas comparten; si no, nula).
+        if (recepciones.Count > 0)
+        {
+            var bodegas = recepciones.Select(r => r.WarehouseId).Distinct().ToList();
+            documento.WarehouseId = bodegas.Count == 1 ? bodegas[0] : null;
+            documento.BranchId = recepciones[0].BranchId;
+        }
+        else if (documento.BranchId == 0)
+        {
+            documento.BranchId = await SucursalPrincipalAsync(ct);
+        }
+
+        // Lo facturado de más se avisa (depende de otros documentos: la confirmación lo vuelve a mirar).
+        var consumo = await vinculos.ConsumoAsync(pares.Select(p => p.Origen.Id).ToList(), documento.Id, ct);
+        foreach (var (origen, linea) in pares)
+        {
+            var hecho = consumo.GetValueOrDefault(origen.Id) ?? new ConsumoDeRecepcion(0m, 0m);
+            var disponible = origen.QuantityBase - hecho.Facturado - hecho.Devuelto;
+            var yaEnEste = pares.Where(p => p.Origen.Id == origen.Id).Sum(p => p.Destino.QuantityBase);
+            if (yaEnEste > disponible)
+                avisos.Add(ErroresDeCompras.InvoiceExceedsReceived(linea.LineNumber, origen.QuantityBase, hecho.Facturado, hecho.Devuelto, Math.Max(0m, disponible)));
+        }
+        return Result.Success();
+    }
+
+    /// <summary>La nota contra una factura confirmada del mismo proveedor; sus líneas contra las de la factura.</summary>
+    private async Task<Result<(IReadOnlyList<Domain.Taxes.RenglonTributario>? Original, Dictionary<int, int>? LineaOriginal)>> NotaAsync(
+        InventoryDocument documento, SaveInventoryDraftRequest pedido, List<InventoryDocumentLine> vivas, List<Error> avisos, CancellationToken ct)
+    {
+        // La nota de ajuste del documento soporte (I4, T740) corrige un SupportDocument (supportDocumentPublicId viaja en el mismo campo) y
+        // siempre disminuye: es crédito.
+        var deSoporte = documento.Class == DocumentClass.SupportDocumentAdjustmentNote;
+        var corregida = deSoporte ? DocumentClass.SupportDocument : DocumentClass.SupplierInvoice;
+        if (pedido.SupplierInvoicePublicId is not { } facturaId)
+            return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(InventoryErrors.FieldRequired(deSoporte ? "supportDocumentPublicId" : "supplierInvoice"));
+        var claseDeNota = deSoporte ? pedido.NoteKind ?? "Credit" : pedido.NoteKind;
+        if (claseDeNota is not ("Credit" or "Debit") || (deSoporte && claseDeNota != "Credit"))
+            return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(new Error("Validation.Invalid", "La clase de la nota es Credit o Debit."));
+
+        var factura = await db.InventoryDocuments.Include(d => d.Lines).FirstOrDefaultAsync(d => d.PublicId == facturaId && d.Class == corregida, ct);
+        if (factura is null) return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(InventoryErrors.DocumentNotFound());
+        var numero = VistaDeDocumentos.NumeroVisible(factura.Prefix, factura.Number);
+        if (factura.Status != DocumentStatus.Confirmed)
+            return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(ErroresDeCompras.NoteInvoiceNotConfirmed(factura.PublicId, numero));
+        if (factura.CounterpartyPersonId != documento.CounterpartyPersonId)
+            return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(ErroresDeCompras.NoteInvoiceFromOtherSupplier(factura.PublicId, numero));
+
+        var origenes = await OrigenesDeLasLineasAsync(documento, ct);
+        var pares = new List<(InventoryDocumentLine Origen, InventoryDocumentLine Destino)>();
+        var lineaOriginal = new Dictionary<int, int>();
+        for (var i = 0; i < vivas.Count; i++)
+        {
+            var linea = vivas[i];
+            if (!origenes.TryGetValue(linea.LineNumber, out var origen) || origen.DocumentId != factura.Id)
+                return Result.Failure<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>(ErroresDeCompras.NoteLineRequired(linea.LineNumber));
+            pares.Add((origen, linea));
+            lineaOriginal[linea.LineNumber] = origen.LineNumber;
+
+            // El valor de la línea, tal cual (el precio es su cociente).
+            if (linea.LineNumber - 1 < pedido.Lines.Count && pedido.Lines[linea.LineNumber - 1].Amount is { } valor)
+            {
+                linea.GrossAmount = valor;
+                if (linea.DiscountAmount > valor) linea.DiscountAmount = valor;
+                linea.NetAmount = valor - linea.DiscountAmount;
+            }
+        }
+        await vinculos.ReemplazarAsync(documento, DocumentLinkKind.NoteOf, pares, ct);
+        // La nota de ajuste del DS es electrónica: lleva el concepto de corrección del catálogo DIAN (sin él, la confirmación responde
+        // ElectronicInvoicing.Document.MissingData). (I4, T740)
+        if (deSoporte) documento.CorrectionConceptCode = string.IsNullOrWhiteSpace(pedido.CorrectionConceptCode) ? null : pedido.CorrectionConceptCode.Trim();
+        documento.WarehouseId = factura.WarehouseId;
+        documento.BranchId = factura.BranchId;
+        documento.Subtotal = vivas.Sum(l => l.GrossAmount);
+        documento.DiscountTotal = vivas.Sum(l => l.DiscountAmount);
+
+        var foto = await db.DocumentTaxLines.AsNoTracking().Where(t => t.DocumentId == factura.Id).OrderBy(t => t.Id).ToListAsync(ct);
+        var numeros = factura.Lines.ToDictionary(l => l.Id, l => l.LineNumber);
+        var renglones = CalculoTributarioDeCompra.DesdeLaFoto(foto, numeros);
+
+        if (claseDeNota == "Credit")
+        {
+            var restante = await vinculos.RestanteDeFacturaAsync(factura, documento.Id, ct);
+            var neto = vivas.Sum(l => l.NetAmount);
+            if (neto > restante) avisos.Add(ErroresDeCompras.NoteExceedsInvoice(restante));
+        }
+        return Result.Success<(IReadOnlyList<Domain.Taxes.RenglonTributario>?, Dictionary<int, int>?)>((renglones, lineaOriginal));
+    }
+
+    /// <summary>La devolución: cada línea contra una de recepción del mismo proveedor, confirmada; lo devuelto de más se avisa.</summary>
+    private async Task<Result> DevolucionAsync(InventoryDocument documento, List<InventoryDocumentLine> vivas, List<Error> avisos, CancellationToken ct)
+    {
+        var origenes = await OrigenesDeLasLineasAsync(documento, ct);
+        var pares = new List<(InventoryDocumentLine Origen, InventoryDocumentLine Destino)>();
+        foreach (var linea in vivas)
+        {
+            if (!origenes.TryGetValue(linea.LineNumber, out var origen)) return Result.Failure(ErroresDeCompras.ReturnReceiptLineRequired(linea.LineNumber));
+            pares.Add((origen, linea));
+        }
+        var idsDeRecepcion = pares.Select(p => p.Origen.DocumentId).Distinct().ToList();
+        var recepciones = await db.InventoryDocuments.AsNoTracking().Where(d => idsDeRecepcion.Contains(d.Id)).ToListAsync(ct);
+        foreach (var (origen, linea) in pares)
+        {
+            var recepcion = recepciones.First(r => r.Id == origen.DocumentId);
+            var numero = VistaDeDocumentos.NumeroVisible(recepcion.Prefix, recepcion.Number);
+            if (recepcion.CounterpartyPersonId != documento.CounterpartyPersonId)
+                return Result.Failure(ErroresDeCompras.ReceiptFromOtherSupplier(linea.LineNumber, recepcion.PublicId, numero));
+            if (recepcion.Status != DocumentStatus.Confirmed)
+                return Result.Failure(ErroresDeCompras.ReceiptNotConfirmed(linea.LineNumber, recepcion.PublicId, numero));
+        }
+        await vinculos.ReemplazarAsync(documento, DocumentLinkKind.ReturnOf, pares, ct);
+        if (documento.WarehouseId is null && recepciones.Count > 0)
+        {
+            documento.WarehouseId = recepciones[0].WarehouseId;
+            documento.BranchId = recepciones[0].BranchId;
+        }
+
+        var consumo = await vinculos.ConsumoAsync(pares.Select(p => p.Origen.Id).ToList(), documento.Id, ct);
+        foreach (var (origen, linea) in pares)
+        {
+            var devuelto = consumo.GetValueOrDefault(origen.Id)?.Devuelto ?? 0m;
+            var enEste = pares.Where(p => p.Origen.Id == origen.Id).Sum(p => p.Destino.QuantityBase);
+            if (devuelto + enEste > origen.QuantityBase)
+                avisos.Add(ErroresDeCompras.ReturnExceedsReceived(linea.LineNumber, origen.QuantityBase, devuelto));
+        }
+        return Result.Success();
+    }
+
+    /// <summary>El campo <c>neededBy</c> de la solicitud (T787). (nuevo)</summary>
+    public const string CampoNecesarioPara = "neededBy";
+
+    /// <summary>El campo <c>expectedDate</c> de la orden (T787). (nuevo)</summary>
+    public const string CampoEntregaEsperada = "expectedDate";
+
+    /// <summary>
+    /// La orden desde su solicitud (T787): cada línea con <c>requestLinePublicId</c> va contra una línea de una solicitud confirmada
+    /// (<c>Inventory.PurchaseRequest.NotConfirmed</c> si no) y deja el vínculo <c>FromOrder</c> orden ← solicitud.
+    /// </summary>
+    private async Task<Result> OrdenAsync(InventoryDocument documento, List<InventoryDocumentLine> vivas, CancellationToken ct)
+    {
+        var origenes = await OrigenesDeLasLineasAsync(documento, ct);
+        var pares = vivas.Where(l => origenes.ContainsKey(l.LineNumber)).Select(l => (Origen: origenes[l.LineNumber], Destino: l)).ToList();
+        var ids = pares.Select(p => p.Origen.DocumentId).Distinct().ToList();
+        var solicitudes = await db.InventoryDocuments.AsNoTracking().Where(d => ids.Contains(d.Id)).ToDictionaryAsync(d => d.Id, ct);
+        foreach (var (origen, linea) in pares)
+        {
+            var solicitud = solicitudes[origen.DocumentId];
+            if (solicitud.Status != DocumentStatus.Confirmed)
+                return Result.Failure(ErroresDeCompras.RequestNotConfirmed(linea.LineNumber, solicitud.PublicId,
+                    VistaDeDocumentos.NumeroVisible(solicitud.Prefix, solicitud.Number), solicitud.Status));
+        }
+        await vinculos.ReemplazarAsync(documento, DocumentLinkKind.FromOrder, pares, ct);
+        return Result.Success();
+    }
+
+    /// <summary>
+    /// La recepción contra órdenes (T789): vínculo <c>FromOrder</c> recepción ← orden por cada línea con <c>orderLinePublicId</c>; la orden
+    /// del mismo proveedor y abierta (falla), y lo recibido de más fuera de la tolerancia como aviso (depende de otras recepciones: la
+    /// confirmación lo vuelve a mirar bajo el cerrojo).
+    /// </summary>
+    private async Task<Result> RecepcionAsync(InventoryDocument documento, List<InventoryDocumentLine> vivas, List<Error> avisos, CancellationToken ct)
+    {
+        var origenes = await OrigenesDeLasLineasAsync(documento, ct);
+        var pares = vivas.Where(l => origenes.ContainsKey(l.LineNumber)).Select(l => (Origen: origenes[l.LineNumber], Destino: l)).ToList();
+        if (pares.Count == 0 && documento.Id == 0) return Result.Success();
+        await vinculos.ReemplazarAsync(documento, DocumentLinkKind.FromOrder, pares, ct);
+        if (pares.Count == 0) return Result.Success();
+
+        var deOrden = pares.Select(p => new ParDeOrden(p.Origen, p.Destino)).ToList();
+        var ordenes = await contraOrden.OrdenesAsync(documento, deOrden, ct);
+        if (ordenes.IsFailure) return Result.Failure(ordenes.Error);
+        var demas = await contraOrden.RecibidoDeMasAsync(documento, deOrden, ct);
+        if (demas.IsFailure) avisos.Add(demas.Error);
+        else avisos.AddRange(demas.Value);
+        return Result.Success();
+    }
+
+    // --------------------------------------------------------------------------------- costos adicionales (I5) --
+
+    /// <summary>Lo que <see cref="PrepararCostosAdicionalesAsync"/> dejó para <see cref="CostosAdicionalesAsync"/>.</summary>
+    private sealed record CostosPreparados(InventoryDocument Factura, IReadOnlyList<InventoryDocument> Recepciones, IReadOnlyList<LineaConCostoAdicional> Lineas);
+
+    private CostosPreparados? _costos;
+
+    private CostosAdicionalesDeCompra Costos => costos ?? throw new InvalidOperationException("Los costos adicionales necesitan CostosAdicionalesDeCompra.");
+
+    /// <summary>
+    /// Los costos adicionales (T799; api.md §14.9): la factura del flete (confirmada y de servicio), las recepciones (confirmadas), el método
+    /// y, en <c>Manual</c>, lo digitado por línea de recepción. Las líneas no se digitan: una por cada línea de recepción que dejó entrada
+    /// en el kardex, con su producto, unidad y cantidad; la contraparte es el proveedor del flete. Sin bodega: la sucursal, la de las
+    /// recepciones.
+    /// </summary>
+    private async Task<Result<SaveInventoryDraftRequest>> PrepararCostosAdicionalesAsync(SaveInventoryDraftRequest pedido, CancellationToken ct)
+    {
+        const DocumentClass clase = DocumentClass.LandedCost;
+        if (pedido.Supplier is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("supplier", clase));
+        if (pedido.NoteKind is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("noteKind", clase));
+        if (pedido.NeededBy is not null || pedido.ExpectedDate is not null || pedido.PaymentTerms is not null || pedido.RequestedByPersonPublicId is not null)
+            return Falla(ErroresDeCompras.CampoNoAdmitido(pedido.NeededBy is not null ? "neededBy" : pedido.ExpectedDate is not null ? "expectedDate"
+                : pedido.PaymentTerms is not null ? "paymentTerms" : "requestedByPersonPublicId", clase));
+        if (pedido.OperationMunicipalityDaneCode is not null) return Falla(ErroresDeCompras.CampoNoAdmitido("operationMunicipalityDaneCode", clase));
+        if (pedido.WarehousePublicId is not null || pedido.DestinationWarehousePublicId is not null)
+            return Falla(ErroresDeCompras.CampoNoAdmitido("warehousePublicId", clase));
+        if (pedido.SupplierPersonPublicId is not null || pedido.CounterpartyPersonPublicId is not null)
+            return Falla(ErroresDeCompras.CampoNoAdmitido("supplierPersonPublicId", clase));
+        if (pedido.Lines.Count > 0) return Falla(ErroresDeCompras.CampoNoAdmitido("lines", clase));
+        if (pedido.SupplierInvoicePublicId is not { } facturaId) return Falla(InventoryErrors.FieldRequired("supplierInvoicePublicId"));
+        if (pedido.ReceiptPublicIds is not { Count: > 0 } recepcionesPedidas) return Falla(InventoryErrors.FieldRequired("receiptPublicIds"));
+        if (pedido.Method is not { } metodo || !Enum.IsDefined(metodo)) return Falla(InventoryErrors.FieldRequired("method"));
+        if (pedido.ManualAllocations is not null && metodo != LandedCostAllocationMethod.Manual)
+            return Falla(ErroresDeCompras.CampoNoAdmitido("manualAllocations", clase));
+        if (pedido.Amount is { } monto && (monto <= 0m || SaveInventoryDraftCommandValidator.Decimales(monto) > 2))
+            return Falla(new ErrorConDatos("Validation.Invalid", "El monto a repartir va positivo y con hasta 2 decimales.", new { field = "amount" }));
+        if (pedido.ManualAllocations?.Any(m => m.Amount < 0m || SaveInventoryDraftCommandValidator.Decimales(m.Amount) > 2) == true)
+            return Falla(new ErrorConDatos("Validation.Invalid", "Lo digitado por línea va en pesos, no negativo y con hasta 2 decimales.", new { field = "manualAllocations" }));
+
+        var factura = await Costos.FacturaAsync(facturaId, ct);
+        if (factura.IsFailure) return Falla(factura.Error);
+        var recepciones = await Costos.RecepcionesAsync(recepcionesPedidas, ct);
+        if (recepciones.IsFailure) return Falla(recepciones.Error);
+        var lineas = await Costos.LineasAsync(recepciones.Value, ct);
+
+        var deLasRecepciones = lineas.Select(l => l.LineaDeRecepcion.PublicId).ToHashSet();
+        if (pedido.ManualAllocations?.FirstOrDefault(m => !deLasRecepciones.Contains(m.ReceiptLinePublicId)) is { } ajena)
+            return Falla(new ErrorConDatos("Validation.Invalid", "Lo digitado a mano va sobre líneas de las recepciones elegidas.",
+                new { field = "manualAllocations", receiptLinePublicId = ajena.ReceiptLinePublicId }));
+
+        _costos = new CostosPreparados(factura.Value, recepciones.Value, lineas);
+        var unidades = lineas.Select(l => l.LineaDeRecepcion.UnitId).Distinct().ToList();
+        var publicasDeUnidad = await db.UnitsOfMeasure.AsNoTracking().Where(u => unidades.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.PublicId, ct);
+        var proveedor = await db.People.AsNoTracking().Where(p => p.Id == factura.Value.CounterpartyPersonId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+        var generadas = lineas.Select(l => new SaveInventoryDraftLine(null, l.Producto.PublicId, publicasDeUnidad[l.LineaDeRecepcion.UnitId],
+            l.LineaDeRecepcion.Quantity, SourceLinePublicId: l.LineaDeRecepcion.PublicId)).ToList();
+        return Result.Success(pedido with { CounterpartyPersonPublicId = proveedor, Lines = generadas });
+    }
+
+    /// <summary>
+    /// Después de armar las líneas (T799): los vínculos <c>LandedCostOf</c> (de cada recepción por línea y de la factura a nivel de documento),
+    /// el monto (el pedido o lo que queda sin repartir de la factura), el reparto como vista previa y su propuesta en
+    /// <c>INV_LandedCostAllocations</c> —el método y lo digitado viven ahí (T778, T42e)—. Lo que depende de otros documentos o de la
+    /// existencia (<c>ExceedsInvoice</c>, <c>BasisMissing</c>, <c>ManualNotBalanced</c>) vuelve como aviso; la confirmación lo repite bajo el
+    /// cerrojo.
+    /// </summary>
+    private async Task<Result<ResultadoDelBorrador>> CostosAdicionalesAsync(
+        InventoryDocument documento, SaveInventoryDraftRequest pedido, List<InventoryDocumentLine> vivas, List<Error> avisos, CancellationToken ct)
+    {
+        var (factura, recepciones, lineas) = _costos ?? throw new InvalidOperationException("Los costos adicionales se preparan antes de aplicarse.");
+        var metodo = pedido.Method!.Value;
+        documento.WarehouseId = null;
+        documento.DestinationWarehouseId = null;
+        documento.BranchId = recepciones[0].BranchId;
+        documento.OperationMunicipalityDaneCode = null;
+
+        // Las líneas vienen en el orden de las líneas de recepción (PrepararCostosAdicionalesAsync).
+        var pares = lineas.Select((l, i) => (Origen: l.LineaDeRecepcion, Destino: vivas[i])).ToList();
+        await vinculos.ReemplazarAsync(documento, DocumentLinkKind.LandedCostOf, pares, ct);
+        db.DocumentLinks.Add(new DocumentLink { SourceDocumentId = factura.Id, TargetDocument = documento, Kind = DocumentLinkKind.LandedCostOf });
+
+        var disponible = await Costos.DisponibleAsync(factura, documento.Id, ct);
+        var monto = pedido.Amount ?? Math.Max(0m, disponible);
+        if (monto > disponible) avisos.Add(ErroresDeCompras.LandedCostExceedsInvoice(Math.Max(0m, disponible)));
+
+        var manuales = (pedido.ManualAllocations ?? [])
+            .Join(lineas, m => m.ReceiptLinePublicId, l => l.LineaDeRecepcion.PublicId, (m, l) => (l.LineaDeRecepcion.Id, m.Amount))
+            .GroupBy(x => x.Id).ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
+        IReadOnlyList<RepartoDeLinea> repartos = [];
+        if (monto > 0m)
+        {
+            var reparto = await Costos.RepartirAsync(documento.OperationDate, monto, metodo, lineas, manuales, ct);
+            if (reparto.IsFailure) avisos.Add(reparto.Error);
+            else repartos = reparto.Value.Lineas;
+        }
+
+        // Montos de las líneas: lo que le toca a cada una (el documento no factura: su subtotal es lo que reparte).
+        var porLinea = repartos.ToDictionary(r => r.ReceiptLineId);
+        foreach (var (origen, destino) in pares)
+        {
+            var asignado = porLinea.TryGetValue(origen.Id, out var r) ? r.AllocatedAmount : 0m;
+            destino.GrossAmount = asignado;
+            destino.DiscountAmount = 0m;
+            destino.NetAmount = asignado;
+            destino.UnitPrice = destino.Quantity == 0m ? 0m : Math.Round(asignado / destino.Quantity, 6, MidpointRounding.AwayFromZero);
+            destino.TotalCost = null;
+        }
+        documento.Subtotal = monto;
+        documento.DiscountTotal = 0m;
+        documento.TaxTotal = 0m;
+        documento.WithholdingTotal = 0m;
+        documento.Total = monto;
+        documento.AmountDue = monto;
+        documento.CostTotal = 0m;
+
+        // La propuesta: una fila por línea de recepción, con el método y lo digitado (en su sitio si ya estaba).
+        var propuesta = lineas.Select(l => porLinea.TryGetValue(l.LineaDeRecepcion.Id, out var r)
+            ? LandedCostAllocation.Desde(documento.Id, l.Recepcion.Id, metodo, r)
+            : new LandedCostAllocation
+            {
+                ReceiptDocumentId = l.Recepcion.Id,
+                ReceiptLineId = l.LineaDeRecepcion.Id,
+                ProductId = l.Entrada.ProductId,
+                AllocationMethod = metodo,
+                Basis = manuales.GetValueOrDefault(l.LineaDeRecepcion.Id),
+            }).ToList();
+        await Costos.EscribirFilasAsync(documento, propuesta, reloj.UtcNow, ct);
+
+        return Result.Success(new ResultadoDelBorrador(avisos, [],
+            CostosAdicionalesDeCompra.Vista(factura, metodo, monto, Math.Max(0m, disponible), lineas, repartos)));
+    }
+
+    // --------------------------------------------------------------------------------------------- apoyo --
+
+    /// <summary>La línea de origen de cada línea del borrador, por número de línea (del pedido ya preparado).</summary>
+    private async Task<Dictionary<int, InventoryDocumentLine>> OrigenesDeLasLineasAsync(InventoryDocument documento, CancellationToken ct)
+    {
+        var pedidas = PedidoActual?.Lines ?? [];
+        var publicas = pedidas.Select(l => l.Origen).OfType<Guid>().Distinct().ToList();
+        var fuentes = await db.InventoryDocumentLines.AsNoTracking().Where(l => publicas.Contains(l.PublicId) && !l.IsDeleted)
+            .ToDictionaryAsync(l => l.PublicId, ct);
+        var resultado = new Dictionary<int, InventoryDocumentLine>();
+        for (var i = 0; i < pedidas.Count; i++)
+        {
+            if (pedidas[i].Origen is { } origen && fuentes.TryGetValue(origen, out var fuente)) resultado[i + 1] = fuente;
+        }
+        return resultado;
+    }
+
+    /// <summary>El pedido que se está aplicando (lo fija <see cref="AplicarAsync"/> para los ayudantes).</summary>
+    private SaveInventoryDraftRequest? PedidoActual { get; set; }
+
+    private async Task<Result> MunicipioAsync(InventoryDocument documento, string? pedido, CancellationToken ct)
+    {
+        var codigo = string.IsNullOrWhiteSpace(pedido) ? null : pedido.Trim();
+        if (codigo is not null)
+        {
+            if (!await db.Cities.AsNoTracking().AnyAsync(c => c.DaneCode == codigo, ct)) return Result.Failure(ErroresDeCompras.MunicipalityUnknown(codigo));
+            documento.OperationMunicipalityDaneCode = codigo;
+            return Result.Success();
+        }
+        documento.OperationMunicipalityDaneCode = documento.BranchId == 0
+            ? null
+            : await db.Branches.AsNoTracking().Where(b => b.Id == documento.BranchId).Select(b => b.MunicipalityDaneCode).FirstOrDefaultAsync(ct);
+        return Result.Success();
+    }
+
+    private async Task<Result> DetalleAsync(InventoryDocument documento, SaveInventoryDraftRequest pedido, DocumentClass clase, CancellationToken ct)
+    {
+        if (pedido.Supplier is not { } proveedor || string.IsNullOrWhiteSpace(proveedor.Number))
+            return Result.Failure(InventoryErrors.FieldRequired("supplier"));
+
+        var hoy = reloj.HoyLocal;
+        var cufe = SupplierInvoiceDetail.NormalizarCufe(proveedor.Cufe);
+        if (cufe is not null && (cufe.Length != SupplierInvoiceDetail.LargoDelCufe || !cufe.All(Uri.IsHexDigit))) return Result.Failure(ErroresDeCompras.CufeInvalid());
+        if (proveedor.IsElectronic && cufe is null) return Result.Failure(ErroresDeCompras.CufeRequired());
+        if (proveedor.IssueDate > hoy) return Result.Failure(ErroresDeCompras.IssueDateInFuture(hoy));
+
+        bool aCredito;
+        if (clase == DocumentClass.SupplierNote)
+        {
+            var factura = await db.InventoryDocuments.AsNoTracking().Where(d => d.PublicId == pedido.SupplierInvoicePublicId).Select(d => d.Id).FirstOrDefaultAsync(ct);
+            aCredito = await db.SupplierInvoiceDetails.AsNoTracking().Where(s => s.DocumentId == factura).Select(s => s.IsCredit).FirstOrDefaultAsync(ct);
+        }
+        else
+        {
+            if (proveedor.PaymentForm is not (SupplierInvoiceDetail.Contado or SupplierInvoiceDetail.Credito))
+                return Result.Failure(new Error("Validation.Invalid", "La forma de pago es Cash (contado) o Credit (crédito)."));
+            aCredito = proveedor.PaymentForm == SupplierInvoiceDetail.Credito;
+            if ((aCredito && proveedor.DueDate is null) || (proveedor.DueDate is { } vence && vence < proveedor.IssueDate))
+                return Result.Failure(ErroresDeCompras.DueDateInvalid(proveedor.IssueDate));
+        }
+
+        var detalle = await vinculos.DetalleAsync(documento, ct);
+        if (detalle is null)
+        {
+            detalle = new SupplierInvoiceDetail { Document = documento };
+            db.SupplierInvoiceDetails.Add(detalle);
+        }
+        detalle.DocumentId = documento.Id;
+        detalle.DocumentClass = clase;
+        detalle.SupplierPersonId = documento.CounterpartyPersonId!.Value;
+        detalle.SupplierPrefix = SupplierInvoiceDetail.NormalizarNumero(proveedor.Prefix);
+        detalle.SupplierNumber = SupplierInvoiceDetail.NormalizarNumero(proveedor.Number);
+        detalle.Cufe = cufe;
+        detalle.IssueDate = proveedor.IssueDate;
+        detalle.DueDate = proveedor.DueDate;
+        detalle.IsCredit = aCredito;
+        detalle.IsElectronic = proveedor.IsElectronic;
+        detalle.IsDebitNote = clase == DocumentClass.SupplierNote && pedido.NoteKind == "Debit";
+        detalle.IsReleased = false;
+
+        if (detalle.SupplierPrefix.Length > SupplierInvoiceDetail.LargoDelPrefijo || detalle.SupplierNumber.Length > SupplierInvoiceDetail.LargoDelNumero)
+            return Result.Failure(new Error("Validation.Invalid", string.Format(CultureInfo.InvariantCulture,
+                "El prefijo admite {0} caracteres y el número {1}.", SupplierInvoiceDetail.LargoDelPrefijo, SupplierInvoiceDetail.LargoDelNumero)));
+
+        var duplicado = await ColisionDeFacturaDeProveedor.BuscarAsync(db, detalle, ct);
+        return duplicado is null ? Result.Success() : Result.Failure(duplicado);
+    }
+
+    private async Task<int> SucursalPrincipalAsync(CancellationToken ct) =>
+        await db.Branches.AsNoTracking().OrderBy(b => b.Id).Select(b => b.Id).FirstOrDefaultAsync(ct);
+
+    private static Result<T> Falla<T>(Error error) => Result.Failure<T>(error);
+
+    private static Result<SaveInventoryDraftRequest> Falla(Error error) => Result.Failure<SaveInventoryDraftRequest>(error);
+}

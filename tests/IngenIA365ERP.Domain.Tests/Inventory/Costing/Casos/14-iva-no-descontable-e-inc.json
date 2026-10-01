@@ -1,0 +1,52 @@
+{
+  // US3-6, FR-044: el IVA no descontable (responsable de IVA → tipo de compra → tratamiento del producto) y el INC van al costo.
+  "nombre": "IVA no descontable e INC al costo",
+  "descripcion": "Cinco compras del mismo producto; los impuestos vienen ya calculados por el motor tributario y aquí sólo se decide si van al costo. C1: 10 × 1.000 = 10.000, descuento no condicionado 500, IVA 1.805 descontable → 9.500 (950 c/u). C2: 10.000 con IVA 1.900 en un tipo de compra de consumo interno (IVA no descontable) → 11.900 (1.190). C3: 10.000 con INC 800 → 10.800 (1.080): el INC siempre va al costo. C4: 1 × 1.000 con IVA 190 de un producto que se vende excluido → 1.190. C5: 2 × 1.000 con IVA 380 cuando la cooperativa no es responsable de IVA → 2.380 (1.190). Promedios: 950; 21.400 / 20 = 1.070; 32.200 / 30 = 1.073,333333; 33.390 / 31 = 1.077,096774; 35.770 / 33 = 1.083,939394.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    {
+      "id": "C1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10,
+      "compra": { "valorBruto": 10000, "descuentos": 500, "impuestos": [ { "clase": "Iva", "valor": 1805, "codigo": "IVA19" } ] },
+      "esperado": {
+        "costoDeEntrada": { "costoUnitario": 950, "impuestosAlCosto": 0 },
+        "lineas": [ { "kind": "Entry", "cantidad": 10, "costoUnitario": 950, "costoTotal": 9500 } ],
+        "estado": { "cantidad": 10, "valor": 9500, "promedio": 950 }
+      }
+    },
+    {
+      "id": "C2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10,
+      "compra": { "valorBruto": 10000, "descuentos": 0, "tipoIvaNoDescontable": true, "impuestos": [ { "clase": "Iva", "valor": 1900, "codigo": "IVA19" } ] },
+      "esperado": {
+        "costoDeEntrada": { "costoUnitario": 1190, "impuestosAlCosto": 1900 },
+        "lineas": [ { "kind": "Entry", "cantidad": 10, "costoUnitario": 1190, "costoTotal": 11900 } ],
+        "estado": { "cantidad": 20, "valor": 21400, "promedio": 1070 }
+      }
+    },
+    {
+      "id": "C3", "documento": "EC-3", "fecha": "2026-09-03", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10,
+      "compra": { "valorBruto": 10000, "descuentos": 0, "impuestos": [ { "clase": "Inc", "valor": 800, "codigo": "INC8" } ] },
+      "esperado": {
+        "costoDeEntrada": { "costoUnitario": 1080, "impuestosAlCosto": 800 },
+        "lineas": [ { "kind": "Entry", "cantidad": 10, "costoUnitario": 1080, "costoTotal": 10800 } ],
+        "estado": { "cantidad": 30, "valor": 32200, "promedio": 1073.333333 }
+      }
+    },
+    {
+      "id": "C4", "documento": "EC-4", "fecha": "2026-09-04", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 1,
+      "compra": { "valorBruto": 1000, "descuentos": 0, "tratamientoDeVenta": "Excluded", "impuestos": [ { "clase": "Iva", "valor": 190, "codigo": "IVA19" } ] },
+      "esperado": {
+        "costoDeEntrada": { "costoUnitario": 1190, "impuestosAlCosto": 190 },
+        "estado": { "cantidad": 31, "valor": 33390, "promedio": 1077.096774 }
+      }
+    },
+    {
+      "id": "C5", "documento": "EC-5", "fecha": "2026-09-05", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 2,
+      "compra": { "valorBruto": 2000, "descuentos": 0, "cooperativaResponsableIva": false, "impuestos": [ { "clase": "Iva", "valor": 380, "codigo": "IVA19" } ] },
+      "esperado": {
+        "costoDeEntrada": { "costoUnitario": 1190, "impuestosAlCosto": 380 },
+        "estado": { "cantidad": 33, "valor": 35770, "promedio": 1083.939394 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 33, "valor": 35770, "promedio": 1083.939394, "ultimoCosto": 1190 } ]
+}

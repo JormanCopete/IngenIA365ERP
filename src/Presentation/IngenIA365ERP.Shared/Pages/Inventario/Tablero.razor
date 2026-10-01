@@ -1,0 +1,137 @@
+@page "/inventario/tablero"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+
+<PageTitle>Tablero de inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I6, US17 (T969; FR-088; contracts/api.md §28): el tablero. Las fichas son las que devuelve GET /api/inventory/dashboard
+   —la API decide cuáles salen según los permisos de quien consulta: las de valor exigen Inventory.Costs.Read y las de mensajes, DIAN y
+   alertas el permiso de su área—; esta pantalla sólo las pinta como .kpi-card por unidad y severidad (sin colores propios: los de
+   componentes.css) y lleva a su enlace con un clic. Filtros de sucursal y bodega (las del alcance que devuelve el mismo tablero) y el corte.
+   Aviso de los tipos de alerta levantados sin destinatario (SC-022). *@
+<PermissionGate Required="Inventory.Dashboard.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tablero de inventario</h3>
+        <div class="toolbar">
+            <label class="campo">Sucursal
+                <select class="e-input" value="@(_sucursal?.ToString() ?? "")" @onchange="@(e => CambiarSucursal(e.Value?.ToString()))" disabled="@_carga.Activa">
+                    <option value="">Todas las del alcance</option>
+                    @foreach (var s in _alcance.Branches) { <option value="@s.PublicId">@s.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Bodega
+                <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => CambiarBodega(e.Value?.ToString()))" disabled="@_carga.Activa">
+                    <option value="">Todas las del alcance</option>
+                    @foreach (var b in _alcance.Warehouses) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Con corte al
+                <input type="date" class="e-input" value="@(_corte.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" @onchange="@(e => CambiarCorte(e.Value))" disabled="@_carga.Activa" />
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando las cifras del tablero…">
+        @if (_tablero is not null)
+        {
+            @if (_tablero.WithoutRecipient.Count > 0)
+            {
+                <div class="aviso aviso-alerta">
+                    Hay alertas levantadas sin destinatario activo (se enviaron al administrador de la empresa):
+                    @string.Join(", ", _tablero.WithoutRecipient.Select(w => w.AlertTypeCode)).
+                    Asigne su permiso destinatario en <a href="/inventario/alertas">Alertas</a>.
+                </div>
+            }
+            @if (_tablero.Tiles.Count == 0)
+            {
+                <p class="texto-tenue">No hay cifras para mostrar con sus permisos.</p>
+            }
+            else
+            {
+                <div class="kpi-grid">
+                    @foreach (var ficha in _tablero.Tiles)
+                    {
+                        <button type="button" class="kpi-card ficha-tablero @Severidad(ficha)" title="Ver el detalle" @onclick="@(() => Navigation.NavigateTo(ficha.Link.Ruta))">
+                            <span class="kpi-label">@ficha.Label</span>
+                            <span class="kpi-value">@Valor(ficha.Value, ficha.Unit)</span>
+                            @if (ficha.PreviousValue is not null)
+                            {
+                                <span class="kpi-anterior">Período anterior: @Valor(ficha.PreviousValue, ficha.Unit)</span>
+                            }
+                        </button>
+                    }
+                </div>
+                <p class="texto-tenue">Cifras al @_tablero.AsOf.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture). Rotación, días y margen son del mes hasta esa fecha.</p>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private TableroDeInventarioDto? _tablero;
+    private AlcanceDelTableroDto _alcance = new();
+    private Guid? _sucursal, _bodega;
+    private DateOnly _corte = DateOnly.FromDateTime(DateTime.Today);
+    private static readonly CultureInfo Colombia = CultureInfo.GetCultureInfo("es-CO");
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.TableroAsync(_sucursal, _bodega, _corte);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el tablero.");
+            return;
+        }
+        _tablero = r.Value;
+        // El alcance para los filtros es el de quien consulta, sin filtrar: se guarda la primera vez.
+        if (_alcance.Warehouses.Count == 0 && _alcance.Branches.Count == 0) _alcance = r.Value.Scope;
+    }
+
+    private Task CambiarSucursal(string? valor)
+    {
+        _sucursal = Guid.TryParse(valor, out var id) ? id : null;
+        return CargarAsync();
+    }
+
+    private Task CambiarBodega(string? valor)
+    {
+        _bodega = Guid.TryParse(valor, out var id) ? id : null;
+        return CargarAsync();
+    }
+
+    private Task CambiarCorte(object? valor)
+    {
+        if (!DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var fecha)) return Task.CompletedTask;
+        _corte = fecha;
+        return CargarAsync();
+    }
+
+    private static string Severidad(FichaDelTableroDto f) => f.Severity switch
+    {
+        "Critical" => "severidad-critical",
+        "Warning" => "severidad-warning",
+        "Info" => "severidad-info",
+        _ => string.Empty,
+    };
+
+    /// <summary>La cifra según su unidad: pesos, veces, días, porcentaje o conteo. Sin dato, un guion.</summary>
+    private static string Valor(decimal? valor, string unidad) => valor is not { } v ? "—" : unidad switch
+    {
+        "Money" => v.ToString("C0", Colombia),
+        "Percent" => $"{v.ToString("N2", Colombia)} %",
+        "Days" => $"{v.ToString("N1", Colombia)} días",
+        "Quantity" => v.ToString("N2", Colombia),
+        _ => v.ToString("N0", Colombia),
+    };
+}

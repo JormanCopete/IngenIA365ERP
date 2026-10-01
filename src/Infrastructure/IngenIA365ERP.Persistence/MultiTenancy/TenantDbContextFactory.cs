@@ -3,6 +3,7 @@ using IngenIA365ERP.Persistence.DbContext;
 using IngenIA365ERP.Persistence.Providers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IngenIA365ERP.Persistence.MultiTenancy;
 
@@ -21,12 +22,27 @@ internal sealed class TenantDbContextFactory(
     TenantConnectionResolver resolutor,
     IDbProviderConfigurator configurador,
     IEnumerable<ISaveChangesInterceptor> interceptores,
+    IServiceProvider servicios,
     ICurrentUserService? usuarioActual = null) : ITenantDbContextFactory
 {
-    public ITenantDbScope Abrir(string nombreDeBase, string? cadenaPropia = null)
-    {
-        var cadena = resolutor.Resolver(nombreDeBase, cadenaPropia);
+    public ITenantDbScope Abrir(string nombreDeBase, string? cadenaPropia = null) =>
+        AbrirSobre(resolutor.Resolver(nombreDeBase, cadenaPropia));
 
+    /// <summary>
+    /// Feature 012 (T37): la misma base que el <see cref="ApplicationDbContext"/> del ámbito —la cadena
+    /// de su <see cref="ErpTenantInfo"/>, que ya resolvió la petición o el trabajo de fondo—, pero con otra
+    /// conexión: lo que se guarde aquí no depende de la transacción de aquél.
+    /// </summary>
+    public ITenantDbScope AbrirLaDelAmbito()
+    {
+        var cooperativa = servicios.GetRequiredService<ErpTenantInfo>();
+        if (string.IsNullOrWhiteSpace(cooperativa.ConnectionString))
+            throw new InvalidOperationException("El ámbito no tiene cooperativa con base resuelta: no hay a dónde abrir otro contexto.");
+        return AbrirSobre(cooperativa.ConnectionString);
+    }
+
+    private Ambito AbrirSobre(string cadena)
+    {
         var constructor = new DbContextOptionsBuilder<ApplicationDbContext>();
         constructor.AddInterceptors(interceptores);
         configurador.Configure(constructor, cadena, MigrationsTarget.Application);

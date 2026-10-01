@@ -1,11 +1,17 @@
+using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
+using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Debit;
 using IngenIA365ERP.Domain.Entities.Treasury;
@@ -13,6 +19,9 @@ using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.Web;
 using IngenIA365ERP.Domain.Entities.Admin;
+using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
+using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Exceptions;
 using IngenIA365ERP.Persistence.Configurations.Common;
@@ -31,10 +40,37 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public ApplicationDbContext(
         DbContextOptions<ApplicationDbContext> options,
         ErpTenantInfo? tenantInfo = null,
-        ICurrentUserService? currentUserService = null) : base(options)
+        ICurrentUserService? currentUserService = null,
+        ISenalDeMensajes? senalDeMensajes = null) : base(options)
     {
         _tenantInfo = tenantInfo;
         _currentUserService = currentUserService;
+        if (senalDeMensajes is not null) AvisarMensajesGuardados(senalDeMensajes);
+    }
+
+    /// <summary>
+    /// Feature 012 (T10, T078): cuando un guardado incluyó mensajes de integración nuevos, avisa a
+    /// <see cref="ISenalDeMensajes"/> para despertar al despachador (I2). Los <c>PublicId</c> se toman en
+    /// <c>SavingChanges</c> —después del guardado ya no están <c>Added</c>— y se avisan sólo en
+    /// <c>SavedChanges</c>: un guardado que falla no despierta a nadie. El aviso es del <c>SaveChanges</c>, no del
+    /// commit de una transacción explícita; el sondeo del despachador cubre ese hueco.
+    /// </summary>
+    private void AvisarMensajesGuardados(ISenalDeMensajes senal)
+    {
+        List<Guid>? porAvisar = null;
+        SavingChanges += (_, _) =>
+        {
+            porAvisar = ChangeTracker.Entries<IntegrationMessage>()
+                .Where(e => e.State == EntityState.Added)
+                .Select(e => e.Entity.PublicId)
+                .ToList();
+        };
+        SavedChanges += (_, _) =>
+        {
+            if (porAvisar is { Count: > 0 }) senal.Avisar(porAvisar);
+            porAvisar = null;
+        };
+        SaveChangesFailed += (_, _) => porAvisar = null;
     }
 
     /// <summary>
@@ -286,31 +322,111 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument> ElectronicPayrollDocuments => Set<Domain.Entities.Payroll.Transactions.ElectronicPayrollDocument>();
     public DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions => Set<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission>();
 
-    // === Inventory (24) ===
-    public DbSet<Product> Products => Set<Product>();
-    public DbSet<ProductGroup> ProductGroups => Set<ProductGroup>();
-    public DbSet<PrimaryGroup> PrimaryGroups => Set<PrimaryGroup>();
-    public DbSet<SecondaryGroup> SecondaryGroups => Set<SecondaryGroup>();
-    public DbSet<InventoryTransaction> InventoryTransactions => Set<InventoryTransaction>();
-    public DbSet<OrderTransaction> OrderTransactions => Set<OrderTransaction>();
-    public DbSet<InventoryTransactionType> InventoryTransactionTypes => Set<InventoryTransactionType>();
-    public DbSet<InventoryInvoice> InventoryInvoices => Set<InventoryInvoice>();
-    public DbSet<InventoryDocument> InventoryDocuments => Set<InventoryDocument>();
-    public DbSet<OrderDocument> OrderDocuments => Set<OrderDocument>();
-    public DbSet<Price> Prices => Set<Price>();
-    public DbSet<PriceListType> PriceListTypes => Set<PriceListType>();
-    public DbSet<InventoryDiscount> InventoryDiscounts => Set<InventoryDiscount>();
-    public DbSet<DiscountType> DiscountTypes => Set<DiscountType>();
-    public DbSet<Warehouse> Warehouses => Set<Warehouse>();
-    public DbSet<Location> Locations => Set<Location>();
-    public DbSet<SalesPoint> SalesPoints => Set<SalesPoint>();
-    public DbSet<Shift> Shifts => Set<Shift>();
-    public DbSet<ProductAccount> ProductAccounts => Set<ProductAccount>();
-    public DbSet<VatAccount> VatAccounts => Set<VatAccount>();
-    public DbSet<PhysicalInventory> PhysicalInventories => Set<PhysicalInventory>();
-    public DbSet<CommissionParameter> CommissionParameters => Set<CommissionParameter>();
-    public DbSet<CommissionPriceParam> CommissionPriceParams => Set<CommissionPriceParam>();
+    // === Inventory (1: sólo vendedores; el modelo heredado se retiró en RetiroDelInventarioHeredado) ===
     public DbSet<Salesperson> Salespeople => Set<Salesperson>();
+    // Feature 012 (T17, T136): documento generico de inventario, sus satelites, tipos y consecutivos.
+    public DbSet<InventoryDocument> InventoryDocuments => Set<InventoryDocument>();
+    public DbSet<InventoryDocumentLine> InventoryDocumentLines => Set<InventoryDocumentLine>();
+    public DbSet<DocumentLink> DocumentLinks => Set<DocumentLink>();
+    public DbSet<DocumentLineLink> DocumentLineLinks => Set<DocumentLineLink>();
+    public DbSet<DocumentPartySnapshot> DocumentPartySnapshots => Set<DocumentPartySnapshot>();
+    public DbSet<DocumentTaxLine> DocumentTaxLines => Set<DocumentTaxLine>();
+    public DbSet<InventoryDocumentType> InventoryDocumentTypes => Set<InventoryDocumentType>();
+    // Feature 012 (T161): catalogo tributario de Core.
+    public DbSet<Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions => Set<Domain.Entities.Core.Taxes.TaxDefinition>();
+    public DbSet<Domain.Entities.Core.Taxes.TaxRate> TaxRates => Set<Domain.Entities.Core.Taxes.TaxRate>();
+    public DbSet<Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts => Set<Domain.Entities.Core.Taxes.WithholdingConcept>();
+    public DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses => Set<DocumentTypeWarehouse>();
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
+    // Feature 012 (T209, US1): catalogo y bodegas (tablas en InventarioComercialNucleo, T440).
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand> Brands => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product> Products => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit> ProductUnits => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductUnit>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode> ProductBarcodes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductBarcode>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax> ProductTaxes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductTax>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange> ProductAccountingGroupChanges => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType> WarehouseTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse> Warehouses => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation> WarehouseLocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseLocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.ReorderPolicy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserWarehouseScope>();
+    // Feature 012 (T250, US2): kardex y proyecciones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry> KardexEntries => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.KardexEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance> StockBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail> StockDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.StockDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState> CostStates => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostState>();
+    // Feature 012 (T284, US3): puesta en marcha, períodos y valorizado fijado al cerrar.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance>();
+    // Feature 012 (T307, US4): activación de bodegas y cifras de referencia.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>();
+    // Feature 012 (T366, US10): faltantes y sobrantes de los traslados.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture> CountCaptures => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountCapture>();
+    // Feature 012, I5 (T835): cruce a tres vías, reparto de costos adicionales, capas PEPS y sus consumos.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine> PurchaseMatchLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.PurchaseMatchLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.LandedCostAllocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer> CostLayers => Set<IngenIA365ERP.Domain.Entities.Inventory.Projections.CostLayer>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Transactions.LayerConsumption>();
+    // Feature 012, I6 (T859; ComercioAmpliado): catálogo avanzado, lotes y series, reservas y promociones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent> ProductComponents => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductComponent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute> VariantAttributes => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttribute>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue> VariantAttributeValues => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.VariantAttributeValue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue> ProductVariantValues => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductVariantValue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot> Lots => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Lot>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial> Serials => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Serial>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation> Reservations => Set<IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Reservation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion> Promotions => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.Promotion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope> PromotionScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier> PromotionTiers => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PromotionTier>();
+    // Feature 012 (T585, I3): medios de pago de Core, punto de venta y caja, precios y satélites de la venta (VentasYPuntoDeVenta).
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans => Set<IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork> CardNetworks => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardNetwork>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer> CardAcquirers => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal> CardTerminals => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CardTerminal>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination> CashDenominations => Set<IngenIA365ERP.Domain.Entities.Core.Payments.CashDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale> PointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PointOfSale>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister> CashRegisters => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession> CashSessions => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashMovementDetail> CashMovementDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashMovementDetail>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount> CashCounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine> CashCountLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountDenomination> CashCountDenominations => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountTerminalBatch> CashCountTerminalBatches => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountTerminalBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountReferenceCheck> CashCountReferenceChecks => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashCountReferenceCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashDocumentLine> CashDocumentLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashDocumentLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose> DayCloses => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList> PriceLists => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem> PriceListItems => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope>();
+
+    // === Facturación electrónica DIAN (feature 012, I4, T698) ===
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting> ElectronicEmissionSettings => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution> DianNumberingResolutions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianNumberingResolution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel> DianResolutionChannels => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianResolutionChannel>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent> DianContingencyEvents => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.DianContingencyEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument> ElectronicDocuments => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> ElectronicDocumentVersions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission> ElectronicDocumentTransmissions => Set<IngenIA365ERP.Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission>();
 
     // === CDT (7) ===
     public DbSet<Certificate> Certificates => Set<Certificate>();
@@ -341,6 +457,36 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    // Feature 012 (T13, T054): claves de idempotencia (adelanto de T096).
+    public DbSet<OperationKey> OperationKeys => Set<OperationKey>();
+    // Feature 012 (T10, T047; T096): arrendamientos de los trabajos de fondo por cooperativa.
+    public DbSet<BackgroundLease> BackgroundLeases => Set<BackgroundLease>();
+    // Feature 012 (T37, T38; T061): auditoria garantizada y sello de integridad (adelanto de T096).
+    public DbSet<AuditOutboxEntry> AuditOutbox => Set<AuditOutboxEntry>();
+    public DbSet<AuditChainHead> AuditChainHeads => Set<AuditChainHead>();
+    public DbSet<AuditAnchor> AuditAnchors => Set<AuditAnchor>();
+    // Feature 012 (T21, T069): parametros con vigencia (adelanto de T096).
+    public DbSet<ParameterVersion> ParameterVersions => Set<ParameterVersion>();
+    // Feature 012 (T7, T9; T073-T078): bandeja de salida de mensajes de integracion (adelanto de T096).
+    public DbSet<IntegrationMessage> IntegrationMessages => Set<IntegrationMessage>();
+    public DbSet<IntegrationMessageDependency> IntegrationMessageDependencies => Set<IntegrationMessageDependency>();
+    public DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries => Set<IntegrationMessageDelivery>();
+    // Feature 012, entrega I2 (T483).
+    public DbSet<IntegrationDeliveryAttempt> IntegrationDeliveryAttempts => Set<IntegrationDeliveryAttempt>();
+    public DbSet<IntegrationBatch> IntegrationBatches => Set<IntegrationBatch>();
+    public DbSet<IntegrationBatchCounter> IntegrationBatchCounters => Set<IntegrationBatchCounter>();
+    public DbSet<InventoryPostingRule> InventoryPostingRules => Set<InventoryPostingRule>();
+    public DbSet<InventoryVoucherMapping> InventoryVoucherMappings => Set<InventoryVoucherMapping>();
+    public DbSet<InventoryPosting> InventoryPostings => Set<InventoryPosting>();
+    // Feature 012 (T33, T34; T081): aprobaciones de plataforma y montos maximos por permiso (adelanto de T096).
+    public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
+    public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
+    public DbSet<ApprovalDecision> ApprovalDecisions => Set<ApprovalDecision>();
+    public DbSet<PermissionAmountLimit> PermissionAmountLimits => Set<PermissionAmountLimit>();
+    // Feature 012 (T39; T091-T094): alertas de plataforma. (Adelanto de T096.)
+    public DbSet<AlertType> AlertTypes => Set<AlertType>();
+    public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<UserMenuAccess> UserMenuAccesses => Set<UserMenuAccess>();
     public DbSet<SecurityModule> SecurityModules => Set<SecurityModule>();
     public DbSet<UserAssignment> UserAssignments => Set<UserAssignment>();
@@ -428,6 +574,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         // mapeo de concurrencia (feature 004: ROWVERSION vs xmin).
         modelBuilder.ApplyBaseEntityConventions(Database.ProviderName);
 
+        // Feature 012 (T206, T43): el indice de la busqueda de productos depende del motor.
+        IngenIA365ERP.Persistence.Configurations.Inventory.Catalog.IndiceDeBusquedaDeProductos.Aplicar(modelBuilder, Database.ProviderName);
+
         base.OnModelCreating(modelBuilder);
     }
 
@@ -446,6 +595,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        // Feature 012 (T137): hechos inmutables y documentos confirmados, antes de tocar nada (T17, T18).
+        await GuardaDeInmutabilidad.VerificarAsync(this, cancellationToken);
+
         var now = DateTime.UtcNow;
         var userName = _currentUserService?.UserName ?? "SYSTEM";
 

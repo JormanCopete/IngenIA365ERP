@@ -1,0 +1,322 @@
+@page "/ventas/facturas/nueva"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject InventarioClient Inventario
+@inject MediosDePagoClient Medios
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Factura de venta - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T642; FR-052–FR-057, FR-096, FR-097; contracts/api.md §18.2, §22.4): la venta de oficina —factura o comprobante no
+   electrónico— con pagos múltiples. El precio sale de la lista que gana para el cliente, canal, sucursal y fecha (se puede digitar, y el
+   descuento sobre el tope pide aprobación); los impuestos y el total los calcula el servidor en cada guardado. Los pagos que se arquean
+   (efectivo, tarjetas) van a la sesión de caja abierta del usuario; el crédito es provisional mientras Cartera no responda en línea.
+   Confirmar manda el total que la persona vio: si cambió, el servidor lo dice (Inventory.Document.TotalChanged).
+   I6 (T897; FR-052, FR-075): la factura elige su origen —sin origen, desde un pedido (?pedido=, propone sus líneas pendientes y consume su
+   reserva) o desde remisiones (?remisiones=, tipo de clase «factura desde remisiones», líneas de sólo lectura con lo pendiente, sin volver a
+   descargar)—; remisiones con destinos contables distintos no se facturan juntas (Inventory.PostingMode.ChainMismatch). *@
+<PermissionGate Required="Inventory.Sales.Create" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_doc is null ? "Nueva factura de venta" : $"Factura {_doc.Numero} · {TextosDeInventario.Estado(_doc.Status)}")</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/ventas/documentos">Volver a las ventas</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-save" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(false))">Guardar</SfButton>
+            @if (_doc is not null)
+            {
+                <PermissionGate Required="Inventory.Sales.Confirm">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_guardado.Activa || _cobro.Problema() is not null)" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_doc?.Issues is { Count: > 0 } hallazgos)
+        {
+            <div class="aviso aviso-alerta"><b>Lo que hoy impediría confirmarla:</b><ul>@foreach (var h in hallazgos) { <li>@(h.LineNumber is { } n ? $"Línea {n}: " : "")@h.Message</li> }</ul></div>
+        }
+        @if (_sesion is null)
+        {
+            <p class="aviso aviso-info">No tiene una sesión de caja abierta: los pagos que se arquean (efectivo, tarjetas) no se pueden registrar hasta abrirla.</p>
+        }
+        @if (_doc is null && _origenes.Count == 0)
+        {
+            <div class="form-grid">
+                <label class="campo">Origen
+                    <select class="e-input" value="@(_pedidoElegido?.ToString() ?? "")" @onchange="@(e => _pedidoElegido = Id(e.Value))">
+                        <option value="">Sin origen</option>
+                        @foreach (var p in _pedidos) { <option value="@p.DocumentPublicId">Desde el pedido @p.Numero · @p.CounterpartyName</option> }
+                    </select>
+                </label>
+                <SfButton CssClass="e-outline" Disabled="@(_pedidoElegido is null)" OnClick="@(() => Nav.NavigateTo($"/ventas/facturas/nueva?pedido={_pedidoElegido}"))">Traer el pedido</SfButton>
+                <a class="e-btn e-flat" href="/ventas/remisiones">Desde remisiones…</a>
+            </div>
+        }
+        @if (_origenes.Count > 0)
+        {
+            <p class="texto-apoyo">@(DesdeRemisiones ? "Factura desde las remisiones" : "Factura desde el pedido") @string.Join(", ", _origenes.Select(o => o.DisplayNumber ?? "(sin número)")).
+                @(_doc is null ? "Al guardar se proponen las líneas pendientes." : DesdeRemisiones ? "Las líneas vienen de las remisiones: no se cambian aquí." : "")</p>
+        }
+        <div class="form-grid">
+            <label class="campo">Tipo *
+                <select class="e-input" disabled="@(_doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => _tipo = Id(e.Value))">
+                    <option value="">Elija…</option>
+                    @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Bodega *
+                <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Id(e.Value))">
+                    <option value="">Elija…</option>
+                    @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Fecha <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = Fecha(e.Value))" /></label>
+            <label class="campo">Vence <input type="date" class="e-input" value="@(_vence?.ToString("yyyy-MM-dd"))" @onchange="@(e => _vence = Fecha(e.Value))" /></label>
+            <label class="campo campo-ancho">Cliente <ClienteDelPos @bind-Seleccionado="_cliente" /></label>
+            <label class="campo">Vendedor
+                <select class="e-input" value="@(_vendedor?.ToString() ?? "")" @onchange="@(e => _vendedor = Id(e.Value))">
+                    <option value="">Sin vendedor</option>
+                    @foreach (var v in _vendedores) { <option value="@v.SalespersonPublicId">@v.Person.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Referencia externa <input class="e-input" @bind="_referencia" maxlength="60" /></label>
+            <label class="campo">Descuento al total (%) <input class="e-input numero" type="number" min="0" max="100" step="any" @bind="_descuentoTotal" /></label>
+            <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="1000" /></label>
+        </div>
+
+        @if (!DesdeRemisiones)
+        {
+            <div class="info-card">
+                <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync" />
+            </div>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio (vacío: el de la lista)</th><th class="numero">Descuento %</th>@if (_lineas.Any(x => x.ControlaLote || x.ControlaSerie)) { <th>Lote / serie</th> }<th class="numero">Total</th><th></th></tr></thead>
+                <tbody>
+                    @for (var i = 0; i < _lineas.Count; i++)
+                    {
+                        var indice = i;
+                        var l = _lineas[i];
+                        var guardada = _doc?.Lines.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
+                        <tr>
+                            <td>@(indice + 1)</td><td>@l.Producto@(guardada?.Discounts.Any(d => d.Approval is { Status: not "Approved" }) == true ? " · descuento por aprobar" : "")</td><td>@l.Unidad</td>
+                            <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@DesdeRemisiones" @bind="l.Cantidad" /></td>
+                            <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@DesdeRemisiones" @bind="l.Precio" placeholder="@guardada?.ListPrice.ToString("N0")" /></td>
+                            <td class="numero"><input class="e-input numero" type="number" min="0" max="100" step="any" disabled="@(DesdeRemisiones || l.ConPromocion)" @bind="l.Descuento" /></td>
+                            @if (_lineas.Any(x => x.ControlaLote || x.ControlaSerie))
+                            {
+                                <td>
+                                    @if (l.ControlaLote || l.ControlaSerie)
+                                    {
+                                        @* I6 (T938): la venta es una salida: propone el lote que vence primero y marca vencidos; la serie, con el lector. *@
+                                        <SelectorDeLote Producto="@l.ProductPublicId" Bodega="@_bodega" ControlaLote="@l.ControlaLote" ControlaSerie="@l.ControlaSerie"
+                                                        Deshabilitado="@DesdeRemisiones" @bind-Lote="l.Lote" @bind-Serie="l.Serie" />
+                                    }
+                                </td>
+                            }
+                            <td class="numero">@guardada?.Total.ToString("N0")@(FormularioDelCiclo.Promociones(guardada) is { Length: > 0 } promo ? $" · {promo}" : "")</td>
+                            <td>@if (!DesdeRemisiones) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (_doc is { } d)
+        {
+            <div class="info-card">
+                <div class="pos-renglon">Subtotal @d.Totals.Subtotal.ToString("N0") · descuentos @d.Totals.DiscountTotal.ToString("N0") · impuestos @d.Totals.TaxTotal.ToString("N0") · retenciones @d.Totals.WithholdingTotal.ToString("N0")</div>
+                <div class="pos-a-pagar">Total @d.Totals.Total.ToString("N0") · a pagar @d.Totals.AmountDue.ToString("N0")</div>
+            </div>
+            <h4>Pagos</h4>
+            <PanelDeCobro Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Cliente="@_cliente?.PublicId" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
+        }
+        else
+        {
+            <p class="texto-tenue">Guarde la factura para ver el total y registrar los pagos.</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
+
+    /// <summary>I6: la factura desde un pedido (propone sus líneas pendientes).</summary>
+    [SupplyParameterFromQuery(Name = "pedido")] public Guid? Pedido { get; set; }
+
+    /// <summary>I6: la factura desde remisiones del mismo cliente, separadas por coma.</summary>
+    [SupplyParameterFromQuery(Name = "remisiones")] public string? Remisiones { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new();
+    private DocumentoDeVentaDto? _doc;
+    private SesionDeCajaDto? _sesion;
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<BodegaDto> _bodegas = [];
+    private List<VendedorDto> _vendedores = [];
+    private IReadOnlyList<MedioDelPosDto> _medios = [];
+    private List<LineaDelCiclo> _lineas = [];
+    private List<DocumentoReferidoDeInventarioDto> _origenes = [];
+    private List<ResumenDeVentaDto> _pedidos = [];
+    private Guid? _pedidoElegido;
+    private bool _desdeRemisiones;
+
+    /// <summary>La factura desde remisiones: sus líneas vienen de las remisiones y son de sólo lectura.</summary>
+    private bool DesdeRemisiones => _desdeRemisiones || _doc?.Class == TextosDeVentas.ClaseFacturaDesdeRemisiones;
+    private CobroDelPos _cobro = new(0m);
+    private Guid? _tipo, _bodega, _vendedor;
+    private readonly HashSet<Guid> _productosRevisados = [];
+    private DateOnly? _fecha = DateOnly.FromDateTime(DateTime.Today), _vence;
+    private PersonSearchPicker.PersonSearchItem? _cliente;
+    private string? _referencia, _notas;
+    private decimal? _descuentoTotal;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
+        var remisiones = (Remisiones ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
+        _desdeRemisiones = remisiones.Count > 0;
+        int[] clases = _desdeRemisiones ? [TextosDeVentas.ClaseFacturaDesdeRemisiones]
+            : Pedido is not null ? [TextosDeVentas.ClaseFactura, TextosDeVentas.ClaseComprobanteNoElectronico]
+            : [TextosDeVentas.ClaseFactura, TextosDeVentas.ClaseComprobanteNoElectronico, TextosDeVentas.ClaseFacturaDesdeRemisiones];
+        _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive && clases.Contains(t.Class))] : [];
+        _origenes = _desdeRemisiones ? remisiones.Select(r => new DocumentoReferidoDeInventarioDto(r, null)).ToList()
+            : Pedido is { } pedido ? [new DocumentoReferidoDeInventarioDto(pedido, null)] : [];
+        if (_origenes.Count == 0 && Documento is null)
+        {
+            var pedidos = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClasePedido, Status = 2, PageSize = 50 });
+            _pedidos = pedidos.IsSuccess ? [.. pedidos.Value!.Items] : [];
+        }
+        var bodegas = await Inventario.ListarBodegasAsync();
+        _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit && b.IsActive)] : [];
+        var vendedores = await Inventario.VendedoresAsync(null, conRetirados: false, 1, 200);
+        _vendedores = vendedores.IsSuccess ? [.. vendedores.Value!.Items.Where(v => v.IsActive)] : [];
+        var sesion = await Ventas.MiSesionAbiertaAsync();
+        _sesion = sesion.IsSuccess ? sesion.Value : null;
+        var medios = await Medios.ListarAsync(activos: true);
+        var datafonos = await Medios.DatafonosAsync(activos: true);
+        _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today));
+        _tipo = _tipos.FirstOrDefault(t => t.Class != TextosDeVentas.ClaseFacturaDesdeRemisiones || _desdeRemisiones)?.PublicId ?? _tipos.FirstOrDefault()?.PublicId;
+        if (_origenes.Count == 0) _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
+        if (Documento is { } id) await CargarAsync(id);
+    }
+
+    private async Task CargarAsync(Guid id)
+    {
+        var r = await Ventas.ObtenerDocumentoAsync(id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la factura."); return; }
+        var d = r.Value;
+        if (d.Status != 0) { Nav.NavigateTo($"/ventas/documentos/{id}"); return; }
+        _doc = d;
+        _tipo = d.DocumentType.PublicId;
+        _bodega = d.Warehouse?.PublicId;
+        _fecha = d.OperationDate;
+        _vendedor = d.Salesperson?.PublicId;
+        _cliente = d.Counterparty is { IsFinalConsumer: false } c
+            ? new PersonSearchPicker.PersonSearchItem { PublicId = c.PersonPublicId, FullName = c.Name, IdentificationNumber = c.IdNumber ?? "" }
+            : null;
+        var antes = _lineas;
+        _lineas = FormularioDelCiclo.Lineas(d);
+        FormularioDelCiclo.ConservarSeguimiento(antes, _lineas);
+        // I6 (T938): las marcas de seguimiento de los productos que no las traen (un borrador recién abierto).
+        foreach (var producto in _lineas.Where(x => !x.ControlaLote && !x.ControlaSerie).Select(x => x.ProductPublicId).Distinct()
+                     .Where(_productosRevisados.Add).ToList())
+        {
+            var leido = await Inventario.ObtenerProductoAsync(producto);
+            if (leido.Value is not { } p || !(p.TracksLot || p.TracksSerial)) continue;
+            foreach (var x in _lineas.Where(x => x.ProductPublicId == producto)) (x.ControlaLote, x.ControlaSerie) = (p.TracksLot, p.TracksSerial);
+        }
+        _origenes = [.. d.Origins ?? []];
+        var cobro = new CobroDelPos(d.Totals.AmountDue);
+        foreach (var p in d.Payments.Where(x => x.Direction == 1))
+        {
+            var medio = _medios.FirstOrDefault(m => m.Code == p.MeansCode);
+            if (medio is null) continue;
+            var pago = cobro.AgregarPorLoQueFalta(medio);
+            if (pago is null) break;
+            pago.Monto = p.Amount;
+            pago.Entregado = p.Tendered;
+            pago.Referencia = p.Reference;
+            pago.Autorizacion = p.AuthorizationCode;
+            pago.Lote = p.BatchNumber;
+            pago.Last4 = p.Last4;
+        }
+        _cobro = cobro;
+    }
+
+    private async Task AgregarLineaAsync(ProductoElegido elegido)
+    {
+        var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
+        if (!producto.IsSuccess || producto.Value is null) { await Notification.ErrorAsync(producto.ErrorMessage ?? "No se pudo leer el producto."); return; }
+        var p = producto.Value;
+        var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
+        _lineas.Add(new LineaDelCiclo
+        {
+            ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            ControlaLote = p.TracksLot, ControlaSerie = p.TracksSerial,
+        });
+    }
+
+    private BorradorDeVentaRequest Borrador() => new(
+        _tipo!.Value, _bodega ?? Guid.Empty,
+        FormularioDelCiclo.Pedido(_lineas),
+        _doc is null ? [] : _cobro.Pedido(_sesion?.CashSessionPublicId),
+        _fecha, _cliente?.PublicId, _vendedor, DueDate: _vence, ExternalReference: string.IsNullOrWhiteSpace(_referencia) ? null : _referencia.Trim(),
+        Notes: string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim(),
+        DocumentDiscount: _descuentoTotal is > 0 ? new DescuentoRequest(Percent: _descuentoTotal / 100m) : null,
+        OriginPublicIds: _origenes.Count > 0 ? _origenes.Select(o => o.PublicId).ToList() : null, RowVersion: _doc?.RowVersion);
+
+    private async Task<bool> GuardarAsync(bool silencioso)
+    {
+        if (_tipo is null || (_bodega is null && _origenes.Count == 0)) { await Notification.WarningAsync("Elija el tipo y la bodega."); return false; }
+        if (_lineas.Count == 0 && _origenes.Count == 0) { await Notification.WarningAsync("Agregue al menos un producto."); return false; }
+        using var guardado = _guardado.Iniciar();
+        var nueva = _doc is null;
+        var r = await Ventas.GuardarFacturaAsync(_doc?.DocumentPublicId, Borrador(), _claveGuardar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo guardar la factura.")); return false; }
+        await CargarAsync(r.Value.DocumentPublicId);
+        if (!silencioso) await Notification.SuccessAsync("Factura guardada.");
+        if (nueva) Nav.NavigateTo($"/ventas/facturas/nueva?documento={r.Value.DocumentPublicId}", replace: true);
+        return true;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_doc is null) return;
+        if (!await GuardarAsync(true)) return;
+        if (_cobro.Problema() is { } problema) { await Notification.WarningAsync(problema); return; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.ConfirmarAsync(VentasClient.Rutas.Facturas, _doc.DocumentPublicId, _doc.Totals.AmountDue, _doc.RowVersion, _claveConfirmar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo confirmar la factura.")); return; }
+        if (r.Value.Status == 1)
+            await Notification.InfoAsync(_cobro.Pagos.Any(p => TextosDeVentas.EsCredito(p.Medio.Class))
+                ? "El crédito quedó esperando la aprobación de alguien con monto suficiente: la venta se confirma con la última aprobación. Siga su estado en la pestaña «Crédito»."
+                : "Quedó en aprobación: la confirma la última aprobación.");
+        else await Notification.SuccessAsync($"Factura {r.Value.DisplayNumber} confirmada.");
+        Nav.NavigateTo($"/ventas/documentos/{_doc.DocumentPublicId}");
+    }
+
+    /// <summary>Los errores del ciclo comercial en lenguaje de la pantalla; los demás, como los dice el servidor.</summary>
+    private static string Mensaje(string? codigo, string? mensaje, string porDefecto) => codigo switch
+    {
+        "Inventory.PostingMode.ChainMismatch" => "Estas remisiones no se pueden facturar juntas: pasan a contabilidad de formas distintas. Facture cada grupo por separado.",
+        "Inventory.Shipment.AlreadyInvoiced" => "Alguna de las remisiones ya se facturó (del todo o en parte): quedó menos pendiente de lo que pide la factura.",
+        "Inventory.Shipment.CustomerMismatch" => "Las remisiones son de clientes distintos: sólo se facturan juntas las del mismo cliente.",
+        "Inventory.Order.ExceedsPending" => "La factura pide más de lo pendiente del pedido.",
+        _ => mensaje ?? porDefecto,
+    };
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

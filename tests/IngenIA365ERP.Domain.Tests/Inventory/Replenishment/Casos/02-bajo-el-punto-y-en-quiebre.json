@@ -1,0 +1,6 @@
+{
+  "nombre": "US17-2: 8 disponibles y 5 en tránsito dan posición 13 ≤ 15: alerta, sugerido 50 − 13 = 37 y quiebre (8 < 10)",
+  "disponible": 8, "enTransito": 5, "porRecibir": 0,
+  "minimo": 10, "maximo": 50, "puntoDeReorden": 15,
+  "esperado": { "posicion": 13, "requiereReorden": true, "sugerido": 37, "quiebre": true }
+}

@@ -8,6 +8,7 @@ using Mapster;
 using MapsterMapper;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace IngenIA365ERP.Application;
 
@@ -18,7 +19,8 @@ public static class DependencyInjection
         var assembly = Assembly.GetExecutingAssembly();
 
         // MediatR + pipeline behaviors.
-        // Orden de envoltura (outermost → innermost): Validation → Logging → Audit → Performance.
+        // Orden de envoltura (outermost → innermost): Validation → Logging → Idempotency → Audit →
+        // ReintentoPorConcurrencia → Performance (feature 012, T14).
         // 1) Validation se ejecuta primero para que las requests inválidas no lleguen al logger ni al audit.
         // 2) Logging abre el scope con tenant/usuario antes de que cualquier otro behavior emita.
         // 3) Audit registra solo lo que pasó validación.
@@ -28,6 +30,15 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssembly(assembly);
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+            // 2b) Feature 012 (T13, T14): los comandos IOperacionIdempotente abren aqui su transaccion
+            //     (TransaccionExplicita) y guardan la clave en COR_OperationKeys; va ANTES de Audit para
+            //     que la auditoria del comando quede dentro de la transaccion y una repeticion no la
+            //     dispare otra vez. Orden: Validation -> Logging -> Idempotency -> Audit ->
+            //     ReintentoPorConcurrencia -> Performance.
+            // 2a) Feature 012, I4 (T734, T736): lo anotado para después del commit (el canónico de un documento electrónico, la espera
+            //     en línea del POS) corre al volver de la transacción de Idempotency, sólo en la petición más externa y si terminó bien.
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(Common.Persistence.TrasElCommitBehavior<,>));
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(AuditBehavior<,>));
             // 3b) Feature 009: reintento ante ConcurrencyConflictException para los requests marcados
             //     IReintentableAnteConcurrencia. Va DESPUES de Audit para que la auditoria vea un solo
@@ -95,9 +106,278 @@ public static class DependencyInjection
         services.AddScoped<Payroll.Vacations.VacationNoveltyPlanner>();
         // Feature 009: mismo molde para contabilidad (exportaciones, envios, configuracion).
         services.AddScoped<Accounting.Reports.AccountingAuditEmitter>();
+        // Feature 012 (T181): el de Inventario, por la bandeja encadenada (exportar informes y catalogos con datos).
+        services.AddScoped<Inventory.Reports.InventoryAuditEmitter>();
         // Feature 009: el contrato de contabilizacion (unico camino al libro) y la elegibilidad
         // de cuentas que parametrizan los demas modulos (FR-016).
         services.AddScoped<Accounting.Posting.AccountingPoster>();
+        // Feature 012 (T21, T070-T071): el unico lector de parametros con vigencia (memoriza por peticion) y los
+        // dos ganchos del alta, vacios hasta que Inventario los implemente (US1 T226, US3 T286).
+        services.AddScoped<Common.Parameters.ILectorDeParametros, Common.Parameters.LectorDeParametros>();
+        // Feature 012 (T23, T163-T164): el unico lector de la UVT y el unico lector del catalogo tributario (arma la foto
+        // del motor tributario a una fecha). Scoped: memorizan por peticion.
+        services.AddScoped<Common.Taxation.IValorUvt, Common.Taxation.LectorDeUvt>();
+        services.AddScoped<Core.Taxes.LectorDeCatalogoTributario>();
+        // Feature 012 (T226 US1, T286 US3): Inventario resuelve los ambitos Warehouse y DocumentType y pone las reglas del alta
+        // de parametros (periodo cerrado, inicio de periodo para Costeo.*, modo de paso por cadena y tipo fiscal sin paso) y de
+        // las politicas de aprobacion. Una sola instancia por peticion para las tres interfaces.
+        services.AddScoped<Inventory.Common.ReglasDePlataformaDeInventario>();
+        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
+        services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
+        services.AddScoped<Common.Approvals.IReglasDePoliticaDeAprobacion>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
+        // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
+        // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
+        services.AddScoped<Common.Integration.EmisorDeMensajes>();
+        // Feature 012, I2 (T496-T498): el lado consumidor de la plataforma. Los destinos (IDestinoDeMensajes) los registra cada
+        // modulo; sin ninguno registrado, el selector no devuelve nada y la bandeja los muestra como no disponibles. Los reintentos
+        // llevan los defectos del contrato; la API los reemplaza con Integration:Retries (T527).
+        services.AddScoped<Common.Integration.IMensajesEntrantes, Common.Integration.MensajesEntrantes>();
+        services.AddScoped<Common.Integration.EntregasElegibles>();
+        // Feature 012, I2 (T505-T510): la matriz contable de Inventario. La resolucion (carga en bloque y elige por peso), el
+        // punto unico de sus reglas (alta, version, desactivacion e importacion) y el resolutor del tipo de comprobante de una
+        // unidad. IDimensionesDeInventario lo registra Inventario (T519).
+        services.AddScoped<Accounting.Inventory.Reglas.ResolutorDeReglas>();
+        services.AddScoped<Accounting.Inventory.Reglas.ReglasDeLaMatriz>();
+        services.AddScoped<Accounting.Inventory.Reglas.TiposDeComprobanteDeInventario>();
+        // Feature 012, I2 (T511-T517): el consumidor contable. Contabilidad es un destino de la bandeja (consume por
+        // PostInventoryMessagesCommand y PostInventorySummaryGroupCommand, planea los lotes con AgrupadorDeResumidos) y el
+        // adaptador IContabilidadParaInventario le da a Inventario sus cuatro consultas en proceso.
+        services.AddScoped<Accounting.Inventory.Contabilizacion.ConsumoDeInventario>();
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaInventario, Accounting.Inventory.ContabilidadParaInventario>();
+        services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
+        // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
+        // de politica de Inventario van vacias hasta que existan sus duenos (tipos y periodos, fases 3 a 6); cada fuente (IFuenteDeAprobacion) la registra su
+        // historia. TryAdd para que el modulo que los implementa los reemplace sin quitar estas lineas.
+        services.AddScoped<Common.Approvals.VistaDeSolicitudes>();
+        services.AddScoped<Common.Approvals.IMotorDeAprobaciones, Common.Approvals.MotorDeAprobaciones>();
+        // Feature 012 (T39, T093): el aviso Aprobaciones.Pendiente sale por las alertas (reemplaza a SinAvisosDeAprobacion).
+        services.TryAddScoped<Common.Approvals.IAvisosDeAprobacion, Common.Alerts.AvisosDeAprobacionPorAlertas>();
+        services.TryAddScoped<Common.Approvals.IReglasDePoliticaDeAprobacion, Common.Approvals.ReglasDePoliticaDeAprobacionVacias>();
+        // Feature 012 (T39, T093-T094): levantar y atender alertas, y qué alertas alcanzan a quien pregunta. Los
+        // destinatarios por permiso (IDestinatariosPorPermiso) los resuelve la API. Adelanto de T096.
+        services.AddScoped<Common.Alerts.IAlertas, Common.Alerts.Alertas>();
+        services.AddScoped<Common.Alerts.VisibilidadDeAlertas>();
+        // Feature 012 (T35, T090): el alcance comercial de un usuario, leído y escrito sólo por los puertos de asignación.
+        services.AddScoped<Inventory.Security.Scopes.VistaDeAlcanceComercial>();
+        // Feature 012, T424–T426: la única operación que da, restaura y retira el rol vendedor.
+        services.AddScoped<Inventory.Salespeople.RolDeVendedor>();
+        // Feature 012 (T16, T139): el unico que asigna numero a un documento de inventario no fiscal.
+        services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
+        // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
+        // registra cada historia; los maestros del documento (bodegas, productos, unidades, corte) los reemplaza US1/US3
+        // (TryAdd); la guardia fiscal y la validación previa se registran en I3/I4 e I2 (sin registro se omiten).
+        services.AddScoped<Inventory.Documents.Efectos.EfectosDeClase>();
+        // Feature 012 (US1): los maestros reales sobre las tablas del catalogo y las bodegas (el corte lo suma US3).
+        services.AddScoped<Inventory.Documents.IMaestrosDelDocumento, Inventory.Documents.MaestrosDelDocumentoEnBase>();
+        // Feature 012 (T222-T225, US1): bodegas y catalogo. El alcance por bodega se lee y se escribe por
+        // AsignacionesDeBodegaEnBase (T224; la API registra la vacia con TryAdd despues, asi que gana esta). La existencia
+        // para inactivar y para la busqueda la informa IExistenciasParaElCatalogo: sin kardex hasta que US2 registre la real.
+        services.AddScoped<Inventory.Warehouses.VistaDeBodegas>();
+        services.AddScoped<Common.Interfaces.Security.IAsignacionesDeBodega, Inventory.Security.Scopes.AsignacionesDeBodegaEnBase>();
+        // Feature 012, I3 (T596): el alcance por punto de venta sobre INV_UserPointOfSaleScopes, en lugar de la vacia que la API
+        // registra con TryAdd (SinAsignacionesDePuntoDeVenta).
+        services.AddScoped<Common.Interfaces.Security.IAsignacionesDePuntoDeVenta, Inventory.Security.Scopes.AsignacionesDePuntoDeVentaEnBase>();
+        // Feature 012 (US2, T251-T258): el kardex. RegistroDeKardex es el unico escritor del kardex y sus proyecciones (con la
+        // reconstruccion); las estrategias de ajuste (Scoped: recuerdan lo preparado por documento) se registran por clase; la
+        // existencia real reemplaza a ExistenciasSinKardex; PosicionDeReposicion es el unico lector de la posicion de reposicion.
+        services.AddScoped<Inventory.Kardex.RegistroDeKardex>();
+        // Feature 012, I6 (T923): las reglas de lote, vencimiento y serie del borrador y de la confirmacion (el registro las repite en el cerrojo).
+        services.AddScoped<Inventory.Documents.ReglasDeSeguimiento>();
+        // I6 (T928): el ensamble de kits (grupo Adjustments); opera cuando el despliegue llega a I6.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeEnsamble>();
+        services.AddScoped<Inventory.Kardex.ReversionDeKardex>();
+        services.AddScoped<Inventory.Kardex.VerificacionDeIntegridad>();
+        services.AddScoped<Inventory.Kardex.ValorDeExistencias>();
+        services.AddScoped<Inventory.Integration.EmisionDeInventario>();
+        // Feature 012, I5 (T841): el cambio de metodo o de ambito de costeo corre dentro de AddParameterVersionCommand (la unica via).
+        services.AddScoped<Common.Parameters.IEfectoDeAltaDeParametro, Inventory.Costing.CambioDeMetodoDeCosteo>();
+        // Feature 012, I2 (T519-T521): el lado de Inventario de la integracion contable. Las dimensiones que Contabilidad le pide
+        // a Inventario (lo unico de Inventario que conoce, T31), como se arman y emiten los mensajes de un documento, y la
+        // validacion previa contable: el paso 5 de la confirmacion y la consulta /prevalidate preguntan por el mismo objeto.
+        services.AddScoped<Common.Integration.Accounting.IDimensionesDeInventario, Inventory.Integration.DimensionesDeInventario>();
+        services.AddScoped<Inventory.Integration.MensajesDelDocumento>();
+        services.AddScoped<Inventory.Integration.ValidacionPreviaContable>();
+        services.AddScoped<Inventory.Documents.IPasoDeValidacionPrevia>(sp => sp.GetRequiredService<Inventory.Integration.ValidacionPreviaContable>());
+        services.AddScoped<Inventory.Replenishment.PosicionDeReposicion>();
+        // Feature 012, US17 (T953, T954): la evaluación de reposición que comparten el aviso al confirmar, la revisión nocturna y
+        // la vista reorder-alerts.
+        services.AddScoped<Inventory.Replenishment.EvaluacionDeReposicion>();
+        services.AddScoped<Inventory.Replenishment.AvisoDeReposicionAlConfirmar>();
+        services.AddScoped<Inventory.Replenishment.RevisionDeReorden>();
+        // Feature 012 (US3, T287-T291): el valorizado a una fecha (cierre y vista valuation), la revision del cierre y la
+        // reclasificacion de grupo contable (comando y plantilla de productos).
+        services.AddScoped<Inventory.Periods.ValorizadoALaFecha>();
+        // Feature 012, I6, US17 (T960-T967): la analitica de inventario (margen, rotacion, consumo, sin movimiento, por vencer) que
+        // comparten las vistas de I6, el motivo «sin movimiento» de impairment y el tablero.
+        services.AddScoped<Inventory.Reports.AnaliticaDeInventario>();
+        services.AddScoped<Inventory.Periods.RevisionDeCierre>();
+        services.AddScoped<Inventory.Catalog.Products.ReclasificacionDeGrupo>();
+        services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjustePositivo>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjusteNegativo>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeConsumoInterno>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeBaja>();
+        // Feature 012 (US4, T309, T313; US7, T523): el saldo inicial por bodega y la activación bodega por bodega, con el cuadre
+        // por conjuntos de cuentas que responde IContabilidadParaInventario.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoSaldoInicial>();
+        services.AddScoped<Inventory.GoLive.ComparacionDeActivacion>();
+        // Feature 012 (US9, T338-T349): compras. El borrador del grupo Purchases (documento del proveedor, vinculos, impuestos
+        // y totales en cada guardado), el calculo tributario de compra y las cuatro estrategias de I1.
+        services.AddScoped<Inventory.Purchasing.Common.CalculoTributarioDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.VinculosDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.DiferenciasDePrecioDeCompra>();
+        // I5 (T799, T800): los costos adicionales (flete, seguro) y su estrategia.
+        services.AddScoped<Inventory.Purchasing.Common.CostosAdicionalesDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeCostosAdicionales>();
+        services.AddScoped<Inventory.Purchasing.Common.ContextoDeCompraDirecta>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Purchasing.Common.BorradorDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoRecepcionDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoFacturaDeProveedor>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeProveedor>();
+        // I4 (T740): el documento soporte y su nota de ajuste, sobre el modelo de la factura y la nota del proveedor.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeDocumentoSoporte>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDeAjusteDeDocumentoSoporte>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDevolucionAProveedor>();
+        services.AddScoped<Inventory.Documents.IConfirmacionEncadenada, Inventory.Purchasing.CompraDirectaEncadenada>();
+        services.AddScoped<Inventory.Purchasing.LectorDeFacturaUbl>();
+        // I5 (T787-T793): solicitudes y ordenes de compra (operan cuando la entrega vigente llega a I5), los pendientes por sus
+        // vinculos, las reglas de la recepcion contra orden y el modelo de la orden en PDF (lo dibuja la API: IOrdenDeCompraEnPdf).
+        services.AddScoped<Inventory.Purchasing.PendientesDeCompra>();
+        services.AddScoped<Inventory.Purchasing.Common.RecepcionContraOrden>();
+        // I5 (T794-T796): el cruce a tres vías de la factura del proveedor y la decisión de sus excepciones (SourceType PurchaseMatchLine).
+        services.AddScoped<Inventory.Purchasing.CruceATresVias>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Purchasing.DecisionDeCruce>();
+        services.AddScoped<Inventory.Purchasing.ModeloDeOrdenDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeSolicitudDeCompra>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeOrdenDeCompra>();
+        // Feature 012 (US10, T367-T374): traslados en dos pasos y movimiento entre ubicaciones. Las tres estrategias, el cierre de las
+        // diferencias (confirma o descarta el documento que las resuelve) y su fuente de aprobación (SourceType TransferDiscrepancy).
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDespachoDeTraslado>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoRecepcionDeTraslado>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoMovimientoEntreUbicaciones>();
+        services.AddScoped<Inventory.Transfers.CierreDeDiferencias>();
+        services.AddScoped<Inventory.Transfers.VistaDeTraslados>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Transfers.FuenteDeAprobacionDeDiferencia>();
+        services.AddScoped<Inventory.Purchasing.RevisionDeEventosRadian>();
+        // Feature 012 (US11, T392-T399): conteos físicos. La estrategia del conteo (sin efecto ni mensajes), la vista, la guarda del
+        // bloqueo (la llaman la confirmación y el borrador), la definición y el detalle, la regla de fecha y costo del ajuste y la fecha
+        // que pone la última aprobación.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoConteoFisico>();
+        services.AddScoped<Inventory.Counts.VistaDeConteos>();
+        services.AddScoped<Inventory.Counts.BloqueoPorConteo>();
+        services.AddScoped<Inventory.Counts.DefinicionDeConteo>();
+        services.AddScoped<Inventory.Counts.DetalleDeConteo>();
+        services.AddScoped<Inventory.Counts.ReglaDelAjusteDeConteo>();
+        services.AddScoped<Inventory.Documents.IAntesDeConfirmarPorAprobacion, Inventory.Counts.FechaDelAjusteDeConteo>();
+        // La compra directa guarda sus dos borradores con el mismo handler del ciclo comun (sin el pipeline: un comando
+        // reintentable anidado vaciaria el ChangeTracker de afuera).
+        services.AddScoped<Inventory.Documents.SaveInventoryDraftCommandHandler>();
+        services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
+        services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();
+        services.AddScoped<Inventory.DocumentTypes.VistaDeTiposDeDocumento>();
+        // Feature 012 (I3, T601, T602): la precificación de las líneas de venta y la aprobación de los descuentos sobre el tope, con
+        // su fuente (SourceType DocumentLineDiscount), que exige al aprobador un tope suficiente y le copia aprobador y método.
+        services.AddScoped<Inventory.Sales.PrecificacionDeVenta>();
+        services.AddScoped<Inventory.Pricing.AprobacionDeDescuentos>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Pricing.FuenteDeAprobacionDeDescuento>();
+        // Feature 012, I3 (T603-T607): el borrador del POS, los pagos del documento, la tirilla, la entrega y los eventos de riesgo.
+        services.AddScoped<Inventory.Pos.BorradorDelPos>();
+        services.AddScoped<Inventory.Pos.IAuditoriaDelPuntoDeVenta, Inventory.Pos.AuditoriaDelPuntoDeVenta>();
+        services.AddScoped<Inventory.Sales.RegistroDePagos>();
+        services.AddScoped<Inventory.Sales.ConstructorDeTirilla>();
+        services.AddScoped<Inventory.Sales.EntregaDeDocumentos>();
+        // Feature 012, I3 (T608-T615): la guardia fiscal (versión mínima de I3), el borrador y las reglas de las ventas de oficina, las
+        // notas, las estrategias de las clases de venta (su anulación no tiene estrategia propia: AnulacionDeVenta), la alerta de venta
+        // bajo costo después del guardado y el retiro gravado.
+        services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
+        services.AddScoped<Common.Persistence.TareasTrasElCommit>();
+        // Feature 012, I4 (T701-T704): el único constructor del canónico y la fuente de Inventario (la plataforma no lee INV_; varias
+        // fuentes pueden convivir y se eligen por SourceModule).
+        services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
+        services.AddScoped<ElectronicInvoicing.Canonical.IFuenteDeDocumentoElectronico, Inventory.Integration.FuenteDeEmisionDeInventario>();
+        // Feature 012, I5 (T803–T806): los eventos RADIAN que emite el ERP. Compras los prepara, los enlaza y registra su resultado (por el
+        // puerto de la fuente); la plataforma arma el evento, lo numera (T802) y lo lleva por el procesador con la máquina simplificada.
+        services.AddScoped<Inventory.Purchasing.EventosRadianDeInventario>();
+        services.AddScoped<ElectronicInvoicing.Documents.CicloDelEventoRadian>();
+        // Feature 012, I4 (T705, T710): el único escritor de LastIssuedNumber y los prefijos de notas de Inventario (la plataforma no lee
+        // INV_: pregunta por el puerto).
+        services.AddScoped<ElectronicInvoicing.Numeracion.NumeradorFiscal>();
+        services.AddScoped<ElectronicInvoicing.Numeracion.IPrefijosDeModulos, Inventory.Integration.PrefijosDeInventario>();
+        // Feature 012, I4 (T711-T721): el registro del documento electrónico en la confirmación, el intento contra el canal sellado
+        // (emitir, consultar, transmitir contingencia) con sus artefactos, la contingencia 04, la representación, la entrega al comprador,
+        // la bandeja (con el alcance que decide cada fuente) y las alertas DIAN de la tarea einvoicing.alerts. Las esperas entre intentos
+        // son técnicas (ElectronicInvoicing:Retries, contracts/dian.md §6.3): estos son los defectos del contrato; T728 los lee de la sección.
+        services.AddSingleton(new ElectronicInvoicing.Documents.EsperasDeReintento(
+            [TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5),
+             TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(30), TimeSpan.FromMinutes(60)],
+            TimeSpan.FromHours(1), TimeSpan.FromMinutes(2)));
+        // Sin canales ni credenciales registrados (T728, T729 los agregan en AddElectronicInvoicing, que se llama después y manda), el
+        // contenedor se arma igual: la validación de desarrollo exige poder construir cada manejador.
+        services.TryAddScoped<ElectronicInvoicing.Channels.ICanalesDeEmision, ElectronicInvoicing.Channels.SinCanalesRegistrados>();
+        services.TryAddScoped<ElectronicInvoicing.Channels.ICredencialesDeCanal, ElectronicInvoicing.Channels.SinCredencialesConfiguradas>();
+        services.AddScoped<ElectronicInvoicing.Documents.RegistroDeDocumentoElectronico>();
+        services.AddScoped<ElectronicInvoicing.Documents.IReconstruccionDelCanonico, ElectronicInvoicing.Documents.ReconstruccionDelCanonico>();
+        services.AddScoped<ElectronicInvoicing.Documents.GuardadoDeArtefactos>();
+        services.AddScoped<ElectronicInvoicing.Contingencies.ContingenciaDeLaDian>();
+        services.AddScoped<ElectronicInvoicing.Documents.GeneracionDeRepresentacion>();
+        services.AddScoped<ElectronicInvoicing.Documents.EntregaAlComprador>();
+        services.AddScoped<ElectronicInvoicing.Documents.IntentoAnteElCanal>();
+        services.AddScoped<ElectronicInvoicing.Documents.AlertasDeFacturacionElectronica>();
+        services.AddScoped<ElectronicInvoicing.Documents.IConsultaDeFuenteElectronica, Inventory.Integration.ConsultaDeEmisionDeInventario>();
+        // Feature 012, I4 (T722-T726): los casos a, b y c de un rechazo (la marca de la anulación sin efecto fiscal y del reemplazo que
+        // leen los efectos de la venta) y las contingencias.
+        services.AddScoped<Inventory.Integration.RechazoFiscalEnCurso>();
+        services.AddScoped<ElectronicInvoicing.Documents.CasosDeRechazo>();
+        // Feature 012, I4 (T734-T738): el flujo fiscal de la confirmación (guardia y contingencia, numeración por resolución, registro del
+        // documento electrónico y subida del canónico después del commit), la espera en línea del POS y el estado electrónico que leen las
+        // ventas (anular, notas, entrega).
+        services.AddScoped<Inventory.Integration.EmisionFiscalDeLaConfirmacion>();
+        services.AddScoped<Inventory.Pos.EsperaEnLineaDelPos>();
+        services.AddScoped<Inventory.Sales.TrasladoDeVentaEnCurso>();
+        services.AddScoped<Inventory.Sales.SaveCreditNoteDraftCommandHandler>();
+        services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Purchasing.PropuestaDeDocumentoSoporte>();
+        services.AddScoped<Inventory.Documents.IPasoFiscalDeConfirmacion>(sp => sp.GetRequiredService<Inventory.Integration.EmisionFiscalDeLaConfirmacion>());
+        services.AddScoped<Inventory.Sales.CalculoTributarioDeVenta>();
+        services.AddScoped<Inventory.Sales.ReglasDeConfirmacionDeVenta>();
+        // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,
+        // las consultas a Cartera responden CarteraNoHabilitada (la entrega IC, T661, registra la real). El crédito dentro del pago, su
+        // aprobación (SourceType DocumentPayment, Subject ProvisionalCredit) y la marca de lo que se está aprobando en la petición.
+        services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Common.Integration.Lending.ConsultasDeCarteraNoHabilitada>();
+        services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
+        services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
+        services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Sales.FuenteDeAprobacionDeCredito>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Sales.BorradorDeVenta>();
+        services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Sales.AlertaDeVentaBajoCosto>();
+        services.AddScoped<Inventory.Documents.Efectos.AnulacionDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.RetiroGravado>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoFacturaDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDocumentoEquivalentePos>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoComprobanteDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaCreditoDeVenta>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeAjustePos>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoNotaDeVentaNoElectronica>();
+        // I6 (T877-T889): el ciclo comercial. Las reservas (único escritor de INV_Reservations y de Reserved), los vínculos del ciclo y
+        // las estrategias de cotización, pedido, remisión, factura desde remisiones y nota débito. Operan cuando el despliegue llega a I6.
+        services.AddScoped<Inventory.Sales.Reservas.ReservasDeInventario>();
+        services.AddScoped<Inventory.Sales.CicloComercial.VinculosDelCiclo>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeCotizacion>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDePedido>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeRemision>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeFacturaDesdeRemisiones>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDebito>();
+        // I3 (T617-T620): la caja. El grupo Cash por el ciclo común (borrador del movimiento, sus dos estrategias) y los servicios que
+        // comparten las sesiones, el arqueo y los movimientos.
+        services.AddScoped<Inventory.Cash.SesionesDeCaja>();
+        services.AddScoped<Inventory.Cash.ReglasDeMovimientoDeCaja>();
+        services.AddScoped<Inventory.Cash.ArqueoDeLaSesion>();
+        services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Cash.BorradorDeMovimientoDeCaja>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Cash.EfectoMovimientoDeCaja>();
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Cash.EfectoDiferenciaDeArqueo>();
+        // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
+        services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
         // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
         // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.
@@ -114,6 +394,10 @@ public static class DependencyInjection
         services.AddScoped<Core.People.Services.PersonFactory>();
         services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();
         services.AddScoped<Core.Associates.Services.AssociateRegistrar>();
+        // Feature 012 (T46, T175): el alta con la autorización de datos del titular, y su lectura sólo por PublicId.
+        services.AddScoped<Compliance.HabeasData.AutorizacionDeDatos>();
+        services.AddScoped<Compliance.HabeasData.IAutorizacionDeDatos>(sp => sp.GetRequiredService<Compliance.HabeasData.AutorizacionDeDatos>());
+        services.AddScoped<Core.People.Services.AltaConAutorizacion>();
 
         // Phase 4b — dispatcher del correo "olvidé mi contraseña".
         services.AddScoped<

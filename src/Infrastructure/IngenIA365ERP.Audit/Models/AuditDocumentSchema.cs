@@ -88,7 +88,18 @@ public static class AuditDocumentSchema
 
     // --------------------------------------------------------- escritura --
 
-    public static BsonDocument ToDocument(AuditEventDocument e) => new()
+    public static BsonDocument ToDocument(AuditEventDocument e)
+    {
+        var doc = SinMetadata(e);
+        // Feature 012 (T36): canal, origen, actor, clave, motivo y código de error. Los eventos de identidad
+        // no la llevan y su documento queda como antes.
+        if (e.Metadata is { Count: > 0 } metadata)
+            doc.Add(Metadata, new BsonDocument(metadata.OrderBy(p => p.Key, StringComparer.Ordinal)
+                .Select(p => new BsonElement(p.Key, p.Value))));
+        return doc;
+    }
+
+    private static BsonDocument SinMetadata(AuditEventDocument e) => new()
     {
         { TenantId, e.TenantId },
         { UserId, e.UserId },
@@ -167,7 +178,9 @@ public static class AuditDocumentSchema
         IpAddress: Texto(d, IpAddress, Heredado.IpAddress),
         Endpoint: Texto(d, Endpoint, Heredado.Endpoint),
         DurationMs: Entero(d, DurationMs, Heredado.DurationMs),
-        Timestamp: Fecha(d, OccurredAt, Heredado.Timestamp));
+        Timestamp: Fecha(d, OccurredAt, Heredado.Timestamp),
+        Metadata: Diccionario(d, Metadata, Heredado.Metadata),
+        ChainSeq: Secuencia(d));
 
     // ----------------------------------------------------------- filtros --
 
@@ -187,6 +200,13 @@ public static class AuditDocumentSchema
         if (!string.IsNullOrEmpty(q.Module)) partes.Add(Igual(Module, Heredado.Module, q.Module));
         if (!string.IsNullOrEmpty(q.Action)) partes.Add(Igual(Action, Heredado.Action, q.Action));
         if (q.From.HasValue || q.To.HasValue) partes.Add(Rango(q.From, q.To));
+        // Feature 012 (T423): varios módulos (los encadenados) y sólo los rechazos o sólo lo aceptado.
+        if (q.Modules is { Count: > 0 } modulos)
+            partes.Add(f.Or(f.In(Module, modulos), f.In(Heredado.Module, modulos)));
+        if (string.Equals(q.Outcome, ResultadoRechazado, StringComparison.OrdinalIgnoreCase))
+            partes.Add(Igual(Action, Heredado.Action, ResultadoRechazado));
+        else if (string.Equals(q.Outcome, ResultadoAceptado, StringComparison.OrdinalIgnoreCase))
+            partes.Add(f.And(f.Ne(Action, ResultadoRechazado), f.Ne(Heredado.Action, ResultadoRechazado)));
 
         return partes.Count == 0 ? f.Empty : f.And(partes);
     }
@@ -229,7 +249,31 @@ public static class AuditDocumentSchema
         return f.And(partes);
     }
 
+    /// <summary>La acción de un rechazo (<c>AuditEventTypes.CommandRejected</c>), el valor de <c>Outcome</c> que la pide.</summary>
+    public const string ResultadoRechazado = "Rejected";
+
+    /// <summary>El valor de <c>Outcome</c> que pide todo lo que no es un rechazo.</summary>
+    public const string ResultadoAceptado = "Accepted";
+
     // ---------------------------------------------------------- ayudantes --
+
+    /// <summary>La metadata (canal, origen, actor, clave, motivo, código de error) como texto; nula si no hay.</summary>
+    private static IReadOnlyDictionary<string, string>? Diccionario(BsonDocument d, string canonico, string heredado)
+    {
+        var v = Valor(d, canonico, heredado);
+        if (v is null || !v.IsBsonDocument) return null;
+        var resultado = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var e in v.AsBsonDocument)
+            if (!e.Value.IsBsonNull) resultado[e.Name] = e.Value.IsString ? e.Value.AsString : e.Value.ToString() ?? string.Empty;
+        return resultado.Count == 0 ? null : resultado;
+    }
+
+    /// <summary>La posición en la cadena de sellos (<c>chain.seq</c>, feature 012 T38); nula fuera de los módulos encadenados.</summary>
+    private static long? Secuencia(BsonDocument d)
+    {
+        if (!d.TryGetValue("chain", out var cadena) || !cadena.IsBsonDocument) return null;
+        return cadena.AsBsonDocument.TryGetValue("seq", out var seq) && seq.IsNumeric ? seq.ToInt64() : null;
+    }
 
     private static BsonValue? Valor(BsonDocument d, string canonico, string heredado)
     {

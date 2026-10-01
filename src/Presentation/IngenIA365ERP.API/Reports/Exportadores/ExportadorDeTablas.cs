@@ -40,6 +40,8 @@ public static class ExportadorDeTablas
         decimal d when tipo == TipoDeColumna.Moneda => d.ToString("N0", Cultura),
         decimal d when tipo == TipoDeColumna.Decimal => d.ToString("0.##", Cultura),
         decimal d when tipo == TipoDeColumna.Porcentaje => d.ToString("N2", Cultura) + " %",
+        decimal d when tipo == TipoDeColumna.Cantidad => d.ToString("N4", Cultura),
+        decimal d when tipo == TipoDeColumna.Costo => d.ToString("N6", Cultura),
         decimal d => d.ToString("N2", Cultura),
         int i => i.ToString(Cultura),
         long l => l.ToString(Cultura),
@@ -49,7 +51,8 @@ public static class ExportadorDeTablas
         _ => valor.ToString() ?? string.Empty,
     };
 
-    private static bool EsNumerica(TipoDeColumna t) => t is TipoDeColumna.Entero or TipoDeColumna.Moneda or TipoDeColumna.Decimal or TipoDeColumna.Porcentaje;
+    private static bool EsNumerica(TipoDeColumna t) => t is TipoDeColumna.Entero or TipoDeColumna.Moneda or TipoDeColumna.Decimal
+        or TipoDeColumna.Porcentaje or TipoDeColumna.Cantidad or TipoDeColumna.Costo;
 
     // ------------------------------------------------------------------ Excel --
 
@@ -141,7 +144,7 @@ public static class ExportadorDeTablas
             for (var i = 1; i < tabla.Columnas.Count; i++)
             {
                 var tipo = tabla.Columnas[i].Tipo;
-                if (tipo is not (TipoDeColumna.Moneda or TipoDeColumna.Decimal)) continue;
+                if (tipo is not (TipoDeColumna.Moneda or TipoDeColumna.Decimal or TipoDeColumna.Cantidad or TipoDeColumna.Costo)) continue;
                 var suma = detalle.Select(f => f.Valores.ElementAtOrDefault(i)).OfType<decimal>().Sum();
                 Celda(hoja.Cell(fila, i + 1), suma, tipo);
             }
@@ -174,7 +177,7 @@ public static class ExportadorDeTablas
             case null: celda.Value = Blank.Value; break;
             case decimal d:
                 celda.Value = d;
-                celda.Style.NumberFormat.Format = tipo switch { TipoDeColumna.Moneda => "#,##0", TipoDeColumna.Porcentaje => @"#,##0.00 ""%""", _ => "#,##0.##" };
+                celda.Style.NumberFormat.Format = FormatoNumerico(tipo);
                 break;
             case int i: celda.Value = i; break;
             case long l: celda.Value = l; break;
@@ -189,6 +192,16 @@ public static class ExportadorDeTablas
             default: celda.Value = valor.ToString(); break;
         }
     }
+
+    /// <summary>El formato de Excel de una celda numérica según su tipo (T157: cantidades a 4 decimales y costos a 6).</summary>
+    public static string FormatoNumerico(TipoDeColumna tipo) => tipo switch
+    {
+        TipoDeColumna.Moneda => "#,##0",
+        TipoDeColumna.Porcentaje => @"#,##0.00 ""%""",
+        TipoDeColumna.Cantidad => "#,##0.0000",
+        TipoDeColumna.Costo => "#,##0.000000",
+        _ => "#,##0.##",
+    };
 
     private static string Recortar(string s, int max) => s.Length <= max ? s : s[..max];
 

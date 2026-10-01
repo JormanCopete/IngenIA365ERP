@@ -83,8 +83,29 @@ public sealed class PersonFactory(
             CreatedBy = currentUser.UserName
         };
 
+        AplicarPerfilTributario(input, person);
+
         context.People.Add(person);
         return Result.Success(person);
+    }
+
+    /// <summary>
+    /// El perfil tributario de <paramref name="input"/> sobre <paramref name="persona"/> (feature 012, T173). Sólo lo que
+    /// viene: una marca nula no cambia (al crear queda en falso), y el CIIU nulo se conserva mientras que el vacío lo quita.
+    /// Lo usan el alta y <c>UpdatePersonCommand</c>: un solo sitio que escribe el perfil.
+    /// </summary>
+    public static void AplicarPerfilTributario(PersonInput input, Person persona)
+    {
+        if (input.IsVatResponsible is { } iva) persona.IsVatResponsible = iva;
+        if (input.IsSelfWithholder is { } autorretenedor) persona.IsSelfWithholder = autorretenedor;
+        if (input.IsVatWithholdingAgent is { } agenteIva) persona.IsVatWithholdingAgent = agenteIva;
+        if (input.IsSimpleTaxRegime is { } simple) persona.IsSimpleTaxRegime = simple;
+        if (input.IsIncomeTaxFiler is { } declarante) persona.IsIncomeTaxFiler = declarante;
+        if (input.IsObligatedToInvoice is { } factura) persona.IsObligatedToInvoice = factura;
+        if (input.IsLargeContributor is { } gran) persona.IsLargeContributor = gran;
+        if (input.WithholdingExempt is { } exento) persona.WithholdingExempt = exento;
+        if (input.IcaWithholdingExempt is { } exentoIca) persona.IcaWithholdingExempt = exentoIca;
+        if (input.CiiuCode is not null) persona.CiiuCode = Vacio(input.CiiuCode);
     }
 
     /// <summary>

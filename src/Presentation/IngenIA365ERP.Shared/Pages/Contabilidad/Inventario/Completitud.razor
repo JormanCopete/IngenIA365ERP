@@ -1,0 +1,200 @@
+@page "/contabilidad/inventario/completitud"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject IntegracionContableClient Integracion
+@inject INotificationService Notification
+
+<PageTitle>Completitud de la matriz - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T534; FR-082, SC-024; contracts/api.md §26.3, contracts/contabilidad.md §7.1): lo que le falta a la matriz a una
+   fecha para que todo lo que Inventario usa se pueda contabilizar. Cinco listas —combinaciones en uso sin regla, medios de pago activos
+   sin cuenta, reglas con una cuenta que ya no es elegible, tarifas distintas entre el catálogo y la cuenta, operaciones sin tipo de
+   comprobante— y los avisos, que no impiden nada. Cada fila lleva a donde se corrige. Vacía, la matriz está completa: es la condición
+   para poner los tipos en línea (quickstart §4.1). *@
+<PermissionGate Required="Accounting.InventoryRules.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Completitud de la matriz contable de Inventario</h3>
+        <div class="toolbar">
+            <label class="campo">A la fecha <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+            <a class="e-btn e-outline" href="/contabilidad/inventario/matriz">Matriz</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Revisando la matriz…">
+        @if (_c is { } c)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-value">@c.Summary.Total</span><span class="kpi-label">Pendientes en total</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.MissingRules.Count</span><span class="kpi-label">Combinaciones sin regla</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.PaymentMeansWithoutAccount.Count</span><span class="kpi-label">Medios de pago sin cuenta</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.IneligibleRules.Count</span><span class="kpi-label">Reglas con cuenta no elegible</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.TaxRateMismatches.Count</span><span class="kpi-label">Tarifas distintas</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.UnmappedOperations.Count</span><span class="kpi-label">Operaciones sin tipo de comprobante</span></div>
+            </div>
+            @if (c.Summary.Total == 0)
+            {
+                <p class="aviso aviso-ok">La matriz está completa al @c.Date.ToString("dd/MM/yyyy"): todo lo que Inventario usa tiene su regla y su tipo de comprobante.</p>
+            }
+
+            @if (c.MissingRules.Count > 0)
+            {
+                <h4>Combinaciones en uso sin regla</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Operación</th><th>Rol</th><th>Dimensiones</th><th>La usan</th><th>Último uso</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var f in c.MissingRules)
+                            {
+                                <tr>
+                                    <td>@f.Operation</td>
+                                    <td>@FamiliasDeRolDeInventario.NombreDelRol(f.Role)</td>
+                                    <td>@Dimensiones(f)</td>
+                                    <td>@string.Join(", ", f.UsedByDocumentTypes)</td>
+                                    <td>@(f.LastUsedAt?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                    <td><a href="@($"/contabilidad/inventario/matriz?operacion={Uri.EscapeDataString(f.Operation)}&rol={Uri.EscapeDataString(f.Role)}")">Crear la regla</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.PaymentMeansWithoutAccount.Count > 0)
+            {
+                <h4>Medios de pago activos sin cuenta</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Medio</th><th>Nombre</th><th>Punto de venta</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var m in c.PaymentMeansWithoutAccount)
+                            {
+                                <tr>
+                                    <td>@m.PaymentMeansCode</td><td>@m.Name</td><td>@(m.PointOfSaleCode ?? "Todos")</td>
+                                    <td><a href="/contabilidad/inventario/matriz?rol=MedioDePago">Crear la regla</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.IneligibleRules.Count > 0)
+            {
+                <h4>Reglas con una cuenta que ya no es elegible</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Operación</th><th>Rol</th><th>Cuenta</th><th>Por qué</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var r in c.IneligibleRules)
+                            {
+                                <tr>
+                                    <td>@r.Operation</td><td>@FamiliasDeRolDeInventario.NombreDelRol(r.Role)</td><td>@r.Account</td><td>@r.Reason</td>
+                                    <td>
+                                        <a href="@($"/contabilidad/inventario/matriz?regla={r.RulePublicId}")">Ver la regla</a> ·
+                                        <a href="/contabilidad/plan-de-cuentas">Plan de cuentas</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.TaxRateMismatches.Count > 0)
+            {
+                <h4>Tarifas distintas entre el catálogo tributario y la cuenta</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Tarifa</th><th class="numero">Catálogo</th><th>Cuenta</th><th class="numero">En la cuenta</th><th>Tramo</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var t in c.TaxRateMismatches)
+                            {
+                                <tr>
+                                    <td>@t.TaxRateCode</td><td class="numero">@Porcentaje(t.CatalogRate)</td><td>@t.Account</td>
+                                    <td class="numero">@(t.AccountRate is { } a ? Porcentaje(a) : "sin tarifa")</td>
+                                    <td>@t.From.ToString("dd/MM/yyyy") – @(t.To?.ToString("dd/MM/yyyy") ?? "vigente")</td>
+                                    <td><a href="/contabilidad/plan-de-cuentas">Plan de cuentas</a> · <a href="/maestros/impuestos">Impuestos</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.UnmappedOperations.Count > 0)
+            {
+                <h4>Operaciones sin tipo de comprobante</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Operación</th><th>Tipo de documento</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var o in c.UnmappedOperations)
+                            {
+                                <tr>
+                                    <td>@o.Operation</td><td>@(o.InventoryDocumentTypeCode ?? "Todos")</td>
+                                    <td><a href="/contabilidad/inventario/tipos-de-comprobante">Mapear</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (c.Warnings is { Count: > 0 } avisos)
+            {
+                <h4>Avisos (no impiden contabilizar)</h4>
+                <ul>
+                    @foreach (var a in avisos)
+                    {
+                        <li>
+                            @a.Message
+                            @if (a.RulePublicId is { } regla) { <text> · </text><a href="@($"/contabilidad/inventario/matriz?regla={regla}")">Ver la regla</a> }
+                            else if (a.Account is not null) { <text> · </text><a href="/contabilidad/plan-de-cuentas">Plan de cuentas</a> }
+                        </li>
+                    }
+                </ul>
+            }
+        }
+        else if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private CompletitudDeInventarioDto? _c;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.CompletitudAsync(_fecha);
+        _c = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo revisar la matriz.";
+        if (!r.IsSuccess) await Notification.ErrorAsync(_error!);
+    }
+
+    private static string Dimensiones(ReglaFaltanteDeInventarioDto f) => string.Join(" · ", new[]
+    {
+        f.AccountingGroupCode is { } g ? $"grupo {g}" : null,
+        f.WarehouseCode is { } w ? $"bodega {w}" : null,
+        f.PointOfSaleCode is { } p ? $"punto {p}" : null,
+        f.PaymentMeansCode is { } m ? $"medio {m}" : null,
+        f.TaxRateCode is { } t ? $"tarifa {t}" : null,
+        f.ReasonCode is { } r ? $"causa {r}" : null,
+    }.Where(x => x is not null));
+
+    private static string Porcentaje(decimal fraccion) => (fraccion * 100m).ToString("0.####", System.Globalization.CultureInfo.GetCultureInfo("es-CO")) + " %";
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

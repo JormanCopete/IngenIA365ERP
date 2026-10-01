@@ -1,0 +1,485 @@
+@page "/ventas/documentos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@inject NavigationManager Nav
+@inject DescargaDeArchivos Descargas
+@inject IImpresionDeDocumentos Impresion
+@inject AdjuntosClient Adjuntos
+
+<PageTitle>Documento de venta - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T642; FR-011, FR-054, FR-066; contracts/api.md §18.1–§18.3, §20.3): un documento de venta —líneas con sus descuentos
+   (y la aprobación que esperan), impuestos, retenciones, pagos por medio (de la tarjeta sólo los últimos cuatro dígitos), los mensajes a
+   los otros módulos y los documentos vinculados (origen, notas, anulación)—. Acciones según su estado: el borrador se edita, se confirma
+   o se descarta; el confirmado se entrega (tirilla o carta, y por correo), se reimprime con la marca «COPIA», recibe notas crédito o se
+   anula con el documento contrario. I4 (T758): un documento electrónico muestra su estado ante la DIAN (EstadoElectronico) y no se anula
+   con el documento contrario: «Anular» emite en una sola confirmación la nota crédito total (o la nota de ajuste del documento
+   equivalente) con devolución, y sobre un documento equivalente POS ya expedido «Pedir factura» hace la nota de ajuste y la factura a
+   nombre del comprador en una transacción (SC-003, api.md §18.3.1). La carta de un electrónico baja por el enlace firmado. *@
+<PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_doc is { } t ? $"{TextosDeInventario.Clase(t.Class)} {t.Numero} · {TextosDeInventario.Estado(t.Status)}" : "Documento de venta")</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/ventas/documentos">Volver a las ventas</a>
+            @if (_doc is { } d)
+            {
+                @if (d.Status == 0)
+                {
+                    @if (EsNota)
+                    {
+                        <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-credito/nueva?documento={d.DocumentPublicId}")">Editar</a></PermissionGate>
+                    }
+                    else
+                    {
+                        <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/facturas/nueva?documento={d.DocumentPublicId}")">Editar</a></PermissionGate>
+                    }
+                    <PermissionGate Required="Inventory.Sales.Confirm"><SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@ConfirmarAsync">Confirmar</SfButton></PermissionGate>
+                    <PermissionGate Required="Inventory.Sales.Create"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Descartar))">Descartar</SfButton></PermissionGate>
+                }
+                @if (d.Status == 2)
+                {
+                    @if (d.Electronico is null)
+                    {
+                        <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirEntrega(copia: false))">Entregar</SfButton>
+                    }
+                    <PermissionGate Required="Inventory.Documents.Reprint"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirEntrega(copia: true))">Reimprimir</SfButton></PermissionGate>
+                    @if (!EsNota)
+                    {
+                        <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-credito/nueva?origen={d.DocumentPublicId}")">Nota crédito</a></PermissionGate>
+                    }
+                    @if (d.Class is TextosDeVentas.ClaseFactura or TextosDeVentas.ClaseFacturaDesdeRemisiones)
+                    {
+                        @* I6 (T898): la nota débito sobre esta factura. *@
+                        <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-debito?factura={d.DocumentPublicId}")">Nota débito</a></PermissionGate>
+                    }
+                    @if (d.Electronico is { } el)
+                    {
+                        @if (!EsNota && AccionesDelDocumentoElectronico.Entregable(el.Status))
+                        {
+                            <PermissionGate Required="Inventory.Sales.Confirm"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@AbrirAnulacionElectronica">Anular</SfButton></PermissionGate>
+                        }
+                        @if (d.Class == ClaseDocumentoEquivalente && AccionesDelDocumentoElectronico.Entregable(el.Status))
+                        {
+                            <PermissionGate Required="Inventory.Sales.Confirm"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@AbrirPedirFactura">Pedir factura</SfButton></PermissionGate>
+                        }
+                    }
+                    else
+                    {
+                        <PermissionGate Required="Inventory.Sales.Void"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Anular))">Anular</SfButton></PermissionGate>
+                    }
+                }
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Procesando…" : "Cargando…")">
+        @if (_doc is { } doc)
+        {
+            @if (doc.Issues.Count > 0)
+            {
+                <div class="aviso aviso-alerta"><ul>@foreach (var h in doc.Issues) { <li>@(h.LineNumber is { } n ? $"Línea {n}: " : "")@h.Message</li> }</ul></div>
+            }
+            <div class="form-grid">
+                <div class="kpi-card"><span class="label">Tipo</span><span>@doc.DocumentType.Code · @doc.DocumentType.Name</span></div>
+                <div class="kpi-card"><span class="label">Fecha</span><span>@doc.OperationDate.ToString("dd/MM/yyyy")@(doc.ConfirmedAt is { } c ? $" · confirmado {c.ToLocalTime():dd/MM HH:mm}" : "")</span></div>
+                <div class="kpi-card"><span class="label">Cliente</span><span>@(doc.Counterparty?.Name ?? "—") @doc.Counterparty?.IdType @doc.Counterparty?.IdNumber</span></div>
+                <div class="kpi-card"><span class="label">Sucursal / punto</span><span>@doc.Branch.Name@(doc.PointOfSale is { } punto ? $" · {punto.Name}" : "")@(doc.CashRegister is { } cj ? $" · caja {cj.Code}" : "")</span></div>
+                <div class="kpi-card"><span class="label">Vendedor</span><span>@(doc.Salesperson?.Name ?? "—")</span></div>
+                <div class="kpi-card"><span class="label">Paso a contabilidad</span><span>@TextosDeInventario.ModoDePaso(doc.PostingMode)</span></div>
+            </div>
+            <EstadoElectronico Electronico="@doc.Electronico" DocumentoId="@doc.DocumentPublicId" Entregar="@(() => AbrirEntrega(copia: false))" Cambio="@CargarAsync" />
+
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio de lista</th><th class="numero">Precio</th><th>Descuentos</th><th>Impuestos</th><th class="numero">Total</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in doc.Lines.OrderBy(x => x.LineNumber))
+                        {
+                            <tr>
+                                <td>@l.LineNumber</td><td>@l.Product.Code · @l.Product.Name@(l.BelowCost ? " · bajo el costo" : "")</td><td>@l.Unit.Code</td>
+                                <td class="numero">@l.Quantity.ToString("0.####")</td><td class="numero">@l.ListPrice.ToString("N0")</td><td class="numero">@l.UnitPrice.ToString("N0")</td>
+                                <td>@string.Join("; ", l.Discounts.Select(x => $"{(x.EsPromocion ? $"{x.PromotionName ?? "Promoción"}: " : "")}{(x.Percent is { } pct ? $"{pct * 100m:0.##} %" : "")} {x.Amount:N0}{(x.FromDocumentDiscount ? " (del total)" : "")}{(x.Approval is { } a ? $" · aprobación {a.Status}" : "")}"))</td>
+                                <td>@string.Join("; ", l.Taxes.Select(x => $"{x.TaxRateCode} {x.Amount:N0}"))</td>
+                                <td class="numero">@l.Total.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="info-card">
+                <div>Subtotal @doc.Totals.Subtotal.ToString("N0") · descuentos @doc.Totals.DiscountTotal.ToString("N0") · impuestos @doc.Totals.TaxTotal.ToString("N0") · retenciones @doc.Totals.WithholdingTotal.ToString("N0")</div>
+                <div class="pos-a-pagar">Total @doc.Totals.Total.ToString("N0") · a pagar @doc.Totals.AmountDue.ToString("N0")</div>
+                @foreach (var r in doc.Withholdings) { <div class="texto-tenue">@r.TaxRateCode base @r.Base.ToString("N0") → @r.Amount.ToString("N0")</div> }
+            </div>
+
+            <h4>Pagos</h4>
+            @if (doc.Payments.Count == 0)
+            {
+                <p class="texto-tenue">Sin pagos.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>#</th><th></th><th>Medio</th><th class="numero">Valor</th><th class="numero">Entregado / vueltas</th><th>Referencia</th><th>Tarjeta</th><th>Crédito / bono</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in doc.Payments.OrderBy(x => x.LineNumber))
+                        {
+                            <tr>
+                                <td>@p.LineNumber</td><td>@TextosDeVentas.DireccionDePago(p.Direction)</td>
+                                <td>@p.MeansCode · @TextosDeVentas.ClaseDeMedio(p.MeansClass)</td><td class="numero">@p.Amount.ToString("N0")</td>
+                                <td class="numero">@p.Tendered?.ToString("N0")@(p.Change > 0m ? $" / {p.Change:N0}" : "")</td>
+                                <td>@p.Reference @p.AuthorizationCode</td>
+                                <td>@(p.Last4 is { } l ? $"{p.NetworkCode} ****{l}" : "")@(p.BatchNumber is { } b ? $" lote {b}" : "")@(p.AcquirerCode is { } a ? $" · {a}" : "")</td>
+                                <td>@(p.CreditOrigin is { } o ? TextosDeVentas.OrigenDeCredito(o) : "")@(p.VoucherRedemptionStatus is { } v ? TextosDeVentas.EstadoDeBono(v) : "")@(p.PendingValidation ? " · por validar" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            @if (doc.Payments.Any(p => TextosDeVentas.EsCredito(p.MeansClass)))
+            {
+                @* I3 (T658, T657; §23.2): la pestaña «Crédito» —condiciones, aprobación, sello y mensajes a Cartera—. Nunca saldos de Cartera. *@
+                <div class="toolbar" role="tablist">
+                    <SfButton CssClass="@(_verCredito ? "e-outline" : "e-primary")" OnClick="@(() => _verCredito = false)">Detalle</SfButton>
+                    <SfButton CssClass="@(_verCredito ? "e-primary" : "e-outline")" OnClick="@VerCreditoAsync">Crédito</SfButton>
+                </div>
+                @if (_verCredito)
+                {
+                    <IndicadorDeCarga Cargando="@_cargaCredito.Activa" Texto="Cargando el crédito…">
+                        @if (_credito is { } cr)
+                        {
+                            <p>Cuenta por cobrar registrada por: <b>@(cr.AccountsReceivableRecordedBy ?? "—")</b></p>
+                            <table class="data-grid">
+                                <thead><tr><th>Medio</th><th class="numero">Financiado</th><th class="numero">Cuotas</th><th class="numero">Plazo (días)</th><th class="numero">Cada (días)</th><th>Primer vencimiento</th><th>Último vencimiento</th><th>Línea sugerida</th><th>Estado</th><th>Aprobación</th></tr></thead>
+                                <tbody>
+                                    @foreach (var p in cr.Payments)
+                                    {
+                                        <tr>
+                                            <td>@p.MeansCode · @TextosDeVentas.ClaseDeMedio(p.MeansClass)</td><td class="numero">@p.Amount.ToString("N0")</td>
+                                            <td class="numero">@p.Installments</td><td class="numero">@p.TermDays</td><td class="numero">@p.PeriodicityDays</td>
+                                            <td>@p.FirstDueDate?.ToString("dd/MM/yyyy")</td><td>@p.FinalDueDate?.ToString("dd/MM/yyyy")</td><td>@p.SuggestedLineCode</td>
+                                            <td>@TextosDeVentas.OrigenDeCredito(p.CreditOrigin)@(p.PendingValidation ? " · pendiente de validar" : "")</td>
+                                            <td>@(p.Approval is { } a ? $"{a.Status}{(a.ApprovedByName is { } n ? $" · {n}" : "")}{(a.DecidedAt is { } f ? $" · {f.ToLocalTime():dd/MM/yyyy HH:mm}" : "")}" : "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            <h4>Mensajes a Cartera</h4>
+                            @if (cr.LendingMessages.Count == 0)
+                            {
+                                <p class="texto-tenue">Todavía no hay mensajes a Cartera: se emiten al confirmar la venta.</p>
+                            }
+                            else
+                            {
+                                <table class="data-grid">
+                                    <thead><tr><th>Tipo</th><th>Entrega</th><th>Validación</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var m in cr.LendingMessages)
+                                        {
+                                            <tr>
+                                                <td>@m.Type</td>
+                                                <td>@m.DeliveryStatus@(m.DestinationAvailable ? "" : " — destino aún no disponible")</td>
+                                                <td>@(m.Validation.Reason ?? m.Validation.Status)</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        }
+                    </IndicadorDeCarga>
+                }
+            }
+
+            @if (doc.Messages.Count > 0)
+            {
+                <h4>Mensajes a los otros módulos</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Tipo</th><th>Destino</th><th>Estado</th><th class="numero">Lote</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in doc.Messages) { <tr><td>@m.Type</td><td>@m.Destination</td><td>@m.DeliveryStatus</td><td class="numero">@m.BatchNumber</td></tr> }
+                    </tbody>
+                </table>
+            }
+
+            <h4>Documentos vinculados</h4>
+            <ul>
+                @if (doc.Links.Origin is { } origen) { <li>Origen: <a href="@($"/ventas/documentos/{origen.PublicId}")">@origen.DisplayNumber</a></li> }
+                @if (doc.Links.Voids is { } an) { <li>Anula a: <a href="@($"/ventas/documentos/{an.PublicId}")">@an.DisplayNumber</a></li> }
+                @if (doc.Links.VoidedBy is { } por) { <li>Anulado por: <a href="@($"/ventas/documentos/{por.PublicId}")">@por.DisplayNumber</a></li> }
+                @foreach (var n in doc.Links.Notes) { <li>Nota: <a href="@($"/ventas/documentos/{n.PublicId}")">@(n.DisplayNumber ?? "(borrador)")</a></li> }
+                @if (doc.Links.ReplacementOf is { } re) { <li>Reemplaza a: @re.DisplayNumber</li> }
+                @if (doc.Links.ReplacedBy is { } rp) { <li>Reemplazado por: @rp.DisplayNumber</li> }
+            </ul>
+            <p class="texto-tenue">Registró @doc.CreatedBy.Name@(doc.ConfirmedBy is { } cb ? $" · confirmó {cb.Name}" : "")</p>
+
+            @if (_tirilla is not null)
+            {
+                <TirillaDeVenta Tirilla="@_tirilla" />
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarEntrega" Header="@(_copia ? "Reimprimir (COPIA)" : "Entregar")" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Preparando…">
+                <div class="form-grid">
+                    <label class="campo">Formato
+                        <select class="e-input" value="@_formato" @onchange="@(e => _formato = int.TryParse(e.Value?.ToString(), out var f) ? f : 80)">
+                            @foreach (var (v, t) in TextosDeVentas.FormatosDeImpresion) { <option value="@v">@t</option> }
+                        </select>
+                    </label>
+                    @if (!_copia)
+                    {
+                        <label class="campo-check"><input type="checkbox" @bind="_porCorreo" /> Enviar por correo</label>
+                        @if (_porCorreo) { <label class="campo">Correo (vacío: el del comprador) <input class="e-input" type="email" @bind="_correo" /></label> }
+                    }
+                    else
+                    {
+                        <label class="campo campo-ancho">Motivo de la copia <input class="e-input" @bind="_motivo" maxlength="300" /></label>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@EntregarAsync">@(_copia ? "Reimprimir" : "Entregar")</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEntrega = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@(_accion == Accion.Anular ? "Anular el documento" : "Descartar el borrador")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@(_accion == Accion.Anular ? "Se crea el documento contrario con su propia fecha; un documento electrónico se corrige con su nota." : "El borrador queda descartado con su motivo; no consume número.")</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AplicarMotivoAsync">Aceptar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular con la nota total" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Emitiendo la nota…">
+                <p class="texto-apoyo">Un documento electrónico validado no se anula con el documento contrario: se emite la nota crédito total (o la nota de ajuste del
+                    documento equivalente) con la devolución de lo vendido, con su propio número y código. Si hay que reintegrar pagos, la nota queda en borrador para registrarlos.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularConNotaAsync">Emitir la nota y anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarPedirFactura" Header="Pedir factura" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Emitiendo…">
+                <p class="texto-apoyo">El comprador pide factura sobre este documento equivalente ya expedido: se emite su nota de ajuste de anulación total y la factura a
+                    su nombre con los mismos pagos, en una sola operación. No mueve pagos ni existencias dos veces.</p>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Comprador * <PersonSearchPicker Selected="@_comprador" SelectedChanged="@CambiarComprador" ShowHelpText="false" Compacto="true" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _comprador is null || string.IsNullOrWhiteSpace(_motivo))" OnClick="@PedirFacturaAsync">Emitir la factura</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPedirFactura = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    /// <summary><c>DocumentClass.PosEquivalentDocument</c>.</summary>
+    private const int ClaseDocumentoEquivalente = 28;
+
+    private readonly ClaveDeOperacion _claveNota = new(), _claveConfirmarNota = new(), _clavePedirFactura = new();
+    private bool _mostrarAnulacion, _mostrarPedirFactura;
+    private PersonSearchPicker.PersonSearchItem? _comprador;
+
+    private void CambiarComprador(PersonSearchPicker.PersonSearchItem? comprador) => _comprador = comprador;
+
+    private enum Accion { Anular, Descartar }
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaCredito = new();
+    private CreditoDeLaVentaDto? _credito;
+    private bool _verCredito;
+    private readonly ClaveDeOperacion _claveConfirmar = new(), _claveEntrega = new(), _claveMotivo = new();
+    private DocumentoDeVentaDto? _doc;
+    private TirillaDto? _tirilla;
+    private bool _mostrarEntrega, _mostrarMotivo, _copia, _porCorreo;
+    private int _formato = 80;
+    private string? _correo, _motivo;
+    private Accion _accion;
+
+    private bool EsNota => _doc is { } d && TextosDeVentas.ClasesDeNota.Contains(d.Class);
+
+    private string Ruta => EsNota ? VentasClient.Rutas.Notas : VentasClient.Rutas.Facturas;
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    /// <summary>La pestaña «Crédito» (§23.2): se consulta al abrirla.</summary>
+    private async Task VerCreditoAsync()
+    {
+        _verCredito = true;
+        using var carga = _cargaCredito.Iniciar();
+        var r = await Ventas.ObtenerCreditoAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el crédito."); return; }
+        _credito = r.Value;
+    }
+
+    private async Task CargarAsync()
+    {
+        _credito = null;
+        _verCredito = false;
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ObtenerDocumentoAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el documento."); return; }
+        _doc = r.Value;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_doc is null) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.ConfirmarAsync(Ruta, _doc.DocumentPublicId, _doc.Totals.AmountDue, _doc.RowVersion, _claveConfirmar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar."); await CargarAsync(); return; }
+        if (r.Value.Status == 1) await Notification.InfoAsync("Quedó en aprobación: la confirma la última aprobación.");
+        else await Notification.SuccessAsync($"{r.Value.DisplayNumber} confirmado.");
+        await CargarAsync();
+    }
+
+    private void AbrirEntrega(bool copia)
+    {
+        _copia = copia;
+        _formato = 80;
+        _porCorreo = false;
+        _correo = null;
+        _motivo = null;
+        _mostrarEntrega = true;
+    }
+
+    private async Task EntregarAsync()
+    {
+        if (_doc is null) return;
+        using var guardado = _guardado.Iniciar();
+        var request = new EntregaRequest(TextosDeVentas.NombreDeFormato(_formato), _copia ? null : _porCorreo, _copia || string.IsNullOrWhiteSpace(_correo) ? null : _correo.Trim(),
+            _copia && !string.IsNullOrWhiteSpace(_motivo) ? _motivo.Trim() : null);
+        var r = _copia ? await Ventas.ReimprimirAsync(_doc.DocumentPublicId, request, _claveEntrega) : await Ventas.EntregarAsync(_doc.DocumentPublicId, request, _claveEntrega);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "Inventory.Document.AlreadyDelivered"
+                ? "Ya se entregó en ese formato: use «Reimprimir»."
+                : r.ErrorMessage ?? "No se pudo entregar.");
+            return;
+        }
+        _mostrarEntrega = false;
+        if (r.Value.Archivo is { } archivo) await Descargas.GuardarAsync(archivo.Nombre, archivo.TipoContenido, archivo.Contenido);
+        // I4: la carta de un electrónico es su representación gráfica guardada, por enlace firmado.
+        if (r.Value.Link is { Url: { } url }) await Adjuntos.DescargarAsync(url, $"{_doc.Numero}.pdf");
+        if (r.Value.Ticket is { } tirilla)
+        {
+            _tirilla = tirilla;
+            await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(tirilla), _doc.Numero);
+        }
+        if (r.Value.EmailSent) await Notification.SuccessAsync("Enviado por correo.");
+    }
+
+    private void AbrirAnulacionElectronica()
+    {
+        _motivo = null;
+        _mostrarAnulacion = true;
+    }
+
+    /// <summary>
+    /// «Anular» un electrónico (SC-003): la nota total con devolución en una sola confirmación. Si la confirmación no pasa —por ejemplo, porque
+    /// hay pagos que reintegrar—, la nota queda en borrador y se abre para completarla.
+    /// </summary>
+    private async Task AnularConNotaAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var borrador = await Ventas.GuardarNotaAsync(null, new BorradorDeNotaRequest(_doc.DocumentPublicId, _motivo.Trim(), TotalVoid: true, WithReturn: true, [], []),
+            _claveNota);
+        if (!borrador.IsSuccess || borrador.Value is null) { await Notification.ErrorAsync(borrador.ErrorMessage ?? "No se pudo preparar la nota."); return; }
+        var nota = borrador.Value;
+        var r = await Ventas.ConfirmarAsync(VentasClient.Rutas.Notas, nota.DocumentPublicId, nota.Totals.AmountDue, nota.RowVersion, _claveConfirmarNota);
+        _mostrarAnulacion = false;
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.WarningAsync((r.ErrorMessage ?? "La nota no se pudo confirmar.") + " Quedó en borrador para completarla.");
+            Nav.NavigateTo($"/ventas/notas-credito/nueva?documento={nota.DocumentPublicId}");
+            return;
+        }
+        await Notification.SuccessAsync(r.Value.Status == 1 ? "La nota quedó en aprobación." : $"Anulado con la nota {r.Value.DisplayNumber}; se transmite a la DIAN.");
+        Nav.NavigateTo($"/ventas/documentos/{nota.DocumentPublicId}");
+    }
+
+    private void AbrirPedirFactura()
+    {
+        _motivo = null;
+        _comprador = null;
+        _mostrarPedirFactura = true;
+    }
+
+    /// <summary>«Pedir factura» (§18.3.1): la nota de ajuste y la factura a nombre del comprador, en una transacción.</summary>
+    private async Task PedirFacturaAsync()
+    {
+        if (_doc is null || _comprador is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.PedirFacturaAsync(_doc.DocumentPublicId, new FacturaEnLugarRequest(_comprador.PublicId, _motivo.Trim(), _doc.Totals.AmountDue),
+            _clavePedirFactura);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo emitir la factura."); return; }
+        _mostrarPedirFactura = false;
+        await Notification.SuccessAsync($"Factura {r.Value.InvoiceNumber} emitida; la nota {r.Value.AdjustmentNoteNumber} anuló el documento equivalente.");
+        Nav.NavigateTo($"/ventas/documentos/{r.Value.InvoicePublicId}");
+    }
+
+    private void AbrirMotivo(Accion accion)
+    {
+        _accion = accion;
+        _motivo = null;
+        _mostrarMotivo = true;
+    }
+
+    private async Task AplicarMotivoAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        if (_accion == Accion.Anular)
+        {
+            var r = await Ventas.AnularAsync(Ruta, _doc.DocumentPublicId, _motivo.Trim(), _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular."); return; }
+            await Notification.SuccessAsync($"Anulado con {r.Value?.DisplayNumber}.");
+        }
+        else
+        {
+            var r = await Ventas.DescartarAsync(Ruta, _doc.DocumentPublicId, _motivo.Trim(), _claveMotivo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar."); return; }
+            await Notification.SuccessAsync("Borrador descartado.");
+        }
+        _mostrarMotivo = false;
+        await CargarAsync();
+    }
+}

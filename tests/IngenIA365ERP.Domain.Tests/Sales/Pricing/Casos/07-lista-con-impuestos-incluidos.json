@@ -1,0 +1,93 @@
+{
+  "nombre": "Una lista con impuestos incluidos devuelve el precio tal cual y la marca",
+  "descripcion": "La lista del canal 2 trae el IVA incluido: el resolutor no lo descuenta (eso lo hace la linea con Redondeo.Residuo), sólo lo marca.",
+  "listas": [
+    {
+      "id": 3,
+      "codigo": "CAN2IVA",
+      "persona": null,
+      "segmento": null,
+      "canal": 2,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": true,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 1190
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "codigo": "GENERAL",
+      "persona": null,
+      "segmento": null,
+      "canal": null,
+      "sucursal": null,
+      "desde": "2026-01-01",
+      "hasta": null,
+      "activa": true,
+      "incluyeImpuestos": false,
+      "items": [
+        {
+          "producto": 10,
+          "unidad": 1,
+          "precio": 1000
+        }
+      ]
+    }
+  ],
+  "consultas": [
+    {
+      "contexto": {
+        "persona": null,
+        "segmento": null,
+        "canal": 2,
+        "sucursal": null,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 1190,
+        "lista": "CAN2IVA",
+        "dimensiones": [
+          "Channel"
+        ],
+        "respaldo": false,
+        "incluyeImpuestos": true,
+        "candidatas": [
+          "CAN2IVA",
+          "GENERAL"
+        ]
+      }
+    },
+    {
+      "contexto": {
+        "persona": null,
+        "segmento": null,
+        "canal": null,
+        "sucursal": null,
+        "fecha": "2026-10-01"
+      },
+      "producto": 10,
+      "unidad": 1,
+      "esperado": {
+        "encontrado": true,
+        "precio": 1000,
+        "lista": "GENERAL",
+        "dimensiones": [],
+        "respaldo": false,
+        "incluyeImpuestos": false,
+        "candidatas": [
+          "GENERAL"
+        ]
+      }
+    }
+  ]
+}

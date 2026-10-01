@@ -116,4 +116,46 @@ public class CodigosDeCatalogoTests
         no.Value.Existe.Should().BeFalse();
         desconocido.IsSuccess.Should().BeFalse();
     }
+
+    /// <summary>
+    /// Feature 012 (T213; contracts/api.md §17.1): los catálogos del inventario comercial se consultan por el mismo endpoint,
+    /// con los nombres de la URL de cada pantalla; el código del producto tiene hasta 20 caracteres.
+    /// </summary>
+    [Fact]
+    public async Task Inventario_los_catalogos_nuevos_se_consultan_por_codigo()
+    {
+        var unidad = new IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure { Code = "UND", Name = "Unidad" };
+        var categoria = new IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory { Code = "ABARROTES", Name = "Abarrotes", Level = 1, Path = "/1/" };
+        var marca = new IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand { Code = "DIANA", Name = "Diana" };
+        var grupo = new IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup { Code = "ABARR", Name = "Abarrotes" };
+        var canal = new IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel { Code = "MOSTRADOR", Name = "Mostrador" };
+        var causa = new IngenIA365ERP.Domain.Entities.Inventory.Documents.AdjustmentCause { Code = "MERMA", Name = "Merma" };
+        var tipo = new IngenIA365ERP.Domain.Entities.Inventory.Warehousing.WarehouseType { Code = "PRINCIPAL", Name = "Principal" };
+        _db.AddRange(unidad, categoria, marca, grupo, canal, causa, tipo);
+        await _db.SaveChangesAsync();
+        _db.Warehouses.Add(new IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse { Code = "PRIN", Name = "Principal", BranchId = 1, WarehouseTypeId = tipo.Id });
+        _db.Products.Add(new IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product
+        {
+            Code = "ARROZ-DIANA-500G-X24", Name = "Arroz Diana", CategoryId = categoria.Id, BaseUnitId = unidad.Id,
+        });
+        await _db.SaveChangesAsync();
+        var buscar = new BuscarCodigoDeCatalogoQueryHandler(_db);
+
+        foreach (var (catalogo, codigo, nombre) in new[]
+        {
+            ("unidades", "und", "Unidad"), ("categorias", "abarrotes", "Abarrotes"), ("marcas", "diana", "Diana"),
+            ("grupos-contables", "abarr", "Abarrotes"), ("productos", "arroz-diana-500g-x24", "Arroz Diana"),
+            ("tipos-de-bodega", "principal", "Principal"), ("bodegas", "prin", "Principal"), ("causas-de-ajuste", "merma", "Merma"),
+            ("canales-de-venta", "mostrador", "Mostrador"),
+        })
+        {
+            var r = await buscar.Handle(new BuscarCodigoDeCatalogoQuery(catalogo, codigo), CancellationToken.None);
+            r.IsSuccess.Should().BeTrue(catalogo);
+            r.Value.Existe.Should().BeTrue(catalogo);
+            r.Value.Nombre.Should().Be(nombre, catalogo);
+        }
+
+        "ARROZ-DIANA-500G-X24".Length.Should().BeLessThanOrEqualTo(CodigoDeCatalogo.LargoLargo, "el código del producto tiene hasta 20");
+        (await buscar.Handle(new BuscarCodigoDeCatalogoQuery("bodegas", "NOPE"), CancellationToken.None)).Value.Existe.Should().BeFalse();
+    }
 }

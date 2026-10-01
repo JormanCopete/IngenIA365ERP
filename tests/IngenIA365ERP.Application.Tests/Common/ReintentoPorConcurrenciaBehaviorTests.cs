@@ -69,6 +69,49 @@ public class ReintentoPorConcurrenciaBehaviorTests
     }
 
     /// <summary>
+    /// Feature 012 (T186, lo destapó la e2e de contabilizar en paralelo con toda la suite corriendo): EF puede
+    /// mandar el INSERT del comprobante antes que el UPDATE del consecutivo, y entonces la carrera no llega como
+    /// conflicto de RowVersion sino como choque contra el índice único del número. Es la misma carrera y se
+    /// reintenta igual; hasta ese día salía 500.
+    /// </summary>
+    [Fact]
+    public async Task El_choque_contra_el_indice_del_consecutivo_se_reintenta_como_una_carrera()
+    {
+        var db = Substitute.For<IApplicationDbContext>();
+        var behavior = new ReintentoPorConcurrenciaBehavior<PedidoReintentable, Result>(Servicios(db), NullLogger<ReintentoPorConcurrenciaBehavior<PedidoReintentable, Result>>.Instance);
+        var llamadas = 0;
+
+        var r = await behavior.Handle(new PedidoReintentable(), _ =>
+        {
+            llamadas++;
+            if (llamadas == 1) throw ChoqueContra("UK_ACC_Documents_Type_Number");
+            return Task.FromResult(Result.Success());
+        }, CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue();
+        llamadas.Should().Be(2);
+        db.Received(1).DescartarCambios();
+    }
+
+    [Fact]
+    public async Task Otro_indice_unico_no_es_una_carrera_y_no_se_reintenta()
+    {
+        var db = Substitute.For<IApplicationDbContext>();
+        var behavior = new ReintentoPorConcurrenciaBehavior<PedidoReintentable, Result>(Servicios(db), NullLogger<ReintentoPorConcurrenciaBehavior<PedidoReintentable, Result>>.Instance);
+        var llamadas = 0;
+
+        var acto = () => behavior.Handle(new PedidoReintentable(), _ => { llamadas++; throw ChoqueContra("UK_COR_People_TaxId"); }, CancellationToken.None);
+
+        await acto.Should().ThrowAsync<Microsoft.EntityFrameworkCore.DbUpdateException>();
+        llamadas.Should().Be(1);
+        db.DidNotReceive().DescartarCambios();
+    }
+
+    private static Microsoft.EntityFrameworkCore.DbUpdateException ChoqueContra(string indice) =>
+        new("An error occurred while saving the entity changes.",
+            new InvalidOperationException($"23505: duplicate key value violates unique constraint \"{indice}\""));
+
+    /// <summary>
     /// Feature 010 (revisión N1): las cuatro liquidaciones especiales contabilizan por el mismo <c>NM</c> que
     /// la ordinaria y la prima, así que aprobar y reversar cada una se reintenta entero como aquéllas; hasta el
     /// 2026-09-21 cesantías, vacaciones y definitiva salían 409 en la carrera por el consecutivo. La definitiva

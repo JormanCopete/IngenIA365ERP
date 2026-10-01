@@ -1,0 +1,37 @@
+@page "/inventario/grupos-contables"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using static IngenIA365ERP.Shared.Components.Inventario.CatalogoDeInventarioModelo
+@inject InventarioClient Inventario
+
+<PageTitle>Grupos contables - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T235 (FR-027, FR-073; contracts/api.md §3.4; plantilla 2): Inventario envía el grupo y la matriz de
+   Contabilidad lo traduce a cuentas; por eso el código no cambia nunca. Un grupo con productos inventariables activos no
+   se inactiva. *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+    <CatalogoDeInventario Titulo="Grupos contables"
+                          Descripcion="Qué cuentas le corresponden a cada grupo lo dice la matriz de Contabilidad, nunca este módulo."
+                          RutaBase="@InventarioClient.RutaDeGruposContables"
+                          RutaDePlantilla="@InventarioClient.RutaDeGruposContables"
+                          CatalogoDeCodigo="grupos-contables"
+                          AvisoAlInactivar="Un grupo con productos inventariables activos no se inactiva."
+                          Campos="@_campos"
+                          Cargar="@CargarAsync"
+                          Guardar="@GuardarAsync" />
+</PermissionGate>
+
+@code {
+    private static readonly IReadOnlyList<CampoDeCatalogo> _campos =
+    [
+        new("descripcion", "Descripción", Largo: 300),
+        new("productos", "Productos", EnFormulario: false),
+    ];
+
+    private async Task<ResultadoDeInventario<IReadOnlyList<FilaDeCatalogo>>> CargarAsync(bool inactivos) =>
+        Filas(await Inventario.ListarGruposContablesAsync(inactivos), g => new FilaDeCatalogo(g.PublicId, g.Code, g.Name, g.IsActive, false,
+            new Dictionary<string, string?> { ["descripcion"] = g.Description, ["productos"] = g.Products.ToString() }));
+
+    private async Task<(bool, string?)> GuardarAsync(FilaDeCatalogo? fila, string? codigo, string nombre, IReadOnlyDictionary<string, string?> v, Services.Http.ClaveDeOperacion clave) =>
+        Resultado(await Inventario.GuardarGrupoContableAsync(fila?.PublicId, new GrupoContableRequest(codigo, nombre, Texto(v, "descripcion")), clave));
+}

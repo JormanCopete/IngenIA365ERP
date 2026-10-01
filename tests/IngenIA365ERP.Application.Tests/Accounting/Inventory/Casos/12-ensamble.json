@@ -1,0 +1,117 @@
+{
+  "descripcion": "AjusteInventarioAprobado · Ensamble: el kit que entra al débito, los componentes que salen al crédito, cada uno en la cuenta de su grupo.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "Assembly",
+      "documentTypeCode": "ENS",
+      "number": "EN-1",
+      "publicId": "00000045-0000-4000-8000-000000000045",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000046-0000-4000-8000-000000000046",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000047-0000-4000-8000-000000000047",
+      "type": "AjusteInventarioAprobado",
+      "payload": {
+        "operation": "Ensamble",
+        "lines": [
+          {
+            "accountingGroupCode": "KITS",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Entry",
+            "quantityBase": 1,
+            "cost": 1500.0,
+            "documentLines": [
+              1
+            ]
+          },
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 1000.0,
+            "documentLines": [
+              2
+            ]
+          },
+          {
+            "accountingGroupCode": "ASEO",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 500.0,
+            "documentLines": [
+              3
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "EI",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "14350504",
+        "debito": 1500.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 0,
+        "credito": 1000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          2
+        ]
+      },
+      {
+        "cuenta": "14350502",
+        "debito": 0,
+        "credito": 500.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          3
+        ]
+      }
+    ]
+  }
+}

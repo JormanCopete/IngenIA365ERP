@@ -1,0 +1,44 @@
+@page "/inventario/unidades"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using static IngenIA365ERP.Shared.Components.Inventario.CatalogoDeInventarioModelo
+@inject InventarioClient Inventario
+
+<PageTitle>Unidades de medida - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T235 (FR-017, FR-025; contracts/api.md §3.1; plantilla 3): unidades con sus decimales y el código UN/ECE
+   Rec. 20 que exige la factura electrónica. Los decimales sólo bajan si ninguna cantidad registrada usa más; una unidad en
+   uso por un producto activo no se inactiva; las sembradas se actualizan pero no se borran. *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+    <CatalogoDeInventario Titulo="Unidades de medida"
+                          Descripcion="Las cantidades se guardan en la unidad base del producto; los decimales dicen cuántos admite cada unidad."
+                          RutaBase="@InventarioClient.RutaDeUnidades"
+                          RutaDePlantilla="@InventarioClient.RutaDeUnidades"
+                          CatalogoDeCodigo="unidades"
+                          LargoDeNombre="60"
+                          AvisoAlInactivar="Una unidad que es base o alterna de un producto activo no se inactiva."
+                          Campos="@_campos"
+                          Cargar="@CargarAsync"
+                          Guardar="@GuardarAsync" />
+</PermissionGate>
+
+@code {
+    private static readonly IReadOnlyList<CampoDeCatalogo> _campos =
+    [
+        new("decimales", "Decimales (0 a 4)", TipoDeCampoDeCatalogo.Entero, PorDefecto: "0"),
+        new("dian", "Código DIAN (Rec. 20)", Largo: 3, Ayuda: "UND = 94, KG = KGM, LT = LTR. Lo exige la factura electrónica."),
+        new("simbolo", "Símbolo", Largo: 10, EnLista: false),
+        new("productos", "Productos", EnFormulario: false, Mostrar: v => v ?? "0"),
+    ];
+
+    private async Task<ResultadoDeInventario<IReadOnlyList<FilaDeCatalogo>>> CargarAsync(bool inactivas) =>
+        Filas(await Inventario.ListarUnidadesAsync(inactivas), u => new FilaDeCatalogo(u.PublicId, u.Code, u.Name, u.IsActive, u.IsSeeded,
+            new Dictionary<string, string?>
+            {
+                ["decimales"] = u.AllowedDecimals.ToString(), ["dian"] = u.DianUnitCode, ["simbolo"] = u.Symbol, ["productos"] = u.ProductsUsing.ToString(),
+            }));
+
+    private async Task<(bool, string?)> GuardarAsync(FilaDeCatalogo? fila, string? codigo, string nombre, IReadOnlyDictionary<string, string?> v, Services.Http.ClaveDeOperacion clave) =>
+        Resultado(await Inventario.GuardarUnidadAsync(fila?.PublicId,
+            new UnidadRequest(codigo, nombre, Texto(v, "simbolo"), Entero(v, "decimales") ?? 0, Texto(v, "dian")?.ToUpperInvariant()), clave));
+}

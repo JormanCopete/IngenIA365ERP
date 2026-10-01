@@ -1,0 +1,12 @@
+{
+  "nombre": "Monto sobre el máximo del permiso sin política: AmountExceedsLimit con maxAmount",
+  "derivacion": "El tipo no tiene política ni el sujeto regla fija. 60.000 supera el máximo de 50.000: no hay nivel que forzar, así que se rechaza con Inventory.Approval.AmountExceedsLimit y maxAmount = 50.000. Bajo el máximo se confirma sin aprobación; sin máximo (un rol que concede el permiso sin fila) nunca excede.",
+  "subject": "DocumentConfirmation",
+  "fecha": "2026-10-05",
+  "politicas": [],
+  "evaluaciones": [
+    { "monto": 60000, "montoMaximo": 50000, "esperado": { "resultado": "ExcedeLimite", "niveles": [], "montoMaximo": 50000 } },
+    { "monto": 49999, "montoMaximo": 50000, "esperado": { "resultado": "SinAprobacion", "niveles": [] } },
+    { "monto": 900000000, "esperado": { "resultado": "SinAprobacion", "niveles": [] } }
+  ]
+}

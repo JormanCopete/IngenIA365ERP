@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Models;

@@ -56,6 +56,8 @@ public static class DependencyInjection
         // consumidor hace creer que hay una defensa donde no la hay.
         services.AddScoped<IRefreshTokenStore, RedisRefreshTokenStore>();
         services.AddScoped<IPermissionClaimsCache, RedisPermissionClaimsCache>();
+        // Feature 012 (T33, T085): desafíos de la aprobación presencial y TOTP ya usados, en la ranura de la cooperativa.
+        services.AddScoped<IngenIA365ERP.Application.Common.Approvals.IDesafiosDePresencia, RedisDesafiosDePresencia>();
 
         // Feature 002 (Chunk C.2) — identidad central:
         // - TenantMembershipReader: cache 60s + JOIN a ADM_TenantMemberships/Tenants/MfaPolicies

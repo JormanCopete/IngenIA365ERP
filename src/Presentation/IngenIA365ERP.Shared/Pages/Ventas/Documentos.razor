@@ -1,0 +1,126 @@
+@page "/ventas/documentos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Documentos de venta - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I3 (T642; FR-058, FR-066; contracts/api.md §18.1, §20.3): la consulta de los documentos de venta del alcance —facturas,
+   documentos equivalentes POS, comprobantes no electrónicos y sus notas— con filtros por clase, estado, fechas, punto, cliente, número y
+   pendientes de entrega. Desde aquí se abre cada uno (entregar, reimprimir, nota, anular) y se registran las ventas de oficina: la factura
+   con sus pagos y la nota crédito sobre una venta confirmada. Un punto sin POS cobra desde aquí. *@
+<PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Documentos de venta</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Inventory.Sales.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/ventas/facturas/nueva"))">Nueva factura</SfButton>
+            </PermissionGate>
+            <a class="e-btn e-flat" href="/ventas/informes">Informes</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Clase
+            <select class="e-input" value="@(_clase?.ToString() ?? "")" @onchange="@(e => { _clase = int.TryParse(e.Value?.ToString(), out var c) ? c : null; return BuscarAsync(); })">
+                <option value="">Todas</option>
+                @foreach (var c in TextosDeVentas.ClasesDeVenta.Concat(TextosDeVentas.ClasesDeNota)) { <option value="@c">@TextosDeInventario.Clase(c)</option> }
+            </select>
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => { _estado = int.TryParse(e.Value?.ToString(), out var s) ? s : null; return BuscarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (valor, texto) in TextosDeInventario.Estados) { <option value="@valor">@texto</option> }
+            </select>
+        </label>
+        <label class="campo">Desde <input type="date" class="e-input" value="@(_desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _desde = Fecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _hasta = Fecha(e.Value); return BuscarAsync(); })" /></label>
+        <label class="campo campo-largo">Cliente <PersonSearchPicker Selected="@_cliente" SelectedChanged="@CambiarClienteAsync" ShowHelpText="false" Compacto="true" /></label>
+        <label class="campo">Número <input class="e-input" type="number" @bind="_numero" @bind:after="BuscarAsync" /></label>
+        <label class="campo-check"><input type="checkbox" @bind="_pendientesDeEntrega" @bind:after="BuscarAsync" /> Pendientes de entrega</label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay documentos de venta con estos filtros en su alcance.</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Clase</th><th>Fecha</th><th>Punto / caja</th><th>Cliente</th><th>Vendedor</th><th>Pagos</th><th class="numero">Total</th><th>Estado</th></tr></thead>
+                <tbody>
+                    @foreach (var d in _filas)
+                    {
+                        <tr>
+                            <td><a href="@($"/ventas/documentos/{d.DocumentPublicId}")">@d.Numero</a>@(d.PendingDelivery ? " · por entregar" : "")</td>
+                            <td>@TextosDeInventario.Clase(d.Class)</td><td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
+                            <td>@d.PointOfSaleCode@(d.CashRegisterCode is { } c ? $" / {c}" : "")</td><td>@d.CounterpartyName</td><td>@d.SalespersonName</td>
+                            <td>@string.Join(", ", d.Payments.Select(p => $"{p.MeansCode} {p.Amount:N0}"))</td>
+                            <td class="numero">@d.Total.ToString("N0")</td><td>@TextosDeInventario.Estado(d.Status)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _carga.Activa)" OnClick="@(() => PaginaAsync(-1))">Anterior</SfButton>
+            <span class="texto-tenue">Página @_pagina · @_total documento(s)</span>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _carga.Activa)" OnClick="@(() => PaginaAsync(1))">Siguiente</SfButton>
+        </div>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private readonly EstadoDeCarga _carga = new();
+    private List<ResumenDeVentaDto> _filas = [];
+    private int? _clase, _estado;
+    private DateOnly? _desde, _hasta;
+    private long? _numero;
+    private bool _pendientesDeEntrega;
+    private PersonSearchPicker.PersonSearchItem? _cliente;
+    private int _pagina = 1;
+    private long _total;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private Task CambiarClienteAsync(PersonSearchPicker.PersonSearchItem? cliente)
+    {
+        _cliente = cliente;
+        return BuscarAsync();
+    }
+
+    private Task BuscarAsync()
+    {
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private async Task PaginaAsync(int paso)
+    {
+        _pagina = Math.Max(1, _pagina + paso);
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas
+        {
+            Class = _clase, Status = _estado, From = _desde, To = _hasta, Person = _cliente?.PublicId, Number = _numero,
+            PendingDelivery = _pendientesDeEntrega ? true : null, Page = _pagina, PageSize = TamanoDePagina,
+        });
+        if (!r.IsSuccess) { _filas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas."); return; }
+        _filas = [.. r.Value!.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

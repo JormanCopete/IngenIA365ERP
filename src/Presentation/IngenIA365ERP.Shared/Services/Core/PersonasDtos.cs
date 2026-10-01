@@ -43,6 +43,18 @@ public sealed record PersonaDto
     public bool IsSupplier { get; init; }
     public bool ReceivesInvoice { get; init; }
 
+    // Perfil tributario (feature 012, T174).
+    public bool IsVatResponsible { get; init; }
+    public bool IsSelfWithholder { get; init; }
+    public bool IsVatWithholdingAgent { get; init; }
+    public bool IsSimpleTaxRegime { get; init; }
+    public bool IsIncomeTaxFiler { get; init; }
+    public bool IsObligatedToInvoice { get; init; }
+    public bool IsLargeContributor { get; init; }
+    public bool WithholdingExempt { get; init; }
+    public bool IcaWithholdingExempt { get; init; }
+    public string? CiiuCode { get; init; }
+
     public string NombreVisible => NombreDePersona.Visible(BusinessName, FirstName, OtherNames, LastName, SecondLastName);
 }
 
@@ -81,7 +93,37 @@ public sealed record PersonaEntradaDto
     public bool IsSupplier { get; init; }
     public bool ReceivesInvoice { get; init; }
     public string? Status { get; init; }
+
+    // Perfil tributario (feature 012, T174). El formulario siempre los manda; el servidor admite nulo = no cambia.
+    public bool? IsVatResponsible { get; init; }
+    public bool? IsSelfWithholder { get; init; }
+    public bool? IsVatWithholdingAgent { get; init; }
+    public bool? IsSimpleTaxRegime { get; init; }
+    public bool? IsIncomeTaxFiler { get; init; }
+    public bool? IsObligatedToInvoice { get; init; }
+    public bool? IsLargeContributor { get; init; }
+    public bool? WithholdingExempt { get; init; }
+    public bool? IcaWithholdingExempt { get; init; }
+    /// <summary>Vacío quita el CIIU; nulo lo deja como está.</summary>
+    public string? CiiuCode { get; init; }
+
+    /// <summary>
+    /// Feature 012 (T175): la autorización de datos capturada al crear (<c>authorization</c>). Sólo en el alta; nula no
+    /// viaja.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public AutorizacionAlCrearDto? Authorization { get; init; }
 }
+
+/// <summary>
+/// La decisión del titular sobre la política de tratamiento de datos al crearlo (<c>AutorizacionAlCrear</c> del
+/// servidor). <see cref="Decision"/> es <c>Accepted</c> o <c>Declined</c>; <see cref="PolicyVersionPublicId"/> nulo sólo si
+/// la cooperativa no tiene política publicada.
+/// </summary>
+public sealed record AutorizacionAlCrearDto(string Decision, Guid? PolicyVersionPublicId, string? Channel);
+
+/// <summary><c>GET /api/compliance/habeas-data/policies/current</c>: la política que se le muestra al titular.</summary>
+public sealed record PoliticaDeDatosVigenteDto(Guid PolicyVersionPublicId, int Version, string Title, string Text, DateTime PublishedAt);
 
 /// <summary>Una fila de <c>GET /api/core/people/search?q=&amp;rol=</c>.</summary>
 public sealed record PersonaBusquedaDto(

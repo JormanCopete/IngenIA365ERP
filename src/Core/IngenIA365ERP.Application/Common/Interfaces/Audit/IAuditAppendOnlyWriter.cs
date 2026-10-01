@@ -35,4 +35,11 @@ public sealed record AuditEventDocument(
     string? HttpMethod,
     int? HttpStatusCode,
     long? DurationMs,
-    DateTime OccurredAt);
+    DateTime OccurredAt)
+{
+    /// <summary>
+    /// Feature 012 (T36): canal, origen, tipo de actor, clave de operación, motivo y código de error.
+    /// Opcional: los eventos de identidad no la llevan.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+}

@@ -1,0 +1,527 @@
+@page "/contabilidad/inventario/matriz"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject IntegracionContableClient Integracion
+@inject ContabilidadClient Contabilidad
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Matriz contable de Inventario - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T533; FR-073, FR-082; contracts/api.md §26.1, contracts/contabilidad.md §2): la matriz con que Contabilidad traduce
+   cada operación de Inventario a cuentas —Inventario no conoce cuentas: manda el grupo contable, la bodega, el medio de pago, la tarifa…
+   y la regla más específica vigente a la fecha de la operación dice la cuenta—. Pestañas por familia de rol (FamiliasDeRolDeInventario);
+   alta con las dimensiones que el rol exige (*) y admite, la cuenta con BuscadorDeCuenta (sólo auxiliares habilitadas para Inventario)
+   y, al elegirla, sus reglas (ReglasDeCuenta de sólo lectura: tercero, cruce, centro, sucursal, base y tarifas, FR-016 de la 009); una
+   versión nueva cierra la vigente la víspera; desactivar cierra la vigencia con motivo y nunca borra. La plantilla 16 se revisa y se
+   aplica todo o nada con el componente único ImportarPlantilla, con los errores por fila y columna. Lo que el servidor rechaza
+   (DimensionRequired, TaxRateMismatch, Overlaps, RetroactiveOverPosted, Account.NotEligible…) se muestra tal como viene. *@
+<PermissionGate Required="Accounting.InventoryRules.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Matriz contable de Inventario</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/contabilidad/inventario/completitud">Completitud</a>
+            <a class="e-btn e-outline" href="/contabilidad/inventario/tipos-de-comprobante">Tipos de comprobante</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Plantilla 16</SfButton>
+            <PermissionGate Required="Accounting.InventoryRules.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@(_catalogo is null)" OnClick="@AbrirAlta">Nueva regla</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_mostrarPlantilla)
+    {
+        <div class="info-card">
+            <h4>Plantilla 16 · matriz contable</h4>
+            <p class="texto-tenue">Encabezados en la fila 1: operacion, rol, grupoContable, bodega, puntoDeVenta, medioDePago, tarifa, tarifaPorcentaje (en puntos: 19 = 19 %), causa, sucursal, centroDeCosto, cuenta, vigenteDesde, vigenteHasta y notas. Una clave que ya existe con una fecha posterior es una versión nueva. Con un error no se guarda nada.</p>
+            <ImportarPlantilla RutaBase="@IntegracionContableClient.RutaDeReglas" PermisoDeDescarga="Accounting.InventoryRules.View"
+                               PermisoDeDescargaConDatos="Accounting.InventoryRules.View" PermisoDeImportacion="Accounting.InventoryRules.Manage"
+                               Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+
+    <div class="toolbar">
+        @foreach (var f in FamiliasDeRolDeInventario.Todas)
+        {
+            var familia = f;
+            <SfButton CssClass="@(_familia == familia.Clave ? "e-primary" : "e-outline")" OnClick="@(() => CambiarFamiliaAsync(familia.Clave))">@familia.Nombre</SfButton>
+        }
+    </div>
+    <div class="toolbar">
+        <label class="campo">Operación
+            <select class="e-input" value="@(_filtroOperacion ?? "")" @onchange="@(e => _filtroOperacion = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString())">
+                <option value="">Todas</option>
+                @foreach (var o in OperacionesDeLaFamilia) { <option value="@o.Code">@o.Code</option> }
+            </select>
+        </label>
+        <label class="campo">Cuenta <input class="e-input" @bind="_filtroCuenta" placeholder="Código o nombre" /></label>
+        <label class="campo">A la fecha <input type="date" class="e-input" value="@(_filtroFecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _filtroFecha = LeerFecha(e.Value))" /></label>
+        <SfCheckBox @bind-Checked="_soloVigentes" TChecked="bool" Label="Sólo vigentes" />
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Operación</th><th>Rol</th><th>Dimensiones</th><th>Cuenta</th><th>Vigencia</th><th class="numero">Peso</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var r in _reglas)
+                    {
+                        var regla = r;
+                        <tr class="@(regla.RulePublicId == _resaltada || !regla.Account.IsEligible ? "resaltada" : "")">
+                            <td>@regla.Operation</td>
+                            <td>@FamiliasDeRolDeInventario.NombreDelRol(regla.Role)</td>
+                            <td>@Dimensiones(regla.Dimensions)</td>
+                            <td>
+                                @regla.Account.Code · @regla.Account.Name
+                                @if (!regla.Account.IsEligible) { <br /><span class="aviso aviso-alerta">ya no es elegible para Inventario</span> }
+                            </td>
+                            <td>@regla.ValidFrom.ToString("dd/MM/yyyy") – @(regla.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente")@(regla.IsCurrent ? "" : " (no vigente hoy)")</td>
+                            <td class="numero" title="@regla.DimensionKey">@regla.Specificity</td>
+                            <td>
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => VerVersionesAsync(regla))">Versiones</SfButton>
+                                @if (regla.ValidTo is null)
+                                {
+                                    <PermissionGate Required="Accounting.InventoryRules.Manage">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirVersion(regla))">Nueva versión</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDesactivar(regla))">Desactivar</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (_reglas.Count == 0 && !_carga.Activa)
+                    {
+                        <tr><td colspan="7" class="texto-tenue">@(_error ?? "Sin reglas en esta familia con estos filtros.")</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_versionesDe is not null)
+    {
+        <div class="info-card">
+            <h4>Versiones de @_versionesDe.Operation · @FamiliasDeRolDeInventario.NombreDelRol(_versionesDe.Role) · @Dimensiones(_versionesDe.Dimensions)</h4>
+            <IndicadorDeCarga Cargando="@_cargaVersiones.Activa">
+                <ul>
+                    @foreach (var v in _versiones)
+                    {
+                        <li>@v.ValidFrom.ToString("dd/MM/yyyy") – @(v.ValidTo?.ToString("dd/MM/yyyy") ?? "vigente") · @v.Account.Code @v.Account.Name@(string.IsNullOrWhiteSpace(v.Notes) ? "" : $" · {v.Notes}")@(v.CreatedByName is { } q ? $" · {q}" : "")</li>
+                    }
+                </ul>
+                <SfButton CssClass="e-flat e-small" OnClick="@(() => _versionesDe = null)">Cerrar</SfButton>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarAlta" Header="Nueva regla" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Operación *
+                        <select class="e-input" value="@(_f.Operacion ?? "")" @onchange="@(e => { _f.Operacion = e.Value?.ToString(); _f.Rol = RolesDeLaOperacion.FirstOrDefault(); })">
+                            <option value="">Elija…</option>
+                            @foreach (var o in OperacionesDeLaFamilia) { <option value="@o.Code">@o.Code</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Rol *
+                        <select class="e-input" @bind="_f.Rol">
+                            <option value="">Elija…</option>
+                            @foreach (var rol in RolesDeLaOperacion) { <option value="@rol">@FamiliasDeRolDeInventario.NombreDelRol(rol)</option> }
+                        </select>
+                    </label>
+                    @foreach (var d in DimensionesDelRol)
+                    {
+                        var dimension = d;
+                        var exigida = RolElegido?.RequiredDimensions.Contains(dimension) == true;
+                        <label class="campo">@FamiliasDeRolDeInventario.NombreDeLaDimension(dimension)@(exigida ? " *" : "")
+                            @switch (dimension)
+                            {
+                                case "accountingGroupCode":
+                                    <select class="e-input" @bind="_f.Grupo">
+                                        <option value="">@(exigida ? "Elija…" : "Cualquiera")</option>
+                                        @foreach (var g in _catalogo!.Dimensions.AccountingGroups) { <option value="@g.Code">@g.Code · @g.Name</option> }
+                                    </select>
+                                    break;
+                                case "warehouseCode":
+                                    <select class="e-input" @bind="_f.Bodega">
+                                        <option value="">@(exigida ? "Elija…" : "Cualquiera")</option>
+                                        @foreach (var w in _catalogo!.Dimensions.Warehouses) { <option value="@w.Code">@w.Code · @w.Name@(w.Behavior == 2 ? " (tránsito)" : "")</option> }
+                                    </select>
+                                    break;
+                                case "pointOfSaleCode":
+                                    <select class="e-input" @bind="_f.Punto">
+                                        <option value="">@(exigida ? "Elija…" : "Cualquiera")</option>
+                                        @foreach (var p in _catalogo!.Dimensions.PointsOfSale) { <option value="@p.Code">@p.Code · @p.Name</option> }
+                                    </select>
+                                    break;
+                                case "paymentMeansCode":
+                                    <select class="e-input" @bind="_f.Medio">
+                                        <option value="">@(exigida ? "Elija…" : "Cualquiera")</option>
+                                        @foreach (var m in _catalogo!.Dimensions.PaymentMeans) { <option value="@m.Code">@m.Code · @m.Name</option> }
+                                    </select>
+                                    break;
+                                case "taxRateCode":
+                                    <select class="e-input" value="@(_f.Tarifa ?? "")" @onchange="@(e => ElegirTarifa(e.Value?.ToString()))">
+                                        <option value="">Elija…</option>
+                                        @foreach (var t in _catalogo!.Dimensions.TaxRates.GroupBy(t => t.Code).Select(g => g.OrderByDescending(x => x.ValidFrom).First()))
+                                        {
+                                            <option value="@t.Code">@t.Code · @t.Name@(t.Rate is { } rate ? $" ({rate * 100m:0.####} %)" : "")</option>
+                                        }
+                                    </select>
+                                    break;
+                                case "taxRate":
+                                    <input class="e-input numero" type="number" step="any" min="0" placeholder="en puntos: 19 = 19 %"
+                                           value="@(_f.TarifaEnPuntos?.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                                           @onchange="@(e => _f.TarifaEnPuntos = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null)" />
+                                    break;
+                                case "reasonCode":
+                                    <select class="e-input" @bind="_f.Causa">
+                                        <option value="">@(exigida ? "Elija…" : "Cualquiera")</option>
+                                        @foreach (var c in CausasDelRol) { <option value="@c.Code">@c.Code@(c.Name != c.Code ? $" · {c.Name}" : "")</option> }
+                                    </select>
+                                    break;
+                                case "branch":
+                                    <select class="e-input" value="@(_f.Sucursal?.ToString() ?? "")" @onchange="@(e => _f.Sucursal = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                        <option value="">Cualquiera</option>
+                                        @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Name</option> }
+                                    </select>
+                                    break;
+                                case "costCenter":
+                                    <select class="e-input" value="@(_f.Centro?.ToString() ?? "")" @onchange="@(e => _f.Centro = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                        <option value="">Cualquiera</option>
+                                        @foreach (var c in _centros) { <option value="@c.PublicId">@c.Name</option> }
+                                    </select>
+                                    break;
+                            }
+                        </label>
+                    }
+                    <label class="campo campo-ancho">Cuenta *
+                        <BuscadorDeCuenta Modulo="INV" Cuenta="@_cuenta" CuentaChanged="@ElegirCuentaAsync" />
+                    </label>
+                    <label class="campo">Vigente desde * <input type="date" class="e-input" value="@(_f.Desde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _f.Desde = LeerFecha(e.Value))" /></label>
+                    <label class="campo">Vigente hasta <input type="date" class="e-input" value="@(_f.Hasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _f.Hasta = LeerFecha(e.Value))" /></label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_f.Notas" maxlength="500" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" @bind:event="oninput" maxlength="500" /></label>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaCuenta.Activa" Compacto="true" Texto="Leyendo la cuenta…">
+                    @if (_reglasDeLaCuenta is { } reglas)
+                    {
+                        <div class="info-card">
+                            <h4>Reglas de la cuenta @_cuenta?.Code</h4>
+                            <p class="texto-tenue">Lo que la cuenta exige a cada línea: si Inventario no puede darlo, la validación previa lo dirá antes de confirmar.</p>
+                            <ReglasDeCuenta Modelo="@reglas" SoloLectura="true" />
+                        </div>
+                    }
+                </IndicadorDeCarga>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeCrear)" OnClick="@CrearAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarVersion" Header="Nueva versión de la regla" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_editando is { } e)
+                {
+                    <p>@e.Operation · @FamiliasDeRolDeInventario.NombreDelRol(e.Role) · @Dimensiones(e.Dimensions). Hoy: @e.Account.Code @e.Account.Name desde @e.ValidFrom.ToString("dd/MM/yyyy").</p>
+                    <p class="texto-tenue">La versión vigente se cierra la víspera de la fecha nueva. No puede empezar en o antes de la fecha del último mensaje ya contabilizado con esta clave: lo pasado se corrige con un comprobante manual.</p>
+                }
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Cuenta * <BuscadorDeCuenta Modulo="INV" Cuenta="@_cuenta" CuentaChanged="@ElegirCuentaAsync" /></label>
+                    <label class="campo">Vigente desde * <input type="date" class="e-input" value="@(_f.Desde?.ToString("yyyy-MM-dd"))" @onchange="@(ev => _f.Desde = LeerFecha(ev.Value))" /></label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_f.Notas" maxlength="500" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" @bind:event="oninput" maxlength="500" /></label>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaCuenta.Activa" Compacto="true" Texto="Leyendo la cuenta…">
+                    @if (_reglasDeLaCuenta is { } reglas) { <ReglasDeCuenta Modelo="@reglas" SoloLectura="true" /> }
+                </IndicadorDeCarga>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _cuenta is null || _f.Desde is null || string.IsNullOrWhiteSpace(_f.Motivo))" OnClick="@GuardarVersionAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarDesactivar" Header="Desactivar la regla" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p>La regla deja de valer desde el día siguiente a la fecha elegida; no se borra y queda en su historia. Lo que ya se contabilizó con ella no cambia.</p>
+                <div class="form-grid">
+                    <label class="campo">Vigente hasta * <input type="date" class="e-input" value="@(_f.Hasta?.ToString("yyyy-MM-dd"))" @onchange="@(ev => _f.Hasta = LeerFecha(ev.Value))" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" @bind:event="oninput" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _f.Hasta is null || string.IsNullOrWhiteSpace(_f.Motivo))" OnClick="@DesactivarAsync">Desactivar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDesactivar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class Formulario
+    {
+        public string? Operacion { get; set; }
+        public string? Rol { get; set; }
+        public string? Grupo { get; set; }
+        public string? Bodega { get; set; }
+        public string? Punto { get; set; }
+        public string? Medio { get; set; }
+        public string? Tarifa { get; set; }
+        public decimal? TarifaEnPuntos { get; set; }
+        public string? Causa { get; set; }
+        public Guid? Sucursal { get; set; }
+        public Guid? Centro { get; set; }
+        public DateOnly? Desde { get; set; }
+        public DateOnly? Hasta { get; set; }
+        public string? Notas { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private sealed class ItemCrudo { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+
+    [SupplyParameterFromQuery(Name = "operacion")] public string? OperacionInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "rol")] public string? RolInicial { get; set; }
+    [SupplyParameterFromQuery(Name = "regla")] public Guid? ReglaInicial { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaCuenta = new(), _cargaVersiones = new();
+    private CatalogoDeReglasDeInventarioDto? _catalogo;
+    private List<ReglaDeInventarioDto> _reglas = [], _versiones = [];
+    private List<ItemCrudo> _sucursales = [], _centros = [];
+    private string _familia = FamiliasDeRolDeInventario.Todas[0].Clave;
+    private string? _filtroOperacion, _filtroCuenta, _error;
+    private DateOnly? _filtroFecha;
+    private bool _soloVigentes = true, _mostrarPlantilla, _mostrarAlta, _mostrarVersion, _mostrarDesactivar;
+    private Formulario _f = new();
+    private CuentaBuscadaDto? _cuenta;
+    private ReglasDeCuentaModelo? _reglasDeLaCuenta;
+    private ReglaDeInventarioDto? _editando, _versionesDe;
+    private Guid? _resaltada;
+
+    private FamiliasDeRolDeInventario.Familia Familia => FamiliasDeRolDeInventario.Todas.First(f => f.Clave == _familia);
+
+    /// <summary>Las operaciones que usan algún rol de la familia elegida.</summary>
+    private IEnumerable<OperacionDelCatalogoDeInventarioDto> OperacionesDeLaFamilia => (_catalogo?.Operations ?? [])
+        .Where(o => o.DebitRoles.Concat(o.CreditRoles).Any(r => Familia.Roles.Contains(r)));
+
+    private IEnumerable<string> RolesDeLaOperacion => (_catalogo?.Operations ?? []).FirstOrDefault(o => o.Code == _f.Operacion) is { } op
+        ? op.DebitRoles.Concat(op.CreditRoles).Distinct().Where(r => Familia.Roles.Contains(r))
+        : [];
+
+    private RolDelCatalogoDeInventarioDto? RolElegido => _catalogo?.Roles.FirstOrDefault(r => r.Code == _f.Rol);
+
+    private IEnumerable<string> DimensionesDelRol => RolElegido?.AllowedDimensions ?? [];
+
+    private IEnumerable<CodigoDeDimensionDeInventarioDto> CausasDelRol => RolElegido is { FixedReasons.Count: > 0 } r
+        ? r.FixedReasons.Select(m => new CodigoDeDimensionDeInventarioDto(m, m))
+        : _catalogo?.Dimensions.Reasons ?? [];
+
+    private bool PuedeCrear => !_guardado.Activa && !string.IsNullOrWhiteSpace(_f.Operacion) && !string.IsNullOrWhiteSpace(_f.Rol) && _cuenta is not null
+                               && _f.Desde is not null && !string.IsNullOrWhiteSpace(_f.Motivo);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var catalogo = Integracion.CatalogoAsync();
+        var sucursales = Http.TryGetListAsync<ItemCrudo>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        var centros = Http.TryGetListAsync<ItemCrudo>("/api/core/cost-centers?PageNumber=1&PageSize=500");
+        await Task.WhenAll(catalogo, sucursales, centros);
+        _catalogo = catalogo.Result.IsSuccess ? catalogo.Result.Value : null;
+        if (_catalogo is null) await Notification.ErrorAsync(catalogo.Result.ErrorMessage ?? "No se pudo leer el catálogo de la matriz.");
+        _sucursales = sucursales.Result;
+        _centros = centros.Result;
+
+        // Desde la completitud: «Crear la regla» trae operación y rol; «Ver la regla», su id.
+        if (ReglaInicial is { } id && (await Integracion.ReglaAsync(id)) is { IsSuccess: true, Value: { } regla })
+        {
+            _familia = FamiliasDeRolDeInventario.FamiliaDe(regla.Role)?.Clave ?? _familia;
+            _filtroOperacion = regla.Operation;
+            _soloVigentes = false;
+            _resaltada = regla.RulePublicId;
+        }
+        else if (FamiliasDeRolDeInventario.FamiliaDe(RolInicial) is { } familia)
+        {
+            _familia = familia.Clave;
+            _filtroOperacion = OperacionInicial;
+        }
+        await CargarAsync();
+        if (OperacionInicial is not null && RolInicial is not null && ReglaInicial is null && _catalogo is not null)
+        {
+            AbrirAlta();
+            _f.Operacion = OperacionInicial;
+            _f.Rol = RolInicial;
+        }
+    }
+
+    private async Task CambiarFamiliaAsync(string clave)
+    {
+        _familia = clave;
+        _filtroOperacion = null;
+        await CargarAsync();
+    }
+
+    /// <summary>Las reglas de los roles de la familia (una consulta por rol: la lista filtra un rol a la vez).</summary>
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var consultas = Familia.Roles.Select(rol => Integracion.ReglasAsync(new FiltroDeReglasDeInventario(Operacion: _filtroOperacion, Rol: rol,
+            ALaFecha: _filtroFecha, Cuenta: string.IsNullOrWhiteSpace(_filtroCuenta) ? null : _filtroCuenta.Trim(), SoloVigentes: _soloVigentes,
+            TamanoDePagina: 200))).ToList();
+        await Task.WhenAll(consultas);
+        var fallida = consultas.Select(c => c.Result).FirstOrDefault(r => !r.IsSuccess);
+        _error = fallida?.ErrorMessage;
+        if (fallida is not null) await Notification.ErrorAsync(fallida.ErrorMessage ?? "No se pudieron consultar las reglas.");
+        _reglas = [.. consultas.Where(c => c.Result.IsSuccess).SelectMany(c => c.Result.Value?.Items ?? [])
+            .OrderBy(r => r.Operation).ThenBy(r => r.Role).ThenByDescending(r => r.Specificity).ThenBy(r => r.DimensionKey).ThenByDescending(r => r.ValidFrom)];
+    }
+
+    private async Task VerVersionesAsync(ReglaDeInventarioDto regla)
+    {
+        _versionesDe = regla;
+        using var carga = _cargaVersiones.Iniciar();
+        var r = await Integracion.VersionesDeReglaAsync(regla.RulePublicId);
+        _versiones = r.IsSuccess ? [.. r.Value ?? []] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las versiones.");
+    }
+
+    private void AbrirAlta()
+    {
+        _f = new Formulario { Desde = DateOnly.FromDateTime(DateTime.Today) };
+        _cuenta = null;
+        _reglasDeLaCuenta = null;
+        _mostrarAlta = true;
+    }
+
+    private void AbrirVersion(ReglaDeInventarioDto regla)
+    {
+        _editando = regla;
+        _f = new Formulario { Desde = DateOnly.FromDateTime(DateTime.Today).AddDays(1) };
+        _cuenta = null;
+        _reglasDeLaCuenta = null;
+        _mostrarVersion = true;
+    }
+
+    private void AbrirDesactivar(ReglaDeInventarioDto regla)
+    {
+        _editando = regla;
+        _f = new Formulario { Hasta = DateOnly.FromDateTime(DateTime.Today) };
+        _mostrarDesactivar = true;
+    }
+
+    private void ElegirTarifa(string? codigo)
+    {
+        _f.Tarifa = string.IsNullOrWhiteSpace(codigo) ? null : codigo;
+        var fecha = _f.Desde ?? DateOnly.FromDateTime(DateTime.Today);
+        var vigente = _catalogo?.Dimensions.TaxRates.Where(t => t.Code == codigo && t.ValidFrom <= fecha && (t.ValidTo is null || t.ValidTo >= fecha))
+            .OrderByDescending(t => t.ValidFrom).FirstOrDefault();
+        _f.TarifaEnPuntos = vigente?.Rate is { } r ? r * 100m : null;
+    }
+
+    /// <summary>Al elegir la cuenta se leen sus reglas y se muestran (FR-016 de la 009).</summary>
+    private async Task ElegirCuentaAsync(CuentaBuscadaDto? cuenta)
+    {
+        _cuenta = cuenta;
+        _reglasDeLaCuenta = null;
+        if (cuenta is null) return;
+        using var carga = _cargaCuenta.Iniciar();
+        var r = await Contabilidad.ObtenerCuentaAsync(cuenta.PublicId);
+        if (r.IsSuccess && r.Value is { } c) _reglasDeLaCuenta = ReglasDeCuentaModelo.Desde(c);
+    }
+
+    private async Task CrearAsync()
+    {
+        if (!PuedeCrear) return;
+        using var guardado = _guardado.Iniciar();
+        var permitidas = DimensionesDelRol.ToHashSet();
+        string? Si(string dimension, string? valor) => permitidas.Contains(dimension) && !string.IsNullOrWhiteSpace(valor) ? valor : null;
+        var dimensiones = new DimensionesDeReglaDeInventarioRequest(
+            Si("accountingGroupCode", _f.Grupo), Si("warehouseCode", _f.Bodega), Si("pointOfSaleCode", _f.Punto), Si("paymentMeansCode", _f.Medio),
+            Si("taxRateCode", _f.Tarifa), permitidas.Contains("taxRate") && _f.TarifaEnPuntos is { } p ? p / 100m : null, Si("reasonCode", _f.Causa),
+            permitidas.Contains("branch") ? _f.Sucursal : null, permitidas.Contains("costCenter") ? _f.Centro : null);
+        var r = await Integracion.CrearReglaAsync(new CrearReglaDeInventarioRequest(_f.Operacion!, _f.Rol!, dimensiones, _cuenta!.PublicId, _f.Desde!.Value,
+            string.IsNullOrWhiteSpace(_f.Notas) ? null : _f.Notas.Trim(), _f.Motivo!.Trim(), _f.Hasta));
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la regla.");
+            return;
+        }
+        _mostrarAlta = false;
+        await AvisarAsync(r.Value, "Regla guardada.");
+        _resaltada = r.Value.RulePublicId;
+        await CargarAsync();
+    }
+
+    private async Task GuardarVersionAsync()
+    {
+        if (_editando is null || _cuenta is null || _f.Desde is not { } desde || string.IsNullOrWhiteSpace(_f.Motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Integracion.NuevaVersionDeReglaAsync(_editando.RulePublicId, new VersionDeReglaDeInventarioRequest(_cuenta.PublicId, desde,
+            string.IsNullOrWhiteSpace(_f.Notas) ? null : _f.Notas.Trim(), _f.Motivo.Trim()));
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la versión.");
+            return;
+        }
+        _mostrarVersion = false;
+        await AvisarAsync(r.Value, "Versión guardada: la anterior se cerró la víspera.");
+        _resaltada = r.Value.RulePublicId;
+        await CargarAsync();
+    }
+
+    private async Task DesactivarAsync()
+    {
+        if (_editando is null || _f.Hasta is not { } hasta || string.IsNullOrWhiteSpace(_f.Motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Integracion.DesactivarReglaAsync(_editando.RulePublicId, new DesactivarReglaDeInventarioRequest(hasta, _f.Motivo.Trim()));
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo desactivar la regla.");
+            return;
+        }
+        _mostrarDesactivar = false;
+        await Notification.SuccessAsync("Regla desactivada.");
+        await CargarAsync();
+    }
+
+    private async Task AvisarAsync(ReglaGuardadaDeInventarioDto guardada, string exito)
+    {
+        await Notification.SuccessAsync(exito);
+        foreach (var aviso in guardada.Warnings) await Notification.WarningAsync(aviso.Message);
+    }
+
+    private static string Dimensiones(DimensionesDeReglaDeInventarioDto d)
+    {
+        var partes = new[]
+        {
+            d.AccountingGroupCode is { } g ? $"grupo {g}" : null,
+            d.WarehouseCode is { } w ? $"bodega {w}" : null,
+            d.PointOfSaleCode is { } p ? $"punto {p}" : null,
+            d.PaymentMeansCode is { } m ? $"medio {m}" : null,
+            d.TaxRateCode is { } t ? $"tarifa {t}{(d.TaxRate is { } v ? $" {v * 100m:0.####} %" : "")}" : null,
+            d.ReasonCode is { } r ? $"causa {r}" : null,
+            d.Branch is { } b ? $"sucursal {b.Code}" : null,
+            d.CostCenter is { } c ? $"centro {c.Code}" : null,
+        }.Where(x => x is not null).ToList();
+        return partes.Count == 0 ? "Todas" : string.Join(" · ", partes);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

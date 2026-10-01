@@ -74,10 +74,10 @@ public class ImportAccountsCommandHandlerTests
         public Task<Result<ImportacionDeCuentasDto>> ImportarAsync() =>
             Importador().Handle(new ImportAccountsCommand("cuentas.csv", [1, 2, 3]), CancellationToken.None);
 
-        public static IReadOnlyList<Application.Accounting.Setup.ErrorDeFila> Errores(Error error)
+        public static IReadOnlyList<Application.Common.Imports.ErrorDeFila> Errores(Error error)
         {
             var datos = ((ErrorConDatos)error).Data;
-            return (IReadOnlyList<Application.Accounting.Setup.ErrorDeFila>)datos.GetType().GetProperty("errors")!.GetValue(datos)!;
+            return (IReadOnlyList<Application.Common.Imports.ErrorDeFila>)datos.GetType().GetProperty("errors")!.GetValue(datos)!;
         }
     }
 

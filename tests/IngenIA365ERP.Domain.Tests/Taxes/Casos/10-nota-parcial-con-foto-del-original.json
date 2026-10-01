@@ -1,0 +1,41 @@
+{
+  // Feature 012, T097, caso 10 (pregunta E9): una nota parcial usa la foto del original y NO vuelve a probar la base
+  // mínima. Original: 2.000.000 con IVA 19 % = 380.000 y ReteFuente 2,5 % = 50.000.
+  // Nota por 500.000 de la línea 1 (bajo el mínimo de 27 UVT = 1.414.098): IVA 500.000 × 19 % = 95.000 y
+  // ReteFuente 500.000 × 2,5 % = 12.500, con las tarifas del original.
+  "nombre": "Nota parcial con la foto del original",
+  "fecha": "2026-03-20",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 1, "codigo": "IVA", "nombre": "IVA", "clase": "Iva", "forma": "PercentOfBase", "codigoDian": "01" },
+    { "id": 2, "codigo": "RETEFUENTE", "nombre": "Retención en la fuente", "clase": "ReteFuente", "forma": "PercentOfBase", "codigoDian": "06" }
+  ],
+  "conceptos": [ { "id": 1, "codigo": "COMPRAS", "nombre": "Compras generales" } ],
+  "tarifas": [
+    { "id": 11, "impuesto": 1, "codigo": "IVA19", "tarifa": 0.19, "aplicaA": "Both", "desde": "2017-01-01" },
+    { "id": 21, "impuesto": 2, "codigo": "RF25", "tarifa": 0.025, "concepto": 1, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true, "sujetoAutorretenedor": false } }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Devolución parcial al proveedor",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 500000, "concepto": 1, "lineaOriginal": 1, "impuestos": [ { "impuesto": 1, "tarifa": "IVA19" } ] } ],
+      "original": [
+        { "linea": 1, "tarifa": "IVA19", "tratamiento": "Deductible", "base": 2000000, "valor": 380000 },
+        { "linea": null, "tarifa": "RF25", "tratamiento": "WithholdingApplied", "base": 2000000, "valor": 50000 }
+      ],
+      "esperado": {
+        "renglones": [
+          { "linea": 1, "tarifa": "IVA19", "tratamiento": "Deductible", "base": 500000, "valor": 95000, "explicacion": [ "Foto del original" ] },
+          { "linea": null, "tarifa": "RF25", "tratamiento": "WithholdingApplied", "base": 500000, "valor": 12500,
+            "explicacion": [ "Sin volver a probar la base mínima" ] }
+        ]
+      }
+    }
+  ]
+}

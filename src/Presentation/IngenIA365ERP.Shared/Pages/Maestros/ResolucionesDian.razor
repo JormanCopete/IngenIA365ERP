@@ -1,0 +1,296 @@
+@page "/maestros/resoluciones-dian"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
+@using IngenIA365ERP.Shared.Services.Http
+@using static IngenIA365ERP.Shared.Services.FacturacionElectronica.TextosDeFacturacionElectronica
+@inject FacturacionElectronicaClient Facturacion
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Resoluciones DIAN - IngenIA365ERP</PageTitle>
+
+@* Feature 012, I4 (T754; FR-065; contracts/api.md §24.2; contracts/dian.md §9): las resoluciones de numeración de la cooperativa —factura,
+   documento equivalente POS, documento soporte y contingencia— con su estado calculado a hoy, el consumo del rango y los días por vencer.
+   Se registran a mano (ningún canal crea resoluciones); se corrigen mientras no tengan números emitidos (con números sólo se retiran,
+   moviendo el fin de la vigencia hacia atrás) y se asocian a un canal desde una fecha, que es la condición para numerar por él. La clave
+   técnica (sólo de factura) entra una vez y vuelve enmascarada; si el canal consulta rangos, la puede proponer él. *@
+<PermissionGate Required="ElectronicInvoicing.Resolutions.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Resoluciones de numeración DIAN</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="ElectronicInvoicing.Resolutions.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirResolucion(null))">Nueva resolución</SfButton>
+            </PermissionGate>
+            <a class="e-btn e-flat" href="/admin/facturacion-electronica">Configuración</a>
+            <a class="e-btn e-flat" href="/manual/facturacion-electronica">Ayuda</a>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Tipo
+            <select class="e-input" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => { _tipo = int.TryParse(e.Value?.ToString(), out var t) ? t : null; return CargarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (v, t) in TiposDeResolucion) { <option value="@v">@t</option> }
+            </select>
+        </label>
+        <label class="campo">Ambiente
+            <select class="e-input" value="@(_ambiente?.ToString() ?? "")" @onchange="@(e => { _ambiente = int.TryParse(e.Value?.ToString(), out var a) ? a : null; return CargarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (v, t) in Ambientes) { <option value="@v">@t</option> }
+            </select>
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" value="@(_estado ?? "")" @onchange="@(e => { _estado = string.IsNullOrEmpty(e.Value?.ToString()) ? null : e.Value!.ToString(); return CargarAsync(); })">
+                <option value="">Todos</option>
+                @foreach (var (v, t) in EstadosDeResolucion) { <option value="@v">@t</option> }
+            </select>
+        </label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay resoluciones con estos filtros.</p>
+        }
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Tipo</th><th>Resolución</th><th>Prefijo</th><th class="numero">Rango</th><th class="numero">Último emitido</th><th class="numero">Consumo</th>
+                        <th>Vigencia</th><th class="numero">Días por vencer</th><th>Ambiente</th><th>Estado</th><th>Canales</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _filas)
+                    {
+                        <tr>
+                            <td>@TipoDeResolucion(r.Kind)@(r.BacksUpKind is { } b ? $" (respalda {TipoDeResolucion(b)})" : "")</td>
+                            <td>@r.ResolutionNumber · @r.ResolutionDate.ToString("dd/MM/yyyy")</td>
+                            <td>@r.Prefix</td>
+                            <td class="numero">@r.RangeFrom – @r.RangeTo</td>
+                            <td class="numero">@(r.LastIssuedNumber?.ToString() ?? "—")</td>
+                            <td class="numero">@r.ConsumedFraction.ToString("P1")</td>
+                            <td>@r.ValidFrom.ToString("dd/MM/yyyy") – @r.ValidTo.ToString("dd/MM/yyyy")</td>
+                            <td class="numero">@r.DaysToExpire</td>
+                            <td>@Ambiente(r.Environment)</td>
+                            <td><span class="aviso @(r.Status == "Active" ? "aviso-ok" : "aviso-alerta")">@EstadoDeResolucion(r.Status)</span></td>
+                            <td>
+                                @if (r.Channels.Count == 0) { <span class="texto-tenue">Sin asociar</span> }
+                                @foreach (var c in r.Channels)
+                                {
+                                    <div>@c.ChannelCode desde @c.ValidFrom.ToString("dd/MM/yyyy")@(c.ValidTo is { } h ? $" hasta {h:dd/MM/yyyy}" : "")@(c.TechnicalKeyMasked is { } k ? $" · clave {k}" : "")</div>
+                                }
+                            </td>
+                            <td>
+                                <PermissionGate Required="ElectronicInvoicing.Resolutions.Manage">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirResolucion(r))">@(r.TieneNumerosEmitidos ? "Retirar" : "Corregir")</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirAsociacion(r))">Asociar a canal</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarResolucion" Header="@(_editando is null ? "Nueva resolución" : _editando.TieneNumerosEmitidos ? "Retirar la resolución" : "Corregir la resolución")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_editando?.TieneNumerosEmitidos == true)
+                {
+                    <p class="aviso aviso-info">Ya tiene números emitidos: sólo se retira adelantando el fin de su vigencia. Para otros datos, registre otra resolución.</p>
+                }
+                <div class="form-grid">
+                    <label class="campo">Tipo *
+                        <select class="e-input" disabled="@Bloqueada" @bind="_f.Tipo">@foreach (var (v, t) in TiposDeResolucion) { <option value="@v">@t</option> }</select>
+                    </label>
+                    @if (_f.Tipo == ResolucionDeContingencia)
+                    {
+                        <label class="campo">Respalda a *
+                            <select class="e-input" disabled="@Bloqueada" value="@(_f.Respalda?.ToString() ?? "")" @onchange="@(e => _f.Respalda = int.TryParse(e.Value?.ToString(), out var x) ? x : null)">
+                                <option value="">Elija…</option>
+                                @foreach (var (v, t) in TiposDeResolucion.Where(p => p.Key != ResolucionDeContingencia)) { <option value="@v">@t</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Número de resolución * <input class="e-input" disabled="@Bloqueada" @bind="_f.Numero" maxlength="30" /></label>
+                    <label class="campo">Fecha de la resolución * <input type="date" class="e-input" disabled="@Bloqueada" value="@_f.Fecha.ToString("yyyy-MM-dd")" @onchange="@(e => _f.Fecha = LeerFecha(e.Value) ?? _f.Fecha)" /></label>
+                    <label class="campo">Prefijo (hasta 4) <input class="e-input" disabled="@Bloqueada" @bind="_f.Prefijo" maxlength="4" /></label>
+                    <label class="campo">Desde el número * <input class="e-input numero" type="number" min="0" disabled="@Bloqueada" @bind="_f.Desde" /></label>
+                    <label class="campo">Hasta el número * <input class="e-input numero" type="number" min="0" disabled="@Bloqueada" @bind="_f.Hasta" /></label>
+                    <label class="campo">Vigente desde * <input type="date" class="e-input" disabled="@Bloqueada" value="@_f.VigenteDesde.ToString("yyyy-MM-dd")" @onchange="@(e => _f.VigenteDesde = LeerFecha(e.Value) ?? _f.VigenteDesde)" /></label>
+                    <label class="campo">Vigente hasta * <input type="date" class="e-input" value="@_f.VigenteHasta.ToString("yyyy-MM-dd")" @onchange="@(e => _f.VigenteHasta = LeerFecha(e.Value) ?? _f.VigenteHasta)" /></label>
+                    <label class="campo">Ambiente *
+                        <select class="e-input" disabled="@Bloqueada" @bind="_f.Ambiente">@foreach (var (v, t) in Ambientes) { <option value="@v">@t</option> }</select>
+                    </label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_f.Notas" maxlength="300" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_f.Motivo) || string.IsNullOrWhiteSpace(_f.Numero))" OnClick="@GuardarResolucionAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarResolucion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAsociacion" Header="Asociar la resolución a un canal" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_asociando is { } res)
+                {
+                    <p class="texto-apoyo">@TipoDeResolucion(res.Kind) @res.Prefix · @res.ResolutionNumber. La asociación vigente se cierra la víspera de la nueva.</p>
+                    <div class="form-grid">
+                        <label class="campo">Canal *
+                            @if (_canales.Count > 0)
+                            {
+                                <select class="e-input" @bind="_a.Canal">@foreach (var c in _canales) { <option value="@c.ChannelCode">@c.ChannelCode · @c.Name</option> }</select>
+                            }
+                            else
+                            {
+                                <input class="e-input" @bind="_a.Canal" maxlength="40" />
+                            }
+                        </label>
+                        <label class="campo">Software <input class="e-input" @bind="_a.Software" maxlength="36" /></label>
+                        <label class="campo">Desde * <input type="date" class="e-input" value="@_a.Desde.ToString("yyyy-MM-dd")" @onchange="@(e => _a.Desde = LeerFecha(e.Value) ?? _a.Desde)" /></label>
+                        @if (res.Kind == 1)
+                        {
+                            <label class="campo-check"><input type="checkbox" @bind="_a.Proponer" /> Proponer la clave técnica desde el canal</label>
+                            @if (!_a.Proponer)
+                            {
+                                <label class="campo campo-ancho">Clave técnica <input class="e-input" type="password" autocomplete="off" @bind="_a.Clave" maxlength="100" /></label>
+                            }
+                            <p class="texto-tenue">La clave técnica no se vuelve a mostrar completa: queda enmascarada (••••ab12).</p>
+                        }
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_a.Motivo" maxlength="500" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_a.Motivo) || string.IsNullOrWhiteSpace(_a.Canal))" OnClick="@AsociarAsync">Asociar</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAsociacion = false)">Cancelar</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class FormularioDeResolucion
+    {
+        public int Tipo { get; set; } = 1;
+        public int? Respalda { get; set; }
+        public string? Numero { get; set; }
+        public DateOnly Fecha { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? Prefijo { get; set; }
+        public long Desde { get; set; } = 1;
+        public long Hasta { get; set; } = 1;
+        public DateOnly VigenteDesde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public DateOnly VigenteHasta { get; set; } = DateOnly.FromDateTime(DateTime.Today).AddYears(1);
+        public int Ambiente { get; set; } = 2;
+        public string? Notas { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private sealed class FormularioDeAsociacion
+    {
+        public string Canal { get; set; } = "";
+        public string? Software { get; set; }
+        public DateOnly Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? Clave { get; set; }
+        public bool Proponer { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _claveResolucion = new(), _claveAsociacion = new();
+    private List<ResolucionDianDto> _filas = [];
+    private List<CanalDisponibleDto> _canales = [];
+    private int? _tipo, _ambiente;
+    private string? _estado;
+    private ResolucionDianDto? _editando, _asociando;
+    private FormularioDeResolucion _f = new();
+    private FormularioDeAsociacion _a = new();
+    private bool _mostrarResolucion, _mostrarAsociacion;
+
+    private bool Bloqueada => _editando?.TieneNumerosEmitidos == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        // Los canales de la instalación sólo los ve quien puede ver la configuración; sin ese permiso el canal se escribe.
+        if (await Permisos.TieneAsync("ElectronicInvoicing.Settings.View"))
+        {
+            var config = await Facturacion.ConfiguracionAsync();
+            if (config.IsSuccess && config.Value is not null) _canales = [.. config.Value.AvailableChannels];
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Facturacion.ResolucionesAsync(Nombre(NombresDeTipoDeResolucion, _tipo), Nombre(NombresDeAmbiente, _ambiente), _estado);
+        if (!r.IsSuccess || r.Value is null) { _filas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las resoluciones."); return; }
+        _filas = [.. r.Value];
+    }
+
+    private void AbrirResolucion(ResolucionDianDto? r)
+    {
+        _editando = r;
+        _f = r is null
+            ? new FormularioDeResolucion()
+            : new FormularioDeResolucion
+            {
+                Tipo = r.Kind, Respalda = r.BacksUpKind, Numero = r.ResolutionNumber, Fecha = r.ResolutionDate, Prefijo = r.Prefix, Desde = r.RangeFrom,
+                Hasta = r.RangeTo, VigenteDesde = r.ValidFrom, VigenteHasta = r.ValidTo, Ambiente = r.Environment,
+            };
+        _mostrarResolucion = true;
+    }
+
+    private async Task GuardarResolucionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_f.Motivo) || string.IsNullOrWhiteSpace(_f.Numero)) return;
+        using var guardado = _guardado.Iniciar();
+        var request = new ResolucionRequest(Nombre(NombresDeTipoDeResolucion, _f.Tipo)!,
+            _f.Tipo == ResolucionDeContingencia ? Nombre(NombresDeTipoDeResolucion, _f.Respalda) : null, _f.Numero.Trim(), _f.Fecha,
+            string.IsNullOrWhiteSpace(_f.Prefijo) ? null : _f.Prefijo.Trim().ToUpperInvariant(), _f.Desde, _f.Hasta, _f.VigenteDesde, _f.VigenteHasta,
+            Nombre(NombresDeAmbiente, _f.Ambiente)!, _f.Motivo.Trim(), string.IsNullOrWhiteSpace(_f.Notas) ? null : _f.Notas.Trim());
+        var r = _editando is { } existente
+            ? await Facturacion.CorregirResolucionAsync(existente.ResolutionPublicId, request, _claveResolucion)
+            : await Facturacion.RegistrarResolucionAsync(request, _claveResolucion);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la resolución."); return; }
+        _mostrarResolucion = false;
+        await Notification.SuccessAsync(_editando is null ? "Resolución registrada. Asóciela al canal para numerar por él." : "Resolución actualizada.");
+        await CargarAsync();
+    }
+
+    private void AbrirAsociacion(ResolucionDianDto r)
+    {
+        _asociando = r;
+        _a = new FormularioDeAsociacion { Canal = _canales.FirstOrDefault()?.ChannelCode ?? r.Channels.LastOrDefault()?.ChannelCode ?? "" };
+        _mostrarAsociacion = true;
+    }
+
+    private async Task AsociarAsync()
+    {
+        if (_asociando is null || string.IsNullOrWhiteSpace(_a.Motivo) || string.IsNullOrWhiteSpace(_a.Canal)) return;
+        using var guardado = _guardado.Iniciar();
+        var esFactura = _asociando.Kind == 1;
+        var request = new AsociacionACanalRequest(_a.Canal.Trim(), string.IsNullOrWhiteSpace(_a.Software) ? null : _a.Software.Trim(), _a.Desde,
+            esFactura && !_a.Proponer && !string.IsNullOrWhiteSpace(_a.Clave) ? _a.Clave.Trim() : null, esFactura && _a.Proponer, _a.Motivo.Trim());
+        var r = await Facturacion.AsociarACanalAsync(_asociando.ResolutionPublicId, request, _claveAsociacion);
+        _a.Clave = null;
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo asociar la resolución al canal."); return; }
+        _mostrarAsociacion = false;
+        await Notification.SuccessAsync("Resolución asociada al canal.");
+        await CargarAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

@@ -106,6 +106,10 @@ public static class BuiltInRolesSeeder
                             "Payroll.WithholdingRate.Calculate", "Payroll.Pila.Generate",
                             "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate"],
         ["ReadOnly"]     = ["*.View"],
+        // Feature 012 (T126, T48; contracts/api.md §1.2): a propósito, ningún patrón nombra Inventory.*,
+        // ElectronicInvoicing.*, Core.Taxes.*, Core.PaymentMeans.* ni Accounting.Inventory*: los tres roles de
+        // arriba reciben sólo su *.View (las lecturas sensibles usan otra acción) y CompanyAdmin todo por "*".
+        // La escritura del comercio se da con roles creados desde PerfilesSugeridos. Lo fija PermisosDeInventarioTests.
     };
 
     /// <summary>

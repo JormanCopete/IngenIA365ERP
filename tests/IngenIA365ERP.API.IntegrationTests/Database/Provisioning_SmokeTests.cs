@@ -30,7 +30,11 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         // sacó las tablas ADM_* del contexto operativo: la prueba pedía 286 y
         // encontraba 277, y lo que delataba no era un esquema incompleto sino
         // su propia constante. Preguntándole al modelo no puede volver a pasar.
-        var esperadas = appDb.Model.GetEntityTypes()
+        // Lo excluido de las migraciones no se crea (hoy nada: la feature 012 excluyó las tablas INV_
+        // de I1 hasta que el par InventarioComercialNucleo las creó).
+        var esperadas = Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions
+            .GetService<Microsoft.EntityFrameworkCore.Metadata.IDesignTimeModel>(appDb).Model.GetEntityTypes()
+            .Where(e => !e.IsTableExcludedFromMigrations())
             .Select(e => e.GetTableName())
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Select(n => n!)
@@ -78,7 +82,7 @@ public class Provisioning_SmokeTests(CentralIdentityApiFixture fixture)
         (await appDb.AccountCatalogs.CountAsync()).Should().Be(2, "PUC solidario y PUC comercial");
         (await appDb.AccountCatalogEntries.CountAsync()).Should().BeGreaterThan(2_000);
         (await appDb.FinancialStatementItems.CountAsync()).Should().BeGreaterThan(100);
-        (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(18);
+        (await appDb.VoucherTypes.CountAsync(v => v.IsSeeded)).Should().Be(23, "los 18 de la 009 y NV, CP, TR, AC y CJ de Inventario (feature 012, T484)");
         (await appDb.CrossDocumentTypes.CountAsync(t => t.IsSeeded)).Should().Be(8);
 
         // RunTestSeed=false en la fixture ⇒ cero datos demo (FR-017/SC-005).

@@ -147,11 +147,74 @@ public static class AuditEventTypes
     public const string AccountingCatalogValidated = "Accounting.Catalog.Validated";
     public const string AccountingReportExported = "Accounting.Report.Exported";
     public const string AccountingCertificateSent = "Accounting.Certificate.Sent";
+    // Feature 012, I2 (contracts/contabilidad.md §10): el consumo de los mensajes de Inventario.
+    public const string AccountingInventoryPosted = "Accounting.Inventory.Posted";
+    public const string AccountingInventoryRejected = "Accounting.Inventory.Rejected";
+    public const string AccountingInventoryBatchProcessed = "Accounting.Inventory.BatchProcessed";
+    // Feature 012, T509 (api.md §26.1): la importación aplicada de la matriz de reglas de Inventario.
+    public const string AccountingInventoryRulesImported = "Accounting.InventoryRules.Imported";
+
+    // -------------------- Inventario (feature 012, T44, T181) --------------------
+    // Eventos explicitos que no salen de un comando: la exportacion de una vista de
+    // /api/reports/inventory (vista, filtros, formato, filas) y la descarga de un catalogo con
+    // datos (?withData=true: catalogo, filas). Los emite InventoryAuditEmitter, encadenados.
+    public const string InventoryReportExported = "Inventory.Report.Exported";
+    public const string InventoryCatalogExported = "Inventory.Catalog.Exported";
+    // La verificacion de integridad del kardex (US2, T258): una consulta que deja su resultado (filtros, filas
+    // revisadas, incidentes y la alerta). La reconstruccion la audita el AuditBehavior (es un comando).
+    public const string InventoryIntegrityVerified = "Inventory.Integrity.Verified";
+    // Las acciones de riesgo del POS (US5, T603, T606, T607; T50, F13): quitar una linea, descuento, precio manual,
+    // suspender, recuperar, descartar, cobrar, entregar y reimprimir. Canal pos, dentro de la transaccion del comando
+    // (AuditoriaDelPuntoDeVenta). Las lecturas del lector no emiten evento propio.
+    public const string InventoryPosLineRemoved = "Inventory.Pos.LineRemoved";
+    public const string InventoryPosDiscountApplied = "Inventory.Pos.DiscountApplied";
+    public const string InventoryPosPriceOverridden = "Inventory.Pos.PriceOverridden";
+    public const string InventoryPosSuspended = "Inventory.Pos.Suspended";
+    public const string InventoryPosResumed = "Inventory.Pos.Resumed";
+    public const string InventoryPosDiscarded = "Inventory.Pos.Discarded";
+    public const string InventoryPosCheckout = "Inventory.Pos.Checkout";
+    public const string InventoryDocumentDelivered = "Inventory.Document.Delivered";
+    public const string InventoryDocumentReprinted = "Inventory.Document.Reprinted";
+
+    // Feature 012, I3 (T617-T620): la caja. Abrir y cerrar la sesion, recontar tras un rechazo (con antes y despues), cerrar y
+    // reabrir el dia (con motivo). Dentro de la transaccion del comando (AuditoriaDelPuntoDeVenta).
+    public const string InventoryCashSessionOpened = "Inventory.CashSession.Opened";
+    public const string InventoryCashSessionClosed = "Inventory.CashSession.Closed";
+    public const string InventoryCashSessionRecounted = "Inventory.CashSession.Recounted";
+    public const string InventoryDayCloseExecuted = "Inventory.DayClose.Executed";
+    public const string InventoryDayCloseReopened = "Inventory.DayClose.Reopened";
+
+    // Feature 012, I3 (T612): el reintegro de una nota por un medio que no fue de la venta (Inventory.Sales.RefundOtherMeans).
+    public const string InventorySalesRefundOtherMeans = "Inventory.Sales.RefundOtherMeans";
+
+    // Feature 012, I5 (T791): el envio de una orden de compra al proveedor (correo y numero). Lo emite InventoryAuditEmitter despues
+    // del envio; el cierre del saldo de la orden (ClosePurchaseOrderBalanceCommand) lo audita el AuditBehavior con su motivo.
+    public const string InventoryPurchaseOrderSent = "Inventory.PurchaseOrder.Sent";
 
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el
     // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.
     public const string NavigationOpened = "Navigation.Opened";
+
+    // -------------------- Idempotencia (feature 012, T13) --------------------
+    // Una operacion repetida con la misma Idempotency-Key devolvio el resultado guardado sin ejecutar
+    // otra vez; lo emite IdempotencyBehavior con la clave y el primer uso en la metadata.
+    public const string OperationReplayed = "Operation.Replayed";
+
+    // -------------------- Auditoria de comandos (feature 012, T36) --------------------
+    // Un comando que termino en Result.IsFailure: queda con este Action y el Error.Code en la metadata
+    // (clave ErrorCode). Una excepcion sigue siendo «Failed».
+    public const string CommandRejected = "Rejected";
+    public const string CommandFailed = "Failed";
+
+    // -------------------- Integridad de la auditoria (feature 012, T38) --------------------
+    // POST /api/audit/integrity/verify: la verificacion misma, con su resultado en la metadata.
+    public const string AuditLogIntegrityVerified = "AuditLog.IntegrityVerified";
+
+    // -------------------- Autorizacion de datos al crear (feature 012, T46; T175) --------------------
+    // Alta de una persona con AutorizacionAlCrear cuando la cooperativa no tiene politica publicada: el alta
+    // procede y queda la constancia «sin politica vigente» (la alerta Personas.SinPoliticaDeDatos es de I3, T616).
+    public const string PersonDataAuthorizationNoCurrentPolicy = "Person.DataAuthorization.NoCurrentPolicy";
 
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";

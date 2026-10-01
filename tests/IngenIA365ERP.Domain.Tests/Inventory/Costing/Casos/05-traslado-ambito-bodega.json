@@ -1,0 +1,88 @@
+{
+  // US3-2 con Costeo.Ambito = Bodega: el tránsito sale al costo de la línea de despacho y queda en cero exacto.
+  "nombre": "Traslado en ámbito bodega",
+  "descripcion": "Cada bodega lleva su promedio. PRINCIPAL: 10 × 1.000 + 10 × 1.300 = 20 por 23.000 (1.150). SUCURSAL: 5 × 1.400 = 7.000. Despacho T1 de 6: sale de PRINCIPAL a 1.150 = 6.900 y entra a TRANSITO a 6.900. Compra en PRINCIPAL de 6 × 1.600 = 9.600: 20 por 25.700 (1.285). Despacho T2 de 4: sale a 4 × 1.285 = 5.140 y entra a TRANSITO: 10 por 12.040 (promedio 1.204, que NO se usa). Recepción de T1: sale de TRANSITO a 1.150 (su línea de despacho) = 6.900 → 4 por 5.140; entra a SUCURSAL a 1.150 → 11 por 13.900 (1.263,636364). Recepción de T2: sale de TRANSITO a 1.285 = 5.140 → 0 por 0 exacto; entra a SUCURSAL → 15 por 19.040 (1.269,333333). Valor total antes y después: 10.000 + 13.000 + 7.000 + 9.600 = 39.600 = 20.560 + 0 + 19.040.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Warehouse", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    { "id": "E3", "documento": "EC-3", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "SUCURSAL", "cantidad": 5, "costoUnitario": 1400 },
+    {
+      "id": "T1", "documento": "TR-1", "fecha": "2026-09-02", "clase": "TransferDispatch", "bodega": "PRINCIPAL", "cantidad": -6,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -6, "costoUnitario": 1150, "costoTotal": -6900 } ],
+        "estado": { "cantidad": 14, "valor": 16100, "promedio": 1150 }
+      }
+    },
+    {
+      "id": "T1E", "documento": "TR-1", "fecha": "2026-09-02", "clase": "TransferDispatch", "bodega": "TRANSITO", "cantidad": 6,
+      "valoracion": "AlCostoDeOrigen", "origen": "T1",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 6, "costoUnitario": 1150, "costoTotal": 6900 } ],
+        "estado": { "cantidad": 6, "valor": 6900, "promedio": 1150, "ultimoCosto": 1150 }
+      }
+    },
+    {
+      "id": "E4", "documento": "EC-4", "fecha": "2026-09-03", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 6, "costoUnitario": 1600,
+      "esperado": { "estado": { "cantidad": 20, "valor": 25700, "promedio": 1285, "ultimoCosto": 1600 } }
+    },
+    {
+      "id": "T2", "documento": "TR-2", "fecha": "2026-09-04", "clase": "TransferDispatch", "bodega": "PRINCIPAL", "cantidad": -4,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 1285, "costoTotal": -5140 } ],
+        "estado": { "cantidad": 16, "valor": 20560, "promedio": 1285 }
+      }
+    },
+    {
+      "id": "T2E", "documento": "TR-2", "fecha": "2026-09-04", "clase": "TransferDispatch", "bodega": "TRANSITO", "cantidad": 4,
+      "valoracion": "AlCostoDeOrigen", "origen": "T2",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 4, "costoUnitario": 1285, "costoTotal": 5140 } ],
+        "estado": { "cantidad": 10, "valor": 12040, "promedio": 1204, "ultimoCosto": 1285 }
+      }
+    },
+    {
+      "id": "R1", "documento": "RT-1", "fecha": "2026-09-05", "clase": "TransferReceipt", "bodega": "TRANSITO", "cantidad": -6,
+      "valoracion": "AlCostoDeOrigen", "origen": "T1",
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -6, "costoUnitario": 1150, "costoTotal": -6900 } ],
+        "estado": { "cantidad": 4, "valor": 5140, "promedio": 1285 },
+        "explicacion": [ "Sale al costo de su línea de origen" ]
+      }
+    },
+    {
+      "id": "R1E", "documento": "RT-1", "fecha": "2026-09-05", "clase": "TransferReceipt", "bodega": "SUCURSAL", "cantidad": 6,
+      "valoracion": "AlCostoDeOrigen", "origen": "T1",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 6, "costoUnitario": 1150, "costoTotal": 6900 } ],
+        "estado": { "cantidad": 11, "valor": 13900, "promedio": 1263.636364, "ultimoCosto": 1150 }
+      }
+    },
+    {
+      "id": "R2", "documento": "RT-2", "fecha": "2026-09-06", "clase": "TransferReceipt", "bodega": "TRANSITO", "cantidad": -4,
+      "valoracion": "AlCostoDeOrigen", "origen": "T2",
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -4, "costoUnitario": 1285, "costoTotal": -5140 } ],
+        "estado": { "cantidad": 0, "valor": 0, "promedio": 1285, "ultimoCosto": 1285 }
+      }
+    },
+    {
+      "id": "R2E", "documento": "RT-2", "fecha": "2026-09-06", "clase": "TransferReceipt", "bodega": "SUCURSAL", "cantidad": 4,
+      "valoracion": "AlCostoDeOrigen", "origen": "T2",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 4, "costoUnitario": 1285, "costoTotal": 5140 } ],
+        "estado": { "cantidad": 15, "valor": 19040, "promedio": 1269.333333, "ultimoCosto": 1285 }
+      }
+    }
+  ],
+  "final": [
+    { "ambito": "PRINCIPAL", "cantidad": 16, "valor": 20560, "promedio": 1285 },
+    { "ambito": "TRANSITO", "cantidad": 0, "valor": 0, "promedio": 1285 },
+    { "ambito": "SUCURSAL", "cantidad": 15, "valor": 19040, "promedio": 1269.333333 }
+  ],
+  "existencias": [
+    { "bodega": "PRINCIPAL", "cantidad": 16 },
+    { "bodega": "TRANSITO", "cantidad": 0 },
+    { "bodega": "SUCURSAL", "cantidad": 15 }
+  ]
+}

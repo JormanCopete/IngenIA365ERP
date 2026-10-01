@@ -1,0 +1,503 @@
+@page "/inventario/tipos-de-documento"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Tipos de documento - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T185 (T45; FR-036 a FR-038; contracts/api.md §8, contracts/plantillas.md §8): los tipos de documento de
+   inventario por grupo y clase. Las CLASES son fijas del sistema (su efecto lo decide el programa); cada TIPO elige su
+   clase al crearse —la clase y el código no cambian después— y parametriza su consecutivo, los campos que exige, las
+   bodegas y el canal. Cambiar de prefijo o de número es un consecutivo nuevo con motivo que cierra el anterior la
+   víspera; el historial queda a la vista. La política de aprobación y el modo de paso a contabilidad vigentes se
+   muestran de sólo lectura: se administran en sus propias opciones (aprobaciones, parámetros). Las clases que numera
+   la DIAN no tienen consecutivo propio. Inactivar y reactivar piden motivo. La plantilla 8 carga todo por archivo con
+   el componente común ImportarPlantilla. Toda escritura lleva su Idempotency-Key. *@
+<PermissionGate Required="Inventory.DocumentTypes.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tipos de documento</h3>
+        <div class="toolbar">
+            <label class="campo">Grupo
+                <select class="e-input" value="@(_grupo?.ToString() ?? "")" @onchange="@(e => CambiarGrupoAsync(e.Value?.ToString()))">
+                    <option value="">Todos</option>
+                    @foreach (var (numero, texto) in TextosDeInventario.Grupos) { <option value="@numero">@texto</option> }
+                </select>
+            </label>
+            <SfCheckBox Checked="@_incluirInactivos" CheckedChanged="@((bool v) => CambiarInactivosAsync(v))" TChecked="bool" Label="Ver inactivos" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = true)">Plantilla</SfButton>
+            <PermissionGate Required="Inventory.DocumentTypes.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirEdicion(null))">Nuevo tipo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (!_carga.Activa && _tipos.Count == 0)
+        {
+            <p class="texto-tenue">No hay tipos de documento@(_grupo is null ? "" : $" en {TextosDeInventario.Grupo(_grupo)}"). La semilla deja uno por cada clase disponible cuando el módulo se inicia.</p>
+        }
+        @foreach (var grupo in _tipos.GroupBy(t => t.Group).OrderBy(g => g.Key ?? int.MaxValue))
+        {
+            <h4>@TextosDeInventario.Grupo(grupo.Key)</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Clase</th><th>Código</th><th>Nombre</th><th>Numeración</th><th>Paso a contabilidad</th><th>Aprobación</th><th>Estado</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in grupo.OrderBy(t => TextosDeInventario.Clase(t.Class)).ThenBy(t => t.Code))
+                        {
+                            var tipo = t;
+                            <tr>
+                                <td>@TextosDeInventario.Clase(tipo.Class)</td>
+                                <td>@tipo.Code</td>
+                                <td>@tipo.Name</td>
+                                <td>@Numeracion(tipo)</td>
+                                <td>@(tipo.Posting is { } p ? $"{TextosDeInventario.ModoDePaso(p.Mode)}{(p.ModeInherited ? " (general)" : "")}" : "—")</td>
+                                <td>@(tipo.ApprovalPolicy is { } a ? $"{a.Levels.Count} nivel(es)" : "Sin política")</td>
+                                <td>@(tipo.IsActive ? "activo" : "inactivo")@(tipo.IsSeeded ? " · sembrado" : "")</td>
+                                <td>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-eye" OnClick="@(() => VerAsync(tipo))">Ver</SfButton>
+                                    <PermissionGate Required="Inventory.DocumentTypes.Manage">
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => AbrirEdicion(tipo))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEstado(tipo))">@(tipo.IsActive ? "Inactivar" : "Reactivar")</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@* ------------------------------------------------------------------------------------------------ detalle -- *@
+<SfDialog @bind-Visible="_mostrarDetalle" Header="@(_detalle is null ? "Tipo de documento" : $"{_detalle.Code} · {_detalle.Name}")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                @if (_detalle is { } d)
+                {
+                    <div class="form-grid">
+                        <div class="campo"><span class="texto-tenue">Clase</span> @TextosDeInventario.Clase(d.Class) (@TextosDeInventario.Grupo(d.Group))</div>
+                        <div class="campo"><span class="texto-tenue">Numeración</span> @TextosDeInventario.Numerado(d.NumberedBy)@(d.IsFiscal ? " · fiscal" : "")</div>
+                        <div class="campo campo-ancho"><span class="texto-tenue">Exige</span> @CamposExigidos(d.RequiredFields)</div>
+                        <div class="campo campo-ancho"><span class="texto-tenue">Bodegas</span> @(d.Warehouses.Count == 0 ? "todas las operativas" : string.Join(", ", d.Warehouses.Select(b => $"{b.Code} {b.Name}")))</div>
+                        @if (d.SalesChannel is { } canal) { <div class="campo"><span class="texto-tenue">Canal</span> @canal.Code @canal.Name</div> }
+                        @if (d.IsTaxableWithdrawal) { <div class="campo">Retiro gravado</div> }
+                        @if (d.VatNonDeductible) { <div class="campo">IVA no descontable</div> }
+                        @if (d.AllowsFutureDate) { <div class="campo">Admite fecha futura</div> }
+                    </div>
+
+                    <h4>Paso a contabilidad (vigente)</h4>
+                    @if (d.Posting is { } p)
+                    {
+                        <p>@TextosDeInventario.ModoDePaso(p.Mode)@(p.ModeInherited ? " — rige el general de la empresa" : " — excepción de este tipo") · granularidad @p.Granularity · disparador @p.BatchTrigger@(p.BatchTime is null ? "" : $" a las {p.BatchTime}")</p>
+                    }
+                    else { <p class="texto-tenue">Sin modo de paso definido.</p> }
+                    <p class="texto-tenue">Se cambia en Parámetros (ámbito del tipo de documento), con vigencia.</p>
+
+                    <h4>Política de aprobación (vigente)</h4>
+                    @if (d.ApprovalPolicy is { } a)
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th class="numero">Nivel</th><th class="numero">Desde el monto</th><th>Permiso que aprueba</th></tr></thead>
+                                <tbody>
+                                    @foreach (var n in a.Levels.OrderBy(n => n.Order))
+                                    {
+                                        <tr><td class="numero">@n.Order</td><td class="numero">@n.Threshold.ToString("N2")</td><td>@n.PermissionCode</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="texto-tenue">Versión @a.Version. Se administra en Políticas de aprobación.</p>
+                    }
+                    else { <p class="texto-tenue">Sin política: se confirma sin aprobación.</p> }
+
+                    <h4>Consecutivos</h4>
+                    @if (d.NumberedBy == 2)
+                    {
+                        <p class="texto-tenue">Numera con la resolución DIAN de su prefijo: no tiene consecutivo propio.</p>
+                    }
+                    else
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Prefijo</th><th class="numero">Próximo número</th><th>Desde</th><th>Hasta</th></tr></thead>
+                                <tbody>
+                                    @foreach (var s in (d.Sequences ?? []).OrderByDescending(s => s.ValidFrom))
+                                    {
+                                        <tr class="@(s.PublicId == d.CurrentSequence?.PublicId ? "resaltada" : "")">
+                                            <td>@(string.IsNullOrEmpty(s.Prefix) ? "(sin prefijo)" : s.Prefix)</td>
+                                            <td class="numero">@s.NextValue</td>
+                                            <td>@s.ValidFrom.ToString("yyyy-MM-dd")</td>
+                                            <td>@(s.ValidTo?.ToString("yyyy-MM-dd") ?? "vigente")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <PermissionGate Required="Inventory.DocumentTypes.Manage">
+                            <div class="toolbar">
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-edit" OnClick="@(() => AbrirConsecutivo(d))">Cambiar prefijo o número</SfButton>
+                            </div>
+                        </PermissionGate>
+                    }
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* --------------------------------------------------------------------------------------------- alta y edición -- *@
+<SfDialog @bind-Visible="_mostrarEdicion" Header="@(_editado is null ? "Nuevo tipo de documento" : $"Tipo {_editado.Code}")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_editado is null)
+                    {
+                        <label class="campo campo-ancho">Clase *
+                            <select class="e-input" value="@(_f.Class?.ToString() ?? "")" @onchange="@(e => _f.Class = int.TryParse(e.Value?.ToString(), out var c) ? c : null)">
+                                <option value="">Elija…</option>
+                                @foreach (var c in _clases.Where(c => c.Operable).OrderBy(c => c.Group ?? int.MaxValue).ThenBy(c => TextosDeInventario.Clase(c.Class)))
+                                {
+                                    <option value="@c.Class">@TextosDeInventario.Grupo(c.Group) › @TextosDeInventario.Clase(c.Class)</option>
+                                }
+                            </select>
+                        </label>
+                        @if (ClaseElegida is { } elegida) { <p class="texto-tenue campo-ancho">@elegida.EffectDescription</p> }
+                        <CampoCodigo Catalogo="tipos-de-documento" @bind-Value="_f.Code" Largo="10" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    }
+                    else
+                    {
+                        <div class="campo"><span class="texto-tenue">Clase</span> @TextosDeInventario.Clase(_editado.Class)</div>
+                    }
+                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_f.Name" maxlength="100" /></label>
+
+                    <div class="campo campo-ancho"><span class="texto-tenue">Campos que exige</span></div>
+                    <label class="campo"><SfCheckBox @bind-Checked="_f.RequiresCounterparty" Label="Tercero" /></label>
+                    <label class="campo"><SfCheckBox @bind-Checked="_f.RequiresCostCenter" Label="Centro de costo" /></label>
+                    <label class="campo"><SfCheckBox @bind-Checked="_f.RequiresReason" Label="Motivo" /></label>
+                    <label class="campo"><SfCheckBox @bind-Checked="_f.RequiresExternalReference" Label="Referencia externa" /></label>
+
+                    @if (ClaseActual == TextosDeInventario.ClaseDeConsumoInterno)
+                    {
+                        <label class="campo"><SfCheckBox @bind-Checked="_f.IsTaxableWithdrawal" Label="Retiro gravado" /></label>
+                    }
+                    @if (GrupoActual == TextosDeInventario.GrupoDeCompras)
+                    {
+                        <label class="campo"><SfCheckBox @bind-Checked="_f.VatNonDeductible" Label="IVA no descontable" /></label>
+                    }
+                    @if (!EsFiscal)
+                    {
+                        <label class="campo"><SfCheckBox @bind-Checked="_f.AllowsFutureDate" Label="Admite fecha futura" /></label>
+                    }
+
+                    @if (_editado is null && !NumeraLaDian)
+                    {
+                        <label class="campo">Prefijo <input class="e-input" @bind="_f.Prefix" maxlength="4" placeholder="vacío = sin prefijo" /></label>
+                        <label class="campo">Primer número <input class="e-input" type="number" min="1" @bind="_f.FirstNumber" /></label>
+                        <label class="campo">Vigente desde <input class="e-input" type="date" @bind="_f.ValidFrom" /></label>
+                    }
+                    else if (_editado is null && NumeraLaDian)
+                    {
+                        <p class="texto-tenue campo-ancho">Esta clase numera con la resolución DIAN de su prefijo: no lleva consecutivo propio.</p>
+                    }
+                    @if (_editado is not null)
+                    {
+                        <p class="texto-tenue campo-ancho">La clase, el código y el consecutivo no se editan aquí: el prefijo o el número se cambian con «Cambiar prefijo o número» en el detalle.</p>
+                    }
+                    <p class="texto-tenue campo-ancho">Bodegas permitidas: @(_f.Bodegas.Count == 0 ? "todas las operativas" : string.Join(", ", _f.Bodegas.Select(b => b.Code))). Se eligen cuando existan las bodegas del catálogo.</p>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _codigoRepetido)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEdicion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ------------------------------------------------------------------------------------------------ consecutivo -- *@
+<SfDialog @bind-Visible="_mostrarConsecutivo" Header="Cambiar prefijo o número" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">Es un consecutivo nuevo: el vigente se cierra la víspera de la fecha que elija. El número no puede quedar en o por debajo de uno ya emitido con ese prefijo.</p>
+                <div class="form-grid">
+                    <label class="campo">Prefijo <input class="e-input" @bind="_s.Prefix" maxlength="4" placeholder="vacío = sin prefijo" /></label>
+                    <label class="campo">Próximo número * <input class="e-input" type="number" min="1" @bind="_s.NextValue" /></label>
+                    <label class="campo">Vigente desde * <input class="e-input" type="date" @bind="_s.ValidFrom" /></label>
+                    <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="400" @bind="_s.Reason"></textarea></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarConsecutivoAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarConsecutivo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* ---------------------------------------------------------------------------------------- inactivar/reactivar -- *@
+<SfDialog @bind-Visible="_mostrarEstado" Header="@(_cambioDeEstado?.IsActive == true ? $"Inactivar {_cambioDeEstado.Code}" : $"Reactivar {_cambioDeEstado?.Code}")" Width="460px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_cambioDeEstado?.IsActive == true)
+                {
+                    <p class="texto-apoyo">Un tipo inactivo no se usa en documentos nuevos. No se puede inactivar con borradores o documentos en aprobación, ni el último activo de una clase que el sistema genera solo.</p>
+                }
+                <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="400" @bind="_motivoDeEstado"></textarea></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@CambiarEstadoAsync">@(_cambioDeEstado?.IsActive == true ? "Inactivar" : "Reactivar")</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEstado = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@* -------------------------------------------------------------------------------------------------- plantilla -- *@
+<SfDialog @bind-Visible="_mostrarPlantilla" Header="Plantilla 8 · Tipos de documento" Width="860px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p class="texto-apoyo">
+                Hojas <code>TiposDeDocumento</code> y <code>NivelesDeAprobacion</code>. Un código que ya existe se actualiza con
+                las mismas reglas que la edición; el modo de paso y los niveles de aprobación se escriben como vigencias.
+            </p>
+            <ImportarPlantilla RutaBase="@InventarioClient.RutaDeTipos"
+                               PermisoDeDescarga="Inventory.DocumentTypes.View"
+                               PermisoDeDescargaConDatos="Inventory.Catalog.Export"
+                               PermisoDeImportacion="Inventory.DocumentTypes.Manage"
+                               Aplicado="@(_ => CargarAsync())" />
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _guardado = new();
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private List<ClaseDeDocumentoDto> _clases = [];
+    private int? _grupo;
+    private bool _incluirInactivos, _codigoRepetido;
+    private bool _mostrarDetalle, _mostrarEdicion, _mostrarConsecutivo, _mostrarEstado, _mostrarPlantilla;
+    private TipoDeDocumentoDto? _detalle, _editado, _cambioDeEstado;
+    private FormTipo _f = new();
+    private FormConsecutivo _s = new();
+    private string? _motivoDeEstado;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        var clases = await Inventario.ClasesAsync();
+        if (clases.IsSuccess) _clases = [.. clases.Value ?? []];
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarTiposAsync(_grupo, null, _incluirInactivos);
+        if (!r.IsSuccess)
+        {
+            _tipos = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los tipos de documento.");
+            return;
+        }
+        _tipos = [.. r.Value ?? []];
+    }
+
+    private async Task CambiarGrupoAsync(string? valor)
+    {
+        _grupo = int.TryParse(valor, out var g) ? g : null;
+        await CargarAsync();
+    }
+
+    private async Task CambiarInactivosAsync(bool valor)
+    {
+        _incluirInactivos = valor;
+        await CargarAsync();
+    }
+
+    private async Task VerAsync(TipoDeDocumentoDto tipo)
+    {
+        _detalle = tipo;
+        _mostrarDetalle = true;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Inventario.ObtenerTipoAsync(tipo.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el tipo."); return; }
+        _detalle = r.Value;
+    }
+
+    // ------------------------------------------------------------------------------------- alta y edición --
+
+    private ClaseDeDocumentoDto? ClaseElegida => _f.Class is { } c ? _clases.FirstOrDefault(x => x.Class == c) : null;
+    private int? ClaseActual => _editado?.Class ?? _f.Class;
+    private int? GrupoActual => _editado is not null ? _editado.Group : ClaseElegida?.Group;
+    private bool EsFiscal => _editado?.IsFiscal ?? ClaseElegida?.IsFiscal ?? false;
+    private bool NumeraLaDian => (_editado?.NumberedBy ?? ClaseElegida?.NumberedBy) == 2;
+
+    private void AbrirEdicion(TipoDeDocumentoDto? tipo)
+    {
+        _editado = tipo;
+        _codigoRepetido = false;
+        _clave = new ClaveDeOperacion();
+        _f = tipo is null
+            ? new FormTipo { ValidFrom = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1) }
+            : new FormTipo
+            {
+                Code = tipo.Code,
+                Name = tipo.Name,
+                Class = tipo.Class,
+                RequiresCounterparty = tipo.RequiredFields.Counterparty,
+                RequiresCostCenter = tipo.RequiredFields.CostCenter,
+                RequiresReason = tipo.RequiredFields.Reason,
+                RequiresExternalReference = tipo.RequiredFields.ExternalReference,
+                IsTaxableWithdrawal = tipo.IsTaxableWithdrawal,
+                VatNonDeductible = tipo.VatNonDeductible,
+                AllowsFutureDate = tipo.AllowsFutureDate,
+                Bodegas = [.. tipo.Warehouses],
+                SalesChannelPublicId = tipo.SalesChannel?.PublicId,
+            };
+        _mostrarEdicion = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_f.Name)) { await Notification.WarningAsync("Escriba el nombre."); return; }
+        if (_editado is null && (_f.Class is null || string.IsNullOrWhiteSpace(_f.Code))) { await Notification.WarningAsync("Elija la clase y escriba el código."); return; }
+
+        using var guardado = _guardado.Iniciar();
+        // Las marcas que la clase no admite no viajan: el servidor las rechazaría (Inventory.DocumentType.FlagNotApplicable).
+        bool? retiro = ClaseActual == TextosDeInventario.ClaseDeConsumoInterno ? _f.IsTaxableWithdrawal : null;
+        bool? ivaNoDescontable = GrupoActual == TextosDeInventario.GrupoDeCompras ? _f.VatNonDeductible : null;
+        bool? fechaFutura = EsFiscal ? null : _f.AllowsFutureDate;
+        var bodegas = _f.Bodegas.Select(b => b.PublicId).ToList();
+
+        var r = _editado is null
+            ? await Inventario.CrearTipoAsync(new CrearTipoDeDocumentoRequest(
+                _f.Code!.Trim().ToUpperInvariant(), _f.Name.Trim(), _f.Class!.Value,
+                _f.RequiresCounterparty, _f.RequiresCostCenter, _f.RequiresReason, _f.RequiresExternalReference,
+                bodegas, _f.SalesChannelPublicId, retiro, ivaNoDescontable, fechaFutura,
+                NumeraLaDian ? null : (_f.Prefix ?? string.Empty).Trim().ToUpperInvariant(),
+                NumeraLaDian ? null : _f.FirstNumber,
+                NumeraLaDian ? null : _f.ValidFrom), _clave)
+            : await Inventario.EditarTipoAsync(_editado.PublicId, new EditarTipoDeDocumentoRequest(
+                _f.Name.Trim(), _f.RequiresCounterparty, _f.RequiresCostCenter, _f.RequiresReason, _f.RequiresExternalReference,
+                bodegas, _f.SalesChannelPublicId, retiro, ivaNoDescontable, fechaFutura), _clave);
+
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el tipo."); return; }
+        _mostrarEdicion = false;
+        await Notification.SuccessAsync("Tipo de documento guardado.");
+        await CargarAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------ consecutivo --
+
+    private void AbrirConsecutivo(TipoDeDocumentoDto tipo)
+    {
+        _clave = new ClaveDeOperacion();
+        _s = new FormConsecutivo
+        {
+            Prefix = tipo.CurrentSequence?.Prefix ?? tipo.Prefix,
+            NextValue = tipo.CurrentSequence?.NextValue ?? 1,
+            ValidFrom = DateOnly.FromDateTime(DateTime.Today),
+        };
+        _mostrarConsecutivo = true;
+    }
+
+    private async Task GuardarConsecutivoAsync()
+    {
+        if (_detalle is null) return;
+        if (string.IsNullOrWhiteSpace(_s.Reason)) { await Notification.WarningAsync("Escriba el motivo del cambio."); return; }
+        if (_s.NextValue < 1) { await Notification.WarningAsync("El próximo número debe ser mayor que cero."); return; }
+
+        using var guardado = _guardado.Iniciar();
+        var r = await Inventario.AgregarConsecutivoAsync(_detalle.PublicId,
+            new ConsecutivoRequest((_s.Prefix ?? string.Empty).Trim().ToUpperInvariant(), _s.NextValue, _s.ValidFrom, _s.Reason.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el consecutivo."); return; }
+        _mostrarConsecutivo = false;
+        await Notification.SuccessAsync("Consecutivo nuevo registrado.");
+        _detalle = r.Value;
+        await CargarAsync();
+        if (_detalle is not null) await VerAsync(_detalle);
+    }
+
+    // ---------------------------------------------------------------------------------- inactivar/reactivar --
+
+    private void AbrirEstado(TipoDeDocumentoDto tipo)
+    {
+        _cambioDeEstado = tipo;
+        _motivoDeEstado = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarEstado = true;
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (_cambioDeEstado is null) return;
+        if (string.IsNullOrWhiteSpace(_motivoDeEstado)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+
+        using var guardado = _guardado.Iniciar();
+        var motivo = new MotivoDeInventarioRequest(_motivoDeEstado.Trim());
+        var r = _cambioDeEstado.IsActive
+            ? await Inventario.InactivarTipoAsync(_cambioDeEstado.PublicId, motivo, _clave)
+            : await Inventario.ReactivarTipoAsync(_cambioDeEstado.PublicId, motivo, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el estado."); return; }
+        _mostrarEstado = false;
+        await Notification.SuccessAsync(_cambioDeEstado.IsActive ? "Tipo inactivado." : "Tipo reactivado.");
+        await CargarAsync();
+    }
+
+    // -------------------------------------------------------------------------------------------- textos --
+
+    private static string Numeracion(TipoDeDocumentoDto t) => t.NumberedBy == 2
+        ? "Resolución DIAN"
+        : t.CurrentSequence is { } s ? $"{(string.IsNullOrEmpty(s.Prefix) ? "" : s.Prefix + " ")}próximo {s.NextValue}" : "sin consecutivo vigente";
+
+    private static string CamposExigidos(CamposObligatoriosDelTipoDto c)
+    {
+        var campos = new List<string>();
+        if (c.Counterparty) campos.Add("tercero");
+        if (c.CostCenter) campos.Add("centro de costo");
+        if (c.Reason) campos.Add("motivo");
+        if (c.ExternalReference) campos.Add("referencia externa");
+        return campos.Count == 0 ? "nada adicional" : string.Join(", ", campos);
+    }
+
+    private sealed class FormTipo
+    {
+        public string? Code { get; set; }
+        public string Name { get; set; } = "";
+        public int? Class { get; set; }
+        public bool RequiresCounterparty { get; set; }
+        public bool RequiresCostCenter { get; set; }
+        public bool RequiresReason { get; set; }
+        public bool RequiresExternalReference { get; set; }
+        public bool IsTaxableWithdrawal { get; set; }
+        public bool VatNonDeductible { get; set; }
+        public bool AllowsFutureDate { get; set; }
+        public string? Prefix { get; set; }
+        public long? FirstNumber { get; set; } = 1;
+        public DateOnly? ValidFrom { get; set; }
+        public List<ReferenciaDeInventarioDto> Bodegas { get; set; } = [];
+        public Guid? SalesChannelPublicId { get; set; }
+    }
+
+    private sealed class FormConsecutivo
+    {
+        public string? Prefix { get; set; }
+        public long NextValue { get; set; } = 1;
+        public DateOnly ValidFrom { get; set; }
+        public string Reason { get; set; } = "";
+    }
+}

@@ -191,7 +191,7 @@ public static class AccountingErrors
     public static readonly Error AccountNotMovement = new("Accounting.Account.NotMovement",
         "Las reglas sólo se configuran en cuentas de movimiento.");
     /// <summary>Carga masiva de auxiliares (E2, 2026-09-22): todas las filas malas juntas; nada se guarda.</summary>
-    public static Error AccountsInvalid(IReadOnlyList<Setup.ErrorDeFila> errores) =>
+    public static Error AccountsInvalid(IReadOnlyList<IngenIA365ERP.Application.Common.Imports.ErrorDeFila> errores) =>
         new ErrorConDatos("Accounting.Accounts.Invalid",
             $"El archivo tiene {errores.Count} fila(s) con error (la primera, fila {errores[0].Row}: {errores[0].Message}); no se guardó nada.",
             new { errors = errores });
@@ -210,7 +210,7 @@ public static class AccountingErrors
         "La cuenta de resultado del ejercicio debe ser una cuenta de movimiento activa.");
 
     // ---- catálogos ----
-    public static Error CatalogInvalid(IReadOnlyList<Setup.ErrorDeFila> errores) =>
+    public static Error CatalogInvalid(IReadOnlyList<IngenIA365ERP.Application.Common.Imports.ErrorDeFila> errores) =>
         new ErrorConDatos("Accounting.Catalog.Invalid",
             $"El archivo tiene {errores.Count} fila(s) con error (la primera, fila {errores[0].Row}: {errores[0].Message}). Corríjalas y vuelva a importar; no se guardó nada.",
             new { errors = errores });
@@ -221,7 +221,7 @@ public static class AccountingErrors
     // ---- apertura ----
     public static readonly Error OpeningAlreadyExists = new("Accounting.Opening.AlreadyExists",
         "Ya hay una apertura contabilizada: reverse la existente antes de cargar otra.");
-    public static Error OpeningInvalid(IReadOnlyList<Setup.ErrorDeFila> errores) =>
+    public static Error OpeningInvalid(IReadOnlyList<IngenIA365ERP.Application.Common.Imports.ErrorDeFila> errores) =>
         new ErrorConDatos("Accounting.Opening.Invalid",
             $"El archivo de apertura tiene {errores.Count} fila(s) con error (la primera, fila {errores[0].Row}: {errores[0].Message}); no se guardó nada.",
             new { errors = errores });
@@ -232,6 +232,119 @@ public static class AccountingErrors
             $"La apertura se fecha entre el {propuesta:yyyy-MM-dd} (la víspera del primer período) y el {fin:yyyy-MM-dd} (el fin del primer ejercicio): después de esa fecha un saldo ya no es inicial.");
     public static Error OpeningDateClosed(DateOnly fecha) =>
         new("Accounting.Opening.DateClosed", $"El período de {fecha:yyyy-MM} está cerrado: reábralo o elija otra fecha para la apertura.");
+
+    // ---- Inventario por mensajes (feature 012, I2; contracts/contabilidad.md §11 y contracts/api.md §26.7) ----
+
+    /// <summary>
+    /// Lo de Inventario no se reversa por el contrato (T29, §6): cada anulación, nota o ajuste llega como un comprobante
+    /// nuevo de su propio mensaje. <c>data.origin</c> nombra el documento que lo originó.
+    /// </summary>
+    public static Error DocumentInventoryCorrectsWithNewVoucher(string module, string? sourceType, Guid? sourcePublicId) =>
+        new ErrorConDatos("Accounting.Document.InventoryCorrectsWithNewVoucher",
+            "Lo que viene de Inventario no se reversa: se corrige anulando el documento o con su nota en Inventario, y llega como comprobante nuevo.",
+            new { origin = new { module, moduleName = ModuloContable.Nombre(module), sourceType, sourcePublicId } });
+
+    /// <summary>
+    /// El mensaje que <c>ReverseDocumentCommand</c> da a un comprobante de Inventario (§6): el mismo código de siempre,
+    /// <c>ModuleOwned</c>, con lo que hay que hacer; en un resumido, cuántos documentos reúne.
+    /// </summary>
+    public static string MensajeDeComprobanteDeInventario(int? documentosDelResumido) =>
+        "Este comprobante lo generó Inventario: se corrige anulando el documento o con su nota en Inventario; llega como comprobante nuevo."
+        + (documentosDelResumido is { } n
+            ? n == 1 ? " Es un comprobante resumido y reúne 1 documento." : $" Es un comprobante resumido y reúne {n} documentos."
+            : string.Empty);
+
+    /// <summary>Cierre del mes con mensajes de Inventario sin procesar y sin reconocerlos (§8): es un aviso, no un bloqueo.</summary>
+    public static Error PeriodInventoryPending(int pending, int inBatch, int rejected, DateOnly? oldestOperationDate, IReadOnlyList<string> types) =>
+        new ErrorConDatos("Accounting.Period.InventoryPending",
+            $"Hay {pending + inBatch + rejected} operación(es) de Inventario fechadas en el mes que Contabilidad aún no recibe ({pending} pendiente(s), {inBatch} en lote, {rejected} rechazada(s)). "
+            + "Procéselas ahora o cierre de todos modos: lo que siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes.",
+            new { pending, inBatch, rejected, oldestOperationDate, types });
+
+    public static Error InventoryRuleMissing(string operation, string role, object values, DateOnly date, IReadOnlyList<int> lineNumbers) =>
+        new ErrorConDatos("Accounting.InventoryRule.Missing",
+            $"No hay regla vigente al {date:yyyy-MM-dd} para la operación {operation} y el rol {role}. Configúrela en Contabilidad › Inventario › Matriz.",
+            new { operation, role, values, date, lineNumbers });
+
+    public static Error InventoryRuleOverlaps(object existing) =>
+        new ErrorConDatos("Accounting.InventoryRule.Overlaps",
+            "Ya hay una regla con las mismas dimensiones cuya vigencia se cruza con la nueva: cree una versión en vez de otra regla.",
+            new { existing });
+
+    public static Error InventoryRuleRetroactiveOverPosted(DateOnly lastPostedDate, string document) =>
+        new ErrorConDatos("Accounting.InventoryRule.RetroactiveOverPosted",
+            $"La versión empieza antes del {lastPostedDate:yyyy-MM-dd}, cuando ya se contabilizó {document} con la regla vigente. Póngale una fecha posterior.",
+            new { lastPostedDate, document });
+
+    public static Error InventoryRuleTaxRateMismatch(string tax, string account, decimal ruleOrAccountRate, decimal messageRate) =>
+        new ErrorConDatos("Accounting.InventoryRule.TaxRateMismatch",
+            $"La tarifa de {tax} en la regla o en la cuenta {account} ({ruleOrAccountRate:0.######}) no es la del documento ({messageRate:0.######}).",
+            new { tax, account, ruleOrAccountRate, messageRate });
+
+    public static Error InventoryRuleDimensionRequired(string operation, string role, string dimension) =>
+        new ErrorConDatos("Accounting.InventoryRule.DimensionRequired",
+            $"La operación {operation} con el rol {role} exige la dimensión {dimension}.",
+            new { operation, role, dimension });
+
+    public static Error InventoryRuleDimensionNotAllowed(string operation, string role, string dimension) =>
+        new ErrorConDatos("Accounting.InventoryRule.DimensionNotAllowed",
+            $"La operación {operation} con el rol {role} no admite la dimensión {dimension}.",
+            new { operation, role, dimension });
+
+    public static Error InventoryRuleDimensionCodeUnknown(string dimension, string code) =>
+        new ErrorConDatos("Accounting.InventoryRule.DimensionCodeUnknown",
+            $"El código {code} no existe en Inventario como {dimension}.",
+            new { dimension, code });
+
+    /// <summary>Feature 012, T507: la regla pedida no existe (o está borrada). (nuevo)</summary>
+    public static readonly Error InventoryRuleNotFound = new("Accounting.InventoryRule.NotFound", "No existe esa regla de la matriz de Inventario.");
+
+    /// <summary>Feature 012, T507: la operación no es de <c>OperacionesDeInventario</c>. (nuevo)</summary>
+    public static Error InventoryRuleOperationUnknown(string operation) =>
+        new ErrorConDatos("Accounting.InventoryRule.OperationUnknown",
+            $"«{operation}» no es una operación de la matriz de Inventario.",
+            new { operation });
+
+    /// <summary>Feature 012, T507: el rol no es de <c>RolesDeCuenta</c> o no lo usa la operación. (nuevo)</summary>
+    public static Error InventoryRuleRoleNotInOperation(string operation, string role, IReadOnlyList<string> roles) =>
+        new ErrorConDatos("Accounting.InventoryRule.RoleNotInOperation",
+            $"La operación {operation} no usa el rol «{role}». Admite: {string.Join(", ", roles)}.",
+            new { operation, role, roles });
+
+    /// <summary>Feature 012, T507: una vigencia que termina antes de la víspera de su inicio. (nuevo)</summary>
+    public static Error InventoryRuleValidToInvalid(DateOnly validFrom, DateOnly validTo) =>
+        new ErrorConDatos("Accounting.InventoryRule.ValidToInvalid",
+            $"La vigencia empieza el {validFrom:yyyy-MM-dd}: no puede terminar el {validTo:yyyy-MM-dd}.",
+            new { validFrom, validTo });
+
+    /// <summary>
+    /// Feature 012, I3 (T659; contracts/contabilidad.md §3.4): la cuenta del medio de un crédito provisional no exige tercero y documento
+    /// cruce, y la cuenta por cobrar quedaría sin cliente ni venta que saldar. (nuevo)
+    /// </summary>
+    public static Error InventoryCreditAccountRequirements(string account, string? paymentMeansCode) =>
+        new ErrorConDatos("Accounting.InventoryRule.CreditAccountRequirements",
+            $"La cuenta {account} del medio de crédito {paymentMeansCode} debe exigir tercero y documento cruce: la venta a crédito se cobra contra el cliente y la factura.",
+            new { account, paymentMeansCode });
+
+    public static Error InventoryMessageUnbalanced(decimal difference) =>
+        new ErrorConDatos("Accounting.InventoryMessage.Unbalanced",
+            $"El contenido del mensaje no cuadra (diferencia {difference:N2}): es un defecto de quien lo emitió, no de la matriz.",
+            new { difference });
+
+    public static Error InventoryMessageCurrencyNotSupported(string currency, decimal exchangeRate) =>
+        new ErrorConDatos("Accounting.InventoryMessage.CurrencyNotSupported",
+            $"Contabilidad sólo recibe pesos colombianos con tasa 1; el mensaje viene en {currency} con tasa {exchangeRate:0.######}.",
+            new { currency, exchangeRate });
+
+    public static Error InventoryMessageWaitingForOriginal(Guid originalMessageId) =>
+        new ErrorConDatos("Accounting.InventoryMessage.WaitingForOriginal",
+            "El documento original todavía no está contabilizado: se reintenta cuando lo esté.",
+            new { originalMessageId });
+
+    public static Error InventoryBatchAlreadyRunning(Guid batchPublicId, long number) =>
+        new ErrorConDatos("Accounting.InventoryBatch.AlreadyRunning",
+            $"Ya hay un lote en curso (lote {number}): espere a que termine.",
+            new { batchPublicId, number });
 
     // ---- concurrencia ----
     public static readonly Error StaleRowVersion = Error.StaleRowVersion;

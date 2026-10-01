@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Branches.Commands.CreateBranch;
 using IngenIA365ERP.Application.Core.Branches.Commands.UpdateBranch;
 using IngenIA365ERP.Application.Core.Branches.Commands.DeleteBranch;
@@ -27,19 +28,21 @@ public class BranchesEndpoints : ICarterModule
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
         }).WithName("GetBranchById");
 
-        group.MapPost("/", async (CreateBranchCommand command, ISender sender) =>
+        // Feature 012 (T178): los fallos van con el sobre canónico y su estado (Branch.MunicipalityUnknown → 422,
+        // lo no encontrado → 404). Antes el PUT respondía 404 a cualquier fallo y el POST 400 sin sobre.
+        group.MapPost("/", async (CreateBranchCommand command, ISender sender, HttpContext http) =>
         {
             var result = await sender.Send(command);
             return result.IsSuccess
-                ? Results.Created($"/api/core/branches/{result.Value}", result.Value)
-                : Results.BadRequest(result.Error);
+                ? (object?)Results.Created($"/api/core/branches/{result.Value}", result.Value)
+                : ErrorEnvelopeFilter.Translate(http, result);
         }).WithName("CreateBranch");
 
-        group.MapPut("/{id:guid}", async (Guid id, UpdateBranchCommand command, ISender sender) =>
+        group.MapPut("/{id:guid}", async (Guid id, UpdateBranchCommand command, ISender sender, HttpContext http) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
-            return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
+            return result.IsSuccess ? (object?)Results.NoContent() : ErrorEnvelopeFilter.Translate(http, result);
         }).WithName("UpdateBranch");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>

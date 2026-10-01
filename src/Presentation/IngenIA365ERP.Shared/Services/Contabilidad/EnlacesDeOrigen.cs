@@ -10,6 +10,14 @@ public static class EnlacesDeOrigen
     public static string? Ruta(string? sourceType, Guid? sourcePublicId) => sourcePublicId is null ? null : sourceType switch
     {
         "PayrollRun" => $"/nomina/liquidacion?corrida={sourcePublicId}",
+        "ServiceBonusRun" => $"/nomina/prima?corrida={sourcePublicId}",
+        "SeveranceRun" => $"/nomina/cesantias-anuales?corrida={sourcePublicId}",
+        "VacationRun" => $"/nomina/vacaciones?corrida={sourcePublicId}",
+        "SettlementRun" => $"/nomina/liquidacion-definitiva/{sourcePublicId}",
+        // Feature 012 (T493): Inventario (los SourceType de OrigenesDeInventario en Application).
+        "InventoryDocument" => $"/inventario/documentos/{sourcePublicId}",
+        "InventoryPostingBatch" => $"/contabilidad/inventario/lotes/{sourcePublicId}",
+        "InventoryProduct" => $"/inventario/productos/{sourcePublicId}",
         _ => null,
     };
 }

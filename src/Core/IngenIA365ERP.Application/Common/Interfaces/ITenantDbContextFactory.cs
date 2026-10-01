@@ -28,6 +28,13 @@ public interface ITenantDbContextFactory
     /// Null es lo normal.
     /// </param>
     ITenantDbScope Abrir(string nombreDeBase, string? cadenaPropia = null);
+
+    /// <summary>
+    /// Feature 012 (T37): un contexto <b>nuevo</b> sobre la base de la cooperativa del ámbito en curso
+    /// (la de la petición o la del trabajo de fondo), con su propia conexión. Lo usa la auditoría para
+    /// escribir un rechazo que tiene que sobrevivir al rollback de la transacción del comando.
+    /// </summary>
+    ITenantDbScope AbrirLaDelAmbito();
 }
 
 /// <summary>

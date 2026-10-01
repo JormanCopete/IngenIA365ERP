@@ -174,6 +174,44 @@
             </div>
         </div>
         break;
+
+    case SeccionDePersona.DatosTributarios:
+        <div class="panel-pestana">
+            <p class="hint">
+                Con estas marcas el cálculo de impuestos decide qué retenciones y qué IVA aplican a las compras y ventas con
+                esta persona, y la factura electrónica deriva sus responsabilidades ante la DIAN. Tómelas del RUT.
+            </p>
+            <div class="rejilla-campos">
+                @Marca(() => Modelo.IsVatResponsible, v => Modelo.IsVatResponsible = v, "Responsable de IVA",
+                       "Cobra IVA en sus ventas (antes «régimen común»).")
+                @Marca(() => Modelo.IsLargeContributor, v => Modelo.IsLargeContributor = v, "Gran contribuyente",
+                       "Calificado así por la DIAN; cambia quién retiene a quién.")
+                @Marca(() => Modelo.IsSelfWithholder, v => Modelo.IsSelfWithholder = v, "Autorretenedor de renta",
+                       "Se retiene a sí mismo: al comprarle no se le practica retención en la fuente.")
+                @Marca(() => Modelo.IsVatWithholdingAgent, v => Modelo.IsVatWithholdingAgent = v, "Agente retenedor de IVA",
+                       "Practica ReteIVA a sus proveedores.")
+                @Marca(() => Modelo.IsSimpleTaxRegime, v => Modelo.IsSimpleTaxRegime = v, "Régimen simple de tributación",
+                       "No se le practica retención en la fuente de renta.")
+                @Marca(() => Modelo.IsIncomeTaxFiler, v => Modelo.IsIncomeTaxFiler = v, "Declarante de renta",
+                       "Cambia la tarifa de algunas retenciones a personas naturales.")
+                @Marca(() => Modelo.IsObligatedToInvoice, v => Modelo.IsObligatedToInvoice = v, "Obligado a facturar",
+                       "Si no lo está, comprarle exige documento soporte.")
+                @Marca(() => Modelo.WithholdingExempt, v => Modelo.WithholdingExempt = v, "Exento de retención en la fuente",
+                       "No se le practica retención en la fuente.")
+                @Marca(() => Modelo.IcaWithholdingExempt, v => Modelo.IcaWithholdingExempt = v, "Exento de ReteICA",
+                       "No se le practica retención de industria y comercio.")
+                <div>
+                    <label>Actividad económica (CIIU)</label>
+                    <SfTextBox @bind-Value="Modelo.CiiuCode" Placeholder="Ej: 4711" Enabled="@Editable" HtmlAttributes="@Largo(6)" />
+                    <small class="hint">Código CIIU de 4 a 6 dígitos, el de la actividad principal del RUT; con él se busca la tarifa de ReteICA.</small>
+                    @if (!PersonaFormularioModelo.CiiuValido(Modelo.CiiuCode))
+                    {
+                        <small class="aviso aviso-error">El código CIIU son de 4 a 6 dígitos.</small>
+                    }
+                </div>
+            </div>
+        </div>
+        break;
 }
 
 @code {
@@ -218,6 +256,15 @@
         {
             <ValidationMessage For="@campo" />
         }
+    };
+
+    /// <summary>Una marca del perfil tributario con su texto de ayuda.</summary>
+    private RenderFragment Marca(Func<bool> valor, Action<bool> asignar, string etiqueta, string ayuda) => __builder =>
+    {
+        <div>
+            <SfCheckBox TChecked="bool" Checked="@valor()" CheckedChanged="@((bool v) => asignar(v))" Label="@etiqueta" Disabled="@Deshabilitado" />
+            <small class="hint">@ayuda</small>
+        </div>
     };
 
     private static Dictionary<string, object> Largo(int max) => new() { { "maxlength", max.ToString() } };

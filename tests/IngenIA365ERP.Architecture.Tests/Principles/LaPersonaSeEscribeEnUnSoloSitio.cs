@@ -97,6 +97,58 @@ public class LaPersonaSeEscribeEnUnSoloSitio
             string.Join("\n  ", yaMigrados));
     }
 
+    /// <summary>
+    /// Feature 012 (T46, T175): la autorización de datos al crear se captura en el mismo sitio que la persona. Sólo el
+    /// diálogo compartido pide la política vigente y arma <c>AutorizacionAlCrearDto</c>; cada pantalla que da de alta
+    /// (POS, Compras) lo abre con <c>CapturarAutorizacion</c> en vez de copiar el aviso.
+    /// </summary>
+    [Fact]
+    public void Solo_el_dialogo_compartido_captura_la_autorizacion_al_crear()
+    {
+        string[] permitidos =
+        [
+            Path.Combine("Components", "Personas", "PersonaDialog.razor"),
+            Path.Combine("Services", "Core", "PersonasClient.cs"),
+            Path.Combine("Services", "Core", "PersonasDtos.cs"),
+        ];
+        var capturan = Fuentes()
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"habeas-data/policies/current|\bnew\s+AutorizacionAlCrearDto\b|\bPoliticaDeDatosVigenteAsync\b"))
+            .Select(Relativo)
+            .Where(r => !permitidos.Contains(r, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(capturan.Count == 0,
+            "La autorización de datos al crear se captura sólo en PersonaDialog (CapturarAutorizacion; feature 012, T46):\n  " +
+            string.Join("\n  ", capturan));
+    }
+
+    /// <summary>
+    /// Feature 012 (T46, T175): el registro de consentimientos lo escriben el alta con autorización
+    /// (<c>AutorizacionDeDatos</c>) y los dos comandos de Habeas Data; nadie más agrega filas a
+    /// <c>CMP_HabeasDataConsents</c>.
+    /// </summary>
+    [Fact]
+    public void Solo_la_autorizacion_y_Habeas_Data_escriben_consentimientos()
+    {
+        var application = Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application");
+        string[] permitidos =
+        [
+            Path.Combine("Compliance", "HabeasData", "AutorizacionDeDatos.cs"),
+            Path.Combine("Compliance", "HabeasData", "AcceptConsent", "AcceptConsentCommand.cs"),
+            Path.Combine("Compliance", "HabeasData", "RevokeConsent", "RevokeConsentCommand.cs"),
+        ];
+        var escritores = Directory.EnumerateFiles(application, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"HabeasDataConsents\s*\.\s*(Add|AddRange)\b|new\s+HabeasDataConsent\b"))
+            .Select(f => Path.GetRelativePath(application, f))
+            .Where(r => !permitidos.Contains(r, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        Assert.True(escritores.Count == 0,
+            "Estos archivos escriben consentimientos de Habeas Data fuera de AutorizacionDeDatos y los comandos de Habeas Data:\n  " +
+            string.Join("\n  ", escritores));
+    }
+
     [Fact]
     public void Los_modulos_ya_no_pisan_las_banderas_con_un_PUT_de_persona()
     {

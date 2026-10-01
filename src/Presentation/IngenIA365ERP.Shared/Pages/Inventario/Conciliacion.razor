@@ -1,0 +1,85 @@
+@page "/inventario/conciliacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+@inject NavigationManager Nav
+
+<PageTitle>Conciliación con Contabilidad - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T538; FR-081, SC-005; contracts/api.md §27, §26.6): el inventario valorizado contra el saldo contable, por conjunto
+   de cuentas, a una fecha. Es la vista «reconciliation» del centro de informes con sus cinco secciones: los conjuntos (valorizado en
+   bodegas y en tránsito, saldo contable, diferencia y lo que la explica —pendientes, en lote, rechazados— y lo que queda sin explicar),
+   el detalle por bodega, lo movido por tipos que no pasan, las ventas a crédito de esos tipos (desde I3) y las bodegas no activas con
+   sus cifras de referencia. Inventario no lee los libros: el saldo lo responde Contabilidad. Una fila con mensaje (_mensaje) lleva a ese
+   mensaje en la bandeja. *@
+<PermissionGate Required="Inventory.Reconciliation.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conciliación con Contabilidad</h3>
+        <div class="toolbar">
+            <label class="campo">Al <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Conciliar</SfButton>
+            <PermissionGate Required="Inventory.Reports.Export">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(_carga.Activa || _tabla is null)" OnClick="@(() => DescargarAsync("xlsx"))">Excel</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(_carga.Activa || _tabla is null)" OnClick="@(() => DescargarAsync("pdf"))">PDF</SfButton>
+            </PermissionGate>
+            <a class="e-btn e-outline" href="/inventario/bandeja-de-mensajes">Bandeja de mensajes</a>
+        </div>
+    </div>
+    <p class="texto-apoyo">Diferencia = valorizado total − saldo contable. Con todo contabilizado y la matriz completa, la diferencia es cero; lo que no, lo explican los mensajes que todavía no llegan al libro.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Comparando con Contabilidad…">
+        <TablaDeReporte Tabla="@_tabla" TextoSinTabla="Elija la fecha y pulse «Conciliar»." FilasClicables="true"
+                        EsClicable="@(f => Mensaje(f) is not null)" FilaElegida="@Profundizar" />
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const string Vista = "reconciliation";
+
+    private readonly EstadoDeCarga _carga = new();
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private TablaReporteDto? _tabla;
+
+    private string Query => $"asOf={_fecha:yyyy-MM-dd}";
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.InformeAsync(Vista, Query);
+        if (!r.IsSuccess)
+        {
+            _tabla = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo conciliar.");
+            return;
+        }
+        _tabla = r.Value;
+    }
+
+    private string? Mensaje(FilaReporteDto fila) => _tabla is null ? null : TablaDeReporte.Oculto(_tabla, fila, "_mensaje");
+
+    private void Profundizar(FilaReporteDto fila)
+    {
+        if (Mensaje(fila) is { } texto && Guid.TryParse(texto, out var mensaje))
+            Nav.NavigateTo($"/inventario/bandeja-de-mensajes?mensaje={mensaje}");
+    }
+
+    private async Task DescargarAsync(string formato)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.DescargarInformeAsync(Vista, Query, formato);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

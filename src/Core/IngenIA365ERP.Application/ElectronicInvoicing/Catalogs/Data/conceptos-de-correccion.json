@@ -1,0 +1,139 @@
+{
+  "catalogo": "conceptosDeCorreccion",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tablas 13.2.4 (notas crédito y débito); anexo del documento soporte (Res. 167/2021) para su nota de ajuste",
+      "porCotejar": true,
+      "notas": "Por cotejar: los conceptos de la nota de ajuste del DEE POS (código 94) y del documento soporte (contracts/dian.md §1). La nota de ajuste POS usa los de la nota crédito mientras tanto.",
+      "codigos": [
+        {
+          "codigo": "1",
+          "nombre": "Devolución parcial de los bienes y/o no aceptación parcial del servicio",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaCredito",
+            "NotaDeAjustePos"
+          ]
+        },
+        {
+          "codigo": "2",
+          "nombre": "Anulación de factura electrónica",
+          "esAnulacion": true,
+          "aplicaA": [
+            "NotaCredito",
+            "NotaDeAjustePos"
+          ]
+        },
+        {
+          "codigo": "3",
+          "nombre": "Rebaja o descuento parcial o total",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaCredito",
+            "NotaDeAjustePos"
+          ]
+        },
+        {
+          "codigo": "4",
+          "nombre": "Ajuste de precio",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaCredito",
+            "NotaDeAjustePos"
+          ]
+        },
+        {
+          "codigo": "5",
+          "nombre": "Descuento comercial por pronto pago",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaCredito",
+            "NotaDeAjustePos"
+          ]
+        },
+        {
+          "codigo": "6",
+          "nombre": "Descuento comercial por volumen de ventas",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaCredito",
+            "NotaDeAjustePos"
+          ]
+        },
+        {
+          "codigo": "1",
+          "nombre": "Intereses",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDebito"
+          ]
+        },
+        {
+          "codigo": "2",
+          "nombre": "Gastos por cobrar",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDebito"
+          ]
+        },
+        {
+          "codigo": "3",
+          "nombre": "Cambio del valor",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDebito"
+          ]
+        },
+        {
+          "codigo": "4",
+          "nombre": "Otros",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDebito"
+          ]
+        },
+        {
+          "codigo": "1",
+          "nombre": "Devolución parcial de los bienes y/o no aceptación parcial del servicio",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDeAjusteDelDocumentoSoporte"
+          ]
+        },
+        {
+          "codigo": "2",
+          "nombre": "Anulación del documento soporte en adquisiciones efectuadas a sujetos no obligados a expedir factura",
+          "esAnulacion": true,
+          "aplicaA": [
+            "NotaDeAjusteDelDocumentoSoporte"
+          ]
+        },
+        {
+          "codigo": "3",
+          "nombre": "Rebaja o descuento parcial o total",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDeAjusteDelDocumentoSoporte"
+          ]
+        },
+        {
+          "codigo": "4",
+          "nombre": "Ajuste de precio",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDeAjusteDelDocumentoSoporte"
+          ]
+        },
+        {
+          "codigo": "5",
+          "nombre": "Otros",
+          "esAnulacion": false,
+          "aplicaA": [
+            "NotaDeAjusteDelDocumentoSoporte"
+          ]
+        }
+      ]
+    }
+  ]
+}

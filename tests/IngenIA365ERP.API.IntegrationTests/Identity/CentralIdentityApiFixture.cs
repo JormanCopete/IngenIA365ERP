@@ -51,17 +51,32 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             .WithUsername("ingenia")
             .WithPassword("IngenIA365_Test2026!")
             .WithDatabase("ingenia365erp_test")
+            // Una base por cooperativa y un pool por base: con las cooperativas aisladas de «Inventario e2e» (feature 012) las
+            // 100 conexiones por defecto se agotaban («53300: sorry, too many clients already») a mitad de la suite.
+            .WithCommand("-c", "max_connections=1000")
             .Build();
 
     private readonly MongoDbContainer _mongo = new MongoDbBuilder()
         .WithImage("mongo:7")
         .Build();
 
+    // Una ranura de Redis por cooperativa (TenantCacheSlotAllocator): con las 16 bases por defecto
+    // caben 15, y la colección «Inventario e2e» (feature 012) crea una cooperativa aislada por caso;
+    // pasada la decimoquinta, el aprovisionamiento fallaba con Cache.TenantSlotsExhausted y la
+    // cooperativa no llegaba a Ready. 256 bases sobran para todas las colecciones de un host.
     private readonly RedisContainer _redis = new RedisBuilder()
         .WithImage("redis:7-alpine")
+        .WithCommand("--databases", "256")
         .Build();
 
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
+
+    /// <summary>
+    /// El directorio de credenciales de facturación electrónica de este host (<c>ElectronicInvoicing:CredentialsPath</c>, feature 012, I4):
+    /// temporal, uno por fixture; se borra al cerrar.
+    /// </summary>
+    public string DirectorioDeCredenciales { get; } =
+        Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "ingenia-fe-cred-" + Guid.NewGuid().ToString("N"))).FullName;
     public CapturingEmailSender Emails { get; } = new();
 
     /// <summary>Lo que una subclase necesita levantado antes que el host (un almacén, por ejemplo).</summary>
@@ -142,9 +157,46 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.UseSetting("MasterAdmin:Email", MasterEmail);
             builder.UseSetting("MasterAdmin:Password", MasterPassword);
 
+            // Feature 012 (T008; decisiones-transversales T10, T47): los trabajos de fondo nuevos
+            // de la plataforma arrancan APAGADOS en las pruebas. Un despachador, un reenviador o un
+            // programador corriendo por su cuenta harían que una e2e viera efectos a destiempo; las
+            // pruebas conducen cada pasada a mano. Las enlaza
+            // IntegrationOptions (T049) y las consultan el despachador (I2), AuditOutboxForwarder
+            // (T065), ProgramadorDeTareas (T050) y el despachador de correo (T47).
+            builder.UseSetting("Integration:Dispatcher:Enabled", "false");
+            builder.UseSetting("Integration:AuditForwarder:Enabled", "false");
+            builder.UseSetting("Integration:ScheduledTasks:Enabled", "false");
+            builder.UseSetting("Integration:EmailDispatcher:Enabled", "false");
+            // Feature 012, I4 (T749): el procesador de documentos electrónicos también queda registrado sin arrancar; las pruebas conducen
+            // sus pasadas a mano.
+            builder.UseSetting("ElectronicInvoicing:Processor:Enabled", "false");
+            // Las credenciales de los canales (contracts/dian.md §11): un directorio temporal por fixture en lugar del Secret montado.
+            // Las e2e de I4 escriben ahí {tenantPublicId}.{canal}.json (T685).
+            builder.UseSetting("ElectronicInvoicing:CredentialsPath", DirectorioDeCredenciales);
+
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+
+                // Feature 012, I2 (T471, T472): el reloj de la suite (desfase cero = el real) y los dobles de la
+                // integración contable, que sólo muerden en la cooperativa que una prueba marca.
+                services.AddSingleton<IngenIA365ERP.API.Services.DateTimeService>();
+                services.RemoveAll<IngenIA365ERP.Application.Common.Interfaces.IDateTimeService>();
+                services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IDateTimeService>(sp =>
+                    new Integration.RelojDeLaSuite(sp.GetRequiredService<IngenIA365ERP.API.Services.DateTimeService>()));
+                services.AddSingleton(Dobles);
+                services.AddScoped<IngenIA365ERP.Application.Accounting.Inventory.ContabilidadParaInventario>();
+                services.RemoveAll<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario>();
+                services.AddScoped<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario, Integration.ContabilidadParaInventarioConDoble>();
+                services.AddScoped<IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+                var destinos = services.Where(d => d.ServiceType == typeof(IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes)
+                    && d.ImplementationType == typeof(IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion.DestinoContabilidad)).ToList();
+                foreach (var d in destinos) services.Remove(d);
+                services.AddScoped<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes, Integration.DestinoContabilidadConDoble>();
+
+                // Feature 012, I4 (T687): un segundo canal, PRUEBA, para ensayar el cambio de canal con vigencia sobre el simulado.
+                services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.Channels.ICanalDeEmisionElectronica>(sp =>
+                    new ElectronicInvoicing.CanalDePruebaE2E(sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Channels.Simulado.CanalSimulado>()));
             });
 
             ConfigurarHost(builder);
@@ -162,6 +214,56 @@ public class CentralIdentityApiFixture : IAsyncLifetime
     }
 
     public HttpClient CreateClient() => Factory.CreateClient();
+
+    /// <summary>Los dobles de la integración contable (T472), inertes salvo en la cooperativa que una prueba marca.</summary>
+    public Integration.DoblesDeIntegracion Dobles { get; } = new();
+
+    /// <summary>El conductor del despachador de mensajes (T471): pasadas a mano, comandos como el proceso y el reloj.</summary>
+    public Integration.ConductorDelDespachador Despachador => new(this);
+
+    /// <summary>
+    /// Una pasada del <see cref="IngenIA365ERP.Audit.Services.AuditOutboxForwarder"/> sobre la cooperativa
+    /// indicada (feature 012, T008, T065): toma su arrendamiento <c>audit.forward</c>, sella lo pendiente de
+    /// <c>COR_AuditOutbox</c> en la cadena, lo lleva a Mongo y ancla. El reenviador está apagado en las
+    /// pruebas (<c>Integration:AuditForwarder:Enabled = false</c>), así que la auditoría de los módulos
+    /// encadenados sólo llega a Mongo cuando una prueba lo pide. Devuelve cuántos eventos llevó.
+    /// </summary>
+    public Task<int> ReenviarAuditoriaAsync(Guid tenantPublicId, CancellationToken ct = default) =>
+        Factory.Services.GetRequiredService<IngenIA365ERP.Audit.Services.AuditOutboxForwarder>()
+            .ReenviarUnaPasadaAsync(tenantPublicId, ct);
+
+    /// <summary>
+    /// Una pasada del <see cref="IngenIA365ERP.API.Integration.ProgramadorDeTareas"/> sobre la cooperativa
+    /// indicada (feature 012, T008, T050): toma su arrendamiento <c>scheduled.tasks</c>, corre las
+    /// <see cref="IngenIA365ERP.Application.Common.Execution.ITareaProgramada"/> a las que les toca y lo suelta.
+    /// El programador está apagado en las pruebas (<c>Integration:ScheduledTasks:Enabled = false</c>), así que
+    /// sólo corre cuando una prueba lo pide.
+    /// </summary>
+    public Task CorrerTareasProgramadasAsync(Guid tenantPublicId, CancellationToken ct = default) =>
+        Factory.Services.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>()
+            .CorrerUnaPasadaAsync(tenantPublicId, ct);
+
+    /// <summary>
+    /// Corre <b>una</b> tarea programada por su nombre en la cooperativa, ahora y sin mirar su horario (<c>DebeCorrer</c>) ni si
+    /// ya corrió hoy: el «disparo manual» de las e2e del comercio (feature 012, T443). <see cref="CorrerTareasProgramadasAsync"/>
+    /// respeta el horario de cada tarea (la revisión de eventos RADIAN corre desde las 6:00 de Colombia), así que una prueba
+    /// que corre de madrugada no la vería correr.
+    /// </summary>
+    public async Task CorrerTareaAsync(Guid tenantPublicId, string nombreDeLaTarea, CancellationToken ct = default)
+    {
+        var tarea = Factory.Services.GetServices<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>()
+            .Single(t => t.Nombre == nombreDeLaTarea);
+        IngenIA365ERP.Application.Common.Interfaces.TenantDirectoryEntry cooperativa;
+        using (var alcance = Factory.Services.CreateScope())
+        {
+            cooperativa = (await alcance.ServiceProvider.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.ITenantDirectory>()
+                .ListActiveAsync(ct)).Single(c => c.PublicId == tenantPublicId);
+        }
+        var origen = IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea(tarea.Nombre);
+        await Factory.Services.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>().EjecutarAsync(
+            cooperativa, IngenIA365ERP.Application.Common.Execution.Actor.ProcesoDeIntegracion(origen), origen,
+            (servicios, c) => tarea.EjecutarAsync(servicios, c), ct);
+    }
 
     /// <summary>Secreto TOTP del maestro, una vez inscrito. Lo usa <see cref="IniciarSesionMaestroAsync"/>.</summary>
     private string? _secretoMaestro;
@@ -322,6 +424,8 @@ public class CentralIdentityApiFixture : IAsyncLifetime
         Factory?.Dispose();
         try { if (_carpetaDeLlaves is not null && Directory.Exists(_carpetaDeLlaves)) Directory.Delete(_carpetaDeLlaves, recursive: true); }
         catch (IOException) { /* el SO puede tener el archivo abierto un instante más: queda en la carpeta temporal */ }
+        try { if (Directory.Exists(DirectorioDeCredenciales)) Directory.Delete(DirectorioDeCredenciales, recursive: true); }
+        catch (IOException) { /* queda en la carpeta temporal */ }
         await Task.WhenAll(
             ((DotNet.Testcontainers.Containers.IContainer)_db).DisposeAsync().AsTask(),
             _mongo.DisposeAsync().AsTask(),

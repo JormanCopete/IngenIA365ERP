@@ -70,16 +70,20 @@ válida, rubro existente, sin duplicados.
 Índices: `(ParentId)`, `(IsMovement, IsActive)`, `(BankId)` filtrado `[BankId] IS NOT NULL`.
 **Bloqueo (FR-012)**: si `FirstMovementAt` cae en el ejercicio en curso, sólo `Name` e `IsActive`
 cambian. **Eliminación (FR-013)**: sólo si `FirstMovementAt IS NULL` y ninguna parametrización
-(`PAY_PayrollConceptDefinitionAccounts`, `LND_CreditLineParameters`, `INV_ProductAccounts`,
-`INV_VatAccounts`, `CDT_Parameters`, `TRS_Concepts`, `COR_Banks`, `ACC_FixedAssets`,
-`ACC_BudgetLines`, `ACC_ExogenousConceptAccounts`) la referencia.
+(`PAY_PayrollConceptDefinitionAccounts`, `LND_CreditLineParameters`, `ACC_InventoryPostingRules`,
+`CDT_Parameters`, `TRS_Concepts`, `COR_Banks`, `ACC_FixedAssets`,
+`ACC_BudgetLines`, `ACC_ExogenousConceptAccounts`) la referencia. *Enmienda 012 (D-01)*: la lista
+decía `INV_ProductAccounts` e `INV_VatAccounts`, que se retiran con `RetiroDelInventarioHeredado`;
+entra la matriz de Inventario (`AccountReferenceFinder`).
 **Reemplazo del plan (US1 esc. 2, FR-004)**: sólo con `Locked = false`; marca `IsDeleted` todas las
 cuentas `Origin = Catalog`, copia el catálogo nuevo y actualiza `AccountingSetup.CatalogId`; queda
 auditado con el catálogo anterior y el nuevo. Por eso el único de `Code` es filtrado.
 
 ### `ACC_AccountTaxRates` — `AccountTaxRate`
 
-`AccountId`, `ValidFrom` (date), `Rate` (decimal 9,4). Único `(AccountId, ValidFrom)`.
+`AccountId`, `ValidFrom` (date), `Rate` (decimal 9,6; *enmienda 012*: era 9,4 y se amplía sin
+pérdida en la migración `IntegracionContableDeInventario`, para las tarifas de Inventario como
+fracción, T19). Único `(AccountId, ValidFrom)`.
 
 ### `ACC_VoucherTypes` — `VoucherType`
 
@@ -87,7 +91,8 @@ auditado con el catálogo anterior y el nuevo. Por eso el único de `Code` es fi
 Assets), `ModuleCode` (nvarchar(3), nullable: NOM, CAR, INV, TES, CDT, ACT), `NextNumber` (bigint,
 1), `IsActive`, `IsSeeded` (bit: no se elimina ni cambia de uso). Semilla (`voucher-types.json`,
 fuente única): `CG` manual; reservados por módulo `NM` Nómina; `DS`, `RC`, `CA`, `PV`, `DN` Cartera;
-`AH` Ahorros; `CD` CDT; `FV`, `EI`, `SI` Inventario; `CH`, `FP`, `CB` Tesorería; `DP` activos; `AP`
+`AH` Ahorros; `CD` CDT; `FV`, `EI`, `SI`, `NV`, `CP`, `TR`, `AC`, `CJ` Inventario (*enmienda 012*: antes
+sólo `FV`, `EI`, `SI`; 23 tipos en total); `CH`, `FP`, `CB` Tesorería; `DP` activos; `AP`
 apertura; `CI` cierre. Un código pertenece a un solo módulo (`ModuleCode`).
 
 ### `ACC_CrossDocumentTypes` — `CrossDocumentType`
@@ -162,6 +167,21 @@ reversa · un `Draft` se descarta (soft-delete: es lo único que se borra, y no 
 
 No existe: los soportes usan `COR_Attachments` con `OwnerEntityType = "AccountingDocument"`.
 
+### Integración con Inventario (enmienda 012, D-01)
+
+Tres tablas nuevas de Contabilidad que nacen con la feature 012 (migración
+`IntegracionContableDeInventario`); su definición completa vive en
+`specs/012-inventario-comercial/data-model.md` §20:
+
+- `ACC_InventoryPostingRules` — `InventoryPostingRule`: la matriz de reglas (operación × rol ×
+  dimensiones → cuenta), con vigencia; es la parametrización contable de Inventario y la referencia
+  que impide eliminar una cuenta.
+- `ACC_InventoryVoucherMappings` — `InventoryVoucherMapping`: el tipo de comprobante por operación y
+  tipo de documento (`FV`, `EI`, `SI`, `NV`, `CP`, `TR`, `AC`, `CJ`).
+- `ACC_InventoryPostings` — `InventoryPosting` (hecho inmutable, `Entities/Accounting/Transactions`):
+  el recibo de cada mensaje de Inventario procesado, único por `MessagePublicId`; es el vínculo
+  documento de Inventario → comprobante que antes iba en `INV_Documents.AccountingDocumentId`.
+
 ## 4. Conciliación bancaria
 
 - `ACC_BankStatementColumnMaps` — `BankStatementColumnMap`: `AccountId` (único), `DateColumn`,
@@ -234,8 +254,11 @@ No existe: los soportes usan `COR_Attachments` con `OwnerEntityType = "Accountin
 | `COR_Branches` | `TenantBranchPublicId` (uniqueidentifier, nullable, único filtrado) | R7 alcance por usuario |
 | `PAY_HealthInsuranceProviders`, `PAY_WorkRiskProviders`, `PAY_PensionProviders`, `PAY_SeveranceProviders`, `PAY_FamilyCompensationFunds`, `COR_Banks` | `PersonId` (FK `COR_People`, nullable) | FR-088 |
 | `TRS_Concepts` | `DebitAccountId`, `CreditAccountId` (FK nullable) | R16 |
-| `LND_CreditLineParameters`, `LND_SavingsParameters`, `INV_ProductAccounts`, `INV_VatAccounts`, `CDT_Parameters`, `COR_Banks` | sin columnas nuevas: los códigos existentes se resuelven a `AccountId` al contabilizar y se validan al guardar (FR-016) | R16 |
-| `INV_Documents` (inventario) | `AccountingDocumentId` (FK nullable) | vínculo para anular (bug de `VoidInventoryDocument`) |
+| `LND_CreditLineParameters`, `LND_SavingsParameters`, `CDT_Parameters`, `COR_Banks` | sin columnas nuevas: los códigos existentes se resuelven a `AccountId` al contabilizar y se validan al guardar (FR-016). *Enmienda 012*: la fila nombraba también `INV_ProductAccounts` e `INV_VatAccounts`, que se retiran; Inventario va por `ACC_InventoryPostingRules` | R16 |
+
+*Enmienda 012 (D-01)*: la fila `INV_Documents` · `AccountingDocumentId` (FK nullable, «vínculo para
+anular») se elimina: el vínculo documento → comprobante vive en `ACC_InventoryPostings`, y lo de
+Inventario no se anula por reversión sino con un comprobante nuevo.
 
 ## 10. Migraciones (par PostgreSQL / SQL Server)
 

@@ -1,0 +1,94 @@
+@page "/inventario/plantillas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Plantillas de parametrización - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T237 (FR-030, FR-095, US1-6; contracts/plantillas.md §0.1, §0.7; contracts/api.md §3.9): las dieciséis
+   plantillas de la puesta en marcha en su orden de carga —cada una sólo cita lo que cargaron las anteriores—, leídas de
+   GET /api/inventory/templates con lo que quien entra puede hacer (canDownload, canImport). Cada una se descarga y se
+   importa con el componente común ImportarPlantilla: revisión por hoja, fila y columna, motivo cuando la revisión lo pide
+   y aplicación todo o nada. Las que todavía no se importan dicen desde qué entrega. *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Plantillas de parametrización</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">
+        Cárguelas en este orden: cada plantilla sólo cita lo que cargaron las anteriores o lo que ya existe en el ERP (sucursales,
+        personas, bancos, plan de cuentas). Revisar no guarda nada; aplicar es todo o nada; la plantilla nunca borra.
+    </p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th class="numero">#</th><th>Plantilla</th><th>Hojas</th><th>Importa desde</th><th>Permisos</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var p in _plantillas)
+                    {
+                        var plantilla = p;
+                        <tr class="@(_elegida?.Key == plantilla.Key ? "resaltada" : "")">
+                            <td class="numero">@plantilla.Number</td>
+                            <td>@plantilla.Name</td>
+                            <td>@string.Join(", ", plantilla.Sheets)</td>
+                            <td>@plantilla.ImportsFrom@(plantilla.Note is null ? "" : $" · {plantilla.Note}")</td>
+                            <td class="texto-tenue">@plantilla.ImportPermission@(plantilla.AdditionalPermissions is null ? "" : $" · {plantilla.AdditionalPermissions}")</td>
+                            <td>
+                                @if (plantilla.CanDownload || plantilla.CanImport)
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => _elegida = plantilla)">@(plantilla.CanImport ? "Descargar o importar" : "Descargar")</SfButton>
+                                }
+                                else
+                                {
+                                    <span class="texto-tenue">sin permiso</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_elegida is { } e)
+    {
+        <div class="info-card">
+            <h4>@e.Number · @e.Name</h4>
+            <ImportarPlantilla @key="e.Key"
+                               RutaBase="@e.BaseRoute"
+                               MostrarDescargas="@e.CanDownload"
+                               PermisoDeDescarga="@e.DownloadPermission"
+                               PermisoDeDescargaConDatos="@(e.BaseRoute.StartsWith("/api/core/", StringComparison.Ordinal) ? null : "Inventory.Catalog.Export")"
+                               PermisoDeImportacion="@e.ImportPermission"
+                               Importable="@e.CanImport"
+                               Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private List<PlantillaDeParametrizacionDto> _plantillas = [];
+    private PlantillaDeParametrizacionDto? _elegida;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarPlantillasAsync();
+        if (!r.IsSuccess)
+        {
+            _plantillas = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la lista de plantillas.");
+            return;
+        }
+        _plantillas = [.. (r.Value ?? []).OrderBy(p => p.Number)];
+    }
+}

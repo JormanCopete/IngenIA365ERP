@@ -1,12 +1,11 @@
 using FluentValidation;
-using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Core.People.Contracts;
 using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Contracts;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Services;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployeeWithPerson;
 
@@ -18,39 +17,25 @@ namespace IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.Register
 /// <c>RegisterEmployeeCommand</c> porque comparten <see cref="PersonFactory"/> y
 /// <see cref="EmployeeRegistrar"/>.
 /// </summary>
-public sealed record RegisterEmployeeWithPersonCommand(PersonInput Person, EmployeeInput Employee)
+/// <remarks>Feature 012 (T46, T175): <paramref name="Authorization"/> es la autorización de datos del titular, opcional.</remarks>
+public sealed record RegisterEmployeeWithPersonCommand(PersonInput Person, EmployeeInput Employee, AutorizacionAlCrear? Authorization = null)
     : IRequest<Result<RegisterEmployeeWithPersonResult>>;
 
 public sealed record RegisterEmployeeWithPersonResult(Guid PersonPublicId, Guid EmployeePublicId);
 
 public sealed class RegisterEmployeeWithPersonCommandHandler(
-    IApplicationDbContext context,
-    PersonFactory personas,
+    AltaConAutorizacion altas,
     EmployeeRegistrar empleados)
     : IRequestHandler<RegisterEmployeeWithPersonCommand, Result<RegisterEmployeeWithPersonResult>>
 {
     public async Task<Result<RegisterEmployeeWithPersonResult>> Handle(
         RegisterEmployeeWithPersonCommand request, CancellationToken ct)
     {
-        var persona = await personas.PrepareAsync(request.Person, ct);
-        if (persona.IsFailure)
-            return Result.Failure<RegisterEmployeeWithPersonResult>(persona.Error);
-
-        var empleado = await empleados.PrepareAsync(persona.Value, request.Employee, ct);
-        if (empleado.IsFailure)
-            return Result.Failure<RegisterEmployeeWithPersonResult>(empleado.Error);
-
-        try
-        {
-            await context.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException ex) when (PersonFactory.EsColisionDeDocumento(ex))
-        {
-            var colision = await personas.TraducirColisionAsync(ex, request.Person.TaxId, ct);
-            return Result.Failure<RegisterEmployeeWithPersonResult>(colision!);
-        }
-
-        return Result.Success(new RegisterEmployeeWithPersonResult(persona.Value.PublicId, empleado.Value.PublicId));
+        var alta = await altas.GuardarAsync(request.Person, request.Authorization,
+            persona => empleados.PrepareAsync(persona, request.Employee, ct), ct);
+        return alta.IsSuccess
+            ? Result.Success(new RegisterEmployeeWithPersonResult(alta.Value.Persona.PublicId, alta.Value.Rol.PublicId))
+            : Result.Failure<RegisterEmployeeWithPersonResult>(alta.Error);
     }
 }
 
@@ -62,5 +47,6 @@ public sealed class RegisterEmployeeWithPersonCommandValidator : AbstractValidat
             .SetValidator(new PersonInputValidator());
         RuleFor(x => x.Employee).NotNull().WithMessage("Faltan los datos laborales.")
             .SetValidator(new EmployeeInputValidator());
+        RuleFor(x => x.Authorization!).SetValidator(new AutorizacionAlCrearValidator()).When(x => x.Authorization is not null);
     }
 }

@@ -1,0 +1,48 @@
+{
+  // Feature 012, T097, caso 07 (T24): ReteICA por municipio y actividad del proveedor, con caída a la fila «*».
+  // Operación en Cali (76001), base 3.000.000.
+  // A) Proveedor CIIU 4711: la tarifa exacta 3,3 por mil → 3.000.000 × 0,0033 = 9.900.
+  // B) Proveedor CIIU 4690: no hay fila de su actividad → la general «*» 6,6 por mil → 19.800.
+  // La tarifa de Medellín (05001) nunca es candidata.
+  "nombre": "ReteICA con la tarifa de la actividad y con la general del municipio",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 4, "codigo": "RETEICA", "nombre": "Retención de ICA", "clase": "ReteIca", "forma": "PercentOfBase", "codigoDian": "07" }
+  ],
+  "tarifas": [
+    { "id": 41, "impuesto": 4, "codigo": "RICA4711", "tarifa": 0.0033, "municipio": "76001", "actividad": "4711", "aplicaA": "Both", "desde": "2026-01-01" },
+    { "id": 42, "impuesto": 4, "codigo": "RICAGEN", "tarifa": 0.0066, "municipio": "76001", "actividad": "*", "aplicaA": "Both", "desde": "2026-01-01" },
+    { "id": 43, "impuesto": 4, "codigo": "RICAMED", "tarifa": 0.01, "municipio": "05001", "actividad": "*", "aplicaA": "Both", "desde": "2026-01-01" }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Proveedor con la actividad que tiene tarifa propia",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "ciiu": "4711" },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "municipio": "76001",
+      "lineas": [ { "numero": 1, "base": 3000000, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": null, "tarifa": "RICA4711", "tratamiento": "WithholdingApplied", "base": 3000000, "valor": 9900, "explicacion": [ "actividad 4711" ] }
+        ]
+      }
+    },
+    {
+      "nombre": "Proveedor con otra actividad: cae a la fila *",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "ciiu": "4690" },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "municipio": "76001",
+      "lineas": [ { "numero": 1, "base": 3000000, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": null, "tarifa": "RICAGEN", "tratamiento": "WithholdingApplied", "base": 3000000, "valor": 19800, "explicacion": [ "fila *" ] }
+        ]
+      }
+    }
+  ]
+}

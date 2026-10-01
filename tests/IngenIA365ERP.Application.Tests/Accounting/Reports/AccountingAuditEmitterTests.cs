@@ -67,32 +67,54 @@ public class AccountingAuditEmitterTests
     }
 
     [Fact]
-    public async Task Sin_cooperativa_activa_el_evento_va_a_la_base_global_y_no_a_una_llamada_por_el_id_interno()
+    public async Task Sin_cooperativa_activa_lanza_y_no_escribe_en_la_base_global()
     {
+        // Feature 012, T495 (T5, FR-083): hasta I2 un evento sin cooperativa caía vacío a la base global. Con el
+        // procesador de mensajes corriendo en segundo plano eso escondería un defecto de ámbito: ahora lanza.
         var (escritor, usuario, cooperativa, reloj) = Escenario();
         cooperativa.TenantId.Returns((string?)null);
-        AuditEventDocument? escrito = null;
-        escritor.AppendAsync(Arg.Do<AuditEventDocument>(d => escrito = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance, cooperativa)
+        var acto = () => new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance, cooperativa)
             .EmitAsync("Accounting.Setup.Initialized", "AccountingSetup", null, null, null, CancellationToken.None);
 
-        escrito!.TenantId.Should().BeEmpty("vacío es lo que el escritor traduce a la base global; «3» sería una base fantasma");
+        await acto.Should().ThrowAsync<InvalidOperationException>().WithMessage("*cooperativa*");
+        await escritor.DidNotReceiveWithAnyArgs().AppendAsync(default!, default);
     }
 
     [Fact]
-    public async Task Sin_servicio_de_tenant_el_evento_tampoco_va_al_id_interno()
+    public async Task Sin_servicio_de_tenant_tambien_lanza_y_nunca_va_al_id_interno()
     {
         // La revisión de la feature 010 (2026-09-21) dejó el servicio opcional para las pruebas que arman el
-        // emisor a mano, y de paso caía al Id interno del usuario: el mismo defecto por la otra puerta.
+        // emisor a mano, y de paso caía al Id interno del usuario; desde I2 de la 012 tampoco cae a la global.
         var (escritor, usuario, _, reloj) = Escenario();
-        AuditEventDocument? escrito = null;
-        escritor.AppendAsync(Arg.Do<AuditEventDocument>(d => escrito = d), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance)
+        var acto = () => new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance)
             .EmitAsync("Accounting.Period.Changed", "AccountingPeriod", null, null, null, CancellationToken.None);
 
-        escrito!.TenantId.Should().BeEmpty();
+        await acto.Should().ThrowAsync<InvalidOperationException>();
+        await escritor.DidNotReceiveWithAnyArgs().AppendAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task Los_eventos_de_inventario_van_a_la_base_de_la_cooperativa()
+    {
+        var (escritor, usuario, cooperativa, reloj) = Escenario();
+        var escritos = new List<AuditEventDocument>();
+        escritor.AppendAsync(Arg.Do<AuditEventDocument>(escritos.Add), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        var emisor = new AccountingAuditEmitter(escritor, usuario, reloj, NullLogger<AccountingAuditEmitter>.Instance, cooperativa);
+        var comprobante = Guid.NewGuid();
+        var lote = Guid.NewGuid();
+
+        await emisor.EmitirContabilizacionDeInventarioAsync(comprobante, new { messages = 2, voucher = "EI-7" }, CancellationToken.None);
+        await emisor.EmitirRechazoDeInventarioAsync(Guid.NewGuid(), new { code = "Accounting.Period.Closed" }, CancellationToken.None);
+        await emisor.EmitirLoteDeInventarioProcesadoAsync(lote, new { number = 12, status = "Completed" }, CancellationToken.None);
+
+        escritos.Select(e => e.Action).Should().Equal("Accounting.Inventory.Posted", "Accounting.Inventory.Rejected", "Accounting.Inventory.BatchProcessed");
+        escritos.Should().OnlyContain(e => e.TenantId == CooperativaDePrueba.PublicIdN && e.Module == "Accounting");
+        escritos[0].EntityPublicId.Should().Be(comprobante.ToString());
+        escritos[0].NewValuesJson.Should().Contain("\"voucher\":\"EI-7\"");
+        escritos[2].EntityType.Should().Be("IntegrationBatch");
+        escritos[2].EntityPublicId.Should().Be(lote.ToString());
     }
 
     [Fact]

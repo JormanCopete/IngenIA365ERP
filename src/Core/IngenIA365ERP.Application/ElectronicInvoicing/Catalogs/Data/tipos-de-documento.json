@@ -1,0 +1,35 @@
+{
+  "catalogo": "tiposDeDocumento",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tablas de tipo de documento y de tipo de operación; anexo técnico del documento equivalente electrónico v1.0; anexo del documento soporte (Res. 167/2021)",
+      "porCotejar": true,
+      "notas": "Por cotejar con el contador y el proveedor elegido (contracts/dian.md §1 y §4.3): los códigos 20 y 94 del documento equivalente POS y su nota de ajuste, el 95 de la nota de ajuste del documento soporte y los tipos de operación del DEE y del DS. Los prefijos EV030 y EV032 de la numeración propia de los eventos RADIAN (feature 012, I5, T802) son una propuesta: cotejar con el proveedor tecnológico si él numera el ApplicationResponse.",
+      "codigos": [
+        { "codigo": "01", "nombre": "Factura electrónica de venta" },
+        { "codigo": "02", "nombre": "Factura electrónica de venta de exportación" },
+        { "codigo": "03", "nombre": "Instrumento electrónico de transmisión, tipo 03 (contingencia del facturador)" },
+        { "codigo": "04", "nombre": "Factura electrónica de venta, tipo 04 (contingencia de la DIAN)" },
+        { "codigo": "05", "nombre": "Documento soporte en adquisiciones a no obligados a facturar" },
+        { "codigo": "20", "nombre": "Documento equivalente electrónico del tiquete de máquina registradora con sistema POS", "porCotejar": true },
+        { "codigo": "91", "nombre": "Nota crédito" },
+        { "codigo": "92", "nombre": "Nota débito" },
+        { "codigo": "94", "nombre": "Nota de ajuste del documento equivalente electrónico", "porCotejar": true },
+        { "codigo": "95", "nombre": "Nota de ajuste al documento soporte", "porCotejar": true },
+        { "codigo": "96", "nombre": "Eventos (ApplicationResponse)" }
+      ],
+      "porTipo": [
+        { "tipo": "Invoice", "codigo": "01", "codigoContingenciaDian": "04", "codigoContingenciaFacturador": "03", "tipoDeOperacion": "10", "codigoUnico": "Cufe" },
+        { "tipo": "CreditNote", "codigo": "91", "tipoDeOperacion": "20", "codigoUnico": "Cude" },
+        { "tipo": "DebitNote", "codigo": "92", "tipoDeOperacion": "30", "codigoUnico": "Cude" },
+        { "tipo": "PosEquivalent", "codigo": "20", "tipoDeOperacion": "10", "codigoUnico": "Cude", "porCotejar": true },
+        { "tipo": "PosAdjustmentNote", "codigo": "94", "tipoDeOperacion": "20", "codigoUnico": "Cude", "porCotejar": true },
+        { "tipo": "SupportDocument", "codigo": "05", "tipoDeOperacion": "10", "codigoUnico": "Cuds" },
+        { "tipo": "SupportDocumentAdjustmentNote", "codigo": "95", "tipoDeOperacion": "10", "codigoUnico": "Cuds", "porCotejar": true },
+        { "tipo": "RadianEvent030", "codigo": "96", "tipoDeOperacion": "", "codigoUnico": "Cude", "codigoDeEvento": "030", "prefijoDeEvento": "EV030", "porCotejar": true },
+        { "tipo": "RadianEvent032", "codigo": "96", "tipoDeOperacion": "", "codigoUnico": "Cude", "codigoDeEvento": "032", "prefijoDeEvento": "EV032", "porCotejar": true }
+      ]
+    }
+  ]
+}

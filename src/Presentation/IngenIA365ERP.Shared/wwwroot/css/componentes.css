@@ -594,6 +594,18 @@ input[type="checkbox"], input[type="radio"] {
 .aviso-alerta  { background: var(--alerta-fondo);  color: var(--alerta-texto);  border-color: var(--alerta); }
 .aviso-info    { background: var(--info-fondo);    color: var(--info-texto);    border-color: var(--info); }
 
+/* Feature 012 (T175): el aviso de privacidad vigente que se le muestra al titular al crear una persona. */
+.texto-politica {
+    max-height: 12rem;
+    overflow-y: auto;
+    padding: var(--pad-md);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    background: var(--superficie-0);
+    font-size: var(--texto-sm);
+    white-space: pre-wrap;
+}
+
 .reload {
     background: none;
     border: 0;
@@ -1092,3 +1104,63 @@ input[type="checkbox"], input[type="radio"] {
 .campos-formato th, .campos-formato td { padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde-suave, var(--borde)); vertical-align: middle; }
 .campos-formato input, .campos-formato select { width: 100%; min-width: 4rem; }
 .campos-formato .estrecha { width: 4.5rem; }
+
+/* --- Punto de venta (feature 012, I3, T635–T641) ----------------------------- */
+/* PosLayout: pantalla completa sin barra lateral. Arriba la barra del punto; en el medio las líneas y, a la derecha, el total y el
+   cobro; abajo los atajos. Todo sobre los tokens: sin colores literales. */
+.pos-layout { display: flex; flex-direction: column; min-height: 100vh; background: var(--superficie-0); color: var(--texto-primario); }
+.pos-barra { display: flex; align-items: center; gap: var(--gap-md); padding: var(--pad-sm) var(--pad-md); background: var(--superficie-1); border-bottom: 1px solid var(--borde); }
+.pos-barra .pos-marca { font-weight: var(--peso-fuerte); }
+.pos-barra .pos-contexto { flex: 1 1 auto; color: var(--texto-secundario); font-size: var(--texto-sm); }
+.pos-contenido { flex: 1 1 auto; display: flex; flex-direction: column; padding: var(--pad-md); gap: var(--gap-md); }
+.pos-venta { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--gap-md); align-items: start; flex: 1 1 auto; }
+@media (max-width: 900px) { .pos-venta { grid-template-columns: minmax(0, 1fr); } }
+.pos-lectura input { width: 100%; font-size: var(--texto-xl); padding: var(--pad-sm) var(--pad-md); font-family: var(--fuente-mono); }
+.pos-lectura .pos-multiplicador { font-family: var(--fuente-mono); color: var(--acento-texto); font-weight: var(--peso-fuerte); }
+.pos-lineas { width: 100%; border-collapse: collapse; font-size: var(--texto-md); }
+.pos-lineas th, .pos-lineas td { padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde); text-align: left; }
+.pos-lineas td.numero, .pos-lineas th.numero { text-align: right; font-variant-numeric: tabular-nums; }
+.pos-lineas tr.pos-linea-elegida td { background: var(--acento-suave); }
+.pos-lineas tr.pos-linea-ultima td { font-weight: var(--peso-medio); }
+.pos-total { padding: var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
+.pos-total .pos-a-pagar { font-size: var(--texto-2xl); font-weight: var(--peso-fuerte); font-variant-numeric: tabular-nums; text-align: right; }
+.pos-total .pos-renglon { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.pos-cobro .pos-pago { border: 1px solid var(--borde); border-radius: var(--radio-sm); padding: var(--pad-sm); margin-bottom: var(--gap-sm); background: var(--superficie-1); }
+.pos-cobro .pos-falta { color: var(--peligro-texto); font-weight: var(--peso-fuerte); }
+.pos-cobro .pos-vueltas { color: var(--exito-texto); font-weight: var(--peso-fuerte); font-size: var(--texto-lg); }
+.pos-atajos { display: flex; flex-wrap: wrap; gap: var(--gap-xs) var(--gap-md); padding: var(--pad-xs) var(--pad-md); border-top: 1px solid var(--borde); background: var(--superficie-1); font-size: var(--texto-sm); color: var(--texto-secundario); }
+.pos-atajos kbd { font-family: var(--fuente-mono); padding: 0 var(--pad-xs); border: 1px solid var(--borde-fuerte); border-radius: var(--radio-sm); background: var(--superficie-2); color: var(--texto-primario); }
+.pos-medios { display: flex; flex-wrap: wrap; gap: var(--gap-xs); }
+/* La tirilla en pantalla: el ancho del papel. Al imprimir desde la pantalla sólo sale la tirilla. */
+.tirilla { font-family: var(--fuente-mono); font-size: var(--texto-sm); background: var(--superficie-1); color: var(--texto-primario); border: 1px dashed var(--borde-fuerte); padding: var(--pad-sm); margin: 0 auto; }
+.tirilla.tirilla-58 { width: 58mm; }
+.tirilla.tirilla-80 { width: 80mm; }
+.tirilla .centro { text-align: center; }
+.tirilla .derecha { text-align: right; }
+.tirilla .fuerte { font-weight: var(--peso-fuerte); }
+.tirilla table { width: 100%; border-collapse: collapse; }
+.tirilla hr { border: 0; border-top: 1px dashed var(--borde-fuerte); }
+@media print {
+    body * { visibility: hidden; }
+    .tirilla, .tirilla * { visibility: visible; }
+    .tirilla { position: absolute; left: 0; top: 0; border: 0; }
+}
+/* Conteo por denominaciones y lotes de datáfono en el cierre de la sesión. */
+.conteo-denominaciones input, .lotes-datafono input { width: 7rem; text-align: right; }
+
+/* Tablero de inventario (feature 012, I6, T969): cada ficha es un botón que lleva a su detalle con un clic; la severidad
+   (Info, Warning, Critical de las alertas) sólo cambia el borde y el color de la cifra, con los tokens de aviso. */
+.ficha-tablero {
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    width: 100%;
+}
+.ficha-tablero:hover,
+.ficha-tablero:focus-visible { border-color: var(--acento); outline: none; }
+.ficha-tablero.severidad-info     { border-color: var(--info); }
+.ficha-tablero.severidad-warning  { border-color: var(--alerta); }
+.ficha-tablero.severidad-warning .kpi-value { color: var(--alerta-texto); }
+.ficha-tablero.severidad-critical { border-color: var(--peligro); background: var(--peligro-fondo); }
+.ficha-tablero.severidad-critical .kpi-value { color: var(--peligro-texto); }
+.ficha-tablero .kpi-anterior { font-size: var(--texto-xs); color: var(--texto-tenue); }

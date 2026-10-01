@@ -1,0 +1,240 @@
+@page "/ventas/vendedores"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject PersonasClient Personas
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Vendedores - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T436 (FR-031, FR-092; contracts/api.md §31, contracts/plantillas.md §9): el rol vendedor de una persona del
+   maestro. Aquí no se escriben personas: se buscan con PersonSearchPicker y, si no existen, se crean en el diálogo compartido
+   (PersonaDialog). Dar el rol a quien lo tuvo lo restaura con el mismo identificador (los documentos que lo citan siguen
+   apuntando a él); retirarlo pide motivo. La plantilla 9 se revisa antes de aplicar. Reemplaza a /inventario/vendedores. *@
+<PermissionGate Required="Inventory.Salespeople.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Vendedores</h3>
+        <div class="toolbar">
+            <input type="search" class="e-input" placeholder="Nombre o documento…" @bind="_buscar" @bind:event="oninput" />
+            <label><input type="checkbox" checked="@_conRetirados" @onchange="@(async e => { _conRetirados = e.Value is true; await CargarAsync(); })" /> Incluir retirados</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+            <PermissionGate Required="Inventory.Salespeople.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAlta">Nuevo vendedor</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Plantilla</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_mostrarPlantilla)
+    {
+        <div class="info-card">
+            <h4>Plantilla 9 · Vendedores</h4>
+            <ImportarPlantilla RutaBase="@InventarioClient.RutaDeVendedores"
+                               PermisoDeDescarga="Inventory.Salespeople.View"
+                               PermisoDeDescargaConDatos="Inventory.Reports.ExportPersonalData"
+                               PermisoDeImportacion="Inventory.Salespeople.Manage"
+                               Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Documento</th><th>Nombre</th><th>Tipo</th><th>Comisión</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var v in _vendedores)
+                    {
+                        var vendedor = v;
+                        <tr>
+                            <td>@vendedor.Person.IdNumber</td>
+                            <td>@vendedor.Person.Name</td>
+                            <td>@vendedor.SalespersonType</td>
+                            <td>@(vendedor.AppliesCommission ? "Sí" : "No")</td>
+                            <td>@(vendedor.IsActive ? "Activo" : "Retirado")</td>
+                            <td>
+                                <PermissionGate Required="Inventory.Salespeople.Manage">
+                                    @if (vendedor.IsActive)
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEdicion(vendedor))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirRetiro(vendedor))">Retirar…</SfButton>
+                                    }
+                                    else
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => RestaurarAsync(vendedor))">Restaurar</SfButton>
+                                    }
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <p class="texto-tenue">@_total vendedor(es).</p>
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@(_editado is null ? "Nuevo vendedor" : "Editar vendedor")" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_editado is null)
+                {
+                    <label class="campo campo-ancho">Persona *
+                        <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" Compacto="true"
+                                            Placeholder="Documento o nombre de la persona" PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@AbrirAltaDePersona"
+                                            TextoSinResultados="@(_puedeCrearPersona ? "No existe: créela en el maestro." : "Pida que la registren en Maestros › Personas.")" />
+                    </label>
+                }
+                else
+                {
+                    <p class="texto-apoyo">@_editado.Person.Name · @_editado.Person.IdNumber</p>
+                }
+                <label class="campo">Tipo de vendedor <input type="number" min="0" class="e-input" @bind="_tipo" /></label>
+                <SfCheckBox @bind-Checked="_comision" TChecked="bool" Label="Aplica comisión" />
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || (_editado is null && _persona is null))" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDialogo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRetiro" Header="Retirar vendedor" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Retirando…">
+                <p class="texto-apoyo">@(_aRetirar?.Person.Name): deja de aparecer para vender. Volver a darle el rol lo restaura.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@RetirarAsync">Retirar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRetiro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<PersonaDialog @bind-Visible="_mostrarAltaDePersona" DocumentoInicial="@_documentoInicial" OnGuardado="@PersonaCreadaAsync" />
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<VendedorDto> _vendedores = [];
+    private long _total;
+    private string _buscar = string.Empty;
+    private bool _conRetirados, _mostrarDialogo, _mostrarRetiro, _mostrarPlantilla, _mostrarAltaDePersona, _puedeCrearPersona, _comision;
+    private VendedorDto? _editado, _aRetirar;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private int? _tipo;
+    private string? _motivo, _error, _documentoInicial;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.VendedoresAsync(string.IsNullOrWhiteSpace(_buscar) ? null : _buscar.Trim(), _conRetirados, 1, 200);
+        if (!r.IsSuccess) { _vendedores = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la lista de vendedores."); return; }
+        _vendedores = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private void AbrirAlta()
+    {
+        _editado = null;
+        _persona = null;
+        _tipo = null;
+        _comision = false;
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarDialogo = true;
+    }
+
+    private void AbrirEdicion(VendedorDto v)
+    {
+        _editado = v;
+        _tipo = v.SalespersonType;
+        _comision = v.AppliesCommission;
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarDialogo = true;
+    }
+
+    private void AbrirRetiro(VendedorDto v)
+    {
+        _aRetirar = v;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarRetiro = true;
+    }
+
+    private void AbrirAltaDePersona(string termino)
+    {
+        _documentoInicial = termino.All(char.IsDigit) ? termino : null;
+        _mostrarAltaDePersona = true;
+    }
+
+    /// <summary>La persona recién creada en el maestro queda elegida para darle el rol.</summary>
+    private async Task PersonaCreadaAsync(Guid publicId)
+    {
+        _mostrarAltaDePersona = false;
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } p)
+            _persona = new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible };
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        if (_editado is { } v)
+        {
+            var r = await Inventario.ActualizarVendedorAsync(v.SalespersonPublicId, new ActualizarVendedorRequest(_tipo, _comision, null), _clave);
+            if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo guardar."; return; }
+            await Notification.SuccessAsync("Vendedor actualizado.");
+        }
+        else if (_persona is { } p)
+        {
+            var r = await Inventario.CrearVendedorAsync(new CrearVendedorRequest(p.PublicId, _tipo, _comision, null), _clave);
+            if (!r.IsSuccess)
+            {
+                _error = r.ErrorCode == "Inventory.Salesperson.AlreadyActive" ? $"{p.FullName} ya es vendedor." : r.ErrorMessage ?? "No se pudo dar el rol.";
+                return;
+            }
+            await Notification.SuccessAsync(r.Value!.Restored ? $"{p.FullName} vuelve a ser vendedor (se restauró su ficha)." : $"{p.FullName} ahora es vendedor.");
+        }
+        _mostrarDialogo = false;
+        await CargarAsync();
+    }
+
+    private async Task RestaurarAsync(VendedorDto v)
+    {
+        using var carga = _guardado.Iniciar();
+        var r = await Inventario.CrearVendedorAsync(new CrearVendedorRequest(v.Person.PersonPublicId, null, null, null), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo restaurar."); return; }
+        await Notification.SuccessAsync($"{v.Person.Name} vuelve a ser vendedor.");
+        await CargarAsync();
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_aRetirar is not { } v || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        var r = await Inventario.RetirarVendedorAsync(v.SalespersonPublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo retirar."; return; }
+        _mostrarRetiro = false;
+        await Notification.SuccessAsync($"{v.Person.Name} retirado como vendedor.");
+        await CargarAsync();
+    }
+}

@@ -1,0 +1,47 @@
+{
+  // US3-2: el traslado viaja al costo de origen; en tránsito sigue en el valorizado y el valor total no cambia.
+  "nombre": "Traslado en ámbito cooperativa",
+  "descripcion": "20 por 23.000 en PRINCIPAL, promedio 1.150. Despacho de 6 a SUCURSAL: sale de PRINCIPAL a 6 × 1.150 = 6.900 y entra a TRANSITO al costo de esa línea, 6.900. Al recibir, sale de TRANSITO a 1.150 (costo de la línea de despacho) y entra a SUCURSAL a 1.150. Como el ámbito es la cooperativa, cada par se cancela: el estado sigue en 20 por 23.000. Valor por bodega = cantidad × promedio: PRINCIPAL 14 × 1.150 = 16.100, SUCURSAL 6 × 1.150 = 6.900.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "T1", "documento": "TR-1", "fecha": "2026-09-07", "clase": "TransferDispatch", "bodega": "PRINCIPAL", "cantidad": -6,
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -6, "costoUnitario": 1150, "costoTotal": -6900 } ],
+        "estado": { "cantidad": 14, "valor": 16100, "promedio": 1150 }
+      }
+    },
+    {
+      "id": "T1E", "documento": "TR-1", "fecha": "2026-09-07", "clase": "TransferDispatch", "bodega": "TRANSITO", "cantidad": 6,
+      "valoracion": "AlCostoDeOrigen", "origen": "T1",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 6, "costoUnitario": 1150, "costoTotal": 6900 } ],
+        "estado": { "cantidad": 20, "valor": 23000, "promedio": 1150, "ultimoCosto": 1150 }
+      }
+    },
+    {
+      "id": "R1", "documento": "RT-1", "fecha": "2026-09-08", "clase": "TransferReceipt", "bodega": "TRANSITO", "cantidad": -6,
+      "valoracion": "AlCostoDeOrigen", "origen": "T1",
+      "esperado": {
+        "lineas": [ { "kind": "Exit", "cantidad": -6, "costoUnitario": 1150, "costoTotal": -6900 } ],
+        "estado": { "cantidad": 14, "valor": 16100, "promedio": 1150 }
+      }
+    },
+    {
+      "id": "R1E", "documento": "RT-1", "fecha": "2026-09-08", "clase": "TransferReceipt", "bodega": "SUCURSAL", "cantidad": 6,
+      "valoracion": "AlCostoDeOrigen", "origen": "T1",
+      "esperado": {
+        "lineas": [ { "kind": "Entry", "cantidad": 6, "costoUnitario": 1150, "costoTotal": 6900 } ],
+        "estado": { "cantidad": 20, "valor": 23000, "promedio": 1150 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 20, "valor": 23000, "promedio": 1150 } ],
+  "existencias": [
+    { "bodega": "PRINCIPAL", "cantidad": 14 },
+    { "bodega": "TRANSITO", "cantidad": 0 },
+    { "bodega": "SUCURSAL", "cantidad": 6 }
+  ]
+}

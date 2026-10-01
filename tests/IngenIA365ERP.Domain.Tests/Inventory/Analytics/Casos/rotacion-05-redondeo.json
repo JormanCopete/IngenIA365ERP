@@ -1,0 +1,5 @@
+{
+  "nombre": "Redondeo a dos decimales: 100.000 ÷ 30.000 = 3,33; 365 ÷ 3,3333… = 109,50 días (con la rotación exacta)",
+  "costoDeVenta": 100000, "saldos": [30000], "diasDelPeriodo": 365,
+  "esperado": { "inventarioPromedio": 30000, "rotacion": 3.33, "diasDeInventario": 109.5, "sinDato": false }
+}

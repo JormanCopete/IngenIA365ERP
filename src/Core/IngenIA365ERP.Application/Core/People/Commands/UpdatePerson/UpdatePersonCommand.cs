@@ -84,6 +84,8 @@ public class UpdatePersonCommandHandler(
         person.IsCustomer = request.IsCustomer;
         person.IsSupplier = request.IsSupplier;
         person.ReceivesInvoice = request.ReceivesInvoice;
+        // Perfil tributario (feature 012, T173): sólo lo que viene; un PUT sin él no lo borra.
+        PersonFactory.AplicarPerfilTributario(request, person);
         if (!string.IsNullOrWhiteSpace(request.Status))
             person.Status = request.Status;
         person.UpdatedAt = dateTime.UtcNow;

@@ -315,7 +315,18 @@ public sealed class ReverseDocumentCommandHandler(IApplicationDbContext db, IDat
         if (original.EsDeModulo)
         {
             var error = AccountingErrors.DocumentModuleOwned(original.OriginModule);
-            return Result.Failure<ReversadoDto>(new ErrorConDatos(error.Code, error.Message,
+            var mensaje = error.Message;
+            if (original.OriginModule == ModuloContable.Inventario)
+            {
+                // Feature 012 (T490, contracts/contabilidad.md §6): lo de Inventario se corrige en Inventario y llega como
+                // comprobante nuevo; un resumido dice cuántos documentos reúne (los recibos de ACC_InventoryPostings).
+                int? reune = original.SourceType == OrigenesDeInventario.LoteResumido
+                    ? await db.InventoryPostings.AsNoTracking().Where(p => p.AccountingDocumentId == original.Id && !p.IsDeleted)
+                        .Select(p => p.SourcePublicId).Distinct().CountAsync(ct)
+                    : null;
+                mensaje = AccountingErrors.MensajeDeComprobanteDeInventario(reune);
+            }
+            return Result.Failure<ReversadoDto>(new ErrorConDatos(error.Code, mensaje,
                 new { origin = new { module = original.OriginModule, moduleName = ModuloContable.Nombre(original.OriginModule), sourceType = original.SourceType, sourcePublicId = original.SourcePublicId } }));
         }
 

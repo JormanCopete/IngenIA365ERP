@@ -1,0 +1,217 @@
+@page "/inventario/activacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Activación de bodegas - IngenIA365ERP</PageTitle>
+
+@* Feature 012, US7 (T538; FR-090, US4-2, US4-3; contracts/api.md §13.3, §26.6): la activación bodega por bodega con cuadre contable.
+   La vista previa la calcula el servidor por conjunto de cuentas (componentes conexos grupo ↔ cuenta de los roles Inventario y
+   Tránsito): el saldo contable al corte que responde Contabilidad, el valorizado de la bodega que se activa, el de las activas que
+   comparten cuentas y, APARTE, el de las bodegas todavía fuera del módulo con sus cifras al corte (suman al conjunto; la diferencia no se les
+   atribuye), la diferencia y los mensajes que la explican; y los bloqueos (saldo inicial sin confirmar, cifras de referencia faltantes,
+   reglas faltantes…). Con diferencia, activar exige aceptarla con motivo y sólo se ofrece si PermisosDelUsuario trae
+   Inventory.Warehouses.AcceptActivationDifference; el servidor lo vuelve a exigir. La orden lleva su Idempotency-Key. *@
+<PermissionGate Required="Inventory.Warehouses.Activate" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Activación de bodegas</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/inventario/saldo-inicial">Saldo inicial</a>
+            <a class="e-btn e-outline" href="/inventario/cifras-de-referencia">Cifras de referencia</a>
+            <a class="e-btn e-outline" href="/inventario/conciliacion">Conciliación</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_cargaBodegas.Activa">
+        <div class="toolbar">
+            <label class="campo">Bodega
+                <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => ElegirBodegaAsync(e.Value?.ToString()))">
+                    <option value="">Elija…</option>
+                    @foreach (var b in _bodegas)
+                    {
+                        <option value="@b.PublicId">@b.Code · @b.Name · @TextosDeInventario.Texto(TextosDeInventario.ActivacionesDeBodega, b.ActivationStatus)</option>
+                    }
+                </select>
+            </label>
+            <label class="campo">Fecha de corte
+                <input type="date" class="e-input" value="@(_corte?.ToString("yyyy-MM-dd"))" @onchange="@(async e => { _corte = LeerFecha(e.Value); await CompararAsync(); })" />
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@(_bodega is null || _carga.Activa)" OnClick="@CompararAsync">Volver a comparar</SfButton>
+        </div>
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Comparando con Contabilidad…">
+        @if (_vista is { } v)
+        {
+            <div class="info-card">
+                <h4>Saldo inicial de @v.Warehouse.Code</h4>
+                @if (v.OpeningBalance.Documents.Count == 0)
+                {
+                    <p class="texto-tenue">La bodega no tiene saldo inicial: arranca vacía.</p>
+                }
+                else
+                {
+                    <p>@(v.OpeningBalance.Confirmed ? "Confirmado" : "Sin confirmar") · valor @v.OpeningBalance.Value.ToString("N2")</p>
+                    <ul>@foreach (var d in v.OpeningBalance.Documents) { <li>@(d.DisplayNumber ?? "(borrador)") · @TextosDeInventario.Estado(d.Status) · @d.Value.ToString("N2")</li> }</ul>
+                }
+            </div>
+
+            @if (v.Sets.Count == 0)
+            {
+                <p class="aviso aviso-alerta">Sin conjuntos de cuentas: Contabilidad no respondió o la matriz no tiene reglas de Inventario o Tránsito para los grupos de esta bodega.</p>
+            }
+            @foreach (var s in v.Sets)
+            {
+                <div class="info-card">
+                    <h4>Grupos @string.Join(", ", s.AccountingGroups.Select(g => g.Code))</h4>
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="kpi-value">@s.LedgerBalance.ToString("N2")</span><span class="kpi-label">Saldo contable al corte</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@s.Valuation.ThisWarehouse.ToString("N2")</span><span class="kpi-label">Esta bodega</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@s.Valuation.Total.ToString("N2")</span><span class="kpi-label">Valorizado del conjunto</span></div>
+                        <div class="kpi-card"><span class="kpi-value">@s.Difference.ToString("N2")</span><span class="kpi-label">Diferencia (valorizado − saldo)</span></div>
+                    </div>
+                    @if (s.Accounts is { Count: > 0 } cuentas)
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Cuenta</th><th>Rol</th><th class="numero">Saldo al corte</th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in cuentas) { <tr><td>@c.Code · @c.Name</td><td>@(c.Role == "Transito" ? "Tránsito" : c.Role)</td><td class="numero">@c.LedgerBalance.ToString("N2")</td></tr> }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    @if (s.Valuation.ActiveWarehouses is { Count: > 0 } activas)
+                    {
+                        <p>Bodegas ya activas que comparten estas cuentas: @string.Join(" · ", activas.Select(a => $"{a.Code} {a.Value:N2}"))</p>
+                    }
+                    @if (s.Valuation.LegacyWarehouses is { Count: > 0 } fueraDelModulo)
+                    {
+                        <div class="aviso aviso-info">
+                            <b>Bodegas todavía fuera del módulo (con sus cifras al corte; suman al conjunto y la diferencia no se les atribuye):</b>
+                            <ul>@foreach (var w in fueraDelModulo) { <li>@w.WarehouseCode · @w.Value.ToString("N2") · cifras al @w.FiguresAsOf.ToString("dd/MM/yyyy")</li> }</ul>
+                        </div>
+                    }
+                    @if (s.Explanation is { } x && (x.Pending + x.InBatch + x.Rejected + x.NotPosted) > 0)
+                    {
+                        <p class="texto-tenue">
+                            Explican parte de la diferencia: @x.Pending pendiente(s), @x.InBatch en lote, @x.Rejected rechazado(s) y @x.NotPosted que no pasan.
+                            <a href="/inventario/bandeja-de-mensajes">Ver la bandeja</a>.
+                        </p>
+                    }
+                </div>
+            }
+            @if (v.Sets.Count > 0)
+            {
+                <p><b>Diferencia total: @v.TotalDifference.ToString("N2")</b></p>
+            }
+
+            @foreach (var b in v.Blockers)
+            {
+                <p class="aviso aviso-error">@b.Message</p>
+            }
+
+            @if (v.Activation is { } a)
+            {
+                <p class="aviso aviso-ok">Activada el @a.ActivatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") con corte @a.CutoffDate.ToString("dd/MM/yyyy")@(a.DifferenceAccepted ? $", aceptando una diferencia de {a.TotalDifference:N2}" : "").@(a.Reason is null ? "" : $" Motivo: {a.Reason}")</p>
+            }
+            else if (v.CanActivate)
+            {
+                @if (v.RequiresAcceptance)
+                {
+                    @if (_puedeAceptar)
+                    {
+                        <SfCheckBox @bind-Checked="_aceptar" TChecked="bool" Label="Acepto la diferencia y activo la bodega" />
+                        <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="500" @bind="_motivo" @bind:event="oninput"></textarea></label>
+                    }
+                    else
+                    {
+                        <p class="aviso aviso-alerta">Hay diferencia con Contabilidad: activar así exige el permiso Inventory.Warehouses.AcceptActivationDifference.</p>
+                    }
+                }
+                <IndicadorDeCarga Cargando="@_activando.Activa" Compacto="true" Texto="Activando…">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(!PuedeActivar)" OnClick="@ActivarAsync">Activar la bodega</SfButton>
+                    </div>
+                </IndicadorDeCarga>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const string PermisoDeAceptar = "Inventory.Warehouses.AcceptActivationDifference";
+
+    [SupplyParameterFromQuery(Name = "bodega")] public Guid? BodegaInicial { get; set; }
+
+    private readonly EstadoDeCarga _cargaBodegas = new(), _carga = new(), _activando = new();
+    private List<BodegaDto> _bodegas = [];
+    private Guid? _bodega;
+    private DateOnly? _corte;
+    private VistaPreviaDeActivacionDto? _vista;
+    private bool _aceptar, _puedeAceptar;
+    private string? _motivo;
+    private ClaveDeOperacion _clave = new();
+
+    private bool PuedeActivar => _vista is { CanActivate: true } v && !_activando.Activa
+        && (!v.RequiresAcceptance || (_puedeAceptar && _aceptar && !string.IsNullOrWhiteSpace(_motivo)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _cargaBodegas.Iniciar();
+        var bodegas = await Inventario.ListarBodegasAsync();
+        _bodegas = bodegas.IsSuccess ? [.. (bodegas.Value ?? []).Where(b => !b.IsTransit && b.IsActive).OrderBy(b => b.ActivationStatus).ThenBy(b => b.Code)] : [];
+        if (!bodegas.IsSuccess) await Notification.ErrorAsync(bodegas.ErrorMessage ?? "No se pudieron consultar las bodegas.");
+        _puedeAceptar = await Permisos.TieneAsync(PermisoDeAceptar);
+        if (BodegaInicial is { } inicial) await ElegirBodegaAsync(inicial.ToString());
+    }
+
+    private async Task ElegirBodegaAsync(string? valor)
+    {
+        _bodega = Guid.TryParse(valor, out var g) ? g : null;
+        _vista = null;
+        _corte = _bodegas.FirstOrDefault(b => b.PublicId == _bodega)?.CutoffDate;
+        await CompararAsync();
+    }
+
+    private async Task CompararAsync()
+    {
+        if (_bodega is not { } bodega) return;
+        using var carga = _carga.Iniciar();
+        _aceptar = false;
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        var r = await Inventario.VistaPreviaDeActivacionAsync(bodega, _corte);
+        if (!r.IsSuccess)
+        {
+            _vista = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular la activación.");
+            return;
+        }
+        _vista = r.Value;
+        _corte ??= _vista?.CutoffDate;
+    }
+
+    private async Task ActivarAsync()
+    {
+        if (!PuedeActivar || _bodega is not { } bodega || (_corte ?? _vista?.CutoffDate) is not { } corte) return;
+        using var activando = _activando.Iniciar();
+        var r = await Inventario.ActivarBodegaAsync(bodega, new ActivacionDeBodegaRequest(corte, _aceptar, string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim()), _clave);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo activar la bodega.");
+            await CompararAsync();
+            return;
+        }
+        await Notification.SuccessAsync("Bodega activada: desde ahora sólo el módulo nuevo la opera.");
+        await CompararAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

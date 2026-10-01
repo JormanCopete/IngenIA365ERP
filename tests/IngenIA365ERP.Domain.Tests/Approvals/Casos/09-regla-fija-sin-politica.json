@@ -1,0 +1,17 @@
+{
+  "nombre": "Regla fija de un nivel para DiscountOverCap y ProvisionalCredit sin política",
+  "derivacion": "Sin política registrada, el descuento sobre el tope exige un nivel con Inventory.Discounts.Authorize y el crédito provisional uno con Inventory.Sales.SellOnCredit, desde el primer peso (umbral 0). La diferencia de traslado, uno con Inventory.Transfers.Approve (data-model §21). DocumentConfirmation no tiene regla fija. Si el sujeto tiene política, rige la política (último caso).",
+  "fecha": "2026-10-05",
+  "politicas": [],
+  "evaluaciones": [
+    { "subject": "DiscountOverCap", "monto": 1500, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Discounts.Authorize"], "reglaFija": true } },
+    { "subject": "ProvisionalCredit", "monto": 800000, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Sales.SellOnCredit"], "reglaFija": true } },
+    { "subject": "TransferDiscrepancy", "monto": 10, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Transfers.Approve"], "reglaFija": true } },
+    { "subject": "DocumentConfirmation", "monto": 800000, "esperado": { "resultado": "SinAprobacion", "niveles": [] } },
+    {
+      "subject": "ProvisionalCredit", "monto": 800000,
+      "politicas": [ { "validFrom": "2026-01-01", "niveles": [ { "order": 1, "threshold": 0, "permission": "Inventory.Approvals.Management" } ] } ],
+      "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Approvals.Management"], "reglaFija": false }
+    }
+  ]
+}

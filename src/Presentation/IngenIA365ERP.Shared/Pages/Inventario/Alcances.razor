@@ -1,0 +1,76 @@
+@page "/inventario/alcances"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Inventario
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Alcance comercial - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T433 (T35, FR-009, SC-014; contracts/api.md §16.3): qué bodegas ve y opera cada usuario. Fuera de su alcance
+   una bodega no existe para él: listas, detalle, kardex y altas responden lo mismo que a lo inexistente. La misma edición
+   se abre desde Seguridad › Usuarios con «Alcance comercial» (?usuario=). *@
+<PermissionGate Required="Inventory.Scopes.Manage" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Alcance comercial</h3>
+        <div class="toolbar">
+            <input type="search" class="e-input" placeholder="Buscar usuario…" @bind="_buscar" @bind:event="oninput" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Usuario</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var u in Filtrados)
+                    {
+                        var usuario = u;
+                        <tr class="@(_elegido == usuario.PublicId ? "resaltada" : "")">
+                            <td>@usuario.Username</td>
+                            <td>@(usuario.IsActive ? "Activo" : "Inactivo")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => _elegido = usuario.PublicId)">Editar alcance</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_elegido is { } elegido)
+    {
+        <div class="info-card">
+            <h4>Bodegas asignadas</h4>
+            <AlcanceComercialDeUsuario Usuario="@elegido" />
+        </div>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    [SupplyParameterFromQuery(Name = "usuario")] public Guid? UsuarioInicial { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<PersonaDeLaCooperativaDto> _usuarios = [];
+    private Guid? _elegido;
+    private string _buscar = string.Empty;
+
+    private IEnumerable<PersonaDeLaCooperativaDto> Filtrados =>
+        string.IsNullOrWhiteSpace(_buscar) ? _usuarios : _usuarios.Where(u => u.Username.Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _elegido = UsuarioInicial;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarPersonasParaContarAsync();
+        if (!r.IsSuccess) { _usuarios = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la lista de usuarios (exige Security.Users.View)."); return; }
+        _usuarios = [.. (r.Value?.Items ?? []).OrderBy(u => u.Username, StringComparer.OrdinalIgnoreCase)];
+    }
+}

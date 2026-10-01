@@ -1,0 +1,109 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+@* Feature 012, T433 (T35; contracts/api.md §16.3): el alcance comercial de un usuario —las bodegas que ve y opera, con una
+   por defecto— sobre GET/PUT /api/inventory/scopes/users/{id}. Se eligen entre las bodegas operativas y de tránsito que ve
+   quien administra (lo demás no existe para él y se conserva); dos por defecto responde Inventory.Scope.DefaultDuplicate. Con
+   el permiso Inventory.Scope.AllWarehouses el usuario ve todas y la lista no lo limita. Los puntos de venta llegan con I3. *@
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_alcance is { } a)
+    {
+        <p class="texto-apoyo">
+            @a.User.Name @(a.User.Email is null ? "" : $"({a.User.Email})")
+            @if (a.HasAllWarehouses)
+            {
+                <span class="aviso aviso-ok">Tiene alcance total por permiso (Inventory.Scope.AllWarehouses): ve todas las bodegas.</span>
+            }
+        </p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Asignada</th><th>Bodega</th><th>Sucursal</th><th>Clase</th><th>Por defecto</th></tr></thead>
+                <tbody>
+                    @foreach (var b in _bodegas)
+                    {
+                        var bodega = b;
+                        <tr>
+                            <td><input type="checkbox" checked="@_asignadas.Contains(bodega.PublicId)" @onchange="@(e => Marcar(bodega.PublicId, e.Value is true))" /></td>
+                            <td>@bodega.Code · @bodega.Name</td>
+                            <td>@bodega.Branch.Name</td>
+                            <td>@(bodega.IsTransit ? "Tránsito" : "Operativa")</td>
+                            <td><input type="radio" name="bodega-por-defecto" checked="@(_porDefecto == bodega.PublicId)" disabled="@(!_asignadas.Contains(bodega.PublicId))" @onchange="@(() => _porDefecto = bodega.PublicId)" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando el alcance…">
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar alcance</SfButton>
+            </div>
+            @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+        </IndicadorDeCarga>
+    }
+</IndicadorDeCarga>
+
+@code {
+    /// <summary>El usuario (<c>SEC_Users.PublicId</c>) cuyo alcance se edita.</summary>
+    [Parameter, EditorRequired] public Guid Usuario { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly ClaveDeOperacion _clave = new();
+    private AlcanceComercialDto? _alcance;
+    private List<BodegaDto> _bodegas = [];
+    private HashSet<Guid> _asignadas = [];
+    private Guid? _porDefecto;
+    private string? _error;
+    private Guid _cargado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Usuario == _cargado) return;
+        _cargado = Usuario;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var bodegas = await Inventario.ListarBodegasAsync(incluirTransito: true);
+        var alcance = await Inventario.AlcanceDeUsuarioAsync(Usuario);
+        if (!alcance.IsSuccess || !bodegas.IsSuccess)
+        {
+            _alcance = null;
+            await Notification.ErrorAsync(alcance.ErrorMessage ?? bodegas.ErrorMessage ?? "No se pudo leer el alcance del usuario.");
+            return;
+        }
+        _alcance = alcance.Value;
+        _bodegas = [.. (bodegas.Value ?? []).OrderBy(b => b.IsTransit).ThenBy(b => b.Code, StringComparer.Ordinal)];
+        _asignadas = [.. _alcance!.Warehouses.Select(w => w.WarehousePublicId)];
+        _porDefecto = _alcance.Warehouses.FirstOrDefault(w => w.IsDefault)?.WarehousePublicId;
+    }
+
+    private void Marcar(Guid bodega, bool asignada)
+    {
+        if (asignada) _asignadas.Add(bodega);
+        else
+        {
+            _asignadas.Remove(bodega);
+            if (_porDefecto == bodega) _porDefecto = null;
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var pedidas = _asignadas.Select(b => new BodegaPedidaDto(b, b == _porDefecto)).ToList();
+        var r = await Inventario.FijarAlcanceAsync(Usuario, new FijarAlcanceRequest(pedidas), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Inventory.Scope.DefaultDuplicate" ? "Marque una sola bodega por defecto." : r.ErrorMessage ?? "No se pudo guardar el alcance.";
+            return;
+        }
+        _alcance = r.Value;
+        await Notification.SuccessAsync("Alcance guardado.");
+    }
+}

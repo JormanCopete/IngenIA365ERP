@@ -1,0 +1,191 @@
+@page "/inventario/integridad"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Integridad del kardex - IngenIA365ERP</PageTitle>
+
+@* Feature 012, T267 (FR-003, SC-006; contracts/api.md §6.2): verificar que las existencias y el estado de costo sean la suma
+   exacta del kardex —en unas bodegas y productos, o en todo lo del alcance— y ver cada diferencia con lo esperado, lo real y
+   la diferencia. Con diferencias se levanta la alerta Inventario.IncidenteDeIntegridad (una por alcance verificado); la
+   misma verificación corre cada noche (inventario.integridad). Reconstruir recalcula las proyecciones desde el kardex, con
+   motivo y Inventory.Integrity.Rebuild, sin tocar un solo hecho; sin filtros puede tardar minutos y la pantalla espera con su
+   indicador. *@
+<PermissionGate Required="Inventory.Integrity.Verify" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Integridad del kardex</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_verificacion.Activa || _reconstruccion.Activa)" OnClick="@VerificarAsync">Verificar</SfButton>
+            <PermissionGate Required="Inventory.Integrity.Rebuild">
+                <SfButton CssClass="e-outline" Disabled="@(_verificacion.Activa || _reconstruccion.Activa)" OnClick="@(() => { _motivo = null; _mostrarReconstruir = true; })">Reconstruir…</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <p class="texto-apoyo">Sin bodegas ni productos elegidos, se verifica todo lo de su alcance.</p>
+        <div class="toolbar">
+            @foreach (var b in _bodegas)
+            {
+                <SfCheckBox Checked="@_elegidas.Contains(b.PublicId)" CheckedChanged="@((bool v) => Alternar(b.PublicId, v))" TChecked="bool" Label="@($"{b.Code}{(b.IsTransit ? " (tránsito)" : "")}")" />
+            }
+        </div>
+        <SelectorDeProducto Etiqueta="Agregar un producto" Elegido="@AgregarProducto" />
+        @if (_productos.Count > 0)
+        {
+            <p>
+                Productos: @foreach (var p in _productos)
+                {
+                    <span class="texto-apoyo">@p.Code <button type="button" class="enlace" @onclick="@(() => _productos.Remove(p))">quitar</button> </span>
+                }
+            </p>
+        }
+    </div>
+
+    <IndicadorDeCarga Cargando="@_verificacion.Activa" Texto="Verificando el kardex…">
+        @if (_informe is { } i)
+        {
+            <p class="texto-apoyo">
+                Verificado el @i.VerifiedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"): @i.Checked.StockBalances existencias, @i.Checked.StockDetails ubicaciones y
+                @i.Checked.CostStates estados de costo.
+            </p>
+            @if (i.Incidents.Count == 0)
+            {
+                <p class="aviso aviso-ok">Sin diferencias: las proyecciones son la suma exacta del kardex.</p>
+            }
+            else
+            {
+                <p class="aviso aviso-error">@i.Incidents.Count diferencia(s). Se levantó la alerta de integridad; reconstruya con motivo para corregirlas.</p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Proyección</th><th>Producto</th><th>Bodega</th><th>Ubicación</th><th>Campo</th><th class="numero">Esperado (kardex)</th><th class="numero">Real</th><th class="numero">Diferencia</th></tr></thead>
+                        <tbody>
+                            @foreach (var x in i.Incidents)
+                            {
+                                <tr>
+                                    <td>@Proyeccion(x.Kind)</td><td>@x.Product.Code</td><td>@(x.Warehouse?.Code ?? "(cooperativa)")</td><td>@x.Location?.Code</td>
+                                    <td>@x.Field</td><td class="numero">@x.Expected.ToString("N4")</td><td class="numero">@x.Actual.ToString("N4")</td><td class="numero">@x.Difference.ToString("N4")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_reconstruccion.Activa" Texto="Reconstruyendo las proyecciones… puede tardar varios minutos.">
+        @if (_reconstruido is { } r)
+        {
+            <p class="aviso aviso-ok">
+                Reconstruido el @r.RebuiltAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"): @r.Rows.StockBalances existencias, @r.Rows.StockDetails ubicaciones y
+                @r.Rows.CostStates estados de costo; @r.Corrected.Count corrección(es). El kardex no se tocó.
+            </p>
+            @if (r.Corrected.Count > 0)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Proyección</th><th>Producto</th><th>Bodega</th><th>Campo</th><th class="numero">Antes</th><th class="numero">Después</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in r.Corrected)
+                            {
+                                <tr><td>@Proyeccion(c.Kind)</td><td>@c.Product.Code</td><td>@(c.Warehouse?.Code ?? "(cooperativa)")</td><td>@c.Field</td><td class="numero">@c.Before.ToString("N4")</td><td class="numero">@c.After.ToString("N4")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarReconstruir" Header="Reconstruir las proyecciones" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_reconstruccion.Activa" Texto="Reconstruyendo…">
+                <p class="texto-apoyo">
+                    Recalcula existencias, ubicaciones y estados de costo desde el kardex en @(_elegidas.Count == 0 && _productos.Count == 0 ? "todo lo de su alcance" : "lo elegido"),
+                    producto por producto. El kardex no cambia. Queda auditado con su motivo.
+                </p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_reconstruccion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReconstruirAsync">Reconstruir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReconstruir = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _verificacion = new(), _reconstruccion = new();
+    private readonly ClaveDeOperacion _claveReconstruir = new();
+    private List<BodegaDto> _bodegas = [];
+    private readonly HashSet<Guid> _elegidas = [];
+    private readonly List<ProductoEncontradoDto> _productos = [];
+    private InformeDeIntegridadDto? _informe;
+    private ResultadoDeReconstruccionDto? _reconstruido;
+    private bool _mostrarReconstruir;
+    private string? _motivo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Inventario.ListarBodegasAsync(incluirTransito: true);
+        _bodegas = r.IsSuccess ? [.. r.Value ?? []] : [];
+    }
+
+    private void Alternar(Guid bodega, bool elegida)
+    {
+        if (elegida) _elegidas.Add(bodega);
+        else _elegidas.Remove(bodega);
+    }
+
+    private void AgregarProducto(ProductoElegido elegido)
+    {
+        if (_productos.All(p => p.PublicId != elegido.Producto.PublicId)) _productos.Add(elegido.Producto);
+    }
+
+    private IReadOnlyList<Guid>? Bodegas => _elegidas.Count == 0 ? null : [.. _elegidas];
+    private IReadOnlyList<Guid>? Productos => _productos.Count == 0 ? null : [.. _productos.Select(p => p.PublicId)];
+
+    private async Task VerificarAsync()
+    {
+        using var carga = _verificacion.Iniciar();
+        var r = await Inventario.VerificarIntegridadAsync(new VerificarIntegridadRequest(Productos, Bodegas));
+        if (!r.IsSuccess)
+        {
+            _informe = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo verificar el kardex.");
+            return;
+        }
+        _informe = r.Value;
+    }
+
+    private async Task ReconstruirAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _reconstruccion.Iniciar();
+        var r = await Inventario.ReconstruirIntegridadAsync(new ReconstruirIntegridadRequest(Productos, Bodegas, _motivo), _claveReconstruir);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron reconstruir las proyecciones.");
+            return;
+        }
+        _reconstruido = r.Value;
+        _mostrarReconstruir = false;
+        await VerificarAsync();
+    }
+
+    private static string Proyeccion(string kind) => kind switch
+    {
+        "StockBalance" => "Existencia",
+        "StockDetail" => "Ubicación",
+        "CostState" => "Estado de costo",
+        "CostLayer" => "Capa de costo",
+        _ => kind,
+    };
+}

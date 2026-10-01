@@ -1,0 +1,24 @@
+{
+  // Research R10, data-model §3.1: anular una entrada ya promediada y consumida registra la diferencia (VoidDifference).
+  "nombre": "Anular una entrada consumida",
+  "descripcion": "10 × 1.000 + 10 × 1.300 = 20 por 23.000 (1.150). Venta de 5 a 1.150 = 5.750 → 15 por 17.250. Se anula la compra EC-2: su línea revierte la entrada al mismo costo, 10 × 1.300 = 13.000 (ReversesEntryId = EC-2), y la diferencia contra el promedio vigente, 13.000 − 10 × 1.150 = 1.500, es VoidDifference sobre EC-2. Quedan 5 por 17.250 − 13.000 + 1.500 = 5.750, promedio 1.150.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    { "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -5 },
+    {
+      "id": "AN1", "documento": "AN-1", "fecha": "2026-09-08", "clase": "Voiding", "bodega": "PRINCIPAL", "cantidad": -10,
+      "valoracion": "DevolucionDeEntrada", "origen": "E2", "anulacion": true,
+      "esperado": {
+        "lineas": [
+          { "kind": "Exit", "cantidad": -10, "costoUnitario": 1300, "costoTotal": -13000, "revierte": "E2" },
+          { "kind": "CostAdjustment", "reason": "VoidDifference", "cantidad": 0, "costoUnitario": 1150, "costoTotal": 1500, "afecta": "E2" }
+        ],
+        "estado": { "cantidad": 5, "valor": 5750, "promedio": 1150, "ultimoCosto": 1300 },
+        "explicacion": [ "Anulación de una entrada" ]
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 5, "valor": 5750, "promedio": 1150 } ]
+}

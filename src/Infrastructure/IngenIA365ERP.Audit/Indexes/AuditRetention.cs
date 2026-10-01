@@ -19,8 +19,16 @@ public static class AuditRetention
     public static readonly TimeSpan Regulatoria = TimeSpan.FromDays(365 * 5);
     public static readonly TimeSpan Contable = TimeSpan.FromDays(365 * 10);
 
-    /// <summary>Módulos cuyo rastro se conserva diez años.</summary>
-    public static readonly string[] ModulosDeDiezAnios = ["Accounting", "Navigation"];
+    /// <summary>
+    /// Módulos cuyo rastro se conserva diez años. Feature 012 (T37, FR-008; T063): los módulos encadenados
+    /// del comercio y su plataforma (<c>AuditoriaEncadenada.Modulos</c>), que viven en el flujo
+    /// <c>{cooperativa}:10y</c>; <c>Navigation</c> ya estaba.
+    /// </summary>
+    public static readonly string[] ModulosDeDiezAnios =
+    [
+        "Accounting", "Navigation",
+        "Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans",
+    ];
 
     public static TimeSpan Para(string? modulo) =>
         modulo is not null && ModulosDeDiezAnios.Contains(modulo, StringComparer.OrdinalIgnoreCase)

@@ -53,7 +53,7 @@
                     {
                         <tr>
                             <td>@t.ValidFrom.ToString("yyyy-MM-dd")</td>
-                            <td class="numero">@((t.Rate * 100m).ToString("N2")) %</td>
+                            <td class="numero">@((t.Rate * 100m).ToString("#,0.00##")) %</td>
                             <td>@if (!SoloLectura) { <button type="button" class="enlace" @onclick="() => Modelo.Tarifas.Remove(t)">Quitar</button> }</td>
                         </tr>
                     }
@@ -63,7 +63,7 @@
             {
                 <div class="toolbar">
                     <SfDatePicker TValue="DateTime?" @bind-Value="_nuevaVigencia" Placeholder="Vigente desde" Format="yyyy-MM-dd" />
-                    <SfNumericTextBox TValue="decimal?" @bind-Value="_nuevaTarifa" Placeholder="Tarifa %" Min="0" Max="100" Format="N2" />
+                    <SfNumericTextBox TValue="decimal?" @bind-Value="_nuevaTarifa" Placeholder="Tarifa %" Min="0" Max="100" Format="N4" Decimals="4" />
                     <SfButton CssClass="e-outline e-small" type="button" OnClick="@AgregarTarifa">Agregar tarifa</SfButton>
                 </div>
                 <span class="hint">La línea usa la tarifa vigente a su fecha; una tarifa nueva no cambia lo ya contabilizado.</span>
@@ -91,7 +91,8 @@
         if (_nuevaVigencia is not { } desde || _nuevaTarifa is not { } tarifa) return;
         var fecha = DateOnly.FromDateTime(desde);
         Modelo.Tarifas.RemoveAll(t => t.ValidFrom == fecha);
-        Modelo.Tarifas.Add(new TarifaDto(fecha, Math.Round(tarifa / 100m, 4)));
+        // Feature 012 (T482, C8): seis decimales de fracción (cuatro de porcentaje); con cuatro, el ICA por mil se redondeaba.
+        Modelo.Tarifas.Add(new TarifaDto(fecha, Math.Round(tarifa / 100m, 6)));
         _nuevaVigencia = null;
         _nuevaTarifa = null;
     }

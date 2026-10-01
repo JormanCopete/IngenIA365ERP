@@ -20,6 +20,7 @@
         <GridColumn Field="@nameof(BranchItem.Code)" HeaderText="Código" Width="120" />
         <GridColumn Field="@nameof(BranchItem.Name)" HeaderText="Nombre" Width="320" />
         <GridColumn Field="@nameof(BranchItem.ShortName)" HeaderText="Nombre Corto" Width="200" />
+        <GridColumn Field="@nameof(BranchItem.MunicipalityDaneCode)" HeaderText="Municipio (DIVIPOLA)" Width="160" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
@@ -58,6 +59,17 @@
                                    HtmlAttributes="@(new Dictionary<string, object> { { "maxlength", "40" } })" />
                         <ValidationMessage For="@(() => _model.ShortName)" />
                     </div>
+                    <div>
+                        @* Feature 012 (T178): el municipio DIVIPOLA de la sucursal; ReteICA de compras lo propone y la
+                           carga de plantillas lo exige. Sólo las ciudades con código DANE. *@
+                        <label>Municipio (DIVIPOLA)</label>
+                        <SfDropDownList TValue="string" TItem="MunicipioItem" @bind-Value="_model.MunicipalityDaneCode"
+                                        DataSource="@_municipios" AllowFiltering="true" ShowClearButton="true"
+                                        Placeholder="Seleccione el municipio">
+                            <DropDownListFieldSettings Text="@nameof(MunicipioItem.Etiqueta)" Value="@nameof(MunicipioItem.DaneCode)" />
+                        </SfDropDownList>
+                        <small class="hint">Si el municipio no aparece, cárguelo con su código DANE en Maestros › Ciudades.</small>
+                    </div>
                 </div>
                 @* Submit oculto: permite ENTER y dispara OnValidSubmit con validacion *@
                 <button type="submit" id="agencias-submit" style="display:none"></button>
@@ -79,6 +91,7 @@
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private SfGrid<BranchItem>? _grid;
     private List<BranchItem> _items = new();
+    private List<MunicipioItem> _municipios = new();
     private BranchModel _model = new();
     private Guid? _editId;
     private bool _codigoRepetido;
@@ -97,6 +110,12 @@
             // PagedList<T> { items: [...] } o un array plano.
             _items = await Http.GetListAsync<BranchItem>(
                 "/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+            var ciudades = await Http.GetListAsync<CiudadItem>("/api/core/cities?PageNumber=1&PageSize=2000");
+            _municipios = ciudades
+                .Where(c => !string.IsNullOrWhiteSpace(c.DaneCode))
+                .Select(c => new MunicipioItem(c.DaneCode!, $"{c.Name} ({c.DepartmentName}) — {c.DaneCode}"))
+                .OrderBy(m => m.Etiqueta)
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -132,7 +151,10 @@
         {
             Code = item.Code,
             Name = item.Name,
-            ShortName = item.ShortName
+            ShortName = item.ShortName,
+            MunicipalityDaneCode = item.MunicipalityDaneCode,
+            // El PUT reemplaza el vínculo con la oficina: se devuelve el que tenía para no borrarlo al editar.
+            TenantBranchPublicId = item.TenantBranchPublicId
         };
         _editId = item.PublicId;
         _dialogTitle = "Editar Agencia";
@@ -180,6 +202,8 @@
         }
 
         _saving = true;
+        // Limpiar el desplegable lo deja nulo, y nulo es «no cambia» en el servidor: vacío es el que quita el municipio.
+        _model.MunicipalityDaneCode ??= string.Empty;
         try
         {
             HttpResponseMessage res;
@@ -252,7 +276,18 @@
 
         [MaxLength(40, ErrorMessage = "El nombre corto no puede superar 40 caracteres.")]
         public string? ShortName { get; set; }
+
+        /// <summary>Vacío (no nulo) quita el municipio; el servidor toma nulo como «no cambia».</summary>
+        public string? MunicipalityDaneCode { get; set; } = string.Empty;
+
+        public Guid? TenantBranchPublicId { get; set; }
     }
+
+    /// <summary>Una ciudad de <c>/api/core/cities</c> (CityDto).</summary>
+    private sealed record CiudadItem(string Name, string DepartmentName, string? DaneCode);
+
+    /// <summary>Opción del desplegable de municipio.</summary>
+    private sealed record MunicipioItem(string DaneCode, string Etiqueta);
 
     /// <summary>
     /// Vista que pinta la grilla. Coincide con BranchDto.
@@ -263,5 +298,7 @@
         public Guid PublicId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? ShortName { get; set; }
+        public string? MunicipalityDaneCode { get; set; }
+        public Guid? TenantBranchPublicId { get; set; }
     }
 }

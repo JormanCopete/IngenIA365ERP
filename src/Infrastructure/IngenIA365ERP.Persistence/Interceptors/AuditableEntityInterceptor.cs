@@ -1,6 +1,11 @@
-using System.Text.Json;
+using System.Collections.Concurrent;
+using System.Reflection;
+using IngenIA365ERP.Application.Common.Audit;
+using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Entities.Audit;
+using IngenIA365ERP.Domain.Enums.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -8,25 +13,44 @@ using Microsoft.Extensions.Logging;
 
 namespace IngenIA365ERP.Persistence.Interceptors;
 
+/// <summary>
+/// Captura antes, después y campos cambiados de toda entidad que se guarda, y los audita.
+///
+/// <para>
+/// Feature 012 (T36, T37; T059, T062): el módulo sale de <see cref="ModuloDeAuditoria.Inferir"/> (la misma
+/// inferencia que <c>AuditBehavior</c>); las entidades <see cref="SinDiffDeAuditoriaAttribute"/> no dejan
+/// diferencias y las propiedades <see cref="NoAuditarAttribute"/> quedan enmascaradas. Para los <b>módulos
+/// encadenados</b> (<see cref="AuditoriaEncadenada.Modulos"/>) las diferencias no van a Mongo después de
+/// guardar: se agregan a <c>COR_AuditOutbox</c> en <c>SavingChanges</c>, así entran en el mismo
+/// <c>SaveChanges</c> —y la misma transacción— que el cambio. Si el guardado falla, se retiran.
+/// </para>
+/// </summary>
 public class AuditableEntityInterceptor : SaveChangesInterceptor
 {
     private readonly ICurrentUserService _currentUserService;
     private readonly ICurrentTenantService _tenantService;
     private readonly IAuditService _auditService;
     private readonly ILogger<AuditableEntityInterceptor> _logger;
+    private readonly IOrigenDeLaPeticion? _origen;
+
+    private static readonly ConcurrentDictionary<Type, bool> SinDiff = new();
+    private static readonly ConcurrentDictionary<PropertyInfo, bool> Enmascaradas = new();
 
     private List<AuditEntryCapture>? _pendingCaptures;
+    private List<AuditOutboxEntry>? _pendingOutbox;
 
     public AuditableEntityInterceptor(
         ICurrentUserService currentUserService,
         ICurrentTenantService tenantService,
         IAuditService auditService,
-        ILogger<AuditableEntityInterceptor> logger)
+        ILogger<AuditableEntityInterceptor> logger,
+        IOrigenDeLaPeticion? origen = null)
     {
         _currentUserService = currentUserService;
         _tenantService = tenantService;
         _auditService = auditService;
         _logger = logger;
+        _origen = origen;
     }
 
     public override InterceptionResult<int> SavingChanges(
@@ -34,6 +58,7 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
     {
         ApplyAuditInfo(eventData.Context);
         _pendingCaptures = CaptureChanges(eventData.Context);
+        AgregarAlOutbox(eventData.Context);
         return base.SavingChanges(eventData, result);
     }
 
@@ -43,7 +68,89 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
     {
         ApplyAuditInfo(eventData.Context);
         _pendingCaptures = CaptureChanges(eventData.Context);
+        AgregarAlOutbox(eventData.Context);
         return await base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+
+    public override void SaveChangesFailed(DbContextErrorEventData eventData)
+    {
+        RetirarDelOutbox(eventData.Context);
+        base.SaveChangesFailed(eventData);
+    }
+
+    public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+    {
+        RetirarDelOutbox(eventData.Context);
+        return base.SaveChangesFailedAsync(eventData, cancellationToken);
+    }
+
+    /// <summary>
+    /// Las diferencias de los módulos encadenados, como filas de <c>COR_AuditOutbox</c> en el mismo guardado
+    /// (T37). Sin cooperativa resuelta no hay flujo: siguen por Mongo, como antes.
+    /// </summary>
+    private void AgregarAlOutbox(Microsoft.EntityFrameworkCore.DbContext? context)
+    {
+        _pendingOutbox = null;
+        if (context is null || _pendingCaptures is null || _pendingCaptures.Count == 0) return;
+
+        var flujo = AuditoriaEncadenada.Flujo(_tenantService.TenantId);
+        if (flujo is null) return;
+
+        var encadenadas = _pendingCaptures.Where(c => AuditoriaEncadenada.EsEncadenado(c.Module)).ToList();
+        if (encadenadas.Count == 0) return;
+
+        var contexto = Contexto();
+        _pendingOutbox = [];
+        foreach (var capture in encadenadas)
+        {
+            var entrada = AuditoriaEncadenada.Entrada(flujo, AuditoriaEncadenada.Evento(contexto, new AuditLogCommand
+            {
+                Action = capture.Action,
+                EntityType = capture.EntityType,
+                EntityId = capture.EntityId,
+                Module = capture.Module,
+                OldValues = capture.OldValues,
+                NewValues = capture.NewValues,
+                ChangedFields = capture.ChangedFields,
+            }));
+            context.Add(entrada);
+            _pendingOutbox.Add(entrada);
+            _pendingCaptures.Remove(capture);
+        }
+    }
+
+    private void RetirarDelOutbox(Microsoft.EntityFrameworkCore.DbContext? context)
+    {
+        if (context is not null && _pendingOutbox is not null)
+        {
+            foreach (var entrada in _pendingOutbox)
+            {
+                var entry = context.Entry(entrada);
+                if (entry.State == EntityState.Added) entry.State = EntityState.Detached;
+            }
+        }
+        _pendingOutbox = null;
+        _pendingCaptures = null;
+    }
+
+    /// <summary>Dentro de SavingChanges no se consulta nada: sólo lo que ya se sabe de la petición o del trabajo.</summary>
+    private ContextoDeAuditoria Contexto()
+    {
+        var canal = _origen?.Canal ?? (ContextoAmbiental.Activo ? ExecutionChannel.Process : ExecutionChannel.Web);
+        var metadata = new Dictionary<string, string> { ["Channel"] = AuditoriaEncadenada.Canal(canal) };
+        var origen = _origen?.Origen ?? ContextoAmbiental.Origen;
+        if (!string.IsNullOrWhiteSpace(origen)) metadata["Origin"] = origen;
+        var endpoint = _origen?.Endpoint;
+        return new ContextoDeAuditoria(
+            _tenantService.TenantId,
+            null,
+            _currentUserService.UserId?.ToString() ?? "system",
+            _currentUserService.UserName ?? "system",
+            _origen?.Ip,
+            _origen?.UserAgent,
+            endpoint,
+            endpoint is not null && endpoint.IndexOf(' ') is > 0 and var i ? endpoint[..i] : null,
+            metadata);
     }
 
     public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
@@ -113,6 +220,10 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
             if (entityType.Namespace?.StartsWith("Microsoft.AspNetCore.Identity") == true)
                 continue;
 
+            // Feature 012 (T36): filas técnicas cuyo cambio no es un hecho de negocio.
+            if (EsSinDiff(entityType))
+                continue;
+
             var capture = new AuditEntryCapture
             {
                 EntityType = entityType.Name,
@@ -130,9 +241,8 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
             var idProp = entry.Properties.FirstOrDefault(p => p.Metadata.Name == "Id");
             capture.EntityId = publicIdProp?.CurrentValue?.ToString() ?? idProp?.CurrentValue?.ToString();
 
-            // Infer module from namespace
-            var ns = entityType.Namespace ?? string.Empty;
-            capture.Module = InferModule(ns);
+            // Infer module from namespace (feature 012: la misma inferencia que AuditBehavior)
+            capture.Module = ModuloDeAuditoria.Inferir(entityType.Namespace, "Unknown");
 
             // Capture old/new values and changed fields
             switch (entry.State)
@@ -193,38 +303,27 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
 
     private static Dictionary<string, object?> GetPropertyValues(EntityEntry entry, Func<PropertyEntry, object?> valueSelector)
     {
-        return entry.Properties
-            .Where(p => !IsAuditField(p.Metadata.Name))
-            .ToDictionary(p => p.Metadata.Name, valueSelector);
+        return GetPropertyValues(entry.Properties.ToList(), valueSelector);
     }
 
     private static Dictionary<string, object?> GetPropertyValues(List<PropertyEntry> properties, Func<PropertyEntry, object?> valueSelector)
     {
         return properties
             .Where(p => !IsAuditField(p.Metadata.Name))
-            .ToDictionary(p => p.Metadata.Name, valueSelector);
+            .ToDictionary(p => p.Metadata.Name, p => EsEnmascarada(p) ? NoAuditarAttribute.Mascara : valueSelector(p));
     }
+
+    private static bool EsSinDiff(Type tipo) =>
+        SinDiff.GetOrAdd(tipo, t => t.GetCustomAttribute<SinDiffDeAuditoriaAttribute>() is not null);
+
+    /// <summary>[NoAuditar]: el cambio se registra (la propiedad sigue en changedFields), el valor no.</summary>
+    private static bool EsEnmascarada(PropertyEntry propiedad) =>
+        propiedad.Metadata.PropertyInfo is { } info
+        && Enmascaradas.GetOrAdd(info, i => i.GetCustomAttribute<NoAuditarAttribute>(inherit: true) is not null);
 
     private static bool IsAuditField(string name) =>
         name is "CreatedAt" or "CreatedBy" or "UpdatedAt" or "UpdatedBy"
             or "DeletedAt" or "DeletedBy" or "IsDeleted";
-
-    private static string InferModule(string ns)
-    {
-        if (ns.Contains(".Accounting")) return "Accounting";
-        if (ns.Contains(".Lending")) return "Lending";
-        if (ns.Contains(".Payroll")) return "Payroll";
-        if (ns.Contains(".Inventory")) return "Inventory";
-        if (ns.Contains(".CDT")) return "CDT";
-        if (ns.Contains(".Debit")) return "Debit";
-        if (ns.Contains(".Treasury")) return "Treasury";
-        if (ns.Contains(".Security")) return "Security";
-        if (ns.Contains(".Audit")) return "Audit";
-        if (ns.Contains(".Web")) return "Web";
-        if (ns.Contains(".Admin")) return "Admin";
-        if (ns.Contains(".Core")) return "Core";
-        return "Unknown";
-    }
 
     private class AuditEntryCapture
     {

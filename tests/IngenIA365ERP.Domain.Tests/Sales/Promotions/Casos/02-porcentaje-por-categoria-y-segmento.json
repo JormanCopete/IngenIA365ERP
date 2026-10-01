@@ -1,0 +1,53 @@
+{
+  "nombre": "Porcentaje por categoria (con descendientes) y segmento: Y entre clases, O dentro de una clase",
+  "descripcion": "10 % sobre las categorias 5 o 7 (O dentro de la clase Category) y solo para el segmento A (Y con la clase Segment). La linea 1 es de la categoria 9, hija de 5 (su ruta es 1/5/9): aplica, 10 % de 2 x 5.000 = 1.000. La linea 2 es de la categoria 2: no aplica. La linea 3 es de la categoria 7: 10 % de 2.000 = 200. Con el segmento B o sin segmento no aplica a ninguna.",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "promociones": [
+    {
+      "id": 2,
+      "codigo": "ASOC10",
+      "clase": "Percent",
+      "tasa": 0.10,
+      "acumulable": false,
+      "desde": "2026-10-01",
+      "hasta": "2026-12-31",
+      "activa": true,
+      "ambitos": [
+        { "clase": "Category", "categoria": 5 },
+        { "clase": "Category", "categoria": 7 },
+        { "clase": "Segment", "segmento": "A" }
+      ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-15",
+      "segmento": "A",
+      "lineas": [
+        { "linea": 1, "producto": 20, "categorias": [1, 5, 9], "cantidad": 2, "precio": 5000 },
+        { "linea": 2, "producto": 21, "categorias": [2], "cantidad": 1, "precio": 3000 },
+        { "linea": 3, "producto": 22, "categorias": [7], "cantidad": 1, "precio": 2000 }
+      ],
+      "esperado": [
+        { "linea": 1, "promocion": 2, "valor": 1000 },
+        { "linea": 3, "promocion": 2, "valor": 200 }
+      ]
+    },
+    {
+      "fecha": "2026-10-15",
+      "segmento": "B",
+      "lineas": [
+        { "linea": 1, "producto": 20, "categorias": [1, 5, 9], "cantidad": 2, "precio": 5000 }
+      ],
+      "esperado": []
+    },
+    {
+      "fecha": "2026-10-15",
+      "lineas": [
+        { "linea": 1, "producto": 22, "categorias": [7], "cantidad": 1, "precio": 2000 }
+      ],
+      "esperado": []
+    }
+  ]
+}

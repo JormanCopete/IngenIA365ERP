@@ -1,0 +1,30 @@
+{
+  // Feature 012 (T210; decisiones-transversales §2.14, Order 77): las unidades de medida básicas de cada cooperativa.
+  // allowedDecimals: los decimales que admite una cantidad en esa unidad (0..4). dianUnitCode: UN/ECE Rec. 20, del
+  // subconjunto de CatalogoDian (Application/ElectronicInvoicing/Catalogs/Data/unidades-rec20.json).
+  // Cambiar "version" pone al día las unidades sembradas en su sitio (SincronizacionDeCatalogo): nombre, símbolo y
+  // código DIAN; los decimales sólo suben (bajarlos invalidaría cantidades ya registradas).
+  "version": "2026-09-25",
+  "unidades": [
+    { "code": "UND", "name": "Unidad", "symbol": "und", "allowedDecimals": 0, "dianUnitCode": "94" },
+    { "code": "KG", "name": "Kilogramo", "symbol": "kg", "allowedDecimals": 3, "dianUnitCode": "KGM" },
+    { "code": "GR", "name": "Gramo", "symbol": "g", "allowedDecimals": 0, "dianUnitCode": "GRM" },
+    { "code": "LB", "name": "Libra", "symbol": "lb", "allowedDecimals": 2, "dianUnitCode": "LBR" },
+    { "code": "TON", "name": "Tonelada", "symbol": "t", "allowedDecimals": 3, "dianUnitCode": "TNE" },
+    { "code": "LT", "name": "Litro", "symbol": "l", "allowedDecimals": 3, "dianUnitCode": "LTR" },
+    { "code": "ML", "name": "Mililitro", "symbol": "ml", "allowedDecimals": 0, "dianUnitCode": "MLT" },
+    { "code": "GL", "name": "Galón", "symbol": "gal", "allowedDecimals": 2, "dianUnitCode": "GLL" },
+    { "code": "MT", "name": "Metro", "symbol": "m", "allowedDecimals": 2, "dianUnitCode": "MTR" },
+    { "code": "CM", "name": "Centímetro", "symbol": "cm", "allowedDecimals": 0, "dianUnitCode": "CMT" },
+    { "code": "M2", "name": "Metro cuadrado", "symbol": "m2", "allowedDecimals": 2, "dianUnitCode": "MTK" },
+    { "code": "M3", "name": "Metro cúbico", "symbol": "m3", "allowedDecimals": 3, "dianUnitCode": "MTQ" },
+    { "code": "DOC", "name": "Docena", "symbol": "doc", "allowedDecimals": 0, "dianUnitCode": "DZN" },
+    { "code": "PAR", "name": "Par", "symbol": "par", "allowedDecimals": 0, "dianUnitCode": "PR" },
+    { "code": "JGO", "name": "Juego", "symbol": "jgo", "allowedDecimals": 0, "dianUnitCode": "SET" },
+    { "code": "HR", "name": "Hora", "symbol": "h", "allowedDecimals": 2, "dianUnitCode": "HUR" },
+    { "code": "DIA", "name": "Día", "symbol": "día", "allowedDecimals": 0, "dianUnitCode": "DAY" },
+    { "code": "MES", "name": "Mes", "symbol": "mes", "allowedDecimals": 0, "dianUnitCode": "MON" },
+    { "code": "KWH", "name": "Kilovatio hora", "symbol": "kWh", "allowedDecimals": 2, "dianUnitCode": "KWH" },
+    { "code": "SRV", "name": "Servicio", "symbol": "srv", "allowedDecimals": 0, "dianUnitCode": "ZZ" }
+  ]
+}

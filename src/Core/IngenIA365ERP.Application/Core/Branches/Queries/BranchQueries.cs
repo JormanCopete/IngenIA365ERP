@@ -14,6 +14,8 @@ public record BranchDto
     public string? ShortName { get; init; }
     /// <summary>Oficina de <c>ADM_Branches</c> vinculada (feature 009, R7), o nulo.</summary>
     public Guid? TenantBranchPublicId { get; init; }
+    /// <summary>Municipio DIVIPOLA de la sucursal (feature 012, T178), o nulo.</summary>
+    public string? MunicipalityDaneCode { get; init; }
 }
 
 // List Query
@@ -59,7 +61,8 @@ public class ListBranchesQueryHandler(IApplicationDbContext context)
                 Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName,
-                TenantBranchPublicId = e.TenantBranchPublicId
+                TenantBranchPublicId = e.TenantBranchPublicId,
+                MunicipalityDaneCode = e.MunicipalityDaneCode
             })
             .ToListAsync(cancellationToken);
 
@@ -87,7 +90,8 @@ public class GetBranchByIdQueryHandler(IApplicationDbContext context)
                 Code = e.LegacyCode,
                 Name = e.Name,
                 ShortName = e.ShortName,
-                TenantBranchPublicId = e.TenantBranchPublicId
+                TenantBranchPublicId = e.TenantBranchPublicId,
+                MunicipalityDaneCode = e.MunicipalityDaneCode
             })
             .FirstOrDefaultAsync(cancellationToken);
 

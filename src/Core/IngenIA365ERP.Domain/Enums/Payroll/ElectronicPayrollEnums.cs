@@ -10,12 +10,7 @@ public enum ElectronicPayrollMode
     TechnologyProvider = 2,
 }
 
-/// <summary>Ambiente DIAN; los mismos códigos que el atributo <c>Ambiente</c> del XML.</summary>
-public enum DianEnvironment
-{
-    Production = 1,
-    Testing = 2,
-}
+// DianEnvironment se trasladó a Enums/Dian (feature 012, T689): lo comparten nómina y facturación electrónica.
 
 /// <summary>Estado del set de pruebas de habilitación.</summary>
 public enum TestSetStatus

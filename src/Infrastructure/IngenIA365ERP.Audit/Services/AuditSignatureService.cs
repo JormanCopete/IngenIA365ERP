@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using IngenIA365ERP.Application.Audit.Common;
 using IngenIA365ERP.Audit.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace IngenIA365ERP.Audit.Services;
@@ -15,9 +16,17 @@ public sealed class AuditSignatureService : IAuditSignatureService
     private readonly AuditSignatureSettings _settings;
     private readonly Dictionary<string, byte[]> _keyMaterialByVersion;
 
-    public AuditSignatureService(IOptions<AuditSignatureSettings> settings)
+    public AuditSignatureService(IOptions<AuditSignatureSettings> settings, ILogger<AuditSignatureService>? logger = null)
     {
         _settings = settings.Value;
+        if (_settings.UsaClavesDeDesarrollo)
+        {
+            // T986: fuera de desarrollo esto significa que falta el Secret erp-audit-signature del ambiente.
+            logger?.LogWarning(
+                "[Auditoria.ClavesDeDesarrollo] Los PDF de auditoría se firman con la clave de desarrollo '{Version}', " +
+                "cuyo secreto está en el repositorio. Configurar AuditSignature con claves propias " +
+                "(tools/scripts/crear-secreto-firma-auditoria.ps1).", _settings.CurrentKeyVersion);
+        }
         _keyMaterialByVersion = _settings.Keys.ToDictionary(
             k => k.Version,
             k => Convert.FromBase64String(k.SecretBase64),
@@ -38,6 +47,23 @@ public sealed class AuditSignatureService : IAuditSignatureService
         var key = _keyMaterialByVersion[_settings.CurrentKeyVersion];
         var hmac = HMACSHA256.HashData(key, payload);
         return Convert.ToBase64String(hmac);
+    }
+
+    /// <summary>Clave de los PDF de desarrollo: nunca firma anclas (pregunta A2).</summary>
+    private const string VersionDeDesarrolloDeExportacion = "dev-v1";
+
+    public string? AnchorKeyVersion =>
+        _settings.AnchorKeyVersion is { Length: > 0 } version
+        && version != VersionDeDesarrolloDeExportacion
+        && _keyMaterialByVersion.ContainsKey(version)
+            ? version
+            : null;
+
+    public string ComputeHmacBase64(byte[] payload, string keyVersion)
+    {
+        if (!_keyMaterialByVersion.TryGetValue(keyVersion, out var key))
+            throw new InvalidOperationException($"AuditSignature: no hay clave para la versión '{keyVersion}'.");
+        return Convert.ToBase64String(HMACSHA256.HashData(key, payload));
     }
 
     public bool VerifyHmacBase64(byte[] payload, string hmacBase64, string keyVersion)

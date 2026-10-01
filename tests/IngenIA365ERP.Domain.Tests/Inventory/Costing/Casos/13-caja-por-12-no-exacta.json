@@ -1,0 +1,32 @@
+{
+  // FR-017: una conversión que no da exacta deja la diferencia visible en la misma línea, en unidad base.
+  "nombre": "Caja por 12 con conversión no exacta",
+  "descripcion": "La unidad base es la CAJA (admite 4 decimales) y se vende por UNIDAD, la doceava parte (factor 0,083333, 6 decimales). Compra de 2 cajas a 36.000 = 72.000. Venta de 5 unidades: 5 × 0,083333 = 0,416665 caja → 0,4167 en la base (4 decimales, lejos del cero) y la cantidad de redondeo −0,000035 queda visible en la línea; sale a 0,4167 × 36.000 = 15.001,20. Quedan 1,5833 por 56.998,80 (promedio 36.000). Venta de 19 unidades: 19 × 0,083333 = 1,583327 → 1,5833, redondeo +0,000027; sale a 1,5833 × 36.000 = 56.998,80 y deja 0 por 0.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    {
+      "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 2, "costoUnitario": 36000,
+      "esperado": { "estado": { "cantidad": 2, "valor": 72000, "promedio": 36000, "ultimoCosto": 36000 } }
+    },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-02", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -5,
+      "unidad": { "codigo": "UND", "factor": 0.083333, "decimales": 0, "base": "CAJA", "decimalesBase": 4 },
+      "esperado": {
+        "cantidadBase": -0.4167, "cantidadDeRedondeo": -0.000035,
+        "lineas": [ { "kind": "Exit", "cantidad": -0.4167, "costoUnitario": 36000, "costoTotal": -15001.20 } ],
+        "estado": { "cantidad": 1.5833, "valor": 56998.80, "promedio": 36000 }
+      }
+    },
+    {
+      "id": "V2", "documento": "FV-2", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -19,
+      "unidad": { "codigo": "UND", "factor": 0.083333, "decimales": 0, "base": "CAJA", "decimalesBase": 4 },
+      "esperado": {
+        "cantidadBase": -1.5833, "cantidadDeRedondeo": 0.000027,
+        "lineas": [ { "kind": "Exit", "cantidad": -1.5833, "costoUnitario": 36000, "costoTotal": -56998.80 } ],
+        "estado": { "cantidad": 0, "valor": 0, "promedio": 36000 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 0, "valor": 0, "promedio": 36000 } ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 0 } ]
+}

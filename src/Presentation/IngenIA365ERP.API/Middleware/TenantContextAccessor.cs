@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Admin;
 
@@ -36,6 +37,12 @@ namespace IngenIA365ERP.API.Middleware;
 /// Singleton a propósito, y correcto: no cachea nada. Cada propiedad relee
 /// <c>HttpContext.Items</c> en cada acceso.
 /// </para>
+///
+/// <para>
+/// <b>Sin petición</b> (feature 012, T5): un trabajo de fondo corrido por
+/// <c>IEjecutorEnCooperativa</c> trae su cooperativa en <see cref="ContextoAmbiental"/>, y se lee de
+/// ahí con el mismo formato. Con <c>HttpContext</c> presente el ambiental no se mira.
+/// </para>
 /// </summary>
 public class TenantContextAccessor(IHttpContextAccessor httpContext) : ICurrentTenantService
 {
@@ -46,12 +53,17 @@ public class TenantContextAccessor(IHttpContextAccessor httpContext) : ICurrentT
             ? tipado
             : default;
 
+    /// <summary>El trabajo de fondo en curso, sólo cuando no hay petición.</summary>
+    private TenantDirectoryEntry? DelAmbiental => httpContext.HttpContext is null ? ContextoAmbiental.Cooperativa : null;
+
     public string? TenantId =>
-        Leer<Guid>("TenantPublicId") is var id && id != Guid.Empty ? id.ToString("N") : null;
+        DelAmbiental is { } coop
+            ? coop.PublicId.ToString("N")
+            : Leer<Guid>("TenantPublicId") is var id && id != Guid.Empty ? id.ToString("N") : null;
 
-    public string? TenantName => Leer<Tenant>("TenantInfo")?.Name;
+    public string? TenantName => DelAmbiental is { } coop ? coop.Name : Leer<Tenant>("TenantInfo")?.Name;
 
-    public string? Schema => Leer<string>("TenantSchema");
+    public string? Schema => DelAmbiental is { } coop ? coop.SchemaName : Leer<string>("TenantSchema");
 
     /// <summary>
     /// Siempre null. La cadena por cooperativa existe en el modelo

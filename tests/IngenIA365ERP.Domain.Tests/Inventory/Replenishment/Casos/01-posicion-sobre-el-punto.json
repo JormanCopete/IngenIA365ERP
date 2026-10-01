@@ -1,0 +1,6 @@
+{
+  "nombre": "US17-2: 12 disponibles y 5 en tránsito dan posición 17, sobre el punto 15: ni alerta ni sugerido",
+  "disponible": 12, "enTransito": 5, "porRecibir": 0,
+  "minimo": 10, "maximo": 50, "puntoDeReorden": 15,
+  "esperado": { "posicion": 17, "requiereReorden": false, "sugerido": 0, "quiebre": false }
+}

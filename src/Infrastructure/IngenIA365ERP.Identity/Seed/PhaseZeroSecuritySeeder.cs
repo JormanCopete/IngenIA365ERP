@@ -60,6 +60,10 @@ public sealed class PhaseZeroSecuritySeeder(IPermissionClaimsCache? cachePermiso
         await CorePermissionCatalogSeeder.SeedAsync(db, context.Logger);
         // Feature 009: contabilidad (30 codigos Accounting.*); antes ninguna ruta contable exigia permiso.
         await AccountingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        // Feature 012 (T126): inventario comercial y facturación electrónica, enteros desde I1. Antes de los roles:
+        // CompanyAdmin los recibe por "*" y Operator, ReadOnly y Auditor sólo sus *.View (ninguna escritura).
+        await InventoryPermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        await ElectronicInvoicingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         var vinculosNuevos = await BuiltInRolesSeeder.SeedAsync(db, context.Logger);
         if (vinculosNuevos > 0)
             await InvalidarCachePermisosAsync(context, vinculosNuevos, ct);

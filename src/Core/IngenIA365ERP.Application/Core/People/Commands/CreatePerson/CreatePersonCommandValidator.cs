@@ -1,4 +1,5 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Core.People.Contracts;
 
 namespace IngenIA365ERP.Application.Core.People.Commands.CreatePerson;
@@ -9,5 +10,6 @@ public class CreatePersonCommandValidator : AbstractValidator<CreatePersonComman
     public CreatePersonCommandValidator()
     {
         Include(new PersonInputValidator());
+        RuleFor(x => x.Authorization!).SetValidator(new AutorizacionAlCrearValidator()).When(x => x.Authorization is not null);
     }
 }

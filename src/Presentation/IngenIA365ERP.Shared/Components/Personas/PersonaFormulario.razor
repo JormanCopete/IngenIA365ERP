@@ -1,11 +1,23 @@
 @using IngenIA365ERP.Shared.Models.Personas
 
 @*
-    Las cuatro secciones de la persona en una SfTab: es el cuerpo del diálogo de Personas.
+    Las secciones de la persona en una SfTab: es el cuerpo del diálogo de Personas.
     Empleados y Asociados no lo usan —arman su propia SfTab con PersonaCampos por pestaña y
     sus pestañas laborales/de afiliación—, así que la pestaña Roles sólo existe aquí.
+    Feature 012 (T616): en modo Compacto (el alta de cliente desde el POS) va sin pestañas y sólo con lo que la
+    venta necesita: identificación, contacto y datos tributarios.
 *@
 
+@if (Compacto)
+{
+    <div class="persona-compacta">
+        <PersonaCampos Seccion="SeccionDePersona.Identificacion" Modelo="@Modelo" Deshabilitado="@Deshabilitado" />
+        <PersonaCampos Seccion="SeccionDePersona.Contacto" Modelo="@Modelo" Deshabilitado="@Deshabilitado" Ciudades="@Ciudades" />
+        <PersonaCampos Seccion="SeccionDePersona.DatosTributarios" Modelo="@Modelo" Deshabilitado="@Deshabilitado" />
+    </div>
+}
+else
+{
 <SfTab>
     <TabItems>
         <TabItem>
@@ -27,6 +39,12 @@
             </ContentTemplate>
         </TabItem>
         <TabItem>
+            <ChildContent><TabHeader Text="Datos tributarios" /></ChildContent>
+            <ContentTemplate>
+                <PersonaCampos Seccion="SeccionDePersona.DatosTributarios" Modelo="@Modelo" Deshabilitado="@Deshabilitado" />
+            </ContentTemplate>
+        </TabItem>
+        <TabItem>
             <ChildContent><TabHeader Text="Roles" /></ChildContent>
             <ContentTemplate>
                 <PersonaCampos Seccion="SeccionDePersona.Roles" Modelo="@Modelo" Deshabilitado="@Deshabilitado"
@@ -35,6 +53,7 @@
         </TabItem>
     </TabItems>
 </SfTab>
+}
 
 @code {
     [Parameter, EditorRequired] public PersonaFormularioModelo Modelo { get; set; } = new();
@@ -42,4 +61,7 @@
     [Parameter] public IReadOnlyList<OpcionDeCiudad> Ciudades { get; set; } = [];
     [Parameter] public IReadOnlyCollection<string> RolesRegistrables { get; set; } = [];
     [Parameter] public EventCallback<string> OnRegistrarRol { get; set; }
+
+    /// <summary>Sin pestañas y sólo identificación, contacto y datos tributarios (alta de cliente desde el POS, T616).</summary>
+    [Parameter] public bool Compacto { get; set; }
 }

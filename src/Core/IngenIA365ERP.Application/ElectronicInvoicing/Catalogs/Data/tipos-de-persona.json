@@ -1,0 +1,19 @@
+{
+  "catalogo": "tiposDePersona",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tabla de tipos de organización jurídica",
+      "porCotejar": false,
+      "notas": "El emisor (la cooperativa) es persona jurídica y se identifica con NIT: «juridica» e «identificacionDeJuridica». «paisPorDefecto» es el país (ISO 3166) de una parte nacional sin país en su dirección.",
+      "codigos": [
+        { "codigo": "1", "nombre": "Persona jurídica y asimiladas" },
+        { "codigo": "2", "nombre": "Persona natural y asimiladas" }
+      ],
+      "juridica": "1",
+      "natural": "2",
+      "identificacionDeJuridica": "31",
+      "paisPorDefecto": "CO"
+    }
+  ]
+}

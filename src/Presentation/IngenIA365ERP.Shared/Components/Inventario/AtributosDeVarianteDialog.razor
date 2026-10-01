@@ -1,0 +1,150 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+@*
+    Feature 012, I6, T937 (US15-1; FR-023; contracts/api.md §17.1, /api/inventory/variant-attributes): los atributos de variante —talla,
+    color— con sus valores, desde la ficha de una plantilla. Crear o cambiar un atributo reemplaza su lista de valores: los que no vienen se
+    retiran, salvo los que ya usan variantes (el servidor responde Inventory.VariantAttribute.InUse); el nombre de un valor sí cambia. Los
+    códigos siguen la regla de los catálogos (10, mayúsculas, sin espacios). Inactivar un atributo lo deja de ofrecer para generar
+    variantes nuevas. Exige Inventory.Catalog.Manage para guardar. (nuevo)
+*@
+
+<SfDialog Visible="@Visible" VisibleChanged="@VisibleChanged" Header="Atributos de variante" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                <div class="toolbar">
+                    <label class="campo">Atributo
+                        <select class="e-input" value="@(_elegido?.ToString() ?? "")" @onchange="@(e => Elegir(e.Value?.ToString()))">
+                            <option value="">Nuevo atributo</option>
+                            @foreach (var a in _atributos) { <option value="@a.PublicId">@a.Code · @a.Name@(a.IsActive ? "" : " (inactivo)")</option> }
+                        </select>
+                    </label>
+                </div>
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_f.Code" maxlength="10" disabled="@(_usado)" /></label>
+                    <label class="campo">Nombre * <input class="e-input" @bind="_f.Name" maxlength="60" /></label>
+                    <label class="campo"><SfCheckBox @bind-Checked="_f.IsActive" Label="Se ofrece para generar variantes" /></label>
+                </div>
+                @if (_usado)
+                {
+                    <p class="texto-tenue">Lo usan variantes: el código del atributo y el de los valores usados no cambian ni se retiran; los nombres sí.</p>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th class="numero">Orden</th><th></th></tr></thead>
+                        <tbody>
+                            @for (var i = 0; i < _f.Valores.Count; i++)
+                            {
+                                var indice = i;
+                                var v = _f.Valores[i];
+                                <tr>
+                                    <td><input class="e-input" @bind="v.Code" maxlength="10" /></td>
+                                    <td><input class="e-input" @bind="v.Name" maxlength="60" /></td>
+                                    <td class="numero"><input class="e-input numero" type="number" step="1" @bind="v.SortOrder" /></td>
+                                    <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el valor" OnClick="@(() => _f.Valores.RemoveAt(indice))" /></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@(() => _f.Valores.Add(new ValorForm { SortOrder = _f.Valores.Count + 1 }))">Agregar valor</SfButton>
+                </div>
+                <PermissionGate Required="Inventory.Catalog.Manage">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(!PuedeGuardar)" OnClick="@GuardarAsync">Guardar atributo</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@CerrarAsync">Cerrar</SfButton>
+                    </div>
+                </PermissionGate>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>Se guardó un atributo: la ficha vuelve a leer la lista para generar.</summary>
+    [Parameter] public EventCallback OnGuardado { get; set; }
+
+    private sealed class ValorForm
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public int SortOrder { get; set; }
+    }
+
+    private sealed class Formulario
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public bool IsActive { get; set; } = true;
+        public List<ValorForm> Valores { get; set; } = [];
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<AtributoDeVarianteDto> _atributos = [];
+    private Guid? _elegido;
+    private bool _usado, _abierto;
+    private Formulario _f = new();
+    private ClaveDeOperacion _clave = new();
+
+    private bool PuedeGuardar => !_guardado.Activa && !string.IsNullOrWhiteSpace(_f.Code) && !string.IsNullOrWhiteSpace(_f.Name)
+        && _f.Valores.Count > 0 && _f.Valores.All(v => !string.IsNullOrWhiteSpace(v.Code) && !string.IsNullOrWhiteSpace(v.Name));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible) { _abierto = false; return; }
+        if (_abierto) return;
+        _abierto = true;
+        await CargarAsync();
+        Elegir(null);
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Inventario.ListarAtributosDeVarianteAsync(incluirInactivos: true);
+        _atributos = r.IsSuccess ? [.. r.Value ?? []] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los atributos.");
+    }
+
+    private void Elegir(string? valor)
+    {
+        _elegido = Guid.TryParse(valor, out var g) ? g : null;
+        _clave = new ClaveDeOperacion();
+        var a = _atributos.FirstOrDefault(x => x.PublicId == _elegido);
+        _usado = a?.VariantsUsing > 0;
+        _f = a is null
+            ? new Formulario { Valores = [new ValorForm { SortOrder = 1 }] }
+            : new Formulario
+            {
+                Code = a.Code, Name = a.Name, IsActive = a.IsActive,
+                Valores = a.Values.OrderBy(v => v.SortOrder).Select(v => new ValorForm { Code = v.Code, Name = v.Name, SortOrder = v.SortOrder }).ToList(),
+            };
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var pedido = new AtributoDeVarianteRequest(_f.Code.Trim().ToUpperInvariant(), _f.Name.Trim(),
+            _f.Valores.Select(v => new ValorDeAtributoRequest(v.Code.Trim().ToUpperInvariant(), v.Name.Trim(), v.SortOrder)).ToList(), _f.IsActive);
+        var r = await Inventario.GuardarAtributoDeVarianteAsync(_elegido, pedido, _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el atributo.");
+            return;
+        }
+        await Notification.SuccessAsync($"Atributo {r.Value.Code} guardado.");
+        await CargarAsync();
+        Elegir(r.Value.PublicId.ToString());
+        await OnGuardado.InvokeAsync();
+    }
+
+    private Task CerrarAsync() => VisibleChanged.InvokeAsync(false);
+}

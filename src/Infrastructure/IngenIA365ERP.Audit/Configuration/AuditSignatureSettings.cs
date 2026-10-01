@@ -21,8 +21,19 @@ public sealed class AuditSignatureSettings
 {
     public const string SectionName = "AuditSignature";
 
+    /// <summary>Prefijo de las claves de desarrollo, públicas en el repositorio (T986).</summary>
+    public const string PrefijoDeDesarrollo = "dev-";
+
     /// <summary>Versión activa para firmar nuevos PDFs.</summary>
     public string CurrentKeyVersion { get; set; } = "dev-v1";
+
+    /// <summary>
+    /// Feature 012 (T38, pregunta A2): versión de la clave con que se firman las anclas de la cadena de
+    /// auditoría (<c>COR_AuditAnchors</c>). Es <b>otra</b> que la de los PDF y <b>nunca</b> <c>dev-v1</c>:
+    /// quien tenga la clave de exportación no puede rehacer anclas. Tiene que estar en <see cref="Keys"/>;
+    /// si no está, o es <c>dev-v1</c>, no se ancla (la cadena sigue sellándose) y el log lo dice.
+    /// </summary>
+    public string? AnchorKeyVersion { get; set; } = "dev-anclas-v1";
 
     /// <summary>Claves disponibles (current + previas vigentes).</summary>
     public List<AuditSignatureKey> Keys { get; set; } =
@@ -32,8 +43,31 @@ public sealed class AuditSignatureSettings
             Version = "dev-v1",
             // Default DEV ONLY — sobreescribir en prod (32 bytes base64).
             SecretBase64 = "ZGV2ZWxvcG1lbnQtb25seS1zZWNyZXQtZG8tbm90LXVzZS1pbi1wcm9k"
+        },
+        new()
+        {
+            Version = "dev-anclas-v1",
+            // Default DEV ONLY — la de anclas de la cadena de auditoría (feature 012). En producción se
+            // configura otra versión con su secreto (pregunta A2).
+            SecretBase64 = "ZGV2LWFuY2xhcy1zb2xvLWRlc2Fycm9sbG8tbm8tdXNhci1lbi1wcm9k"
         }
     ];
+
+    /// <summary>¿Firma con una clave de desarrollo (pública en el repositorio)?</summary>
+    public bool UsaClavesDeDesarrollo =>
+        CurrentKeyVersion.StartsWith(PrefijoDeDesarrollo, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Feature 012, T986: si la configuración trae claves propias, las de desarrollo salen de la lista. El
+    /// enlazador de configuración <b>agrega</b> a una lista que ya tiene elementos, así que sin esto un ambiente
+    /// con su Secret seguiría aceptando PDF y anclas firmados con los secretos publicados en el repositorio: cualquiera
+    /// podría falsificarlos. Sin claves propias (desarrollo, pruebas) la lista queda como está.
+    /// </summary>
+    public void QuitarClavesDeDesarrolloSiHayPropias()
+    {
+        if (Keys.Exists(k => !k.Version.StartsWith(PrefijoDeDesarrollo, StringComparison.Ordinal)))
+            Keys.RemoveAll(k => k.Version.StartsWith(PrefijoDeDesarrollo, StringComparison.Ordinal));
+    }
 }
 
 public sealed class AuditSignatureKey

@@ -1,0 +1,23 @@
+{
+  // FR-044: la devolución a proveedor sale al costo con que entró; la diferencia con el promedio es ajuste de costo.
+  "nombre": "Devolución a proveedor al costo de entrada",
+  "descripcion": "20 por 23.000, promedio 1.150. Se devuelven 4 de la compra EC-2 (entró a 1.300): salen a 4 × 1.300 = 5.200 y la diferencia contra el promedio, 5.200 − 4 × 1.150 = 600, es una línea CostAdjustment VoidDifference sobre la entrada EC-2. Quedan 16 por 23.000 − 5.200 + 600 = 18.400, promedio 1.150 (no cambia).",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "DP1", "documento": "DP-1", "fecha": "2026-09-06", "clase": "SupplierReturn", "bodega": "PRINCIPAL", "cantidad": -4,
+      "valoracion": "DevolucionDeEntrada", "origen": "E2",
+      "esperado": {
+        "lineas": [
+          { "kind": "Exit", "cantidad": -4, "costoUnitario": 1300, "costoTotal": -5200, "revierte": "-" },
+          { "kind": "CostAdjustment", "reason": "VoidDifference", "cantidad": 0, "costoUnitario": 1150, "costoTotal": 600, "afecta": "E2" }
+        ],
+        "estado": { "cantidad": 16, "valor": 18400, "promedio": 1150, "ultimoCosto": 1300 },
+        "explicacion": [ "Diferencia contra el promedio (VoidDifference): 600" ]
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 16, "valor": 18400, "promedio": 1150 } ]
+}

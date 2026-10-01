@@ -1,0 +1,76 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Ventas
+@using static IngenIA365ERP.Shared.Services.FacturacionElectronica.TextosDeFacturacionElectronica
+@using IngenIA365ERP.Shared.Services.FacturacionElectronica
+@inject VentasClient Ventas
+@inject INotificationService Notification
+
+@* Feature 012, I4 (T758; FR-063, FR-066, FR-067; contracts/api.md §18.2, §20.3): el estado ante la DIAN de un documento de venta —el
+   estado, el código único (CUFE o CUDE), la contingencia en que salió, si ya se puede entregar o espera la validación—, con «Entregar»
+   (lo abre la pantalla que lo usa, con su diálogo de formato) y «Reenviar correo» al comprador, que sólo procede validado o en
+   contingencia. El detalle, los reintentos y las correcciones viven en la bandeja de documentos electrónicos. (nuevo) *@
+@if (Electronico is { } e)
+{
+    <div class="info-card">
+        <div>
+            <b>@TipoDeDocumento(e.Kind)</b> ante la DIAN: <span class="aviso @ClaseDeEstado(e.Status)">@Estado(e.Status)</span>
+            @if (e.ContingencyType is { } c) { <span> · salió en contingencia @TipoDeContingencia(c)</span> }
+            @if (e.PendingDelivery) { <span> · pendiente de entrega</span> }
+        </div>
+        @if (e.UniqueCode is { } codigo) { <div class="texto-tenue">@(e.Kind is 6 or 7 ? "CUDS" : e.Kind is 1 ? "CUFE" : "CUDE"): @codigo</div> }
+        @if (e.Messages is { Count: > 0 } mensajes) { <ul>@foreach (var m in mensajes) { <li>@(m.Translation ?? m.Text)</li> }</ul> }
+        <IndicadorDeCarga Cargando="@_envio.Activa" Texto="Enviando…" Compacto="true">
+            <div class="toolbar">
+                @if (AccionesDelDocumentoElectronico.Entregable(e.Status))
+                {
+                    <SfButton CssClass="e-outline" Disabled="@_envio.Activa" OnClick="@(() => Entregar.InvokeAsync())">Entregar</SfButton>
+                    <SfButton CssClass="e-outline" Disabled="@_envio.Activa" OnClick="@ReenviarCorreoAsync">Reenviar correo</SfButton>
+                }
+                else
+                {
+                    <span class="texto-tenue">Se entrega cuando la DIAN lo valide o si sale en contingencia.</span>
+                }
+                <PermissionGate Required="ElectronicInvoicing.Documents.View">
+                    <a class="e-btn e-flat" href="@($"/ventas/documentos-electronicos?documento={e.ElectronicDocumentPublicId}")">Ver en la bandeja</a>
+                </PermissionGate>
+            </div>
+        </IndicadorDeCarga>
+    </div>
+}
+
+@code {
+    /// <summary>El bloque <c>electronic</c> de la venta; sin él (comprobante no electrónico) no se pinta nada.</summary>
+    [Parameter] public ElectronicoDeLaVentaDto? Electronico { get; set; }
+
+    /// <summary>El documento de venta (su <c>PublicId</c>), para reenviar el correo.</summary>
+    [Parameter] public Guid DocumentoId { get; set; }
+
+    /// <summary>«Entregar»: la pantalla abre su diálogo de formato (tirilla o carta, y por correo).</summary>
+    [Parameter] public EventCallback Entregar { get; set; }
+
+    /// <summary>Después de reenviar el correo, para que la pantalla recargue.</summary>
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    private readonly EstadoDeCarga _envio = new();
+    private readonly ClaveDeOperacion _claveCorreo = new();
+
+    /// <summary>El correo sale con la entrega en carta: el PDF y el AttachedDocument al correo de la copia fiscal (§20.3).</summary>
+    private async Task ReenviarCorreoAsync()
+    {
+        using var envio = _envio.Iniciar();
+        var r = await Ventas.EntregarAsync(DocumentoId, new EntregaRequest(TextosDeVentas.NombreDeFormato(FormatoCarta), SendEmail: true), _claveCorreo);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "Inventory.Document.AlreadyDelivered"
+                ? "Ya se entregó en carta con su correo; una copia se saca con «Reimprimir»."
+                : r.ErrorMessage ?? "No se pudo reenviar el correo.");
+            return;
+        }
+        if (r.Value?.EmailSent == true) await Notification.SuccessAsync("Correo enviado al comprador.");
+        else await Notification.InfoAsync("La entrega quedó registrada; el correo lo envía el canal o falta el correo del comprador.");
+        await Cambio.InvokeAsync();
+    }
+
+    /// <summary><c>CashRegisterPrintFormat.Letter</c>.</summary>
+    private const int FormatoCarta = 216;
+}

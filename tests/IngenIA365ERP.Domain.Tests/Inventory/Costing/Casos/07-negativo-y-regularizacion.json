@@ -1,0 +1,32 @@
+{
+  // Research R10: con el negativo permitido la salida va al último costo y se regulariza al llegar la entrada.
+  "nombre": "Negativo y regularización",
+  "descripcion": "Existencias.StockNegativoPermitido = sí. 20 por 23.000 (1.150; último costo 1.300). Venta de 25: los 20 que hay salen al promedio (23.000) y los 5 que faltan salen al último costo en su propia línea, 5 × 1.300 = 6.500: quedan −5 por −6.500. Llega una compra de 10 × 1.400 = 14.000; cubre los 5 negativos, que debieron costar 1.400: la diferencia 5 × (1.300 − 1.400) = −500 es NegativeRegularization sobre la línea negativa de la venta. Quedan 5 por −6.500 + 14.000 − 500 = 7.000, promedio 1.400.",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": true },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-2", "fecha": "2026-09-02", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1300 },
+    {
+      "id": "V1", "documento": "FV-1", "fecha": "2026-09-03", "clase": "SalesInvoice", "bodega": "PRINCIPAL", "cantidad": -25,
+      "esperado": {
+        "lineas": [
+          { "kind": "Exit", "cantidad": -20, "costoUnitario": 1150, "costoTotal": -23000 },
+          { "kind": "Exit", "cantidad": -5, "costoUnitario": 1300, "costoTotal": -6500 }
+        ],
+        "estado": { "cantidad": -5, "valor": -6500, "promedio": 1300, "ultimoCosto": 1300 },
+        "explicacion": [ "Sale en negativo al último costo: 5" ]
+      }
+    },
+    {
+      "id": "E3", "documento": "EC-3", "fecha": "2026-09-04", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "cantidad": 10, "costoUnitario": 1400,
+      "esperado": {
+        "lineas": [
+          { "kind": "Entry", "cantidad": 10, "costoUnitario": 1400, "costoTotal": 14000 },
+          { "kind": "CostAdjustment", "reason": "NegativeRegularization", "cantidad": 0, "costoUnitario": 1400, "costoTotal": -500, "afecta": "V1#2" }
+        ],
+        "estado": { "cantidad": 5, "valor": 7000, "promedio": 1400, "ultimoCosto": 1400 }
+      }
+    }
+  ],
+  "final": [ { "ambito": "COOPERATIVA", "cantidad": 5, "valor": 7000, "promedio": 1400 } ]
+}

@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Notifications.Common;
 using MediatR;
@@ -34,17 +35,18 @@ public sealed class MarkNotificationReadHandler
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IActorActual _actor;
     private readonly IDateTimeService _clock;
 
     public MarkNotificationReadHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser, IDateTimeService clock)
+        IApplicationDbContext db, ICurrentUserService currentUser, IActorActual actor, IDateTimeService clock)
     {
-        _db = db; _currentUser = currentUser; _clock = clock;
+        _db = db; _currentUser = currentUser; _actor = actor; _clock = clock;
     }
 
     public async Task<Result> Handle(MarkNotificationReadCommand request, CancellationToken ct)
     {
-        var recipient = await ResolveUserPublicIdAsync(_db, _currentUser, ct);
+        var recipient = await ResolveUserPublicIdAsync(_actor, ct);
         if (recipient is null) return Result.Failure("Auth.Unauthorized", "Usuario no identificado.");
 
         var entry = await _db.Notifications
@@ -66,13 +68,12 @@ public sealed class MarkNotificationReadHandler
         return Result.Success();
     }
 
-    internal static async Task<Guid?> ResolveUserPublicIdAsync(
-        IApplicationDbContext db, ICurrentUserService cu, CancellationToken ct)
-    {
-        if (cu.UserId is not { } uid) return null;
-        return await db.Users.Where(u => u.Id == uid)
-            .Select(u => (Guid?)u.PublicId).FirstOrDefaultAsync(ct);
-    }
+    /// <summary>
+    /// El dueño de la bandeja por <see cref="IActorActual"/> (feature 012, T39, T095), no por
+    /// <c>ICurrentUserService.UserId</c>, que es nulo para un usuario de identidad central.
+    /// </summary>
+    internal static async Task<Guid?> ResolveUserPublicIdAsync(IActorActual actor, CancellationToken ct) =>
+        (await actor.ObtenerAsync(ct)).UserPublicId;
 }
 
 public sealed class MarkNotificationArchivedHandler
@@ -80,17 +81,18 @@ public sealed class MarkNotificationArchivedHandler
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IActorActual _actor;
     private readonly IDateTimeService _clock;
 
     public MarkNotificationArchivedHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser, IDateTimeService clock)
+        IApplicationDbContext db, ICurrentUserService currentUser, IActorActual actor, IDateTimeService clock)
     {
-        _db = db; _currentUser = currentUser; _clock = clock;
+        _db = db; _currentUser = currentUser; _actor = actor; _clock = clock;
     }
 
     public async Task<Result> Handle(MarkNotificationArchivedCommand request, CancellationToken ct)
     {
-        var recipient = await MarkNotificationReadHandler.ResolveUserPublicIdAsync(_db, _currentUser, ct);
+        var recipient = await MarkNotificationReadHandler.ResolveUserPublicIdAsync(_actor, ct);
         if (recipient is null) return Result.Failure("Auth.Unauthorized", "Usuario no identificado.");
 
         var entry = await _db.Notifications
@@ -117,17 +119,18 @@ public sealed class MarkAllNotificationsReadHandler
 {
     private readonly IApplicationDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IActorActual _actor;
     private readonly IDateTimeService _clock;
 
     public MarkAllNotificationsReadHandler(
-        IApplicationDbContext db, ICurrentUserService currentUser, IDateTimeService clock)
+        IApplicationDbContext db, ICurrentUserService currentUser, IActorActual actor, IDateTimeService clock)
     {
-        _db = db; _currentUser = currentUser; _clock = clock;
+        _db = db; _currentUser = currentUser; _actor = actor; _clock = clock;
     }
 
     public async Task<Result> Handle(MarkAllNotificationsReadCommand request, CancellationToken ct)
     {
-        var recipient = await MarkNotificationReadHandler.ResolveUserPublicIdAsync(_db, _currentUser, ct);
+        var recipient = await MarkNotificationReadHandler.ResolveUserPublicIdAsync(_actor, ct);
         if (recipient is null) return Result.Failure("Auth.Unauthorized", "Usuario no identificado.");
 
         var now = _clock.UtcNow;

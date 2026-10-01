@@ -1,0 +1,163 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+@*
+    Feature 012, I5, US16 (T848; FR-043; contracts/api.md §7; T18, T42g): cambiar el método de costeo (Costeo.Metodo: promedio ponderado o
+    PEPS) o su ámbito (Costeo.Ambito: cooperativa o bodega) desde /inventario/parametros. El cambio es una vigencia nueva que sólo se admite
+    el primer día de un período abierto sin movimientos desde ese día y nunca con fecha futura: el diálogo propone el primer día del período
+    abierto que sigue al último cerrado y, si el servidor responde con la fecha más temprana admitida, la ofrece. Pide la justificación y el
+    acta (obligatoria si la cooperativa la exige, Costeo.CambioExigeActa), advierte que no se deshace —registra un ajuste de costo del
+    sistema que revalúa toda la existencia— y enlaza al valorizado por los dos métodos. Exige Inventory.Costing.Manage además de
+    Inventory.Parameters.Manage. (nuevo)
+*@
+
+<SfDialog Visible="@Visible" VisibleChanged="@VisibleChanged" Header="@Titulo" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <PermissionGate Required="Inventory.Costing.Manage" MostrarAviso="true">
+                <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Registrando el cambio…" : "Buscando el próximo período abierto…")">
+                    @if (Parametro is { } p)
+                    {
+                        <p class="texto-apoyo">@p.Description · hoy: <b>@Texto(p.Current.Value)</b></p>
+                        <div class="aviso aviso-alerta">
+                            <p><b>Este cambio no se deshace.</b> Desde la fecha elegida todo el inventario se valora con el método o ámbito nuevo: el sistema registra un
+                            ajuste de costo que revalúa la existencia de cada producto, y lo confirmado antes no cambia.</p>
+                            <p>Antes de registrarlo, compare los dos valorizados en el <a href="/inventario/informes?vista=method-change-valuation">informe del cambio de método</a>.</p>
+                        </div>
+                        <div class="form-grid">
+                            <label class="campo">Valor nuevo *
+                                <select class="e-input" @bind="_valor">
+                                    <option value="">Elija…</option>
+                                    @foreach (var v in p.AllowedValues ?? []) { <option value="@v" disabled="@(v == p.Current.Value)">@Texto(v)</option> }
+                                </select>
+                            </label>
+                            <label class="campo">Desde *
+                                <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" />
+                            </label>
+                            <label class="campo campo-ancho">Justificación * <input class="e-input" @bind="_motivo" maxlength="500" placeholder="Por qué cambia el método" /></label>
+                            <label class="campo campo-ancho">Acta @(p.RequiresLegalSource ? "*" : "") <input class="e-input" @bind="_acta" maxlength="200" placeholder="Acta del consejo o de la gerencia que lo aprueba" /></label>
+                        </div>
+                        <p class="texto-tenue">Se propone el primer día del período abierto que sigue al último cerrado. Sólo se admite el primer día de un período abierto,
+                        sin movimientos desde ese día, y no se programa a futuro: si ese día todavía no llega, se registra ese día.</p>
+                        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(!PuedeRegistrar)" OnClick="@RegistrarAsync">Registrar el cambio</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@CerrarAsync">Cancelar</SfButton>
+                        </div>
+                    }
+                </IndicadorDeCarga>
+            </PermissionGate>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary><c>Costeo.Metodo</c> o <c>Costeo.Ambito</c>, con su valor vigente y los admitidos.</summary>
+    [Parameter] public ParametroDto? Parametro { get; set; }
+
+    /// <summary>Se avisa cuando el cambio quedó registrado, con la fecha desde la que rige.</summary>
+    [Parameter] public EventCallback<DateOnly> OnRegistrado { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private string? _valor, _motivo, _acta, _error, _abiertoPara;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+
+    private string Titulo => Parametro?.Key == "Costeo.Ambito" ? "Cambiar el ámbito de costeo" : "Cambiar el método de costeo";
+
+    private bool PuedeRegistrar => !_guardado.Activa && !string.IsNullOrWhiteSpace(_valor) && !string.IsNullOrWhiteSpace(_motivo)
+                                   && (Parametro?.RequiresLegalSource != true || !string.IsNullOrWhiteSpace(_acta));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || Parametro is null)
+        {
+            _abiertoPara = null;
+            return;
+        }
+        if (_abiertoPara == Parametro.Key) return;
+        _abiertoPara = Parametro.Key;
+        _valor = Parametro.AllowedValues?.FirstOrDefault(v => v != Parametro.Current.Value);
+        _motivo = _acta = _error = null;
+        _clave = new ClaveDeOperacion();
+        using var carga = _carga.Iniciar();
+        _desde = await PropuestaAsync();
+    }
+
+    /// <summary>
+    /// El primer día del período abierto que sigue al último cerrado; sin cierres, el del mes de arranque del inventario o, sin él, el del
+    /// mes en curso. Nunca después de hoy (el cambio no se programa).
+    /// </summary>
+    private async Task<DateOnly> PropuestaAsync()
+    {
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        var inicioDelMes = new DateOnly(hoy.Year, hoy.Month, 1);
+        var r = await Inventario.PeriodosAsync();
+        if (!r.IsSuccess || r.Value is null) return inicioDelMes;
+        var propuesta = r.Value.LastClosedDate is { } cerrado ? cerrado.AddDays(1)
+            : r.Value.StartDate is { } arranque ? new DateOnly(arranque.Year, arranque.Month, 1)
+            : inicioDelMes;
+        return propuesta > hoy ? inicioDelMes : propuesta;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (Parametro is not { } p || !PuedeRegistrar) return;
+        using var guardado = _guardado.Iniciar();
+        _error = null;
+        var r = await Inventario.NuevaVigenciaAsync(p.Module, p.Key, new NuevaVigenciaDeParametroRequest(
+            0, null, null, _valor!.Trim(), _desde, _motivo!.Trim(), string.IsNullOrWhiteSpace(_acta) ? null : _acta.Trim(), null), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode switch
+            {
+                "Parameters.RequiresPeriodStart" when r.Dato<DateOnly?>("earliestAllowed") is { } primera =>
+                    Proponer(primera, $"{r.ErrorMessage} La fecha más temprana admitida es el {primera:dd/MM/yyyy}."),
+                "Inventory.Costing.MethodChangeInFuture" => $"{r.ErrorMessage} Regístrelo el {_desde:dd/MM/yyyy} o después, sin movimientos desde ese día.",
+                "Parameters.PermissionRequired" => $"Le falta el permiso {r.Dato<string>("permissionCode")} para cambiar este parámetro.",
+                "Parameters.LegalSourceRequired" => "La cooperativa exige el acta que aprueba el cambio.",
+                "Parameters.ValueNotAllowed" => $"{r.ErrorMessage} Admite: {string.Join(", ", r.Dato<List<string>>("allowed") ?? [])}.",
+                _ => r.ErrorMessage ?? "No se pudo registrar el cambio.",
+            };
+            return;
+        }
+        await Notification.SuccessAsync($"{p.Key} = {Texto(_valor)} desde el {_desde:dd/MM/yyyy}. El ajuste de costo del sistema quedó registrado.");
+        _abiertoPara = null;
+        await VisibleChanged.InvokeAsync(false);
+        await OnRegistrado.InvokeAsync(_desde);
+    }
+
+    /// <summary>Deja propuesta la fecha que admitió el servidor y devuelve el mensaje.</summary>
+    private string Proponer(DateOnly fecha, string mensaje)
+    {
+        _desde = fecha;
+        _clave = new ClaveDeOperacion();
+        return mensaje;
+    }
+
+    private async Task CerrarAsync()
+    {
+        _abiertoPara = null;
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    /// <summary>Los valores del catálogo en palabras.</summary>
+    private static string Texto(string? valor) => valor switch
+    {
+        "PromedioPonderado" => "Promedio ponderado",
+        "Peps" => "PEPS (primeras en entrar, primeras en salir)",
+        "Cooperativa" => "Toda la cooperativa",
+        "Bodega" => "Cada bodega",
+        null => "",
+        _ => valor,
+    };
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

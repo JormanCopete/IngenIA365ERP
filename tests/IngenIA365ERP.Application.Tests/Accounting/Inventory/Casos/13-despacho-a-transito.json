@@ -1,0 +1,89 @@
+{
+  "descripcion": "TrasladoDespachado: la punta to es la bodega de tránsito (rol Transito) y la from la operativa (rol Inventario).",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "TransferDispatch",
+      "documentTypeCode": "TRD",
+      "number": "TR-1",
+      "publicId": "00000048-0000-4000-8000-000000000048",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000049-0000-4000-8000-000000000049",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000050-0000-4000-8000-000000000050",
+      "type": "TrasladoDespachado",
+      "payload": {
+        "operation": "DespachoTraslado",
+        "transitWarehouseCode": "TR01",
+        "destinationWarehouseCode": "B02",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "fromWarehouseCode": "B01",
+            "fromWarehouseBehavior": "Operational",
+            "fromBranchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "toWarehouseCode": "TR01",
+            "toWarehouseBehavior": "Transit",
+            "toBranchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "quantityBase": 1,
+            "cost": 800.0,
+            "documentLines": [
+              1,
+              2
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "TR",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "14350590",
+        "debito": 800.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ]
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 0,
+        "credito": 800.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2
+        ]
+      }
+    ]
+  }
+}

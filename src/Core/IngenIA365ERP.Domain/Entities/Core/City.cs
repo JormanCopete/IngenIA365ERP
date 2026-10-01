@@ -16,6 +16,14 @@ public class City : AuditableEntity
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Código DIVIPOLA del municipio (DANE, cinco dígitos; feature 012, T24; T176). Único entre las vivas. Lo llena
+    /// <c>DivipolaSeeder</c>; a él se refieren por código la sucursal (<c>COR_Branches.MunicipalityDaneCode</c>) y las
+    /// tarifas municipales del catálogo tributario.
+    /// </summary>
+    [MaxLength(5)]
+    public string? DaneCode { get; set; }
+
     // Navigation properties
     public Department Department { get; set; } = null!;
     public ICollection<Person> People { get; set; } = [];

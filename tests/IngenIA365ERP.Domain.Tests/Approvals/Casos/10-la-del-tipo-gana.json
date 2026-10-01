@@ -1,0 +1,16 @@
+{
+  "nombre": "La política de un tipo gana sobre la de «todos los tipos» del mismo sujeto",
+  "derivacion": "Hay una política de todos los tipos (nivel 1 desde 0 con Inventory.Approvals.Supervisor) y una del tipo aaaa… (nivel 1 desde 0 con Inventory.Approvals.Management). Un documento del tipo aaaa… toma la suya; uno del tipo bbbb… y uno sin tipo toman la de todos. Antes de que empiece la del tipo (mayo), el tipo aaaa… toma la de todos.",
+  "subject": "DocumentConfirmation",
+  "fecha": "2026-10-05",
+  "politicas": [
+    { "validFrom": "2026-01-01", "niveles": [ { "order": 1, "threshold": 0, "permission": "Inventory.Approvals.Supervisor" } ] },
+    { "documentType": "aaaaaaaa-0000-0000-0000-000000000001", "validFrom": "2026-06-01", "niveles": [ { "order": 1, "threshold": 0, "permission": "Inventory.Approvals.Management" } ] }
+  ],
+  "evaluaciones": [
+    { "documentType": "aaaaaaaa-0000-0000-0000-000000000001", "monto": 10, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Approvals.Management"] } },
+    { "documentType": "bbbbbbbb-0000-0000-0000-000000000002", "monto": 10, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Approvals.Supervisor"] } },
+    { "monto": 10, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Approvals.Supervisor"] } },
+    { "fecha": "2026-05-15", "documentType": "aaaaaaaa-0000-0000-0000-000000000001", "monto": 10, "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Approvals.Supervisor"] } }
+  ]
+}

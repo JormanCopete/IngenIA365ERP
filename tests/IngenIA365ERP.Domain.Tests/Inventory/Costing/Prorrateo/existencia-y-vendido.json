@@ -1,0 +1,23 @@
+{
+  "nombre": "D5: la porción en existencia es mín(1, existencia actual / cantidad recibida)",
+  "descripcion": "Tres líneas de 10 unidades con el mismo valor: $3.000 por valor, $1.000 a cada una. Línea 1: quedan 6 → ExistingRatio 0,6, $600 a inventario y $400 a costo de venta. Línea 2: la existencia (15) supera lo recibido → 1, todo a inventario. Línea 3: ya no hay existencia → 0, todo a costo de venta. Línea 4: 3 recibidas, queda 1 → 0,333333 (seis decimales, Tarifa); $300 × 0,333333 = 99,9999 → $100,00 a inventario y $200 a costo de venta.",
+  "monto": 3300,
+  "metodo": "Value",
+  "montos": "Centavo",
+  "residuo": "MayorValor",
+  "lineas": [
+    { "linea": 1, "producto": 10, "cantidad": 10, "valor": 10000, "existencia": 6 },
+    { "linea": 2, "producto": 11, "cantidad": 10, "valor": 10000, "existencia": 15 },
+    { "linea": 3, "producto": 12, "cantidad": 10, "valor": 10000, "existencia": 0 },
+    { "linea": 4, "producto": 13, "cantidad": 3, "valor": 3000, "existencia": 1 }
+  ],
+  "esperado": {
+    "roundingResidue": 0,
+    "lineas": [
+      { "linea": 1, "basis": 10000, "allocated": 1000, "residue": 0, "existingRatio": 0.6, "existing": 600, "sold": 400 },
+      { "linea": 2, "basis": 10000, "allocated": 1000, "residue": 0, "existingRatio": 1, "existing": 1000, "sold": 0 },
+      { "linea": 3, "basis": 10000, "allocated": 1000, "residue": 0, "existingRatio": 0, "existing": 0, "sold": 1000 },
+      { "linea": 4, "basis": 3000, "allocated": 300, "residue": 0, "existingRatio": 0.333333, "existing": 100, "sold": 200 }
+    ]
+  }
+}

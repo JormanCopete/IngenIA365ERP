@@ -118,4 +118,70 @@ public static class SincronizacionDeCatalogo
         setup.UpdatedAt = ahora; setup.UpdatedBy = quien;
         return (true, null);
     }
+
+    // ------------------------------------------------------------------ unidades de medida (feature 012) --
+
+    /// <summary>La clave de <c>COR_SystemSettings</c> que recuerda la versión sembrada de las unidades (T210).</summary>
+    public const string ClaveDeVersionDeUnidades = "INV.UnidadesSembradas.Version";
+
+    /// <summary>
+    /// Feature 012 (T210): pone al día las unidades de medida sembradas cuando <c>inventario-unidades.json</c> trae otra
+    /// <c>version</c>, con la misma idea que el catálogo contable: en su sitio y sin duplicar. Corrige nombre, símbolo y
+    /// código DIAN de las que siguen marcadas <c>IsSeeded</c>; los decimales <b>sólo suben</b> (data-model §1.1: bajarlos
+    /// invalidaría cantidades ya registradas); revive una sembrada que estaba de baja. No toca las que creó la cooperativa
+    /// ni retira ninguna. Nula si la versión guardada ya es la del archivo. Sin <c>SaveChanges</c>: guarda la semilla.
+    /// </summary>
+    public static async Task<int?> SincronizarUnidadesAsync(
+        IApplicationDbContext db, string version, IReadOnlyList<Domain.Entities.Inventory.Catalog.UnitOfMeasure> semilla,
+        string quien, DateTime ahora, ILogger? logger, CancellationToken ct)
+    {
+        var marca = await db.SystemSettings.FirstOrDefaultAsync(s => s.SettingKey == ClaveDeVersionDeUnidades, ct);
+        if (marca?.SettingValue == version) return null;
+
+        var existentes = (await db.UnitsOfMeasure.IgnoreQueryFilters().ToListAsync(ct))
+            .GroupBy(u => u.Code, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderBy(u => u.IsDeleted).First(), StringComparer.OrdinalIgnoreCase);
+        var cambios = 0;
+        foreach (var s in semilla)
+        {
+            if (!existentes.TryGetValue(s.Code, out var u))
+            {
+                db.UnitsOfMeasure.Add(new Domain.Entities.Inventory.Catalog.UnitOfMeasure
+                {
+                    Code = s.Code, Name = s.Name, Symbol = s.Symbol, AllowedDecimals = s.AllowedDecimals, DianUnitCode = s.DianUnitCode,
+                    IsSeeded = true, IsActive = true, CreatedAt = ahora, CreatedBy = quien,
+                });
+                cambios++;
+                continue;
+            }
+            if (!u.IsSeeded) continue;
+            var decimales = Math.Max(u.AllowedDecimals, s.AllowedDecimals);
+            if (u.IsDeleted || u.Name != s.Name || u.Symbol != s.Symbol || u.DianUnitCode != s.DianUnitCode || u.AllowedDecimals != decimales)
+            {
+                u.Name = s.Name; u.Symbol = s.Symbol; u.DianUnitCode = s.DianUnitCode; u.AllowedDecimals = (byte)decimales;
+                u.IsDeleted = false; u.DeletedAt = null; u.DeletedBy = null;
+                u.UpdatedAt = ahora; u.UpdatedBy = quien;
+                cambios++;
+            }
+        }
+
+        if (marca is null)
+        {
+            db.SystemSettings.Add(new Domain.Entities.Core.SystemSetting
+            {
+                SettingKey = ClaveDeVersionDeUnidades, SettingValue = version, ValueType = "String", ModulePrefix = "INV",
+                Description = "Versión de inventario-unidades.json sembrada en esta cooperativa (feature 012, T210).",
+                CreatedAt = ahora, CreatedBy = quien,
+            });
+        }
+        else
+        {
+            logger?.LogWarning("Unidades de medida sembradas: {Anterior} → {Version}, {Cambios} corregida(s) o insertada(s).",
+                marca.SettingValue, version, cambios);
+            marca.SettingValue = version;
+            marca.UpdatedAt = ahora;
+            marca.UpdatedBy = quien;
+        }
+        return cambios + 1;
+    }
 }

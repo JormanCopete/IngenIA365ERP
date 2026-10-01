@@ -1,0 +1,36 @@
+{
+  // Feature 012, T097, caso 08 (AmountPerUnit): el impuesto a las bolsas es un valor por unidad gravable.
+  // Venta en el punto de venta a un consumidor final:
+  // Línea 1: 3 bolsas (1 unidad gravable por unidad base) × 66 = 198.
+  // Línea 2: 2 rollos de 10 bolsas (10 unidades gravables por unidad base) = 20 × 66 = 1.320.
+  // El valor por unidad es de ejemplo (la norma se coteja en la semilla).
+  "nombre": "Impuesto por unidad a las bolsas",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 5, "codigo": "BOLSAS", "nombre": "Impuesto nacional al consumo de bolsas plásticas", "clase": "Inc", "forma": "AmountPerUnit", "codigoDian": "22" }
+  ],
+  "tarifas": [
+    { "id": 51, "impuesto": 5, "codigo": "BOLSA", "valorPorUnidad": 66, "aplicaA": "Sales", "desde": "2026-01-01" }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Venta de bolsas sueltas y en rollo",
+      "perspectiva": "Sales",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "comprador": { "tipoPersona": "01" },
+      "lineas": [
+        { "numero": 1, "base": 300, "unidades": 3, "impuestos": [ { "impuesto": 5, "tarifa": "BOLSA", "aplicaA": "Sales", "unidadesGravables": 1 } ] },
+        { "numero": 2, "base": 5000, "unidades": 2, "impuestos": [ { "impuesto": 5, "tarifa": "BOLSA", "aplicaA": "Sales", "unidadesGravables": 10 } ] }
+      ],
+      "esperado": {
+        "renglones": [
+          { "linea": 1, "tarifa": "BOLSA", "tratamiento": "Generated", "base": 300, "valor": 198, "explicacion": [ "Unidades gravables: 3", "Valor por unidad: 66" ] },
+          { "linea": 2, "tarifa": "BOLSA", "tratamiento": "Generated", "base": 5000, "valor": 1320, "explicacion": [ "Unidades gravables por unidad base: 10", "Unidades gravables: 20" ] }
+        ]
+      }
+    }
+  ]
+}

@@ -12,6 +12,8 @@ public record CityDto
     public string Name { get; init; } = string.Empty;
     public Guid DepartmentPublicId { get; init; }
     public string DepartmentName { get; init; } = string.Empty;
+    /// <summary>Código DIVIPOLA (feature 012, T176), o nulo.</summary>
+    public string? DaneCode { get; init; }
 }
 
 public record ListCitiesQuery : IRequest<Result<PagedList<CityDto>>>
@@ -66,7 +68,8 @@ public class ListCitiesQueryHandler(IApplicationDbContext context)
                 Code = e.LegacyCode,
                 Name = e.Name,
                 DepartmentPublicId = e.Department.PublicId,
-                DepartmentName = e.Department.Name
+                DepartmentName = e.Department.Name,
+                DaneCode = e.DaneCode
             })
             .ToListAsync(cancellationToken);
 
@@ -94,7 +97,8 @@ public class GetCityByIdQueryHandler(IApplicationDbContext context)
                 Code = e.LegacyCode,
                 Name = e.Name,
                 DepartmentPublicId = e.Department.PublicId,
-                DepartmentName = e.Department.Name
+                DepartmentName = e.Department.Name,
+                DaneCode = e.DaneCode
             })
             .FirstOrDefaultAsync(cancellationToken);
 

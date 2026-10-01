@@ -145,7 +145,7 @@ las conciliaciones cerradas del mes.
 
 **Apertura** (`Contabilidad › Saldos de apertura`, `/contabilidad/apertura`, permiso
 `Accounting.Opening.Manage`; API `/api/accounting/opening`). Es lo primero que hace una
-cooperativa que llega desde SOLIDO, después de iniciar la contabilidad y crear las auxiliares:
+cooperativa que llega desde el sistema anterior, después de iniciar la contabilidad y crear las auxiliares:
 
 0. **Elegir la fecha del corte.** Se propone la víspera del primer período (el 31 de diciembre
    anterior al primer ejercicio) y se puede mover hasta el **fin del primer ejercicio**: el corte
@@ -155,8 +155,7 @@ cooperativa que llega desde SOLIDO, después de iniciar la contabilidad y crear 
    la apertura es saldo inicial y **nunca** movimiento del mes, y su comprobante no lleva período.
 1. Descargar la plantilla (`GET /template.xlsx`): la hoja «Datos» trae sólo los encabezados en la
    fila 1 —`cuenta, tercero, tipoDocumento, numeroDocumento, centroCosto, sucursal, debito,
-   credito, detalle`— y la hoja «Instrucciones» explica cada columna. El contador la llena desde
-   SOLIDO: una fila por auxiliar de movimiento, y por tercero y documento cruce donde la cuenta lo
+   credito, detalle`— y la hoja «Instrucciones» explica cada columna. El contador la llena desde el sistema anterior: una fila por auxiliar de movimiento, y por tercero y documento cruce donde la cuenta lo
    exige (cartera, proveedores). `tercero` es el documento de identidad de la persona (tiene que
    existir en Personas), `sucursal` su código, sigla o nombre (vacía = la principal), importes sin
    separador de miles y con hasta dos decimales.

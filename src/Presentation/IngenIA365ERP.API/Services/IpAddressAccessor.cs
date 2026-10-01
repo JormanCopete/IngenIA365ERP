@@ -24,6 +24,12 @@ namespace IngenIA365ERP.API.Services;
 /// tenia la misma IP interna (10.42.0.25, el pod de cloudflared). Cualquier
 /// limite o bloqueo «por IP» era en realidad para toda la plataforma junta.
 /// </para>
+///
+/// <para>
+/// Sin petición —un trabajo de fondo con <c>ContextoAmbiental</c> (feature 012, T5)— es
+/// <b>nula</b>, a propósito: el proceso no tiene IP, y ponerle la del servidor la haría pasar por la
+/// de una persona en la auditoría.
+/// </para>
 /// </summary>
 internal sealed class IpAddressAccessor(IHttpContextAccessor httpContextAccessor) : IIpAddressAccessor
 {

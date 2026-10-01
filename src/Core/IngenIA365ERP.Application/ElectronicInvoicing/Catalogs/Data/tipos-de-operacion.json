@@ -1,0 +1,20 @@
+{
+  "catalogo": "tiposDeOperacion",
+  "versiones": [
+    {
+      "vigenteDesde": "2019-01-01",
+      "fuente": "DIAN, Anexo técnico de la factura electrónica de venta v1.9 (Res. 165/2023, compilada en la Res. Única 000227 de 2025, anexo T5.1), tabla de tipos de operación; anexo del documento soporte (Res. 167/2021)",
+      "porCotejar": true,
+      "notas": "El mismo código significa cosas distintas según el tipo de documento: cada código dice a qué tipos aplica. Por cotejar los del documento equivalente POS y de la nota de ajuste del documento soporte.",
+      "codigos": [
+        { "codigo": "10", "nombre": "Estándar", "tipos": [ "Invoice", "PosEquivalent" ] },
+        { "codigo": "20", "nombre": "Nota que referencia un documento electrónico", "tipos": [ "CreditNote", "PosAdjustmentNote" ] },
+        { "codigo": "22", "nombre": "Nota crédito sin referencia a facturas", "tipos": [ "CreditNote" ] },
+        { "codigo": "30", "nombre": "Nota débito que referencia una factura electrónica", "tipos": [ "DebitNote" ] },
+        { "codigo": "32", "nombre": "Nota débito sin referencia a facturas", "tipos": [ "DebitNote" ] },
+        { "codigo": "10", "nombre": "Residente", "tipos": [ "SupportDocument", "SupportDocumentAdjustmentNote" ] },
+        { "codigo": "11", "nombre": "No residente", "tipos": [ "SupportDocument", "SupportDocumentAdjustmentNote" ] }
+      ]
+    }
+  ]
+}

@@ -74,6 +74,9 @@ public static class DomainPermissionCatalogSeeder
         // Audit log
         ("AuditLog",               "View",     "Consultar el audit log de la cooperativa"),
         ("AuditLog",               "Export",   "Exportar audit log a CSV / PDF firmado"),
+        // Feature 012 (T125): verificar la cadena sellada de la auditoría (POST /api/audit/integrity/verify).
+        // El Auditor integrado lo recibe por su glob AuditLog.*.
+        ("AuditLog",               "VerifyIntegrity", "Verificar la integridad de la cadena de auditoría"),
 
         // Attachments (adjuntos cifrados)
         ("Attachments",            "Upload",   "Subir archivo cifrado"),

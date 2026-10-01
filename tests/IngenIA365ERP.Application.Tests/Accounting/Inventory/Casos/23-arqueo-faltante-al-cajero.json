@@ -1,0 +1,83 @@
+{
+  "descripcion": "DiferenciaDeArqueoAprobada: el faltante ShortageToCashier va a Faltante con el cajero de tercero.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "CashCountDifference",
+      "documentTypeCode": "ARQ",
+      "number": "AD-23",
+      "publicId": "00000087-0000-4000-8000-000000000087",
+      "operationDate": "2026-03-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000088-0000-4000-8000-000000000088",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000090-0000-4000-8000-000000000090",
+      "type": "DiferenciaDeArqueoAprobada",
+      "payload": {
+        "operation": "DiferenciaDeArqueo",
+        "pointOfSaleCode": "PTO01",
+        "cashRegisterCode": "CAJA03",
+        "cashSessionPublicId": "00000089-0000-4000-8000-000000000089",
+        "cashier": {
+          "personPublicId": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+          "name": "Cajero de ensayo"
+        },
+        "lines": [
+          {
+            "paymentMeansCode": "EFECTIVO",
+            "paymentMeansClass": "Cash",
+            "countMethod": "PhysicalCount",
+            "expected": 1000000.0,
+            "counted": 997000.0,
+            "difference": -3000.0,
+            "toleranceAmount": 0.0,
+            "withinTolerance": false,
+            "treatment": "ShortageToCashier",
+            "reason": "Prueba"
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CJ",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "13659501",
+        "debito": 3000.0,
+        "credito": 0,
+        "tercero": "2a3b4c5d-6e7f-4a8b-9c0d-1e2f3a4b5c6d",
+        "cruce": null,
+        "base": null
+      },
+      {
+        "cuenta": "11050501",
+        "debito": 0,
+        "credito": 3000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null
+      }
+    ]
+  }
+}

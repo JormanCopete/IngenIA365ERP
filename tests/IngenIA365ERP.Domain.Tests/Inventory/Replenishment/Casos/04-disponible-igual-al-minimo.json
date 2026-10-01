@@ -1,0 +1,6 @@
+{
+  "nombre": "Disponible igual al mínimo y nada en tránsito: sin quiebre (el quiebre es estrictamente menor), pero 10 ≤ 15 pide reorden de 40",
+  "disponible": 10, "enTransito": 0, "porRecibir": 0,
+  "minimo": 10, "maximo": 50, "puntoDeReorden": 15,
+  "esperado": { "posicion": 10, "requiereReorden": true, "sugerido": 40, "quiebre": false }
+}

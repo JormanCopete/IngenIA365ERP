@@ -2,6 +2,7 @@ using System.Text;
 using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Accounting.Setup;
+using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Files;

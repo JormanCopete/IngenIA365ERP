@@ -25,7 +25,17 @@ public sealed record QueryAuditLogQuery(
     string? Action,
     DateTime? From,
     DateTime? To,
-    PageRequest Paging) : IRequest<Result<PagedResult<AuditLogEntryDto>>>;
+    PageRequest Paging) : IRequest<Result<PagedResult<AuditLogEntryDto>>>
+{
+    /// <summary>
+    /// Feature 012 (T423, FR-007): varios módulos a la vez; la consola ofrece los encadenados
+    /// (<c>AuditoriaEncadenada.Modulos</c>). Nulo o vacío no filtra.
+    /// </summary>
+    public IReadOnlyList<string>? Modules { get; init; }
+
+    /// <summary>Feature 012 (T423; <c>?result=</c>): <c>Rejected</c> sólo los rechazos, <c>Accepted</c> lo demás; nulo, todo.</summary>
+    public string? Outcome { get; init; }
+}
 
 public sealed class QueryAuditLogQueryValidator : AbstractValidator<QueryAuditLogQuery>
 {
@@ -34,6 +44,11 @@ public sealed class QueryAuditLogQueryValidator : AbstractValidator<QueryAuditLo
 
     public QueryAuditLogQueryValidator()
     {
+        RuleFor(x => x.Outcome)
+            .Must(r => r is null or "Rejected" or "Accepted")
+            .WithMessage("«result» admite Rejected o Accepted.");
+        RuleForEach(x => x.Modules).NotEmpty().MaximumLength(60);
+
         RuleFor(x => x).Custom((query, ctx) =>
         {
             if (query.From is not null && query.To is not null)
@@ -110,7 +125,9 @@ public sealed class QueryAuditLogQueryHandler
             From = request.From,
             To = request.To,
             PageNumber = page,
-            PageSize = pageSize
+            PageSize = pageSize,
+            Modules = request.Modules?.Where(m => !string.IsNullOrWhiteSpace(m)).Select(m => m.Trim()).Distinct().ToList(),
+            Outcome = NullIfBlank(request.Outcome),
         };
 
         var paged = await _audit.QueryAsync(serviceParams, ct);
@@ -124,6 +141,9 @@ public sealed class QueryAuditLogQueryHandler
 
     private static string? NullIfBlank(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static string? Meta(AuditLogEntry e, string clave) =>
+        e.Metadata is { } m && m.TryGetValue(clave, out var v) && !string.IsNullOrWhiteSpace(v) ? v : null;
 
     private static AuditLogEntryDto MapToDto(AuditLogEntry e) => new(
         Id: e.Id,
@@ -145,5 +165,13 @@ public sealed class QueryAuditLogQueryHandler
         Timestamp: e.Timestamp,
         OldValuesJson: e.OldValues,
         NewValuesJson: e.NewValues,
-        ChangedFields: e.ChangedFields);
+        ChangedFields: e.ChangedFields,
+        Channel: Meta(e, "Channel"),
+        ActorKind: Meta(e, "ActorKind"),
+        Origin: Meta(e, "Origin"),
+        Reason: Meta(e, "Reason"),
+        Result: e.Action == IngenIA365ERP.Application.Common.Audit.AuditEventTypes.CommandRejected ? "Rejected" : "Accepted",
+        ErrorCode: Meta(e, "ErrorCode"),
+        OperationKey: Meta(e, "OperationKey"),
+        ChainSeq: e.ChainSeq);
 }

@@ -1,0 +1,21 @@
+{
+  "nombre": "US12-6: compra de 8.000.000 con límite de 5.000.000 (con y sin política; rol sin límite)",
+  "derivacion": "El comprador tiene monto máximo 5.000.000 en el permiso de confirmar compras. Con la política de compras (nivel 1 desde 20.000.000), 8.000.000 no alcanza el umbral pero supera el máximo: nivel 1 forzado. El mismo monto sin política ni regla fija no tiene nivel que forzar: ExcedeLimite con maxAmount = 5.000.000 (Inventory.Approval.AmountExceedsLimit). 25.000.000 con política alcanza el nivel 1 por umbral: no hay nada que forzar. Un rol sin fila de límite (C4) no tiene máximo: 8.000.000 sin política se confirma sin aprobación.",
+  "subject": "DocumentConfirmation",
+  "fecha": "2026-10-05",
+  "politicas": [],
+  "evaluaciones": [
+    {
+      "monto": 8000000, "montoMaximo": 5000000,
+      "politicas": [ { "validFrom": "2026-01-01", "niveles": [ { "order": 1, "threshold": 20000000, "permission": "Inventory.Approvals.Supervisor" } ] } ],
+      "esperado": { "resultado": "ConNiveles", "niveles": [1], "permisos": ["Inventory.Approvals.Supervisor"], "nivelForzado": true }
+    },
+    {
+      "monto": 25000000, "montoMaximo": 5000000,
+      "politicas": [ { "validFrom": "2026-01-01", "niveles": [ { "order": 1, "threshold": 20000000, "permission": "Inventory.Approvals.Supervisor" } ] } ],
+      "esperado": { "resultado": "ConNiveles", "niveles": [1], "nivelForzado": false }
+    },
+    { "monto": 8000000, "montoMaximo": 5000000, "esperado": { "resultado": "ExcedeLimite", "niveles": [], "montoMaximo": 5000000 } },
+    { "monto": 8000000, "esperado": { "resultado": "SinAprobacion", "niveles": [] } }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "nombre": "Tolerancia del 10 %: se mide contra el teórico de cada línea",
+  "descripcion": "A teórico 50 contado 46: -4 cabe en 5 (10 % de 50). B teórico 20 contado 17: -3 no cabe en 2 (10 % de 20).",
+  "tolerancia": {
+    "porcentaje": 10,
+    "unidades": 0
+  },
+  "sumaMovimientos": false,
+  "foto": [
+    {
+      "linea": "A",
+      "teorico": 50
+    },
+    {
+      "linea": "B",
+      "teorico": 20
+    }
+  ],
+  "capturas": [
+    {
+      "linea": "A",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 46
+    },
+    {
+      "linea": "B",
+      "ronda": 1,
+      "contador": 2,
+      "cantidad": 17
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "linea": "A",
+      "teorico": 50,
+      "movimientos": null,
+      "contado": 46,
+      "diferencia": -4,
+      "ronda": 1,
+      "reconteo": false
+    },
+    {
+      "linea": "B",
+      "teorico": 20,
+      "movimientos": null,
+      "contado": 17,
+      "diferencia": -3,
+      "ronda": 1,
+      "reconteo": true
+    }
+  ]
+}

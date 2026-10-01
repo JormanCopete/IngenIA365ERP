@@ -1,0 +1,64 @@
+{
+  "nombre": "10 · Prorrateo con parte vendida",
+  "descripcion": "Research R10, D5 (a validar por la contadora). Recepción de 10 unidades a $100 ($1.000). Se venden 4 al promedio ($400): quedan 6 por $600. Llega un flete de $1.000 facturado aparte y se reparte sobre esa recepción (por valor, una sola línea: todo a ella). ExistingRatio = mín(1, 6 / 10) = 0,6: $600 a inventario y $400 a costo de venta. El kardex agrega, bajo el documento de costos adicionales y con AffectsEntryId de la entrada C1, dos líneas CostAdjustment LandedCost: +$1.000 (lo que costó la entrada) y −$400 (lo que ya pasó a lo vendido); el ámbito queda en 6 unidades por $1.200, promedio $200. Un AjusteDeCostoReconocido para el documento C1: $600 en existencia y $400 vendidos.",
+  "parametros": {
+    "metodo": "WeightedAverage",
+    "ambito": "Cooperative",
+    "montos": "Centavo",
+    "negativoPermitido": false
+  },
+  "movimientos": [
+    {
+      "id": "C1",
+      "fecha": "2026-03-02",
+      "clase": "PurchaseReceipt",
+      "bodega": "B1",
+      "cantidad": 10,
+      "costoUnitario": 100,
+      "esperado": {
+        "lineas": [
+          { "kind": "Entry", "reason": "Normal", "cantidad": 10, "costoUnitario": 100, "costoTotal": 1000 }
+        ],
+        "estado": { "cantidad": 10, "valor": 1000, "promedio": 100 }
+      }
+    },
+    {
+      "id": "V1",
+      "fecha": "2026-03-05",
+      "clase": "SalesInvoice",
+      "bodega": "B1",
+      "cantidad": -4,
+      "esperado": {
+        "lineas": [
+          { "kind": "Exit", "reason": "Normal", "cantidad": -4, "costoUnitario": 100, "costoTotal": -400 }
+        ],
+        "estado": { "cantidad": 6, "valor": 600, "promedio": 100 }
+      }
+    },
+    {
+      "id": "F1",
+      "fecha": "2026-03-10",
+      "clase": "LandedCost",
+      "bodega": "B1",
+      "cantidad": 0,
+      "costoAdicional": { "monto": 1000, "entrada": "C1", "metodo": "Value" },
+      "esperado": {
+        "lineas": [
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": 1000, "afecta": "C1", "porcion": "EnExistencia" },
+          { "kind": "CostAdjustment", "reason": "LandedCost", "cantidad": 0, "costoUnitario": 0, "costoTotal": -400, "afecta": "C1", "porcion": "Vendida" }
+        ],
+        "ajustesPorDocumento": [
+          { "documento": "C1", "enExistencia": 600, "vendida": 400 }
+        ],
+        "estado": { "cantidad": 6, "valor": 1200, "promedio": 200 },
+        "explicacion": [ "Costos adicionales", "En existencia: 600", "Vendida o consumida: 400" ]
+      }
+    }
+  ],
+  "final": [
+    { "ambito": "COOPERATIVA", "cantidad": 6, "valor": 1200, "promedio": 200 }
+  ],
+  "existencias": [
+    { "bodega": "B1", "cantidad": 6 }
+  ]
+}

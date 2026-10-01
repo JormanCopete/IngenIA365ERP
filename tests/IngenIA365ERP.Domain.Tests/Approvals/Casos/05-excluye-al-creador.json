@@ -1,0 +1,8 @@
+{
+  "nombre": "Segregación: el creador del documento no decide",
+  "derivacion": "Creador 10, solicitante 11, participante declarado 12, 13 aprobó el nivel 1. El decisor 10 queda excluido con reason Creator; 14 puede decidir. La identidad es SEC_Users.Id.",
+  "segregacion": {
+    "creador": 10, "solicitante": 11, "participantes": [12], "aprobadoresPrevios": [13],
+    "decisiones": [ { "decisor": 10, "esperado": "Creator" }, { "decisor": 14, "esperado": null } ]
+  }
+}

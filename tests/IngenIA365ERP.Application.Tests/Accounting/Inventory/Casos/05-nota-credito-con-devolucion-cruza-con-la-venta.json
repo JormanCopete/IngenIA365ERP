@@ -1,0 +1,174 @@
+{
+  "descripcion": "NotaCreditoEmitida + DevolucionRegistrada (DevolucionDeCliente), una unidad y un NV: devolución e IVA al débito, el reintegro al crédito de asociado cruza contra FV PV01-1532 (salda otro documento); la mercancía vuelve al inventario contra el costo.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "CreditNote",
+      "documentTypeCode": "NCV",
+      "number": "NC-9",
+      "publicId": "00000019-0000-4000-8000-000000000019",
+      "operationDate": "2026-03-14"
+    },
+    "related": {
+      "publicId": "00000018-0000-4000-8000-000000000018",
+      "documentClass": "PosEquivalentDocument",
+      "number": "PV01-1532"
+    },
+    "chainRootPublicId": "00000020-0000-4000-8000-000000000020",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000022-0000-4000-8000-000000000022",
+      "type": "NotaCreditoEmitida",
+      "payload": {
+        "operation": "NotaCredito",
+        "isTotalVoid": false,
+        "withReturn": true,
+        "pointOfSaleCode": "PTO01",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "grossAmount": 10000.0,
+            "discountAmount": 0.0,
+            "netAmount": 10000.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ],
+        "taxes": [
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA05",
+            "rate": 0.05,
+            "treatment": "Generated",
+            "taxableBase": 10000.0,
+            "amount": 500.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ],
+        "payments": [
+          {
+            "paymentPublicId": "00000021-0000-4000-8000-000000000021",
+            "lineNumber": 1,
+            "paymentMeansCode": "CREDASOC",
+            "paymentMeansClass": "AssociateCredit",
+            "direction": "Refunded",
+            "amount": 10500.0,
+            "thirdPartyPersonPublicId": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+          }
+        ],
+        "totals": {
+          "subtotal": 10000.0,
+          "discountTotal": 0.0,
+          "taxTotal": 500.0,
+          "withholdingTotal": 0.0,
+          "total": 10500.0,
+          "amountDue": 10500.0
+        }
+      }
+    },
+    {
+      "messageId": "00000023-0000-4000-8000-000000000023",
+      "type": "DevolucionRegistrada",
+      "payload": {
+        "operation": "DevolucionDeCliente",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Entry",
+            "quantityBase": 1,
+            "cost": 7240.0,
+            "documentLines": [
+              1
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "NV",
+    "fecha": "2026-03-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "13050502",
+        "debito": 0,
+        "credito": 10500.0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": "FV PV01-1532",
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "41750502",
+        "debito": 10000.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "24080501",
+        "debito": 500.0,
+        "credito": 0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": null,
+        "base": 10000.0,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 7240.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "61350501",
+        "debito": 0,
+        "credito": 7240.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,324 @@
+{
+  "descripcion": "La venta de mensajes.md §14 (VentaFacturada + CostoDeVentaReconocido, una unidad) da el FV de contracts/contabilidad.md §3.8: doce líneas, 267.830,50 por lado, tercero y cruce FV PV01-1532 en el crédito de asociado, base en las dos líneas de IVA; el descuento de aseo en cero se descarta.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "INV",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Document",
+      "documentClass": "PosEquivalentDocument",
+      "documentTypeCode": "DEPOS",
+      "number": "PV01-1532",
+      "publicId": "3f0c9d42-5a1b-4e7c-8d21-6b9f0e4a7c13",
+      "operationDate": "2026-11-14"
+    },
+    "related": null,
+    "chainRootPublicId": "00000002-0000-4000-8000-000000000002",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": "B01",
+    "personPublicId": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Cajero de ensayo"
+    },
+    "emittedAt": "2026-03-14T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "00000006-0000-4000-8000-000000000006",
+      "type": "VentaFacturada",
+      "payload": {
+        "operation": "Venta",
+        "salesChannelCode": "MOSTRADOR",
+        "pointOfSaleCode": "PTO01",
+        "cashRegisterCode": "CAJA03",
+        "derivedFrom": [],
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01PV",
+            "grossAmount": 100000.0,
+            "discountAmount": 5000.0,
+            "netAmount": 95000.0,
+            "documentLines": [
+              1,
+              2,
+              4
+            ]
+          },
+          {
+            "accountingGroupCode": "ASEO",
+            "warehouseCode": "B01PV",
+            "grossAmount": 50000.0,
+            "discountAmount": 0.0,
+            "netAmount": 50000.0,
+            "documentLines": [
+              3,
+              5
+            ]
+          }
+        ],
+        "taxes": [
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA05",
+            "rate": 0.05,
+            "treatment": "Generated",
+            "taxableBase": 95000.0,
+            "amount": 4750.0,
+            "documentLines": [
+              1,
+              2,
+              4
+            ]
+          },
+          {
+            "taxCode": "IVA",
+            "taxKind": "Iva",
+            "taxRateCode": "IVA19",
+            "rate": 0.19,
+            "treatment": "Generated",
+            "taxableBase": 50000.0,
+            "amount": 9500.0,
+            "documentLines": [
+              3,
+              5
+            ]
+          }
+        ],
+        "payments": [
+          {
+            "paymentPublicId": "00000003-0000-4000-8000-000000000003",
+            "lineNumber": 1,
+            "paymentMeansCode": "EFECTIVO",
+            "paymentMeansClass": "Cash",
+            "direction": "Received",
+            "amount": 60000.0
+          },
+          {
+            "paymentPublicId": "00000004-0000-4000-8000-000000000004",
+            "lineNumber": 2,
+            "paymentMeansCode": "VISARB",
+            "paymentMeansClass": "CreditCard",
+            "direction": "Received",
+            "amount": 49250.0,
+            "thirdPartyPersonPublicId": "f0e1d2c3-b4a5-4968-8776-655443322110"
+          },
+          {
+            "paymentPublicId": "00000005-0000-4000-8000-000000000005",
+            "lineNumber": 3,
+            "paymentMeansCode": "CREDASOC",
+            "paymentMeansClass": "AssociateCredit",
+            "direction": "Received",
+            "amount": 50000.0,
+            "thirdPartyPersonPublicId": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+            "pendingValidation": true
+          }
+        ],
+        "totals": {
+          "subtotal": 150000.0,
+          "discountTotal": 5000.0,
+          "taxTotal": 14250.0,
+          "withholdingTotal": 0.0,
+          "total": 159250.0,
+          "amountDue": 159250.0
+        }
+      }
+    },
+    {
+      "messageId": "00000007-0000-4000-8000-000000000007",
+      "type": "CostoDeVentaReconocido",
+      "payload": {
+        "operation": "CostoDeVenta",
+        "pointOfSaleCode": "PTO01",
+        "lines": [
+          {
+            "accountingGroupCode": "ABARROTES",
+            "warehouseCode": "B01PV",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 72400.0,
+            "documentLines": [
+              1,
+              2,
+              4
+            ]
+          },
+          {
+            "accountingGroupCode": "ASEO",
+            "warehouseCode": "B01PV",
+            "warehouseBehavior": "Operational",
+            "branchPublicId": null,
+            "movement": "Exit",
+            "quantityBase": 1,
+            "cost": 31180.5,
+            "documentLines": [
+              3,
+              5
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "FV",
+    "fecha": "2026-11-14",
+    "origen": "InventoryDocument",
+    "lineas": [
+      {
+        "cuenta": "11050501",
+        "debito": 60000.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1
+        ]
+      },
+      {
+        "cuenta": "13050501",
+        "debito": 49250.0,
+        "credito": 0,
+        "tercero": "f0e1d2c3-b4a5-4968-8776-655443322110",
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          2
+        ]
+      },
+      {
+        "cuenta": "13050502",
+        "debito": 50000.0,
+        "credito": 0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": "FV PV01-1532",
+        "base": null,
+        "lineas": [
+          3
+        ]
+      },
+      {
+        "cuenta": "41750501",
+        "debito": 5000.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2,
+          4
+        ]
+      },
+      {
+        "cuenta": "41350501",
+        "debito": 0,
+        "credito": 100000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2,
+          4
+        ]
+      },
+      {
+        "cuenta": "41350502",
+        "debito": 0,
+        "credito": 50000.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          3,
+          5
+        ]
+      },
+      {
+        "cuenta": "24080501",
+        "debito": 0,
+        "credito": 4750.0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": null,
+        "base": 95000.0,
+        "lineas": [
+          1,
+          2,
+          4
+        ]
+      },
+      {
+        "cuenta": "24080502",
+        "debito": 0,
+        "credito": 9500.0,
+        "tercero": "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+        "cruce": null,
+        "base": 50000.0,
+        "lineas": [
+          3,
+          5
+        ]
+      },
+      {
+        "cuenta": "61350501",
+        "debito": 72400.0,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2,
+          4
+        ]
+      },
+      {
+        "cuenta": "14350501",
+        "debito": 0,
+        "credito": 72400.0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          1,
+          2,
+          4
+        ]
+      },
+      {
+        "cuenta": "61350502",
+        "debito": 31180.5,
+        "credito": 0,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          3,
+          5
+        ]
+      },
+      {
+        "cuenta": "14350502",
+        "debito": 0,
+        "credito": 31180.5,
+        "tercero": null,
+        "cruce": null,
+        "base": null,
+        "lineas": [
+          3,
+          5
+        ]
+      }
+    ]
+  }
+}

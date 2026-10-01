@@ -18,7 +18,7 @@ public class PrincipioXII_MigrationsIdempotent
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
-    /// Migraciones legacy de importación SOLIDO → SQL Server. Son scripts
+    /// Migraciones legacy de importación el sistema anterior → SQL Server. Son scripts
     /// one-shot (cargan datos al schema vacío) que se ejecutan una sola vez
     /// y no se diseñaron reentrantes. La convención de idempotencia se
     /// adoptó a partir de la migración 11 (soft-delete framework). Cualquier

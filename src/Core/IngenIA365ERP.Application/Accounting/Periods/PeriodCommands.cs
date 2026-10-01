@@ -1,4 +1,5 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Accounting.Inventory.Consultas;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Accounting.Setup;
@@ -94,8 +95,13 @@ public sealed class OpenFiscalYearCommandHandler(IApplicationDbContext db, IDate
 
 // ---------------------------------------------------------------------------- cerrar período --
 
-/// <summary>FR-021: cerrar exige que no queden borradores fechados en el mes; la respuesta los lista.</summary>
-public sealed record ClosePeriodCommand(int Year, int Month) : IRequest<Result>;
+/// <summary>
+/// FR-021: cerrar exige que no queden borradores fechados en el mes; la respuesta los lista. Feature 012 (T491,
+/// contracts/contabilidad.md §8): si Inventario tiene operaciones del mes que Contabilidad aún no recibe, avisa con
+/// <c>Accounting.Period.InventoryPending</c> salvo que venga <paramref name="AcknowledgeInventoryPending"/>, que cierra
+/// igual y queda auditado (es un aviso, no un bloqueo; molde de <c>GeneratePilaCommand.AcknowledgeWarnings</c>).
+/// </summary>
+public sealed record ClosePeriodCommand(int Year, int Month, bool AcknowledgeInventoryPending = false) : IRequest<Result>;
 
 public sealed class ClosePeriodCommandValidator : AbstractValidator<ClosePeriodCommand>
 {
@@ -125,13 +131,25 @@ public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTim
                 $"{AccountingErrors.PeriodHasDrafts.Message} Hay {borradores.Count}: {string.Join("; ", borradores.Take(3).Select(b => $"{b.voucherType} {b.Date:yyyy-MM-dd} «{b.Description}» de {b.RegisteredBy}"))}{(borradores.Count > 3 ? "…" : string.Empty)}",
                 new { drafts = borradores }));
 
+        var inventario = await PendingInventoryMessagesQueryHandler.ContarAsync(db, periodo.StartDate, periodo.EndDate, ct);
+        if (inventario.HayPendientes && !request.AcknowledgeInventoryPending)
+            return Result.Failure(AccountingErrors.PeriodInventoryPending(inventario.Pending, inventario.InBatch, inventario.Rejected,
+                inventario.OldestOperationDate, inventario.Types));
+
         periodo.Status = PeriodStatus.Closed;
         periodo.ClosedAt = clock.UtcNow;
         periodo.ClosedBy = user.UserName ?? "system";
         periodo.UpdatedAt = periodo.ClosedAt;
         periodo.UpdatedBy = periodo.ClosedBy;
         await db.SaveChangesAsync(ct);
-        await audit.EmitAsync("Accounting.Period.Closed", nameof(AccountingPeriod), periodo.PublicId, new { status = "Open" }, new { status = "Closed", request.Year, request.Month }, ct);
+        object despues = inventario.HayPendientes
+            ? new
+            {
+                status = "Closed", request.Year, request.Month, inventoryPendingAcknowledged = true,
+                inventoryPending = new { pending = inventario.Pending, inBatch = inventario.InBatch, rejected = inventario.Rejected, oldestOperationDate = inventario.OldestOperationDate, types = inventario.Types },
+            }
+            : new { status = "Closed", request.Year, request.Month };
+        await audit.EmitAsync("Accounting.Period.Closed", nameof(AccountingPeriod), periodo.PublicId, new { status = "Open" }, despues, ct);
         return Result.Success();
     }
 }

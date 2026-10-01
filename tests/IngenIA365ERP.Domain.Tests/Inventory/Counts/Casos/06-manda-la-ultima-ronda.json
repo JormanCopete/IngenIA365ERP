@@ -1,0 +1,47 @@
+{
+  "nombre": "Después del reconteo manda la última ronda",
+  "descripcion": "A teórico 10: la ronda 1 cuenta 7 (pide reconteo); la ronda 2 cuenta 8 y vale ésa aunque siga fuera de tolerancia.",
+  "tolerancia": {
+    "porcentaje": 0,
+    "unidades": 1
+  },
+  "sumaMovimientos": false,
+  "foto": [
+    {
+      "linea": "A",
+      "teorico": 10
+    }
+  ],
+  "capturas": [
+    {
+      "linea": "A",
+      "ronda": 1,
+      "contador": 1,
+      "cantidad": 7
+    },
+    {
+      "linea": "A",
+      "ronda": 2,
+      "contador": 3,
+      "cantidad": 5
+    },
+    {
+      "linea": "A",
+      "ronda": 2,
+      "contador": 3,
+      "cantidad": 3
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "linea": "A",
+      "teorico": 10,
+      "movimientos": null,
+      "contado": 8,
+      "diferencia": -2,
+      "ronda": 2,
+      "reconteo": false
+    }
+  ]
+}

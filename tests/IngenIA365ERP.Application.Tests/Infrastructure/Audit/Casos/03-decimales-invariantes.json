@@ -1,0 +1,21 @@
+{
+  "descripcion": "Decimales con punto y con su escala (1234567.50, no 1234567,5), aunque la cultura del proceso sea es-CO.",
+  "eventos": [
+    {
+      "campos": {
+        "monto": {
+          "$decimal": "1234567.50"
+        },
+        "tarifa": {
+          "$decimal": "0.00966"
+        },
+        "negativo": {
+          "$decimal": "-3.1"
+        },
+        "entero": 42
+      },
+      "canonico": "{\"entero\":42,\"monto\":1234567.50,\"negativo\":-3.1,\"tarifa\":0.00966,\"v\":1}",
+      "hash": "f1a6ebb4ae4fd39f7cabc28e988a4cf5d1da63e1a71a89a4e8631f775f3c48f5"
+    }
+  ]
+}

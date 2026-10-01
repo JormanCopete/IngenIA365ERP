@@ -19,7 +19,7 @@ public class SalaryChange : AuditableEntityLong
     // Navigation
     public Employee? Employee { get; set; }
 
-    /// <summary>Largo de la columna legada <c>UserName</c> (SOLIDO): varchar(20).</summary>
+    /// <summary>Largo de la columna legada <c>UserName</c> (del sistema anterior): varchar(20).</summary>
     public const int UserNameMaxLength = 20;
 
     /// <summary>

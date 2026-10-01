@@ -1,13 +1,21 @@
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
+using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Admin;
+using IngenIA365ERP.Domain.Entities.Approvals.Transactions;
+using IngenIA365ERP.Domain.Entities.Approvals;
+using IngenIA365ERP.Domain.Entities.Alerts;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.CDT;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Debit;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
+using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Treasury;
@@ -187,25 +195,120 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Payroll.Transactions.ElectronicPayrollTransmission> ElectronicPayrollTransmissions { get; }
 
     // Inventory
-    DbSet<Product> Products { get; }
-    DbSet<ProductGroup> ProductGroups { get; }
-    DbSet<PrimaryGroup> PrimaryGroups { get; }
-    DbSet<SecondaryGroup> SecondaryGroups { get; }
-    DbSet<InventoryTransactionType> InventoryTransactionTypes { get; }
-    DbSet<Warehouse> Warehouses { get; }
-    DbSet<Location> Locations { get; }
-    DbSet<SalesPoint> SalesPoints { get; }
-    DbSet<Shift> Shifts { get; }
     DbSet<Salesperson> Salespeople { get; }
-    DbSet<DiscountType> DiscountTypes { get; }
-    DbSet<PriceListType> PriceListTypes { get; }
-    DbSet<ProductAccount> ProductAccounts { get; }
-    DbSet<VatAccount> VatAccounts { get; }
-    DbSet<CommissionParameter> CommissionParameters { get; }
+    // Feature 012 (T17, T136): documento generico de inventario. Number y NextValue los escribe solo Numerador;
+    // DocumentPartySnapshots y DocumentTaxLines son hechos (solo insercion).
     DbSet<InventoryDocument> InventoryDocuments { get; }
-    DbSet<InventoryTransaction> InventoryTransactions { get; }
-    DbSet<InventoryInvoice> InventoryInvoices { get; }
-    DbSet<PhysicalInventory> PhysicalInventories { get; }
+    DbSet<InventoryDocumentLine> InventoryDocumentLines { get; }
+    DbSet<DocumentLink> DocumentLinks { get; }
+    DbSet<DocumentLineLink> DocumentLineLinks { get; }
+    DbSet<DocumentPartySnapshot> DocumentPartySnapshots { get; }
+    DbSet<DocumentTaxLine> DocumentTaxLines { get; }
+    DbSet<InventoryDocumentType> InventoryDocumentTypes { get; }
+    DbSet<DocumentTypeWarehouse> DocumentTypeWarehouses { get; }
+    DbSet<DocumentSequence> DocumentSequences { get; }
+    // Feature 012 (T209, US1): catalogo y bodegas. ProductAccountingGroupChanges es un hecho (solo insercion; lo escribe
+    // ChangeProductAccountingGroupCommand, US3). INV_UserWarehouseScopes se lee y escribe solo por IAsignacionesDeBodega.
+    DbSet<Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Brand> Brands { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Product> Products { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductUnit> ProductUnits { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductBarcode> ProductBarcodes { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductTax> ProductTaxes { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductAccountingGroupChange> ProductAccountingGroupChanges { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.WarehouseType> WarehouseTypes { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.Warehouse> Warehouses { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.WarehouseLocation> WarehouseLocations { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.ReorderPolicy> ReorderPolicies { get; }
+    DbSet<Domain.Entities.Inventory.Documents.AdjustmentCause> AdjustmentCauses { get; }
+    DbSet<Domain.Entities.Inventory.Security.UserWarehouseScope> UserWarehouseScopes { get; }
+    // Feature 012 (T250, US2): el kardex y sus proyecciones. Los escriben solo RegistroDeKardex y
+    // RebuildInventoryProjectionsCommand (NadieEscribeElKardexFueraDelRegistro).
+    DbSet<Domain.Entities.Inventory.Transactions.KardexEntry> KardexEntries { get; }
+    DbSet<Domain.Entities.Inventory.Projections.StockBalance> StockBalances { get; }
+    DbSet<Domain.Entities.Inventory.Projections.StockDetail> StockDetails { get; }
+    DbSet<Domain.Entities.Inventory.Projections.CostState> CostStates { get; }
+    // Feature 012 (T284, US3): puesta en marcha, períodos y valorizado fijado al cerrar.
+    DbSet<Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups { get; }
+    DbSet<Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods { get; }
+    DbSet<Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances { get; }
+    // Feature 012 (T307, US4): la activación de cada bodega y las cifras de referencia (sólo informativas: nunca kardex).
+    DbSet<Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations { get; }
+    DbSet<Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures { get; }
+    // Feature 012, US9 (T335-T337): el documento del proveedor y sus eventos RADIAN.
+    DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails { get; }
+    DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents { get; }
+    // Feature 012 (US10, T366): faltantes y sobrantes de los traslados.
+    DbSet<Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies { get; }
+    // US11 (T391): la foto y las capturas de los conteos físicos (INV_CountSnapshotLines, INV_CountCaptures).
+    DbSet<Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines { get; }
+    DbSet<Domain.Entities.Inventory.Documents.CountCapture> CountCaptures { get; }
+    // Feature 012, I5 (T835): el cruce a tres vías, el reparto de los costos adicionales y las capas PEPS con sus consumos.
+    // Las capas y los consumos los escriben sólo RegistroDeKardex y RebuildInventoryProjectionsCommand.
+    DbSet<Domain.Entities.Inventory.Purchasing.PurchaseMatchLine> PurchaseMatchLines { get; }
+    DbSet<Domain.Entities.Inventory.Purchasing.LandedCostAllocation> LandedCostAllocations { get; }
+    DbSet<Domain.Entities.Inventory.Projections.CostLayer> CostLayers { get; }
+    DbSet<Domain.Entities.Inventory.Transactions.LayerConsumption> LayerConsumptions { get; }
+    // Feature 012, I6 (T859; ComercioAmpliado): catálogo avanzado, lotes y series, reservas y promociones. La proyección de la serie
+    // (InStock*) la escribe sólo RegistroDeKardex.
+    DbSet<Domain.Entities.Inventory.Catalog.ProductComponent> ProductComponents { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.VariantAttribute> VariantAttributes { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.VariantAttributeValue> VariantAttributeValues { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.ProductVariantValue> ProductVariantValues { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Lot> Lots { get; }
+    DbSet<Domain.Entities.Inventory.Catalog.Serial> Serials { get; }
+    DbSet<Domain.Entities.Inventory.Warehousing.Reservation> Reservations { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.Promotion> Promotions { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PromotionScope> PromotionScopes { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PromotionTier> PromotionTiers { get; }
+    // Feature 012 (T585, I3): medios de pago de Core, punto de venta y caja, precios y satélites de la venta. INV_UserPointOfSaleScopes
+    // se lee y escribe solo por IAsignacionesDePuntoDeVenta; las redenciones de bonos, sólo al confirmar la venta.
+    DbSet<Domain.Entities.Core.Payments.PaymentMeans> PaymentMeans { get; }
+    DbSet<Domain.Entities.Core.Payments.CardNetwork> CardNetworks { get; }
+    DbSet<Domain.Entities.Core.Payments.CardAcquirer> CardAcquirers { get; }
+    DbSet<Domain.Entities.Core.Payments.CardTerminal> CardTerminals { get; }
+    DbSet<Domain.Entities.Core.Payments.CashDenomination> CashDenominations { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PointOfSale> PointsOfSale { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashRegister> CashRegisters { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels { get; }
+    DbSet<Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashSession> CashSessions { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashMovementDetail> CashMovementDetails { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCount> CashCounts { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountLine> CashCountLines { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountDenomination> CashCountDenominations { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountTerminalBatch> CashCountTerminalBatches { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashCountReferenceCheck> CashCountReferenceChecks { get; }
+    DbSet<Domain.Entities.Inventory.Pos.CashDocumentLine> CashDocumentLines { get; }
+    DbSet<Domain.Entities.Inventory.Pos.DayClose> DayCloses { get; }
+    DbSet<Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines { get; }
+    DbSet<Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments { get; }
+    DbSet<Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions { get; }
+    DbSet<Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PriceList> PriceLists { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PriceListItem> PriceListItems { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps { get; }
+    DbSet<Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes { get; }
+
+    // Feature 012 (T698, I4): facturación electrónica DIAN (COR_Electronic*, COR_Dian*).
+    DbSet<Domain.Entities.ElectronicInvoicing.ElectronicEmissionSetting> ElectronicEmissionSettings { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.DianNumberingResolution> DianNumberingResolutions { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.DianResolutionChannel> DianResolutionChannels { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.DianContingencyEvent> DianContingencyEvents { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.ElectronicDocument> ElectronicDocuments { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentVersion> ElectronicDocumentVersions { get; }
+    DbSet<Domain.Entities.ElectronicInvoicing.Transactions.ElectronicDocumentTransmission> ElectronicDocumentTransmissions { get; }
+
+    // Feature 012 (T22, T161): catalogo tributario de Core. Lo escriben solo los comandos de Core/Taxes (y su
+    // plantilla y semilla); lo lee para el motor solo LectorDeCatalogoTributario.
+    DbSet<Domain.Entities.Core.Taxes.TaxDefinition> TaxDefinitions { get; }
+    DbSet<Domain.Entities.Core.Taxes.TaxRate> TaxRates { get; }
+    DbSet<Domain.Entities.Core.Taxes.WithholdingConcept> WithholdingConcepts { get; }
 
     // CDT
     DbSet<Certificate> Certificates { get; }
@@ -242,6 +345,54 @@ public interface IApplicationDbContext
     DbSet<Permission> Permissions { get; }
     DbSet<RolePermission> RolePermissions { get; }
     DbSet<UserRole> UserRoles { get; }
+
+    // Feature 012 (T13, T054): claves de idempotencia de las operaciones de pantalla. Las lee y escribe
+    // solo IdempotencyBehavior. (Adelanto de T096, que registra el resto de DbSet de la plataforma.)
+    DbSet<OperationKey> OperationKeys { get; }
+
+    // Feature 012 (T10, T047; T096): arrendamientos de los trabajos de fondo, uno por nombre y por cooperativa. Los
+    // toma, renueva y suelta solo ArrendamientosEnBase (IArrendamientos); las filas las siembra la migracion.
+    DbSet<BackgroundLease> BackgroundLeases { get; }
+
+    // Feature 012 (T37, T38; T061–T066): auditoria garantizada de los modulos encadenados. Escriben
+    // AuditableEntityInterceptor, AuditBehavior y AuditoriaEncadenada; sella y reenvia solo el
+    // AuditOutboxForwarder. (Adelanto de T096.)
+    DbSet<AuditOutboxEntry> AuditOutbox { get; }
+    DbSet<AuditChainHead> AuditChainHeads { get; }
+    DbSet<AuditAnchor> AuditAnchors { get; }
+
+    // Feature 012 (T21, T069-T071): parametros con vigencia. Los leen solo LectorDeParametros y los escribe solo
+    // AddParameterVersionCommandHandler (LosParametrosSeLeenEnUnSoloSitio). (Adelanto de T096.)
+    DbSet<ParameterVersion> ParameterVersions { get; }
+
+    // Feature 012 (T7, T9; T073-T078): bandeja de salida de mensajes de integracion. Escribe mensajes, entregas y
+    // dependencias solo EmisorDeMensajes (dentro del SaveChanges del documento); las entregas las actualizan
+    // despues los comandos de I2. (Adelanto de T096.)
+    DbSet<IntegrationMessage> IntegrationMessages { get; }
+    DbSet<IntegrationMessageDependency> IntegrationMessageDependencies { get; }
+    DbSet<IntegrationMessageDelivery> IntegrationMessageDeliveries { get; }
+    // Feature 012, entrega I2 (T483): intentos, lotes y su consecutivo (plataforma), y el lado contable de la
+    // integración con Inventario (matriz, mapeo de tipos de comprobante y recibos). Migración IntegracionContableDeInventario.
+    DbSet<IntegrationDeliveryAttempt> IntegrationDeliveryAttempts { get; }
+    DbSet<IntegrationBatch> IntegrationBatches { get; }
+    DbSet<IntegrationBatchCounter> IntegrationBatchCounters { get; }
+    DbSet<InventoryPostingRule> InventoryPostingRules { get; }
+    DbSet<InventoryVoucherMapping> InventoryVoucherMappings { get; }
+    DbSet<InventoryPosting> InventoryPostings { get; }
+
+    // Feature 012 (T33, T34; T081-T085): aprobaciones de plataforma y montos maximos por permiso. Escriben solo
+    // MotorDeAprobaciones (solicitudes y decisiones), SaveApprovalPolicyCommand y SetPermissionAmountLimitCommand;
+    // lee los limites ILimitesPorPermiso. (Adelanto de T096.)
+    DbSet<ApprovalPolicy> ApprovalPolicies { get; }
+    DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels { get; }
+    DbSet<ApprovalRequest> ApprovalRequests { get; }
+    DbSet<ApprovalDecision> ApprovalDecisions { get; }
+    DbSet<PermissionAmountLimit> PermissionAmountLimits { get; }
+
+    // Feature 012 (T39; T091-T094): alertas de plataforma. Escriben solo IAlertas (levantar, atender por proceso),
+    // AttendAlertCommand, SaveAlertTypeCommand y AlertTypesSeeder. (Adelanto de T096.)
+    DbSet<AlertType> AlertTypes { get; }
+    DbSet<Alert> Alerts { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

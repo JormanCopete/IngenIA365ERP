@@ -16,7 +16,7 @@ public class RegisterEmployeeWithPersonCommandHandlerTests
         PayrollPlanPublicId = plan, WorkRiskRatePublicId = claseArl, PayrollBankAccountType = 1,
     };
 
-    private static RegisterEmployeeWithPersonCommandHandler Handler(PersonasTestData d) => new(d.Db, d.Personas, d.Empleados);
+    private static RegisterEmployeeWithPersonCommandHandler Handler(PersonasTestData d) => new(d.Altas, d.Empleados);
 
     [Fact]
     public async Task Crea_persona_ficha_y_primer_salario_en_un_solo_guardado()

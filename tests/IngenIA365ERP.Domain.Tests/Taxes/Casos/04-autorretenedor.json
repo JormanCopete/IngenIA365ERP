@@ -1,0 +1,40 @@
+{
+  // Feature 012, T097, caso 04: a un autorretenedor no se le practica ReteFuente (la tarifa exige sujeto no
+  // autorretenedor). A) proveedor no autorretenedor: 2.000.000 × 2,5 % = 50.000. B) autorretenedor: nada.
+  "nombre": "ReteFuente a un autorretenedor",
+  "fecha": "2026-03-16",
+  "uvt": 52374,
+  "redondeoUvt": "Peso",
+  "decimales": 2,
+  "impuestos": [
+    { "id": 2, "codigo": "RETEFUENTE", "nombre": "Retención en la fuente", "clase": "ReteFuente", "forma": "PercentOfBase", "codigoDian": "06" }
+  ],
+  "conceptos": [ { "id": 1, "codigo": "COMPRAS", "nombre": "Compras generales" } ],
+  "tarifas": [
+    { "id": 21, "impuesto": 2, "codigo": "RF25", "tarifa": 0.025, "concepto": 1, "baseMinimaUvt": 27, "aplicaA": "Both", "desde": "2026-01-01",
+      "condiciones": { "sujetoDeclarante": true, "sujetoAutorretenedor": false } }
+  ],
+  "escenarios": [
+    {
+      "nombre": "Proveedor que no es autorretenedor",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "autorretenedor": false },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 2000000, "concepto": 1, "impuestos": [] } ],
+      "esperado": {
+        "renglones": [
+          { "linea": null, "tarifa": "RF25", "tratamiento": "WithholdingApplied", "base": 2000000, "valor": 50000,
+            "explicacion": [ "sujeto autorretenedor: no" ] }
+        ]
+      }
+    },
+    {
+      "nombre": "Proveedor autorretenedor",
+      "perspectiva": "Purchases",
+      "vendedor": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "autorretenedor": true },
+      "comprador": { "tipoPersona": "02", "responsableIva": true, "declarante": true, "agenteDeRetencion": true },
+      "lineas": [ { "numero": 1, "base": 2000000, "concepto": 1, "impuestos": [] } ],
+      "esperado": { "renglones": [] }
+    }
+  ]
+}

@@ -3,6 +3,8 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using Microsoft.EntityFrameworkCore;
+using ClaseDeDocumento = IngenIA365ERP.Domain.Enums.Inventory.DocumentClass;
+using EstadoDelDocumentoDeInventario = IngenIA365ERP.Domain.Enums.Inventory.DocumentStatus;
 
 namespace IngenIA365ERP.Application.Attachments.Common;
 
@@ -27,7 +29,12 @@ namespace IngenIA365ERP.Application.Attachments.Common;
 /// </para>
 ///
 /// <para>
-/// <b>Destinos de subida habilitados</b>: sólo el comprobante contable. Los tipos de módulo nunca, y
+/// <b>Destinos de subida habilitados</b>: el comprobante contable y las imágenes del producto de inventario
+/// (<see cref="ProductoDeInventario"/>, feature 012, T221: leer con <c>Inventory.Catalog.View</c>, subir y borrar con
+/// <c>Inventory.Catalog.Manage</c>, sólo JPEG, PNG y WebP, el producto tiene que existir) y los soportes de un ajuste de
+/// inventario (<see cref="SoporteDeAjuste"/>, feature 012, T255: actas de destrucción, denuncias; subir con
+/// <c>Inventory.Adjustments.Create</c> mientras el ajuste está en borrador o en aprobación, leer con
+/// <c>Inventory.Adjustments.View</c>, y confirmado no se borran: <c>Attachments.OwnerLocked</c>). Los tipos de módulo nunca, y
 /// cualquier otro tipo tampoco hasta que tenga su pantalla y su regla (FR-019).
 /// </para>
 /// </summary>
@@ -42,6 +49,49 @@ public static class AdjuntosDeModulo
     /// <summary>El permiso genérico de borrar adjuntos; además, la regla del dueño (<see cref="PuedeBorrarAsync"/>).</summary>
     public const string PermisoDeBorrar = "Attachments.Delete";
 
+    /// <summary>El tipo de dueño de las imágenes de un producto de inventario (feature 012, T41, T221; FR-029).</summary>
+    public const string ProductoDeInventario = "InventoryProduct";
+
+    /// <summary>Los únicos tipos de archivo que admite la imagen de un producto.</summary>
+    public static readonly IReadOnlySet<string> TiposDeImagenDeProducto =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png", "image/webp" };
+
+    /// <summary>El tipo de dueño de los soportes de un ajuste de inventario (feature 012, T41, T255; FR-037; contracts/api.md §10).</summary>
+    public const string SoporteDeAjuste = "InventoryAdjustmentSupport";
+
+    private const string VerAjustes = "Inventory.Adjustments.View";
+    private const string CrearAjustes = "Inventory.Adjustments.Create";
+
+    /// <summary>Las clases de un ajuste de I1 cuyo documento admite soportes (el grupo <c>Adjustments</c>).</summary>
+    private static readonly ClaseDeDocumento[] ClasesDeAjuste =
+    [
+        ClaseDeDocumento.PositiveAdjustment, ClaseDeDocumento.NegativeAdjustment, ClaseDeDocumento.InternalConsumption,
+        ClaseDeDocumento.WriteOff, ClaseDeDocumento.Assembly, ClaseDeDocumento.LocationMove,
+    ];
+
+    private const string VerCatalogo = "Inventory.Catalog.View";
+    private const string AdministrarCatalogo = "Inventory.Catalog.Manage";
+
+    /// <summary>
+    /// Feature 012, I4 (T717, T41; contracts/dian.md §12; FR-068): los artefactos de factura, notas, DEE y su nota (canónico, XML firmado,
+    /// <c>AttachedDocument</c>, <c>ApplicationResponse</c>, PDF). Los genera la facturación electrónica: se leen con <c>Inventory.Sales.View</c>,
+    /// no se borran ni reciben subidas. El <c>OwnerEntityPublicId</c> es el del documento electrónico.
+    /// </summary>
+    public const string DocumentoElectronicoDeVenta = "ElectronicSalesDocument";
+
+    /// <summary>Los del documento soporte y su nota (y los eventos RADIAN de I5): <c>Inventory.Purchases.View</c>, igual que los de venta.</summary>
+    public const string DocumentoElectronicoDeCompra = "ElectronicPurchaseDocument";
+
+    /// <summary>
+    /// Las constancias y evidencias de un evento de contingencia 03/04: se leen con <c>ElectronicInvoicing.Contingencies.View</c>, <b>admiten</b>
+    /// subidas de personas con <c>ElectronicInvoicing.Contingencies.Declare</c> sobre un evento que exista, y no se borran (son la evidencia
+    /// ante la DIAN).
+    /// </summary>
+    public const string EventoDeContingencia = "DianContingencyEvent";
+
+    private const string VerContingencias = "ElectronicInvoicing.Contingencies.View";
+    private const string DeclararContingencias = "ElectronicInvoicing.Contingencies.Declare";
+
     private const string LeerComprobantes = "Accounting.Vouchers.View";
     private const string EscribirComprobantes = "Accounting.Vouchers.Create";
 
@@ -51,6 +101,8 @@ public static class AdjuntosDeModulo
         ["EmploymentTermination"] = new("Payroll.Settlements.View", Borrable: false, "el documento para firma de la liquidación definitiva"),
         ["BankDisbursementFile"] = new("Payroll.Disbursement.View", Borrable: false, "el archivo de dispersión bancaria que se entregó al banco"),
         ["PilaGeneration"] = new("Payroll.Pila.View", Borrable: false, "la planilla PILA tal como se generó y se cargó en el operador"),
+        [DocumentoElectronicoDeVenta] = new("Inventory.Sales.View", Borrable: false, "un archivo de un documento electrónico de venta ante la DIAN"),
+        [DocumentoElectronicoDeCompra] = new("Inventory.Purchases.View", Borrable: false, "un archivo de un documento electrónico de compra ante la DIAN"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
@@ -64,7 +116,14 @@ public static class AdjuntosDeModulo
     /// </summary>
     public static async Task<bool> PuedeLeerAsync(IPermissionChecker permisos, string? ownerEntityType, CancellationToken ct)
     {
-        var permiso = ownerEntityType == Comprobante ? LeerComprobantes : De(ownerEntityType)?.PermisoDeLectura;
+        var permiso = ownerEntityType switch
+        {
+            Comprobante => LeerComprobantes,
+            ProductoDeInventario => VerCatalogo,
+            SoporteDeAjuste => VerAjustes,
+            EventoDeContingencia => VerContingencias,
+            _ => De(ownerEntityType)?.PermisoDeLectura,
+        };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
     }
 
@@ -76,11 +135,40 @@ public static class AdjuntosDeModulo
     /// cooperativa, un comprobante de otra simplemente no está.
     /// </summary>
     public static async Task<Error?> PuedeSubirAsync(
-        IApplicationDbContext db, IPermissionChecker permisos, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct)
+        IApplicationDbContext db, IPermissionChecker permisos, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct,
+        string? contentType = null)
     {
         if (De(ownerEntityType) is { } deModulo)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 $"No se pueden subir archivos a {deModulo.Descripcion}: lo genera el programa.");
+        if (ownerEntityType == ProductoDeInventario)
+        {
+            if (contentType is not null && !TiposDeImagenDeProducto.Contains(contentType))
+                return new Error(AttachmentErrorCodes.Validation_MimeTypeNotAllowed, "La imagen del producto va en JPEG, PNG o WebP.");
+            if (!await permisos.HasPermissionAsync(AdministrarCatalogo, ct)
+                || !await db.Products.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Producto no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeAjuste)
+        {
+            var ajuste = await db.InventoryDocuments.AsNoTracking()
+                .Where(d => d.PublicId == ownerEntityPublicId && ClasesDeAjuste.Contains(d.Class))
+                .Select(d => (EstadoDelDocumentoDeInventario?)d.Status)
+                .FirstOrDefaultAsync(ct);
+            if (ajuste is null || !await permisos.HasPermissionAsync(CrearAjustes, ct))
+                return new Error("Generic.NotFound", "Ajuste no encontrado.");
+            return ajuste is EstadoDelDocumentoDeInventario.Draft or EstadoDelDocumentoDeInventario.PendingApproval
+                ? null
+                : AjusteBloqueado();
+        }
+        if (ownerEntityType == EventoDeContingencia)
+        {
+            if (!await permisos.HasPermissionAsync(DeclararContingencias, ct)
+                || !await db.DianContingencyEvents.AnyAsync(e => e.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Evento de contingencia no encontrado.");
+            return null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -97,10 +185,31 @@ public static class AdjuntosDeModulo
     /// el comprobante ya no existe —un borrador descartado antes de esta regla—, no hay nada que proteger.
     /// </summary>
     public static async Task<Error?> PuedeBorrarAsync(
-        IApplicationDbContext db, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct)
+        IApplicationDbContext db, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct, IPermissionChecker? permisos = null)
     {
         if (De(ownerEntityType) is { Borrable: false } regla)
             return NoBorrable(regla);
+        // Las constancias de una contingencia son la evidencia ante la DIAN: se conservan con el evento (T717).
+        if (ownerEntityType == EventoDeContingencia)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es evidencia de una contingencia ante la DIAN: se conserva con el evento y no se puede borrar.",
+                new { ownerEntityType });
+        // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
+        if (ownerEntityType == ProductoDeInventario)
+            return permisos is not null && await permisos.HasPermissionAsync(AdministrarCatalogo, ct)
+                ? null
+                : new Error("Generic.NotFound", "Adjunto no encontrado.");
+        // Los soportes de un ajuste se borran sólo antes de confirmarlo (T255): confirmado o anulado, se conservan con él.
+        if (ownerEntityType == SoporteDeAjuste)
+        {
+            var ajuste = await db.InventoryDocuments.AsNoTracking()
+                .Where(d => d.PublicId == ownerEntityPublicId)
+                .Select(d => (EstadoDelDocumentoDeInventario?)d.Status)
+                .FirstOrDefaultAsync(ct);
+            if (permisos is not null && !await permisos.HasPermissionAsync(CrearAjustes, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return ajuste is EstadoDelDocumentoDeInventario.Confirmed or EstadoDelDocumentoDeInventario.Voided ? AjusteBloqueado() : null;
+        }
         if (ownerEntityType != Comprobante)
             return null;
 
@@ -114,6 +223,10 @@ public static class AdjuntosDeModulo
                 new { ownerEntityType })
             : null;
     }
+
+    private static Error AjusteBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es soporte de un ajuste confirmado: se conserva con el ajuste y no se puede cambiar.",
+        new { ownerEntityType = SoporteDeAjuste });
 
     /// <summary>El error de borrar por la ruta genérica un adjunto que su módulo declara inmutable.</summary>
     public static Error NoBorrable(Regla regla) =>

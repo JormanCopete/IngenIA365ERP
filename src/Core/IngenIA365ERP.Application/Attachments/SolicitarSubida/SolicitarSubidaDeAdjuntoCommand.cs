@@ -72,7 +72,7 @@ public sealed class SolicitarSubidaDeAdjuntoCommandHandler(
         if (!AttachmentPolicy.AllowedMimeTypes.Contains(request.ContentType))
             return Result.Failure<AutorizacionDeSubidaDto>(AttachmentErrorCodes.Validation_MimeTypeNotAllowed,
                 "Ese tipo de archivo no se admite como soporte.");
-        if (await AdjuntosDeModulo.PuedeSubirAsync(db, permisos, request.OwnerEntityType, request.OwnerEntityPublicId, ct) is { } prohibido)
+        if (await AdjuntosDeModulo.PuedeSubirAsync(db, permisos, request.OwnerEntityType, request.OwnerEntityPublicId, ct, request.ContentType) is { } prohibido)
             return Result.Failure<AutorizacionDeSubidaDto>(prohibido);
 
         var quien = usuario.UserName ?? "SYSTEM";

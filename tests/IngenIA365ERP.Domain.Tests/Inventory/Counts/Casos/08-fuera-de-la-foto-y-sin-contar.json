@@ -1,0 +1,48 @@
+{
+  "nombre": "Un producto encontrado fuera de la foto entra con teórico 0; uno de la foto que nadie contó cuenta 0",
+  "descripcion": "N no estaba en la foto y se encontraron 2 (sobrante 2). F estaba con 4 y nadie lo contó: faltan 4. Los dos piden reconteo.",
+  "tolerancia": {
+    "porcentaje": 0,
+    "unidades": 0
+  },
+  "sumaMovimientos": false,
+  "foto": [
+    {
+      "linea": "N",
+      "teorico": 0
+    },
+    {
+      "linea": "F",
+      "teorico": 4
+    }
+  ],
+  "capturas": [
+    {
+      "linea": "N",
+      "ronda": 1,
+      "contador": 2,
+      "cantidad": 2
+    }
+  ],
+  "movimientos": [],
+  "esperado": [
+    {
+      "linea": "N",
+      "teorico": 0,
+      "movimientos": null,
+      "contado": 2,
+      "diferencia": 2,
+      "ronda": 1,
+      "reconteo": true
+    },
+    {
+      "linea": "F",
+      "teorico": 4,
+      "movimientos": null,
+      "contado": 0,
+      "diferencia": -4,
+      "ronda": 0,
+      "reconteo": true
+    }
+  ]
+}

@@ -25,4 +25,14 @@ public interface IAuditSignatureService
     /// Devuelve <c>false</c> si la versión es desconocida o el HMAC no coincide.
     /// </summary>
     bool VerifyHmacBase64(byte[] payload, string hmacBase64, string keyVersion);
+
+    /// <summary>
+    /// Feature 012 (T38): la versión con que se firman las anclas de la cadena de auditoría
+    /// (<c>AuditSignature:AnchorKeyVersion</c>); nula si no está configurada, no está en las claves o es
+    /// <c>dev-v1</c> (nunca se ancla con la clave de los PDF).
+    /// </summary>
+    string? AnchorKeyVersion { get; }
+
+    /// <summary>HMAC-SHA256 en Base64 con la clave de <paramref name="keyVersion"/>; lanza si no existe.</summary>
+    string ComputeHmacBase64(byte[] payload, string keyVersion);
 }

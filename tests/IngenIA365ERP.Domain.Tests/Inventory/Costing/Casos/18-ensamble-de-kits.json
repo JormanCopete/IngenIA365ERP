@@ -1,0 +1,71 @@
+{
+  // I6, T904 (SC-007, US15-3, data-model §1.11): el kit entra por el documento Assembly al costo de lo consumido. Salen sus componentes
+  // al promedio de su ámbito (cantidad por kit × kits) y el kit entra por Σ de esas salidas ÷ la cantidad de kits, a 6 decimales; si
+  // round(cantidad × costo) no diera exactamente lo consumido, la diferencia iría en una línea RoundingResidue sobre la entrada del kit
+  // (FR-017; con cantidades menores que 10.000 al centavo no ocurre: lo fija MotorDeCosteoEnsambleYComboTests).
+  "nombre": "Ensamble de kits",
+  "descripcion": "Compra A 12 × 1.000 = 12.000 y B 6 × 3.000 = 18.000. EN1 ensambla 5 kits de 2 A + 1 B: salen 10 A × 1.000 = 10.000 (A queda 2 por 2.000) y 5 B × 3.000 = 15.000 (B queda 1 por 3.000); consumido 25.000 → entra el kit a 25.000 / 5 = 5.000 la unidad. Compra A 4 × 1.100 = 4.400 → A 6 por 6.400 (1.066,666667) y B 2 × 3.050 = 6.100 → B 3 por 9.100 (3.033,333333). EN2 ensambla 3 kits: salen 6 A × 1.066,666667 = 6.400,00 y 3 B × 3.033,333333 = 9.100,00 (los dos ámbitos quedan en cero sin residuo); consumido 15.500 → 15.500 / 3 = 5.166,666667 y 3 × 5.166,666667 = 15.500,000001 → 15.500,00, sin residuo. El kit queda 8 por 40.500 (5.062,5).",
+  "parametros": { "metodo": "WeightedAverage", "ambito": "Cooperative", "montos": "Centavo", "negativoPermitido": false },
+  "movimientos": [
+    { "id": "E1", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "A", "cantidad": 12, "costoUnitario": 1000 },
+    { "id": "E2", "documento": "EC-1", "fecha": "2026-09-01", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "B", "cantidad": 6, "costoUnitario": 3000 },
+    {
+      "id": "EN1", "documento": "ENS-1", "fecha": "2026-09-02", "clase": "Assembly", "bodega": "PRINCIPAL", "producto": "KIT", "cantidad": 5,
+      "componentes": [ { "producto": "A", "cantidad": 2 }, { "producto": "B", "cantidad": 1 } ],
+      "esperado": {
+        "componentes": [
+          {
+            "producto": "A",
+            "lineas": [ { "kind": "Exit", "cantidad": -10, "costoUnitario": 1000, "costoTotal": -10000 } ],
+            "estado": { "cantidad": 2, "valor": 2000, "promedio": 1000 }
+          },
+          {
+            "producto": "B",
+            "lineas": [ { "kind": "Exit", "cantidad": -5, "costoUnitario": 3000, "costoTotal": -15000 } ],
+            "estado": { "cantidad": 1, "valor": 3000, "promedio": 3000 }
+          }
+        ],
+        "costoCompuesto": 25000,
+        "lineas": [ { "kind": "Entry", "cantidad": 5, "costoUnitario": 5000, "costoTotal": 25000 } ],
+        "estado": { "cantidad": 5, "valor": 25000, "promedio": 5000, "ultimoCosto": 5000 },
+        "explicacion": [ "Costo consumido de los componentes: 25000", "Costo unitario del kit: 5000" ]
+      }
+    },
+    { "id": "E3", "documento": "EC-2", "fecha": "2026-09-03", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "A", "cantidad": 4, "costoUnitario": 1100,
+      "esperado": { "estado": { "cantidad": 6, "valor": 6400, "promedio": 1066.666667, "ultimoCosto": 1100 } } },
+    { "id": "E4", "documento": "EC-2", "fecha": "2026-09-03", "clase": "PurchaseReceipt", "bodega": "PRINCIPAL", "producto": "B", "cantidad": 2, "costoUnitario": 3050,
+      "esperado": { "estado": { "cantidad": 3, "valor": 9100, "promedio": 3033.333333, "ultimoCosto": 3050 } } },
+    {
+      "id": "EN2", "documento": "ENS-2", "fecha": "2026-09-04", "clase": "Assembly", "bodega": "PRINCIPAL", "producto": "KIT", "cantidad": 3,
+      "componentes": [ { "producto": "A", "cantidad": 2 }, { "producto": "B", "cantidad": 1 } ],
+      "esperado": {
+        "componentes": [
+          {
+            "producto": "A",
+            "lineas": [ { "kind": "Exit", "cantidad": -6, "costoUnitario": 1066.666667, "costoTotal": -6400 } ],
+            "estado": { "cantidad": 0, "valor": 0, "promedio": 1100 }
+          },
+          {
+            "producto": "B",
+            "lineas": [ { "kind": "Exit", "cantidad": -3, "costoUnitario": 3033.333333, "costoTotal": -9100 } ],
+            "estado": { "cantidad": 0, "valor": 0, "promedio": 3050 }
+          }
+        ],
+        "costoCompuesto": 15500,
+        "lineas": [ { "kind": "Entry", "cantidad": 3, "costoUnitario": 5166.666667, "costoTotal": 15500 } ],
+        "estado": { "cantidad": 8, "valor": 40500, "promedio": 5062.5, "ultimoCosto": 5166.666667 }
+      }
+    },
+    {
+      "id": "EN3", "documento": "ENS-3", "fecha": "2026-09-05", "clase": "Assembly", "bodega": "PRINCIPAL", "producto": "KIT", "cantidad": 1,
+      "componentes": [ { "producto": "A", "cantidad": 2 }, { "producto": "B", "cantidad": 1 } ],
+      "esperado": { "rechazo": "Inventory.Stock.Insufficient", "componenteRechazado": "A" }
+    }
+  ],
+  "final": [
+    { "ambito": "A@COOPERATIVA", "cantidad": 0, "valor": 0, "promedio": 1100 },
+    { "ambito": "B@COOPERATIVA", "cantidad": 0, "valor": 0, "promedio": 3050 },
+    { "ambito": "KIT@COOPERATIVA", "cantidad": 8, "valor": 40500, "promedio": 5062.5, "ultimoCosto": 5166.666667 }
+  ],
+  "existencias": [ { "bodega": "PRINCIPAL", "cantidad": 8 } ]
+}
