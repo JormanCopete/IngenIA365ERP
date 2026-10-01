@@ -123,13 +123,15 @@ public class CanalYConcurrenciaTests(CentralIdentityApiFixture fx)
         var otra = await PrepararAsync(fx, "fecredotra", configurar: false);
         using var http = fx.CreateClient();
 
-        // Otra cooperativa configurada sin su archivo no se verifica con el de la primera, aunque esté en el mismo directorio.
+        // El canal simulado no tiene secreto: otra cooperativa sin archivo se verifica igual (2026-10-01, para poder probar
+        // ventas en los ambientes desplegados, que no montan el Secret). Que un canal REAL no tome el archivo de otra
+        // cooperativa lo fija CredencialesEnArchivoTests con un canal que sí exige archivo.
         await otra.ConfigurarAsync(fx, http, conCredencial: false);
-        await InventarioE2E.FallaAsync(await InventarioE2E.MandarAsync(http, otra.Admin, HttpMethod.Post, "/api/electronic-invoicing/settings/verify-credential",
-            new { channelCode = Canal }), "ElectronicInvoicing.CredentialMismatch");
+        await InventarioE2E.ExitoAsync(http, otra.Admin, HttpMethod.Post, "/api/electronic-invoicing/settings/verify-credential",
+            new { channelCode = Canal });
         var preparacion = await InventarioE2E.GetAsync(http, otra.Admin, $"/api/electronic-invoicing/readiness?documentType={otra.Tipo("FE")}");
         preparacion.GetProperty("missing").EnumerateArray().Select(m => m.GetProperty("code").GetString())
-            .Should().Contain("ElectronicInvoicing.Readiness.CredentialNotVerified");
+            .Should().NotContain("ElectronicInvoicing.Readiness.CredentialNotVerified");
 
         // CredentialKey cambiada a mano en la base: la emisión no sale.
         var t = esc.Admin;

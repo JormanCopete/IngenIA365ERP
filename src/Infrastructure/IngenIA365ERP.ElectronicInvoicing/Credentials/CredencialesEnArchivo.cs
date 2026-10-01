@@ -113,6 +113,13 @@ public sealed class CredencialesEnArchivo(
             return Result.Failure<CredencialesDeCanal>(CodigoNoDisponible, "La ruta de la credencial sale del directorio del Secret.");
 
         var huella = Huella(ruta);
+        if (huella is null && string.Equals(canal, Channels.Simulado.CanalSimulado.Codigo, StringComparison.Ordinal))
+        {
+            // El canal simulado no habla con nadie: no tiene secreto que guardar. Exigir el archivo dejaba sin poder
+            // configurarlo en los ambientes desplegados, que no montan el Secret hasta tener un canal real (2026-10-01).
+            // La clave sigue siendo la derivada de la cooperativa: una alterada en la base ya respondió CredentialMismatch.
+            return Result.Success(new CredencialesDeCanal(clave, new Dictionary<string, string>(StringComparer.Ordinal)));
+        }
         if (huella is null)
         {
             cache.Olvidar(ruta);
