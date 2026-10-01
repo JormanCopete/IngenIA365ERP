@@ -95,6 +95,37 @@ public sealed class CredencialesEnArchivoTests : IDisposable
     }
 
     [Fact]
+    public async Task El_canal_simulado_no_necesita_archivo()
+    {
+        // 2026-10-01: ningún ambiente desplegado monta el Secret hasta tener un canal real; el simulado tiene que poder
+        // verificarse igual para probar ventas (también en producción, en ambiente DIAN de pruebas).
+        var r = await Credenciales(CooperativaA).ResolverAsync("SIMULADO", default);
+
+        Assert.True(r.IsSuccess, r.IsFailure ? r.Error.Message : null);
+        Assert.Equal(CredencialesDeCanal.ClaveDe(CooperativaA, "SIMULADO"), r.Value.Clave);
+        Assert.Empty(r.Value.Valores);
+    }
+
+    [Fact]
+    public async Task El_canal_simulado_sin_archivo_sigue_rechazando_una_clave_alterada()
+    {
+        var db = TestDbContextFactory.Create();
+        db.ElectronicEmissionSettings.Add(new ElectronicEmissionSetting
+        {
+            Mode = EmissionMode.TechnologyProvider, ChannelCode = "SIMULADO", Environment = DianEnvironment.Testing,
+            CredentialKey = CredencialesDeCanal.ClaveDe(CooperativaB, "SIMULADO"),
+            IssuerTaxId = "900123456", IssuerCheckDigit = "7", IssuerBusinessName = "Cooperativa", IsEnabled = true,
+            ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+        });
+        db.SaveChanges();
+
+        var r = await Credenciales(CooperativaA, db).ResolverAsync("SIMULADO", default);
+
+        Assert.True(r.IsFailure);
+        Assert.Equal(CredencialesEnArchivo.CodigoNoCoincide, r.Error.Code);
+    }
+
+    [Fact]
     public async Task El_archivo_ausente_es_un_fallo_sin_excepcion()
     {
         var r = await Credenciales(CooperativaA).ResolverAsync("OTRO", default);
