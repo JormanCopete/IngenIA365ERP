@@ -79,8 +79,9 @@ if ($r.Salida.Trim()) {
 }
 
 # 2. Mongo tiene que estar sano y todavia abierto (sin autenticacion).
-# (mongosh leyendo de STDIN repite su prompt: se busca la marca, no la salida exacta.)
-$r = En-Nodo "k3s kubectl exec -i -n $ns erp-mongo-0 -c mongo -- mongosh --quiet" "print('ESTADO=' + rs.status().myState)"
+# mongosh --file /dev/stdin evalua el guion ENTERO (leido por STDIN sin --file lo evalua linea
+# por linea, como la consola: un else en su propia linea queda suelto).
+$r = En-Nodo "k3s kubectl exec -i -n $ns erp-mongo-0 -c mongo -- mongosh --quiet --file /dev/stdin" "print('ESTADO=' + rs.status().myState)"
 if ($r.Codigo -ne 0 -or $r.Salida -notmatch 'ESTADO=1') {
     throw "Mongo no responde como PRIMARY sin autenticacion en $($destino.Nombre) (¿ya esta protegido?): $($r.Salida)"
 }
@@ -121,7 +122,7 @@ const r = prueba.getDB('admin').runCommand({ connectionStatus: 1 });
 print('erp-api autentica: ' + (r.authInfo.authenticatedUsers.length === 1));
 "@
 Write-Host "  Creando rol y usuarios ... " -NoNewline
-$r = En-Nodo "k3s kubectl exec -i -n $ns erp-mongo-0 -c mongo -- mongosh --quiet" $js
+$r = En-Nodo "k3s kubectl exec -i -n $ns erp-mongo-0 -c mongo -- mongosh --quiet --file /dev/stdin" $js
 if ($r.Codigo -ne 0 -or $r.Salida -notmatch 'erp-api autentica: true') {
     Write-Host "FALLO" -ForegroundColor Red
     Write-Host "     $($r.Salida)" -ForegroundColor DarkRed
