@@ -89,14 +89,14 @@ if ($r.Codigo -ne 0 -or $r.Salida -notmatch 'ESTADO=1') {
 function Nueva-Clave([int]$largo) {
     $alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
     $bytes = New-Object byte[] $largo
-    [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($bytes); $rng.Dispose()
     -join ($bytes | ForEach-Object { $alfabeto[$_ % $alfabeto.Length] })
 }
 $claveAdmin = Nueva-Clave 40
 $claveApi = Nueva-Clave 40
 $claveRespaldo = Nueva-Clave 40
 $bytesKeyfile = New-Object byte[] 756
-[Security.Cryptography.RandomNumberGenerator]::Fill($bytesKeyfile)
+$rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($bytesKeyfile); $rng.Dispose()
 $keyfile = [Convert]::ToBase64String($bytesKeyfile).Substring(0, 1000)
 
 # 4. Rol y usuarios (idempotente: crea o cambia la clave).

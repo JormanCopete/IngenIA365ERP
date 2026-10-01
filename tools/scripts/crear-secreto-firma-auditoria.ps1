@@ -89,7 +89,7 @@ $versionAnclas = "erp-$Ambiente-anclas-$mes"
 
 function Nueva-Clave {
     $bytes = New-Object byte[] 32
-    [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($bytes); $rng.Dispose()
     [Convert]::ToBase64String($bytes)
 }
 $clavePdf = Nueva-Clave
