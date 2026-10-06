@@ -48,5 +48,13 @@ public interface IAdminDbContext
     // --- Contenido promocional de la pantalla de inicio de sesion ---
     DbSet<PromoContenido> PromoContenidos { get; }
 
+    // --- Valores nacionales (feature 013, T37, T38): registro central, sólo inserción ---
+    DbSet<PlatformNationalValue> PlatformNationalValues { get; }
+    DbSet<PlatformRegulatoryDocument> PlatformRegulatoryDocuments { get; }
+    DbSet<PlatformNationalValueCounter> PlatformNationalValueCounters { get; }
+
+    /// <summary>Suelta lo seguido (feature 013): el registro que pierde la carrera por el contador lo reintenta desde cero.</summary>
+    void DescartarCambios();
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

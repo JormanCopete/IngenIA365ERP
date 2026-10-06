@@ -32,6 +32,12 @@ public static class ModuloDeAuditoria
     public const string Parameters = "Parameters";
     public const string Taxes = "Taxes";
     public const string PaymentMeans = "PaymentMeans";
+
+    /// <summary>Feature 013 (T67, T0092): habeas data, listas restrictivas y solicitudes del titular; encadenado, diez años.</summary>
+    public const string Compliance = "Compliance";
+
+    /// <summary>Feature 013 (T67, T0092): valores nacionales y su réplica; encadenado, diez años.</summary>
+    public const string NationalValues = "NationalValues";
     public const string Audit = "Audit";
     public const string Web = "Web";
     public const string Admin = "Admin";
@@ -63,6 +69,9 @@ public static class ModuloDeAuditoria
         (".Core.Payments", PaymentMeans),
         (".Audit", Audit),
         (".Web", Web),
+        // Feature 013 (T67, T0092): cumplimiento y valores nacionales, antes de .Admin y de .Core.
+        (".Compliance", Compliance),
+        (".NationalValues", NationalValues),
         (".Admin", Admin),
         (".Core", Core),
     ];

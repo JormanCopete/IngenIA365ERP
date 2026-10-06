@@ -115,7 +115,7 @@
             var response = await Http.GetFromJsonAsync<PagedResponse<SavingsLineItem>>("api/lending/savings-parameters?PageSize=100");
             _savingsLines = response?.Items ?? [];
         }
-        catch { /* silent */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar las líneas de ahorro: {ex.Message}"); }
     }
 
     private async Task OnFilterChanged(Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, StatusItem> args)

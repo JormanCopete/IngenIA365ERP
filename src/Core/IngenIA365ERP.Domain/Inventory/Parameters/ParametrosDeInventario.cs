@@ -80,7 +80,7 @@ public static class ParametrosDeInventario
             ["PromedioPonderado", "Peps"], "PromedioPonderado", I1) with
         {
             PermisoAdicional = PermisoDeCosteo,
-            ValoresDesde = new Dictionary<string, EntregaDelComercio> { ["Peps"] = I5 },
+            ValoresDesde = new Dictionary<string, EntregaDeModulo> { ["Peps"] = I5 },
         },
         Eleccion(Modulo, CosteoAmbito, "Ámbito del costo: uno por cooperativa o uno por bodega (misma regla que el método).",
             ["Cooperativa", "Bodega"], "Cooperativa", I1) with { PermisoAdicional = PermisoDeCosteo },

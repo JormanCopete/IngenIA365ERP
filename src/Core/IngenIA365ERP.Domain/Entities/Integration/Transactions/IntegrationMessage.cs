@@ -31,7 +31,7 @@ public class IntegrationMessage : AuditableEntityLong, IHechoInmutable
 
     public IntegrationMessageKind Kind { get; init; }
 
-    /// <summary>Siempre <c>INV</c> por ahora.</summary>
+    /// <summary>El módulo que lo emite según su tipo en el catálogo: <c>INV</c>, <c>CAR</c>, <c>TES</c> o <c>REC</c> (feature 013, T10).</summary>
     public string OriginModule { get; init; } = string.Empty;
 
     public MessageOriginKind OriginKind { get; init; }
@@ -85,8 +85,17 @@ public class IntegrationMessage : AuditableEntityLong, IHechoInmutable
     /// <summary>Resultado de la validación previa sellado al confirmar (SC-021); no es contenido de negocio.</summary>
     public PrevalidationOutcome? PrevalidationOutcome { get; init; }
 
-    /// <summary>Quien confirmó u ordenó: un <b>dato</b>, nunca un actor (FR-083).</summary>
-    public Guid OriginUserCentralId { get; init; }
+    /// <summary>
+    /// Persona o proceso (feature 013, T11, PM-02; <c>DEFAULT 1</c>): <c>Process</c> sólo en los tipos que el catálogo marca
+    /// <c>AdmiteProceso</c>, y entonces <see cref="OriginUserCentralId"/> es nulo.
+    /// </summary>
+    public ActorKind OriginActorKind { get; init; } = ActorKind.Person;
+
+    /// <summary>
+    /// Quien confirmó u ordenó: un <b>dato</b>, nunca un actor (FR-083). Nulo ⇔ <see cref="OriginActorKind"/> es
+    /// <c>Process</c> (feature 013, T11).
+    /// </summary>
+    public Guid? OriginUserCentralId { get; init; }
 
     public string OriginUserName { get; init; } = string.Empty;
 

@@ -394,6 +394,37 @@ public interface IApplicationDbContext
     DbSet<AlertType> AlertTypes { get; }
     DbSet<Alert> Alerts { get; }
 
+    // Feature 013 (T37, T39, T41; data-model parte 3 §4.1–§4.4): la copia de los valores nacionales. Escribe las copias y la
+    // bitácora sólo ReplicacionDeValoresNacionales; las leen sólo IValoresNacionales, ICalendarioHabil e INormativaVigente
+    // (LosValoresNacionalesSeLeenEnUnSoloSitio). Las revisiones, ReviewNationalValueCommand y ReviewRegulatoryDocumentCommand.
+    DbSet<Domain.Entities.Core.NationalValues.NationalValue> NationalValues { get; }
+    DbSet<Domain.Entities.Core.NationalValues.RegulatoryDocument> RegulatoryDocuments { get; }
+    DbSet<Domain.Entities.Core.NationalValues.NationalValueReplication> NationalValueReplications { get; }
+    DbSet<Domain.Entities.Core.NationalValues.NationalValueReview> NationalValueReviews { get; }
+
+    // Feature 013 (T50; data-model parte 3 §4.5): el perfil regulatorio. Lo escribe sólo AddRegulatoryProfileVersionCommand y lo
+    // lee IPerfilRegulatorio (con la regla bitemporal).
+    DbSet<Domain.Entities.Core.RegulatoryProfileVersion> RegulatoryProfileVersions { get; }
+
+    // Feature 013 (T0087, T0088; data-model parte 3 §4.8, §4.9): listas restrictivas (las escribe sólo ImportRestrictiveListCommand y
+    // las lee la carga vigente de CARGA-PROPIA) y solicitudes del titular.
+    DbSet<Domain.Entities.Compliance.RestrictiveListLoad> RestrictiveListLoads { get; }
+    DbSet<Domain.Entities.Compliance.RestrictiveListEntry> RestrictiveListEntries { get; }
+    DbSet<Domain.Entities.Compliance.DataSubjectRequest> DataSubjectRequests { get; }
+
+    // Feature 013 (T0077, T16; data-model parte 3 §4.6): el registro de participantes de la integración. Lo escribe sólo
+    // EscritorDelRegistroDeIntegracion y lo lee IRegistroDeIntegracion.
+    DbSet<IntegrationParticipant> IntegrationParticipants { get; }
+    DbSet<IntegrationParticipantAdoption> IntegrationParticipantAdoptions { get; }
+
+    // Feature 013 (T0080, T72; data-model parte 3 §4.7): el canal externo por cooperativa y clase. Sólo guarda la referencia a la
+    // credencial; lo escribe ConfigureExternalChannelCommand (y la verificación) y lo lee la credencial en archivo.
+    DbSet<Domain.Entities.Core.ExternalChannelSetting> ExternalChannelSettings { get; }
+
+    // Feature 013 (T0084, T76; data-model parte 3 §4.12): las plantillas de mensaje versionadas. Las escribe
+    // CreateMessageTemplateVersionCommand (y la semilla); el mensaje al deudor sella PublicId y versión.
+    DbSet<Domain.Entities.Core.NotificationTemplate> NotificationTemplates { get; }
+
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y
     // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir

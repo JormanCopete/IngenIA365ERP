@@ -98,6 +98,14 @@ public class AdminDbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<UserSetting> UserSettings => Set<UserSetting>();
     public DbSet<PromoContenido> PromoContenidos => Set<PromoContenido>();
+
+    // --- Valores nacionales (feature 013, T37, T38; data-model parte 3 §3) ---
+    public DbSet<PlatformNationalValue> PlatformNationalValues => Set<PlatformNationalValue>();
+    public DbSet<PlatformRegulatoryDocument> PlatformRegulatoryDocuments => Set<PlatformRegulatoryDocument>();
+    public DbSet<PlatformNationalValueCounter> PlatformNationalValueCounters => Set<PlatformNationalValueCounter>();
+
+    /// <summary>Suelta todo lo seguido: el reintento de un registro que perdió la carrera por el contador relee desde cero.</summary>
+    public void DescartarCambios() => ChangeTracker.Clear();
     // Nota: DbSet<CentralUserIdentity> Users es heredado de IdentityDbContext;
     // no se expone via IAdminDbContext porque CentralUserIdentity es tipo de
     // Infrastructure (Application usa ICentralIdentityProvider).
@@ -151,6 +159,11 @@ public class AdminDbContext
         modelBuilder.ApplyConfiguration(new UserSettingConfiguration());
         modelBuilder.ApplyConfiguration(new PromoContenidoConfiguration());
 
+        // Feature 013 (T37, T38, C44): registro central de valores nacionales y su numeración común.
+        modelBuilder.ApplyConfiguration(new PlatformNationalValueConfiguration());
+        modelBuilder.ApplyConfiguration(new PlatformRegulatoryDocumentConfiguration());
+        modelBuilder.ApplyConfiguration(new PlatformNationalValueCounterConfiguration());
+
         // Feature 004: columnas de interoperabilidad con el store multitenant.
         // TenantDbContext (Finbuckle/ErpTenantInfo) mapea LA MISMA tabla
         // ADM_Tenants con estas columnas adicionales; como este contexto es el
@@ -192,6 +205,10 @@ public class AdminDbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        // Feature 013 (C68): los hechos de la base administrativa (valores nacionales y documentos normativos) sólo se
+        // insertan, como en ApplicationDbContext. Antes de tocar nada.
+        await GuardaDeInmutabilidad.VerificarAsync(this, cancellationToken);
+
         var now = DateTime.UtcNow;
         var userName = _currentUserService?.UserName ?? "SYSTEM";
 

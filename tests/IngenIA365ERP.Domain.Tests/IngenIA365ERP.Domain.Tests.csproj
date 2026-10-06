@@ -43,6 +43,8 @@
     <None Include="Inventory\Costing\Prorrateo\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 012, I6 (T943): casos dorados de la rotación y los días de inventario, calculados a mano. -->
     <None Include="Inventory\Analytics\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013 (T0021): documentos normativos de prueba para los lectores tipados de valores nacionales. -->
+    <None Include="Common\NationalValues\Documentos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

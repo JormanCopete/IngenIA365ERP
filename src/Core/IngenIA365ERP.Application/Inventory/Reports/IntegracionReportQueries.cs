@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Application.Inventory.Reports;
 /// la bandeja por fila —número y clase del documento de origen, tipo y versión del mensaje, destino, estado, modo, fecha de
 /// operación, lote, intentos, último error, cuándo se procesó y el comprobante— con las ocultas <c>_mensaje</c> y <c>_documento</c>
 /// para abrir el mensaje en la bandeja y el documento. Lee <b>sólo</b> <c>COR_Integration*</c> (el resultado viene de la entrega,
-/// nunca de los libros, FR-014), con el alcance de bodega de la bandeja (<see cref="VistaDeMensajes.Visibles"/>). Filtros comunes
+/// nunca de los libros, FR-014), con el alcance de bodega de la bandeja (<see cref="Integration.VistaDeBandejaDeInventario.Visibles"/>). Filtros comunes
 /// <c>from</c>/<c>to</c> (fecha de operación) y <c>warehouse</c> (la bodega del sobre); propios <c>status</c>, <c>destination</c>,
 /// <c>type</c> y <c>batch</c>. (nuevo)
 /// </summary>
@@ -60,7 +60,7 @@ public sealed class MessagesReportQueryHandler(IApplicationDbContext db, IAlcanc
         var hasta = f.Hasta(hoy);
         var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
 
-        var consulta = VistaDeMensajes.PorDestinoYEstado(VistaDeMensajes.Visibles(db, alcance), request.Destination, request.Status)
+        var consulta = VistaDeMensajes.PorDestinoYEstado(Integration.VistaDeBandejaDeInventario.Visibles(db, alcance), request.Destination, request.Status)
             .Where(d => d.Message!.OperationDate >= desde && d.Message.OperationDate <= hasta);
         if (!string.IsNullOrWhiteSpace(request.Type)) consulta = consulta.Where(d => d.Message!.Type == request.Type);
         string? bodegaFiltrada = null;
@@ -151,7 +151,7 @@ public sealed class AccountingBatchesReportQueryHandler(IApplicationDbContext db
     public static IQueryable<IntegrationBatch> Visibles(IApplicationDbContext db, IQueryable<IntegrationBatch> lotes, AlcanceDeInventario alcance)
     {
         if (alcance.TodasLasBodegas) return lotes;
-        var visibles = VistaDeMensajes.Visibles(db, alcance);
+        var visibles = Integration.VistaDeBandejaDeInventario.Visibles(db, alcance);
         return lotes.Where(b => visibles.Any(d => d.BatchId == b.Id));
     }
 

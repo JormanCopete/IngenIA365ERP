@@ -128,7 +128,7 @@
                 _projectedRate = _selectedParam.AnnualRate ?? 0;
             }
         }
-        catch { /* silent */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar los tipos de CDT: {ex.Message}"); }
     }
 
     private async Task SearchPerson()

@@ -73,7 +73,7 @@
                 _creditLines = [new("", "Todas las lineas"), ..lines.Select(l => new CreditLineOption(l.PublicId.ToString(), l.Description))];
             }
         }
-        catch { /* keep defaults */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar las líneas de crédito: {ex.Message}"); }
     }
 
     private string GetPreviewUrl()

@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// </summary>
 /// <param name="Origen">El documento o la operación que emite.</param>
 /// <param name="OriginEventKey">Uno de los valores de <see cref="ClavesDeEvento"/>, con la forma que admite cada tipo.</param>
-/// <param name="Contenidos">Records <c>&lt;Type&gt;V1</c> del catálogo (<c>CatalogoDeMensajesV1</c>); al menos uno.</param>
+/// <param name="Contenidos">Records <c>&lt;Type&gt;V1</c> del catálogo agregado (<c>CatalogoDeMensajes</c>), todos del mismo módulo; al menos uno.</param>
 /// <param name="Modo">Cómo nace la entrega a Contabilidad de un mensaje de negocio: sellado o heredado del original.</param>
 /// <param name="CadenasDeLasQueDepende">
 /// Los orígenes de un derivado (<c>derivedFrom</c>) y, en un ajuste de costo, el documento afectado. Su propio origen,
@@ -19,6 +19,19 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// <param name="Relacionado">El documento que éste anula, corrige, devuelve o ajusta; nulo en un original.</param>
 /// <param name="ValidacionPrevia">Resultado de la validación previa sellado en cada mensaje (SC-021); nulo si no aplica.</param>
 /// <param name="KindDelOriginal">El <c>Kind</c> que hereda un <c>DocumentoAnulado</c>; obligatorio si lo hay.</param>
+/// <param name="Destino">
+/// Feature 013 (T10): el destino cuando el tipo admite varios (hoy ninguno de V1; <c>PagoReversadoPorCartera</c> está pensado para
+/// eso). Si se indica, tiene que ser uno de los que el tipo admite. El módulo de origen nunca va aquí: lo dice el catálogo.
+/// </param>
+/// <param name="UsuarioDeOrigen">
+/// Feature 013 (T11): a nombre de quién va el mensaje cuando no actúa una persona: el <c>originUser</c> del mensaje que se está
+/// consumiendo o la persona que ordenó la corrida. Con su <c>CentralUserId</c> nulo (el consumido lo originó el proceso) cuenta
+/// como si no estuviera.
+/// </param>
+/// <param name="CadenaDeOrden">
+/// Feature 013 (T12): la raíz de cadena de las respuestas a Comercial (<c>ObligacionCreada</c>, <c>ObligacionRechazada</c>): la
+/// venta, para que lleguen en orden. Va a <c>ChainRootPublicId</c> y agrega la arista hacia el último mensaje de esa cadena.
+/// </param>
 public sealed record SolicitudDeEmision(
     OrigenDeEmision Origen,
     string OriginEventKey,
@@ -27,7 +40,10 @@ public sealed record SolicitudDeEmision(
     IReadOnlyList<Guid>? CadenasDeLasQueDepende = null,
     DocumentoRelacionado? Relacionado = null,
     PrevalidationOutcome? ValidacionPrevia = null,
-    IntegrationMessageKind? KindDelOriginal = null);
+    IntegrationMessageKind? KindDelOriginal = null,
+    string? Destino = null,
+    Contracts.Inventory.UserRefV1? UsuarioDeOrigen = null,
+    Guid? CadenaDeOrden = null);
 
 /// <summary>
 /// El origen de los mensajes: las columnas del sobre que no son del contenido. La clase del documento va como

@@ -152,7 +152,7 @@ public sealed class RevisionDeCierre(IApplicationDbContext db, IDateTimeService 
 
         var entregas = await db.IntegrationMessageDeliveries.AsNoTracking()
             .Where(e => e.Status == DeliveryStatus.Pending || e.Status == DeliveryStatus.InBatch || e.Status == DeliveryStatus.Rejected)
-            .Where(e => db.IntegrationMessages.Any(m => m.Id == e.MessageId && m.OriginModule == EmisorDeMensajes.ModuloDeOrigen
+            .Where(e => db.IntegrationMessages.Any(m => m.Id == e.MessageId && m.OriginModule == ModulosDeOrigen.Inventario
                 && m.OperationDate >= inicio && m.OperationDate <= fin))
             .GroupBy(e => e.Status)
             .Select(g => new { Estado = g.Key, Cantidad = g.Count() })

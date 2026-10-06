@@ -30,5 +30,6 @@
     <!-- Feature 012, I4 (T668): los adaptadores de facturación electrónica, para vigilar que sólo la raíz de composición los conozca
          (ElProveedorTecnologicoSoloLoConoceSuAdaptador) y que las credenciales no toquen la base. -->
     <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.ElectronicInvoicing\IngenIA365ERP.ElectronicInvoicing.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\IngenIA365ERP.ExternalChannels\IngenIA365ERP.ExternalChannels.csproj" />
   </ItemGroup>
 </Project>

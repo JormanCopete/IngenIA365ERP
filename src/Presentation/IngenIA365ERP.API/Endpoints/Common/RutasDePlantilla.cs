@@ -26,6 +26,14 @@ namespace IngenIA365ERP.API.Endpoints.Common;
 /// mismo libro con las columnas <c>resultado</c> y <c>errores</c>. Sin comando de importación (plantillas 10 a 13 en
 /// I1) no se publica: el <c>POST</c> es el 404 de lo inexistente.</item>
 /// </list>
+///
+/// <para>
+/// Feature 013 (T82, T0089; contracts/plantillas.md §0.8): la sobrecarga general recibe la búsqueda de la definición, el nombre del
+/// libro, el permiso de los datos personales y el evento de la descarga con datos, así la usan los catálogos de plataforma
+/// (<see cref="CatalogoDePlantillasDePlataforma"/>) y los de Cartera. La de antes —atada a <see cref="CatalogoDePlantillas"/> de la 012,
+/// con <see cref="PermisoDeDatosPersonales"/> y <see cref="EventoDeExportacion"/>— la llama con esos valores y no cambia a las dieciséis
+/// plantillas.
+/// </para>
 /// </summary>
 public static class RutasDePlantilla
 {
@@ -64,11 +72,58 @@ public static class RutasDePlantilla
         Func<IRequest<Result<ImportResultDto>>, IFormCollection, IRequest<Result<ImportResultDto>>>? camposDelFormulario = null)
     {
         var plantilla = CatalogoDePlantillas.Por(clave);
+        return grupo.MapPlantilla(
+            () => CatalogoDePlantillas.Por(clave).Definicion,
+            $"plantilla-{plantilla.Numero:00}-{clave.Replace('.', '-')}",
+            permisoDeDescarga, permisoDeImportacion, nombre, PermisoDeDatosPersonales, EventoDeExportacion,
+            importar, datos, permisoDeExportacion, datosPersonales, camposDelFormulario);
+    }
+
+    /// <summary>
+    /// Feature 013 (T82, T0089): las mismas dos rutas de una plantilla de un catálogo de plataforma (<see cref="CatalogoDePlantillasDePlataforma"/>),
+    /// con el permiso de datos personales y el evento de exportación de su área.
+    /// </summary>
+    public static RouteGroupBuilder MapPlantillaDePlataforma(
+        this RouteGroupBuilder grupo,
+        string clave,
+        string nombre,
+        Func<ModoDeImportacion?, ArchivoDeImportacion, string?, Guid, IRequest<Result<ImportResultDto>>>? importar = null,
+        Func<IRequest<Result<DatosDePlantilla>>>? datos = null,
+        string? permisoDeDatosPersonales = null,
+        string eventoDeExportacion = EventoDeExportacion)
+    {
+        var plantilla = CatalogoDePlantillasDePlataforma.Por(clave);
+        return grupo.MapPlantilla(() => CatalogoDePlantillasDePlataforma.Por(clave).Definicion, plantilla.NombreDelLibro,
+            plantilla.PermisoDeDescarga, plantilla.PermisoDeImportacion, nombre, permisoDeDatosPersonales ?? PermisoDeDatosPersonales,
+            eventoDeExportacion, importar, datos, permisoDeExportacion: null, datosPersonales: permisoDeDatosPersonales is not null);
+    }
+
+    /// <summary>
+    /// Feature 013 (T82, T0089; contracts/plantillas.md §0.8): la forma general. <paramref name="buscarDefinicion"/> se llama en cada
+    /// petición (como antes la búsqueda en el catálogo de la 012); <paramref name="permisoDeDatosPersonales"/> se exige además en la descarga
+    /// con datos cuando <paramref name="datosPersonales"/>; <paramref name="eventoDeExportacion"/> es la acción del evento de esa descarga.
+    /// </summary>
+    public static RouteGroupBuilder MapPlantilla(
+        this RouteGroupBuilder grupo,
+        Func<DefinicionDePlantilla> buscarDefinicion,
+        string nombreDelLibro,
+        string permisoDeDescarga,
+        string? permisoDeImportacion,
+        string nombre,
+        string permisoDeDatosPersonales,
+        string eventoDeExportacion,
+        Func<ModoDeImportacion?, ArchivoDeImportacion, string?, Guid, IRequest<Result<ImportResultDto>>>? importar = null,
+        Func<IRequest<Result<DatosDePlantilla>>>? datos = null,
+        string? permisoDeExportacion = null,
+        bool datosPersonales = false,
+        Func<IRequest<Result<ImportResultDto>>, IFormCollection, IRequest<Result<ImportResultDto>>>? camposDelFormulario = null)
+    {
+        ArgumentNullException.ThrowIfNull(buscarDefinicion);
 
         grupo.MapGet("/template.xlsx", async ([FromQuery] bool? withData, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var definicion = CatalogoDePlantillas.Por(clave).Definicion;
-                var nombreBase = $"plantilla-{plantilla.Numero:00}-{clave.Replace('.', '-')}";
+                var definicion = buscarDefinicion();
+                var nombreBase = nombreDelLibro;
                 if (withData != true)
                 {
                     var vacia = PlantillaDeImportacion.Xlsx(definicion, nombreBase);
@@ -77,7 +132,7 @@ public static class RutasDePlantilla
 
                 if (datos is null
                     || (permisoDeExportacion is not null && !await PermissionAuthorizationFilter.TieneAsync(http, permisoDeExportacion))
-                    || (datosPersonales && !await PermissionAuthorizationFilter.TieneAsync(http, PermisoDeDatosPersonales)))
+                    || (datosPersonales && !await PermissionAuthorizationFilter.TieneAsync(http, permisoDeDatosPersonales)))
                     return PermissionAuthorizationFilter.NotFoundEnvelope(http);
 
                 var existentes = await sender.Send(datos(), ct);
@@ -85,10 +140,10 @@ public static class RutasDePlantilla
 
                 await AuditoriaEncadenada.RegistrarAsync(http.RequestServices, new AuditLogCommand
                 {
-                    Action = EventoDeExportacion,
-                    EntityType = clave,
+                    Action = eventoDeExportacion,
+                    EntityType = definicion.Clave,
                     Module = definicion.Modulo,
-                    NewValues = new { catalog = clave, rows = existentes.Value.TotalDeFilas },
+                    NewValues = new { catalog = definicion.Clave, rows = existentes.Value.TotalDeFilas },
                 }, ct);
 
                 var llena = PlantillaDeImportacion.Xlsx(definicion, nombreBase + "-datos", existentes.Value);
@@ -129,7 +184,7 @@ public static class RutasDePlantilla
                 if (resultado.IsSuccess && resultado.Value.Mode == ModoDeImportacion.Review
                     && string.Equals(formato, "xlsx", StringComparison.OrdinalIgnoreCase))
                 {
-                    var revisado = PlantillaDeImportacion.ConResultados(subido, CatalogoDePlantillas.Por(clave).Definicion, resultado.Value);
+                    var revisado = PlantillaDeImportacion.ConResultados(subido, buscarDefinicion(), resultado.Value);
                     return Results.File(revisado.Contenido, revisado.TipoContenido, revisado.NombreArchivo);
                 }
                 return (object)resultado;

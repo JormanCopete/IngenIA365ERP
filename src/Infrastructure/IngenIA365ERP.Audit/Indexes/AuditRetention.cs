@@ -28,6 +28,8 @@ public static class AuditRetention
     [
         "Accounting", "Navigation",
         "Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans",
+        // Feature 013 (T67, T0092).
+        "Compliance", "NationalValues",
     ];
 
     public static TimeSpan Para(string? modulo) =>

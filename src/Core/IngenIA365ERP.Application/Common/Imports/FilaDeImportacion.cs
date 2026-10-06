@@ -212,7 +212,8 @@ public sealed class FilaDeImportacion
         return crudo;
     }
 
-    private decimal? Decimal(string columna, int decimales)
+    /// <summary>Un número con hasta <paramref name="decimales"/> decimales, con las reglas de §0.4 (punto o coma, sin miles).</summary>
+    internal decimal? Decimal(string columna, int decimales)
     {
         var crudo = Leer(columna);
         if (crudo is null) return null;

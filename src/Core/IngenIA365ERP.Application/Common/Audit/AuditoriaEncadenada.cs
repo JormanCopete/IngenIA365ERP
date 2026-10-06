@@ -46,6 +46,9 @@ public static class AuditoriaEncadenada
         ModuloDeAuditoria.Taxes,
         ModuloDeAuditoria.PaymentMeans,
         ModuloDeAuditoria.Navigation,
+        // Feature 013 (T67, T0092).
+        ModuloDeAuditoria.Compliance,
+        ModuloDeAuditoria.NationalValues,
     ];
 
     /// <summary>Sufijo de la clase de retención de diez años.</summary>

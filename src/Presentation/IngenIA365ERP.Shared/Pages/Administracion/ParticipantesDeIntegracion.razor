@@ -1,0 +1,198 @@
+@page "/admin/participantes-de-integracion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using static IngenIA365ERP.Shared.Services.Core.TextosDePlataforma
+@inject ParticipantesDeIntegracionClient Participantes
+@inject INotificationService Notification
+
+<PageTitle>Participantes de la integración - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 2 (T0095; T16, C35, C36; contracts/api.md §21.1; data-model parte 3 §4.6): quién participa en la integración entre
+   módulos —los destinos que consumen la bandeja de mensajes y los recaudadores del contrato de obligaciones— con las versiones que adoptan
+   y si cuentan hoy. Un destino que no cuenta no recibe nada: sus mensajes esperan sin intentos ni alertas. Habilitar o retirar cierra la
+   vigencia y abre otra: la historia queda. Cartera nace registrada e inhabilitada; la habilita su activación, no esta pantalla. *@
+<PermissionGate Required="Core.IntegrationParticipants.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Participantes de la integración</h3>
+        <div class="toolbar">
+            <label class="campo-check"><input type="checkbox" @bind="_verHistoria" /> Ver también los retirados</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Core.IntegrationParticipants.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Abrir">Registrar participante</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (Visibles.Count == 0)
+        {
+            <p class="texto-tenue">No hay participantes registrados.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Participante</th><th>Clase</th><th>Papel</th><th>Destino</th><th>Habilitado</th><th>Desde</th><th>Hasta</th><th>Versiones adoptadas</th><th>Cuenta hoy</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in Visibles)
+                        {
+                            <tr>
+                                <td>@p.Code@(p.IsTestDouble ? " (prueba)" : "")</td><td>@ClaseDeParticipante(p.Class)</td><td>@RolDeParticipante(p.Role)</td>
+                                <td>@Destino(p.Destination)</td><td>@(p.IsEnabled ? "Sí" : "No")</td>
+                                <td>@p.ValidFrom.ToString("dd/MM/yyyy")</td><td>@p.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                <td>@(p.Adoptions.Count == 0 ? "Las que declara su consumidor" : string.Join(", ", p.Adoptions.Select(a => $"{a.Contract} v{a.Version}")))</td>
+                                <td>@(p.Counts ? "Sí" : p.ImplementationAvailable ? "No (inhabilitado o fuera de vigencia)" : "No (sin implementación en esta versión)")</td>
+                                <td>
+                                    @if (p.ValidTo is null)
+                                    {
+                                        <PermissionGate Required="Core.IntegrationParticipants.Manage">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirRetiro(p))">Retirar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="Registrar participante" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">Si ya hay una vigencia del mismo participante, papel y destino, se cierra la víspera de la nueva. Un doble de prueba no cuenta en producción.</p>
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_f.Codigo" maxlength="10" /></label>
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_f.Clase">@foreach (var (valor, _, texto) in ClasesDeParticipante) { <option value="@valor">@texto</option> }</select>
+                    </label>
+                    <label class="campo">Papel *
+                        <select class="e-input" @bind="_f.Rol">@foreach (var (valor, _, texto) in RolesDeParticipante) { <option value="@valor">@texto</option> }</select>
+                    </label>
+                    @if (_f.Rol == 2)
+                    {
+                        <label class="campo">Destino *
+                            <select class="e-input" @bind="_f.Destino">@foreach (var (valor, texto) in Destinos) { <option value="@valor">@texto</option> }</select>
+                        </label>
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="_f.Habilitado" /> Habilitado</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.Doble" /> Es un doble de prueba</label>
+                    <label class="campo campo-ancho">Versiones adoptadas <input class="e-input" @bind="_f.Adopciones" placeholder="Contrato:versión separados por coma, p. ej. ProveedorDeObligaciones:1" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_f.Desde.ToString("yyyy-MM-dd")" @onchange="@(e => _f.Desde = LeerFecha(e.Value) ?? _f.Desde)" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" maxlength="300" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_f.Codigo) || string.IsNullOrWhiteSpace(_f.Motivo))" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRetiro" Header="Retirar participante" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@_retirando?.Code deja de contar desde el día siguiente a la fecha de retiro. Sus mensajes pendientes esperan.</p>
+                <div class="form-grid">
+                    <label class="campo">Hasta * <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd")" @onchange="@(e => _hasta = LeerFecha(e.Value) ?? _hasta)" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoRetiro" maxlength="300" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivoRetiro))" OnClick="@RetirarAsync">Retirar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRetiro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class Formulario
+    {
+        public string? Codigo { get; set; }
+        public int Clase { get; set; } = 1;
+        public int Rol { get; set; } = 1;
+        public string Destino { get; set; } = "Receipts";
+        public bool Habilitado { get; set; } = true;
+        public bool Doble { get; set; }
+        public string? Adopciones { get; set; }
+        public DateOnly Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? Motivo { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new(), _claveRetiro = new();
+    private List<ParticipanteDeIntegracionDto> _participantes = [];
+    private bool _mostrar, _mostrarRetiro, _verHistoria;
+    private Formulario _f = new();
+    private ParticipanteDeIntegracionDto? _retirando;
+    private DateOnly _hasta = DateOnly.FromDateTime(DateTime.Today);
+    private string? _motivoRetiro;
+
+    private List<ParticipanteDeIntegracionDto> Visibles =>
+        [.. _participantes.Where(p => _verHistoria || p.ValidTo is null).OrderBy(p => p.Code, StringComparer.Ordinal).ThenBy(p => p.Role).ThenByDescending(p => p.ValidFrom)];
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Participantes.ListarAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el registro."); return; }
+        _participantes = [.. r.Value];
+    }
+
+    private void Abrir()
+    {
+        _f = new Formulario();
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var adopciones = (_f.Adopciones ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(a => a.Split(':', StringSplitOptions.TrimEntries))
+            .Where(p => p.Length == 2 && int.TryParse(p[1], out _))
+            .Select(p => new AdopcionRequest(p[0], int.Parse(p[1], System.Globalization.CultureInfo.InvariantCulture)))
+            .ToList();
+        var request = new RegistroDeParticipanteRequest(_f.Codigo!.Trim().ToUpperInvariant(), NombreDeClaseDeParticipante(_f.Clase),
+            NombreDeRolDeParticipante(_f.Rol), _f.Rol == 2 ? _f.Destino : null, _f.Habilitado, _f.Doble, adopciones, _f.Desde, _f.Motivo!.Trim());
+        var r = await Participantes.RegistrarAsync(request, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el participante."); return; }
+        _mostrar = false;
+        await Notification.SuccessAsync("Participante registrado.");
+        await CargarAsync();
+    }
+
+    private void AbrirRetiro(ParticipanteDeIntegracionDto participante)
+    {
+        _retirando = participante;
+        _hasta = DateOnly.FromDateTime(DateTime.Today);
+        _motivoRetiro = null;
+        _claveRetiro = new ClaveDeOperacion();
+        _mostrarRetiro = true;
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_retirando is null) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Participantes.RetirarAsync(_retirando.PublicId, new RetiroDeParticipanteRequest(_hasta, _motivoRetiro!.Trim()), _claveRetiro);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo retirar el participante."); return; }
+        _mostrarRetiro = false;
+        await Notification.SuccessAsync("Participante retirado.");
+        await CargarAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

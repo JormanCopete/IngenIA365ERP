@@ -209,7 +209,7 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
                     Type = tipo.Type,
                     Version = tipo.Version,
                     Kind = tipo.Kind ?? solicitud.KindDelOriginal ?? IntegrationMessageKind.Business,
-                    OriginModule = EmisorDeMensajes.ModuloDeOrigen,
+                    OriginModule = ModulosDeOrigen.Inventario,
                     OriginEventKey = solicitud.OriginEventKey,
                     Origin = new MessageOriginV1
                     {
@@ -249,5 +249,5 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
     /// <summary>¿Alguno de los sobres es un mensaje de negocio a Contabilidad? (lo único que la validación previa evalúa).</summary>
     public static bool HayNegocioAContabilidad(IReadOnlyList<MensajeContableDto> sobres) =>
         sobres.Any(m => m.Envelope.Kind == IntegrationMessageKind.Business
-            && CatalogoDeMensajesV1.Todos.Any(t => t.Type == m.Envelope.Type && t.Destination == IntegrationDestinations.Accounting));
+            && CatalogoDeMensajesV1.Todos.Any(t => t.Type == m.Envelope.Type && t.AdmiteDestino(IntegrationDestinations.Accounting)));
 }

@@ -45,6 +45,15 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Reports", "Inventory*.cs"),
         // Feature 012 (T159): las rutas reutilizables de las plantillas (RutasDePlantilla.MapPlantilla).
         Path.Combine("Endpoints", "Common", "*.cs"),
+        // Feature 013, fase 2 (T0038; contracts/api.md §21, §22): la plataforma que pide Cartera —valores nacionales de la
+        // cooperativa, perfil regulatorio, canales externos, registro de participantes— y el cumplimiento (listas restrictivas,
+        // solicitudes del titular, autorizaciones por finalidad). Las rutas /api/saas/* del maestro van aparte (RequireMasterAdminAttribute).
+        Path.Combine("Endpoints", "Core", "NationalValuesEndpoints.cs"),
+        Path.Combine("Endpoints", "Core", "RegulatoryProfileEndpoints.cs"),
+        Path.Combine("Endpoints", "Core", "ExternalChannelsEndpoints.cs"),
+        Path.Combine("Endpoints", "Core", "IntegrationParticipantsEndpoints.cs"),
+        Path.Combine("Endpoints", "Compliance", "*.cs"),
+        Path.Combine("Endpoints", "HabeasDataModule.cs"),
     ];
 
     /// <summary>
@@ -236,6 +245,23 @@ public class LosEndpointsProtegidosExigenPermiso
             Assert.True(File.Exists(Path.Combine(Api, esperado)), $"No existe {esperado} (T528, T529).");
             Assert.Contains(esperado, archivos);
         }
+    }
+
+    [Fact]
+    public void Las_rutas_del_registro_central_exigen_al_maestro()
+    {
+        // Feature 013, fase 2 (T0038; B5, contracts/api.md §21.5): /api/saas/national-values y /api/saas/regulatory-documents no llevan
+        // código de permiso —corren sin cooperativa—: el grupo entero pasa por RequireMasterAdminAttribute.Check (maestro con segundo
+        // factor). Se fija que cada grupo del archivo se arme con esa guarda y que ninguna ruta se publique fuera de un grupo.
+        var archivo = Path.Combine(Api, "Endpoints", "Saas", "NationalValuesEndpoints.cs");
+        Assert.True(File.Exists(archivo), $"No existe {archivo}.");
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("RequireMasterAdminAttribute.Check(", fuente, StringComparison.Ordinal);
+        Assert.Contains("\"/api/saas/national-values\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("\"/api/saas/regulatory-documents\"", fuente, StringComparison.Ordinal);
+        Assert.Equal(1, Regex.Matches(fuente, @"\.MapGroup\(").Count);
+        Assert.DoesNotMatch(@"\bapp\.Map(Get|Post|Put|Delete|Patch)\(", fuente);
+        Assert.True(Tramos(fuente).Count >= 10, "El registro central publica al menos diez rutas (§21.5).");
     }
 
     [Fact]

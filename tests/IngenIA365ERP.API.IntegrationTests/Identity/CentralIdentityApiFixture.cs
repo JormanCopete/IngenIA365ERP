@@ -77,6 +77,14 @@ public class CentralIdentityApiFixture : IAsyncLifetime
     /// </summary>
     public string DirectorioDeCredenciales { get; } =
         Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "ingenia-fe-cred-" + Guid.NewGuid().ToString("N"))).FullName;
+
+    /// <summary>
+    /// El directorio de credenciales de los canales externos de Cartera y de la plataforma (<c>ExternalChannels:CredentialsPath</c>,
+    /// feature 013, T0013): temporal, uno por fixture; se borra al cerrar. Los canales <c>SIMULADO</c> y <c>CARGA-PROPIA</c> no
+    /// piden archivo; la prueba de credenciales escribe aquí.
+    /// </summary>
+    public string DirectorioDeCredencialesDeCanales { get; } =
+        Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "ingenia-canales-cred-" + Guid.NewGuid().ToString("N"))).FullName;
     public CapturingEmailSender Emails { get; } = new();
 
     /// <summary>Lo que una subclase necesita levantado antes que el host (un almacén, por ejemplo).</summary>
@@ -173,6 +181,13 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             // Las credenciales de los canales (contracts/dian.md §11): un directorio temporal por fixture en lugar del Secret montado.
             // Las e2e de I4 escriben ahí {tenantPublicId}.{canal}.json (T685).
             builder.UseSetting("ElectronicInvoicing:CredentialsPath", DirectorioDeCredenciales);
+            // Feature 013 (T0013; decisiones-transversales T5, T20): el ProcesadorDeCartera queda registrado sin arrancar (las
+            // pruebas corren cada tanda a mano), los dobles de prueba de Recaudo y Tesorería están permitidos porque este host no
+            // es de producción, y los canales externos leen sus credenciales de un directorio temporal. Las claves que todavía
+            // nadie lee no afectan el arranque.
+            builder.UseSetting("Lending:Process:Enabled", "false");
+            builder.UseSetting("Lending:TestDoubles:Enabled", "true");
+            builder.UseSetting("ExternalChannels:CredentialsPath", DirectorioDeCredencialesDeCanales);
 
             builder.ConfigureTestServices(services =>
             {
@@ -425,6 +440,8 @@ public class CentralIdentityApiFixture : IAsyncLifetime
         try { if (_carpetaDeLlaves is not null && Directory.Exists(_carpetaDeLlaves)) Directory.Delete(_carpetaDeLlaves, recursive: true); }
         catch (IOException) { /* el SO puede tener el archivo abierto un instante más: queda en la carpeta temporal */ }
         try { if (Directory.Exists(DirectorioDeCredenciales)) Directory.Delete(DirectorioDeCredenciales, recursive: true); }
+        catch (IOException) { /* queda en la carpeta temporal */ }
+        try { if (Directory.Exists(DirectorioDeCredencialesDeCanales)) Directory.Delete(DirectorioDeCredencialesDeCanales, recursive: true); }
         catch (IOException) { /* queda en la carpeta temporal */ }
         await Task.WhenAll(
             ((DotNet.Testcontainers.Containers.IContainer)_db).DisposeAsync().AsTask(),

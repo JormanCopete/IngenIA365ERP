@@ -1,11 +1,18 @@
-namespace IngenIA365ERP.Persistence.Seeding.Parametric;
+namespace IngenIA365ERP.Domain.Common.Calendar;
 
 /// <summary>
 /// Feature 010 (R6): el calendario de festivos de Colombia según la Ley 51 de 1983, calculado
-/// para un año. Es el generador <b>de la semilla</b> de <c>PAY_Holidays</c>, no del cálculo: la
-/// lista de festivos es un valor legal, y <c>Domain/Payroll</c> no lleva ninguno (SC-008), así
-/// que el contador de días hábiles lee sólo la tabla —editable por la cooperativa, donde un
-/// puente decretado tiene dónde registrarse— y este archivo vive en <c>Persistence/Seeding</c>.
+/// para un año. Es el generador <b>de las semillas</b>, no del cálculo: la lista de festivos es un
+/// valor legal, y los motores no llevan ninguno, así que el contador de días hábiles de Nómina lee
+/// <c>PAY_Holidays</c> y Cartera recibe la lista de no hábiles (<see cref="CalendarioHabil"/>) de los
+/// <c>FESTIVO</c> nacionales replicados.
+///
+/// <para>
+/// Feature 013 (T0047, T93 regla 2): se mudó de <c>Persistence/Seeding/Parametric</c> a
+/// <c>Domain/Common/Calendar</c> porque es aritmética pura sobre el año y ahora lo usan dos semillas:
+/// la de Nómina (<c>HolidaysSeeder</c>, Order 74) y la central de valores nacionales
+/// (<c>PlatformNationalValuesSeeder</c>, que siembra los <c>FESTIVO</c>).
+/// </para>
 ///
 /// <para>
 /// Tres familias (art. 1 y 2 de la Ley 51): seis fijos que no se mueven (1 de enero, 1 de mayo,

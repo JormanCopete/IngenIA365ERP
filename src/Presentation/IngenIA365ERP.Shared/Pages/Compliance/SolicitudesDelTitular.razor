@@ -1,0 +1,324 @@
+@page "/compliance/solicitudes-del-titular"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Compliance
+@using IngenIA365ERP.Shared.Services.Http
+@using static IngenIA365ERP.Shared.Services.Core.TextosDePlataforma
+@inject SolicitudesDelTitularClient Solicitudes
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Solicitudes del titular - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 2 (T0095; T69 b, S10; contracts/api.md §22.3; data-model parte 3 §4.9): las consultas, actualizaciones,
+   rectificaciones, supresiones y revocaciones que presenta el titular de los datos (Ley 1581). El plazo lo calcula el servidor en días
+   hábiles nacionales desde el recibo; se puede prorrogar una sola vez con motivo. Revocar una finalidad de crédito no procede mientras exista
+   un deber de conservar el dato: la respuesta deja la constancia. Los soportes (el escrito del titular, la respuesta) se suben como
+   adjuntos de la persona. *@
+<PermissionGate Required="Compliance.DataSubjectRequests.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Solicitudes del titular</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync())">Actualizar</SfButton>
+            <PermissionGate Required="Compliance.DataSubjectRequests.Register">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRadicacion">Radicar solicitud</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="filtros-de-informe form-grid">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_filtroEstado">
+                <option value="0">Todas</option><option value="1">Recibidas</option><option value="2">Prorrogadas</option><option value="3">Respondidas</option>
+            </select>
+        </label>
+        <label class="campo">Vencen hasta <input type="date" class="e-input" value="@_vencenHasta?.ToString("yyyy-MM-dd")" @onchange="@(e => _vencenHasta = LeerFecha(e.Value))" /></label>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync())">Consultar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_lista.Count == 0)
+        {
+            <p class="texto-tenue">No hay solicitudes con ese filtro.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Titular</th><th>Solicitud</th><th>Finalidad</th><th>Recibida</th><th>Vence</th><th>Estado</th><th>Respuesta</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _lista)
+                        {
+                            <tr>
+                                <td>@(s.Person.Name ?? "—")<span class="texto-tenue"> @s.Person.TaxId</span></td>
+                                <td>@ClaseDeSolicitud(s.Kind)</td>
+                                <td>@Finalidad(s.Purpose)@(s.ContactChannel is { } cc ? $" · {CanalDeContacto(cc)}" : "")</td>
+                                <td>@s.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy") · @s.Channel</td>
+                                <td class="@(s.Abierta && s.VenceEl < Hoy ? "texto-alerta" : "")">@s.VenceEl.ToString("dd/MM/yyyy")@(s.Extended ? " (prorrogada)" : "")</td>
+                                <td>@EstadoDeSolicitud(s.Status)</td>
+                                <td>@DesenlaceDeSolicitud(s.Outcome)</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => VerAsync(s.PublicId))">Ver</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_detalle is { } d)
+    {
+        <h4>Solicitud de @(d.Person.Name ?? "titular")</h4>
+        <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+            <div class="info-card">
+                <div><b>@ClaseDeSolicitud(d.Kind)</b> · @Finalidad(d.Purpose) · recibida el @d.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy") por @d.Channel</div>
+                <div>Vence el @d.VenceEl.ToString("dd/MM/yyyy")@(d.Extended ? $" (prorrogada; el plazo inicial era el {d.DueDate:dd/MM/yyyy})" : "") · @EstadoDeSolicitud(d.Status)</div>
+                <p>@d.Description</p>
+                @if (d.ResponseText is { } texto)
+                {
+                    <div class="aviso @(d.Outcome == 3 ? "aviso-alerta" : "aviso-ok")"><b>@DesenlaceDeSolicitud(d.Outcome)</b>: @texto<br /><span class="texto-tenue">@d.RespondedBy · @d.RespondedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span></div>
+                }
+                @if (d.DutyBasis is { } deber)
+                {
+                    <p class="aviso aviso-info">Deber que impide revocar o suprimir: @deber</p>
+                }
+            </div>
+            @if (d.Abierta)
+            {
+                <div class="toolbar">
+                    <PermissionGate Required="Compliance.DataSubjectRequests.Respond">
+                        @if (!d.Extended)
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@(() => _mostrarProrroga = true)">Prorrogar</SfButton>
+                        }
+                        <SfButton CssClass="e-primary" OnClick="@AbrirRespuesta">Responder</SfButton>
+                    </PermissionGate>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarRadicacion" Header="Radicar solicitud del titular" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Titular *
+                        <PersonSearchPicker OnPersonSelected="@ElegirTitularAsync" OnCleared="@(() => { _titular = null; _soportes = []; })" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo">Solicitud *
+                        <select class="e-input" @bind="_r.Clase">@foreach (var (valor, _, texto) in ClasesDeSolicitud) { <option value="@valor">@texto</option> }</select>
+                    </label>
+                    @if (_r.Clase is 4 or 5)
+                    {
+                        <label class="campo">Finalidad *
+                            <select class="e-input" @bind="_r.Finalidad">@foreach (var (valor, _, texto) in Finalidades) { <option value="@valor">@texto</option> }</select>
+                        </label>
+                        @if (_r.Finalidad == 5)
+                        {
+                            <label class="campo">Canal *
+                                <select class="e-input" @bind="_r.Canal">@foreach (var (valor, _, texto) in CanalesDeContacto) { <option value="@valor">@texto</option> }</select>
+                            </label>
+                        }
+                    }
+                    <label class="campo">Recibida por *
+                        <select class="e-input" @bind="_r.Medio">@foreach (var (valor, texto) in MediosDeRecibo) { <option value="@valor">@texto</option> }</select>
+                    </label>
+                    <label class="campo">Recibida el * <input type="date" class="e-input" value="@_r.Recibida.ToString("yyyy-MM-dd")" @onchange="@(e => _r.Recibida = LeerFecha(e.Value) ?? _r.Recibida)" /></label>
+                    <label class="campo campo-ancho">Lo que pide el titular * <textarea class="e-input" rows="4" maxlength="2000" @bind="_r.Descripcion"></textarea></label>
+                </div>
+                @if (_titular is { } t)
+                {
+                    <h4>Soportes</h4>
+                    <SubirSoporte OwnerEntityType="@SolicitudesDelTitularClient.TipoDeSoporte" OwnerEntityPublicId="@t.PublicId" OnSubido="@CargarSoportesAsync" />
+                    @if (_soportes.Count > 0)
+                    {
+                        <p class="texto-tenue">Marque los soportes de esta solicitud:</p>
+                        @foreach (var s in _soportes)
+                        {
+                            <label class="campo-check"><input type="checkbox" checked="@_elegidos.Contains(s.PublicId)" @onchange="@(e => Alternar(s.PublicId, e.Value))" /> @s.FileName · @s.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</label>
+                        }
+                    }
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _titular is null || string.IsNullOrWhiteSpace(_r.Descripcion))" OnClick="@RadicarAsync">Radicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRadicacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarProrroga" Header="Prorrogar la solicitud" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">La prórroga se concede una sola vez y hay que informarle al titular el motivo.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoProrroga" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivoProrroga))" OnClick="@ProrrogarAsync">Prorrogar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarProrroga = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRespuesta" Header="Responder la solicitud" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">Si la solicitud revoca o suprime una finalidad de crédito y existe un deber de conservar el dato, el sistema la responde «No procede» con la constancia.</p>
+                <div class="form-grid">
+                    <label class="campo">Decisión *
+                        <select class="e-input" @bind="_desenlace">@foreach (var (valor, _, texto) in DesenlacesDeSolicitud) { <option value="@valor">@texto</option> }</select>
+                    </label>
+                    <label class="campo campo-ancho">Respuesta al titular * <textarea class="e-input" rows="5" maxlength="4000" @bind="_respuesta"></textarea></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_respuesta))" OnClick="@ResponderAsync">Responder</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRespuesta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class FormularioDeRadicacion
+    {
+        public int Clase { get; set; } = 1;
+        public int Finalidad { get; set; } = 1;
+        public int Canal { get; set; } = 1;
+        public string Medio { get; set; } = "Presencial";
+        public DateOnly Recibida { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? Descripcion { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _guardado = new();
+    private ClaveDeOperacion _claveRadicar = new(), _claveProrroga = new(), _claveRespuesta = new();
+    private List<SolicitudDelTitularDto> _lista = [];
+    private SolicitudDelTitularDto? _detalle;
+    private int _filtroEstado;
+    private DateOnly? _vencenHasta;
+
+    private bool _mostrarRadicacion, _mostrarProrroga, _mostrarRespuesta;
+    private FormularioDeRadicacion _r = new();
+    private PersonSearchPicker.PersonSearchItem? _titular;
+    private List<AdjuntoDto> _soportes = [];
+    private HashSet<Guid> _elegidos = [];
+    private string? _motivoProrroga, _respuesta;
+    private int _desenlace = 1;
+
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Solicitudes.ListarAsync(estado: _filtroEstado == 0 ? null : _filtroEstado, vencenAntesDe: _vencenHasta, tamano: 200);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las solicitudes."); return; }
+        _lista = [.. r.Value.Items];
+    }
+
+    private async Task VerAsync(Guid solicitud)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Solicitudes.ObtenerAsync(solicitud);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la solicitud."); return; }
+        _detalle = r.Value;
+    }
+
+    private void AbrirRadicacion()
+    {
+        _r = new FormularioDeRadicacion();
+        _titular = null;
+        _soportes = [];
+        _elegidos = [];
+        _claveRadicar = new ClaveDeOperacion();
+        _mostrarRadicacion = true;
+    }
+
+    private async Task ElegirTitularAsync(PersonSearchPicker.PersonSearchItem persona)
+    {
+        _titular = persona;
+        _elegidos = [];
+        await CargarSoportesAsync();
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_titular is null) return;
+        var r = await Adjuntos.ListarAsync(SolicitudesDelTitularClient.TipoDeSoporte, _titular.PublicId);
+        _soportes = r.IsSuccess && r.Value is not null ? [.. r.Value.Where(a => a.Disponible).OrderByDescending(a => a.CreatedAt)] : [];
+    }
+
+    private void Alternar(Guid soporte, object? marcado)
+    {
+        if (marcado is true) _elegidos.Add(soporte); else _elegidos.Remove(soporte);
+    }
+
+    private async Task RadicarAsync()
+    {
+        if (_titular is null || string.IsNullOrWhiteSpace(_r.Descripcion)) return;
+        using var guardado = _guardado.Iniciar();
+        var conFinalidad = _r.Clase is 4 or 5;
+        var request = new RadicarSolicitudRequest(
+            _titular.PublicId, NombreDeClaseDeSolicitud(_r.Clase), conFinalidad ? NombreDeFinalidad(_r.Finalidad) : null,
+            conFinalidad && _r.Finalidad == 5 ? NombreDeCanalDeContacto(_r.Canal) : null, _r.Medio,
+            _r.Recibida == Hoy ? DateTime.UtcNow : _r.Recibida.ToDateTime(new TimeOnly(12, 0), DateTimeKind.Local).ToUniversalTime(),
+            _r.Descripcion.Trim(), _elegidos.Count == 0 ? null : [.. _elegidos]);
+        var r = await Solicitudes.RadicarAsync(request, _claveRadicar);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo radicar la solicitud."); return; }
+        _mostrarRadicacion = false;
+        await Notification.SuccessAsync($"Solicitud radicada. Vence el {r.Value.DueDate:dd/MM/yyyy}.");
+        _detalle = r.Value;
+        await CargarAsync();
+    }
+
+    private async Task ProrrogarAsync()
+    {
+        if (_detalle is null || string.IsNullOrWhiteSpace(_motivoProrroga)) return;
+        using var guardado = _guardado.Iniciar();
+        _claveProrroga = new ClaveDeOperacion();
+        var r = await Solicitudes.ProrrogarAsync(_detalle.PublicId, new ProrrogaDeSolicitudRequest(_motivoProrroga.Trim()), _claveProrroga);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo prorrogar."); return; }
+        _mostrarProrroga = false;
+        _motivoProrroga = null;
+        _detalle = r.Value;
+        await Notification.SuccessAsync($"Solicitud prorrogada hasta el {r.Value.VenceEl:dd/MM/yyyy}.");
+        await CargarAsync();
+    }
+
+    private void AbrirRespuesta()
+    {
+        _desenlace = 1;
+        _respuesta = null;
+        _claveRespuesta = new ClaveDeOperacion();
+        _mostrarRespuesta = true;
+    }
+
+    private async Task ResponderAsync()
+    {
+        if (_detalle is null || string.IsNullOrWhiteSpace(_respuesta)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Solicitudes.ResponderAsync(_detalle.PublicId, new RespuestaDeSolicitudRequest(NombreDeDesenlace(_desenlace), _respuesta.Trim(), null),
+            _claveRespuesta);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo responder."); return; }
+        _mostrarRespuesta = false;
+        _detalle = r.Value;
+        await Notification.SuccessAsync(r.Value.Outcome == 3 && r.Value.DutyBasis is not null
+            ? "Respondida: no procede por un deber de conservar el dato; quedó la constancia."
+            : "Solicitud respondida.");
+        await CargarAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

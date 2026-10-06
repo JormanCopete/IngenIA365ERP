@@ -301,7 +301,7 @@ local, nunca en DEV ni QA. SC-005 de punta a punta (cinco segundos con el despac
 encuentra pruebas y la corrida no falla por eso.
 
 ```bash
-F_K1="FullyQualifiedName~RetiroDeLaCarteraHeredadaTests|FullyQualifiedName~CarteraDesplegadaSinActivarTests|FullyQualifiedName~NominaRecaudaPorElContratoTests|FullyQualifiedName~CreditoConCarteraTests|FullyQualifiedName~ConcurrenciaPagoYCausacionTests|FullyQualifiedName~IdempotenciaDeCarteraTests|FullyQualifiedName~LineasDeCreditoYUsuraTests|FullyQualifiedName~OriginacionConAtribucionesTests|FullyQualifiedName~DesembolsoYRecogidaTests|FullyQualifiedName~CausacionYLiquidacionTests|FullyQualifiedName~ContratoDeObligacionesTests|FullyQualifiedName~ContabilizacionDeCarteraPorMensajesTests|FullyQualifiedName~MigracionYActivacionDeCarteraTests|FullyQualifiedName~CierreMensualDeCarteraTests|FullyQualifiedName~DocumentosDeCarteraTests|FullyQualifiedName~SeguridadYHabeasDataDeCarteraTests"
+F_K1="FullyQualifiedName~PlataformaParaCarteraTests|FullyQualifiedName~RetiroDeLaCarteraHeredadaTests|FullyQualifiedName~CarteraDesplegadaSinActivarTests|FullyQualifiedName~NominaRecaudaPorElContratoTests|FullyQualifiedName~CreditoConCarteraTests|FullyQualifiedName~ConcurrenciaPagoYCausacionTests|FullyQualifiedName~IdempotenciaDeCarteraTests|FullyQualifiedName~LineasDeCreditoYUsuraTests|FullyQualifiedName~OriginacionConAtribucionesTests|FullyQualifiedName~DesembolsoYRecogidaTests|FullyQualifiedName~CausacionYLiquidacionTests|FullyQualifiedName~ContratoDeObligacionesTests|FullyQualifiedName~ContabilizacionDeCarteraPorMensajesTests|FullyQualifiedName~MigracionYActivacionDeCarteraTests|FullyQualifiedName~CierreMensualDeCarteraTests|FullyQualifiedName~DocumentosDeCarteraTests|FullyQualifiedName~SeguridadYHabeasDataDeCarteraTests"
 F_VN="FullyQualifiedName~ValoresNacionalesYReplicaTests|FullyQualifiedName~ReplicaSobreCooperativaSembradaTests"
 F_K2="FullyQualifiedName~LibranzaYArchivoDeDescuentosTests"
 F_K3="FullyQualifiedName~NovedadesYCondonacionesTests|FullyQualifiedName~CastigoYRecuperacionTests"
@@ -375,6 +375,22 @@ particular `ContabilizacionPorMensajesTests`, `ContabilizacionDeVentasPorMensaje
 Con cambios esperados y reescritas en la misma tarea que las provoca: `CreditoProvisionalTests` (sigue verde al
 cerrar el paso 1 de T88 y después cubre `NotEnabled`), `LiquidacionDefinitivaTests` (propone y recauda por el
 contrato) y las de Application de §1.5 que sembraban `LoanPortfolio`.
+
+**Línea base** (T0010, 2026-10-05, rama `013-cartera-financiera` sobre `e15249fa`, antes de cualquier código de
+Cartera nueva):
+
+| Proyecto | Pasan | Omitidas | Notas |
+|---|---|---|---|
+| Domain.Tests | 1.134 | 0 | |
+| Application.Tests | 3.294 | 0 | |
+| Architecture.Tests | 394 | 0 | incluye los 32 esqueletos de la fase 1 (listas vacías) y la prueba de `catch` vacío en `.razor` (T0008) |
+| Shared.Tests | 340 | 0 | |
+| Load.Tests | 2 | 0 | |
+| API.IntegrationTests (PostgreSQL) | ver abajo | | se anota al correrla con Docker |
+| API.IntegrationTests (SQL Server) | ver abajo | | se anota al correrla con Docker |
+
+Siguen contando como «pasadas» sin comprobar nada las siete de CLAUDE.md que hacen `return` según una variable de
+entorno (`AuditPerformanceTests`, `LoginThroughputFact`, cuatro de multi-tenancy y `PrincipioVI_PublicIdOnly`).
 
 ## 2. La preparación del ensayo en DEV o QA
 

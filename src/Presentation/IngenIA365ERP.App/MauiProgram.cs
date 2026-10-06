@@ -83,6 +83,13 @@ namespace IngenIA365ERP.App
             // Feature 012, I4 (T752): facturación electrónica (configuración, resoluciones, documentos, contingencias).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.FacturacionElectronica.FacturacionElectronicaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
+            // Feature 013, fase 2 (T0094): plataforma de Cartera (valores nacionales, perfil regulatorio, canales, participantes, cumplimiento).
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ValoresNacionalesClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.ListasRestrictivasClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.SolicitudesDelTitularClient>();
             builder.Services.AddSingleton<IImpresionDeDocumentos, ImpresionNativa>();
             // Feature 012, US7 (T532): el lado contable de la integración con Inventario; misma salvedad (CentralAuthClient, verificacion de MAUI).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();

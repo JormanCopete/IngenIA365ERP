@@ -19,13 +19,18 @@ namespace IngenIA365ERP.Application.Common.Integration;
 ///
 /// <para>Lo que hace con cada solicitud:</para>
 /// <list type="number">
-///   <item>busca cada contenido en <see cref="CatalogoDeMensajesV1"/> (tipo, versión, destino y <c>Kind</c>) y
-///         comprueba que la <c>originEventKey</c> tenga la forma que el tipo admite (§10.1);</item>
+///   <item>busca cada contenido en el catálogo agregado (<see cref="CatalogoDeMensajes"/>: tipo, versión, módulo, destinos y
+///         <c>Kind</c>), comprueba que la <c>originEventKey</c> tenga la forma que el tipo admite (§10.1), que todos los contenidos
+///         sean del mismo módulo y que el destino sea uno de los que el tipo admite (feature 013, T10). El módulo de origen lo
+///         da el tipo, nunca la solicitud;</item>
 ///   <item>rechaza la doble emisión de <c>(OriginPublicId, Type, OriginEventKey)</c>, en la unidad de trabajo y en la
 ///         base; el índice único de <c>COR_IntegrationMessages</c> es la última defensa (§10.2);</item>
-///   <item>toma el usuario de origen de <see cref="IActorActual"/>: quien confirmó (con aprobación, el último
-///         aprobador, porque confirma en su transacción) u ordenó. Es un <b>dato</b>; el actor de proceso nunca firma
-///         un mensaje;</item>
+///   <item>resuelve el usuario de origen en el orden de T11 (feature 013): la persona que actúa (<see cref="IActorActual"/>:
+///         quien confirmó u ordenó; con aprobación, el último aprobador); si actúa el proceso, el
+///         <see cref="SolicitudDeEmision.UsuarioDeOrigen"/> (el del mensaje consumido o el de quien ordenó la corrida); si
+///         tampoco, el proceso mismo (<c>OriginActorKind = Process</c>, sin identidad central, «Proceso de integración»),
+///         <b>sólo</b> si todos los tipos lo admiten (<c>AdmiteProceso</c>). Si no, lanza y no agrega nada: para Inventario
+///         el mensaje lo origina la persona. Es un <b>dato</b>, nunca un actor;</item>
 ///   <item>resuelve el modo: el sellado, o el de la entrega a Contabilidad del original, del que un relacionado copia
 ///         <c>Mode</c> y <c>ScheduleKey</c> <b>sin leer el parámetro</b> (FR-075, FR-079);</item>
 ///   <item>serializa cada contenido con <see cref="OpcionesDeMensajes"/> y calcula <c>PayloadSha256</c> sobre esos
@@ -51,9 +56,6 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// </summary>
 public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual actorActual, IDateTimeService reloj)
 {
-    /// <summary>El módulo de origen de todo lo que emite Inventario.</summary>
-    public const string ModuloDeOrigen = "INV";
-
     public const string Moneda = "COP";
 
     private readonly List<Emitido> _emitidos = [];
@@ -66,27 +68,20 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
     /// </summary>
     /// <exception cref="ArgumentException">Contenido fuera del catálogo, clave de evento inválida, modo incompleto.</exception>
     /// <exception cref="InvalidOperationException">
-    /// Doble emisión, actor de proceso o sin identidad central, u original sin entrega a Contabilidad que heredar.
+    /// Doble emisión, proceso en un tipo que no lo admite, persona sin identidad central, u original sin entrega a Contabilidad
+    /// que heredar.
     /// </exception>
     public async Task<IReadOnlyList<IntegrationMessage>> EmitirAsync(SolicitudDeEmision solicitud, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(solicitud);
-        var contenidos = Clasificar(solicitud);
-
-        var actor = await actorActual.ObtenerAsync(ct);
-        if (actor.EsProceso)
-        {
-            throw new InvalidOperationException(
-                "Un mensaje de integración lo origina la persona que confirmó u ordenó la operación; el proceso automático no emite mensajes.");
-        }
-
-        if (actor.CentralUserId is not { } usuarioCentral)
-            throw new InvalidOperationException("No se puede emitir un mensaje sin la identidad central de quien confirma.");
+        var (modulo, contenidos) = Clasificar(solicitud);
+        var usuario = await ResolverUsuarioDeOrigenAsync(solicitud, contenidos, ct);
 
         await RechazarDobleEmisionAsync(solicitud, contenidos, ct);
 
         var necesitaModo = contenidos.Any(c => LlevaModo(c.Destino, c.Kind));
         var (raiz, modo) = await ResolverModoAsync(solicitud, necesitaModo, ct);
+        if (solicitud.CadenaDeOrden is { } cadenaDeOrden && cadenaDeOrden != Guid.Empty) raiz = cadenaDeOrden;
         var objetivos = await ObjetivosAsync(solicitud, contenidos.Select(c => c.Destino).Distinct().ToList(), ct);
 
         var ahora = reloj.UtcNow;
@@ -101,7 +96,7 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
                 Type = contenido.Tipo.Type,
                 Version = (short)contenido.Tipo.Version,
                 Kind = contenido.Kind,
-                OriginModule = ModuloDeOrigen,
+                OriginModule = modulo,
                 OriginKind = origen.Kind,
                 OriginPublicId = origen.PublicId,
                 OriginDocumentClass = origen.DocumentClass,
@@ -123,8 +118,9 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
                 PayloadJson = Encoding.UTF8.GetString(bytes),
                 PayloadSha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)),
                 PrevalidationOutcome = solicitud.ValidacionPrevia,
-                OriginUserCentralId = usuarioCentral,
-                OriginUserName = actor.Name,
+                OriginActorKind = usuario.Kind,
+                OriginUserCentralId = usuario.CentralUserId,
+                OriginUserName = usuario.Nombre,
                 EmittedAt = ahora,
             };
             db.IntegrationMessages.Add(mensaje);
@@ -146,7 +142,7 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
 
     private sealed record Contenido(object Record, TipoDeMensaje Tipo, string Destino, IntegrationMessageKind Kind);
 
-    private static List<Contenido> Clasificar(SolicitudDeEmision solicitud)
+    private static (string Modulo, List<Contenido> Contenidos) Clasificar(SolicitudDeEmision solicitud)
     {
         ArgumentNullException.ThrowIfNull(solicitud.Origen);
         ArgumentNullException.ThrowIfNull(solicitud.Modo);
@@ -166,8 +162,8 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
         foreach (var record in solicitud.Contenidos)
         {
             ArgumentNullException.ThrowIfNull(record);
-            var tipo = CatalogoDeMensajesV1.Buscar(record.GetType())
-                ?? throw new ArgumentException($"«{record.GetType().Name}» no es un mensaje del catálogo (CatalogoDeMensajesV1).", nameof(solicitud));
+            var tipo = CatalogoDeMensajes.Buscar(record.GetType())
+                ?? throw new ArgumentException($"«{record.GetType().Name}» no es un mensaje del catálogo (CatalogoDeMensajes).", nameof(solicitud));
 
             if (!ClavesDeEvento.EsValida(tipo.FormaDeClave, solicitud.OriginEventKey))
             {
@@ -178,14 +174,79 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
 
             var kind = tipo.Kind ?? solicitud.KindDelOriginal
                 ?? throw new ArgumentException($"{tipo.Type} hereda el Kind de su original: falta KindDelOriginal.", nameof(solicitud));
-            lista.Add(new Contenido(record, tipo, tipo.Destination, kind));
+            lista.Add(new Contenido(record, tipo, ResolverDestino(tipo, solicitud.Destino), kind));
+        }
+
+        var modulos = lista.Select(c => c.Tipo.OriginModule).Distinct(StringComparer.Ordinal).ToList();
+        if (modulos.Count > 1)
+        {
+            throw new ArgumentException(
+                $"Una solicitud de emisión trae contenidos de un solo módulo; ésta mezcla {string.Join(", ", modulos)} (T10).", nameof(solicitud));
         }
 
         if (lista.GroupBy(c => c.Tipo.Type).Any(g => g.Count() > 1))
             throw new InvalidOperationException("Doble emisión: una solicitud repite un tipo de mensaje con la misma originEventKey.");
 
-        return lista;
+        return (modulos[0], lista);
     }
+
+    /// <summary>
+    /// El destino de un contenido (feature 013, T10): el único que admite el tipo, o el que diga la solicitud si admite varios. Un
+    /// destino que el tipo no admite, o un tipo con varios sin <see cref="SolicitudDeEmision.Destino"/>, es un defecto del emisor.
+    /// </summary>
+    /// <exception cref="ArgumentException">Sin destino en un tipo con varios, o con uno que el tipo no admite.</exception>
+    public static string ResolverDestino(TipoDeMensaje tipo, string? destino)
+    {
+        ArgumentNullException.ThrowIfNull(tipo);
+        if (destino is null)
+        {
+            if (tipo.Destinos.Count == 1) return tipo.Destinos.First();
+            throw new ArgumentException(
+                $"{tipo.Type} admite los destinos {string.Join(", ", tipo.Destinos.Order(StringComparer.Ordinal))}: la solicitud dice cuál (Destino).",
+                nameof(destino));
+        }
+
+        if (!tipo.AdmiteDestino(destino))
+        {
+            throw new ArgumentException(
+                $"{tipo.Type} no admite el destino {destino}; admite {string.Join(", ", tipo.Destinos.Order(StringComparer.Ordinal))}.", nameof(destino));
+        }
+
+        return destino;
+    }
+
+    // ----------------------------------------------------------------------------------- usuario de origen --
+
+    /// <summary>Quién origina el mensaje como <b>dato</b>: persona (con su identidad central) o proceso (sin ella).</summary>
+    private sealed record UsuarioDeOrigenResuelto(ActorKind Kind, Guid? CentralUserId, string Nombre);
+
+    /// <summary>
+    /// El usuario de origen en el orden de T11: la persona que actúa; si actúa el proceso, el usuario de origen de la solicitud; si
+    /// tampoco, el proceso, sólo si todos los tipos lo admiten. Corre antes de agregar nada: si lanza, la operación falla entera.
+    /// </summary>
+    private async Task<UsuarioDeOrigenResuelto> ResolverUsuarioDeOrigenAsync(SolicitudDeEmision solicitud, List<Contenido> contenidos, CancellationToken ct)
+    {
+        var actor = await actorActual.ObtenerAsync(ct);
+        if (!actor.EsProceso)
+        {
+            if (actor.CentralUserId is { } central) return new UsuarioDeOrigenResuelto(ActorKind.Person, central, actor.Name);
+            throw new InvalidOperationException("No se puede emitir un mensaje sin la identidad central de quien confirma.");
+        }
+
+        if (solicitud.UsuarioDeOrigen is { CentralUserId: { } delOrigen } usuario)
+            return new UsuarioDeOrigenResuelto(ActorKind.Person, delOrigen, Recortar(usuario.Name, 150));
+
+        var sinProceso = contenidos.Where(c => !c.Tipo.AdmiteProceso).Select(c => c.Tipo.Type).Distinct(StringComparer.Ordinal).ToList();
+        if (sinProceso.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"{string.Join(", ", sinProceso)} lo origina la persona que confirmó u ordenó la operación: el proceso automático no lo emite (T11).");
+        }
+
+        return new UsuarioDeOrigenResuelto(ActorKind.Process, null, Execution.Actor.NombreDelProceso);
+    }
+
+    private static string Recortar(string texto, int largo) => texto.Length <= largo ? texto : texto[..largo];
 
     private async Task RechazarDobleEmisionAsync(SolicitudDeEmision solicitud, List<Contenido> contenidos, CancellationToken ct)
     {
@@ -272,6 +333,14 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
                 Agregar(await UltimoDeCadenaAsync(cadena, destino, ct));
         }
 
+        // Feature 013 (T12): las respuestas a Comercial de una venta llegan en orden: cada una espera a la última ya emitida
+        // con la venta como raíz y entrega a su mismo destino, aunque su origen (el recibo) sea otro.
+        if (solicitud.CadenaDeOrden is { } raiz && raiz != Guid.Empty)
+        {
+            foreach (var destino in destinos)
+                Agregar(await UltimoDeRaizAsync(raiz, destino, ct));
+        }
+
         return objetivos;
 
         void Agregar(IntegrationMessage? mensaje)
@@ -299,6 +368,22 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
         if (destino is not null)
             consulta = consulta.Where(m => db.IntegrationMessageDeliveries.Any(d => d.MessageId == m.Id && d.Destination == destino));
         return await consulta.OrderByDescending(m => m.Id).FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>El último mensaje ya emitido con esa raíz de cadena y entrega a <paramref name="destino"/> (feature 013, T12).</summary>
+    private async Task<IntegrationMessage?> UltimoDeRaizAsync(Guid raiz, string destino, CancellationToken ct)
+    {
+        for (var i = _emitidos.Count - 1; i >= 0; i--)
+        {
+            var emitido = _emitidos[i];
+            if (emitido.Mensaje.ChainRootPublicId == raiz && emitido.Entregas.Any(e => e.Destination == destino))
+                return emitido.Mensaje;
+        }
+
+        return await db.IntegrationMessages
+            .Where(m => m.ChainRootPublicId == raiz && db.IntegrationMessageDeliveries.Any(d => d.MessageId == m.Id && d.Destination == destino))
+            .OrderByDescending(m => m.Id)
+            .FirstOrDefaultAsync(ct);
     }
 
     private async Task<IntegrationMessageDelivery?> EntregaAsync(IntegrationMessage mensaje, string destino, CancellationToken ct)

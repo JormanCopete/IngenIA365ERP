@@ -31,6 +31,9 @@ public class AlertConfiguration : IEntityTypeConfiguration<Alert>
         builder.Property(e => e.EntityPublicId);
         builder.Property(e => e.ScopeWarehousePublicId);
         builder.Property(e => e.ScopePointOfSalePublicId);
+        // Feature 013 (C68; data-model parte 3 §4.14): alcance de Cartera, sin FK; la columna llega con PlataformaParaCartera.
+        builder.Property(e => e.ScopeBranchPublicId);
+        builder.Property(e => e.ScopeCreditLinePublicId);
         builder.Property(e => e.DedupKey).HasMaxLength(200).IsRequired();
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();
         builder.Property(e => e.RaisedAt).IsRequired();

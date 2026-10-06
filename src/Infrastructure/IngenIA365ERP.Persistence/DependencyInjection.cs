@@ -178,9 +178,9 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollConceptDefinitionsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PayrollLegalParametersSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.WorkRiskClassesSeeder>();
-        // Feature 010: motivos de retiro, festivos de la Ley 51 y políticas por empresa (T017).
+        // Feature 010: motivos de retiro y políticas por empresa (T017). Los festivos de la Ley 51 los siembra desde la
+        // feature 013 la central (PlatformNationalValuesSeeder, Order 6) y los proyecta la réplica (Order 88): HolidaysSeeder se retiró (T93).
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.TerminationReasonsSeeder>();
-        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.HolidaysSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CompanyPoliciesSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.BankFileFormatsSeeder>();
         // Contabilidad (feature 009): tipos de comprobante (reemplaza al NM de nomina) y tipos de documento cruce, desde JSON incrustado.
@@ -211,6 +211,15 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.CashDenominationsSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.DefaultPaymentMeansSeeder>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ConsumidorFinalSeeder>();
+        // Feature 013 (T0055, T0059; DT §2.21): el registro central de valores nacionales (Admin, Order 6) y su copia en cada
+        // cooperativa (Tenant, Order 88). No hacen nada hasta que las bases tengan ValoresNacionales y PlataformaParaCartera.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PlatformNationalValuesSeeder>();
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.NationalValuesReplicaSeeder>();
+        // Feature 013 (T0085; T76): las nueve plantillas de mensaje de Cartera «pendiente de validar» (Tenant, Order 91). No hace nada
+        // hasta que la base tenga PlataformaParaCartera, que agrega las columnas de versión a COR_NotificationTemplates.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingMessageTemplatesSeeder>();
+        // La lectura de la central que sólo usa el replicador (T0057).
+        services.AddScoped<Application.Common.NationalValues.IRegistroCentralDeValoresNacionales, Services.RegistroCentralDeValoresNacionales>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();
         services.AddScoped<Application.Common.Interfaces.Database.IDataSeedRunner, Seeding.DataSeedRunner>();
         // Feature 005: reaplicar la semilla de nomina sobre la cooperativa activa desde la pantalla de conceptos.

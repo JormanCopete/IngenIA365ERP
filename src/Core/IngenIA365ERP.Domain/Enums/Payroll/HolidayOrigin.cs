@@ -12,4 +12,10 @@ public enum HolidayOrigin
     Ley51Easter = 3,
     Decreed = 4,
     Manual = 5,
+
+    /// <summary>
+    /// Feature 013 (T93, R6): proyección de un <c>FESTIVO</c> nacional replicado. Lo escribe sólo el efecto de la réplica
+    /// (<c>EfectoDeReplicacionEnNomina</c>) y los comandos de festivos no lo editan.
+    /// </summary>
+    National = 6,
 }

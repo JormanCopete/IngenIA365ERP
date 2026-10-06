@@ -24,7 +24,39 @@ public class LasPantallasDicenQueEstanCargando
     /// de documento); «Ventas» entra con Canales (US1, T239); «Compras» y «Pos» los agrega la historia que crea la primera
     /// pantalla de cada carpeta.
     /// US9 (T358): «Compras» entra con sus pantallas de I1 (recepciones, compra directa, facturas, notas y devoluciones).
-    private static readonly string[] ModulosMigrados = ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos"];
+    /// Feature 013, fase 2 (T0038, T0095): «Administracion» y «Compliance» entran con las seis pantallas de la plataforma de Cartera
+    /// (valores nacionales, perfil regulatorio, canales externos, participantes, listas restrictivas, solicitudes del titular).
+    private static readonly string[] ModulosMigrados =
+        ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance"];
+
+    /// <summary>Feature 013 (T0038): las pantallas de la fase 2 llevan su indicador aunque no usen <c>SfGrid</c>.</summary>
+    private static readonly string[] PantallasDeLaPlataformaDeCartera =
+    [
+        "Administracion/ValoresNacionales.razor",
+        "Administracion/PerfilRegulatorio.razor",
+        "Administracion/CanalesExternos.razor",
+        "Administracion/ParticipantesDeIntegracion.razor",
+        "Compliance/ListasRestrictivas.razor",
+        "Compliance/SolicitudesDelTitular.razor",
+    ];
+
+    [Fact]
+    public void Las_pantallas_de_la_plataforma_de_Cartera_dicen_que_estan_cargando()
+    {
+        var pages = Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared", "Pages");
+        foreach (var relativa in PantallasDeLaPlataformaDeCartera)
+        {
+            var archivo = Path.Combine(pages, relativa.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(archivo), $"No existe {relativa}.");
+            var texto = File.ReadAllText(archivo);
+            Assert.Contains("<IndicadorDeCarga", texto, StringComparison.Ordinal);
+            Assert.Contains("EstadoDeCarga", texto, StringComparison.Ordinal);
+            Assert.Contains("<PermissionGate", texto, StringComparison.Ordinal);
+            Assert.DoesNotContain("<style", texto, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotMatch(@"#[0-9a-fA-F]{3,6}\b|rgb\(", texto);
+            Assert.DoesNotContain("SOLIDO", texto, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     private static IEnumerable<string> PantallasMigradas()
     {

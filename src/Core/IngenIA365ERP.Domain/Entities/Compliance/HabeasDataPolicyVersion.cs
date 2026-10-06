@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Enums.Compliance;
 
 namespace IngenIA365ERP.Domain.Entities.Compliance;
 
@@ -44,4 +45,11 @@ public class HabeasDataPolicyVersion : AuditableEntity
 
     [MaxLength(100)]
     public string PublishedBy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Feature 013 (T69 a, C68; data-model parte 3 §4.10): la finalidad de la política, como texto. Hay a lo sumo una versión
+    /// vigente por finalidad y el número de versión corre por finalidad; las anteriores a la 013 quedan en
+    /// <see cref="DataAuthorizationPurpose.GeneralTreatment"/>.
+    /// </summary>
+    public DataAuthorizationPurpose Purpose { get; set; } = DataAuthorizationPurpose.GeneralTreatment;
 }

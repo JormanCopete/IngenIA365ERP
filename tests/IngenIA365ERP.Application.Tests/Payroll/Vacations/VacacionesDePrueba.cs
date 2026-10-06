@@ -25,7 +25,14 @@ public static class VacacionesDePrueba
     public static NominaTestData Escenario(DateTime? hoy = null)
     {
         var d = new NominaTestData();
-        d.Db.Holidays.AddRange(HolidaysSeeder.Catalogo());
+        // Feature 013 (T93): los festivos Ley 51 los proyecta la réplica desde la semilla central (HolidaysSeeder se retiró).
+        d.Db.Holidays.AddRange(PlatformNationalValuesSeeder.Valores()
+            .Where(v => v.Code == IngenIA365ERP.Domain.Common.NationalValues.CodigosDeValorNacional.Festivo)
+            .Select(v => new Holiday
+            {
+                Date = v.ValidFrom, Name = v.Label ?? "Festivo nacional", Origin = HolidayOrigin.National, Year = (short)v.ValidFrom.Year,
+                NationalValuePublicId = Guid.NewGuid(), CreatedBy = "test",
+            }));
         d.Db.SaveChanges();
         d.HoyEs(hoy ?? CorteDe540Dias.ToDateTime(new TimeOnly(12, 0)));
         return d;

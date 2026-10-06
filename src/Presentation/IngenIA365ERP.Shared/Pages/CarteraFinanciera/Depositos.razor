@@ -161,7 +161,7 @@
             // Since we don't have a global deposit endpoint, show recent accounts
             _recentDeposits = []; // Will be populated when statement endpoints are called per-account
         }
-        catch { /* silent */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar las cuentas recientes: {ex.Message}"); }
     }
 
     // --- Local types ---

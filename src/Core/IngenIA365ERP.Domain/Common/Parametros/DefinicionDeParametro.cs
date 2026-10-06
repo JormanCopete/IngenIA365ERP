@@ -23,6 +23,9 @@ public enum TipoDeParametro
 /// Las entregas del comercio (feature 012, decisiones-transversales §5), en el orden en que salen. Un valor de una
 /// clave disponible sólo desde una entrega posterior a la vigente (<see cref="CatalogoDeParametros.EntregaVigente"/>)
 /// no se admite todavía: <c>Peps</c> de <c>Costeo.Metodo</c> hasta I5. No se guarda en ninguna tabla. (nuevo)
+///
+/// <para>Feature 013 (T43): es el nombre tipado de la línea <c>INV</c> de <see cref="EntregaDeModulo"/>, al que se convierte
+/// solo; las definiciones de parámetros declaran <see cref="EntregaDeModulo"/>.</para>
 /// </summary>
 public enum EntregaDelComercio
 {
@@ -67,9 +70,9 @@ public sealed record DefinicionDeParametro
     /// <summary>Para <see cref="TipoDeParametro.Choice"/>: los valores, en su escritura canónica.</summary>
     public IReadOnlyList<string> ValoresAdmitidos { get; init; } = [];
 
-    /// <summary>Valores de <see cref="ValoresAdmitidos"/> que sólo se admiten desde una entrega posterior.</summary>
-    public IReadOnlyDictionary<string, EntregaDelComercio> ValoresDesde { get; init; } =
-        new Dictionary<string, EntregaDelComercio>();
+    /// <summary>Valores de <see cref="ValoresAdmitidos"/> que sólo se admiten desde una entrega posterior (de cualquier línea).</summary>
+    public IReadOnlyDictionary<string, EntregaDeModulo> ValoresDesde { get; init; } =
+        new Dictionary<string, EntregaDeModulo>();
 
     /// <summary>El defecto seguro, en texto canónico ("" = vacío, sólo si <see cref="AdmiteVacio"/>).</summary>
     public required string DefectoSeguro { get; init; }
@@ -85,8 +88,24 @@ public sealed record DefinicionDeParametro
     /// <summary>Registrar una vigencia exige <c>LegalSource</c> (la norma o el acta que la respalda).</summary>
     public bool ExigeFuenteLegal { get; init; }
 
-    /// <summary>La entrega desde la que la clave tiene efecto (informativo: se puede parametrizar antes).</summary>
-    public EntregaDelComercio DisponibleDesde { get; init; } = EntregaDelComercio.I1;
+    /// <summary>
+    /// La entrega de su línea desde la que la clave existe (feature 013, T43): mientras la entrega vigente de esa línea
+    /// (<see cref="CatalogoDeParametros.EntregaVigenteDe"/>) no la alcance, la clave no se ofrece ni se acepta. En el comercio
+    /// la vigente es la última (I6), así que todas sus claves se ofrecen como antes.
+    /// </summary>
+    public EntregaDeModulo DisponibleDesde { get; init; } = EntregaDelComercio.I1;
+
+    /// <summary>
+    /// Feature 013 (T42; data-model parte 3 §12.1, §12.5): los códigos de <c>CatalogoDeLimitesLegales</c> que acotan la clave.
+    /// La cooperativa sólo puede ser más estricta (lo hacen cumplir las reglas de su módulo) y al leer rige lo más estricto.
+    /// </summary>
+    public IReadOnlyList<string> LimitesLegales { get; init; } = [];
+
+    /// <summary>
+    /// Feature 013 (T41; data-model parte 3 §12.1, «PV»): el defecto se siembra «pendiente de validar»; el texto dice por quién y
+    /// con qué fuente. Nulo si el defecto no está pendiente de nadie.
+    /// </summary>
+    public string? PendienteDeValidar { get; init; }
 
     /// <summary>El valor vacío es admitido y significa «sin valor» (p. ej. <c>Cartera.IntegracionHabilitadaDesde</c>).</summary>
     public bool AdmiteVacio { get; init; }
@@ -106,7 +125,9 @@ public sealed record DefinicionDeParametro
     /// Lo admitido, para <c>data.allowed</c> y la pantalla: los valores de una elección disponibles en la entrega, o
     /// el formato del tipo.
     /// </summary>
-    public IReadOnlyList<string> Admitidos(EntregaDelComercio entrega)
+    /// <param name="entrega">La entrega con que se interpretan los valores de su línea (las pruebas fijan una anterior); nula o de
+    /// otra línea: la vigente de cada línea.</param>
+    public IReadOnlyList<string> Admitidos(EntregaDeModulo? entrega = null)
     {
         List<string> lista = Tipo switch
         {
@@ -126,7 +147,7 @@ public sealed record DefinicionDeParametro
     /// Valida y tipa un texto según la definición, en la entrega dada. Puro: no lee reloj ni base. Un valor de
     /// elección o un booleano se reconoce sin distinguir mayúsculas y se devuelve en su escritura canónica.
     /// </summary>
-    public ValorInterpretado Interpretar(string? texto, EntregaDelComercio entrega)
+    public ValorInterpretado Interpretar(string? texto, EntregaDeModulo? entrega = null)
     {
         var t = texto?.Trim() ?? string.Empty;
         if (t.Length == 0)
@@ -175,8 +196,12 @@ public sealed record DefinicionDeParametro
         }
     }
 
-    private bool DisponibleEn(string valor, EntregaDelComercio entrega) =>
-        !ValoresDesde.TryGetValue(valor, out var desde) || desde <= entrega;
+    private bool DisponibleEn(string valor, EntregaDeModulo? entrega) =>
+        !ValoresDesde.TryGetValue(valor, out var desde) || desde <= CatalogoDeParametros.EntregaParaLaLinea(desde.Modulo, entrega);
+
+    /// <summary>Si la clave existe en la entrega dada (o en la vigente de su línea): <see cref="DisponibleDesde"/> ya llegó.</summary>
+    public bool DisponibleEnLaEntrega(EntregaDeModulo? entrega = null) =>
+        DisponibleDesde <= CatalogoDeParametros.EntregaParaLaLinea(DisponibleDesde.Modulo, entrega);
 
     private bool EnRango(decimal valor) => (Minimo is null || valor >= Minimo) && (Maximo is null || valor <= Maximo);
 

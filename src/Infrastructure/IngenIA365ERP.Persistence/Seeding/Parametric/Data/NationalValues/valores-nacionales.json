@@ -1,0 +1,61 @@
+{
+  // Feature 013 (T0055; DT §2.21; data-model parte 3 §12.3–§12.5): la semilla del registro central de valores nacionales
+  // (PlatformNationalValuesSeeder, Admin, Order 6). Idempotente por (code, key, validFrom) y por código de documento: nunca
+  // actualiza; un valor equivocado se corrige en /admin/valores-nacionales con su motivo. Los límites legales entran
+  // «pendientes de validar» hasta que el dueño y la contadora los coteje con su fuente. Los festivos 2026–2028 los calcula
+  // FestivosLey51 (Ley 51 de 1983); los años siguientes los registra el maestro por la plantilla saas.national-values.
+  // LIBRANZA_UMBRAL_MORA_PAGADURIA no se siembra: su valor está «a cotejar en la CBCF antes de K2» (data-model §12.5).
+  "version": 1,
+  "validFrom": "2026-01-01",
+  "documents": [
+    {
+      "kind": "CatalogoDeModalidades",
+      "code": "MODALIDADES-PROPUESTA-2026-01-01",
+      "validFrom": "2026-01-01",
+      "schemaVersion": 1,
+      "verified": false,
+      "source": "Propuesta de las preguntas E4 y E10 (decisiones transversales §5), pendiente de cotejo con la certificación de la Superintendencia Financiera",
+      "file": "catalogo-de-modalidades.json"
+    },
+    {
+      "kind": "TiposDeOrganizacion",
+      "code": "TIPOS-ORGANIZACION-PROPUESTA-2026-01-01",
+      "validFrom": "2026-01-01",
+      "schemaVersion": 1,
+      "verified": false,
+      "source": "Propuesta de la pregunta E4, pendiente de cotejo con la Circular Básica Contable y Financiera de la Supersolidaria",
+      "file": "tipos-de-organizacion.json"
+    }
+  ],
+  "values": [
+    { "code": "SMMLV", "key": "", "validFrom": "2026-01-01", "value": 1750905, "unit": "Pesos", "label": "Salario mínimo mensual legal vigente 2026", "source": "Decreto 1469 de 2025 (Decreto 159 de 2026, mismo valor)" },
+    { "code": "UVT", "key": "", "validFrom": "2026-01-01", "value": 52374, "unit": "Pesos", "label": "Unidad de valor tributario 2026", "source": "Resolución DIAN 000238 del 15-12-2025" },
+
+    { "code": "LIMITE", "key": "AVISO_PREVIO_DIAS", "validFrom": "2026-01-01", "value": 20, "unit": "Dias", "source": "Ley 1266 de 2008; Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "COBRANZA_HORA_FIN_LV", "validFrom": "2026-01-01", "value": 19, "unit": "Horas", "source": "Ley 2300 de 2023 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "LIBRANZA_CAPACIDAD_DESCUENTO", "validFrom": "2026-01-01", "value": 0.5, "unit": "Fraccion", "source": "Ley 1527 de 2012 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "PREPAGO_TOPE_SMMLV", "validFrom": "2026-01-01", "value": 880, "unit": "Veces", "source": "Ley 1555 de 2012 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "CONCENTRACION_INDIVIDUAL", "validFrom": "2026-01-01", "value": 0.10, "unit": "Fraccion", "source": "Decreto 961 de 2018 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "DETERIORO_GENERAL_MINIMO", "validFrom": "2026-01-01", "value": 0.01, "unit": "Fraccion", "source": "Circular Básica Contable y Financiera, Anexo 1 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "CONCENTRACION_INDIVIDUAL_CON_GARANTIA", "validFrom": "2026-01-01", "value": 0.20, "unit": "Fraccion", "source": "Decreto 961 de 2018 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "COBRANZA_HORA_INICIO_LV", "validFrom": "2026-01-01", "value": 7, "unit": "Horas", "source": "Ley 2300 de 2023 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "COBRANZA_HORA_INICIO_SAB", "validFrom": "2026-01-01", "value": 8, "unit": "Horas", "source": "Ley 2300 de 2023 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "COBRANZA_HORA_FIN_SAB", "validFrom": "2026-01-01", "value": 15, "unit": "Horas", "source": "Ley 2300 de 2023 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "COBRANZA_CONTACTOS_DIA", "validFrom": "2026-01-01", "value": 1, "unit": "Veces", "source": "Ley 2300 de 2023 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "AVISO_PREVIO_UMBRAL_SMMLV", "validFrom": "2026-01-01", "value": 0.15, "unit": "Veces", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "MORA_SOBRE_INTERESES_PERMITIDA", "validFrom": "2026-01-01", "value": 0, "unit": "Veces", "source": "Código de Comercio; nunca en vivienda (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "LIBRANZA_VENTANA_GIRO_DIAS", "validFrom": "2026-01-01", "value": 3, "unit": "Dias", "source": "Ley 1527 de 2012, art. 6 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "VINCULADOS_FRACCION_CALIFICADA", "validFrom": "2026-01-01", "value": 0.8, "unit": "Fraccion", "source": "Ley 454 de 1998, art. 61: 4/5 de la composición (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "TITULAR_CONSULTA_DIAS", "validFrom": "2026-01-01", "value": 10, "unit": "Dias", "source": "Ley 1581 de 2012; Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "TITULAR_CONSULTA_PRORROGA_DIAS", "validFrom": "2026-01-01", "value": 5, "unit": "Dias", "source": "Ley 1581 de 2012; Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "TITULAR_RECLAMO_DIAS", "validFrom": "2026-01-01", "value": 15, "unit": "Dias", "source": "Ley 1581 de 2012; Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "TITULAR_RECLAMO_PRORROGA_DIAS", "validFrom": "2026-01-01", "value": 8, "unit": "Dias", "source": "Ley 1581 de 2012; Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "TITULAR_LEYENDA_RECLAMO_DIAS", "validFrom": "2026-01-01", "value": 2, "unit": "Dias", "source": "Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "PERMANENCIA_NEGATIVO_VECES_MORA", "validFrom": "2026-01-01", "value": 2, "unit": "Veces", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "PERMANENCIA_NEGATIVO_MESES_MAXIMOS", "validFrom": "2026-01-01", "value": 48, "unit": "Meses", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" }
+  ],
+  "holidays": {
+    "years": [ 2026, 2027, 2028 ],
+    "source": "Ley 51 de 1983 (calculado con FestivosLey51)"
+  }
+}

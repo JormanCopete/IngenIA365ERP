@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Payroll.Holidays;
 
 /// <summary>
-/// Calendario de festivos (feature 010, R6; contracts/api.md §10.2). La lista de la Ley 51 de
-/// 1983 la siembra <c>HolidaysSeeder</c> y aquí no se toca: la cooperativa agrega un puente
+/// Calendario de festivos (feature 010, R6; contracts/api.md §10.2). Los festivos nacionales los
+/// proyecta la réplica de valores nacionales (feature 013, T93: <c>HolidayOrigin.National</c>) y aquí no se tocan: la cooperativa agrega un puente
 /// decretado o un festivo propio y retira sólo esos. Todo queda auditado
 /// (<c>Payroll.Holiday.Changed</c>): un festivo cambia cuántos días hábiles tienen unas
 /// vacaciones.
@@ -29,6 +29,10 @@ public static class HolidayErrors
         new("Payroll.Holiday.DateDuplicate", $"El {fecha:dd/MM/yyyy} ya es festivo: {nombre}.");
 
     public static readonly Error NotFound = new("Payroll.Holiday.NotFound", "No existe el festivo indicado.");
+
+    /// <summary>Feature 013 (T93, regla 4): un festivo nacional lo proyecta la réplica; Nómina no lo edita ni lo retira.</summary>
+    public static readonly Error National = new("Payroll.Holiday.National",
+        "Un festivo nacional lo registra la plataforma y lo trae la réplica: no se retira desde Nómina.");
 
     public static readonly Error OriginInvalid = new("Payroll.Holiday.OriginInvalid",
         "Desde la pantalla sólo se registran festivos decretados (Decreed) o manuales (Manual); los de la Ley 51 los pone la semilla.");
@@ -141,6 +145,7 @@ public sealed class DeleteHolidayCommandHandler(IApplicationDbContext db, IDateT
     {
         var festivo = await db.Holidays.FirstOrDefaultAsync(h => h.PublicId == request.HolidayPublicId && !h.IsDeleted, ct);
         if (festivo is null) return Result.Failure(HolidayErrors.NotFound);
+        if (festivo.Origin == HolidayOrigin.National) return Result.Failure(HolidayErrors.National);
         if (festivo.EsSembrado) return Result.Failure(HolidayErrors.Seeded);
 
         var antes = new { date = festivo.Date, name = festivo.Name, origin = festivo.Origin.ToString() };

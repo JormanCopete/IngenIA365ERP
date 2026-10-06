@@ -23,14 +23,17 @@ public static class AgrupadorDeResumidos
     {
         ArgumentNullException.ThrowIfNull(entregas);
         return entregas
-            .GroupBy(m => (m.Envelope.Origin.PublicId, m.Envelope.OriginEventKey))
+            .GroupBy(m => (m.Envelope.OriginModule, m.Envelope.Origin.PublicId, m.Envelope.OriginEventKey))
             .Select(g =>
             {
                 var mensajes = g.ToList();
                 var unidad = new UnidadDeConsumo(destino, g.Key.PublicId, g.Key.OriginEventKey,
                     mensajes.Select(m => m.MessageId).ToList(),
                     mensajes.Select(m => m.Entrega.BatchPublicId).FirstOrDefault(b => b is not null),
-                    mensajes.Max(m => m.Entrega.Attempts));
+                    mensajes.Max(m => m.Entrega.Attempts))
+                {
+                    OriginModule = g.Key.OriginModule,
+                };
                 return (unidad, (IReadOnlyList<MensajeEntrante>)mensajes);
             })
             .ToList();

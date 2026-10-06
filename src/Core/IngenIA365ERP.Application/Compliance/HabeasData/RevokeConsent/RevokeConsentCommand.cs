@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Compliance.HabeasData.Common;
 using IngenIA365ERP.Application.Compliance.HabeasData.Events;
 using IngenIA365ERP.Domain.Entities.Compliance;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,7 +55,7 @@ public sealed class RevokeConsentCommandHandler
         }
 
         var lastAction = await _db.HabeasDataConsents
-            .Where(c => c.TenantId == tenantId && c.PersonId == request.PersonId)
+            .Where(c => c.TenantId == tenantId && c.PersonId == request.PersonId && c.Purpose == DataAuthorizationPurpose.GeneralTreatment)
             .OrderByDescending(c => c.ActionAt)
             .Include(c => c.PolicyVersion)
             .FirstOrDefaultAsync(ct);

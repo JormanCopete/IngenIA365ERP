@@ -118,12 +118,39 @@ public static class DependencyInjection
         // del motor tributario a una fecha). Scoped: memorizan por peticion.
         services.AddScoped<Common.Taxation.IValorUvt, Common.Taxation.LectorDeUvt>();
         services.AddScoped<Core.Taxes.LectorDeCatalogoTributario>();
+        // Feature 013 (T37–T42, T93): valores nacionales. Los validadores de documentos normativos de la plataforma (Cartera
+        // registra los suyos en sus fases), el nucleo unico de la replica con sus efectos (singletons sin estado: reciben el
+        // contexto por parametro) y los tres lectores unicos de la copia de la cooperativa.
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo, Domain.Common.NationalValues.ValidadorDeCatalogoDeModalidades>();
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo, Domain.Common.NationalValues.ValidadorDeTiposDeOrganizacion>();
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Payroll.NationalValues.EfectoDeReplicacionEnNomina>();
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Common.NationalValues.EfectoDeReplicacionLimitesLegales>();
+        services.AddScoped<Common.NationalValues.ReplicacionDeValoresNacionales>();
+        services.AddScoped<Common.NationalValues.IValoresNacionales, Common.NationalValues.LectorDeValoresNacionales>();
+        services.AddScoped<Common.NationalValues.INormativaVigente, Common.NationalValues.LectorDeDocumentoNormativo>();
+        services.AddScoped<Common.Calendar.ICalendarioHabil, Common.Calendar.CalendarioDeDiasHabiles>();
         // Feature 012 (T226 US1, T286 US3): Inventario resuelve los ambitos Warehouse y DocumentType y pone las reglas del alta
         // de parametros (periodo cerrado, inicio de periodo para Costeo.*, modo de paso por cadena y tipo fiscal sin paso) y de
         // las politicas de aprobacion. Una sola instancia por peticion para las tres interfaces.
         services.AddScoped<Inventory.Common.ReglasDePlataformaDeInventario>();
-        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
-        services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
+        // Feature 013 (T43, T0067): el resolutor de ambitos y las reglas del alta son compuestos por modulo. Inventario registra sus
+        // cinco ambitos (los mismos que antes resolvia o negaba) y sus reglas siguen siendo las de todo modulo sin reglas propias;
+        // Cartera registra las suyas para LND (ReglasDeParametrosDeCartera) y, cuando existan LND_CreditLines y LND_FactTypes, el
+        // resolutor de CreditLine y LendingFactType.
+        services.AddScoped(sp => new Common.Parameters.ResolutorDeAmbitoDeModulo(
+            Domain.Inventory.Parameters.ParametrosDeInventario.Modulo,
+            [Domain.Enums.Parameters.ParameterScopeKind.Warehouse, Domain.Enums.Parameters.ParameterScopeKind.DocumentType,
+             Domain.Enums.Parameters.ParameterScopeKind.PointOfSale, Domain.Enums.Parameters.ParameterScopeKind.CashRegister,
+             Domain.Enums.Parameters.ParameterScopeKind.ThirdPartyKind],
+            sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>()));
+        services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoCompuesto>();
+        services.AddScoped<Lending.Common.ReglasDeParametrosDeCartera>();
+        services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => sp.GetRequiredService<Lending.Common.ReglasDeParametrosDeCartera>());
+        services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => new Common.Parameters.ReglasDeParametrosPorModulo(
+            sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>(),
+            sp.GetServices<Common.Parameters.IReglasDeParametrosDeModulo>()));
+        // Feature 013 (T50, T0064): el lector bitemporal del perfil regulatorio de la cooperativa.
+        services.AddScoped<Common.NationalValues.IPerfilRegulatorio, Common.NationalValues.LectorDePerfilRegulatorio>();
         services.AddScoped<Common.Approvals.IReglasDePoliticaDeAprobacion>(sp => sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>());
         // Feature 012 (T7, T9, T078): el unico escritor de la bandeja de salida. Scoped porque recuerda lo que emitio
         // en su ambito (dos eventos del mismo guardado, o un relacionado en la transaccion de su original).
@@ -133,6 +160,12 @@ public static class DependencyInjection
         // llevan los defectos del contrato; la API los reemplaza con Integration:Retries (T527).
         services.AddScoped<Common.Integration.IMensajesEntrantes, Common.Integration.MensajesEntrantes>();
         services.AddScoped<Common.Integration.EntregasElegibles>();
+        // Feature 013 (T0075, T0078; T16, T19): la vista de cada módulo en la bandeja (Inventario aquí; Cartera la agrega US7) y el
+        // registro de participantes: su lector y su único escritor (agrega sin guardar). IAmbienteDeDespliegue lo pone la API.
+        services.AddScoped<Common.Integration.IVistaDeBandejaDelModulo, Inventory.Integration.VistaDeBandejaDeInventario>();
+        services.AddScoped<Common.Integration.IRegistroDeIntegracion, Common.Integration.RegistroDeIntegracion>();
+        services.AddScoped<Common.Integration.EscritorDelRegistroDeIntegracion>();
+        AddCanalesExternos(services);
         // Feature 012, I2 (T505-T510): la matriz contable de Inventario. La resolucion (carga en bloque y elige por peso), el
         // punto unico de sus reglas (alta, version, desactivacion e importacion) y el resolutor del tipo de comprobante de una
         // unidad. IDimensionesDeInventario lo registra Inventario (T519).
@@ -157,6 +190,8 @@ public static class DependencyInjection
         // Feature 012 (T39, T093-T094): levantar y atender alertas, y qué alertas alcanzan a quien pregunta. Los
         // destinatarios por permiso (IDestinatariosPorPermiso) los resuelve la API. Adelanto de T096.
         services.AddScoped<Common.Alerts.IAlertas, Common.Alerts.Alertas>();
+        // Feature 013 (C68, T0090): el alcance de Cartera sobre los destinatarios; hasta US17 no filtra.
+        services.TryAddScoped<Common.Alerts.IFiltroDeAlcanceDeAlertas, Common.Alerts.SinFiltroDeAlcanceDeAlertas>();
         services.AddScoped<Common.Alerts.VisibilidadDeAlertas>();
         // Feature 012 (T35, T090): el alcance comercial de un usuario, leído y escrito sólo por los puertos de asignación.
         services.AddScoped<Inventory.Security.Scopes.VistaDeAlcanceComercial>();
@@ -423,5 +458,33 @@ public static class DependencyInjection
         services.AddSingleton<ISecureTokenGenerator, SecureTokenGenerator>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Feature 013 (T0079, T0081, T0083; T71–T74; contracts/adaptadores-y-archivos.md §2): los defectos de los canales externos. La guardia
+    /// del efecto legal (con <c>CanalesExternosOptions</c>, que fija Program.cs), el correo como canal de mensajería siempre disponible, los
+    /// registros de mensajería y de listas sobre los adaptadores que haya, las credenciales sin archivo, el circuito que no se abre y la
+    /// carga de listas vacía. <c>AddExternalChannels</c> (sólo desde Program.cs, después de esto) suma los simulados y reemplaza
+    /// credenciales y circuito; T0087 reemplaza la carga de listas.
+    /// </summary>
+    private static void AddCanalesExternos(IServiceCollection services)
+    {
+        services.AddOptions<Lending.Adapters.CanalesExternosOptions>();
+        services.AddSingleton<Lending.Adapters.GuardiaDeCanalesExternos>();
+        services.TryAddScoped<Common.ExternalChannels.ICredencialesDeCanalExterno, Common.ExternalChannels.SinCredencialesDeCanalExterno>();
+        services.TryAddScoped<Common.ExternalChannels.ICircuitoDeCanalExterno, Common.ExternalChannels.CircuitoSiempreCerrado>();
+
+        services.AddSingleton(new Common.ExternalChannels.CanalExternoRegistrado(
+            Common.ExternalChannels.PuertosExternos.Mensajeria, Common.ExternalChannels.CodigosDeCanalExterno.Correo, typeof(Common.Messaging.CanalDeCorreo)));
+        services.AddScoped<Common.Messaging.ICanalDeMensajeria, Common.Messaging.CanalDeCorreo>();
+        services.AddScoped<Common.Messaging.ICanalesDeMensajeria, Common.Messaging.CanalesDeMensajeria>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Common.Messaging.ICanalesDeMensajeria>());
+
+        // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
+        services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();
+        // Feature 013 (T0088): el deber de conservar del titular; hasta la fase 3 responde «sin obligaciones registradas».
+        services.TryAddScoped<Compliance.DataSubjectRequests.IDeberDeConservacionDelTitular, Compliance.DataSubjectRequests.SinObligacionesRegistradas>();
+        services.AddScoped<Common.Compliance.IProveedoresDeListas, Common.Compliance.ProveedoresDeListas>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Common.Compliance.IProveedoresDeListas>());
     }
 }

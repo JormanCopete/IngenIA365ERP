@@ -20,6 +20,8 @@ namespace IngenIA365ERP.Application.Tests.Audit
 {
     using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Core;
     using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Parameters;
+    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Compliance;
+    using IngenIA365ERP.Application.Tests.AuditoriaDePrueba.NationalValues;
 
     /// <summary>
     /// T017, segunda mitad (feature 012; decisiones-transversales T36, T37; contracts/api.md §1.6): lo que la
@@ -68,6 +70,13 @@ namespace IngenIA365ERP.Application.Tests.Audit
         [InlineData("IngenIA365ERP.Application.Accounting.Inventory", "Accounting")]
         [InlineData("IngenIA365ERP.Application.Lending.Payments.Commands.ProcessPayment", "Lending")]
         [InlineData("IngenIA365ERP.Application.Audit.RegisterOptionAccess", "Navigation")]
+        // Feature 013 (T0092): cumplimiento y valores nacionales, antes de .Admin y de .Core.
+        [InlineData("IngenIA365ERP.Application.Compliance.HabeasData.AcceptConsent", "Compliance")]
+        [InlineData("IngenIA365ERP.Application.Compliance.RestrictiveLists", "Compliance")]
+        [InlineData("IngenIA365ERP.Domain.Entities.Compliance", "Compliance")]
+        [InlineData("IngenIA365ERP.Application.Common.NationalValues", "NationalValues")]
+        [InlineData("IngenIA365ERP.Application.Core.NationalValues", "NationalValues")]
+        [InlineData("IngenIA365ERP.Domain.Entities.Admin.NationalValues", "NationalValues")]
         [InlineData("IngenIA365ERP.Application.Identity.Auth.WebAuthn", "General")]
         [InlineData(null, "General")]
         public void Una_sola_inferencia_reconoce_los_modulos_nuevos_antes_que_Core(string? ns, string modulo)
@@ -79,7 +88,10 @@ namespace IngenIA365ERP.Application.Tests.Audit
         public void Los_modulos_encadenados_son_los_de_T38_sin_Contabilidad()
         {
             AuditoriaEncadenada.Modulos.Should().BeEquivalentTo(
-                ["Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans", "Navigation"]);
+                ["Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans", "Navigation",
+                    "Compliance", "NationalValues"]);
+            // Feature 013 (T0092): los dos módulos nuevos también guardan diez años.
+            IngenIA365ERP.Audit.Indexes.AuditRetention.ModulosDeDiezAnios.Should().Contain(["Compliance", "NationalValues"]);
             AuditoriaEncadenada.EsEncadenado("Accounting").Should().BeFalse("pregunta C1");
             AuditoriaEncadenada.Flujo(Cooperativa).Should().Be(Flujo);
         }
@@ -169,6 +181,20 @@ namespace IngenIA365ERP.Application.Tests.Audit
             evento.TenantId.Should().Be(Cooperativa.ToString("N"));
             evento.Metadata.Should().Contain("Reason", "Cambio de política").And.Contain("Channel", "app");
             evento.NewValuesJson.Should().Contain("INV");
+        }
+
+        [Fact]
+        public async Task Un_evento_de_Compliance_y_otro_de_NationalValues_salen_encadenados_por_el_outbox()
+        {
+            await Behavior<RegistrarSolicitudDePruebaCommand, Result>().Handle(
+                new RegistrarSolicitudDePruebaCommand(Guid.NewGuid(), "Revocación pedida por escrito"), _ => Task.FromResult(Result.Success()), CancellationToken.None);
+            await Behavior<RevisarValorDePruebaCommand, Result>().Handle(
+                new RevisarValorDePruebaCommand(Guid.NewGuid(), "Cotejado con la norma"), _ => Task.FromResult(Result.Success()), CancellationToken.None);
+
+            _enMongo.Should().BeEmpty("los dos módulos van por la cadena");
+            var filas = await _db.AuditOutbox.OrderBy(f => f.Id).ToListAsync();
+            filas.Select(f => f.Module).Should().Equal("Compliance", "NationalValues");
+            filas.Should().OnlyContain(f => f.Stream == Flujo);
         }
 
         [Fact]
@@ -326,6 +352,16 @@ namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Core
         [NoAuditar]
         public string Clave { get; set; } = string.Empty;
     }
+}
+
+namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Compliance
+{
+    public sealed record RegistrarSolicitudDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
+}
+
+namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.NationalValues
+{
+    public sealed record RevisarValorDePruebaCommand(Guid OperationKey, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo;
 }
 
 namespace IngenIA365ERP.Application.Tests.AuditoriaDePrueba.Parameters

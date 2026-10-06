@@ -12,6 +12,7 @@ using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
 using IngenIA365ERP.Caching.Services;
 using IngenIA365ERP.ElectronicInvoicing;
+using IngenIA365ERP.ExternalChannels;
 using IngenIA365ERP.Identity;
 using IngenIA365ERP.Identity.CentralIdentity;
 using IngenIA365ERP.Identity.Seed;
@@ -170,6 +171,10 @@ try
     // Feature 012 (I3, T607): fuera de produccion toda tirilla dice «SIN VALIDEZ FISCAL» (quickstart §5.13).
     builder.Services.Configure<IngenIA365ERP.Application.Inventory.Sales.TirillaOptions>(o =>
         o.AmbienteDePruebas = !builder.Environment.IsProduction());
+    // Feature 013 (T0082; T73, CH20): fuera de produccion un resultado del canal SIMULADO tiene efecto legal; en produccion
+    // GuardiaDeCanalesExternos se lo quita. Un solo criterio, el del despliegue: ninguna cooperativa lo cambia.
+    builder.Services.Configure<IngenIA365ERP.Application.Lending.Adapters.CanalesExternosOptions>(o =>
+        o.AmbienteDePruebas = !builder.Environment.IsProduction());
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
@@ -238,6 +243,12 @@ try
     // Feature 012 (T932, I6): la alerta diaria de los lotes con existencia proximos a vencer (no corre antes de I6).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
         new IngenIA365ERP.Application.Inventory.Catalog.Lots.TareaDeLotesProximosAVencer());
+    // Feature 013 (T0059, T39): la replica de valores nacionales en cada pasada y en cada cooperativa (tambien sin Cartera activada).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Common.NationalValues.TareaDeReplicaDeValoresNacionales>();
+    // Feature 013 (T0088, T69 b): la revisión diaria de los plazos de las solicitudes del titular (cumplimiento.plazos-del-titular).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
@@ -247,6 +258,9 @@ try
     builder.Services.Configure<IngenIA365ERP.Application.Common.Integration.ReintentosDeIntegracion>(
         builder.Configuration.GetSection($"{IngenIA365ERP.API.Integration.IntegrationOptions.SectionName}:Retries"));
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.DespachadorDeMensajes>();
+    // Feature 013 (T0076, T0078; T20, CH20): el carácter de producción del despliegue, un solo criterio (IsProduction).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IAmbienteDeDespliegue>(
+        new IngenIA365ERP.API.Integration.AmbienteDeDespliegue(builder.Environment.IsProduction()));
     if (integracion.Dispatcher.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.DespachadorDeMensajes>());
 
@@ -377,6 +391,13 @@ try
     if (builder.Configuration.GetValue("ElectronicInvoicing:Processor:Enabled", true))
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Processor.ProcesadorDeDocumentosElectronicos>());
 
+    // Feature 013 (T0082; T71, T72; contracts/adaptadores-y-archivos.md §2): los canales externos —mensajeria, listas restrictivas y,
+    // en sus fases, deposito de valores y centrales—. UNICO sitio que conoce el ensamblado de los adaptadores
+    // (LosProveedoresExternosSoloLosConoceSuAdaptador). Va despues de AddApplicationServices porque reemplaza sus defectos (credenciales
+    // sin archivo, circuito que no se abre) y suma los adaptadores a sus registros. Lee la seccion ExternalChannels (tiempos por canal y
+    // CredentialsPath del Secret erp-canales-externos).
+    builder.Services.AddExternalChannels(builder.Configuration);
+
     // Feature 002 — opciones del flujo de identidad central
     // (URL base del frontend para el enlace de invitaciones, lifetime, etc.).
     builder.Services.Configure<IngenIA365ERP.Application.Common.Configuration.IdentityEmailOptions>(
@@ -430,6 +451,14 @@ try
     builder.Services.AddIngenIaHealthChecks(builder.Configuration);
 
     var app = builder.Build();
+
+    // Feature 013 (T0076; T15): un solo consumidor por destino de la bandeja. Dos IDestinoDeMensajes con el mismo destino hacen fallar
+    // el arranque con Integration.Destination.DuplicateConsumer (antes el despachador tomaba el primero sin avisar).
+    using (var ambitoDeConsumidores = app.Services.CreateScope())
+    {
+        IngenIA365ERP.Application.Common.Integration.ConsumidoresPorDestino.Validar(
+            ambitoDeConsumidores.ServiceProvider.GetServices<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes>());
+    }
 
     // Feature 004 (T019/T020) — bitacora de arranque de base de datos.
     // La validacion fail-fast de la seccion Database corre via ValidateOnStart

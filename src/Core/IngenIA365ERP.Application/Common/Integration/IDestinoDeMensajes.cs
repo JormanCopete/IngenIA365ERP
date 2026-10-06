@@ -56,7 +56,14 @@ public sealed record UnidadDeConsumo(
     string OriginEventKey,
     IReadOnlyList<Guid> MessagePublicIds,
     Guid? BatchPublicId,
-    int IntentosLeidos);
+    int IntentosLeidos)
+{
+    /// <summary>
+    /// El módulo que emitió la unidad (feature 013, T15): un destino con varios emisores (Contabilidad) reparte por él. Una unidad
+    /// nunca mezcla módulos: todos sus mensajes vienen de la misma solicitud de emisión.
+    /// </summary>
+    public string OriginModule { get; init; } = ModulosDeOrigen.Inventario;
+}
 
 /// <summary>
 /// Lo que el despachador entrega al destino de una vez: una unidad, o un grupo resumido con su clave (§5.3 de
@@ -120,6 +127,14 @@ public abstract record ResultadoDeConsumo
 
     /// <summary>Falla transitoria (o el original aún no está): se reintenta con espera creciente.</summary>
     public sealed record Retry(string Reason, string? Code = null) : ResultadoDeConsumo;
+
+    /// <summary>
+    /// Sólo el destino <c>Lending</c> (feature 013, T17, CH12; contracts/mensajes.md §14.4): la obligación se creó, pero con la
+    /// validación fallida (FR-052). La entrega queda <c>ValidationFailed</c> —terminal, no bloquea a sus dependientes— con la
+    /// referencia al crédito (<paramref name="LoanPublicId"/>, <paramref name="LoanNumber"/>) y el código y el motivo como en un
+    /// rechazo; levanta <c>Integracion.ValidacionFallida</c>.
+    /// </summary>
+    public sealed record ValidationFailed(Guid LoanPublicId, string LoanNumber, string Code, string Reason) : ResultadoDeConsumo;
 }
 
 /// <summary>

@@ -172,7 +172,12 @@
         if (_enfocar is { } i && _buscadores.TryGetValue(i, out var b))
         {
             _enfocar = null;
-            try { await b.EnfocarAsync(); } catch (Exception) { /* la fila ya no está o el foco no aplica: no es un error de la ventana */ }
+            try { await b.EnfocarAsync(); }
+            catch (Exception ex) when (ex is Microsoft.JSInterop.JSException or Microsoft.JSInterop.JSDisconnectedException or ObjectDisposedException)
+            {
+                // La fila ya no está o el circuito se cerró: el foco no aplica y no es un error de la ventana.
+                return;
+            }
         }
     }
 

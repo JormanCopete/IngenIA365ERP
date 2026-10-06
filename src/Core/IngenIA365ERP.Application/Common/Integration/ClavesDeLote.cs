@@ -35,6 +35,9 @@ public static class ClavesDeLote
         return new HorarioDeLote(partes[0], partes[1], hora, partes[3]);
     }
 
+    /// <summary>El prefijo de las claves de Cartera: <c>CAR.{ShortCode}|{disparador}|{hora}|{granularidad}</c> (feature 013, C06).</summary>
+    public const string PrefijoDeCartera = "CAR.";
+
     /// <summary>El disparador de la franja diaria (<c>Contabilidad.DisparadorDeLote</c>).</summary>
     public const string HoraDiaria = "HoraDiaria";
 
@@ -58,6 +61,17 @@ public static class ClavesDeLote
 /// </summary>
 public sealed record HorarioDeLote(string TipoDeDocumentoRaiz, string Disparador, TimeOnly? Hora, string Granularidad)
 {
+    /// <summary>
+    /// El módulo de la clave (feature 013, C06): las de Cartera empiezan por <c>CAR.</c> (<c>CAR.{ShortCode}</c>); las de Inventario
+    /// llevan el código del tipo de documento, sin prefijo de módulo.
+    /// </summary>
+    public string Modulo => TipoDeDocumentoRaiz.StartsWith(ClavesDeLote.PrefijoDeCartera, StringComparison.Ordinal)
+        ? ModulosDeOrigen.Cartera
+        : ModulosDeOrigen.Inventario;
+
+    /// <summary>¿Es una clave de Inventario (la única que usa el respaldo de <c>InventoryDocumentTypes</c>)?</summary>
+    public bool EsDeInventario => Modulo == ModulosDeOrigen.Inventario;
+
     public Domain.Enums.Inventory.PostingGranularity GranularidadDelLote =>
         Granularidad is "Resumido" or nameof(Domain.Enums.Inventory.PostingGranularity.Summarized)
             ? Domain.Enums.Inventory.PostingGranularity.Summarized

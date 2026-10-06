@@ -140,6 +140,8 @@ procesos por cooperativa, parámetros con vigencia, aprobaciones, alertas y audi
 | `docs/manual/plantillas-de-importacion.md` | I1 | **La mecánica común de las plantillas** (encabezados en la fila 1, revisión y aplicación todo o nada, errores por hoja, fila y columna, `ImportResultDto`) y cómo se agrega una plantilla nueva. |
 | `docs/operaciones/inventario-retiro-heredado.md` | I1 | **Runbook de la migración destructiva** `RetiroDelInventarioHeredado`: diagnóstico por base, `pg_dump` `*-pre-f012.dump`, la fila de aprobación, el segundo revisor, qué hace la guarda, el `Down()` y el retorno desde el respaldo. |
 | `docs/operaciones/inventario-puesta-en-marcha.md` | I1 (el cuadre, I2) | **Runbook de la puesta en marcha**: semillas, plantillas en orden, conteo físico, cifras de SOLIDO, saldo inicial con aprobación, excepción de puesta en marcha, comparativos, marcha paralela y activación bodega por bodega (en producción, sólo con I2). |
+| `docs/operaciones/valores-nacionales.md` | 013, fase 2 | **Valores nacionales**: el maestro registra y corrige en el registro central, la plantilla y el paquete entre ambientes, la réplica a cada cooperativa, la proyección de Nómina (`Nomina.ValorNacionalDistinto`), la revisión «pendiente de validar» y los faltantes. |
+| `docs/operaciones/canales-externos.md` | 013, fase 2 | **Canales externos**: el Secret `erp-canales-externos` y su guion, `SIMULADO` y `CARGA-PROPIA`, el efecto legal en producción y el circuito. |
 | `docs/operaciones/auditoria-cadena-de-sellos.md` | I1 | **Auditoría con entrega garantizada**: `COR_AuditOutbox`, cabezas y anclas, el reenviador, la verificación de integridad, qué hacer ante un hallazgo y cómo rotar la clave de anclas. |
 
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)

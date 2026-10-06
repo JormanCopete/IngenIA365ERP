@@ -87,6 +87,23 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // Feature 012 (T39): alertas de plataforma.
     public DbSet<AlertType> AlertTypes => Set<AlertType>();
     public DbSet<Alert> Alerts => Set<Alert>();
+    // Feature 013 (T0024–T0026): la copia de los valores nacionales, la bitácora de réplicas y las revisiones.
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValue> NationalValues => Set<IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValue>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.NationalValues.RegulatoryDocument> RegulatoryDocuments => Set<IngenIA365ERP.Domain.Entities.Core.NationalValues.RegulatoryDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReplication> NationalValueReplications => Set<IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReview> NationalValueReviews => Set<IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReview>();
+    // Feature 013 (T0035): el perfil regulatorio.
+    public DbSet<RegulatoryProfileVersion> RegulatoryProfileVersions => Set<RegulatoryProfileVersion>();
+    // Feature 013 (T0033): listas restrictivas y solicitudes del titular.
+    public DbSet<RestrictiveListLoad> RestrictiveListLoads => Set<RestrictiveListLoad>();
+    public DbSet<RestrictiveListEntry> RestrictiveListEntries => Set<RestrictiveListEntry>();
+    public DbSet<DataSubjectRequest> DataSubjectRequests => Set<DataSubjectRequest>();
+    // Feature 013 (T0077): el registro de participantes de la integración.
+    public DbSet<IntegrationParticipant> IntegrationParticipants => Set<IntegrationParticipant>();
+    public DbSet<IntegrationParticipantAdoption> IntegrationParticipantAdoptions => Set<IntegrationParticipantAdoption>();
+    // Feature 013 (T0080, T0084): canales externos y plantillas de mensaje versionadas.
+    public DbSet<ExternalChannelSetting> ExternalChannelSettings => Set<ExternalChannelSetting>();
+    public DbSet<NotificationTemplate> NotificationTemplates => Set<NotificationTemplate>();
 
     // === Nomina (feature 005): registradas para probar handlers de novedades y liquidacion ===
     public DbSet<Employee> Employees => Set<Employee>();

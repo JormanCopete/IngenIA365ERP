@@ -369,7 +369,7 @@ public static class ParametrosDeLiquidacion
 
     public static List<PayrollLegalParameter> Catalogo()
     {
-        var lista = PayrollLegalParametersSeeder.Catalogo().ToList();
+        var lista = PayrollLegalParametersSeeder.ConValoresNacionales().ToList();
         var archivo = JsonSerializer.Deserialize<ArchivoJson>(File.ReadAllText(CasoDoradoLiquidacion.ArchivoDeParametros), Opciones)
             ?? throw new InvalidOperationException("El archivo de parámetros de liquidación está vacío.");
 

@@ -64,6 +64,19 @@ public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabili
         return r.IsSuccess ? r.Value : TotalesDeLoteEnDestino.Cero;
     }
 
-    public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas) =>
-        AgrupadorDeResumidos.Planear(entregas, Destino);
+    /// <summary>
+    /// Separa por módulo de origen antes de agrupar (feature 013, T15): lo de Inventario va al agrupador de Inventario (por documento
+    /// o resumido); lo de los demás módulos sale una unidad por trabajo hasta que US7 agregue el agrupador de Cartera. Una unidad
+    /// nunca mezcla módulos.
+    /// </summary>
+    public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas)
+    {
+        ArgumentNullException.ThrowIfNull(entregas);
+        var deInventario = entregas.Where(m => m.OriginModule == ModulosDeOrigen.Inventario).ToList();
+        var otros = entregas.Where(m => m.OriginModule != ModulosDeOrigen.Inventario).ToList();
+        var trabajos = AgrupadorDeResumidos.Planear(deInventario, Destino).ToList();
+        if (otros.Count > 0)
+            trabajos.AddRange(AgrupadorDeResumidos.Unidades(otros, Destino).Select(u => TrabajoDeConsumo.DeUnaUnidad(u.Unidad)));
+        return trabajos;
+    }
 }

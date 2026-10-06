@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Feature 013 (T0012; decisiones-transversales T4, T71; plan.md «Structure Decision»): los adaptadores de los
+    canales externos de Cartera y de la plataforma —pagaré desmaterializado, centrales de riesgo, listas
+    restrictivas, SMS y WhatsApp—, cada uno con su canal SIMULADO, más las credenciales en archivo y el circuito
+    por canal. Referencia sólo Application: Domain, Application y la API no lo conocen salvo Program.cs, que lo
+    compone con AddExternalChannels (LosProveedoresExternosSoloLosConoceSuAdaptador). Molde: ElectronicInvoicing.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IngenIA365ERP.ExternalChannels</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.*" />
+    <!-- Reintentos y tiempos del transporte contra cada proveedor. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
+  </ItemGroup>
+</Project>

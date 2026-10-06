@@ -64,6 +64,25 @@ public class TodoEnlaceDelMenuTieneSuPagina
             "Tarjetas del Centro de Reportes sin página (@page): quitá la tarjeta hasta que exista la pantalla, o apuntala a una que exista.\n  " + string.Join("\n  ", sinPagina));
     }
 
+    /// <summary>
+    /// Feature 013, fase 2 (T0038, T0095): las seis pantallas de la plataforma de Cartera tienen su enlace en el menú y su página, para que
+    /// ninguna quede huérfana (existir y no tener cómo llegar) ni apunte a «Página no encontrada».
+    /// </summary>
+    [Theory]
+    [InlineData("/admin/valores-nacionales")]
+    [InlineData("/admin/perfil-regulatorio")]
+    [InlineData("/admin/canales-externos")]
+    [InlineData("/admin/participantes-de-integracion")]
+    [InlineData("/compliance/listas-restrictivas")]
+    [InlineData("/compliance/solicitudes-del-titular")]
+    public void Las_pantallas_de_la_plataforma_de_Cartera_estan_en_el_menu(string ruta)
+    {
+        var shared = Shared();
+        var menu = File.ReadAllText(Path.Combine(shared, "Layout", "NavMenu.razor"));
+        Assert.Contains(Enlace.Matches(menu).Select(m => m.Groups[1].Value), href => href == ruta);
+        Assert.True(Existe(Rutas(shared), ruta), $"{ruta} está en el menú pero no tiene @page.");
+    }
+
     private static string Shared() =>
         Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared");
 

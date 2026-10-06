@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Compliance.HabeasData.Common;
 using IngenIA365ERP.Domain.Entities.Compliance;
+using IngenIA365ERP.Domain.Enums.Compliance;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -49,7 +50,7 @@ public sealed class AcceptConsentCommandHandler
         }
 
         var current = await _db.HabeasDataPolicyVersions
-            .Where(p => p.TenantId == tenantId && p.EffectiveTo == null)
+            .Where(p => p.TenantId == tenantId && p.Purpose == DataAuthorizationPurpose.GeneralTreatment && p.EffectiveTo == null)
             .FirstOrDefaultAsync(ct);
 
         if (current is null)

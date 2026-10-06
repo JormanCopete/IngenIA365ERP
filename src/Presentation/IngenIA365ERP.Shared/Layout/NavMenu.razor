@@ -397,7 +397,32 @@
             <PermissionGate Required="ElectronicInvoicing.Settings.View">
                 <NavLink href="/admin/facturacion-electronica" class="nav-subitem">Facturación electrónica</NavLink>
             </PermissionGate>
+            @* Feature 013, fase 2 (T0095): la plataforma que pide Cartera. *@
+            <PermissionGate Required="Core.NationalValues.View">
+                <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Core.RegulatoryProfile.View">
+                <NavLink href="/admin/perfil-regulatorio" class="nav-subitem">Perfil regulatorio</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Core.ExternalChannels.View">
+                <NavLink href="/admin/canales-externos" class="nav-subitem">Canales externos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Core.IntegrationParticipants.View">
+                <NavLink href="/admin/participantes-de-integracion" class="nav-subitem">Participantes de la integración</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
+
+        @* Feature 013, fase 2 (T0095): cumplimiento de habeas data y listas restrictivas. *@
+        <PermissionGate AnyOf="@(new[] { "Compliance.RestrictiveLists.View", "Compliance.DataSubjectRequests.Read" })" Required="Compliance.RestrictiveLists.View">
+            <NavMenuGroup Icon="e-description" Title="Cumplimiento" Expanded="SidebarOpen">
+                <PermissionGate Required="Compliance.RestrictiveLists.View">
+                    <NavLink href="/compliance/listas-restrictivas" class="nav-subitem">Listas restrictivas</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Compliance.DataSubjectRequests.Read">
+                    <NavLink href="/compliance/solicitudes-del-titular" class="nav-subitem">Solicitudes del titular</NavLink>
+                </PermissionGate>
+            </NavMenuGroup>
+        </PermissionGate>
         }
 
         @* Feature 003 (US2, FR-105..FR-107) — identidad central por rol. *@
@@ -424,6 +449,8 @@
                 <NavLink href="/saas/register-tenant" class="nav-subitem">Registrar Cooperativa</NavLink>
                 <NavLink href="/saas/force-mfa-reset" class="nav-subitem">Reset MFA Usuarios</NavLink>
                 <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
+                @* Feature 013 (T0095): el registro central de valores nacionales, que la réplica copia a cada cooperativa. *@
+                <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
                 @* Vive en la base administrativa y lo gestiona el maestro: es el
                    contenido del panel del login, que se sirve antes de elegir
                    cooperativa. Por eso está aquí y no sólo en Administracion,

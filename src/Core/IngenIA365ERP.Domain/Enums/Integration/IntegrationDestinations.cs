@@ -9,4 +9,9 @@ public static class IntegrationDestinations
 {
     public const string Accounting = "Accounting";
     public const string Lending = "Lending";
+
+    // Feature 013 (DT §2.6, §2.12; data-model parte 3 §9.3; PM-06, CH9, CH10): destinos de los hechos de Cartera.
+    public const string Inventory = "Inventory";
+    public const string Treasury = "Treasury";
+    public const string Receipts = "Receipts";
 }

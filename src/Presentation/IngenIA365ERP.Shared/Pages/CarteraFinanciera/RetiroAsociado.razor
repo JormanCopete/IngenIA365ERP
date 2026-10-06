@@ -144,7 +144,7 @@
             _withdrawalReasons = response?.Items ?? [];
             _selectedReasonId = _withdrawalReasons.FirstOrDefault()?.Value ?? "";
         }
-        catch { /* silent */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar los datos del retiro: {ex.Message}"); }
     }
 
     private async Task LoadRecentWithdrawals()
@@ -154,7 +154,7 @@
             var response = await Http.GetFromJsonAsync<PagedResponse<WithdrawalRow>>("api/lending/withdrawals?PageSize=20");
             _recentWithdrawals = response?.Items ?? [];
         }
-        catch { /* silent */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar los datos del retiro: {ex.Message}"); }
     }
 
     private async Task SearchPerson()

@@ -184,7 +184,7 @@ public class GetInventoryDashboardQueryTests
         x.V.K.Parametro(ParametrosDeInventario.ContabilidadModoDePaso, "NoPasa", ParameterScopeKind.DocumentType, x.V.K.Tipo("FV").Id);
 
         var con = (await x.ConsultarAsync()).Value;
-        var pendientes = VistaDeMensajes.Visibles(x.V.Db, AlcanceDeInventario.Total).Count(d => d.Status == DeliveryStatus.Pending);
+        var pendientes = IngenIA365ERP.Application.Inventory.Integration.VistaDeBandejaDeInventario.Visibles(x.V.Db, AlcanceDeInventario.Total).Count(d => d.Status == DeliveryStatus.Pending);
         Ficha(con, "messagesPending").Value.Should().Be(pendientes);
         Ficha(con, "dianPending").Value.Should().Be(0m, "la cooperativa de prueba no factura electrónicamente");
         Ficha(con, "fiscalTypesNotPosted").Value.Should().Be(1m, "FV es fiscal y está en NoPasa");

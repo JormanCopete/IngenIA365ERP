@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Parameters.AddParameterVersion;
 using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Parameters;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using MediatR;
 
 namespace IngenIA365ERP.Application.Common.Parameters.ListParameters;
@@ -72,8 +73,13 @@ public sealed class ListParametersQueryHandler(
         }
         else
         {
+            // Feature 013 (T43): una clave de una entrega que no llegó no se ofrece; las de Cartera (LND) se listan pidiendo su
+            // módulo —tienen su ruta y su permiso, api.md §3.4—, así la pantalla de parámetros de Inventario no cambia.
             definiciones = CatalogoDeParametros.Todas
-                .Where(d => string.IsNullOrWhiteSpace(request.Module) || string.Equals(d.Modulo, request.Module.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Where(d => string.IsNullOrWhiteSpace(request.Module)
+                    ? d.Modulo != ParametrosDeCartera.Modulo
+                    : string.Equals(d.Modulo, request.Module.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Where(d => d.DisponibleEnLaEntrega())
                 .ToList();
         }
 
@@ -106,7 +112,7 @@ public sealed class ListParametersQueryHandler(
 
             lista.Add(new ParameterDto(
                 d.Modulo, d.Clave, d.Descripcion, d.Tipo.ToString(),
-                d.Tipo == TipoDeParametro.Choice ? d.Admitidos(CatalogoDeParametros.EntregaVigente) : null,
+                d.Tipo == TipoDeParametro.Choice ? d.Admitidos() : null,
                 d.DefectoSeguro, d.AmbitosAdmitidos, d.SelladoAlConfirmar, d.PermisoAdicional, d.ExigeFuenteLegal,
                 d.DisponibleDesde.ToString(), actual, excepciones, programadas));
         }

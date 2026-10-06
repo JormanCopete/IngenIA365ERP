@@ -201,6 +201,14 @@ posibles que sí chocarían, y esta especificación las descarta:
     ordenó;
   - el usuario que originó cada documento viaja en el mensaje y queda como dato, nunca como actor;
   - el procesador no usa los permisos de ese usuario.
+  - **Enmienda de la feature 013 (T11, T97; 2026-10-05).** La regla «el mensaje lo origina la persona»
+    sigue intacta para todos los tipos de Inventario. La única excepción son los tipos de Cartera que su
+    catálogo de mensajes marca `AdmiteProceso = true` (los masivos de la causación y del cierre, sus
+    informativos y las respuestas a Comercial): ésos pueden nacer del proceso, con
+    `COR_IntegrationMessages.OriginActorKind = Process` y `OriginUserCentralId` nulo. Si hay un usuario
+    de origen (el del mensaje consumido o quien ordenó la corrida), lo sella el emisor como dato. Lo fija
+    la prueba `EmisionesDeProcesoPermitidas`; detalle en specs/013-cartera-financiera
+    (decisiones-transversales T11).
 
 | Principio | Cómo lo cumple esta especificación |
 |---|---|
@@ -1746,7 +1754,8 @@ con datos personales sin el permiso.
 #### F2 · Crédito con Cartera (entrega IC pendiente; crédito provisional mientras tanto)
 
 La comunicación con Cartera queda **pendiente** hasta que exista la especificación de Cartera (D-02),
-por decisión del dueño. Esa comunicación es la consulta de FR-060 y la entrega de los mensajes de
+por decisión del dueño. (Esa especificación es la feature 013, specs/013-cartera-financiera; ver la
+enmienda de FR-062.) Esa comunicación es la consulta de FR-060 y la entrega de los mensajes de
 FR-062. Mientras tanto rige el **crédito provisional**, también decidido por el dueño (Clarifications):
 - la venta a crédito se trata como si Cartera no respondiera: se aplica la política «permitir con
   aprobación» de FR-061, sin consultar cupo, y la venta queda «pendiente de validar»;
@@ -1780,6 +1789,11 @@ Lo que sigue queda especificado para cuando exista la entrega IC.
   - Las notas crédito, las notas débito, las devoluciones y las anulaciones de una venta a crédito
     emiten sus mensajes enlazados al original.
   - Inventario MUST NOT guardar saldos, cuotas ni obligaciones de Cartera.
+  - **Enmienda de la feature 013 (T95, T97, E-02; 2026-10-05).** Comercial guarda el **número y el
+    estado** del crédito que le responde Cartera (`INV_LendingObligationResponses`; la línea elegida en
+    `DocumentPayment.CreditLineCode`), **nunca saldos ni cuotas**. La entrega IC la construye la feature
+    013 (specs/013-cartera-financiera, migración `ComercioConCartera`); sus tareas en esta feature
+    (T661–T667, la rama Cartera de T886, T1026–T1027) quedan cerradas por remisión.
   - La cuenta por cobrar de una venta a crédito la registra **un solo lado**. O la registra
     Contabilidad desde «VentaFacturada», y Cartera no genera comprobante al crear la obligación. O la
     registra Cartera al crear la obligación, y «VentaFacturada» lleva la parte a crédito contra la
@@ -1929,7 +1943,8 @@ Lo que sigue queda especificado para cuando exista la entrega IC.
   - cuando el mensaje nace de un documento: documento origen (clase, tipo, número, identificador, fecha
     de operación y, si es fiscal, su código único) y documento relacionado (anulado, devuelto o
     corregido). Si no, la operación que lo origina: cierre, reapertura o reclasificación;
-  - usuario que originó, moneda y tasa.
+  - usuario que originó, moneda y tasa. (Desde la feature 013, T11: o el proceso, sólo en los tipos de
+    Cartera que lo admiten; ver la enmienda de R6.)
 - **FR-071** Entrega garantizada:
   - el mensaje MUST nacer junto con el documento, de modo que no hay documento confirmado sin sus
     mensajes ni mensaje sin documento. Los de cierre, reapertura y reclasificación nacen junto con esa

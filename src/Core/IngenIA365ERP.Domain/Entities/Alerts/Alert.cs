@@ -39,6 +39,17 @@ public class Alert : AuditableEntityLong
     /// <summary>Sólo la reciben y la ven quienes tienen alcance sobre este punto de venta.</summary>
     public Guid? ScopePointOfSalePublicId { get; set; }
 
+    /// <summary>
+    /// Feature 013 (C68; data-model parte 3 §4.14): la oficina (<c>COR_Branches</c>) del crédito o de la solicitud. Sólo la
+    /// reciben quienes tienen esa oficina en su alcance de Cartera (o <c>Lending.Scope.AllOffices</c>).
+    /// </summary>
+    public Guid? ScopeBranchPublicId { get; set; }
+
+    /// <summary>
+    /// Feature 013 (C68): la línea de crédito, sin FK. Sólo la reciben quienes la operan (o <c>Lending.Scope.AllLines</c>).
+    /// </summary>
+    public Guid? ScopeCreditLinePublicId { get; set; }
+
     /// <summary><c>{TypeCode}:{entidad}[:{bodega}]</c> (máx. 200); única mientras la alerta está pendiente.</summary>
     public string DedupKey { get; set; } = string.Empty;
 

@@ -53,6 +53,16 @@ public interface ILectorDeParametros
         ParameterScopeKind ambito = ParameterScopeKind.None, int ambitoId = 0, CancellationToken ct = default);
 
     /// <summary>
+    /// Lo mismo, con lo que se sabía hasta <paramref name="informacionHasta"/> (R; feature 013, T38, FR-011). Regla propia, porque
+    /// <c>COR_ParameterVersions</c> no tiene <c>Sequence</c>, <c>SupersedesPublicId</c> ni <c>KnownAt</c> y el alta reescribe
+    /// <c>ValidTo</c>: R se compara con <c>CreatedAt</c> (entran las vigencias creadas hasta R); el <c>ValidTo</c> guardado se ignora y
+    /// se deriva de la vigencia siguiente del mismo ámbito conocida en R (la víspera de su <c>ValidFrom</c>); una baja posterior a R
+    /// no cuenta. Con <paramref name="informacionHasta"/> nulo es exactamente <see cref="LeerAsync(string, string, DateOnly, ParameterScopeKind, int, CancellationToken)"/>.
+    /// </summary>
+    Task<Result<ValorDeParametro>> LeerAsync(string modulo, string clave, DateOnly fecha, DateTime? informacionHasta,
+        ParameterScopeKind ambito = ParameterScopeKind.None, int ambitoId = 0, CancellationToken ct = default);
+
+    /// <summary>
     /// Todas las vigencias vivas guardadas, filtradas por módulo y clave si vienen (para la pantalla de parámetros
     /// y el historial). No interpreta los valores.
     /// </summary>

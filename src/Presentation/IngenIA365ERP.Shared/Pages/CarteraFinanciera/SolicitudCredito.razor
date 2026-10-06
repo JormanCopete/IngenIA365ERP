@@ -378,7 +378,7 @@ else
             // For now, create sample data - will be wired to actual endpoint
             _creditLines = [];
         }
-        catch { /* graceful fallback */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar las líneas de crédito: {ex.Message}"); }
     }
 
     private async Task SearchPerson()

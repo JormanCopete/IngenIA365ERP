@@ -83,7 +83,7 @@ public sealed class NominaTestData
         Plan = new PayrollPlan { Code = "DEFAULT", Name = "Nómina general", Periodicity = PayrollPeriodicity.Monthly, IsDefault = true, IsActive = true, CreatedBy = "system:seed" };
         Db.PayrollPlans.Add(Plan);
         Db.PayrollConceptDefinitions.AddRange(PayrollConceptDefinitionsSeeder.Catalogo());
-        Db.PayrollLegalParameters.AddRange(PayrollLegalParametersSeeder.Catalogo());
+        Db.PayrollLegalParameters.AddRange(PayrollLegalParametersSeeder.ConValoresNacionales());
         // Las cinco clases ARL con Ids que NO coinciden con la clase (una fila de relleno
         // antes): la ficha guarda la fila y la clase es su Code, no su Id.
         Db.WorkRiskRates.Add(new WorkRiskRate { Code = 9, Name = "Relleno", ShortName = "X", Rate = 0m, CreatedBy = "test", IsDeleted = true });

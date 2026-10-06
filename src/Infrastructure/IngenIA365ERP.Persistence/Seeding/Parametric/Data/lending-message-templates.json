@@ -1,0 +1,179 @@
+// Feature 013 (T0085; T76; contracts/adaptadores-y-archivos.md §4.7; data-model parte 3 §4.12): las nueve plantillas de mensaje de
+// Cartera que se siembran «pendiente de validar» (ReviewPending = 1), una fila por canal (correo, SMS y WhatsApp). Las revisa el
+// abogado y la cooperativa las cambia creando una versión nueva en /cartera/plantillas-de-mensaje. Sólo usan variables de la lista
+// blanca de su propósito (RenderizadorDePlantillasDeMensaje). Los SMS van sin tildes en a, i, o, u para quedarse en GSM-7 (160 por
+// mensaje en lugar de 70). Los de WhatsApp no salen hasta que la cooperativa registre el identificador de la plantilla aprobada ante
+// su proveedor (pregunta I15). Los valores de cobranza se escriben «a la fecha de corte», porque el envío puede diferirse.
+[
+  {
+    "code": "AVISOPREV",
+    "purpose": "PriorNotice",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Aviso previo al reporte ante centrales de riesgo – crédito {{NumeroDelCredito}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le informa que, a la fecha {{FechaDeCorte}}, la obligación {{NumeroDelCredito}} por {{ValorDeLaObligacion}} presenta un valor vencido de {{ValorVencido}}.</p><p>De no ponerse al día, la información negativa podrá reportarse a {{Centrales}} a partir del {{FechaMasTempranaDeReporte}}, conforme a la Ley 1266 de 2008. Puede comunicarse con nosotros al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: su credito {{NumeroDelCredito}} tiene {{ValorVencido}} vencido a {{FechaDeCorte}}. Podra reportarse a centrales desde {{FechaMasTempranaDeReporte}}. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que su crédito {{NumeroDelCredito}} presenta un valor vencido de {{ValorVencido}} a la fecha {{FechaDeCorte}}. Si no se pone al día, podrá reportarse a {{Centrales}} desde el {{FechaMasTempranaDeReporte}}. Contáctenos al {{TelefonoDeLaCooperativa}}."
+      }
+    ]
+  },
+  {
+    "code": "RECORDPREV",
+    "purpose": "Collection",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Recordatorio de pago – crédito {{NumeroDelCredito}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>{{NombreDeLaCooperativa}} le recuerda que, a la fecha {{FechaDeCorte}}, para estar al día en el crédito {{NumeroDelCredito}} debe pagar {{ValorParaPonerseAlDia}}.</p><p>Si ya realizó el pago, no tenga en cuenta este mensaje. Teléfono: {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}} le recuerda pagar {{ValorParaPonerseAlDia}} de su credito {{NumeroDelCredito}} (corte {{FechaDeCorte}}). Si ya pago, omita este mensaje."
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le recuerda que para estar al día en su crédito {{NumeroDelCredito}} debe pagar {{ValorParaPonerseAlDia}} (a la fecha {{FechaDeCorte}}). Si ya pagó, no tenga en cuenta este mensaje."
+      }
+    ]
+  },
+  {
+    "code": "MORAADMIN",
+    "purpose": "Collection",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Su crédito {{NumeroDelCredito}} presenta mora",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>A la fecha {{FechaDeCorte}}, el crédito {{NumeroDelCredito}} tiene {{CuotasVencidas}} cuota(s) vencida(s), {{DiasDeMora}} días de mora y un valor vencido de {{ValorVencido}}.</p><p>Para ponerse al día debe pagar {{ValorParaPonerseAlDia}}. Comuníquese con {{NombreDeLaCooperativa}} al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: su credito {{NumeroDelCredito}} tiene {{DiasDeMora}} dias de mora. Pague {{ValorParaPonerseAlDia}} (corte {{FechaDeCorte}}). Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que su crédito {{NumeroDelCredito}} tiene {{DiasDeMora}} días de mora y {{ValorVencido}} vencido a la fecha {{FechaDeCorte}}. Para ponerse al día pague {{ValorParaPonerseAlDia}}."
+      }
+    ]
+  },
+  {
+    "code": "PREJURID",
+    "purpose": "Collection",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Cobro prejurídico – crédito {{NumeroDelCredito}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>El crédito {{NumeroDelCredito}} presenta, a la fecha {{FechaDeCorte}}, {{DiasDeMora}} días de mora y un valor vencido de {{ValorVencido}}, por lo que ha pasado a cobro prejurídico.</p><p>Lo invitamos a ponerse al día pagando {{ValorParaPonerseAlDia}} o a acordar el pago con {{NombreDeLaCooperativa}} al {{TelefonoDeLaCooperativa}}, para evitar el cobro judicial.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: su credito {{NumeroDelCredito}} paso a cobro prejuridico. Pague {{ValorParaPonerseAlDia}} o llame al {{TelefonoDeLaCooperativa}}."
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que su crédito {{NumeroDelCredito}} pasó a cobro prejurídico ({{DiasDeMora}} días de mora a la fecha {{FechaDeCorte}}). Para evitar el cobro judicial pague {{ValorParaPonerseAlDia}} o comuníquese al {{TelefonoDeLaCooperativa}}."
+      }
+    ]
+  },
+  {
+    "code": "NOAPLICPAG",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "La cuota de su crédito {{NumeroDelCredito}} no fue descontada",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>La cuota del crédito {{NumeroDelCredito}} no fue descontada de su nómina o pagaduría ({{MotivoDeNoDescuento}}).</p><p>Para evitar la mora puede pagarla por {{FormaDePagoNueva}}. Si tiene dudas, comuníquese con {{NombreDeLaCooperativa}} al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: la cuota de su credito {{NumeroDelCredito}} no se desconto de nomina. Paguela por {{FormaDePagoNueva}}. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que la cuota de su crédito {{NumeroDelCredito}} no fue descontada de su nómina ({{MotivoDeNoDescuento}}). Para evitar la mora puede pagarla por {{FormaDePagoNueva}}."
+      }
+    ]
+  },
+  {
+    "code": "PASOACAJA",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Cambio en la forma de pago de su crédito {{NumeroDelCredito}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>Desde ahora, las cuotas del crédito {{NumeroDelCredito}} se pagan por {{FormaDePagoNueva}}, porque ya no se descuentan de su nómina o pagaduría.</p><p>Si tiene dudas, comuníquese con {{NombreDeLaCooperativa}} al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: las cuotas de su credito {{NumeroDelCredito}} ahora se pagan por {{FormaDePagoNueva}}. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que, desde ahora, las cuotas de su crédito {{NumeroDelCredito}} se pagan por {{FormaDePagoNueva}}."
+      }
+    ]
+  },
+  {
+    "code": "ABONOCAP",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Abono a capital aplicado – crédito {{NumeroDelCredito}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>Aplicamos un abono a capital de {{ValorAplicado}} al crédito {{NumeroDelCredito}} con la modalidad {{ModalidadAplicada}}.</p><p>Su nueva cuota es {{NuevaCuota}} y el nuevo plazo, {{NuevoPlazo}}. Si tiene dudas, comuníquese con {{NombreDeLaCooperativa}} al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: aplicamos {{ValorAplicado}} a capital de su credito {{NumeroDelCredito}}. Nueva cuota {{NuevaCuota}}, plazo {{NuevoPlazo}}."
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} aplicó un abono a capital de {{ValorAplicado}} a su crédito {{NumeroDelCredito}} ({{ModalidadAplicada}}). Nueva cuota: {{NuevaCuota}}. Nuevo plazo: {{NuevoPlazo}}."
+      }
+    ]
+  },
+  {
+    "code": "GASTOCOBR",
+    "purpose": "CollectionFeeNotice",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Gastos de cobranza – crédito {{NumeroDelCredito}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>Le informamos que, por la etapa de cobranza {{Etapa}} del crédito {{NumeroDelCredito}}, a partir del {{FechaDeCausacion}} se causarán gastos de cobranza por {{ValorDelGasto}}.</p><p>Puede evitarlos poniéndose al día. Comuníquese con {{NombreDeLaCooperativa}} al {{TelefonoDeLaCooperativa}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: desde {{FechaDeCausacion}} su credito {{NumeroDelCredito}} causara gastos de cobranza por {{ValorDelGasto}}. Tel {{TelefonoDeLaCooperativa}}"
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le informa que, por la etapa {{Etapa}} de su crédito {{NumeroDelCredito}}, desde el {{FechaDeCausacion}} se causarán gastos de cobranza por {{ValorDelGasto}}. Puede evitarlos poniéndose al día."
+      }
+    ]
+  },
+  {
+    "code": "ENVIODOC",
+    "purpose": "DocumentDelivery",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "{{ClaseDeDocumento}} {{NumeroDelDocumento}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>Adjuntamos el documento {{ClaseDeDocumento}} número {{NumeroDelDocumento}} que solicitó a {{NombreDeLaCooperativa}}.</p><p>Su código de verificación es {{CodigoDeVerificacion}}.</p>"
+      },
+      {
+        "channel": "Sms",
+        "body": "{{NombreDeLaCooperativa}}: le enviamos por correo el documento {{NumeroDelDocumento}}. Codigo de verificacion {{CodigoDeVerificacion}}."
+      },
+      {
+        "channel": "WhatsApp",
+        "body": "{{NombreDeLaCooperativa}} le envió el documento {{ClaseDeDocumento}} {{NumeroDelDocumento}}. Código de verificación: {{CodigoDeVerificacion}}."
+      }
+    ]
+  }
+]

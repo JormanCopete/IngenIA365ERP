@@ -92,6 +92,28 @@ public static class AdjuntosDeModulo
     private const string VerContingencias = "ElectronicInvoicing.Contingencies.View";
     private const string DeclararContingencias = "ElectronicInvoicing.Contingencies.Declare";
 
+    /// <summary>
+    /// Feature 013 (T81, T0086; data-model parte 3 §4.10): la evidencia de una autorización de tratamiento de datos (el formato
+    /// firmado, la grabación). El dueño es la <b>persona</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>), porque se sube antes de
+    /// registrar la autorización, que la cita en <c>EvidenceAttachmentPublicId</c>. Se lee con <c>Compliance.HabeasData.ViewHistory</c>,
+    /// se sube con <c>Compliance.HabeasData.RecordConsent</c> sobre una persona que exista y no se borra: es la prueba ante el titular y
+    /// la Superintendencia (Ley 1581).
+    /// </summary>
+    public const string AutorizacionDeDatos = "DataAuthorization";
+
+    /// <summary>
+    /// Feature 013 (T0088; data-model parte 3 §4.9): el escrito del titular o el soporte de la respuesta de una solicitud del titular.
+    /// Dueño: la persona (se sube antes de radicar). Se lee con <c>Compliance.DataSubjectRequests.Read</c>, se sube con
+    /// <c>.Register</c> o <c>.Respond</c> sobre una persona que exista y no se borra.
+    /// </summary>
+    public const string SolicitudDelTitular = "DataSubjectRequest";
+
+    private const string VerHabeasData = "Compliance.HabeasData.ViewHistory";
+    private const string RegistrarAutorizacion = "Compliance.HabeasData.RecordConsent";
+    private const string LeerSolicitudes = "Compliance.DataSubjectRequests.Read";
+    private const string RadicarSolicitud = "Compliance.DataSubjectRequests.Register";
+    private const string ResponderSolicitud = "Compliance.DataSubjectRequests.Respond";
+
     private const string LeerComprobantes = "Accounting.Vouchers.View";
     private const string EscribirComprobantes = "Accounting.Vouchers.Create";
 
@@ -122,6 +144,8 @@ public static class AdjuntosDeModulo
             ProductoDeInventario => VerCatalogo,
             SoporteDeAjuste => VerAjustes,
             EventoDeContingencia => VerContingencias,
+            AutorizacionDeDatos => VerHabeasData,
+            SolicitudDelTitular => LeerSolicitudes,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -169,6 +193,15 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Evento de contingencia no encontrado.");
             return null;
         }
+        if (ownerEntityType is AutorizacionDeDatos or SolicitudDelTitular)
+        {
+            var puede = ownerEntityType == AutorizacionDeDatos
+                ? await permisos.HasPermissionAsync(RegistrarAutorizacion, ct)
+                : await permisos.HasPermissionAsync(RadicarSolicitud, ct) || await permisos.HasPermissionAsync(ResponderSolicitud, ct);
+            if (!puede || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -193,6 +226,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == EventoDeContingencia)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es evidencia de una contingencia ante la DIAN: se conserva con el evento y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013 (T0086, T0088): la evidencia del titular se conserva (Ley 1581).
+        if (ownerEntityType is AutorizacionDeDatos or SolicitudDelTitular)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es evidencia del titular de los datos (autorización o solicitud): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
         if (ownerEntityType == ProductoDeInventario)

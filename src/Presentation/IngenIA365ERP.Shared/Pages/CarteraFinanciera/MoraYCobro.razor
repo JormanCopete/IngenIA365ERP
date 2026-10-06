@@ -197,7 +197,7 @@
         {
             _summary = await Http.GetFromJsonAsync<SummaryResponse>("api/lending/defaults/summary");
         }
-        catch { /* graceful fallback */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar el resumen de mora: {ex.Message}"); }
     }
 
     private async Task LoadData()

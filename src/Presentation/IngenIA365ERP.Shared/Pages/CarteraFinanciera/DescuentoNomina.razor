@@ -71,7 +71,7 @@
                 _payPeriods = periods.Select(p => new PeriodOption(p.PublicId.ToString(), p.Description ?? $"Periodo {p.PeriodId}")).ToList();
             }
         }
-        catch { /* keep empty */ }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar los períodos de nómina: {ex.Message}"); }
     }
 
     private class DeductionPreviewLine

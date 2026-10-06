@@ -5220,3 +5220,17 @@ final su línea **Conciliación**.
 | RS2-10 · Copia de datos en `NominaRecaudaPorElContrato` | C73: transformación idempotente de datos, no semilla; lo declara el Constitution Check |
 | RS2-11 · `plan.md` contradice tres decisiones | §7.6: corregidas en `plan.md` |
 | RS2-12 · Numeración de las dos mitades | §7.6: R1–R61 y R101–R154; ningún artefacto cita R62–R100 |
+
+---
+
+## 15. Datos verificados al empezar la implementación (fase 1, 2026-10-05)
+
+- **B4 · «despliegue de producción»** (T0016): los manifiestos de GitOps (`ingenia365-gitops`, `origin/main`, sólo
+  lectura) dicen `ASPNETCORE_ENVIRONMENT=Development` en DEV, `QA` en QA y `Production` en PDN. QA no corre como
+  `Production`: rige la propuesta de B4 sin cambios. `IHostEnvironment.IsProduction()` decide; en DEV y QA existen los
+  dobles de prueba y los canales simulados con efecto.
+- **E11 · SICSES antes de K5** (T0017): el dueño todavía no respondió. Rige la propuesta por defecto: **sí, sólo el
+  formato de cartera del SICSES y sólo si la fecha del primer vencimiento de COOFLOPAL lo exige**. Mientras la fecha
+  no se conozca, `CarteraInformes` sigue en K5; si llega antes del congelamiento de la fase 14, se aplica lo que dice
+  la tarea de la fase 1.
+

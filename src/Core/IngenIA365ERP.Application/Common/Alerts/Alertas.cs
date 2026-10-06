@@ -23,7 +23,8 @@ public sealed class Alertas(
     IActorActual actorActual,
     IDateTimeService reloj,
     ISender sender,
-    ILogger<Alertas> logger) : IAlertas
+    ILogger<Alertas> logger,
+    IFiltroDeAlcanceDeAlertas? filtroDeAlcance = null) : IAlertas
 {
     /// <summary>La condición canónica: <c>{TypeCode}:{entidad}[:{bodega}]</c> (data-model §22).</summary>
     public static string ClaveDe(string typeCode, Guid? entidad, Guid? bodega) =>
@@ -56,8 +57,11 @@ public sealed class Alertas(
             return Result.Success(new AlertaLevantada(pendiente.PublicId, DesenlaceDeAlerta.Repetida, pendiente.RecipientCount, pendiente.WithoutRecipient));
         }
 
-        var permisos = alerta.RecipientPermissions ?? tipo.Permisos();
+        // Feature 013 (PM-15, C68): de la lista del tipo, el módulo de origen descarta los permisos del otro módulo; una lista
+        // explícita (el nivel pendiente, la bandeja de integración) se respeta tal cual.
+        var permisos = alerta.RecipientPermissions ?? FiltroPorModuloDeOrigen.Aplicar(tipo.Permisos(), alerta.ModuloDeOrigen);
         var aQuien = await destinatarios.ResolverAsync(permisos, alerta.ScopeWarehousePublicId, alerta.ScopePointOfSalePublicId, ct);
+        aQuien = await AlcanceDeCarteraAsync(aQuien, alerta, ct);
         var actor = await actorActual.ObtenerAsync(ct);
 
         var nueva = new Alert
@@ -72,6 +76,8 @@ public sealed class Alertas(
             EntityPublicId = alerta.EntityPublicId,
             ScopeWarehousePublicId = alerta.ScopeWarehousePublicId,
             ScopePointOfSalePublicId = alerta.ScopePointOfSalePublicId,
+            ScopeBranchPublicId = alerta.ScopeBranchPublicId,
+            ScopeCreditLinePublicId = alerta.ScopeCreditLinePublicId,
             DedupKey = clave,
             Status = AlertStatus.Pending,
             RaisedAt = ahora,
@@ -104,6 +110,21 @@ public sealed class Alertas(
         }
 
         return Result.Success(new AlertaLevantada(nueva.PublicId, DesenlaceDeAlerta.Levantada, nueva.RecipientCount, nueva.WithoutRecipient));
+    }
+
+    /// <summary>
+    /// Feature 013 (C68, SC-015): con oficina o línea, sólo quienes las tienen en su alcance (<see cref="IFiltroDeAlcanceDeAlertas"/>).
+    /// Si el filtro no deja a nadie, los titulares de <c>CompanyAdmin</c> con <c>WithoutRecipient</c> (SC-022).
+    /// </summary>
+    private async Task<DestinatariosDeAlerta> AlcanceDeCarteraAsync(DestinatariosDeAlerta aQuien, AlertaALevantar alerta, CancellationToken ct)
+    {
+        if (filtroDeAlcance is null || aQuien.SinDestinatario || (alerta.ScopeBranchPublicId is null && alerta.ScopeCreditLinePublicId is null))
+            return aQuien;
+        var conAlcance = await filtroDeAlcance.FiltrarAsync(aQuien.Usuarios, alerta.ScopeBranchPublicId, alerta.ScopeCreditLinePublicId, ct);
+        if (conAlcance.Count > 0) return new DestinatariosDeAlerta(conAlcance, SinDestinatario: false);
+        return await destinatarios.ResolverAsync([], null, null, ct) is { } respaldo
+            ? respaldo with { SinDestinatario = true }
+            : new DestinatariosDeAlerta([], SinDestinatario: true);
     }
 
     public async Task<bool> AtenderPorProcesoAsync(string dedupKey, string nota, CancellationToken ct)

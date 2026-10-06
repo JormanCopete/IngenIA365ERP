@@ -25,7 +25,15 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// <c>ProcessedAt</c>, <c>ResultReference</c>, tipo y número del comprobante), agrega una fila de
 /// <c>COR_IntegrationDeliveryAttempts</c> por entrega con el actor de <see cref="IActorActual"/> y la réplica, y levanta por
 /// <see cref="IAlertas"/> <c>Integracion.MensajeSinEntregar</c> (al intento N o a los M minutos de <c>Integration:Retries</c>)
-/// o <c>Integracion.MensajeRechazado</c>, con los destinatarios de <c>COR_AlertTypes</c>.
+/// o <c>Integracion.MensajeRechazado</c>, con los destinatarios de <c>COR_AlertTypes</c> en lo de Inventario y los del módulo de
+/// origen en lo demás (<see cref="DestinatariosDeIntegracion"/>, feature 013, T19).
+/// </para>
+///
+/// <para>
+/// <b>Validación fallida</b> (feature 013, T17, C18): sólo en entregas a <c>Lending</c> que estén <c>Pending</c> o <c>InBatch</c>,
+/// directo a <c>ValidationFailed</c> —terminal, no bloquea a sus dependientes— con el crédito como referencia, el intento
+/// <c>DeliveryAttemptOutcome.ValidationFailed</c> y la alerta <c>Integracion.ValidacionFallida</c> a Cartera y al módulo de
+/// origen. En cualquier otro destino es un defecto del consumidor y lanza.
 /// </para>
 ///
 /// <para>
@@ -72,6 +80,9 @@ public sealed class RegisterDeliveryResultCommandValidator : AbstractValidator<R
         RuleFor(x => x.Resultado)
             .Must(r => r is not ResultadoDeConsumo.Rejected rechazo || !string.IsNullOrWhiteSpace(rechazo.Code))
             .WithMessage("Un rechazo lleva su código.");
+        RuleFor(x => x.Resultado)
+            .Must(r => r is not ResultadoDeConsumo.ValidationFailed v || (!string.IsNullOrWhiteSpace(v.Code) && v.LoanPublicId != Guid.Empty))
+            .WithMessage("Una validación fallida lleva su código y el crédito creado.");
     }
 }
 
@@ -84,6 +95,12 @@ public sealed class RegisterDeliveryResultCommandHandler(
 {
     public async Task<Result<RegistroDeEntregaDto>> Handle(RegisterDeliveryResultCommand request, CancellationToken ct)
     {
+        if (request.Resultado is ResultadoDeConsumo.ValidationFailed && request.Destination != IntegrationDestinations.Lending)
+        {
+            throw new InvalidOperationException(
+                $"Una validación fallida sólo la responde el destino {IntegrationDestinations.Lending}; {request.Destination} la respondió: es un defecto del consumidor (C18).");
+        }
+
         var ids = request.MessagePublicIds.Distinct().ToList();
         var entregas = await db.IntegrationMessageDeliveries
             .Include(d => d.Message)
@@ -147,15 +164,23 @@ public sealed class RegisterDeliveryResultCommandHandler(
         var principal = entregas[0].Message!;
         if (request.Resultado is ResultadoDeConsumo.Rejected rechazo)
         {
-            if (await LevantarAsync(TiposDeAlerta.MensajeRechazado, principal,
+            if (await LevantarAsync(TiposDeAlerta.MensajeRechazado, principal, request.Destination,
                     $"Rechazado: {principal.Type} {principal.OriginNumber}",
                     $"El destino {request.Destination} rechazó {principal.Type} de {principal.OriginNumber} ({principal.OperationDate:yyyy-MM-dd}): {rechazo.Reason} [{rechazo.Code}]. Corrija la causa y reprocese desde la bandeja de mensajes.",
                     ct))
                 levantadas.Add(TiposDeAlerta.MensajeRechazado);
         }
+        else if (request.Resultado is ResultadoDeConsumo.ValidationFailed fallida)
+        {
+            if (await LevantarAsync(TiposDeAlerta.ValidacionFallida, principal, request.Destination,
+                    $"Validación fallida: {principal.Type} {principal.OriginNumber}",
+                    $"Cartera creó el crédito {fallida.LoanNumber} de {principal.Type} {principal.OriginNumber} ({principal.OperationDate:yyyy-MM-dd}) con la validación fallida: {fallida.Reason} [{fallida.Code}]. El deudor queda bloqueado para crédito nuevo hasta que se confirme por excepción.",
+                    ct))
+                levantadas.Add(TiposDeAlerta.ValidacionFallida);
+        }
         else if (request.Resultado is ResultadoDeConsumo.Retry reintento && await DebeAlertarSinEntregarAsync(entregas, intento, request, politica, ct))
         {
-            if (await LevantarAsync(TiposDeAlerta.MensajeSinEntregar, principal,
+            if (await LevantarAsync(TiposDeAlerta.MensajeSinEntregar, principal, request.Destination,
                     $"Sin entregar: {principal.Type} {principal.OriginNumber}",
                     $"{principal.Type} de {principal.OriginNumber} lleva {intento} intento(s) sin entregarse a {request.Destination}: {reintento.Reason}. Se sigue reintentando solo.",
                     ct))
@@ -171,6 +196,7 @@ public sealed class RegisterDeliveryResultCommandHandler(
         ResultadoDeConsumo.AlreadyProcessed => (DeliveryAttemptOutcome.AlreadyProcessed, null, null),
         ResultadoDeConsumo.Rejected r => (DeliveryAttemptOutcome.Rejected, r.Code, r.Reason),
         ResultadoDeConsumo.Retry r => (DeliveryAttemptOutcome.Retry, r.Code, r.Reason),
+        ResultadoDeConsumo.ValidationFailed v => (DeliveryAttemptOutcome.ValidationFailed, v.Code, v.Reason),
         _ => throw new ArgumentOutOfRangeException(nameof(resultado), resultado, "Resultado de consumo desconocido."),
     };
 
@@ -188,6 +214,18 @@ public sealed class RegisterDeliveryResultCommandHandler(
                 break;
             case ResultadoDeConsumo.Rejected r:
                 Rechazada(entrega, r.Code, r.Reason, r.DataJson);
+                break;
+            case ResultadoDeConsumo.ValidationFailed v:
+                // Directo desde Pending o InBatch (C18): terminal, con el crédito creado como referencia.
+                entrega.Status = DeliveryStatus.ValidationFailed;
+                entrega.ProcessedAt = ahora;
+                entrega.NextAttemptAt = null;
+                entrega.ResultReference = v.LoanPublicId.ToString("D");
+                entrega.ResultVoucherTypeCode = null;
+                entrega.ResultVoucherNumber = Recortar(v.LoanNumber, 30);
+                entrega.LastErrorCode = Recortar(v.Code, 80);
+                entrega.LastErrorMessage = Recortar(v.Reason, 1000);
+                entrega.LastErrorDataJson = null;
                 break;
             case ResultadoDeConsumo.Retry r:
                 // Pending sigue Pending; InBatch sigue InBatch con el mismo lote, y el lote sigue en curso (data-model §19).
@@ -267,7 +305,7 @@ public sealed class RegisterDeliveryResultCommandHandler(
         return request.FinishedAt - primero >= TimeSpan.FromMinutes(politica.AlertAfterMinutes);
     }
 
-    private async Task<bool> LevantarAsync(string tipo, IntegrationMessage mensaje, string asunto, string cuerpo, CancellationToken ct)
+    private async Task<bool> LevantarAsync(string tipo, IntegrationMessage mensaje, string destino, string asunto, string cuerpo, CancellationToken ct)
     {
         var r = await alertas.LevantarAsync(new AlertaALevantar(
             tipo,
@@ -275,7 +313,9 @@ public sealed class RegisterDeliveryResultCommandHandler(
             Recortar(cuerpo, 2000)!,
             EntityType: "IntegrationMessage",
             EntityPublicId: mensaje.PublicId,
-            DedupKey: $"{tipo}:{mensaje.PublicId:N}"), ct);
+            DedupKey: $"{tipo}:{mensaje.PublicId:N}",
+            RecipientPermissions: DestinatariosDeIntegracion.Permisos(tipo, mensaje.OriginModule, destino),
+            ModuloDeOrigen: mensaje.OriginModule), ct);
         if (r.IsFailure)
         {
             logger.LogWarning("[Integracion.AlertaNoLevantada] {Tipo} para el mensaje {Mensaje}: {Codigo} {Motivo}",

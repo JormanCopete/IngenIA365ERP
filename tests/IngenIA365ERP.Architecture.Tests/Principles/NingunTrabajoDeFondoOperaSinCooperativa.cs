@@ -227,4 +227,35 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
             Assert.True(TrabajosDeFondo.Any(t => Path.GetFileName(t) == archivo),
                 $"{archivo} está en GuardanPorSuCuenta pero no en TrabajosDeFondo.");
     }
+
+    /// <summary>
+    /// Feature 013, fase 2 (T0038): las tareas de la plataforma de Cartera no son servicios de fondo propios sino
+    /// <c>ITareaProgramada</c> que corre <c>ProgramadorDeTareas</c> (por cooperativa, con <c>IEjecutorEnCooperativa</c>): la réplica de
+    /// valores nacionales (<c>valores-nacionales.replicar</c>, T39) y la revisión de plazos del titular
+    /// (<c>cumplimiento.plazos-del-titular</c>, T69). Se registran en <c>API/Program.cs</c> y escriben sólo por comandos.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.NationalValues.TareaDeReplicaDeValoresNacionales), "valores-nacionales.replicar",
+        "ReplicateNationalValuesCommand")]
+    [InlineData(typeof(IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular), "cumplimiento.plazos-del-titular",
+        "AlertDataSubjectRequestDeadlinesCommand")]
+    public void Las_tareas_de_la_plataforma_de_Cartera_corren_por_el_programador(Type tarea, string nombre, string comando)
+    {
+        Assert.True(typeof(IngenIA365ERP.Application.Common.Execution.ITareaProgramada).IsAssignableFrom(tarea), $"{tarea.Name} no es ITareaProgramada.");
+        var instancia = (IngenIA365ERP.Application.Common.Execution.ITareaProgramada)Activator.CreateInstance(tarea)!;
+        Assert.Equal(nombre, instancia.Nombre);
+
+        var root = RepoPath.FindRepoRoot();
+        var program = FuenteSinComentarios.Leer(Path.Combine(root, ProgramDeLaApi));
+        Assert.Matches($@"ITareaProgramada,\s*[\w.]*\b{tarea.Name}>", program);
+
+        // El cuerpo de la clase: desde su declaración hasta el final del archivo (las dos son la última clase de su archivo).
+        var archivo = RepoPath.ProductionCSharpFiles().Single(f => Regex.IsMatch(FuenteSinComentarios.Leer(f), $@"\bclass\s+{tarea.Name}\b"));
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        var cuerpo = fuente[Regex.Match(fuente, $@"\bclass\s+{tarea.Name}\b").Index..];
+        Assert.Contains("ISender", cuerpo, StringComparison.Ordinal);
+        Assert.Contains(comando, cuerpo, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveChanges", cuerpo, StringComparison.Ordinal);
+        Assert.DoesNotContain("IApplicationDbContext", cuerpo, StringComparison.Ordinal);
+    }
 }

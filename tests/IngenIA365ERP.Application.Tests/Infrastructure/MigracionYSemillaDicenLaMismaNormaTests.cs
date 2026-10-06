@@ -42,7 +42,8 @@ public class MigracionYSemillaDicenLaMismaNormaTests
     {
         var codigo = File.ReadAllText(Path.Combine(RaizDelRepositorio(), relativo));
         var enMigracion = SourceEnSql.Matches(codigo).Select(m => m.Groups[1].Value).ToList();
-        var enSeeder = PayrollLegalParametersSeeder.Catalogo().Select(p => p.Source!).ToHashSet(StringComparer.Ordinal);
+        // Feature 013 (T93): el SMMLV y la UVT los proyecta la réplica desde la semilla central, con la misma norma.
+        var enSeeder = PayrollLegalParametersSeeder.ConValoresNacionales().Select(p => p.Source!).ToHashSet(StringComparer.Ordinal);
 
         enMigracion.Should().NotBeEmpty("el paso (3) de la migración precisa cinco normas");
         enMigracion.Should().OnlyContain(s => enSeeder.Contains(s),
@@ -68,23 +69,24 @@ public class MigracionYSemillaDicenLaMismaNormaTests
         var base2026 = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         db.PayrollLegalParameters.Add(new PayrollLegalParameter
         {
-            Code = LegalParameterCodes.Smmlv, Name = "Salario mínimo", Kind = LegalParameterKind.Amount, Value = 1_750_905m,
-            ValidFrom = base2026, Source = "Decreto 1469 de 2025 (salario mínimo 2026; Decreto 159 de 2026, mismo valor)", CreatedBy = SeedContext.ParametricCreatedBy,
+            Code = LegalParameterCodes.TransportAllowance, Name = "Auxilio de transporte", Kind = LegalParameterKind.Amount, Value = 249_095m,
+            ValidFrom = base2026, Source = "Decreto 1470 de 2025 (auxilio de transporte 2026)", CreatedBy = SeedContext.ParametricCreatedBy,
         });
+        // Feature 013 (T93): el SMMLV ya no es de esta semilla; lo adopta la réplica (EfectoDeReplicacionEnNominaTests).
         db.PayrollLegalParameters.Add(new PayrollLegalParameter
         {
-            Code = LegalParameterCodes.Uvt, Name = "UVT", Kind = LegalParameterKind.Amount, Value = 52_374m,
-            ValidFrom = base2026, Source = "Resolución DIAN 000238 de 2025 (UVT 2026)", CreatedBy = SeedContext.ParametricCreatedBy,
+            Code = LegalParameterCodes.Smmlv, Name = "Salario mínimo", Kind = LegalParameterKind.Amount, Value = 1_750_905m,
+            ValidFrom = base2026, Source = "Decreto 1469 de 2025 (salario mínimo 2026; Decreto 159 de 2026, mismo valor)", CreatedBy = SeedContext.ParametricCreatedBy,
         });
         await db.SaveChangesAsync();
 
         await PayrollLegalParametersSeeder.AplicarAsync(db, CancellationToken.None);
 
         var catalogo = PayrollLegalParametersSeeder.Catalogo();
+        (await db.PayrollLegalParameters.SingleAsync(p => p.Code == LegalParameterCodes.TransportAllowance)).Source
+            .Should().Be(catalogo.Single(p => p.Code == LegalParameterCodes.TransportAllowance).Source);
         (await db.PayrollLegalParameters.SingleAsync(p => p.Code == LegalParameterCodes.Smmlv)).Source
-            .Should().Be(catalogo.Single(p => p.Code == LegalParameterCodes.Smmlv).Source);
-        (await db.PayrollLegalParameters.SingleAsync(p => p.Code == LegalParameterCodes.Uvt)).Source
-            .Should().Be(catalogo.Single(p => p.Code == LegalParameterCodes.Uvt).Source);
+            .Should().Be("Decreto 1469 de 2025 (salario mínimo 2026; Decreto 159 de 2026, mismo valor)", "la semilla de Nómina ya no toca el SMMLV");
     }
 
     private static string RaizDelRepositorio()

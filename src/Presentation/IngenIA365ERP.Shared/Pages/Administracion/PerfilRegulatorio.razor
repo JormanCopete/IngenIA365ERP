@@ -1,0 +1,245 @@
+@page "/admin/perfil-regulatorio"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text.Json
+@using IngenIA365ERP.Shared.Services.Http
+@inject PerfilRegulatorioClient Perfil
+@inject ValoresNacionalesClient Valores
+@inject INotificationService Notification
+
+<PageTitle>Perfil regulatorio - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 2 (T0095; FR-017, FR-018, FR-108; contracts/api.md §21.4): el tipo de organización, la actividad financiera, el
+   nivel de supervisión, la categoría del fondo de empleados, el grupo NIIF y la inscripción como operador de libranza, por vigencias. Una
+   versión no se edita: se registra otra desde una fecha, o una corrección que la reemplaza con su motivo. Los tipos de organización salen
+   del documento normativo vigente que llega con la réplica. *@
+<PermissionGate Required="Core.RegulatoryProfile.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Perfil regulatorio</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Core.RegulatoryProfile.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@_carga.Activa" OnClick="@(() => AbrirVersion(null))">Nueva versión</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_perfil is { } p)
+        {
+            @if (p.Current is { } v)
+            {
+                <h4>Vigente</h4>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Tipo de organización</span><span class="kpi-value">@NombreDeTipo(v.OrganizationTypeCode)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Actividad financiera</span><span class="kpi-value">@(v.FinancialActivityAuthorized ? "Autorizada" : "No autorizada")</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Nivel de supervisión</span><span class="kpi-value">@v.SupervisionLevel</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Grupo NIIF</span><span class="kpi-value">@(v.NiifGroup?.ToString() ?? "—")</span></div>
+                    @if (v.EmployeeFundCategory is { } cat)
+                    {
+                        <div class="kpi-card"><span class="kpi-label">Categoría del fondo</span><span class="kpi-value">@NombreDeCategoria(cat)</span></div>
+                    }
+                    <div class="kpi-card"><span class="kpi-label">Operador de libranza</span><span class="kpi-value">@(v.LibranzaOperatorRegistered ? $"Inscrito {v.LibranzaOperatorRegistrationNumber}" : "No inscrito")</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Vigente desde</span><span class="kpi-value">@v.ValidFrom.ToString("dd/MM/yyyy")</span></div>
+                </div>
+                @if (p.NiifGroupMismatch == true)
+                {
+                    <p class="aviso aviso-alerta">El grupo NIIF del perfil (@v.NiifGroup) no coincide con el de la configuración contable (@p.AccountingNiifGroup). Revise cuál es el correcto.</p>
+                }
+                <p class="texto-tenue">Pérdida esperada: @p.ExpectedLoss.Basis</p>
+            }
+            else
+            {
+                <p class="aviso aviso-info">La cooperativa todavía no tiene perfil regulatorio. Registre la primera versión con «Nueva versión».</p>
+            }
+
+            @if (p.Versions.Count > 0)
+            {
+                <h4>Historial de versiones</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Desde</th><th>Tipo</th><th>Supervisión</th><th>Grupo NIIF</th><th>Libranza</th><th>Fuente</th><th>Motivo</th><th>Soporte</th><th>Registró</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var x in p.Versions.OrderByDescending(x => x.ValidFrom).ThenByDescending(x => x.RegisteredAt))
+                            {
+                                <tr>
+                                    <td>@x.ValidFrom.ToString("dd/MM/yyyy")</td><td>@NombreDeTipo(x.OrganizationTypeCode)</td><td>@x.SupervisionLevel</td>
+                                    <td>@(x.NiifGroup?.ToString() ?? "—")</td><td>@(x.LibranzaOperatorRegistered ? "Inscrito" : "No")</td><td>@x.Source</td>
+                                    <td>@x.Reason@(x.SupersedesPublicId is null ? "" : " (corrección)")</td>
+                                    <td>@(x.SupportAttachmentPublicId is null ? "—" : "Con soporte")</td>
+                                    <td>@x.RegisteredByName · @x.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        <PermissionGate Required="Core.RegulatoryProfile.Manage">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirVersion(x))">Corregir</SfButton>
+                                        </PermissionGate>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@(_corrige is null ? "Nueva versión del perfil" : "Corregir una versión")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@(_corrige is null ? "La versión rige desde la fecha que indique; la anterior queda en el historial." : "La corrección reemplaza a la versión elegida y queda con su motivo.")</p>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Tipo de organización *
+                        <select class="e-input" @bind="_f.Tipo">
+                            <option value="">Elija…</option>
+                            @foreach (var t in _tipos) { <option value="@t.Code">@t.Name</option> }
+                        </select>
+                    </label>
+                    @if (EsFondo)
+                    {
+                        <label class="campo">Categoría del fondo
+                            <select class="e-input" @bind="_f.Categoria"><option value="">—</option>@foreach (var c in _categorias) { <option value="@c.Code">@c.Name</option> }</select>
+                        </label>
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="_f.ActividadFinanciera" /> Actividad financiera autorizada</label>
+                    <label class="campo">Nivel de supervisión *
+                        <select class="e-input" @bind="_f.Supervision"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+                    </label>
+                    <label class="campo">Grupo NIIF
+                        <select class="e-input" @bind="_f.GrupoNiif"><option value="0">El de la configuración contable</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.OperadorDeLibranza" /> Inscrita como operadora de libranza</label>
+                    @if (_f.OperadorDeLibranza)
+                    {
+                        <label class="campo">Número de inscripción * <input class="e-input" @bind="_f.NumeroDeInscripcion" maxlength="40" /></label>
+                        <label class="campo">Fecha de inscripción <input type="date" class="e-input" value="@_f.FechaDeInscripcion?.ToString("yyyy-MM-dd")" @onchange="@(e => _f.FechaDeInscripcion = LeerFecha(e.Value))" /></label>
+                    }
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_f.Desde.ToString("yyyy-MM-dd")" @onchange="@(e => _f.Desde = LeerFecha(e.Value) ?? _f.Desde)" /></label>
+                    <label class="campo campo-ancho">Fuente * <input class="e-input" @bind="_f.Fuente" maxlength="300" placeholder="Resolución, certificado o acta" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_f.Motivo" maxlength="300" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeGuardar)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class Formulario
+    {
+        public string Tipo { get; set; } = "";
+        public string? Categoria { get; set; }
+        public bool ActividadFinanciera { get; set; }
+        public byte Supervision { get; set; } = 2;
+        public byte GrupoNiif { get; set; }
+        public bool OperadorDeLibranza { get; set; }
+        public string? NumeroDeInscripcion { get; set; }
+        public DateOnly? FechaDeInscripcion { get; set; }
+        public DateOnly Desde { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public string? Fuente { get; set; }
+        public string? Motivo { get; set; }
+    }
+
+    private sealed record Opcion(string Code, string Name, bool IsEmployeeFund = false);
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private PerfilRegulatorioDto? _perfil;
+    private List<Opcion> _tipos = [], _categorias = [];
+    private bool _mostrar;
+    private VersionDePerfilRegulatorioDto? _corrige;
+    private Formulario _f = new();
+
+    private bool EsFondo => _tipos.FirstOrDefault(t => t.Code == _f.Tipo)?.IsEmployeeFund == true;
+
+    private bool PuedeGuardar => !_guardado.Activa && !string.IsNullOrWhiteSpace(_f.Tipo) && !string.IsNullOrWhiteSpace(_f.Fuente)
+        && !string.IsNullOrWhiteSpace(_f.Motivo) && (!_f.OperadorDeLibranza || !string.IsNullOrWhiteSpace(_f.NumeroDeInscripcion));
+
+    protected override Task OnInitializedAsync() => Task.WhenAll(CargarAsync(), CargarTiposAsync());
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Perfil.ObtenerAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el perfil regulatorio."); return; }
+        _perfil = r.Value;
+    }
+
+    /// <summary>Los tipos de organización y las categorías del documento normativo vigente (réplica de la plataforma).</summary>
+    private async Task CargarTiposAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var lista = await Valores.ListarDocumentosAsync("TiposDeOrganizacion", DateOnly.FromDateTime(DateTime.Today));
+        if (!lista.IsSuccess || lista.Value is not { Count: > 0 } documentos)
+        {
+            await Notification.WarningAsync("Todavía no llegó el documento de tipos de organización: la réplica de valores nacionales no ha corrido.");
+            return;
+        }
+        var detalle = await Valores.DocumentoAsync(documentos.OrderByDescending(d => d.ValidFrom).First().PublicId);
+        if (!detalle.IsSuccess || detalle.Value is null) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(detalle.Value.Content, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            _tipos = Leer(doc.RootElement, "organizationTypes", conFondo: true);
+            _categorias = Leer(doc.RootElement, "employeeFundCategories", conFondo: false);
+        }
+        catch (JsonException)
+        {
+            await Notification.ErrorAsync("El documento de tipos de organización no se pudo leer.");
+        }
+    }
+
+    private static List<Opcion> Leer(JsonElement raiz, string propiedad, bool conFondo) =>
+        raiz.TryGetProperty(propiedad, out var arreglo) && arreglo.ValueKind == JsonValueKind.Array
+            ? [.. arreglo.EnumerateArray().Select(e => new Opcion(
+                e.GetProperty("code").GetString() ?? "",
+                e.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+                conFondo && e.TryGetProperty("isEmployeeFund", out var f) && f.ValueKind == JsonValueKind.True))]
+            : [];
+
+    private string NombreDeTipo(string codigo) => _tipos.FirstOrDefault(t => t.Code == codigo)?.Name ?? codigo;
+
+    private string NombreDeCategoria(string codigo) => _categorias.FirstOrDefault(c => c.Code == codigo)?.Name ?? codigo;
+
+    private void AbrirVersion(VersionDePerfilRegulatorioDto? corrige)
+    {
+        var base_ = corrige ?? _perfil?.Current;
+        _corrige = corrige;
+        _f = new Formulario
+        {
+            Tipo = base_?.OrganizationTypeCode ?? "", Categoria = base_?.EmployeeFundCategory, ActividadFinanciera = base_?.FinancialActivityAuthorized ?? false,
+            Supervision = base_?.SupervisionLevel ?? 2, GrupoNiif = base_?.NiifGroup ?? 0, OperadorDeLibranza = base_?.LibranzaOperatorRegistered ?? false,
+            NumeroDeInscripcion = base_?.LibranzaOperatorRegistrationNumber, FechaDeInscripcion = base_?.LibranzaOperatorRegistrationDate,
+            Desde = corrige?.ValidFrom ?? DateOnly.FromDateTime(DateTime.Today), Fuente = base_?.Source,
+        };
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!PuedeGuardar) return;
+        using var guardado = _guardado.Iniciar();
+        var request = new VersionDePerfilRequest(
+            _f.Tipo, _f.ActividadFinanciera, _f.Supervision, EsFondo ? Limpio(_f.Categoria) : null, _f.GrupoNiif == 0 ? null : _f.GrupoNiif,
+            _f.OperadorDeLibranza ? new InscripcionDeOperadorRequest(_f.NumeroDeInscripcion?.Trim(), _f.FechaDeInscripcion) : null,
+            _f.Desde, _f.Fuente!.Trim(), _corrige?.SupportAttachmentPublicId, _f.Motivo!.Trim(), _corrige?.VersionPublicId);
+        var r = await Perfil.RegistrarVersionAsync(request, _clave);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la versión."); return; }
+        _mostrar = false;
+        if (r.Value.NiifGroupMismatch)
+            await Notification.WarningAsync("Versión registrada. El grupo NIIF no coincide con el de la configuración contable: se avisó a Contabilidad.");
+        else
+            await Notification.SuccessAsync("Versión registrada.");
+        await CargarAsync();
+    }
+
+    private static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

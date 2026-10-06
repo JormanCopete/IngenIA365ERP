@@ -43,6 +43,17 @@ public class LosHechosInmutablesNoSeModifican
         // US16, entrega I5 (T825; data-model §3.5): el consumo de una capa PEPS. La capa (CostLayer) es proyección y no está aquí:
         // la protege NadieEscribeElKardexFueraDelRegistro.
         "LayerConsumption",
+        // Feature 013, fase 2 (T0038): el registro central de valores nacionales y su copia por cooperativa (T37–T41), la revisión de la
+        // copia, el perfil regulatorio por versiones (FR-018) y las cargas de listas restrictivas con sus entradas (T70).
+        "PlatformNationalValue",
+        "PlatformRegulatoryDocument",
+        "NationalValue",
+        "RegulatoryDocument",
+        "NationalValueReplication",
+        "NationalValueReview",
+        "RegulatoryProfileVersion",
+        "RestrictiveListLoad",
+        "RestrictiveListEntry",
     ];
 
     /// <summary>
@@ -173,6 +184,28 @@ public class LosHechosInmutablesNoSeModifican
                 && !p.SetMethod.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.FullName == "System.Runtime.CompilerServices.IsExternalInit"))
             .Select(p => p.Name).ToList();
         Assert.True(conSetPublico.Count == 0, "LayerConsumption con set público: " + string.Join(", ", conSetPublico));
+    }
+
+    /// <summary>
+    /// Feature 013, fase 2 (T0038): los hechos de la plataforma de Cartera llevan el marcador, así la guarda del guardado —también la de
+    /// <c>AdminDbContext</c> desde C68— rechaza cualquier cambio o baja después de insertarlos.
+    /// </summary>
+    [Fact]
+    public void Los_hechos_de_la_plataforma_de_Cartera_llevan_el_marcador()
+    {
+        var hecho = typeof(IngenIA365ERP.Domain.Common.IHechoInmutable);
+        var tipos = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && Hechos.Contains(t.Name))
+            .ToList();
+        foreach (var nombre in new[] { "PlatformNationalValue", "PlatformRegulatoryDocument", "NationalValue", "RegulatoryDocument",
+                     "NationalValueReplication", "NationalValueReview", "RegulatoryProfileVersion", "RestrictiveListLoad", "RestrictiveListEntry" })
+        {
+            var tipo = tipos.SingleOrDefault(t => t.Name == nombre);
+            Assert.True(tipo is not null, $"{nombre} no está en el dominio.");
+            Assert.True(hecho.IsAssignableFrom(tipo), $"{nombre} tiene que ser IHechoInmutable (Principio XI).");
+        }
+        var admin = File.ReadAllText(Path.Combine(RepoPath.FindRepoRoot(), "src", "Infrastructure", "IngenIA365ERP.Persistence", "DbContext", "AdminDbContext.cs"));
+        Assert.Contains("GuardaDeInmutabilidad.VerificarAsync", admin, StringComparison.Ordinal);
     }
 
     private static readonly Regex SetPublico =new(@"public\s+[^;{=]+\{\s*get;\s*set;", RegexOptions.Compiled);

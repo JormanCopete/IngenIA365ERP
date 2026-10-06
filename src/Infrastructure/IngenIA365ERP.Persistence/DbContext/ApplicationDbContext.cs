@@ -487,6 +487,20 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     // Feature 012 (T39; T091-T094): alertas de plataforma. (Adelanto de T096.)
     public DbSet<AlertType> AlertTypes => Set<AlertType>();
     public DbSet<Alert> Alerts => Set<Alert>();
+    // Feature 013 (T37, T39, T41): copia de los valores nacionales, su bitácora de réplicas y las revisiones.
+    public DbSet<Domain.Entities.Core.NationalValues.NationalValue> NationalValues => Set<Domain.Entities.Core.NationalValues.NationalValue>();
+    public DbSet<Domain.Entities.Core.NationalValues.RegulatoryDocument> RegulatoryDocuments => Set<Domain.Entities.Core.NationalValues.RegulatoryDocument>();
+    public DbSet<Domain.Entities.Core.NationalValues.NationalValueReplication> NationalValueReplications => Set<Domain.Entities.Core.NationalValues.NationalValueReplication>();
+    public DbSet<Domain.Entities.Core.NationalValues.NationalValueReview> NationalValueReviews => Set<Domain.Entities.Core.NationalValues.NationalValueReview>();
+    public DbSet<Domain.Entities.Core.RegulatoryProfileVersion> RegulatoryProfileVersions => Set<Domain.Entities.Core.RegulatoryProfileVersion>();
+    // Feature 013 (T0087, T0088): listas restrictivas y solicitudes del titular.
+    public DbSet<Domain.Entities.Compliance.RestrictiveListLoad> RestrictiveListLoads => Set<Domain.Entities.Compliance.RestrictiveListLoad>();
+    public DbSet<Domain.Entities.Compliance.RestrictiveListEntry> RestrictiveListEntries => Set<Domain.Entities.Compliance.RestrictiveListEntry>();
+    public DbSet<Domain.Entities.Compliance.DataSubjectRequest> DataSubjectRequests => Set<Domain.Entities.Compliance.DataSubjectRequest>();
+    // Feature 013 (T0077): el registro de participantes de la integración.
+    public DbSet<IntegrationParticipant> IntegrationParticipants => Set<IntegrationParticipant>();
+    public DbSet<Domain.Entities.Core.ExternalChannelSetting> ExternalChannelSettings => Set<Domain.Entities.Core.ExternalChannelSetting>();
+    public DbSet<IntegrationParticipantAdoption> IntegrationParticipantAdoptions => Set<IntegrationParticipantAdoption>();
     public DbSet<UserMenuAccess> UserMenuAccesses => Set<UserMenuAccess>();
     public DbSet<SecurityModule> SecurityModules => Set<SecurityModule>();
     public DbSet<UserAssignment> UserAssignments => Set<UserAssignment>();

@@ -36,7 +36,8 @@ public class LegalParameterCommandsTests
         var d = new NominaTestData();
         var h = new AddLegalParameterVersionCommandHandler(d.Db, d.Clock, d.User, d.StaleMarker);
 
-        var r = await h.Handle(new AddLegalParameterVersionCommand(LegalParameterCodes.Smmlv, new DateTime(2026, 1, 1), 1_800_000m, null, "x"), CancellationToken.None);
+        // Feature 013 (T93): el SMMLV ya no se registra en Nómina (Payroll.LegalParameter.NationalValue); el caso va con el auxilio.
+        var r = await h.Handle(new AddLegalParameterVersionCommand(LegalParameterCodes.TransportAllowance, new DateTime(2026, 1, 1), 260_000m, null, "x"), CancellationToken.None);
 
         r.Error.Code.Should().Be("Payroll.LegalParameterOverlap");
     }

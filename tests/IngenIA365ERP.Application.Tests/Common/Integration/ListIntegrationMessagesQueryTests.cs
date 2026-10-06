@@ -25,8 +25,12 @@ public class ListIntegrationMessagesQueryTests
         _alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(AlcanceDeInventario.Total);
     }
 
+    /// <summary>La vista de Inventario de la bandeja (feature 013, T0075), con el alcance falso.</summary>
+    private IVistaDeBandejaDelModulo[] Vistas() =>
+        [new IngenIA365ERP.Application.Inventory.Integration.VistaDeBandejaDeInventario(_b.Db, _alcance, Substitute.For<Application.Common.Parameters.ILectorDeParametros>())];
+
     private Task<Application.Common.Models.Result<BandejaDeMensajesDto>> Listar(ListIntegrationMessagesQuery q) =>
-        new ListIntegrationMessagesQueryHandler(_b.Db, _alcance, _destinos).Handle(q, default);
+        new ListIntegrationMessagesQueryHandler(_b.Db, Vistas(), _destinos).Handle(q, default);
 
     [Fact]
     public async Task Sale_en_orden_de_emision_con_los_contadores_por_estado()
@@ -159,8 +163,8 @@ public class ListIntegrationMessagesQueryTests
         });
         await _b.Db.SaveChangesAsync();
 
-        var detalle = (await new GetIntegrationMessageQueryHandler(_b.Db, _alcance, _destinos).Handle(new GetIntegrationMessageQuery(anulacion.PublicId), default)).Value;
-        var delOriginal = (await new GetIntegrationMessageQueryHandler(_b.Db, _alcance, _destinos).Handle(new GetIntegrationMessageQuery(original.PublicId), default)).Value;
+        var detalle = (await new GetIntegrationMessageQueryHandler(_b.Db, Vistas(), _destinos).Handle(new GetIntegrationMessageQuery(anulacion.PublicId), default)).Value;
+        var delOriginal = (await new GetIntegrationMessageQueryHandler(_b.Db, Vistas(), _destinos).Handle(new GetIntegrationMessageQuery(original.PublicId), default)).Value;
 
         detalle.Payload.Should().Be("{\"operation\":\"Anulacion\"}");
         detalle.PayloadSha256.Should().Be(anulacion.PayloadSha256);
@@ -173,7 +177,7 @@ public class ListIntegrationMessagesQueryTests
     [Fact]
     public async Task El_detalle_de_un_mensaje_inexistente_es_NotFound()
     {
-        var r = await new GetIntegrationMessageQueryHandler(_b.Db, _alcance, _destinos).Handle(new GetIntegrationMessageQuery(Guid.NewGuid()), default);
+        var r = await new GetIntegrationMessageQueryHandler(_b.Db, Vistas(), _destinos).Handle(new GetIntegrationMessageQuery(Guid.NewGuid()), default);
 
         r.Error.Code.Should().Be("Integration.Message.NotFound");
     }
@@ -188,7 +192,7 @@ public class ListIntegrationMessagesQueryTests
         _b.Depende(anulacion, original);
 
         var bandeja = (await Listar(new(Closure: true))).Value;
-        var detalle = (await new GetIntegrationMessageQueryHandler(_b.Db, _alcance, _destinos).Handle(new GetIntegrationMessageQuery(anulacion.PublicId), default)).Value;
+        var detalle = (await new GetIntegrationMessageQueryHandler(_b.Db, Vistas(), _destinos).Handle(new GetIntegrationMessageQuery(anulacion.PublicId), default)).Value;
 
         foreach (var json in new[] { JsonSerializer.Serialize(bandeja, JsonSerializerOptions.Web), JsonSerializer.Serialize(detalle, JsonSerializerOptions.Web) })
         {

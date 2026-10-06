@@ -10,13 +10,15 @@ public enum IntegrationMessageKind { Business = 1, Informational = 2 }
 /// <summary>
 /// Estado de la entrega de un mensaje a un destino. <c>Rejected</c> → reprocesar → <c>InBatch</c>
 /// (lote <c>Reprocess</c>); <c>NotApplicable</c> → enviar después → <c>InBatch</c> (lote
-/// <c>SendNotApplicable</c>); <c>Processed</c> (Lending) → validación negativa → <c>ValidationFailed</c>.
+/// <c>SendNotApplicable</c>); <c>Pending</c> o <c>InBatch</c> (sólo Lending) → validación negativa →
+/// <c>ValidationFailed</c>, directo y terminal (feature 013, C18).
 /// </summary>
 public enum DeliveryStatus { Pending = 0, InBatch = 1, Processed = 2, Rejected = 3, NotApplicable = 4, ValidationFailed = 5 }
 
 public enum DeliveryMode { Online = 1, Batch = 2, NotPosted = 3, Always = 4 }
 
-public enum BatchTrigger { Scheduled = 1, CashSessionClose = 2, PeriodClose = 3, Manual = 4, Reprocess = 5, SendNotApplicable = 6 }
+/// <summary>Qué ordenó un lote. Feature 013 (DC-11): <c>LendingAccrualRun</c> y <c>LendingMonthlyClose</c>, los lotes de la causación y del cierre de Cartera.</summary>
+public enum BatchTrigger { Scheduled = 1, CashSessionClose = 2, PeriodClose = 3, Manual = 4, Reprocess = 5, SendNotApplicable = 6, LendingAccrualRun = 7, LendingMonthlyClose = 8 }
 
 public enum BatchStatus { Requested = 0, Running = 1, Completed = 2, CompletedWithRejections = 3, Empty = 4 }
 
@@ -34,5 +36,8 @@ public enum PrevalidationOutcome { Postable = 1, NoResponse = 2, NotApplicable =
 /// <summary>El <c>Origin.Kind</c> del sobre: un documento, o una operación (cierre, reapertura, reclasificación).</summary>
 public enum MessageOriginKind { Document = 1, Operation = 2 }
 
-/// <summary>Lo que el destino respondió en un intento de entrega (el <c>ResultadoDeConsumo</c>).</summary>
-public enum DeliveryAttemptOutcome { Processed = 1, AlreadyProcessed = 2, Rejected = 3, Retry = 4 }
+/// <summary>
+/// Lo que el destino respondió en un intento de entrega (el <c>ResultadoDeConsumo</c>). Feature 013 (PM-09, C18):
+/// <c>ValidationFailed</c>, la validación negativa de Cartera, que deja la entrega en <c>DeliveryStatus.ValidationFailed</c>.
+/// </summary>
+public enum DeliveryAttemptOutcome { Processed = 1, AlreadyProcessed = 2, Rejected = 3, Retry = 4, ValidationFailed = 5 }

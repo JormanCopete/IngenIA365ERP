@@ -4,9 +4,7 @@ using IngenIA365ERP.Application.Common.Alerts.RaiseAlert;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
-using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Domain.Enums.Integration;
-using IngenIA365ERP.Domain.Inventory.Parameters;
 using IngenIA365ERP.Persistence.Initialization;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +31,9 @@ namespace IngenIA365ERP.API.Integration;
 /// <c>Integracion.LoteNoCorrio</c> con <c>RaiseAlertCommand</c> por cada lote que ese comando devuelve atrasado más
 /// <c>Integration:Dispatcher:LateToleranceMinutes</c>;</item>
 /// <item>entrega lo en línea elegible (<see cref="EntregasElegibles.EnLineaAsync"/>), una unidad por vez, con el actor
-/// «Proceso de integración» y origen <c>Mensaje:{id}</c>;</item>
+/// «Proceso de integración» y origen <c>Mensaje:{id}</c>, <b>turnando los destinos</b>: una tanda por destino en cada vuelta, para
+/// que el atraso de uno (Contabilidad) no se coma el presupuesto de los demás (la respuesta a Comercial, SC-005; feature 013,
+/// T19);</item>
 /// <item>corre cada lote <c>Requested</c> o <c>Running</c>: lo pasa a <c>Running</c> con <c>StartIntegrationBatchCommand</c>,
 /// ejecuta en pasadas sucesivas lo que ya tiene sus dependencias satisfechas (<see cref="EntregasElegibles.DelLoteAsync"/> y
 /// <see cref="IDestinoDeMensajes.PlanearLote"/>: una unidad por documento o un grupo resumido) con el proceso (origen
@@ -43,8 +43,10 @@ namespace IngenIA365ERP.API.Integration;
 /// <para>
 /// Cada unidad o grupo se consume en su propia llamada a <see cref="IEjecutorEnCooperativa"/> (un ámbito DI nuevo) y su
 /// resultado se registra con <c>RegisterDeliveryResultCommand</c> en <b>otro</b> ámbito (T11): el consumidor nunca toca las
-/// tablas de la plataforma. Un destino sin <see cref="IDestinoDeMensajes"/> registrado se salta, y <c>Lending</c> además
-/// mientras <c>Cartera.IntegracionHabilitadaDesde</c> esté vacío (D-02). Nada falla en silencio: una excepción del destino
+/// tablas de la plataforma. Un destino se recorre sólo si está <b>habilitado en el registro</b> de la cooperativa
+/// (<see cref="IRegistroDeIntegracion"/>: consumidor registrado, fila activa a hoy y, si es un doble, despliegue que no es de
+/// producción; feature 013, T16): lo no habilitado queda <c>Pending</c> sin intentos ni alertas. Ya no lee
+/// <c>Cartera.IntegracionHabilitadaDesde</c>, que sigue sirviendo sólo a Comercial. Nada falla en silencio: una excepción del destino
 /// se registra como <c>Retry</c> y una cooperativa que falla se registra y sigue la siguiente.
 /// </para>
 /// <para>
@@ -195,14 +197,19 @@ public sealed class DespachadorDeMensajes(
         }
     }
 
-    /// <summary>Lo en línea elegible de cada destino con consumidor, por tandas. Falso si se perdió el arrendamiento.</summary>
+    /// <summary>
+    /// Lo en línea elegible de los destinos habilitados, por tandas y <b>turnando</b> (feature 013, T19): en cada vuelta, una tanda
+    /// por destino; un destino sale de la ronda cuando no le queda nada nuevo. Falso si se perdió el arrendamiento.
+    /// </summary>
     private async Task<bool> EntregarEnLineaAsync(Pasada pasada, CancellationToken ct)
     {
-        foreach (var destino in await DestinosHabilitadosAsync(pasada, ct))
+        var activos = (await DestinosHabilitadosAsync(pasada, ct)).ToList();
+        var intentadas = activos.ToDictionary(d => d, _ => new HashSet<Guid>(), StringComparer.Ordinal);
+        while (activos.Count > 0 && pasada.QuedaTiempo)
         {
-            var intentadas = new HashSet<Guid>();
-            while (pasada.QuedaTiempo)
+            foreach (var destino in activos.ToList())
             {
+                if (!pasada.QuedaTiempo) break;
                 if (!await RenovarAsync(pasada, ct)) return false;
 
                 IReadOnlyList<UnidadDeConsumo> unidades = [];
@@ -212,8 +219,12 @@ public sealed class DespachadorDeMensajes(
 
                 // Lo que ya se intentó en esta pasada y volvió elegible (p. ej. un registro que otra réplica ganó) espera a la
                 // siguiente: una pasada no gira sobre la misma unidad.
-                var nuevas = unidades.Where(u => intentadas.Add(u.MessagePublicIds[0])).ToList();
-                if (nuevas.Count == 0) break;
+                var nuevas = unidades.Where(u => intentadas[destino].Add(u.MessagePublicIds[0])).ToList();
+                if (nuevas.Count == 0)
+                {
+                    activos.Remove(destino);
+                    continue;
+                }
 
                 foreach (var unidad in nuevas)
                 {
@@ -392,8 +403,10 @@ public sealed class DespachadorDeMensajes(
     }
 
     /// <summary>
-    /// Los destinos que el despachador recorre en esta cooperativa: los que tienen consumidor registrado y, para Cartera,
-    /// sólo desde <c>Cartera.IntegracionHabilitadaDesde</c> (vacío = todavía no).
+    /// Los destinos que el despachador recorre en esta cooperativa (feature 013, T16; contracts/mensajes.md §13.3): los que tienen
+    /// consumidor registrado <b>y</b> una fila del registro de participantes que cuenta a hoy (habilitada, vigente y, si es un doble,
+    /// en un despliegue que no es de producción). Antes de activar Cartera, el destino <c>Lending</c> no cuenta y lo de Comercial se
+    /// acumula sin intentos ni alertas.
     /// </summary>
     private async Task<IReadOnlyList<string>> DestinosHabilitadosAsync(Pasada pasada, CancellationToken ct)
     {
@@ -402,24 +415,16 @@ public sealed class DespachadorDeMensajes(
         var habilitados = new List<string>();
         await ejecutor.EjecutarAsync(pasada.Cooperativa, Actor.ProcesoDeIntegracion(OrigenDelArrendamiento), OrigenDelArrendamiento, async (servicios, c) =>
         {
+            var registro = servicios.GetRequiredService<IRegistroDeIntegracion>();
+            var hoy = reloj.HoyLocal;
             foreach (var destino in servicios.GetRequiredService<EntregasElegibles>().DestinosConConsumidor.Order(StringComparer.Ordinal))
             {
-                if (destino == IntegrationDestinations.Lending && !await CarteraHabilitadaAsync(servicios, c)) continue;
-                habilitados.Add(destino);
+                if (await registro.DestinoHabilitadoAsync(destino, hoy, c)) habilitados.Add(destino);
             }
         }, ct);
 
         pasada.Destinos = habilitados;
         return habilitados;
-    }
-
-    private async Task<bool> CarteraHabilitadaAsync(IServiceProvider servicios, CancellationToken ct)
-    {
-        var hoy = reloj.HoyLocal;
-        var leido = await servicios.GetRequiredService<ILectorDeParametros>()
-            .LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.CarteraIntegracionHabilitadaDesde, hoy, ct: ct);
-        if (leido.IsFailure || string.IsNullOrWhiteSpace(leido.Value.Texto)) return false;
-        return leido.Value.Valor is not DateOnly desde || desde <= hoy;
     }
 
     private static IDestinoDeMensajes? Destino(IServiceProvider servicios, string destino) =>

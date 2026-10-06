@@ -5107,6 +5107,8 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.Usury.Exceeded` | 422 | «La tasa efectiva resultante ({tasa}) supera la usura vigente de {modalidad} ({usura}). Ajuste la tasa o los cargos.» | línea, simulación, aprobación, desembolso | T28 |
 | `Lending.Schedule.PrincipalMismatch` | 422 | «El plan no suma el capital: hay una diferencia de {valor}.» | plan, carga de migración | T29 |
 | `Lending.Parameter.BelowLegalFloor` | 422 | «El valor {valor} es menos estricto que el límite legal vigente ({limite}, {fuente}). La cooperativa sólo puede ser más estricta.» | vigencia de parámetro | T42 |
+| `Lending.Parameter.NotYetAvailable` **(fijado en api.md §3.4)** | 422 | ««{clave}» todavía no está disponible: llega con la entrega {entrega}.» (`data: { key, availableFrom }`) | vigencia de una clave de una entrega posterior a `CatalogoDeCartera.EntregaVigente` (T43) | T43 |
+| `Lending.Parameter.NotSupportedYet` **(nuevo, C111, C123)** | 422 | «La cooperativa todavía no puede diferir comisiones y costos de originación: ninguna entrega lo implementa.» (`data: { key, availableFrom: null }`) | vigencia de `Contabilidad.DiferirComisiones = true` (FR-017, C10) | FR-017 |
 | `Lending.Process.AlreadyRunning` | 422 | «Ya hay una corrida de {clase} en curso. Espere a que termine.» | `RequestLendingProcessRunCommand`, `OrderMonthlyCloseCommand` | PM-13 |
 | `Lending.MonthlyClose.PreviousMissing` **(fijado aquí)** | 422 | «Falta el cierre de {mesAnterior} (o el cierre base). Ciérrelo primero.» | T47 | R13 |
 | `Lending.MonthlyClose.AccrualBehind` **(fijado aquí)** | 422 | «La causación no está al día hasta el {finDeMes}. Espere el ciclo diario o reintente la corrida.» | T47 | R13 |
@@ -5145,11 +5147,23 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Integration.Participant.VersionNotSupported` | 422 | «Cartera no acepta la versión {version} de {contrato}.» | PM-07 |
 | `Integration.Participant.Overlaps` **(fijado aquí)** | 422 | «Ya hay un participante vigente con esa clave o ese destino en esas fechas.» | T16 |
 | `Integration.Destination.DuplicateConsumer` | — (falla el arranque) | «Hay dos consumidores para el destino {destino}.» | T15 |
+| `Parameters.NotYetAvailable` **(nuevo, T0065)** | 422 | ««{clave}» todavía no está disponible: llega con la entrega {entrega}.» | la plataforma, para una línea de entregas que no nombra su propio código (Cartera usa `Lending.Parameter.NotYetAvailable`) | T43 |
+| `Core.RegulatoryProfile.Overlaps` **(fijado en api.md §21.4)** | 422 | «Ya hay una versión del perfil que rige desde el {fecha}. Si está mal, regístrela como corrección de esa versión.» (también: la versión ya fue corregida) | `AddRegulatoryProfileVersionCommand` | T50 |
+| `Core.RegulatoryProfile.OrganizationTypeUnknown` **(fijado en api.md §21.4)** | 422 | ««{código}» no es un tipo de organización del catálogo de la Superintendencia vigente el {fecha}. Elija uno de la lista.» | `AddRegulatoryProfileVersionCommand` | T50 |
+| `Core.RegulatoryProfile.NotFound` **(nuevo, T0064)** | 404 | «La versión del perfil regulatorio no existe.» | corrección (`supersedesPublicId`) de una versión inexistente | T50 |
 | `NationalValues.Missing` | 422 · alerta | «Falta {codigo} {clave} para el {fecha}. Pida al administrador de la plataforma registrarlo.» | T40 |
 | `NationalValues.Value.AlreadyRegistered` **(fijado aquí)** | 422 | «Ya existe {codigo} {clave} desde el {fecha}: regístrelo como corrección, con su motivo.» | T38 |
 | `NationalValues.Document.Invalid` **(fijado aquí)** | 422 | «El documento no cumple su esquema: {n} errores.» (`data.errors[] { path, message }`) | T45 |
 | `NationalValues.ConflictingValue` | 422 | «Ya existe {codigo} {clave} desde el {fecha} con otro valor ({valor}). Si quiere cambiarlo, regístrelo como corrección (columna `corrigeA`) con su motivo.» | C98 (`plantillas.md`) |
 | `Compliance.RestrictiveList.Match` | 422 | «{persona} coincide con la lista {lista}. La operación queda detenida hasta que el oficial de cumplimiento la revise.» | T70 |
+| `Compliance.RestrictiveList.NotFound` **(nuevo, T0087)** | 404 | «La carga de la lista restrictiva no existe.» | `ListRestrictiveListEntriesQuery` | T70 |
+| `Compliance.RestrictiveList.HeaderMismatch` **(nuevo, T0087)** | 422 (error de fila) | ««{valor}» no coincide con «{esperado}» de la primera fila: un archivo carga una sola lista, con la misma fuente, publicación y vigencia.» | `ImportRestrictiveListCommand` | T70 |
+| `Compliance.RestrictiveList.ValidFromBeforeCurrent` **(nuevo, T0087)** | 422 (error sin fila) | «La lista {lista} ya tiene una carga vigente desde el {fecha}: la nueva no puede empezar antes.» | `ImportRestrictiveListCommand` | T70 |
+| `Compliance.HabeasData.EvidenceRequired` **(nuevo, T0086)** | 422 | «Adjunte la evidencia de la autorización: sólo una autorización migrada puede registrarse sin ella.» | `RecordDataAuthorizationCommand` | T69 |
+| `Compliance.HabeasData.EvidenceNotFound` **(nuevo, T0086)** | 422 | «La evidencia no existe, no es de este titular o no terminó de subirse.» (adjunto `DataAuthorization` de la persona, `Available`) | `RecordDataAuthorizationCommand` | T69 |
+| `Compliance.DataSubjectRequest.NotFound` **(nuevo, T0088)** | 404 | «La solicitud del titular no existe.» | solicitudes del titular | T69 |
+| `Compliance.DataSubjectRequest.AlreadyExtended` | 422 | «La solicitud ya se prorrogó (vence el {fecha}): la prórroga se concede una sola vez.» | `ExtendDataSubjectRequestCommand` | T69 |
+| `Compliance.DataSubjectRequest.NotOpen` | 422 | «La solicitud está {estado}: sólo se prorroga o responde una solicitud abierta.» | prorrogar y responder | T69 |
 | `Core.ExternalChannel.Overlaps` **(fijado aquí)** | 422 | «Ya hay una configuración vigente para ese canal en esas fechas.» | T72 |
 | `Accounting.LendingRule.Missing` | 422 · consumo `Rejected` | «La matriz de Cartera no tiene regla para {combinacion}.» | T52 |
 | `Accounting.LendingRule.Overlaps` | 422 | «Ya hay una versión de esa regla vigente en esas fechas.» | T52 |
@@ -5223,7 +5237,8 @@ Los destinatarios por defecto están cotejados con las plantillas `cartera.*` de
 | `Contabilidad.PeriodoInexistente` | Accounting | llegó un hecho con fecha contable en un período que no existe (`Retry`) | `Accounting.Periods.CloseYear` | App+C | Critical | K1 | `…:{aaaa-mm}` |
 | `Contabilidad.GrupoNiifDistinto` **(fijado aquí)** | Accounting | el perfil regulatorio y `AccountingSetup.NiifGroup` difieren | `Core.RegulatoryProfile.Manage` | App | Warning | K1 | `…` |
 | `Nomina.ValorNacionalDistinto` | Payroll | la réplica trajo un SMMLV, UVT o festivo distinto del que Nómina tenía (T93) | `Payroll.LegalParameters.Manage` | App+C | Warning | K1 | `…:{código}:{fecha}` |
-| `Cumplimiento.PlazoDelTitularPorVencer` **(fijado aquí)** | Compliance | una solicitud del titular se acerca a su `DueDate` (o `ExtendedDueDate`) sin respuesta | `Compliance.DataSubjectRequests.Respond` | App+C | Warning | K1 | `…:{solicitud}` |
+| `Cumplimiento.PlazoDelTitularPorVencer` **(fijado aquí)** | Compliance | una solicitud del titular se acerca a su `DueDate` (o `ExtendedDueDate`) sin respuesta; umbral `ThresholdsJson.diasDeAnticipacion` (3, **fijado en T0088**), tarea diaria `cumplimiento.plazos-del-titular` | `Compliance.DataSubjectRequests.Respond` | App+C | Warning | K1 | `…:{solicitud}` |
+| `Cartera.TareaDiariaNoCorrio` **(C123, llevado aquí en T0091)** | Lending | una tarea diaria de Cartera no corrió en su día (marca `LendingProcessKind.ScheduledTask`, SC-020) | `Lending.Processes.Run` | App+C | Warning | K1 | `…:{tarea}:{fecha}` |
 
 Tipos que se reutilizan (de la 012), con los destinatarios de Cartera agregados por versión (§4.14):
 

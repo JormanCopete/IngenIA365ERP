@@ -283,7 +283,7 @@ public static class TextosDeInventario
         [4] = "Siempre",
     };
 
-    /// <summary><c>BatchTrigger</c> (1..6).</summary>
+    /// <summary><c>BatchTrigger</c> (1..8).</summary>
     public static IReadOnlyDictionary<int, string> DisparadoresDeLote { get; } = new Dictionary<int, string>
     {
         [1] = "Programado",
@@ -292,6 +292,9 @@ public static class TextosDeInventario
         [4] = "Manual",
         [5] = "Reproceso",
         [6] = "Envío posterior",
+        // Feature 013 (data-model parte 3 §9.3): los lotes de la causación y del cierre de Cartera.
+        [7] = "Causación de cartera",
+        [8] = "Cierre mensual de cartera",
     };
 
     public static IReadOnlyDictionary<int, string> NombresDeDisparador { get; } = new Dictionary<int, string>
@@ -302,6 +305,8 @@ public static class TextosDeInventario
         [4] = "Manual",
         [5] = "Reprocess",
         [6] = "SendNotApplicable",
+        [7] = "LendingAccrualRun",
+        [8] = "LendingMonthlyClose",
     };
 
     /// <summary><c>BatchStatus</c> (0..4).</summary>
@@ -345,13 +350,15 @@ public static class TextosDeInventario
         [2] = "Resumido",
     };
 
-    /// <summary><c>DeliveryAttemptOutcome</c> (1..4): cada intento de entrega en el detalle del mensaje.</summary>
+    /// <summary><c>DeliveryAttemptOutcome</c> (1..5): cada intento de entrega en el detalle del mensaje.</summary>
     public static IReadOnlyDictionary<int, string> ResultadosDeIntento { get; } = new Dictionary<int, string>
     {
         [1] = "Procesado",
         [2] = "Ya procesado",
         [3] = "Rechazado",
         [4] = "Reintento",
+        // Feature 013 (C18): Cartera validó la venta en contra.
+        [5] = "Validación fallida",
     };
 
     /// <summary><c>ActorKind</c> (1..2): quién pidió un lote o hizo un intento.</summary>

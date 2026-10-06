@@ -3112,6 +3112,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<Guid?>("ScopeBranchPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ScopeCreditLinePublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("ScopePointOfSalePublicId")
                         .HasColumnType("uniqueidentifier");
 
@@ -5964,6 +5970,150 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("CDT_CertificateEntries", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.DataSubjectRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContactChannel")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateOnly>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("DutyBasis")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("DutyEvidenceJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid?>("EvidenceAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("ExtendedDueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ExtensionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("Outcome")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateOnly>("ReceivedOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ReceivedVia")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("RegisteredByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("RegisteredByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RespondedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("RespondedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ResponseAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResponseText")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_DataSubjectRequests_PublicId");
+
+                    b.HasIndex("RegisteredByUserId");
+
+                    b.HasIndex("RespondedByUserId");
+
+                    b.HasIndex("PersonId", "ReceivedAt")
+                        .HasDatabaseName("IX_COR_DataSubjectRequests_Person");
+
+                    b.HasIndex("Status", "DueDate")
+                        .HasDatabaseName("IX_COR_DataSubjectRequests_Status_Due");
+
+                    b.ToTable("COR_DataSubjectRequests", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.HabeasDataConsent", b =>
                 {
                     b.Property<int>("Id")
@@ -5990,6 +6140,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("ContactChannel")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -6004,6 +6158,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<Guid?>("EvidenceAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
@@ -6013,6 +6170,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("PersonRegistration");
+
                     b.Property<int>("PersonId")
                         .HasColumnType("int");
 
@@ -6021,6 +6185,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("GeneralTreatment");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -6048,6 +6219,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("TenantId", "PersonId", "ActionAt")
                         .HasDatabaseName("IX_CMP_HabeasConsents_History")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("PersonId", "Purpose", "ContactChannel", "ActionAt")
+                        .HasDatabaseName("IX_CMP_HabeasConsents_Purpose")
                         .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("CMP_HabeasDataConsents", "dbo");
@@ -6099,6 +6274,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("GeneralTreatment");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -6134,16 +6316,217 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique()
                         .HasDatabaseName("UK_CMP_HabeasPolicyVersions_PublicId");
 
-                    b.HasIndex("TenantId")
+                    b.HasIndex("TenantId", "Purpose")
                         .IsUnique()
                         .HasDatabaseName("UK_CMP_HabeasPolicyVersions_Current")
                         .HasFilter("[EffectiveTo] IS NULL AND [IsDeleted] = 0");
 
-                    b.HasIndex("TenantId", "VersionNumber")
+                    b.HasIndex("TenantId", "Purpose", "VersionNumber")
                         .IsUnique()
                         .HasDatabaseName("UK_CMP_HabeasPolicyVersions_TenantVersion");
 
                     b.ToTable("CMP_HabeasDataPolicyVersions", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.RestrictiveListEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Aliases")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("DocumentNumberNormalized")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("DocumentType")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("EntityKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("LoadId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NameNormalized")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Program")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentNumberNormalized")
+                        .HasDatabaseName("IX_COR_RestrictiveListEntries_Document")
+                        .HasFilter("[DocumentNumberNormalized] IS NOT NULL");
+
+                    b.HasIndex("LoadId")
+                        .HasDatabaseName("IX_COR_RestrictiveListEntries_Load");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RestrictiveListEntries_PublicId");
+
+                    b.ToTable("COR_RestrictiveListEntries", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.RestrictiveListLoad", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("EntryCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<string>("FileSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nchar(64)")
+                        .IsFixedLength();
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("ListCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("LoadedByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("LoadedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateOnly?>("PublishedOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LoadedByUserId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RestrictiveListLoads_PublicId");
+
+                    b.HasIndex("ListCode", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RestrictiveListLoads_Code_Version")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_RestrictiveListLoads", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.ActivityProgram", b =>
@@ -9832,6 +10215,116 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("COR_EmployerCompanies", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.ExternalChannelSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BureauCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ChannelCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CredentialKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LastVerificationMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("LastVerificationOutcome")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SettingKey")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("VerifiedByName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("VerifiedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ExternalChannelSettings_PublicId");
+
+                    b.HasIndex("VerifiedByUserId")
+                        .HasDatabaseName("IX_COR_ExternalChannelSettings_VerifiedByUser");
+
+                    b.HasIndex("SettingKey", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_ExternalChannelSettings_Key_ValidFrom")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_ExternalChannelSettings", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.ExternalEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -10136,6 +10629,424 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("COR_ListParameters", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CentralRegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime>("KnownAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateOnly?>("ReferenceDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ReplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid>("SourcePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SourceSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("SupersedesSourcePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(12)
+                        .HasColumnType("nvarchar(12)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("Value")
+                        .HasPrecision(20, 10)
+                        .HasColumnType("decimal(20,10)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_NationalValues_PublicId");
+
+                    b.HasIndex("ReplicationId");
+
+                    b.HasIndex("SourcePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_NationalValues_SourcePublicId");
+
+                    b.HasIndex("SourceSequence")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_NationalValues_SourceSequence");
+
+                    b.HasIndex("Code", "Key", "ValidFrom")
+                        .HasDatabaseName("IX_COR_NationalValues_Code_Key_ValidFrom");
+
+                    b.ToTable("COR_NationalValues", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReplication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActorName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("DocumentCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EffectsSummaryJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("FinishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("FromSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("ToSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ValueCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_NationalValueReplications_PublicId");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("IX_COR_NationalValueReplications_StartedAt");
+
+                    b.ToTable("COR_NationalValueReplications", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReview", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReviewedByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ReviewedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("TargetKind")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TargetPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_NationalValueReviews_PublicId");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("TargetPublicId", "ReviewedAt")
+                        .HasDatabaseName("IX_COR_NationalValueReviews_Target");
+
+                    b.ToTable("COR_NationalValueReviews", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.RegulatoryDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CentralRegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime>("KnownAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("ReplicationId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<short>("SchemaVersion")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid>("SourcePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("SourceSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("SupersedesSourcePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("Verified")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RegulatoryDocuments_PublicId");
+
+                    b.HasIndex("ReplicationId");
+
+                    b.HasIndex("SourcePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RegulatoryDocuments_SourcePublicId");
+
+                    b.HasIndex("SourceSequence")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RegulatoryDocuments_SourceSequence");
+
+                    b.HasIndex("Kind", "ValidFrom")
+                        .HasDatabaseName("IX_COR_RegulatoryDocuments_Kind_ValidFrom");
+
+                    b.ToTable("COR_RegulatoryDocuments", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Notification", b =>
                 {
                     b.Property<long>("Id")
@@ -10340,6 +11251,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -10364,8 +11282,36 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsSeeded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Lending");
+
+                    b.Property<string>("ProviderTemplateId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("");
+
+                    b.Property<bool>("ReviewPending")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -10389,15 +11335,34 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Variables")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)")
+                        .HasDefaultValue("[]");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.HasKey("Id");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
                         .HasDatabaseName("UK_COR_NotificationTemplates_PublicId");
 
-                    b.HasIndex("TemplateName", "Channel")
+                    b.HasIndex("Code", "Channel", "Version")
                         .IsUnique()
-                        .HasDatabaseName("UK_COR_NotificationTemplates_Name_Channel");
+                        .HasDatabaseName("UK_COR_NotificationTemplates_Code_Channel_Version")
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("COR_NotificationTemplates", "dbo");
                 });
@@ -12203,6 +13168,124 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDatabaseName("UK_COR_References_PublicId");
 
                     b.ToTable("COR_References", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.RegulatoryProfileVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("EmployeeFundCategory")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("FinancialActivityAuthorized")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("LibranzaOperatorRegistered")
+                        .HasColumnType("bit");
+
+                    b.Property<DateOnly?>("LibranzaOperatorRegistrationDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("LibranzaOperatorRegistrationNumber")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<byte?>("NiifGroup")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("OrganizationTypeCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RegisteredByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("RegisteredByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("SupersedesPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte>("SupervisionLevel")
+                        .HasColumnType("tinyint");
+
+                    b.Property<Guid?>("SupportAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RegulatoryProfileVersions_PublicId");
+
+                    b.HasIndex("RegisteredByUserId");
+
+                    b.HasIndex("SupersedesPublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_RegulatoryProfileVersions_Supersedes")
+                        .HasFilter("[SupersedesPublicId] IS NOT NULL");
+
+                    b.HasIndex("ValidFrom")
+                        .HasDatabaseName("IX_COR_RegulatoryProfileVersions_ValidFrom");
+
+                    b.ToTable("COR_RegulatoryProfileVersions", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Relationship", b =>
@@ -15111,6 +16194,195 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("COR_IntegrationMessageDeliveries", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationParticipant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Class")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Destination")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsTestDouble")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("RegisteredByKind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RegisteredByName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int?>("RegisteredByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationParticipants_PublicId");
+
+                    b.HasIndex("RegisteredByUserId")
+                        .HasDatabaseName("IX_COR_IntegrationParticipants_RegisteredByUser");
+
+                    b.HasIndex("Destination", "ValidFrom")
+                        .HasDatabaseName("IX_COR_IntegrationParticipants_Destination")
+                        .HasFilter("[Role] = 2 AND [IsDeleted] = 0");
+
+                    b.HasIndex("Code", "Role", "Destination")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationParticipants_Code_Role_Destination")
+                        .HasFilter("[ValidTo] IS NULL AND [IsDeleted] = 0");
+
+                    b.ToTable("COR_IntegrationParticipants", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationParticipantAdoption", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContractName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ParticipantId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ValidTo")
+                        .HasColumnType("date");
+
+                    b.Property<short>("Version")
+                        .HasColumnType("smallint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationParticipantAdoptions_PublicId");
+
+                    b.HasIndex("ParticipantId", "ContractName", "Version", "ValidFrom")
+                        .IsUnique()
+                        .HasDatabaseName("UK_COR_IntegrationParticipantAdoptions_Key")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("COR_IntegrationParticipantAdoptions", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationDeliveryAttempt", b =>
                 {
                     b.Property<long>("Id")
@@ -15286,6 +16558,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateOnly>("OperationDate")
                         .HasColumnType("date");
 
+                    b.Property<int>("OriginActorKind")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<string>("OriginDocumentClass")
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
@@ -15314,7 +16591,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<Guid>("OriginPublicId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid>("OriginUserCentralId")
+                    b.Property<Guid?>("OriginUserCentralId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("OriginUserName")
@@ -37883,6 +39160,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
 
+                    b.Property<Guid?>("NationalValuePublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("Origin")
                         .HasColumnType("int");
 
@@ -45832,6 +47112,26 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Certificate");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.DataSubjectRequest", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RespondedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.HabeasDataConsent", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Compliance.HabeasDataPolicyVersion", "PolicyVersion")
@@ -45841,6 +47141,26 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired();
 
                     b.Navigation("PolicyVersion");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.RestrictiveListEntry", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Compliance.RestrictiveListLoad", "Load")
+                        .WithMany("Entries")
+                        .HasForeignKey("LoadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Load");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.RestrictiveListLoad", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("LoadedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Associate", b =>
@@ -46045,6 +47365,45 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Country");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.ExternalChannelSetting", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValue", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReplication", "Replication")
+                        .WithMany("Values")
+                        .HasForeignKey("ReplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Replication");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReview", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.RegulatoryDocument", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReplication", "Replication")
+                        .WithMany("Documents")
+                        .HasForeignKey("ReplicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Replication");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Notification", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.NotificationTemplate", null)
@@ -46173,6 +47532,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("City");
 
                     b.Navigation("Person");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.RegulatoryProfileVersion", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.Sport", b =>
@@ -46364,6 +47732,25 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired();
 
                     b.Navigation("Message");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationParticipant", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationParticipantAdoption", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Integration.IntegrationParticipant", "Participant")
+                        .WithMany("Adoptions")
+                        .HasForeignKey("ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Participant");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationDeliveryAttempt", b =>
@@ -49395,6 +50782,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Entries");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.RestrictiveListLoad", b =>
+                {
+                    b.Navigation("Entries");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.ActivityProgram", b =>
                 {
                     b.Navigation("Courses");
@@ -49442,6 +50834,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.ExternalEntity", b =>
                 {
                     b.Navigation("Courses");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NationalValues.NationalValueReplication", b =>
+                {
+                    b.Navigation("Documents");
+
+                    b.Navigation("Values");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Core.NotificationTemplate", b =>
@@ -49496,6 +50895,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Navigation("Transmissions");
 
                     b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Integration.IntegrationParticipant", b =>
+                {
+                    b.Navigation("Adoptions");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product", b =>
