@@ -1,6 +1,6 @@
 # Decisiones transversales — 013 Cartera financiera
 
-**Fecha**: 2026-10-05 · **Estado**: armonización de la fase 0 (ocho frentes investigados por separado) y conciliación de los artefactos del plan (§7, C01..C102).
+**Fecha**: 2026-10-05 · **Estado**: armonización de la fase 0 (ocho frentes investigados por separado) y conciliación de los artefactos del plan (§7, C01..C111).
 **Fuente de verdad** para `research.md`, `data-model.md`, `contracts/*`, `quickstart.md`, `plan.md` y
 `tasks.md` de la feature 013. Quien redacte esos artefactos **reutiliza literalmente** los nombres de la §2 y
 respeta las decisiones T1..T102 de la §3. Si un borrador contradice este documento, gana este documento; si
@@ -2688,7 +2688,7 @@ una propuesta por defecto coherente con la spec y la constitución; si el dueño
 
 ---
 
-## 7. Conciliación de los artefactos del plan (C01..C102, 2026-10-05)
+## 7. Conciliación de los artefactos del plan (C01..C111, 2026-10-05)
 
 Cada artefacto del plan cerró con una lista de «puntos para conciliar»: lecturas que hizo donde este documento no
 decía lo bastante, o choques con un artefacto hermano. Aquí se decide cada uno. **Esta sección enmienda las T, CH y
@@ -2872,3 +2872,17 @@ Al aplicar la §7, los artefactos dejaron estos ajustes finos; se deciden aquí 
 Las decisiones de esta sección se escriben `C01`..`C102` (con dos dígitos o más); las preguntas de contabilidad de la
 §5 se escriben `C1`..`C11`. `C10` decisión (orden pagada por archivo) y `C10` pregunta (`Contabilidad.DiferirComisiones`)
 se distinguen por el contexto: en los artefactos, «decisión C10» o «pregunta C10».
+
+### 7.9 Orden de construcción (decidido al redactar `tasks.md`)
+
+| # | Decisión | Origen |
+|---|---|---|
+| C103 | **Orden de las migraciones de K1** (enmienda T88 y §2.26): primero `ValoresNacionales` (Admin) y `PlataformaParaCartera`, que no tocan tablas `LND_`; luego `NominaRecaudaPorElContrato`, `ComercioConCartera` y `RetiroDeLaCarteraHeredada`; después `CarteraNucleo`, `CarteraRiesgo` e `IntegracionContableDeCartera`. La regla de T88 se mantiene: ninguna entidad `LND_` nueva antes del retiro. | tareas, fases 2 y 3 |
+| C104 | **Pares de K1 regenerables**: la fase 3 crea la forma de todas las tablas de `CarteraNucleo` (entidad, configuración, índices, marca H) y genera el par; si una fase de K1 cambia el esquema, el par se **regenera** (no hay migración correctiva) hasta la tarea final de K1 que lo congela. Ninguno se aplica fuera de local y de las e2e antes de esa tarea. Lo mismo para `CarteraRiesgo` e `IntegracionContableDeCartera`. | tareas, fases 3–14 |
+| C105 | **Motor puro**: días, tasas, usura, fechas de vencimiento, generador del plan inicial, `MotorDeCartera` y el cargador `CasoDoradoDeCartera` nacen en US1 (fase 5); US4 los **extiende** (regeneración del plan, causación, reconstrucción). | tareas, fases 5 y 8 |
+| C106 | **Puertos y piezas que se usan antes de su historia**: la fase 3 deja con firma estable y comportamiento mínimo `IContabilidadParaCartera`, `ModoDePasoDeCartera`, `ValidacionPreviaContableDeCartera`, `FechaContable`, `CategoriaContableDeCartera`, `IConsultaDeObligaciones` (sin activar) y `TesoreriaDePrueba`; las historias dueñas (US7, US9, US5) las completan. | tareas, fases 3, 7–12 |
+| C107 | **Activación de prueba sin cartera previa**: la fase 3 construye el camino mínimo de `ActivateLendingCommand` para una cooperativa **sin cartera que migrar** (carga vacía, acta, requisitos verificados contra el registro, con los dobles de prueba como Recaudo y Tesorería) y el ayudante e2e `ActivarCarteraAsync`; US8 lo completa con la migración. Así las e2e de las fases 4 a 12 corren sin `Skip`. | tareas, fases 6–13 |
+| C108 | **Cola de mensajes al deudor** (`LND_DebtorMessages`, tarea `cartera.mensajes`, rutas y pantalla de plantillas de mensaje) es de US17 parte K1 (fase 4); K4 suma campañas y canales reales. | tareas |
+| C109 | **Base del centro de informes y las vistas de K1** (DT §2.15) van en K1 (fase 14, marcadas US15); K2–K4 suman las suyas en sus fases; K5 completa US15. K5 se entrega antes que K6a, porque `EntregaVigente` es ordinal. | tareas, fases 14 y 20 |
+| C110 | **`LND_FactTypes` siembra 35 filas**: los hechos que van a Contabilidad (con `ShortCode`); los 12 tipos restantes del catálogo de 47 no son hechos contables. | fase 3 |
+| C111 | **Códigos de error que las tareas usan y `data-model.md` §10 no lista**: cada fase que los use los lleva a §10 en la misma tarea; ante dos nombres para lo mismo, gana el de `data-model.md`. Pregunta nueva **E12**: ¿la corrección monetaria UVR llega a Contabilidad como hecho propio (`CorreccionMonetariaUvrCausada`)? Propuesta: sí, en K6b. | tareas |

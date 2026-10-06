@@ -1,0 +1,4391 @@
+---
+
+description: "Lista de tareas de la feature 013 — Cartera financiera desde cero"
+---
+
+# Tasks: Cartera financiera — líneas, originación, causación, pagos, riesgo y cobranza de créditos
+
+**Input**: Design documents from `specs/013-cartera-financiera/`
+**Prerequisites**: plan.md, spec.md, decisiones-transversales.md (DT), research.md, data-model.md,
+contracts/{api,mensajes,interfaces,contabilidad,adaptadores-y-archivos,plantillas}.md, quickstart.md
+
+**Total**: 1081 tareas.
+
+**Tests**: se incluyen; la constitución y `quickstart.md` los exigen. Son de cuatro clases:
+- casos dorados JSON de los motores puros (motor financiero, riesgo, cobranza y layouts);
+- pruebas de Application y de arquitectura (DT §2.25);
+- e2e con `CentralIdentityApiFixture` en PostgreSQL y SQL Server, en las colecciones «Cartera e2e» y
+  «Valores nacionales e2e»;
+- rendimiento con `RUN_PERF_TESTS=1`.
+
+Toda prueba se escribe antes de su implementación y debe fallar primero.
+
+**Organization**: las fases siguen el orden de las entregas y, dentro de cada entrega, el de las historias
+que dependen unas de otras.
+
+| Entrega | Contenido | Fases |
+|---|---|---|
+| — | Setup | 1 |
+| K1 | Plataforma (fundacional A) | 2 |
+| K1 | Enmiendas previas, retiro de lo heredado y base de Cartera (fundacional B) | 3 |
+| K1 | US17 (parte K1), US1, US2, US3, US4, US5, US6, US7, US9 (parte K1), US8 y US13 (parte K1) | 4 a 14 |
+| K2 | US10 | 15 |
+| K3 | US11 y US14 | 16 y 17 |
+| K4 | US12 | 18 |
+| K5 | US13 (resto), US15 y US16 | 19 a 21 |
+| K6a | Pérdida esperada (US9 ampliada) | 22 |
+| K6b | Vivienda | 23 |
+| — | Polish | 24 |
+
+**K1 es lo mínimo para salir en vivo.** En producción, Cartera además no se activa sin Recaudo y Tesorería
+reales (Q1 B), ni sin K6a si la cooperativa está obligada. COOFLOPAL no lo está.
+
+**Nombres**: todo nombre de tabla, entidad, enumeración, mensaje, permiso, ruta, migración y prueba de
+arquitectura sale de `decisiones-transversales.md`:
+- la §2 da los nombres;
+- la §7 (C01–C102) concilia los artefactos y, si difiere de otro artefacto, manda ella;
+- los números de las enumeraciones salen de `data-model.md` §9.
+
+Lo que no está en DT va marcado **(nuevo)** y se lleva a DT en la misma tarea.
+
+## Format: `[ID] [P?] [Story] Description`
+
+- **[P]**: puede correr en paralelo, porque toca archivos distintos y no depende de otra tarea incompleta de
+  la misma fase.
+- **[Story]**: la historia de spec.md (US1…US17). No va en Setup, en las fundacionales, en la base de una
+  entrega ni en Polish.
+- «(dueño)» al final: la tarea depende de una decisión o un dato del dueño o de la contadora (DT §5 y §7.7).
+  Si no llega, rige la propuesta por defecto que la tarea cita.
+- «(producción)»: toca un ambiente productivo. Sólo se hace en la fase 24, con `pg_dump` por base,
+  autorización expresa del dueño y GitOps.
+
+## Path Conventions
+
+Clean Architecture del repositorio, con rutas relativas a la raíz:
+- `src/Core/IngenIA365ERP.Domain` y `src/Core/IngenIA365ERP.Application`;
+- `src/Infrastructure/IngenIA365ERP.{Persistence,Persistence.Migrations.PostgreSql,Persistence.Migrations.SqlServer,Audit,Identity,Storage}`;
+- el proyecto nuevo `src/Infrastructure/IngenIA365ERP.ExternalChannels`, que se crea en la fase 1;
+- `src/Presentation/IngenIA365ERP.{API,Shared,Web,Web.Client,App}`;
+- `tests/IngenIA365ERP.{Domain,Application,Architecture,API.Integration}Tests`.
+
+El árbol detallado está en plan.md, «Project Structure».
+
+---
+
+## Phase 1: Setup (Shared Infrastructure)
+
+**Goal**: dejar la rama verificada, la línea base de pruebas anotada, el árbol de carpetas de plan.md y DT §2.2
+acordado, los esqueletos de las 31 pruebas de arquitectura nuevas de DT §2.25 (más `TextosDeCarteraTests`, §7.6)
+compilando con sus listas vacías, el proyecto nuevo `IngenIA365ERP.ExternalChannels` en la solución y la fixture e2e
+con las colecciones «Cartera e2e» y «Valores nacionales e2e», los trabajos de fondo apagados por configuración y los
+ayudantes para conducirlos a mano.
+
+**Independent Test**: `dotnet build IngenIA365ERP.slnx` y `dotnet build IngenIA365ERP.CI.slnf -c Release` con 0
+errores; `dotnet test tests/IngenIA365ERP.Architecture.Tests` verde con las clases nuevas presentes (cada una recorre
+su lista vacía, sin `return` temprano); la fixture arranca en PostgreSQL y SQL Server con `Lending:Process:Enabled =
+false` y `Lending:TestDoubles:Enabled = true`, y una prueba humo de cada colección nueva crea su cooperativa aislada;
+la línea base anotada coincide con lo que corre hoy.
+
+### Tests for Setup
+
+- [ ] T0001 [P] Crear los esqueletos de las pruebas de frontera y puertos (DT §2.25; T4, T90, T97-A1; C27, C34) en tests/IngenIA365ERP.Architecture.Tests/Principles/: `LaCarteraSoloSeTocaPorSusInterfaces.cs`, `CarteraNoConoceContabilidad.cs`, `LosHechosDeCarteraNoLlevanCuentas.cs`, `LoDeCarteraSeCorrigeConComprobanteNuevo.cs`, `LosPuertosDeCarteraValidanYAuditanSusEscrituras.cs`
+  · cada clase declara su lista **vacía** (`private static readonly string[]` o de tipos) y un `[Fact]` que la recorre y afirma la regla sobre cada elemento; con la lista vacía pasa porque no hay nada que violar, **nunca por un `return` temprano** (CLAUDE.md: siete métodos «pasan» sin comprobar nada).
+  · el `<summary>` nombra la T/C y el FR (FR-008, FR-126, SC-018) y quién llena la lista: la fase de cada puerto (`Common.Integration.Lending`, los cinco de T90) y la de US7 para la frontera contable; `LaCarteraSoloSeTocaPorSusInterfaces` vigila las dos direcciones (C34).
+  · estilo de `InventarioNoConoceContabilidadNiCartera.cs` (ArchUnitNET) y `LasPantallasDicenQueEstanCargando.cs` (`RepoPath.FindRepoRoot()` para reglas sobre fuente).
+- [ ] T0002 [P] Crear los esqueletos de bandeja, procesos e idempotencia (DT §2.25; T10, T11, T15, T20, T21; FR-009, FR-089, FR-149) en tests/IngenIA365ERP.Architecture.Tests/Principles/: `SoloElEmisorEscribeLaBandeja.cs`, `ElCatalogoDeMensajesEsUnico.cs`, `EmisionesDeProcesoPermitidas.cs`, `UnSoloConsumidorPorDestino.cs`, `LosDoblesDePruebaNoSeRegistranEnProduccion.cs`, `LosComandosDeCarteraLlevanClave.cs`, con las mismas reglas de forma que T0001
+  · `LosDoblesDePruebaNoSeRegistranEnProduccion` deja vacía la lista de tipos de doble (la llenan las fases que crean `TesoreriaDePrueba` y `RecaudadorDePrueba`) y documenta que su caso final construirá el contenedor de DI con `IHostEnvironment` de producción.
+- [ ] T0003 [P] Crear los esqueletos del motor, el libro y los cierres (DT §2.25; T9, T35, M16, R18; CH39) en tests/IngenIA365ERP.Architecture.Tests/Principles/: `LaCarteraNoTieneValoresLegalesFijos.cs`, `ElMotorDeCarteraEsDecimal.cs`, `NadieEscribeElLibroDeCarteraFueraDelRegistro.cs`, `LosSaldosYTasasDeCarteraTienenSuPrecision.cs`, `LaCarteraUsaLaFechaLocal.cs`, `LosCierresDeCarteraNoSeReescriben.cs`
+  · `LaCarteraNoTieneValoresLegalesFijos` declara ya la lista de literales admitidos (los de `LaNominaNoTieneValoresLegalesFijos` más `365`; `7` y `10` sólo por el valor del enum de periodicidad) y la lista vacía de exenciones por archivo; recorre `Domain/Lending` y `Application/Lending`, que aún no existen (cero archivos, pasa sin `return`).
+- [ ] T0004 [P] Crear los esqueletos de valores nacionales y parámetros (DT §2.25; T40, T43, T93) en tests/IngenIA365ERP.Architecture.Tests/Principles/: `LosValoresNacionalesSeLeenEnUnSoloSitio.cs`, `SoloElReplicadorLeeElRegistroCentral.cs`, `SoloLaReplicaEscribeLosValoresNacionalesDeNomina.cs`, `CadaParametroRespetaLaEntregaDeSuModulo.cs`
+  · `SoloLaReplicaEscribeLosValoresNacionalesDeNomina` reemplaza en nombre a `SoloLaReplicaEscribeElSalarioMinimo` de los informes (DT §2.25), que no existe en el código: no hay archivo que borrar.
+- [ ] T0005 [P] Crear los esqueletos del retiro (DT §2.25; T2, T3, T86, R-05, R-07) en tests/IngenIA365ERP.Architecture.Tests/Principles/: `LaCarteraHeredadaNoVuelve.cs`, `NingunaTablaConservadaApuntaALaCarteraRetirada.cs`, `ElEspacioLendingEsSoloCartera.cs`, con la lista de los 55 nombres retirados **vacía** (la llena la fase Fundacional B al retirar; data-model §13.1) y la regla escrita sobre el modelo EF y los dos snapshots.
+- [ ] T0006 [P] Crear los esqueletos de seguridad (DT §2.25; T60, T62, T67; SC-014, SC-015) en tests/IngenIA365ERP.Architecture.Tests/Principles/: `LasConsultasDeCarteraRespetanElAlcance.cs`, `LasLecturasSensiblesDeCarteraSeAuditan.cs`, `LosCodigosViewDeCarteraNoTienenDatosPersonales.cs`; la última deja ya escrita la regla «la bandeja, los hechos y los archivos regulatorios van con `Read`» y su lista de rutas vacía.
+- [ ] T0007 [P] Crear los esqueletos de adaptadores, pantallas y textos (DT §2.25, §7.6; T71, T72, T98; FR-013) en tests/IngenIA365ERP.Architecture.Tests/Principles/: `LosProveedoresExternosSoloLosConoceSuAdaptador.cs` (molde `ElProveedorTecnologicoSoloLoConoceSuAdaptador.cs`: ningún archivo fuera de `Program.cs` y de `IngenIA365ERP.ExternalChannels` usa `IngenIA365ERP.ExternalChannels.*`; con el proyecto ya creado en T0011 la regla corre de verdad sobre cero usos), `LasCredencialesDeCanalesExternosNoTocanLaBase.cs`, `LaCobranzaNuncaContactaReferencias.cs`, `LasPantallasDeCarteraEstanEnElMenu.cs` (molde `LasPantallasDelCicloComercialEstanEnElMenu.cs`), `TextosDeCarteraTests.cs` (molde `TextosDeInventarioTests.cs`: ningún texto con códigos técnicos ni con el nombre del sistema anterior)
+
+### Implementation for Setup
+
+- [ ] T0008 Verificar la rama y la base: `git status` en `013-cartera-financiera` sin cambios salvo `docs/implementacion/__pycache__/` (no se versiona), los dos commits de diseño (`6a565725` spec, `50b4bc05` plan) sobre `48aa85e4`; `git fetch` y confirmar que `origin/develop` no avanzó (si avanzó, rebasar antes de empezar, nunca a mitad de una fase); `dotnet build IngenIA365ERP.slnx` con 0 errores; Docker Desktop encendido (apagado por defecto en la máquina de desarrollo).
+- [ ] T0009 Anotar la línea base en specs/013-cartera-financiera/quickstart.md §1.9 («Lo que debe seguir verde»): conteo por proyecto de `dotnet test tests/IngenIA365ERP.{Domain,Application,Architecture,Shared,Load}.Tests` y de `tests/IngenIA365ERP.API.IntegrationTests` con `DB_PROVIDER=PostgreSql` y `SqlServer` (pasan, omitidas con su motivo, y las que «pasan» por `return` temprano según CLAUDE.md), con la fecha y el commit; es la cifra contra la que cada fase comprueba que nada de Inventario, Nómina ni Contabilidad se cayó.
+- [ ] T0010 Fijar el árbol de carpetas de DT §2.2 y plan.md «Source Code» como lista en el `<summary>` de cada esqueleto que lo recorre, **sin crear carpetas vacías ni archivos marcadores** (git no versiona carpetas vacías; lección de la 012): `Domain/Entities/Lending/*`, `Domain/Enums/Lending`, `Domain/Lending/*`, `Domain/Common/{Calendar,NationalValues,Layouts,Compliance}`, `Application/Lending/*`, `Application/Accounting/Lending/*`, `Application/Common/Integration/{Lending,Accounting,Savings,Contracts/Lending}`, `Application/Common/{NationalValues,Calendar,Messaging,Compliance,ExternalChannels}`, `Application/Saas/NationalValues`, `Persistence/Configurations/Lending`, `API/Endpoints/{Lending,Saas}`, `Shared/Pages/Cartera`, `Shared/Services/Cartera`, `tests/*/Lending`, `tests/IngenIA365ERP.API.IntegrationTests/{Lending,NationalValues}`; cada carpeta nace con su primer archivo en la tarea que lo crea.
+- [ ] T0011 Crear el proyecto src/Infrastructure/IngenIA365ERP.ExternalChannels/IngenIA365ERP.ExternalChannels.csproj (T4, T71; plan.md «Structure Decision») con el molde de `IngenIA365ERP.ElectronicInvoicing.csproj`: `net10.0`, referencia **sólo** a `IngenIA365ERP.Application`, paquetes `Microsoft.Extensions.{Configuration.Abstractions,DependencyInjection.Abstractions,Options.ConfigurationExtensions,Hosting.Abstractions,Http.Resilience}` `10.*`, comentario de cabecera que diga que Domain, Application y la API no lo conocen salvo `Program.cs` (`LosProveedoresExternosSoloLosConoceSuAdaptador`)
+  · un `DependencyInjection.cs` con `AddExternalChannels(this IServiceCollection, IConfiguration)` vacío (lo llenan las tareas de canales de la fase 2);
+  · agregarlo a IngenIA365ERP.slnx (junto a ElectronicInvoicing) y a IngenIA365ERP.CI.slnf (aprovechar para agregar también `IngenIA365ERP.ElectronicInvoicing.csproj`, que hoy falta en el filtro);
+  · `ProjectReference` desde src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj, tests/IngenIA365ERP.Application.Tests/IngenIA365ERP.Application.Tests.csproj (baterías de conformidad, DT §7.6) y tests/IngenIA365ERP.Architecture.Tests/IngenIA365ERP.Architecture.Tests.csproj;
+  · `Program.cs` todavía no llama `AddExternalChannels` (lo hace la fase 2 después de `AddApplicationServices`).
+- [ ] T0012 Preparar tests/IngenIA365ERP.API.IntegrationTests/Identity/CentralIdentityApiFixture.cs para Cartera (quickstart §1.7; T5, T20): `builder.UseSetting("Lending:Process:Enabled", "false")` (las pruebas corren cada tanda a mano), `"Lending:TestDoubles:Enabled", "true"` (el host de pruebas no es de producción) y `"ExternalChannels:CredentialsPath"` **(nuevo)** a una carpeta temporal por fixture (los canales `SIMULADO` y `CARGA-PROPIA` no piden archivo; una prueba de credenciales escribe ahí); se conservan apagados `Integration:Dispatcher`, `AuditForwarder`, `ScheduledTasks` y `EmailDispatcher`. Las claves que nadie lee todavía no rompen el arranque; el ayudante de pasada del `ProcesadorDeCartera` lo agrega la fase Fundacional B al crear su esqueleto (ver Notas).
+- [ ] T0013 [P] Crear tests/IngenIA365ERP.API.IntegrationTests/Lending/CarteraE2E.cs con la colección **«Cartera e2e»** (DT §2.25, «fijado aquí»; `CarteraCollection : ICollectionFixture<CentralIdentityApiFixture>`, molde `Inventory/InventarioE2E.cs`) y la clase estática `CarteraE2E`:
+  · `CabeceraDeClave = "Idempotency-Key"` y `ConClave(HttpRequestMessage)` (UUID nuevo por llamada; la prueba de repetición pone la misma clave a mano);
+  · `CooperativaAisladaAsync(fx, nombre, primerEjercicioContable?)` (una por nombre y fixture, mismo camino HTTP que `ContabilidadE2E.CooperativaAisladaAsync`: alta por `/api/saas/tenants/with-admin`, administrador, sucursal «Principal» y, si se pide, contabilidad iniciada con el PUC solidario);
+  · `TokenMaestroAsync` reutilizado de `InventarioE2E` (el limitador de login: 10/min por IP);
+  · ayudantes de pasada a mano: `DespacharAsync(coop, pasadas)` sobre `fx.Despachador.PasadasAsync`, `CorrerTareasProgramadasAsync(coop)` y `ReenviarAuditoriaAsync(coop)` sobre los de la fixture;
+  · `EnviarAsync`, `GetAsync`, `LeerAsync`, `CodigoDeErrorAsync` delegados en `NominaE2E`;
+  · una prueba humo `[Fact]` que crea una cooperativa aislada y lee `/api/auth/session-policy` con su token (corre en los dos motores).
+- [ ] T0014 [P] Crear tests/IngenIA365ERP.API.IntegrationTests/NationalValues/ValoresNacionalesE2E.cs con la colección **«Valores nacionales e2e»** (DT §7.6: otro host porque la central es una por host y todas sus cooperativas la replican), `ValoresNacionalesCollection : ICollectionFixture<CentralIdentityApiFixture>` y `ValoresNacionalesE2E` con `TokenMaestroAsync`, `CooperativaAisladaAsync` (delegado en `CarteraE2E`) y una prueba humo con el token del maestro contra `/api/saas/tenants`; el ayudante `ReplicarAsync(tenantPublicId)` lo agrega la fase 2 junto con la réplica (T0056).
+- [ ] T0015 Confirmar con el dueño cómo corren DEV y QA en el clúster (pregunta B4: «despliegue de producción» = `IHostEnvironment.IsProduction()`; que QA no corra como `Production`, o allí no hay dobles de prueba ni canales simulados con efecto) leyendo `ASPNETCORE_ENVIRONMENT` de los manifiestos de GitOps (sólo lectura) y anotarlo en specs/013-cartera-financiera/research.md (dueño)
+  · rige la propuesta por defecto de B4: `IsProduction()`; si QA corre como `Production`, la prueba de los dobles se hace en DEV y en las e2e.
+
+**Checkpoint**: la rama compila con el proyecto nuevo, la línea base está anotada, los 31 esqueletos y
+`TextosDeCarteraTests` corren verdes sin `return` temprano y las dos colecciones nuevas arrancan su host con los
+trabajos de fondo apagados en los dos motores. Las fases fundacionales pueden empezar.
+
+---
+
+## Phase 2: Foundational (Blocking Prerequisites) — parte A: plataforma
+
+**Goal**: construir, en la plataforma y no en Cartera, lo que cualquier historia de K1 necesita antes de existir el
+primer crédito (E-05, FR-149; DT §2.5, §2.6, §2.9, §2.12, §2.13, §2.18, §2.20–§2.22): el registro central de valores
+nacionales y documentos normativos con su réplica bitemporal a cada cooperativa y sus tres lectores únicos (T37–T42,
+T44), con la proyección de Nómina (T93); el perfil regulatorio; la bandeja con varios emisores, el proceso como
+origen de los tipos marcados, el catálogo agregado y los destinos nuevos (T10–T19); el registro de participantes y la
+habilitación de destinos por registro (T16); los canales externos y su proyecto con el canal `SIMULADO`, la guardia
+única del efecto legal y las credenciales fuera de la base (T71–T73); la mensajería a personas con plantillas
+versionadas (T74, T76); listas restrictivas, solicitudes del titular y autorizaciones por finalidad (T69, T70);
+alertas con alcance y destinatarios por módulo de origen; parámetros por módulo con `EntregaDeModulo` y la regla
+bitemporal de lectura (T38, T42, T43); auditoría con los módulos `Compliance` y `NationalValues`; los arreglos de
+plataforma de C68; y las migraciones `ValoresNacionales` (Admin) y `PlataformaParaCartera`.
+
+**Independent Test**: sin que exista todavía una tabla `LND_` nueva, en PostgreSQL y SQL Server: (a) el maestro, con
+segundo factor, registra una usura y una corrección por `/api/saas/national-values` y la réplica la copia a dos
+cooperativas en orden de `Sequence`, una sola vez aunque corra tres veces; (b) una cooperativa nueva nace con el
+SMMLV, la UVT y los festivos 2026–2028 por la réplica, y Nómina los ve en su proyección; en una cooperativa que ya los
+tenía sembrados, la réplica los adopta sin fallar y alerta `Nomina.ValorNacionalDistinto` si difieren; (c) el
+registro de participantes viene sembrado (`CNT`, `INV`, `NOM` activos, `CAR` inhabilitado) y una venta a crédito de
+Comercial queda `Pending` sin intentos ni alertas porque el destino `Lending` no está habilitado; (d) un canal
+`SIMULADO` de listas se configura y verifica, una carga de listas restrictivas se importa con revisión previa y una
+consulta por `IListasRestrictivas` devuelve `Match` por documento; (e) una solicitud del titular recibe su
+`dueDate` en días hábiles nacionales; (f) Inventario, Nómina y Contabilidad siguen con su línea base de T0009.
+
+### Tests for Foundational A
+
+**Dominio puro (casos dorados y propiedades; deben fallar antes de implementar)**
+
+- [ ] T0016 [P] Escribir tests/IngenIA365ERP.Domain.Tests/Common/VigenciaBitemporalTests.cs (T38; quickstart §1.4; SC-001) sobre `VigenciaBitemporal.Vigente(versiones, D, R)` de src/Core/IngenIA365ERP.Domain/Common/VigenciaBitemporal.cs: versión conocida en R que cubre D; corrección con `SupersedesPublicId` conocida después de R no cuenta; empate de `ValidFrom` gana la `Sequence` mayor; `ValidTo` implícito derivado del sucesor conocido en R; `ValidTo` explícito (usura del período, festivo) respetado; sin versión → nulo.
+- [ ] T0017 [P] Escribir tests/IngenIA365ERP.Domain.Tests/Common/Calendar/CalendarioHabilTests.cs (T40; quickstart §1.4; SC-023) sobre `CalendarioHabil` (src/Core/IngenIA365ERP.Domain/Common/Calendar/CalendarioHabil.cs, puro: recibe la lista de no hábiles): sábado y domingo no hábiles, festivo trasladado Ley 51, `SiguienteHabil` desde un viernes festivo, `Contar` de a excluida a b incluida, rango que cruza el año.
+- [ ] T0018 [P] Escribir tests/IngenIA365ERP.Domain.Tests/Common/Compliance/{CoincidenciaDeNombresTests,ReglaDeRevocacionTests,PlazosDelTitularTests}.cs (T69, T70; F-18, S10; quickstart §1.4; SC-012) sobre los puros de src/Core/IngenIA365ERP.Domain/Common/Compliance/:
+  · `CoincidenciaDeNombres`: normalización (mayúsculas, sin tildes ni signos, tokens ordenados), homónimos con tildes, alias, umbral recibido por parámetro; documento normalizado (sin puntos, guiones, espacios ni ceros a la izquierda);
+  · `ReglaDeRevocacion`: `ContactChannel` procede siempre; `CreditProcessing`/`CreditBureauQuery`/`CreditBureauReport` no proceden con una obligación viva, con `MigratedNotActivated` ni, para `CreditBureauReport`, con una cerrada dentro de la permanencia del dato negativo (contracts/interfaces.md §10.3); la constancia lista el porqué;
+  · `PlazosDelTitular`: consulta 10 + 5 y reclamo 15 + 8 días hábiles recibidos como límites (`TITULAR_*`), prórroga una sola vez, festivos nacionales.
+- [ ] T0019 [P] Escribir tests/IngenIA365ERP.Domain.Tests/Common/NationalValues/{ValidadoresDeDocumentosNormativosTests,CatalogoDeLimitesLegalesTests}.cs **(nuevo)** (T42, T44, T45; data-model §3.2, §12.4, §12.5):
+  · `CatalogoDeModalidades`: las nueve modalidades y los sub-segmentos de DT §2.21 (con `Inmobiliario`/`Empresarial` en microcrédito, E10); cada combinación con segmento SARC, segmento de pérdida esperada y clave de `USURA` o tope de vivienda; una combinación sin segmento → error con la ruta del JSON;
+  · `TiposDeOrganizacion`: código único, categoría de fondo de empleados válida;
+  · `CatalogoDeLimitesLegales`: los 23 códigos de data-model §12.5 con unidad (incluida `Veces`), dirección de lo estricto (`Mayor`/`Menor`) y clave de parámetro que acotan; `MasEstricto(valorCooperativa, limite)` en las dos direcciones; un `LIMITE` con unidad distinta de la del catálogo se rechaza.
+
+**Application (InMemory, reloj fijo, servicios reales)**
+
+- [ ] T0020 [P] Escribir tests/IngenIA365ERP.Application.Tests/Saas/NationalValues/RegistroCentralDeValoresNacionalesTests.cs **(nuevo)** (T37, T38; data-model §3; contracts/api.md §21.5) para `RegisterNationalValueCommand`, `CorrectNationalValueCommand`, `RegisterRegulatoryDocumentCommand`: `Sequence` común de las dos tablas tomada de `ADM_NationalValueCounters` (C44), creciente y sin huecos en dos registros seguidos; mismo (`Code`, `Key`, `ValidFrom`) vigente → `NationalValues.Value.AlreadyRegistered`; corrección sin `Reason` → validación; corrección de una corrección reemplaza a la corrección (único `SupersedesPublicId`); `FESTIVO` con `ValidFrom = ValidTo = Key`; `NationalValues.CodeUnknown`, `.KeyInvalid` (la clave de `USURA` debe ser modalidad certificada del catálogo vigente), `.CodeNotAvailable` (`UVR`, `TOPE_TASA_VIVIENDA` hasta K6b); documento inválido → `NationalValues.Document.Invalid` con `data.errors[] { path, message }`; `NationalValues.DocumentKindNotAvailable` para `SarcAnexo2` (K6a); `ContentSha256` recalculado; una modificación de una fila existente la rechaza `GuardaDeInmutabilidad` en `AdminDbContext` (C68).
+- [ ] T0021 [P] Escribir tests/IngenIA365ERP.Application.Tests/Saas/NationalValues/ImportNationalValuesCommandTests.cs (C82; contracts/plantillas.md §10): plantilla `saas.national-values` con revisión sin escribir; fila igual a una vigente = «sin cambio»; misma llave con otro valor sin `corrigeA` → `NationalValues.ConflictingValue` (C98) con fila y columna; `corrigeA` sin motivo → error de fila; `Sequence` en el orden del archivo; todo o nada en su propia transacción sobre `IAdminDbContext`; el paquete `.json` de `ExportNationalValuesQuery` se importa en otra base y produce las mismas filas con su SHA-256.
+- [ ] T0022 [P] Escribir tests/IngenIA365ERP.Application.Tests/Common/NationalValues/ReplicacionDeValoresNacionalesTests.cs (T39; quickstart §1.5 «Valores nacionales»): copia sólo `Sequence` mayor que la última local, en orden; repetir no duplica (`SourcePublicId` único); una fila que confirmó tarde con `Sequence` menor ya copiada no se salta (el contador da el orden de confirmación); `COR_NationalValueReplications` se escribe sólo si copió algo (no una fila por pasada vacía); los `IEfectoDeReplicacion` corren en el mismo `SaveChanges` y su resumen queda en `EffectsSummaryJson`; si un efecto falla, no se copia nada; central sin respuesta → resultado con motivo, sin excepción; un evento de auditoría `NationalValues.Replicated` **(nuevo)** por réplica con conteos y rango.
+- [ ] T0023 [P] Escribir tests/IngenIA365ERP.Application.Tests/Common/NationalValues/LectorDeValoresNacionalesTests.cs (T40; R5): `LeerAsync(codigo, clave, fecha, informacionHasta?)` con la regla bitemporal y `KnownAt` como R (una liquidación anterior a la réplica no ve el valor); valor faltante → `NationalValues.Missing` con código, clave y fecha y alerta `Cartera.ValorNacionalFaltante` (`DedupKey` `…:{código}:{clave}:{fecha}`); `LeerUltimoPublicadoAsync` (IBR, IPC) alerta `Cartera.IndiceDesactualizado` si el último es más viejo que lo que admite `CodigosDeValorNacional`; `LeerSerieAsync` devuelve en una consulta la serie de un rango; `INormativaVigente` entrega el documento con `PublicId` y SHA-256 y lo memoriza por huella; `ICalendarioHabil` usa sólo `FESTIVO` replicado (nunca `PAY_Holidays` `Manual`, pregunta E5); el estado «pendiente de validar» es derivado de la última `COR_NationalValueReviews`.
+- [ ] T0024 [P] Escribir tests/IngenIA365ERP.Application.Tests/Payroll/EfectoDeReplicacionEnNominaTests.cs (T93; data-model §7.5; quickstart §1.5): las cuatro reglas — (1) fila de `PAY_LegalParameters` o `PAY_Holidays` igual (mismo `Code`/`ValidFrom` o misma fecha y valor) → se marca como proyección (`Source = "Valor nacional {SourcePublicId}"`, `HolidayOrigin.National`, `NationalValuePublicId`) sin insertar; distinta → se conserva la de Nómina y se alerta `Nomina.ValorNacionalDistinto`; (2) nueva → se inserta; (3) cierra la vigencia anterior la víspera, como `AddLegalParameterVersionCommand`; (4) `AddLegalParameterVersionCommand` con `SMMLV` o `UVT` → `Payroll.LegalParameter.NationalValue` y los comandos de festivos no editan un `National`; los festivos `Manual` no se tocan; `LectorDeUvt` lee la proyección sin cambio.
+- [ ] T0025 [P] Escribir tests/IngenIA365ERP.Application.Tests/Common/Parameters/{LectorDeParametrosConInformacionHastaTests,ReglasDeParametrosDeCarteraTests,EntregaDeModuloTests}.cs (T38, T42, T43; quickstart §1.5 «Parámetros»):
+  · `informacionHasta` compara con `CreatedAt`, ignora el `ValidTo` guardado y lo deriva de la versión siguiente conocida en R; una baja posterior a R no cuenta; **sin** `informacionHasta` el resultado es idéntico al de hoy para Inventario (correr las pruebas de la 012 de `LectorDeParametrosTests` sin cambios);
+  · `IReglasDeParametros` de Cartera: una vigencia menos estricta que el límite vigente en su `ValidFrom` → `Lending.Parameter.BelowLegalFloor` con el límite y su fuente; al leer rige lo más estricto entre cooperativa y límite;
+  · `EntregaDeModulo`: una clave de Cartera marcada K2 no se ofrece ni se acepta con `CatalogoDeCartera.EntregaVigente = K1`; las claves de Inventario siguen gobernadas por su entrega (`EntregaDelComercio` convertida, I6 vigente).
+- [ ] T0026 [P] Escribir tests/IngenIA365ERP.Application.Tests/Common/Integration/EmisorDeMensajesConVariosModulosTests.cs (T10, T11, T13; contracts/mensajes.md §1, §6; quickstart §1.5 «Mensajes»): el módulo de origen sale del tipo en el catálogo (`INV`, `CAR`, `TES`, `REC`), nunca de la solicitud; una solicitud que mezcla módulos → rechazo; un tipo con varios destinos exige `SolicitudDeEmision.Destino`; sin persona y con `UsuarioDeOrigen` → `OriginActorKind = Person` con ese usuario; sin ninguno y tipo con `AdmiteProceso = true` → `OriginActorKind = Process`, `OriginUserCentralId` nulo, nombre «Proceso de integración»; sin ninguno y tipo INV → lanza y no escribe nada; `CadenaDeOrden` va a `ChainRootPublicId`; la clase del documento viaja como texto. Correr además `ContratosDeMensajesTests` sin cambios: los bytes de los veinte contratos INV no cambian.
+- [ ] T0027 [P] Escribir tests/IngenIA365ERP.Application.Tests/Common/Integration/{RegistroDeIntegracionTests,ConsumoConValidacionFallidaTests,MensajesEntrantesPendientesTests}.cs **(nuevos)** (T15–T17, T19; C35, C36; contracts/mensajes.md §13, §14):
+  · registro: un participante cuenta si está habilitado y vigente a hoy, su implementación está en el despliegue con la versión adoptada y no es un doble en producción; `Integration.Participant.TestDoubleInProduction` (con `IHostEnvironment` de producción), `.VersionNotSupported` (`data: { contract, supported[] }`), `.Overlaps`; habilitar cierra la fila la víspera y abre otra; el escritor agrega sin guardar;
+  · `ResultadoDeConsumo.ValidationFailed(ref, número, código, motivo)` → `RegisterDeliveryResultCommand` deja `DeliveryStatus.ValidationFailed` desde `Pending` o `InBatch` (C18), el intento `DeliveryAttemptOutcome.ValidationFailed = 5` y levanta `Integracion.ValidacionFallida` con destinatarios del módulo de origen;
+  · `IMensajesEntrantes.PendientesAsync(destino, tipos, hastaFechaDeOperacion, página)` lista sin consumir ni crear intentos; `MensajeEntrante.OriginDocumentClassText`/`RelatedDocumentClassText` llegan llenos.
+- [ ] T0028 [P] Escribir tests/IngenIA365ERP.Application.Tests/Common/ExternalChannels/{GuardiaDeCanalesExternosTests,CredencialesDeCanalExternoEnArchivoTests}.cs (T72, T73; contracts/adaptadores-y-archivos.md §3.4, §3.6, §10):
+  · guardia con `AmbienteDePruebas` en los dos valores para los cuatro `EfectoLegalDeCanal`: en producción un resultado `Simulado` es `SinEfecto(Motivo, QueConfigurar)` y en pruebas `ConEfecto`; `CARGA-PROPIA` no es simulado y vale en producción;
+  · credenciales con dos cooperativas: la ruta sale sólo del `PublicId` de la cooperativa resuelta y de un `ChannelCode` que cumple `^[A-Z0-9-]{2,30}$`; un código con `..` o `/` se rechaza; `CredentialKey` que no coincide con la ruta derivada → `Core.ExternalChannel.CredentialMismatch`; caché de 5 minutos por huella del archivo; `SIMULADO` y `CARGA-PROPIA` no leen archivo.
+- [ ] T0029 [P] Escribir las baterías de conformidad de la plataforma en tests/IngenIA365ERP.Application.Tests/Common/ExternalChannels/{ConformidadDeMensajeria,ConformidadDeListasRestrictivas}.cs (T71; DT §7.6: en Application.Tests; contracts/adaptadores-y-archivos.md §3.1, §3.7, §3.9), cada una abstracta con su clase concreta por canal simulado (`MensajeriaSimulada`, `ListasSimuladas`, `CanalDeListasCargadas` sobre una carga en memoria): las siete reglas de §3.1 (nunca lanza por rechazo ni por transporte; `ChannelUnavailable` si no salió e `InProcess` si pudo llegar; «ya existe» no es error; código sellado sin adaptador → `ChannelUnavailable`), `ChannelCode` en el resultado, `Simulado = true` sólo en el simulado, y el comportamiento por último dígito del documento de DT §2.22 (mensajería 1/2/3/5; listas 8 `PossibleMatch`, 9 `Match`).
+- [ ] T0030 [P] Escribir tests/IngenIA365ERP.Application.Tests/Lending/Collections/RenderizadorDePlantillasDeMensajeTests.cs (T76; contracts/adaptadores-y-archivos.md §4.7): sólo variables de la lista blanca del propósito (las comunes más las del propósito); una variable fuera de la lista es error al guardar la plantilla; HTML escapado en el correo; aviso del largo del SMS (160 GSM-7, 70 UCS-2) y número de segmentos; WhatsApp sin `ProviderTemplateId` no se usa; cambiar una plantilla crea `Version + 1` y cierra la anterior la víspera; dos versiones del mismo (`Code`, `Channel`) no se cruzan.
+- [ ] T0031 [P] Escribir tests/IngenIA365ERP.Application.Tests/Compliance/{AutorizacionDeDatosPorFinalidadTests,SolicitudesDelTitularTests,ImportRestrictiveListCommandTests}.cs (T69, T70; quickstart §1.5 «Habeas data»):
+  · `IAutorizacionDeDatos.VigenteAsync(persona, finalidad, canal?)` con `Purpose` y `HasEvidence`; el método existente (tratamiento general) responde igual que hoy; `Agregar(...)` no guarda; `RecordDataAuthorizationCommand` sin versión de política vigente para la finalidad → `Compliance.HabeasData.NoCurrentPolicy`; una versión vigente por finalidad (únicos rehechos con `Purpose`, C68);
+  · solicitudes: `dueDate` por `PlazosDelTitular` con `ICalendarioHabil`; prórroga una vez (`Compliance.DataSubjectRequest.AlreadyExtended`); responder una cerrada → `.NotOpen`; revocación de `ContactChannel` procede y agrega en el mismo `SaveChanges` la fila `Revoked` de `CMP_HabeasDataConsents` con `Origin = TitularRequest`; revocación de una finalidad de crédito consulta el deber (doble de `IConsultaDeObligaciones`) y responde `Denied` con la constancia sellada en `DutyEvidenceJson`;
+  · listas: plantilla `compliance.restrictive-lists` con revisión previa; `Import.Row.Duplicate` por documento normalizado; carga nueva con `Version` consecutiva y la anterior `Replaced` (derivado); un evento de auditoría por carga (conteo y SHA-256), no por fila.
+- [ ] T0032 [P] Escribir tests/IngenIA365ERP.Application.Tests/Common/Alerts/AlertasConAlcanceYModuloTests.cs **(nuevo)** (C68; data-model §4.14, §11; SC-015, SC-022): `IAlertas.LevantarAsync` guarda `ScopeBranchPublicId` y `ScopeCreditLinePublicId`; con módulo de origen `CAR` descarta destinatarios `Inventory.*` y `Accounting.Inventory*`, con `INV` descarta `Lending.*` y `Accounting.Lending*`; sin destinatario activo va a `CompanyAdmin` con `WithoutRecipient`; la versión nueva de los tres tipos reutilizados une los destinatarios de Cartera sin perder los de Inventario y no se duplica al resembrar.
+- [ ] T0033 [P] Escribir tests/IngenIA365ERP.Application.Tests/Core/RegulatoryProfile/PerfilRegulatorioTests.cs **(nuevo)** (FR-018, FR-108, T50; data-model §4.5; contracts/interfaces.md §11.1): `AddRegulatoryProfileVersionCommand` exige un `OrganizationTypeCode` del documento `TiposDeOrganizacion` vigente en `ValidFrom` (`Core.RegulatoryProfile.OrganizationTypeUnknown`), número de inscripción de operador de libranza cuando la bandera es 1; corrección con `SupersedesPublicId`; `IPerfilRegulatorio.VigenteAsync(fecha, informacionHasta)` con la regla bitemporal (`CreatedAt` como R, `Id` como desempate); grupo NIIF distinto de `AccountingSetup.NiifGroup` → alerta `Contabilidad.GrupoNiifDistinto`.
+
+**Arquitectura (llenar las listas de los esqueletos de la fase 1 que esta fase hace verdaderos)**
+
+- [ ] T0034 Llenar en tests/IngenIA365ERP.Architecture.Tests/Principles/ las listas de valores nacionales y parámetros (T40, T43, T93): `LosValoresNacionalesSeLeenEnUnSoloSitio` (sólo `LectorDeValoresNacionales`, `CalendarioDeDiasHabiles`, `LectorDeDocumentoNormativo` y el núcleo de la réplica tocan `NationalValues`/`RegulatoryDocuments` de `IApplicationDbContext`), `SoloElReplicadorLeeElRegistroCentral` (sólo `ReplicacionDeValoresNacionales` depende de `IRegistroCentralDeValoresNacionales` y nada fuera de `Application/Saas/NationalValues` y de Persistence lee `ADM_NationalValues`), `SoloLaReplicaEscribeLosValoresNacionalesDeNomina` (sólo `EfectoDeReplicacionEnNomina` crea `PayrollLegalParameter` con `SMMLV`/`UVT` o `Holiday` con `HolidayOrigin.National`; las semillas 71 y 74 ya no lo hacen), `CadaParametroRespetaLaEntregaDeSuModulo` (toda `DefinicionDeParametro` de `ParametrosDeCartera` declara su `EntregaDeModulo` y ninguna posterior a K1 aparece en el catálogo ofrecido); y ampliar `LaUvtSeLeeEnUnSoloSitio` para confirmar que sigue siendo `LectorDeUvt`.
+- [ ] T0035 Llenar las listas de la bandeja (T10, T11, T15) en `SoloElEmisorEscribeLaBandeja` (sólo `EmisorDeMensajes` agrega `IntegrationMessage`), `ElCatalogoDeMensajesEsUnico` (`(Type, Version)` único en el agregado, módulo declarado, record único, todo record `*V1`/`*V2` de `Contracts/` está en el catálogo), `EmisionesDeProcesoPermitidas` (lista cerrada de los tipos `CAR` con `AdmiteProceso = true` de contracts/mensajes.md §6 —con los tres contingentes de C15/A3—, y `false` en todo `INV`, `TES` y `REC`), `UnSoloConsumidorPorDestino` (dos `IDestinoDeMensajes` con el mismo `Destino` hacen fallar el arranque con `Integration.Destination.DuplicateConsumer`), `LosHechosDeCarteraNoLlevanCuentas` (ningún record de `Contracts/Lending` tiene propiedades `Account*`, `Puc*` ni códigos de cuenta; FR-126).
+- [ ] T0036 Llenar las listas de adaptadores (T71, T72) en `LosProveedoresExternosSoloLosConoceSuAdaptador` y `LasCredencialesDeCanalesExternosNoTocanLaBase` (ninguna propiedad `Password`, `Token`, `Secret` o `ApiKey` en `COR_ExternalChannel*` ni `LND_*`; la ruta de la credencial se deriva del inquilino) y ampliar las existentes: `LosHechosInmutablesNoSeModifican` (+ `PlatformNationalValue`, `PlatformRegulatoryDocument`, `NationalValue`, `RegulatoryDocument`, `NationalValueReplication`, `NationalValueReview`, `RegulatoryProfileVersion`, `RestrictiveListLoad`, `RestrictiveListEntry`), `LosEndpointsProtegidosExigenPermiso` (+ `/api/core/{integration-participants,external-channels,national-values,regulatory-documents,regulatory-profile}` y `/api/compliance/{restrictive-lists,habeas-data/authorizations,data-subject-requests}`; las de `/api/saas/*` por `RequireMasterAdminAttribute.Check`), `NingunTrabajoDeFondoOperaSinCooperativa` (+ la tarea `valores-nacionales.replicar` y `cumplimiento.plazos-del-titular`), `PrincipioVI_PublicIdOnly` (las rutas nuevas sólo por `PublicId`), `TodoEnlaceDelMenuTieneSuPagina` y `LasPantallasDicenQueEstanCargando` (`ModulosMigrados` += las carpetas de las seis pantallas de esta fase).
+
+**e2e (se escriben aquí y corren tras T0094; dos motores)**
+
+- [ ] T0037 [P] Escribir tests/IngenIA365ERP.API.IntegrationTests/NationalValues/ValoresNacionalesYReplicaTests.cs (colección «Valores nacionales e2e»; T37–T41; FR-015) en su parte de plataforma: el maestro (con segundo factor) registra `USURA CONSUMO`, un `IBR` y un `LIMITE`; sin maestro → 404/401 según la puerta; la réplica (`ReplicarAsync`) copia en orden a dos cooperativas y repetirla no duplica; la cooperativa nueva nace con su copia; una corrección llega con `SupersedesPublicId` y la consulta con `date` y `recordedAsOf` (C83) devuelve el valor anterior para un R viejo; una revisión `Objected` deja el valor «objetado» y sin revisión queda «pendiente de validar» sin bloquear la lectura; `GET /api/saas/national-values/missing` **(nuevo)** lista la usura del mes siguiente sin registrar (C69). La parte de la corrida `NationalValueCorrection` (ajuste y saldo a favor) la agrega la fase de US4.
+- [ ] T0038 [P] Escribir tests/IngenIA365ERP.API.IntegrationTests/NationalValues/ReplicaSobreCooperativaSembradaTests.cs (colección «Valores nacionales e2e»; T93; FR-147): una cooperativa sembrada como hoy (SMMLV, UVT y festivos de Nómina con `HolidayOrigin` de la semilla) recibe la réplica sin fallar por `UK_PAY_LegalParameters_Code_ValidFrom` ni `UK_PAY_Holidays_Date`; lo igual queda marcado como proyección; un SMMLV distinto se conserva y alerta `Nomina.ValorNacionalDistinto`; `POST /api/payroll/legal-parameters` con `SMMLV` → 422 `Payroll.LegalParameter.NationalValue`; una nómina ordinaria calcula igual que antes de la réplica.
+- [ ] T0039 [P] Escribir tests/IngenIA365ERP.API.IntegrationTests/Lending/PlataformaParaCarteraTests.cs **(nuevo)** (colección «Cartera e2e»; T16, T69–T73; contracts/api.md §21, §22), en una cooperativa aislada: `GET /api/core/integration-participants` trae `CNT`, `INV`, `NOM` habilitados y `CAR` inhabilitado; `POST` con `isTestDouble` en este host (no producción) se acepta; una venta a crédito de Comercial queda `Pending` sin intentos tras `DespacharAsync` (destino `Lending` no habilitado); `POST /api/core/external-channels` con `SIMULADO` sin credencial y `verify` responde `Ok`; uno con `CredentialKey` sin archivo → `Core.ExternalChannel.CredentialMissing`; importar `compliance.restrictive-lists` con `mode=review` no escribe y con `apply` escribe la carga; `POST /api/compliance/data-subject-requests` devuelve `dueDate` en días hábiles; `POST /api/compliance/habeas-data/authorizations` con evidencia adjunta; `POST /api/core/regulatory-profile/versions` con un tipo de organización inexistente → 422; toda escritura con `Idempotency-Key` repetida responde `Idempotent-Replayed: true`. Agregar la clase al filtro `F_K1` de quickstart §1.7.
+
+### Implementation for Foundational A
+
+**Enumeraciones y valores nuevos (DT §2.6; data-model §9.2, §9.3)**
+
+- [ ] T0040 [P] Agregar los enums de plataforma (data-model §9.2): src/Core/IngenIA365ERP.Domain/Enums/Integration/{IntegrationParticipantClass,IntegrationParticipantRole}.cs; src/Core/IngenIA365ERP.Domain/Common/NationalValues/RegulatoryDocumentKind.cs (se guarda como texto); src/Core/IngenIA365ERP.Domain/Enums/ExternalChannels/{ExternalChannelKind,ExternalOutcome}.cs **(carpeta nueva)**; src/Core/IngenIA365ERP.Domain/Enums/Compliance/{DataAuthorizationPurpose,DataAuthorizationChannel,DataAuthorizationOrigin,DataSubjectRequestKind,DataSubjectRequestStatus,DataSubjectRequestOutcome,RestrictiveListEntityKind}.cs; src/Core/IngenIA365ERP.Domain/Enums/Core/{NationalValueReviewTarget,NationalValueReviewDecision,NationalValueReplicationOrigin}.cs, con los números de data-model §9.2 (C65) y `<summary>` que diga cuáles se guardan como texto.
+- [ ] T0041 [P] Agregar los valores nuevos en enums existentes (DT §2.6; data-model §9.3): `IntegrationDestinations.Inventory/Treasury/Receipts` en src/Core/IngenIA365ERP.Domain/Enums/Integration/IntegrationDestinations.cs; `DeliveryAttemptOutcome.ValidationFailed = 5`, `BatchTrigger.LendingAccrualRun = 7`, `LendingMonthlyClose = 8` en src/Core/IngenIA365ERP.Domain/Enums/Integration/IntegrationEnums.cs; `ParameterScopeKind.CreditLine = 6`, `LendingFactType = 7` en src/Core/IngenIA365ERP.Domain/Enums/Parameters/; `HolidayOrigin.National = 6` en src/Core/IngenIA365ERP.Domain/Enums/Payroll/HolidayOrigin.cs. Los valores de `BankFileScope`, `MotivoSinComprobante.NotIncorporated` y `PrevalidationOutcome.NotPostable` los agregan las fases de US3, US6 y US7, que los usan.
+- [ ] T0042 [P] Crear src/Core/IngenIA365ERP.Domain/Enums/Lending/{MessageChannel,DebtorMessagePurpose}.cs con los valores de data-model §9.1 (`Email = 1`, `Sms = 2`, `WhatsApp = 3`, `Letter = 4`; `Collection = 1`, `PriorNotice = 2`, `Informative = 3`, `DocumentDelivery = 4`, `CollectionFeeNotice = 5`): los necesitan ya el puerto de mensajería y las plantillas de esta fase; la fase Fundacional B **no** los vuelve a crear (ver Notas).
+
+**Valores nacionales: dominio puro**
+
+- [ ] T0043 [P] Implementar src/Core/IngenIA365ERP.Domain/Common/VigenciaBitemporal.cs (T38): `Vigente<T>(IEnumerable<T> versiones, DateOnly D, DateTime R)` sobre una interfaz mínima (`ValidFrom`, `ValidTo?`, `Sequence`, `ConocidaEn`, `PublicId`, `SupersedesPublicId?`), sin IO, que deja verde T0016.
+- [ ] T0044 [P] Implementar src/Core/IngenIA365ERP.Domain/Common/Calendar/CalendarioHabil.cs (`EsHabil`, `SiguienteHabil`, `Contar` sobre la lista de no hábiles que recibe) y mover `FestivosLey51` de src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/FestivosLey51.cs a src/Core/IngenIA365ERP.Domain/Common/Calendar/FestivosLey51.cs (puro; lo usa la semilla central, T93 regla 2), dejando verde T0017.
+- [ ] T0045 [P] Implementar los puros de src/Core/IngenIA365ERP.Domain/Common/Compliance/: `CoincidenciaDeNombres.cs`, `ReglaDeRevocacion.cs`, `PlazosDelTitular.cs` (T69, T70; F-18, S10), sin valores legales en el código (los plazos llegan como límites `TITULAR_*`), dejando verde T0018.
+- [ ] T0046 [P] Implementar src/Core/IngenIA365ERP.Domain/Common/NationalValues/: `CodigosDeValorNacional.cs` (los nueve códigos de DT §2.21 con sus unidades admitidas, si llevan clave, si están disponibles en K1 y la antigüedad máxima de IBR e IPC para `LeerUltimoPublicadoAsync`), `UnidadDeValorNacional.cs` (`EA`, `NominalMV`, `Pesos`, `Fraccion`, `Dias`, `Meses`, `Horas`, `Veces`), `CatalogoDeLimitesLegales.cs` (los 23 códigos de data-model §12.5 con unidad, dirección y clave que acotan), `IValidadorDeDocumentoNormativo.cs` (punto de extensión por `RegulatoryDocumentKind`, T45), y los lectores tipados y validadores `CatalogoDeModalidades.cs` y `TiposDeOrganizacion.cs` con su `SchemaVersion`, dejando verde T0019. Los validadores de `SarcAnexo1`, `SarcAnexo2` y `ReglaDePerdidaEsperada` los registra Cartera (fase de US9 y K6a).
+
+**Valores nacionales: registro central (`ADM_`)**
+
+- [ ] T0047 Crear las entidades `PlatformNationalValue`, `PlatformRegulatoryDocument` (H) y `PlatformNationalValueCounter` (`[SinDiffDeAuditoria]`, `NextValue`, nunca `NextNumber`) en src/Core/IngenIA365ERP.Domain/Entities/Admin/ y sus configuraciones en src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Admin/ con las columnas, tipos e índices de data-model §3.1–§3.3 (`UK_ADM_NationalValues_Sequence`, `UK_ADM_NationalValues_Supersedes` filtrado no nulo, `IX_ADM_NationalValues_Code_Key_ValidFrom`, y los equivalentes de documentos; `Content` texto, no `jsonb`); sus `DbSet` en `AdminDbContext` e `IAdminDbContext`.
+- [ ] T0048 Hacer que `AdminDbContext.SaveChangesAsync` llame `GuardaDeInmutabilidad.VerificarAsync` como `ApplicationDbContext` (C68) en src/Infrastructure/IngenIA365ERP.Persistence/DbContext/AdminDbContext.cs, y confirmar que ninguna entidad `ADM_` existente implementa `IHechoInmutable` por accidente (correr las pruebas de identidad central y de tenants).
+- [ ] T0049 Implementar los comandos del maestro en src/Core/IngenIA365ERP.Application/Saas/NationalValues/: `RegisterNationalValueCommand`, `CorrectNationalValueCommand`, `RegisterRegulatoryDocumentCommand` (toman `Sequence` de `ADM_NationalValueCounters` bajo cerrojo de fila en la misma transacción, molde `COR_IntegrationBatchCounters`; validan con `CodigosDeValorNacional`, `CatalogoDeLimitesLegales` y el `IValidadorDeDocumentoNormativo` de la clase; `RegisteredByCentralUserId` del maestro), `ListPlatformNationalValuesQuery`, `ListPlatformRegulatoryDocumentsQuery`, `GetPlatformRegulatoryDocumentContentQuery` y `ListMissingPlatformNationalValuesQuery` **(nuevo)** (C69: códigos esperados sin vigencia para los próximos días, calculado sin leer cooperativas), con los errores de data-model §10.2 y contracts/api.md §21.5 en src/Core/IngenIA365ERP.Application/Saas/NationalValues/ErroresDeValoresNacionales.cs **(nuevo)**; auditoría de plataforma con módulo `NationalValues` (sin cadena de cooperativa). Deja verde T0020.
+- [ ] T0050 Implementar `ImportNationalValuesCommand` y `ExportNationalValuesQuery` en src/Core/IngenIA365ERP.Application/Saas/NationalValues/ (C82; contracts/plantillas.md §10): definición `saas.national-values` con las columnas de §10, el mismo lector y las mismas reglas del ejecutor de plantillas, **su propia transacción sobre `IAdminDbContext`**, `Sequence` en el orden del archivo; el paquete `.json` (valores y documentos con SHA-256) para llevar valores entre ambientes (B5). Deja verde T0021.
+- [ ] T0051 Crear src/Presentation/IngenIA365ERP.API/Endpoints/Saas/NationalValuesEndpoints.cs **(carpeta nueva)** con las rutas de contracts/api.md §21.5 bajo `/api/saas` protegidas por `RequireMasterAdminAttribute.Check` (el maestro con segundo factor, pregunta B5): `GET/POST /national-values`, `POST /national-values/{id}/corrections`, `GET /national-values/template.xlsx`, `POST /national-values/import?mode=review|apply`, `GET /national-values/export`, `GET /national-values/missing` **(nuevo)**, `GET/POST /regulatory-documents`, `GET /regulatory-documents/{id}/content`; escrituras con `Idempotency-Key`; sobre de error común.
+- [ ] T0052 Crear la semilla central src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/PlatformNationalValuesSeeder.cs (`Scope = Admin`, `Order = 6`; DT §2.21; data-model §12.3–§12.5) con JSON embebidos en src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/Data/NationalValues/: `SMMLV` 2026 (1.750.905) y `UVT` 2026 (52.374) con su fuente; `FESTIVO` 2026–2028 con `FestivosLey51`; los 23 `LIMITE` con su valor semilla y fuente, «pendiente de validar»; `CatalogoDeModalidades` y `TiposDeOrganizacion` versión inicial `Verified = 0` (preguntas E4, E10: rige la propuesta —populares productivas a microcrédito, productivas a comercial, microcrédito con `Inmobiliario`/`Empresarial`— hasta que el dueño y la contadora coteje). Idempotente por (`Code`, `Key`, `ValidFrom`) y por `Code` de documento, numerando con el contador; nunca actualiza filas. Los documentos `SarcAnexo1` y `ReglaDePerdidaEsperada` los agrega a esta semilla la fase de US9 con sus validadores (dueño)
+  · rige la propuesta de E1 (pendiente de validar no bloquea), E4 y E10; el cotejo contra la fuente oficial (E8) no bloquea esta fase.
+
+**Valores nacionales: copia por cooperativa (`COR_`)**
+
+- [ ] T0053 Crear las entidades `NationalValue`, `RegulatoryDocument`, `NationalValueReplication` (H) y `NationalValueReview` (H) en src/Core/IngenIA365ERP.Domain/Entities/Core/NationalValues/ y sus configuraciones en src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Core/ con las columnas e índices de data-model §4.1–§4.4 (`UK_COR_NationalValues_SourcePublicId`, `_SourceSequence`, `IX_COR_NationalValues_Code_Key_ValidFrom`; `IX_COR_NationalValueReviews_Target`; `ReplicationId` FK `Restrict`); `DbSet` en `IApplicationDbContext`.
+- [ ] T0054 Implementar el núcleo único de la réplica en src/Core/IngenIA365ERP.Application/Common/NationalValues/: `IRegistroCentralDeValoresNacionales.cs` (lectura de la central por `Sequence`), `IEfectoDeReplicacion.cs` (`AlReplicarAsync(lote, ct)`, mismo `SaveChanges`), `ReplicacionDeValoresNacionales.cs` (`AplicarAsync(origen, ct)`: copia lo de `Sequence` mayor que `MAX(SourceSequence)` local, `KnownAt` = ahora, escribe `COR_NationalValueReplications` sólo si copió algo, corre los efectos registrados, un solo `SaveChanges`, evento `NationalValues.Replicated`) y `ReplicateNationalValuesCommand` sin ruta (T39); la implementación `RegistroCentralDeValoresNacionales` **(nuevo)** en src/Infrastructure/IngenIA365ERP.Persistence/Services/ sobre `AdminDbContext` en lectura. Deja verde T0022.
+- [ ] T0055 Implementar los lectores únicos (T40) en src/Core/IngenIA365ERP.Application/Common/NationalValues/ y src/Core/IngenIA365ERP.Application/Common/Calendar/: `IValoresNacionales` + `LectorDeValoresNacionales` (`LeerAsync(codigo, clave, fecha, informacionHasta?)`, `LeerUltimoPublicadoAsync`, `LeerSerieAsync`), `ICalendarioHabil` + `CalendarioDeDiasHabiles` (sobre `FESTIVO` replicado y `CalendarioHabil`), `INormativaVigente` + `LectorDeDocumentoNormativo` (valida con el lector tipado, memoriza por `ContentSha256`); faltante → `NationalValues.Missing` y alerta `Cartera.ValorNacionalFaltante`; índice viejo → `Cartera.IndiceDesactualizado`; estado de revisión derivado. Registro en `AddApplicationServices`. Deja verde T0023.
+- [ ] T0056 Crear la tarea `valores-nacionales.replicar` (`ITareaProgramada`, cada pasada, también sin Cartera activada; T7, T39) como src/Core/IngenIA365ERP.Application/Common/NationalValues/TareaDeReplicaDeValoresNacionales.cs **(nuevo)**, registrada en src/Presentation/IngenIA365ERP.API/Program.cs junto a las de la 012; si la central no responde levanta `Cartera.ReplicaDeValoresNacionalesAtrasada` (dedup) sin lanzar; la semilla de cada cooperativa nueva src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/NationalValuesReplicaSeeder.cs (`Scope = Tenant`, `Order = 88`, origen `TenantSeeder`); y el ayudante `ReplicarAsync(tenantPublicId)` en tests/IngenIA365ERP.API.IntegrationTests/NationalValues/ValoresNacionalesE2E.cs (resuelve el núcleo por `IEjecutorEnCooperativa`).
+- [ ] T0057 Implementar la conformidad de la cooperativa con una copia (T41, R7) en src/Core/IngenIA365ERP.Application/Core/NationalValues/ **(carpeta nueva)**: `ReviewNationalValueCommand`, `ReviewRegulatoryDocumentCommand` (`COR_NationalValueReviews`, H; `Note` obligatoria en `Objected`; con `Core.NationalValues.Review`), `ListNationalValuesQuery` (con `date` y `recordedAsOf`, C83), `ListNationalValueReplicationsQuery`, `ListRegulatoryDocumentsQuery`, `GetRegulatoryDocumentQuery`; y src/Presentation/IngenIA365ERP.API/Endpoints/Core/NationalValuesEndpoints.cs **(nuevo)** con las rutas de contracts/api.md §21.3, `Core.NationalValues.View/Review`, `Idempotency-Key` en las escrituras. Si una segunda revisión de la misma copia se admite o responde `NationalValues.AlreadyReviewed` lo decide la Nota de contradicciones: rige data-model §4.4 (vale la más reciente).
+- [ ] T0058 Implementar el efecto de límites legales `EfectoDeReplicacionLimitesLegales` **(nuevo)** en src/Core/IngenIA365ERP.Application/Common/NationalValues/: cuando la réplica trae un `LIMITE` más estricto que la vigencia de la cooperativa en la clave que acota (`CatalogoDeLimitesLegales`), levanta `Cartera.LimiteLegalMasEstricto` (`DedupKey …:{límite}`) y lo anota en `EffectsSummaryJson` (T42; data-model §4.3). Los efectos `EfectoDeReplicacionObligacionSobrevenida` (fase de US9) y `EfectoDeReplicacionCorreccionDeValorNacional` (C05, fase de US4) se registran en el mismo punto de extensión en sus fases.
+
+**Nómina: proyección de la réplica (T93, enmienda A7)**
+
+- [ ] T0059 Implementar `EfectoDeReplicacionEnNomina` en src/Core/IngenIA365ERP.Application/Payroll/NationalValues/EfectoDeReplicacionEnNomina.cs **(carpeta nueva)** con las cuatro reglas de T93 (adoptar lo igual, conservar y alertar `Nomina.ValorNacionalDistinto` lo distinto, cerrar la vigencia anterior la víspera, `HolidayOrigin.National` con `NationalValuePublicId`), registrado como `IEfectoDeReplicacion`; agregar `PAY_Holidays.NationalValuePublicId` (uniqueidentifier, nulo; C68) a `Holiday` y a src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Payroll/HolidayConfiguration.cs. Deja verde T0024 (enmienda A7: rige la propuesta).
+- [ ] T0060 Retirar de las semillas de Nómina lo que ahora escribe la réplica (T93 regla 2): quitar `SMMLV` y `UVT` de src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/PayrollLegalParametersSeeder.cs, vaciar y retirar src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/HolidaysSeeder.cs (sus pruebas pasan a la semilla central); `AddLegalParameterVersionCommand` (src/Core/IngenIA365ERP.Application/Payroll/...) rechaza `SMMLV` y `UVT` con `Payroll.LegalParameter.NationalValue` y los comandos de festivos no editan ni borran un `National`; correr las e2e «Nomina e2e» completas en los dos motores (la ordinaria, la PILA y las liquidaciones leen el SMMLV de la proyección que ahora deja `NationalValuesReplicaSeeder`, Order 88, después de 71 y 74).
+
+**Perfil regulatorio (FR-017, FR-018, FR-108; R15)**
+
+- [ ] T0061 Crear `RegulatoryProfileVersion` (H) en src/Core/IngenIA365ERP.Domain/Entities/Core/RegulatoryProfileVersion.cs y su configuración con las columnas e índices de data-model §4.5; `IPerfilRegulatorio` + `PerfilRegulatorioDto` en src/Core/IngenIA365ERP.Application/Common/NationalValues/IPerfilRegulatorio.cs (contracts/interfaces.md §11.1) con su lector bitemporal; `AddRegulatoryProfileVersionCommand` y `GetRegulatoryProfileQuery` en src/Core/IngenIA365ERP.Application/Core/RegulatoryProfile/ **(carpeta nueva)** (el grupo NIIF se propone desde `AccountingSetup.NiifGroup` y alerta `Contabilidad.GrupoNiifDistinto` si difieren, pregunta E3); src/Presentation/IngenIA365ERP.API/Endpoints/Core/RegulatoryProfileEndpoints.cs **(nuevo)** con `GET /api/core/regulatory-profile?date=` y `POST /versions` (`Core.RegulatoryProfile.View/Manage`, `Idempotency-Key`). La evaluación de la obligación sobrevenida (D28) que la respuesta trae la conecta la fase de US9; hasta entonces `expectedLoss` responde `obligated: null` con la base «sin evaluar». Deja verde T0033.
+
+**Parámetros por módulo (T38, T42, T43; R17)**
+
+- [ ] T0062 Generalizar la entrega de los parámetros (T43): `EntregaDeModulo` **(nombre de DT §2.6)** en src/Core/IngenIA365ERP.Domain/Common/Parametros/EntregaDeModulo.cs (módulo + orden); `DefinicionDeParametro.DisponibleDesde` y `ValoresDesde` pasan a `EntregaDeModulo`; `EntregaDelComercio` se convierte (I1…I6, IC → `EntregaDeModulo("INV", n)`) sin cambiar el comportamiento de Inventario; `CatalogoDeParametros.EntregaVigente` pasa a una por módulo; `CatalogoDeParametros.Modulos` += `ParametrosDeCartera.Modulo = "LND"`; ajustar los lectores de src/Core/IngenIA365ERP.Application/Common/Parameters/{LectorDeParametros,ErroresDeParametros}.cs, AddParameterVersionCommandHandler.cs y los seis usos de `EntregaDelComercio` (GuardiaDeEmisionFiscal, CatalogoDePlantillas, RegistroDeKardex, EfectosDeClase, reservas, remisiones, lotes) por la conversión.
+- [ ] T0063 Crear el catálogo `ParametrosDeCartera` y `CatalogoDeCartera` (`EntregaVigente = K1`) en src/Core/IngenIA365ERP.Domain/Lending/Parameters/ **(carpeta nueva, ver Notas)** con todas las claves de DT §2.20 y data-model §12.1 (tipo, valores admitidos, defecto, ámbitos `None`/`CreditLine`/`LendingFactType`, límite legal que la acota, entrega K1/K2/K4/K6a, `ExigeFuenteLegal` y «pendiente de validar» con su fuente); las claves `Contabilidad.FaltaDeRegla` y `Contabilidad.PoliticaSinRespuesta` con la descripción de la enmienda A8 (sólo muerden en pantallas de Cartera); `Libranza.UmbralDeMoraDePagaduria` sin valor hasta cotejar la CBCF (C71) (dueño)
+  · rigen los defectos de data-model §12.1 «pendientes de validar» por la contadora (§7.7: `Cupo.MoraMaximaParaVender = 0`, `Bloqueos.DiasDeMoraParaBloquear = 30`, pregunta C10 para `Contabilidad.DiferirComisiones = false`).
+- [ ] T0064 Implementar en src/Core/IngenIA365ERP.Application/Common/Parameters/: `informacionHasta` opcional en `ILectorDeParametros`/`LectorDeParametros` con su regla propia (T38: R contra `CreatedAt`, `ValidTo` derivado del sucesor conocido en R), sin cambio cuando no se pasa; `IResolutorDeAmbitoDeParametro` compuesto por módulo (Inventario + los que registre cada módulo, por `PublicId`) —los resolutores de `CreditLine` y `LendingFactType` los registra Cartera cuando existan `LND_CreditLines` y `LND_FactTypes`—; y `ReglasDeParametrosDeCartera` **(nuevo)** como `IReglasDeParametros` de `LND` en src/Core/IngenIA365ERP.Application/Lending/Common/ReglasDeParametrosDeCartera.cs: rechaza una vigencia menos estricta que el `LIMITE` vigente en su `ValidFrom` (`Lending.Parameter.BelowLegalFloor` con límite y fuente) y al leer entrega lo más estricto (T42). Deja verde T0025.
+
+**Bandeja con varios emisores (T10–T15, T17–T19; contracts/mensajes.md §1–§9, §13, §14)**
+
+- [ ] T0065 Ampliar `TipoDeMensaje` en src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/CatalogoDeMensajesV1.cs con `OriginModule`, `Destinos` (`IReadOnlySet<string>`, reemplaza a `Destination`) y `AdmiteProceso` (contracts/mensajes.md §2.4); las veinte entradas INV reciben `"INV"`, su destino y `false` sin cambiar los bytes de sus contratos; crear el agregado src/Core/IngenIA365ERP.Application/Common/Integration/CatalogoDeMensajes.cs (`Todos`, `Buscar(Type)`, `Buscar(type, version)`) que une `CatalogoDeMensajesV1` (sin renombrar ni mover), `CatalogoDeMensajesDeCarteraV1` y `CatalogoDeMensajesHaciaCarteraV1`; `MensajesEntrantes`, `EmisorDeMensajes` y `VersionesAceptadas` leen el agregado.
+- [ ] T0066 [P] Crear los bloques comunes de Cartera en src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/BloquesComunesDeCarteraV1.cs **(nombre de archivo nuevo)**: `LoanRefV1`, `LoanFactDimensionsV1` (con modelo de deterioro, segmento y unidad UVR desde V1), `ConceptAmountV1`, `OriginalFactRefV1`, `ExternalDocumentRefV1` (clase como texto), `LoanFactLineV1`, `LoanPlanSummaryV1` y `UserRefV1` si no existe ya en `Contracts/Inventory` (contracts/mensajes.md §9), con la serialización de §4 (la de la 012).
+- [ ] T0067 Crear los records de hechos a Contabilidad en src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/<Type>V1.cs (un archivo por tipo; contracts/mensajes.md §10.1–§10.24; DT §2.11, C01–C03, C15, C91, C94) y declararlos en src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/CatalogoDeMensajesDeCarteraV1.cs con `OriginModule = "CAR"`, destino `Accounting`, `Kind`, `FormaDeClave` y `AdmiteProceso` según contracts/mensajes.md §6 (los de K3 y K4 «declarados en K1»; los tres contingentes de A3 con su nota «se quitan si el dueño rechaza A3»), sin propiedades de cuenta contable (FR-126).
+- [ ] T0068 Crear los records de Cartera a otros destinos y de otros módulos a Cartera: `ObligacionCreadaV1`, `ObligacionRechazadaV1` (→ `Inventory`, `AdmiteProceso = true`), `OrdenDeGiroEmitidaV1`, `AnulacionDeOrdenDeGiroV1` (→ `Treasury`), `PagoReversadoPorCarteraV1` (→ `Receipts`, pensado para varios destinos), `DescuentosPorPagaduriaV1` (→ `Receipts`, K2) en src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/ y su entrada en `CatalogoDeMensajesDeCarteraV1`; `ResultadoDelGiroV1` (`TES`), `EnvioDeDescuentosConfirmadoV1` y `ResultadoDeDescuentosV1` (`REC`, K2) con destino `Lending` en src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/CatalogoDeMensajesHaciaCarteraV1.cs (contracts/mensajes.md §11, §12; D15, D27). `VentaACreditoRegistradaV2` es de Comercial y la agrega la fase Fundacional B con E-02 (T18).
+- [ ] T0069 Hacer que `EmisorDeMensajes` (src/Core/IngenIA365ERP.Application/Common/Integration/EmisorDeMensajes.cs) tome el módulo del tipo y retire la constante `ModuloDeOrigen = "INV"`; ampliar src/Core/IngenIA365ERP.Application/Common/Integration/SolicitudDeEmision.cs con `Destino?`, `UsuarioDeOrigen` (`UserRefV1?`) y `CadenaDeOrden` (`Guid?`); resolver el usuario de origen en el orden de T11 (persona → `UsuarioDeOrigen` → proceso sólo si `AdmiteProceso`, si no lanza); `COR_IntegrationMessages.OriginActorKind` (`ActorKind`, `DEFAULT 1`) y `OriginUserCentralId` nulo en la entidad `IntegrationMessage` y su configuración; rechazar solicitudes que mezclan módulos o que omiten `Destino` en un tipo con varios. Deja verde T0026.
+- [ ] T0070 Ampliar el consumo (T15, T17, T19): `MensajeEntrante` gana `OriginDocumentClassText` y `RelatedDocumentClassText` (src/Core/IngenIA365ERP.Application/Common/Integration/IMensajesEntrantes.cs); `IMensajesEntrantes.PendientesAsync(destino, tipos, hastaFechaDeOperacion, página)` sin consumir ni intentar en MensajesEntrantes.cs; `UnidadDeConsumo` gana `OriginModule` (IDestinoDeMensajes.cs); la variante `ResultadoDeConsumo.ValidationFailed(ref, número, código, motivo)`; `RegisterDeliveryResultCommand` la lleva a `DeliveryStatus.ValidationFailed` desde `Pending` o `InBatch` (C18) con intento `ValidationFailed = 5` y levanta `Integracion.ValidacionFallida` con destinatarios del módulo de origen. Deja verde T0027 (parte de consumo).
+- [ ] T0071 Generalizar lo de Contabilidad que hoy supone un solo módulo (T15), sin tocar el consumo de Inventario: `PlanearLote` separa por `OriginModule`; `PendingInventoryMessagesQuery` pasa su lógica a `ListPendingIntegrationMessagesQuery(módulo)` **(nombre de T15)** en src/Core/IngenIA365ERP.Application/Common/Integration/ y el aviso del cierre contable de Inventario la llama con `INV`; `ScheduleIntegrationBatchesCommand` usa el respaldo de Inventario (`InventoryDocumentTypes`, `ContabilidadHoraDeLote`) sólo con claves INV; `VersionesAceptadas` por módulo. El reparto de `DestinoContabilidad` a `PostLendingFactsCommand` y `TotalesDelLoteAsync` con los recibos de Cartera los hace la fase de US7.
+- [ ] T0072 Extraer la estrategia `IVistaDeBandejaDelModulo` (alcance, modo vigente por tipo, nombre del documento; T19, PM-15) en src/Core/IngenIA365ERP.Application/Common/Integration/IVistaDeBandejaDelModulo.cs y mover a `VistaDeBandejaDeInventario` **(nuevo)** en src/Core/IngenIA365ERP.Application/Inventory/Integration/ la parte de Inventario de `ListIntegrationMessagesQuery` y `SendNotApplicableMessagesCommand`, sin cambiar `/api/inventory/messages*` ni sus respuestas (correr las e2e de bandeja de «Inventario e2e»); la de Cartera la agrega la fase de US7 con alcance por oficina.
+- [ ] T0073 Cambiar `DespachadorDeMensajes` (src/Presentation/IngenIA365ERP.API/Integration/DespachadorDeMensajes.cs; T15, T16, T19): `DestinosHabilitadosAsync` deja de leer `ParametrosDeInventario.CarteraIntegracionHabilitadaDesde` y recorre un destino si tiene consumidor y fila activa a hoy en `IRegistroDeIntegracion` (y, si es doble, el despliegue no es de producción); lo no habilitado queda `Pending` sin intentos ni alertas; turna los destinos (una tanda por destino y vuelta, dentro del presupuesto); el arranque falla con `Integration.Destination.DuplicateConsumer` si dos `IDestinoDeMensajes` declaran el mismo destino (validación al construir, registrada en Program.cs); `GetSalesDocumentCreditQuery` (src/Core/IngenIA365ERP.Application/Inventory/Sales/SalesQueries.cs) calcula «disponible» con el registro, no con la sola existencia del consumidor. Correr «Inventario e2e» y las de contabilización por mensajes.
+
+**Registro de participantes (T16; C35, C36; data-model §4.6)**
+
+- [ ] T0074 Crear `IntegrationParticipant` e `IntegrationParticipantAdoption` en src/Core/IngenIA365ERP.Domain/Entities/Integration/ y sus configuraciones en src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Integration/ con las columnas e índices de data-model §4.6 (`UK_COR_IntegrationParticipants_Code_Role_Destination` filtrado `[ValidTo] IS NULL AND [IsDeleted] = 0`, `Destination = ''` en un recaudador; `IX_…_Destination` filtrado `[Role] = 2`; `UK_COR_IntegrationParticipantAdoptions_Key`; `ValidTo` `[EscrituraUnica]`).
+- [ ] T0075 Implementar `IRegistroDeIntegracion` (lector: qué participante cuenta a una fecha, versiones adoptadas) y `EscritorDelRegistroDeIntegracion` (agrega sin guardar; rechaza dobles en producción, versiones no implementadas y cruces) en src/Core/IngenIA365ERP.Application/Common/Integration/; `RegisterIntegrationParticipantCommand` (con `destination`, C36), `RetireIntegrationParticipantCommand` (`Integration.Participant.InUse` con el destino `Lending` y Cartera activa) y `ListIntegrationParticipantsQuery` (con `implementationAvailable`) en src/Core/IngenIA365ERP.Application/Core/IntegrationParticipants/ **(carpeta nueva)**; src/Presentation/IngenIA365ERP.API/Endpoints/Core/IntegrationParticipantsEndpoints.cs **(nuevo)** con contracts/api.md §21.1 (`Core.IntegrationParticipants.View/Manage`, `Idempotency-Key`). Las claves derivadas `:reverso` y `:destino` y el retiro del prefijo `TEST:` (C35) quedan en `ClavesDeRecaudador` **(nuevo)** del mismo espacio para que el contrato las use. Deja verde T0027 (parte de registro).
+
+**Canales externos (T71–T73; contracts/adaptadores-y-archivos.md §2, §3)**
+
+- [ ] T0076 [P] Crear lo común de los puertos en src/Core/IngenIA365ERP.Application/Common/ExternalChannels/ **(carpeta fijada en adaptadores-y-archivos.md §2)**: `ResultadoExterno<T>`, `ContextoDeCanalExterno`, `ArtefactoExterno`, `CredencialDeCanalExterno`, `ICredencialesDeCanalExterno` y el defecto `SinCredencialesDeCanalExterno` **(nuevo)**; y la guardia única en src/Core/IngenIA365ERP.Application/Lending/Adapters/: `GuardiaDeCanalesExternos`, `CanalesExternosOptions` (`AmbienteDePruebas`), `EfectoLegalDeCanal`, `VeredictoDeEfectoLegal` (§3.6). Deja verde la parte de guardia de T0028.
+- [ ] T0077 Crear `ExternalChannelSetting` en src/Core/IngenIA365ERP.Domain/Entities/Core/ExternalChannelSetting.cs y su configuración con data-model §4.7 (`SettingKey = {Kind}|{BureauCode|*}`, `UK_COR_ExternalChannelSettings_Key_ValidFrom` filtrado vivos, sólo `CredentialKey`); `ConfigureExternalChannelCommand` (cierra la anterior la víspera; `SIMULADO` admitido en producción antes y después de activar, T73; audita sin `CredentialKey` en el diff), `VerifyExternalChannelCredentialCommand` (resuelve la credencial, llama `ProbarAsync`, fija `VerifiedAt`), `ListExternalChannelSettingsQuery` (con `simulated` y estado del circuito) en src/Core/IngenIA365ERP.Application/Core/ExternalChannels/ **(carpeta nueva)**; src/Presentation/IngenIA365ERP.API/Endpoints/Core/ExternalChannelsEndpoints.cs **(nuevo)** con contracts/api.md §21.2 (`Core.ExternalChannels.View/Manage`).
+- [ ] T0078 Llenar el proyecto src/Infrastructure/IngenIA365ERP.ExternalChannels/ (T71, T72): `Credentials/CredencialesDeCanalExternoEnArchivo.cs` (ruta `/secrets/canales-externos/{tenantPublicId}.{channelCode}.json` desde `ExternalChannels:CredentialsPath`, caché de 5 min por huella, esquema validado por el adaptador; no reutiliza `CredencialesEnArchivo` de la DIAN), `Circuit/CircuitoDeCanalExterno.cs` (fallas seguidas por cooperativa y canal, umbral `Canales.UmbralDeFallas`, alerta `Cartera.CanalExternoNoDisponible` con `DedupKey …:{clase}:{canal}`, sondeo `ProbarAsync` cada 5 minutos, nunca lanza), `Messaging/MensajeriaSimulada.cs`, `RestrictiveLists/{CanalDeListasCargadas,ListasSimuladas}.cs` (`CARGA-PROPIA` sobre la carga vigente con `CoincidenciaDeNombres` en memoria y el umbral `Listas.UmbralDeCoincidenciaDeNombre`), y `DependencyInjection.AddExternalChannels` que reemplaza los defectos «sin canal» y falla el arranque con dos adaptadores del mismo código. Los adaptadores `Securities/` y `CreditBureaus/` (con `DepositoDeValoresSimulado` y `CentralDeRiesgoSimulada`) los agregan las fases de US3 y US2. Deja verde T0029 y la parte de credenciales de T0028.
+- [ ] T0079 Componer en src/Presentation/IngenIA365ERP.API/Program.cs: `builder.Services.AddExternalChannels(builder.Configuration)` **después** de `AddApplicationServices` (y sólo aquí), `CanalesExternosOptions.AmbienteDePruebas = !builder.Environment.IsProduction()`, la sección `ExternalChannels` en appsettings.json con tiempos por canal y `CredentialsPath = /secrets/canales-externos`; y el guion tools/scripts/crear-secreto-canales-externos.ps1 (`-Ambiente -Tenant -Canal`, molde `crear-secreto-facturacion-electronica.ps1`: valores por teclado o STDIN sobre SSH, `kubectl patch secret erp-canales-externos` sólo esa clave, en producción exige escribir `PRODUCCION`, nada en disco ni en GitOps). El montaje del Secret en los manifiestos es tarea de Polish con autorización (producción).
+
+**Mensajería a personas y plantillas versionadas (T74, T76; F-04, F-07)**
+
+- [ ] T0080 [P] Crear el puerto de plataforma en src/Core/IngenIA365ERP.Application/Common/Messaging/: `ICanalDeMensajeria` (`ChannelCode`, `Capacidades`, `EnviarAsync(MensajeSaliente)`, `ConsultarEntregaAsync`, `ProbarAsync`), `ICanalesDeMensajeria` (registro por código sellado), `MensajeSaliente`, `EnvioDeMensaje`, `EstadoDeEntrega`, `DeliveryState` (`Accepted`, `Delivered`, `Failed`, `Unknown`) y `CanalDeCorreo` sobre `IEmailSender` (registrado por `AddApplicationServices` como canal siempre disponible); `NotificationChannels` no se amplía y `COR_Notifications` no se usa para personas que no son usuarios (T74, pregunta I14).
+- [ ] T0081 Adoptar `COR_NotificationTemplates` como plantillas versionadas (T76; data-model §4.12; C68, C90): columnas `Code` (10, `CodigoDeCatalogo`), `Module`, `Purpose`, `Version`, `ValidFrom`, `ValidTo`, `ProviderTemplateId`, `Variables`, `IsSeeded`, `ReviewPending` en la entidad y en src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Core/NotificationTemplateConfiguration.cs; retirar `UK_COR_NotificationTemplates_Name_Channel` y crear `UK_COR_NotificationTemplates_Code_Channel_Version` filtrado vivos; `RenderizadorDePlantillasDeMensaje` en src/Core/IngenIA365ERP.Application/Lending/Collections/RenderizadorDePlantillasDeMensaje.cs con la lista blanca por propósito de contracts/adaptadores-y-archivos.md §4.7; `CreateMessageTemplateVersionCommand` en src/Core/IngenIA365ERP.Application/Lending/Collections/. Deja verde T0030. Rutas `/api/lending/message-templates` y pantalla `/cartera/plantillas-de-mensaje`: ver Notas (sin fase dueña en el mapa).
+- [ ] T0082 Sembrar las nueve plantillas «pendiente de validar» (`AVISOPREV`, `RECORDPREV`, `MORAADMIN`, `PREJURID`, `NOAPLICPAG`, `PASOACAJA`, `ABONOCAP`, `GASTOCOBR`, `ENVIODOC`; una fila por canal, `Module = Lending`, `IsSeeded = 1`, `ReviewPending = 1`) en src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/LendingMessageTemplatesSeeder.cs **(nuevo, Order 91, nuevo)** con su JSON en Data/; idempotente por (`Code`, `Channel`, `Version`) (dueño)
+  · los textos los valida el abogado o el dueño (preguntas I2, I15); rige la propuesta de contracts/adaptadores-y-archivos.md §4.7.
+
+**Cumplimiento: autorizaciones, listas y solicitudes (T69, T70; S10, F-18)**
+
+- [ ] T0083 Ampliar habeas data por finalidad (T69 a; data-model §4.10): columnas `Purpose` (`DEFAULT 'GeneralTreatment'`), `ContactChannel`, `EvidenceAttachmentPublicId`, `Origin` (`DEFAULT 'PersonRegistration'`) en `HabeasDataConsent`, y `Purpose` en `HabeasDataPolicyVersion`, con sus configuraciones en src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Compliance/; rehacer `UK_CMP_HabeasPolicyVersions_TenantVersion` con `Purpose` y `UK_CMP_HabeasPolicyVersions_Current` por `(TenantId, Purpose)` (C68); nuevo `IX_CMP_HabeasConsents_Purpose`; `IAutorizacionDeDatos` gana `VigenteAsync(persona, finalidad, canal?)` y `Agregar(AutorizacionAAgregar)` (src/Core/IngenIA365ERP.Application/Compliance/HabeasData/IAutorizacionDeDatos.cs y su implementación), `AutorizacionVigente` suma `Purpose` y `HasEvidence`; `RecordDataAuthorizationCommand` y `ListDataAuthorizationsQuery` con rutas `GET/POST /api/compliance/habeas-data/authorizations?personPublicId=` en src/Presentation/IngenIA365ERP.API/Endpoints/HabeasDataModule.cs (`Compliance.HabeasData.ViewHistory/RecordConsent`); el tipo de adjunto `DataAuthorization` con subida en `AdjuntosDeModulo` (T81); las rutas `{personId:int}` quedan marcadas en desuso. Deja verde la parte de autorizaciones de T0031.
+- [ ] T0084 Crear las listas restrictivas (T70; data-model §4.8): `RestrictiveListLoad` (H) y `RestrictiveListEntry` (H, `AuditableEntityLong`, `[SinDiffDeAuditoria]`) en src/Core/IngenIA365ERP.Domain/Entities/Compliance/ con sus configuraciones e índices; `IListasRestrictivas`, `IProveedoresDeListas`, `ConsultaDeListas`, `ResultadoDeListas`, `ScreeningOutcome` (`NoMatch`, `PossibleMatch`, `Match`) y el defecto `ListasSinProveedores` **(nuevo)** en src/Core/IngenIA365ERP.Application/Common/Compliance/; `ImportRestrictiveListCommand` (plantilla `compliance.restrictive-lists` de contracts/plantillas.md §4, todo o nada, un evento de auditoría por carga con conteo y SHA-256), `ListRestrictiveListLoadsQuery`, `ListRestrictiveListEntriesQuery` en src/Core/IngenIA365ERP.Application/Compliance/RestrictiveLists/ **(carpeta nueva)**; rutas en src/Presentation/IngenIA365ERP.API/Endpoints/Compliance/RestrictiveListsEndpoints.cs **(nuevo)** (`Compliance.RestrictiveLists.View/Load`; contracts/api.md §22.1). El re-escaneo de deudores vivos (`cartera.re-escaneo-de-listas`, C90) y `LND_ScreeningResults` son de la fase de US2.
+- [ ] T0085 Crear las solicitudes del titular (T69 b; data-model §4.9): `DataSubjectRequest` en src/Core/IngenIA365ERP.Domain/Entities/Compliance/DataSubjectRequest.cs y su configuración (`IX_COR_DataSubjectRequests_Status_Due`, `_Person`; `RespondedAt` `[EscrituraUnica]`); `RegisterDataSubjectRequestCommand` (`dueDate` por `PlazosDelTitular` con `TITULAR_*` de `IValoresNacionales` e `ICalendarioHabil`), `ExtendDataSubjectRequestCommand`, `RespondDataSubjectRequestCommand` (con `ReglaDeRevocacion`: la revocación de `ContactChannel` agrega la fila `Revoked` en el mismo `SaveChanges`; la de una finalidad de crédito consulta el deber por `IDeberDeConservacionDelTitular` **(nuevo)**, que en esta fase responde «sin obligaciones registradas» y la fase 3 conecta a `IConsultaDeObligaciones.ObligacionesAsync([titular], hoy, IncludeAsCoDebtor: true, IncludeClosed: true)`; sella la respuesta en `DutyEvidenceJson`), `ListDataSubjectRequestsQuery`, `GetDataSubjectRequestQuery` en src/Core/IngenIA365ERP.Application/Compliance/DataSubjectRequests/ **(carpeta nueva)**; rutas en src/Presentation/IngenIA365ERP.API/Endpoints/Compliance/DataSubjectRequestsEndpoints.cs **(nuevo)** (`Compliance.DataSubjectRequests.Read/Register/Respond`; contracts/api.md §22.3); la tarea diaria `cumplimiento.plazos-del-titular` **(nuevo)** que alerta `Cumplimiento.PlazoDelTitularPorVencer`. **Depende** del puerto `IConsultaDeObligaciones` que crea la fase Fundacional B (ver Notas). Deja verde la parte de solicitudes de T0031.
+- [ ] T0086 Generalizar `RutasDePlantilla.MapPlantilla` (src/Presentation/IngenIA365ERP.API/Endpoints/Common/RutasDePlantilla.cs; T82; contracts/plantillas.md §0.8) para recibir la búsqueda de la definición, el permiso de datos personales y el evento de exportación, sin cambiar las dieciséis plantillas de la 012 (correr sus pruebas antes de fusionar); registrar las definiciones `compliance.restrictive-lists` y `saas.national-values` en un catálogo de plataforma `CatalogoDePlantillasDePlataforma` **(nuevo)** en src/Core/IngenIA365ERP.Application/Common/Imports/ **(carpeta nueva)**. Deja verde la parte de listas de T0031.
+
+**Alertas con alcance (C68, C74; data-model §4.14, §11)**
+
+- [ ] T0087 Agregar `ScopeBranchPublicId` y `ScopeCreditLinePublicId` a `COR_Alerts` (entidad y configuración en src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Alerts/); `AlertaALevantar` gana módulo de origen y alcance; `IAlertas.LevantarAsync` descarta destinatarios del otro módulo (`Inventory.*`/`Accounting.Inventory*` con origen `CAR`; `Lending.*`/`Accounting.Lending*` con origen `INV`) y deja un punto de extensión `IFiltroDeAlcanceDeAlertas` **(nuevo)** que por defecto no filtra y que implementa la fase de US17 con `IAlcanceDeCartera`. Deja verde T0032.
+- [ ] T0088 Agregar a src/Core/IngenIA365ERP.Application/Common/Alerts/TiposDeAlerta.cs todos los tipos de data-model §11 (Cartera K1–K4 con su módulo, severidad, canal, destinatarios por defecto cotejados con `PerfilesSugeridos` —C74— y `DisponibleDesde` = `K1`…`K4`; `Contabilidad.PeriodoInexistente`, `Contabilidad.GrupoNiifDistinto`, `Nomina.ValorNacionalDistinto`, `Cumplimiento.PlazoDelTitularPorVencer`, `Cartera.HechoNoContabilizable`, `Cartera.VentaNoIncorporada`, `Cartera.GarantiaPorVencer` con `ThresholdsJson.diasDeAnticipacion = 30`); ampliar src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/AlertTypesSeeder.cs (Order 83) para insertar los nuevos y, en los tres reutilizados (`Integracion.ValidacionFallida`, `.MensajeRechazado`, `.MensajeSinEntregar`), una **versión nueva** desde el despliegue con la unión de destinatarios y motivo «Feature 013: destinatarios de Cartera», sólo si la vigente no los tiene (C68).
+
+**Auditoría y permisos de plataforma (T67; S8, R4; DT §2.14)**
+
+- [ ] T0089 [P] Agregar `Compliance` y `NationalValues` a `ModuloDeAuditoria` con sus reglas «.Compliance» y «.NationalValues» antes de «.Admin» y «.Core» (src/Core/IngenIA365ERP.Application/Common/Audit/ModuloDeAuditoria.cs), a `AuditoriaEncadenada.Modulos` (src/Core/IngenIA365ERP.Application/Common/Audit/AuditoriaEncadenada.cs) y a `AuditRetention.ModulosDeDiezAnios` (src/Infrastructure/IngenIA365ERP.Audit/Indexes/AuditRetention.cs); los handlers de habeas data existentes pasan a `Compliance` (encadenado, diez años). `Lending` entra a la cadena con la regla «.Savings» de la mudanza, en la fase Fundacional B (C89; ver Notas).
+- [ ] T0090 [P] Sembrar los permisos de plataforma de DT §2.14 en src/Infrastructure/IngenIA365ERP.Identity/Seed/DomainPermissionCatalogSeeder.cs (la API al arrancar, antes de `BuiltInRolesSeeder`; nunca el DbMigrator, T60): `Core.IntegrationParticipants.View/Manage`, `Core.NationalValues.View/Review`, `Core.RegulatoryProfile.View/Manage`, `Core.ExternalChannels.View/Manage`, `Compliance.RestrictiveLists.View/Load/Release`, `Compliance.DataSubjectRequests.Read/Register/Respond`; `View` sólo donde no hay datos personales (las listas restrictivas no son personas del maestro; `Release` ve coincidencias con deudores, C84).
+
+**Pantallas y clientes (T98, T100; DT §2.16 «Otras áreas»)**
+
+- [ ] T0091 Crear los clientes tipados (sin poner `Authorization` a mano, `ElTokenDeSesionLoPoneElHandler`) en src/Presentation/IngenIA365ERP.Shared/Services/Core/{ValoresNacionalesClient,PerfilRegulatorioClient,CanalesExternosClient,ParticipantesDeIntegracionClient}.cs y src/Presentation/IngenIA365ERP.Shared/Services/Compliance/{ListasRestrictivasClient,SolicitudesDelTitularClient}.cs **(nuevos)**, con `Idempotency-Key` en toda escritura y registro en el contenedor de Shared.
+- [ ] T0092 Crear las pantallas (todas con `IndicadorDeCarga`/`EstadoDeCarga` por zona, clases de `componentes.css` sin colores literales ni `<style>`, `PermissionGate` y enlace en src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor):
+  · src/Presentation/IngenIA365ERP.Shared/Pages/Administracion/ValoresNacionales.razor (`/admin/valores-nacionales`: el maestro registra, corrige, importa, exporta y ve los faltantes de C69; la cooperativa consulta su copia con `date`/`recordedAsOf`, la bitácora de réplicas y revisa con `Core.NationalValues.Review`; «pendiente de validar» visible);
+  · src/Presentation/IngenIA365ERP.Shared/Pages/Administracion/PerfilRegulatorio.razor (`/admin/perfil-regulatorio`, versiones con soporte adjunto);
+  · src/Presentation/IngenIA365ERP.Shared/Pages/Administracion/CanalesExternos.razor (`/admin/canales-externos`, verificación y aviso permanente «Canal simulado: no tiene validez legal»);
+  · src/Presentation/IngenIA365ERP.Shared/Pages/Administracion/ParticipantesDeIntegracion.razor (`/admin/participantes-de-integracion`);
+  · src/Presentation/IngenIA365ERP.Shared/Pages/Compliance/ListasRestrictivas.razor (`/compliance/listas-restrictivas`, carga con revisión previa) y src/Presentation/IngenIA365ERP.Shared/Pages/Compliance/SolicitudesDelTitular.razor (`/compliance/solicitudes-del-titular`, plazos y prórroga);
+  · ningún texto nombra al sistema anterior ni muestra códigos técnicos; ampliar `TodoEnlaceDelMenuTieneSuPagina` y `ModulosMigrados` de `LasPantallasDicenQueEstanCargando` (T0036).
+
+**Migraciones pares (DT §2.26)**
+
+- [ ] T0093 Generar el par Admin `ValoresNacionales` con `tools/scripts/add-migration.ps1 -Name ValoresNacionales -Context Admin` en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Admin/: tres tablas (`ADM_NationalValues`, `ADM_RegulatoryDocuments`, `ADM_NationalValueCounters`, C44 enmienda a DT §2.26), aditiva, sin nada más en el scaffold; `check-migration-parity.ps1` en verde en el contexto `Admin`.
+- [ ] T0094 Generar el par `PlataformaParaCartera` con `tools/scripts/add-migration.ps1 -Name PlataformaParaCartera -Context Application` (DT §2.26; data-model §14): las 11 tablas `COR_` (§4.1–§4.9), `COR_IntegrationMessages.OriginActorKind` (`DEFAULT 1`) y `OriginUserCentralId` nulo, `COR_NotificationTemplates` (10 columnas y cambio de UK), `CMP_HabeasDataConsents` (4 columnas e índice) y `CMP_HabeasDataPolicyVersions` (`Purpose` y dos UK rehechos, sin pérdida de datos), `COR_Alerts` (alcance), `PAY_Holidays.NationalValuePublicId`; filas por `INSERT … WHERE NOT EXISTS` en los dos motores: arrendamiento `lending.process` (`LeaseUntil` en el pasado) y participantes `CNT`, `INV`, `NOM` (habilitados) y `CAR` (inhabilitado, `ValidFrom = 1900-01-01`) con sus adopciones de data-model §4.6; revisar que el scaffold no arrastre cambios de otras features (lección de `NominaDispersionBancaria`) ni operaciones sobre tablas `LND_` heredadas; `check-migration-parity.ps1` y `PrincipioXII_MigrationsIdempotent` en verde. Orden frente a T88: ver Notas.
+- [ ] T0095 Correr las e2e de esta fase (T0037, T0038, T0039) más «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» con `DB_PROVIDER=PostgreSql` y `SqlServer`, y comparar con la línea base de T0009; ninguna prueba existente cae (en particular la bandeja de Inventario, la contabilización por mensajes y la PILA, que lee el SMMLV).
+
+**Documentación**
+
+- [ ] T0096 [P] Escribir docs/operaciones/valores-nacionales.md **(nuevo)**: quién registra (el maestro con segundo factor, B5), la plantilla `saas.national-values` y el paquete de exportación entre ambientes, la réplica (`valores-nacionales.replicar`, `NationalValuesReplicaSeeder`), qué hace la proyección de Nómina (T93) y cómo resolver `Nomina.ValorNacionalDistinto`, la revisión «pendiente de validar», los faltantes de C69, y que nada que necesite valores ficticios en la central se ensaya en DEV ni QA (DT §7.6).
+- [ ] T0097 [P] Escribir docs/operaciones/canales-externos.md **(nuevo)** (Secret `erp-canales-externos`, guion `crear-secreto-canales-externos.ps1`, `SIMULADO` y `CARGA-PROPIA`, efecto legal en producción, circuito) y ampliar docs/manual/plataforma-de-integracion.md con la bandeja de varios emisores, el proceso como origen (T11), el registro de participantes y la habilitación de destinos (T16), `ValidationFailed` y los turnos del despachador.
+
+**Checkpoint**: la plataforma que pide K1 existe y está probada en los dos motores sin una sola tabla `LND_` nueva:
+valores nacionales con réplica y proyección de Nómina, perfil regulatorio, bandeja de varios emisores con el
+catálogo de Cartera declarado, registro de participantes, canales externos con `SIMULADO`, mensajería a personas,
+cumplimiento y alertas con alcance; `ValoresNacionales` y `PlataformaParaCartera` generadas en par; Inventario,
+Nómina y Contabilidad en su línea base. La fase Fundacional B puede empezar.
+
+---
+
+## Phase 3: Foundational (Blocking Prerequisites) — parte B: enmiendas previas, retiro de lo heredado y base de Cartera
+
+**Goal**: dejar el terreno sobre el que se construye la Cartera nueva, en el orden que fija C103 de
+`decisiones-transversales.md` (DT §7.9, que enmienda T88, la §2.26 y `plan.md` «Orden de migraciones en K1»). La fase
+tiene cuatro secciones:
+
+- **Sección A — enmiendas que van antes del retiro** (T90–T95, E-02, E-03, E-04): los cinco puertos que Cartera
+  ofrece nacen en `Application/Common/Integration/Lending` con sus implementaciones provisionales
+  (`ConsultaDeObligacionesSinActivar`, `ContratoDeObligacionesSinActivar` → `Lending.NotActivated`;
+  `ReservasDeCarteraNoHabilitada` → `NotEnabled`; `IDimensionesDeCartera` lo crea US7); Nómina recauda por el
+  contrato (definitiva «todo o nada», ordinaria como pagaduría interna, `PAY_PayrollLoanDeductions`, novedad
+  `LoanDeduction` por obligación, reconocimiento de «Cartera por activar», `DESC_CARTERA` contra el puente);
+  Personas y el retiro de asociado por la consulta de obligaciones; Comercial con columnas, reserva, v2 y
+  `CreditWithoutLending`; y las migraciones aditivas `NominaRecaudaPorElContrato` (con la copia idempotente de C73)
+  y `ComercioConCartera`. Al cerrar la sección, ningún archivo fuera de la cartera heredada nombra una `LND_`
+  heredada ni sus `DbSet` (T88 paso 1).
+- **Sección B — retiro de lo heredado** (T86–T89, T96, R119–R128, data-model §13): diagnóstico, mudanza de las 38
+  tablas conservadas al espacio `Savings` con rutas `/api/savings/*` y `/api/reports/savings/*` (enmienda A10),
+  retiro de las 55 tablas de crédito, su código, 66 rutas, 21 pantallas, menú, manual, PDF, permisos legados y el
+  proyecto `IngenIA365ERP.Legacy`; y la migración destructiva con guarda `RetiroDeLaCarteraHeredada` en commit
+  propio, con su runbook.
+- **Sección C — base de Cartera**: enumeraciones (DT §2.7 con la numeración de data-model §9 y las fijadas en las
+  partes 1 y 2), `PrecisionDeCartera`, `AritmeticaDecimal`, `VigenciaBitemporal`, **todas** las entidades y
+  configuraciones de las 91 tablas de `CarteraNucleo`, `CerrojoDeCartera`, `RegistroDeCartera` (C45),
+  `NumeradorDeCartera` (C48), la guarda de inmutabilidad para los hechos de Cartera, los 123 permisos `Lending.*` y
+  las trece plantillas de rol (C85, C86), el catálogo `ParametrosDeCartera`, el esqueleto de `ProcesadorDeCartera`
+  (arrendamiento `lending.process`, cuatro clases de corrida, C59), las semillas (tipos de hecho con `ShortCode`,
+  comprobante `CN`, documentos normativos de Cartera) y, al final, la migración par `CarteraNucleo`.
+- **Sección D — piezas que se usan antes de su historia y activación de prueba** (C106, C107): firma estable y
+  comportamiento mínimo de `IContabilidadParaCartera`, `ModoDePasoDeCartera`, `ValidacionPreviaContableDeCartera`,
+  `FechaContable`, `CategoriaContableDeCartera` y `TesoreriaDePrueba` (`IConsultaDeObligaciones` «sin activar» ya la
+  deja la sección A), `EmisionDeCartera` con los dos informativos de la activación, y el **camino mínimo** de
+  `ActivateLendingCommand` para una cooperativa **sin cartera que migrar** (carga vacía, acta, requisitos contra el
+  registro con los dobles de prueba como Recaudo y Tesorería) con el ayudante e2e `ActivarCarteraAsync`, para que las
+  e2e de las fases 4 a 12 corran sin `Skip`. Las historias dueñas (US3, US5, US7, US8, US9) completan cada pieza.
+
+**Qué entidades crea esta fase y cuáles cada historia (decisión de esta fase).** Esta fase crea la **forma** de
+todas las tablas de `CarteraNucleo` (data-model §14: 74 de negocio, contando las tres `LND_IssuedDocument*` que la
+pregunta I5 adelanta a K1, más las 17 de preparación): entidad, configuración, columnas, tipos con su alias de
+precisión, claves, índices con nombre, filtro de borrado lógico, FK `Restrict`, marca `IHechoInmutable`,
+`[EscrituraUnica]` y `[SinDiffDeAuditoria]`, y los constructores o fábricas que garantizan las invariantes de forma.
+**No** crea comportamiento de negocio: cada historia agrega sobre ellas sus métodos de dominio, comandos, consultas,
+validadores, rutas y pantallas (US1 líneas, US2 originación, US17 gobierno, US3 desembolso, US4 libro y ciclo, US5
+contrato real, US6 Comercial real, US8 migración y activación, US13 documentos). Quedan **fuera** de esta fase las 7
+tablas de `CarteraRiesgo` (las crea US9 en su fase, con las FK de C66 hacia ellas), las 4 `ACC_Lending*` y
+`ACC_RegulatoryIndicators` (US7, `IntegracionContableDeCartera`) y las de K2–K6b. **Pares regenerables (C104)**: si
+una historia de K1 necesita cambiar el esquema de una tabla de `CarteraNucleo`, se **regenera** el par
+`CarteraNucleo` (borrar y volver a generar con `tools/scripts/add-migration.ps1`), nunca una migración correctiva,
+hasta la tarea final de K1 (al cierre de la fase 14) que congela los tres pares de K1; ninguno se aplica fuera de
+local y de las e2e antes de esa tarea.
+
+**Orden respecto de la fase 2 (C103).** La fase 2 genera **primero** `ValoresNacionales` (Admin) y
+`PlataformaParaCartera`, que no tocan tablas `LND_`; esta fase empieza después y genera, en este orden,
+`NominaRecaudaPorElContrato`, `ComercioConCartera`, `RetiroDeLaCarteraHeredada` (commit propio) y `CarteraNucleo`; la
+fase ya no se parte por las migraciones. La regla de T88 se mantiene: ninguna entidad `LND_` nueva entra al modelo
+antes del retiro (la sección C empieza cuando la B terminó). Después vienen `CarteraRiesgo` (US9) e
+`IntegracionContableDeCartera` (US7), en ese orden.
+
+**Independent Test**: sin contenedores, quedan verdes las pruebas de Domain (`AritmeticaDecimalTests`,
+`VigenciaBitemporalTests`, `EnumeracionesDeCarteraTests`, los casos dorados de Nómina con la cuota de Cartera y
+`CasoDoradoLiquidacion` con `DESC_CARTERA` contabilizable), las de Application de esta fase (puertos provisionales,
+Nómina por el contrato con dobles, Personas, retiro de asociado, Comercial con reserva y v2, permisos y plantillas,
+numerador, registro, procesador) y las de arquitectura que esta fase llena (`LaCarteraHeredadaNoVuelve`,
+`NingunaTablaConservadaApuntaALaCarteraRetirada`, `ElEspacioLendingEsSoloCartera`,
+`LaCarteraSoloSeTocaPorSusInterfaces` con cuatro puertos, `ElMotorDeCarteraEsDecimal`,
+`NadieEscribeElLibroDeCarteraFueraDelRegistro`, `LosSaldosYTasasDeCarteraTienenSuPrecision`,
+`LaCarteraUsaLaFechaLocal`, `CadaParametroRespetaLaEntregaDeSuModulo` y las ampliadas). Con Docker Desktop, en
+PostgreSQL y SQL Server (`DB_PROVIDER`), pasan `RetiroDeLaCarteraHeredadaTests`, `CarteraDesplegadaSinActivarTests`
+y `ActivacionDeCarteraDePruebaTests` (colección «Cartera e2e»: `ActivarCarteraAsync` deja una cooperativa aislada
+activada sin cartera previa) y siguen verdes «Nomina e2e», «Inventario e2e» (en particular
+`Ventas/CreditoProvisionalTests`), `Payroll/LiquidacionDefinitivaTests` y `Core/AltaDePersonaEnUnPasoTests`;
+`GET /api/admin/permissions/mine` con el administrador de una cooperativa trae los 123 `Lending.*` y
+`GET /api/admin/roles/templates?module=Lending` las trece plantillas; las 66 rutas de crédito heredadas responden 404
+y las 52 conservadas responden en `/api/savings/*`; tras `CarteraNucleo`, `dotnet ef` no ve cambios pendientes en
+ningún motor y `check-migration-parity.ps1` pasa.
+
+### Tests for Foundational B (se escriben primero y deben fallar antes de implementar)
+
+#### Sección A — enmiendas previas
+
+- [ ] T0098 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Common/Integration/Lending/PuertosProvisionalesDeCarteraTests.cs` **(nuevo)** (T85, interfaces.md §3.17, §5.2, §6.1, §7): `ConsultaDeObligacionesSinActivar.ObligacionesAsync` responde `LendingStatus = NotActivated`, una entrada por persona pedida con `MigratedNotActivated = false` y sin obligaciones; `CuotasDeNominaAsync` vacío con `NotActivated`; `ContratoDeObligacionesSinActivar`: `ListarAsync` y `SimularAsync` → `Answered`, valor vacío, código `Lending.NotActivated`; `AplicarAsync` → `Rejected` con `Lending.NotActivated` en **cada** ítem de `Payments` y de `NotDeducted`; `ReversarAsync` y `ResolverSaldoAFavorAsync` → `Rejected` con el mismo código; `ReservasDeCarteraNoHabilitada.ReservarAsync`/`LiberarAsync` → `EstadosDeReserva.NotEnabled`; los tres provisionales no escriben nada en el contexto
+- [ ] T0099 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Common/Behaviors/TransaccionExplicitaTests.cs` (ampliar): `TransaccionExplicita.HayEnCurso(db)` verdadero dentro de `EjecutarAsync` y falso fuera; en InMemory (sin transacciones) responde falso y las pruebas que lo necesitan lo sustituyen (DE-02, T91)
+- [ ] T0100 [P] Casos dorados de Nómina con la cuota de Cartera, calculados a mano, en `tests/IngenIA365ERP.Domain.Tests/Payroll/Calculation/Casos/` (DE-19, G5, quickstart §1.4): `cartera-01-cuota-dentro-del-tope.json`, `cartera-02-cuota-excede-el-tope.json` (lo que no cabe queda no descontado con `DeductionCap`), `cartera-03-neto-insuficiente.json` (`InsufficientNet`), `cartera-04-cuota-primera-entre-autorizadas.json` (después de las de ley, antes de las demás autorizadas) **(nombres nuevos)**; el ejecutor existente los lee sin cambios de forma salvo el motivo de no descontado por línea
+- [ ] T0101 [P] Actualizar `tests/IngenIA365ERP.Domain.Tests/Payroll/Settlements/CasoDoradoLiquidacion.cs` y sus casos: `DESC_CARTERA` deja de ser `AccountedByOtherModule` y contabiliza contra la cuenta del concepto (enmienda D-08 de la 010, T53, C1 «propuesta por defecto: sí»)
+- [ ] T0102 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Payroll/Settlements/PropuestaDeDescuentosDeCarteraTests.cs` **(nuevo)** con `ConsultaDeObligacionesDePrueba`: `SaldoTotal` → `TotalBalance`; `SoloCuotasCausadas` → `DueAmount`; `NoProponer` → nada; todas las vivas como deudor, castigadas incluidas, nunca las de codeudor (G4); el desglose JSON conserva las claves `capital`, `intereses`, `mora`, `cuotasPendientes`, `cuota`, `saldoTotal`, `modo`; `DeudaPropuesta` lleva `ObligationPublicId` y `ObligationNumber`; una excepción o el tiempo agotado dan el aviso `Payroll.Settlement.PortfolioUnavailable` y propuesta vacía (R104)
+- [ ] T0103 [P] Reescribir `tests/IngenIA365ERP.Application.Tests/Payroll/Services/SettlementInputLoaderTests.cs` (l. 174, 351, 374), `tests/IngenIA365ERP.Application.Tests/Payroll/Settlements/Settlement/DefinitivaDePrueba.cs` (sin `LoanPortfolio` ni `RecaudoDeCredito`) y `RecalculateSettlementCommandHandlerTests.cs` (l. 17, 60) para que propongan por la consulta de obligaciones; `Coincide` y `Conservar` comparan por `ObligationPublicId` (R118)
+- [ ] T0104 [P] Reescribir `tests/IngenIA365ERP.Application.Tests/Payroll/Settlements/Settlement/ApproveSettlementCommandHandlerTests.cs` (l. 33, 115, 136, 155) con `ContratoDeObligacionesDePrueba`: aprobar vuelve a consultar en el gancho `antesDeContabilizar` y con el conjunto vivo distinto responde `Payroll.Settlement.LoanProposalOutdated`; aplica el lote `NonInteractive`, `Payroll`/`NOM`, `OwnPayrollDeduction`, pagador el empleado, fecha valor = aprobación, clave `NOM:{runPublicId:N}:{obligationPublicId:N}` en orden ascendente de `ObligationPublicId`, modalidad `FullPayoff`/`CycleInstallment`/`FreeAmount` según política y ajuste; un ítem `Rejected` o con excedente → `Payroll.Settlement.LoanAmountsChanged` con los valores de Cartera y nada queda guardado; guarda `CarteraTransactionPublicId` y `RemainingBalanceAfter`; con personas en `MigratedNotActivated` exige `AcknowledgeLendingPendingActivation` (`Payroll.LendingPendingActivationAckRequired`) y lo guarda en `PAY_PayrollRuns.LendingActivationAckBy/At` (T92, R104, R109)
+- [ ] T0105 [P] Reescribir `tests/IngenIA365ERP.Application.Tests/Payroll/Settlements/Settlement/ReverseSettlementCommandHandlerTests.cs` (l. 19): reversar llama `ReversarAsync` por cada descuento aplicado con la clave del pago, guarda `CarteraReversalPublicId`, y un rechazo revierte la reversión entera con el motivo (R105); y `AdjustSettlementDeductionCommandHandlerTests.cs`: el ajuste pide `SimularAsync` (`FreeAmount`) sin escribir y guarda el saldo exacto que quedaría (R105)
+- [ ] T0106 [P] Reescribir `tests/IngenIA365ERP.Application.Tests/Payroll/Terminations/RegisterTerminationCommandHandlerTests.cs` (l. 26, 78, 158, 171, 212: Cartera caída con el doble) con `ConsultaDeObligacionesDePrueba` (R118)
+- [ ] T0107 [P] Ampliar `tests/IngenIA365ERP.Application.Tests/Payroll/Runs/CalculatePayrollRunCommandHandlerTests.cs`: `CuotasDeNominaAsync` alimenta una novedad `LoanDeduction` por empleado, obligación y período con `ObligationPublicId` y `ObligationNumber`; recalcular la reemplaza y descartar el borrador la anula (C55, patrón del materializador de la 006); se escribe una fila `PAY_PayrollLoanDeductions` `Calculated` con esperado, descontado, no descontado y motivo; `Los_descuentos_de_cartera_entran_como_lineas_sin_asiento` pasa a «con asiento al puente» (T53); con personas `MigratedNotActivated` deja el aviso `Payroll.LendingPendingActivation` (R106, R109)
+- [ ] T0108 [P] Ampliar `tests/IngenIA365ERP.Application.Tests/Payroll/Runs/ApprovePayrollRunCommandHandlerTests.cs` y `ReversePayrollRunCommandHandlerTests.cs` con `ContratoDeObligacionesDePrueba` (`tests/IngenIA365ERP.Application.Tests/Payroll/RecaudoPorNominaTests.cs` **(nuevo)** para el servicio): aprobar aplica el lote **antes** de armar el NM con lo descontado (`CycleInstallment`) y los `NoDescontado` en la misma llamada (`SourceItemPublicId` = la fila de `PAY_PayrollLoanDeductions`, C32, C56); un `Rejected` o un excedente no bloquea: la línea `DESC_CARTERA` baja a lo aplicado, el neto sube, la fila queda `Rejected`/`PartiallyApplied` con código y mensaje y se avisa `Payroll.LoanDeductionNotApplied`; fecha valor = fin del período (A9); reconocimiento de «Cartera por activar» igual que la definitiva; reversar reversa por el contrato todo o nada (G3) y deja las filas `Reversed` con `CarteraReversalPublicId`; `ReintentoPorConcurrenciaBehaviorTests` (l. 120-132) sigue fijando que aprobar y reversar son reintentables
+- [ ] T0109 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Payroll/Runs/ListPayrollLoanDeductionsQueryTests.cs` **(nuevo)**: `GET /api/payroll/runs/{runId}/loan-deductions` devuelve `{ employee, obligationPublicId, obligationNumber, expected, deducted, notDeducted, reason?, status, carteraReceiptPublicId?, carteraReversalPublicId? }` (api.md §24)
+- [ ] T0110 [P] Actualizar `tests/IngenIA365ERP.Application.Tests/Infrastructure/LosUnicosDeDescuentosSoloCuentanFilasVivasTests.cs`: el único vivo pasa a `UK_PAY_SettlementDeductions_Termination_Obligation (TerminationId, ObligationPublicId)` filtrado a no nulo y vivas; y suma `UK_PAY_PayrollLoanDeductions_Run_Employee_Obligation` filtrado vivas (data-model parte 3 §7.1, §7.2)
+- [ ] T0111 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Core/People/DeletePersonCommandHandlerTests.cs` **(nuevo; la rama que hoy falta)** con `ConsultaDeObligacionesDePrueba`: bloquea con `Person.HasActiveLoans` y el mensaje nuevo («tiene obligaciones vivas como deudor o codeudor, o está en una carga de Cartera por activar») si hay obligación `IsLive` como deudor, como codeudor o `MigratedNotActivated`; sin nada, borra como hoy; y `GetPersonDetailQuery` arma `PortfolioSummaryDto` desde la consulta con `LendingStatus` (T94, interfaces.md §7)
+- [ ] T0112 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Savings/Withdrawals/RetiroDeAsociadoConObligacionesTests.cs` **(nuevo)**: `WithdrawalQueries` y `ProcessWithdrawalCommand` cuentan las obligaciones vivas por `IConsultaDeObligaciones` (consumidor «Aportes, en el retiro» de FR-061; A5 «propuesta por defecto: sí») y no por `LoanPortfolios`
+- [ ] T0113 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/CreditoEnLaVentaTests.cs` **(nuevo)** con `ReservasDeCarteraDePrueba` **(nuevo)** y el doble de consultas (T95, interfaces.md §5.3): `NotEnabled` → crédito provisional como hoy y sello «Contabilidad»; `Blocked` o `AllowsSale = false` → `Inventory.Credit.LendingBlocked`; monto > `AvailableQuota` → `Inventory.Credit.QuotaExceeded` con `availableQuota`; sin respuesta en `Cartera.ConsultaSegundos` → `Cartera.PoliticaSinRespuesta` (`Bloquear` → `Inventory.Credit.LendingNoResponse`; `PermitirConAprobacion` → origen `LendingNoResponse`); consulta válida → origen `Validated`, sin aprobación provisional, `ConsultationEvidence` = `EvidenceId`; reserva `Reserved` → `ReservedLoanNumber` y `ReservationPublicId` en el pago; `Rejected` → la confirmación no procede con el código de Comercial; `NoResponse` → la venta sigue sin número (D26); clave `INV:{paymentPublicId:N}:{monto}` con dos decimales y punto invariante; un pago con `CreditWithoutLending` no consulta, no reserva, sella «Contabilidad» y no emite a Cartera (A6 «propuesta por defecto: sí»)
+- [ ] T0114 [P] Actualizar `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/EvaluateSaleCreditQueryTests.cs`, `CreditoProvisionalTests.cs` y `CreditoDePrueba.cs`: `EvaluateSaleCreditQuery` devuelve el origen real (`Validated` con el doble activado, `ProvisionalCredit` con `NotEnabled`); y ampliar `tests/IngenIA365ERP.Application.Tests/Inventory/Pos/PosCommandsTests.cs` y las pruebas de `DiscardInventoryDraftCommand`: descartar llama `LiberarAsync` con la clave de la reserva (T22)
+- [ ] T0115 [P] Ampliar `tests/IngenIA365ERP.Application.Tests/Common/Integration/ContratosDeMensajesTests.cs`: `VentaACreditoRegistradaV2` = v1 + `ReservedLoanNumber` + `ReservationPublicId` y su forma fijada; los bytes de los contratos INV existentes no cambian; `EmisionDeInventario` emite sólo v2 y no emite v2 ni `AjusteDeVentaACredito` para un pago con `CreditWithoutLending` (T18, R113, R115)
+- [ ] T0116 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Core/PaymentMeans/CreditoSinCarteraTests.cs` **(nuevo)**: `CreditWithoutLending` sólo en clases `AssociateCredit`/`CustomerCredit` (otra clase → error de validación de `ReglasDeMedioDePago`), inmutable una vez el medio tiene pagos (como la clase), copiado a `DocumentPayment.CreditWithoutLending` al confirmar (A6, data-model parte 3 §8.2)
+- [ ] T0117 Completar la prueba de arquitectura `tests/IngenIA365ERP.Architecture.Tests/Principles/LaCarteraSoloSeTocaPorSusInterfaces.cs` (esqueleto de la fase 1): (1) `Application.Payroll`, `Application.Core.People`, `Application.Inventory`, `Application.Savings`, `Domain.Entities.Payroll` y `Domain.Entities.Inventory` no dependen de espacios `*.Lending*` salvo `Application.Common.Integration.Lending` (ArchUnit y fuente); (2) métodos exactos de `IConsultasDeCartera` (2), `IReservasDeCartera` (2), `IConsultaDeObligaciones` (2) e `IContratoDeObligaciones` (5 más `VersionDelContrato = 1`); `IDimensionesDeCartera` lo suma US7; (3) fuera de Cartera sólo los provisionales del mismo espacio y los dobles de `tests/` los implementan; (4) ninguna entidad `PAY_`/`INV_` tiene navegación ni FK a `LND_` (T90, R117, C34); y ampliar `InventarioNoConoceContabilidadNiCartera.cs`: `El_puerto_de_Cartera_declara_exactamente_sus_dos_consultas` suma los dos métodos de `IReservasDeCartera`
+- [ ] T0118 [P] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/LosEnumsDelContratoNumeranComoElDominio.cs`: `ModalidadDePago` ↔ `PaymentModality`, `MotivoDeNoDescuento` ↔ `NonDeductionReason`, `EleccionDeAbono` ↔ `PrepaymentChoice`, `ConceptoDeObligacion` ↔ `LoanConcept`, `EstadoDeObligacion` ↔ `LoanStatus` (mismo nombre y número, data-model §9.4); `ClaseDeMedioDeRecaudo` = valores de `PaymentMeansClass` más `OwnPayrollDeduction = 20`, `ExternalPaymasterDeduction = 21`, `InternalOffset = 22` (data-model §9.4 rige sobre interfaces.md §3.1; ver Notas)
+
+#### Sección B — retiro de lo heredado
+
+- [ ] T0119 [P] Completar `tests/IngenIA365ERP.Architecture.Tests/Principles/LaCarteraHeredadaNoVuelve.cs` (esqueleto de la fase 1): ninguno de los 55 nombres de tabla de data-model §13.1 ni de sus entidades aparece en el modelo de `ApplicationDbContext` ni en los snapshots posteriores a `RetiroDeLaCarteraHeredada` de los dos motores; ninguna tabla nueva reutiliza uno de los 93 nombres heredados (T2, R124)
+- [ ] T0120 [P] Completar `tests/IngenIA365ERP.Architecture.Tests/Principles/NingunaTablaConservadaApuntaALaCarteraRetirada.cs`: ninguna de las 38 conservadas (data-model §13.1) ni `PAY_SettlementDeductions`/`PAY_Novelties` tiene FK, navegación o columna `LoanPortfolioId`/`CreditLine` hacia una retirada; `LND_SiplaGroupParameters.CreditLineId` queda requerida y sin FK (§7.6 de DT)
+- [ ] T0121 [P] Completar `tests/IngenIA365ERP.Architecture.Tests/Principles/ElEspacioLendingEsSoloCartera.cs`: las 38 entidades conservadas viven en `Domain.Entities.Savings`, sus configuraciones en `Configurations/Savings`, sus handlers en `Application.Savings`, sus rutas en `Endpoints/Savings` (`/api/savings/*`) y `SavingsReportsEndpoints` (`/api/reports/savings/*`); ningún tipo de `*.Lending*` toca un `DbSet` de `Savings` y `/api/lending/*` y `/api/reports/lending` no mapean nada de lo conservado (T3, R125, A10 «propuesta por defecto: sí»; si el dueño rechaza A10, la prueba exime por nombre lo conservado)
+- [ ] T0122 [P] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/PrincipioXII_MigracionesDestructivas.cs`: `RetiroDeLaCarteraHeredada` es la única migración destructiva de la feature, lleva `MIGRACION-DESTRUCTIVA-APROBADA` con referencia del respaldo y segundo revisor en su `Up()`, y su guarda usa `THROW 50013` (SQL Server) y `RAISE EXCEPTION` (PostgreSQL) sobre la fila `LND.RetiroHeredado.Aprobado`
+- [ ] T0123 [P] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/LosEndpointsProtegidosExigenPermiso.cs`: patrón `Endpoints/Lending/*.cs` sin excepciones (hoy no lo mira, R9.1) y `Endpoints/Savings/*.cs` y `SavingsReportsEndpoints.cs` **exentos por nombre** hasta su feature (api.md §25); ampliar `NingunModuloEscribeMovimientosFueraDelContrato.cs`: se retiran de su lista de autorizados los escritores heredados de crédito (`DisburseLoanCommand`, `RecaudoDeCredito`, `AccrueInterestCommand`, `ClassifyPortfolioCommand`, `ProcessPayrollDeductionCommand`) y ninguna propiedad nueva se llama `NextNumber` (T96, §2.1)
+- [ ] T0124 [P] Actualizar pruebas atadas a lo heredado (R9.1, R118): `tests/IngenIA365ERP.Application.Tests/Common/TestDbContextFactory.cs` (l. 204-237, 660-669: sin `DbSet` de crédito heredado; los de ahorros con `using` de `Savings`), `tests/IngenIA365ERP.Application.Tests/.../AuditoriaDeComandosTests.cs` (l. 69), `PreferenciasHandlersTests` (`/cartera/recaudos` deja de ser ejemplo); se retiran `CreateLoanApplicationValidatorTests` y `ProcessPaymentValidatorTests`
+- [ ] T0125 Prueba e2e `tests/IngenIA365ERP.API.IntegrationTests/Lending/RetiroDeLaCarteraHeredadaTests.cs` (colección «Cartera e2e», dos motores, cooperativa aislada con `CarteraE2E.CooperativaAisladaAsync`; data-model §13.4): baja a la migración anterior a `RetiroDeLaCarteraHeredada`, inserta una fila en una tabla retirada (`LND_LoanPortfolios`) y otra en `LND_SavingsAccounts`; la migración falla y el mensaje nombra la retirada y su cantidad; con la fila `COR_SystemSettings.SettingKey = 'LND.RetiroHeredado.Aprobado'` pasa, las 55 desaparecen y la fila de ahorros sigue; además, por HTTP, las 63 rutas de crédito de `Endpoints/Lending` y `aging`, `aging/pdf`, `loan-statement/{id}/pdf` responden 404 sin alias, y las 12 familias conservadas responden en `/api/savings/*` y los dos informes en `/api/reports/savings/*` (api.md §25)
+
+#### Sección C — base de Cartera
+
+- [ ] T0126 [P] Pruebas `tests/IngenIA365ERP.Domain.Tests/Lending/Rates/AritmeticaDecimalTests.cs` **(nuevo)** (T26, M5): potencia entera por cuadrados exacta; raíz entera por Newton a 24 decimales (`RaizEntera(1+EA, B)` para B = 360 y 365 con EA 0,265000 y 0,000001); TIR por Newton con caída a bisección cuando Newton no converge; valores esperados calculados con decimal de 40 dígitos y escritos en la prueba (nunca Excel); ningún resultado pasa por `double`
+- [ ] T0127 [P] Pruebas `tests/IngenIA365ERP.Domain.Tests/Common/VigenciaBitemporalTests.cs` (quickstart §1.4; si la fase 2 ya las creó para valores nacionales, se amplían): versiones propias de Cartera sin `ValidTo` (data-model §0.6) — entran las de `RegisteredAt ≤ R` y `ValidFrom ≤ D`, gana el `ValidFrom` más reciente y, si empatan, el `VersionNumber` mayor; una versión registrada después de R no cuenta aunque su `ValidFrom` sea anterior; corrección con `SupersedesPublicId` y empate por `Sequence` para los valores nacionales (T38)
+- [ ] T0128 [P] Pruebas `tests/IngenIA365ERP.Domain.Tests/Lending/EnumeracionesDeCarteraTests.cs` **(nuevo)**: cada enum de `Domain/Enums/Lending` tiene exactamente los nombres y números de data-model §9.1, parte 1 §10 y parte 2 «Nombres fijados» (incluido `RepaymentPeriodicity` con el valor = base de proporción: `Weekly = 7`, `TenDay = 10`; `GraceKind.None = 0`; `RatingSubcategory.None = 0`; `NonDeductionReason.Other = 99`) (C65)
+- [ ] T0129 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Common/CerrojoDeCarteraSqlTests.cs` **(nuevo; molde `CerrojoDeInventarioSqlTests`)** (T34, data-model §0.10): para cada motor, `SqlDelCerrojoDeCartera` emite en orden `LND_Setup` compartido (`FOR SHARE` / `HOLDLOCK`) o exclusivo al cerrar o reabrir → `LND_DebtorControls` por Id ascendente → `LND_LoanControls` por Id ascendente en una sola sentencia; modo «esperar» (`FOR UPDATE` / `UPDLOCK, ROWLOCK, HOLDLOCK`) y modo «saltar» del proceso (`FOR UPDATE SKIP LOCKED` / `UPDLOCK, ROWLOCK, READPAST`); el `INSERT` de la fila de deudor que falta (`ON CONFLICT DO NOTHING` / `WHERE NOT EXISTS`) escribe `PublicId` (`gen_random_uuid()` / `NEWID()`), `CreatedAt` UTC, `CreatedBy` = nombre del actor por parámetro e `IsDeleted = 0`; el nombre del actor nunca entra como texto; sin transacción en curso lanza
+- [ ] T0130 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Common/NumeradorDeCarteraTests.cs` **(nuevo)** (C48, data-model §1.10): asigna `Prefix` + `NextValue` con `MinDigits` y lo incrementa por `(Kind, ScopeKey)`; crea la fila que falta; salta un número que ya existe en su tabla (migrado o reservado; FR-057); el consecutivo de actas usa `ScopeKey` = `PublicId:N` del órgano y el prefijo del órgano; se llama al final y nunca para un borrador
+- [ ] T0131 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Ledger/RegistroDeCarteraTests.cs` (quickstart §1.5; esta fase fija las primitivas, US4 y US5 suman `Conciliar` y la escritura en bloque): es el único que agrega `LoanOperation`, `LoanTransaction`, `LoanTermsVersion`, `RepaymentScheduleVersion`/`RepaymentInstallment` y `LoanDailyPosition` y avanza `LoanControl` (C45); `Sequence` y `RegisteredAt` monótonos por crédito (`max(UtcNow, LastRegisteredAt + 1 tick)`); una fila espejo lleva `ReversesTransactionId`, signo contrario y no se espeja un espejo (`Lending.Reversal.OfReversal`); `LastAccruedDate` sólo avanza de a un día (`d−1 → d`, T6)
+- [ ] T0132 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Common/GuardaDeInmutabilidadDeCarteraTests.cs` **(nuevo; molde `Inventory/Documents/GuardaDeInmutabilidadTests`)**: modificar o borrar un hecho de Cartera (`LoanTransaction`, `LoanOperation`, `CreditDecision`, `SessionVote`, `CreditScore`, versiones de línea y sus hijas, `AttributionMatrix`/niveles/reglas, `DisbursementOrderResult`, `InstallmentNonDeduction`, `LendingActivation`, las 17 de preparación…; lista de §2.3 y C42) lanza; las propiedades `[EscrituraUnica]` (liberación de `ScreeningResult`, levantamiento de `DebtorBlock`, anulación de `DisbursementFile`, `ProvisionalCollection`) pasan de nulo a valor una sola vez
+- [ ] T0133 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Common/ModeloDeCarteraNucleoTests.cs` **(nuevo)** sobre el `IModel` de `ApplicationDbContext` con cada proveedor: toda entidad de `Domain.Entities.Lending` mapea a una tabla `LND_` de la lista de data-model §14 `CarteraNucleo`; tiene `UK_{Tabla}_PublicId`, filtro de borrado lógico y FK `Restrict`; ninguna FK ni navegación hacia `ACC_`, `INV_`, `PAY_` ni tablas de `Savings` (data-model §0.1); `Id` `bigint` en `LoanOperation`, `LoanTransaction`, `LoanDailyPosition`, `RepaymentInstallment` (C43); todo índice con nombre de 63 caracteres o menos; los UK de hechos, proyecciones, controles y créditos sin filtro; las entidades marcadas H coinciden con §2.3 y C42; las `[SinDiffDeAuditoria]` coinciden con C46
+- [ ] T0134 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Infrastructure/PermisosDeCarteraTests.cs` **(nuevo; molde `PermisosDeInventarioTests`)** y `tests/IngenIA365ERP.Application.Tests/Security/PerfilesSugeridosDeCarteraTests.cs` (quickstart §1.5): `LendingPermissionCatalogSeeder` siembra exactamente los 123 códigos `Lending.*` de DT §2.14 más `Lending.PrepaymentPreferences.Manage` (C85) —todo `Lending.*` en K1, también lo de K2–K6b—; ningún código de lectura con datos del deudor usa `View` (`LosCodigosViewDeCarteraNoTienenDatosPersonales` lo vigila después); `BuiltInRolesSeeder` excluye del glob de `CompanyAdmin` `Lending.Decisions.*` y `Lending.Sessions.Vote` (T61); `Operator`, `ReadOnly` y `Auditor` no reciben escrituras de Cartera; `PerfilesSugeridos` produce las trece plantillas `cartera.*` sin códigos inexistentes, `cartera.administrador` sin `Lending.Decisions.*` ni `Lending.Sessions.Vote` (C86) y `cartera.asesor` y `cartera.jefe` con `Lending.PrepaymentPreferences.Manage` (C85); y actualizar la cuenta de `RepartoDePermisosTests.cs` por el seeder nuevo
+- [ ] T0135 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Common/ParametrosDeCarteraTests.cs` **(nuevo)**: `ParametrosDeCartera.Modulo = "LND"`; las claves y defectos de data-model §12.1 (sin prefijo «Cartera.», CH36), sus ámbitos (`None`, `CreditLine`, `LendingFactType`) y su `DisponibleDesde` por `EntregaDeCartera`; con `CatalogoDeCartera.EntregaVigente = K1` no se ofrece ninguna clave de K2+ (T43)
+- [ ] T0136 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Integration/LendingFactTypesSeederTests.cs` **(nuevo)**: `LendingFactTypesSeeder` (Order 90) siembra un `LND_FactTypes` por cada tipo `CAR → Accounting` del catálogo de mensajes de Cartera (**35**, C110: con los tres contingentes `CAD`, `CRO`, `GCT` de C15/C91; los 12 tipos restantes del catálogo de 47 no son hechos contables y no tienen fila), con `ShortCode` único de 3 a 4 letras, `IsInformational`, `VoucherTypeCode`, `DefaultMode`, `DefaultBatchTrigger` y `DeliveredIn`; es idempotente, actualiza nombres y nunca borra; un tipo sin `ShortCode` hace fallar el arranque
+- [ ] T0137 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Risk/ValidadorDeDocumentoNormativoDeCarteraTests.cs` (quickstart §1.5, parte de esta fase): el validador de Cartera registrado para `SarcAnexo1` y `ReglaDePerdidaEsperada` acepta los JSON semilla y rechaza con `NationalValues.Document.Invalid` un contenido que no deserializa en `Anexo1`/`ReglaDePerdidaEsperada` o rompe sus reglas de forma (rangos solapados, porcentajes fuera de 0..1, segmento desconocido); `SarcAnexo2` lo agrega K6a (T45)
+- [ ] T0138 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Processes/ProcesadorDeCarteraTests.cs` (quickstart §1.5; esqueleto): recorre las cooperativas del directorio con `MaxParallelCooperatives` y presupuesto `BudgetSeconds` menor que `LeaseTtlSeconds`, toma `lending.process` por cooperativa, salta las que no tienen `LND_Setup.ActivationDate`, toma corridas `Requested` de las cuatro clases (`DailyCycle`, `MonthlyClose`, `CloseReopen`, `NationalValueCorrection`, C59) y las pasa al ejecutor de su clase; una clase sin ejecutor registrado deja la corrida `Requested` con advertencia en el log; una excepción del ejecutor deja `Failed` con error en `LND_ProcessRunErrors` y sigue con la cooperativa siguiente; `Enabled = false` no hace nada (T5, PM-13)
+- [ ] T0139 Completar las pruebas de arquitectura de la base (esqueletos de la fase 1) en `tests/IngenIA365ERP.Architecture.Tests/Principles/`:
+  - `ElMotorDeCarteraEsDecimal.cs`: en `Domain/Lending/**` y `Domain/Common/VigenciaBitemporal*` no hay `double`, `float`, `Math.Pow`, `Math.Exp`, `Math.Log` (T26)
+  - `NadieEscribeElLibroDeCarteraFueraDelRegistro.cs`: fuera de `Application/Lending/Ledger/RegistroDeCartera.cs` nadie agrega ni modifica `LoanTransaction`, `LoanOperation`, `LoanTermsVersion`, `RepaymentScheduleVersion`, `RepaymentInstallment`, `LoanDailyPosition` ni la marca de agua de `LoanControl` (C45)
+  - `LosSaldosYTasasDeCarteraTienenSuPrecision.cs`: toda propiedad `decimal` de `Entities/Lending` declara su alias de `PrecisionDeCartera` (`Monto`, `TasaAnual`, `TasaEquivalente`, `Fraccion`, `Puntaje`; `ValorUvr` en K6b) y ninguna configuración de `Configurations/Lending` escribe la precisión a mano (T35)
+  - `LaCarteraUsaLaFechaLocal.cs`: ningún archivo de `Application/Lending`, `Domain/Lending` ni `API/Integration/ProcesadorDeCartera*` usa `TodayUtc` (T9)
+  - `CadaParametroRespetaLaEntregaDeSuModulo.cs`: toda clave de `ParametrosDeCartera` declara `DisponibleDesde` con `EntregaDeModulo` del módulo `LND` y ninguna se ofrece antes de `CatalogoDeCartera.EntregaVigente` (T43)
+- [ ] T0140 Ampliar pruebas de arquitectura existentes en `tests/IngenIA365ERP.Architecture.Tests/Principles/`:
+  - `LosHechosInmutablesNoSeModifican.cs`: los hechos de Cartera de T0132 están en la lista que hace cumplir `GuardaDeInmutabilidad` y `Application` no hace `Remove`/`Update`/`ExecuteDelete`/`ExecuteUpdate` sobre sus `DbSet`
+  - `SoloElNumeradorNumera.cs`: suma `Application/Lending/Common/NumeradorDeCartera.cs` como único autorizado a asignar `Number` en `Entities/Lending` y `NextValue` de `LND_NumberSequences`
+  - `NingunTrabajoDeFondoOperaSinCooperativa.cs`: suma `ProcesadorDeCartera` (todo su trabajo por `IEjecutorEnCooperativa`)
+  - `PrincipioXI_ContableImmutable.cs`: confirmar que se activa sola con `Domain/Entities/Lending/Transactions` (`LoanTransaction`) y que no hay `Update`/`Remove` sobre ella
+- [ ] T0141 Prueba e2e `tests/IngenIA365ERP.API.IntegrationTests/Lending/CarteraDesplegadaSinActivarTests.cs` (colección «Cartera e2e», dos motores, cooperativa aislada) (T85, interfaces.md §12): con los puertos provisionales (y después, sin cambiar la prueba, con los reales sin activar) la liquidación definitiva se aprueba sin descuentos de Cartera; la nómina ordinaria calcula y aprueba sin descuentos ni filas de `PAY_PayrollLoanDeductions`; `DELETE /api/core/people/{id}` borra a quien no tiene nada; una venta a crédito confirma como crédito provisional, sin número reservado, emite `VentaACreditoRegistrada` v2 y queda sin intentos ni alertas hacia `Lending` (el destino no está habilitado en el registro); `GET /api/core/people/{id}/detail` trae `lendingStatus = NotActivated`
+
+#### Sección D — piezas tempranas y activación de prueba (C106, C107)
+
+- [ ] T0142 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Integration/PiezasTempranasDeCarteraTests.cs` **(nuevo)** (C106; firmas de DT §2.9 e interfaces.md): `IContabilidadParaCartera` declara exactamente sus cinco métodos (`EvaluarAsync`, `SaldosDeCuentasMapeadasAsync`, `EstadoDelPeriodoAsync`, `IndicadoresDeLaEntidadAsync`, `CuentasBancariasAsync`) y el provisional responde: `EstadoDelPeriodoAsync` con el estado real del mes por las consultas de períodos de la 009 (contabilidad sin iniciar → «no iniciada»), `CuentasBancariasAsync` por `ListBankAccountsQuery`, `EvaluarAsync` → `NotApplicable` sin hallazgos, `SaldosDeCuentasMapeadasAsync` vacío e `IndicadoresDeLaEntidadAsync` «no disponible»; `ModoDePasoDeCartera` da el `DefaultMode` de `LND_FactTypes` y `NoPasa` con la contabilidad sin iniciar, `Always` en informativos; `ValidacionPreviaContableDeCartera` nunca bloquea y sella `PrevalidationOutcome` (`NotApplicable` con el provisional, `NoResponse` si el puerto falla); `FechaContable` da la fecha valor con su mes abierto y, si no, el primer día del primer mes abierto; `CategoriaContableDeCartera` da la categoría de crédito nuevo (`RatingCause.NewLoan`) mientras no haya cierres; `TesoreriaDePrueba` consume `OrdenDeGiroEmitida` y `AnulacionDeOrdenDeGiro` y responde `Processed` sin estado propio, y sólo se registra con `Lending:TestDoubles:Enabled = true` y `!IsProduction()` (en producción la API no arranca); amplía `LosDoblesDePruebaNoSeRegistranEnProduccion` con `TesoreriaDePrueba`
+- [ ] T0143 [P] Pruebas `tests/IngenIA365ERP.Application.Tests/Lending/Activation/ActivacionSinCarteraPreviaTests.cs` **(nuevo)** (C107, C61; api.md §19.1, §19.3), InMemory con reloj fijo:
+  · `CreateMigrationLoadCommand` deja un borrador con su corte; `ApplyMigrationLoadCommand` sobre una carga **sin ninguna parte** la deja `Applied` con conteos en cero, `IsBalanced` y `SalesReconciled` verdaderos (no hay qué cuadrar ni conciliar), `ActivationDeadline` = corte + `Pagos.DiasMaximosFechaValor` y emite `CargaDeCarteraAplicada`;
+  · `ActivateLendingCommand` con esa carga: fecha ≠ corte + 1 → `Lending.Activation.CutoffInvalid`; sin `sessionItemPublicId`, o con un punto de sesión abierta, no aprobado o de otro sujeto que `ActivationDifferences` de esa carga → `Lending.Session.ItemMismatch`; requisitos de `RequisitosDeActivacion` en su forma mínima (`LoadApplied`, `DateInTerm`, `AccountingMonthOpen` por el provisional de `IContabilidadParaCartera`, `ReceiptsCollectorRegistered` y `TreasuryDestinationRegistered` contra el registro de participantes: fuera de producción los dobles `TST`/`TES` con `Class = Test` cuentan; con `IHostEnvironment` de producción no) → `Lending.Activation.RequirementsMissing` con `data.missing[]`;
+  · OK: en una `TransaccionExplicita` con `LND_Setup` exclusivo escribe `LND_Activations` (con `SessionItemId`, requisitos, conteos en cero, `IsProductionEnvironment`), `LND_Setup.ActivationDate/ActivationId/ActivatedAt` una sola vez, la carga `Activated`, el destino `Lending` activo por `EscritorDelRegistroDeIntegracion` y `CarteraActivada` por `EmisionDeCartera`; una segunda → `Lending.Activation.AlreadyActivated`; misma `Idempotency-Key` y mismo cuerpo → la misma respuesta
+- [ ] T0144 Prueba e2e `tests/IngenIA365ERP.API.IntegrationTests/Lending/ActivacionDeCarteraDePruebaTests.cs` **(nuevo)** (colección «Cartera e2e», dos motores, cooperativa aislada; C107): `CarteraE2E.ActivarCarteraAsync` deja la cooperativa activada por las rutas reales (`POST /api/lending/migration/loads`, `…/{id}/apply`, `POST /api/lending/activation`); `GET /api/lending/activation` la muestra activada; `CarteraActivada` está en `COR_IntegrationMessages`; el destino `Lending` queda activo en esa cooperativa y en otra cooperativa aislada del mismo host `CarteraDesplegadaSinActivarTests` sigue igual; repetir la activación → `Lending.Activation.AlreadyActivated`
+
+### Implementation for Foundational B
+
+#### Sección A.1 — Puertos que Cartera ofrece, en modo provisional (T90, R101, interfaces.md §3, §5, §6)
+
+- [ ] T0145 [P] Crear los DTO y enums del contrato en `src/Core/IngenIA365ERP.Application/Common/Integration/Lending/`: `IContratoDeObligaciones.cs` (firma literal de interfaces.md §3.1 con `const int VersionDelContrato = 1`), `Recaudador.cs`, `SolicitudDeListado`, `ListadoDeObligacionesDto`, `SolicitudDeSimulacion`, `SimulacionDePagoDto`, `SolicitudDeAplicacion` (lote de `PagoAAplicar` y `NoDescontado`), `ReferenciaDeRecibo`, `RespuestaDeAplicacionDto`, `ComprobanteDeAplicacionDto`, `NoDescontadoRegistradoDto`, `SolicitudDeReverso`, `ComprobanteDeReversoDto`, `SolicitudDeResolucion`, `ComprobanteDeResolucionDto`, `RespuestaDelContratoDto<T>` (interfaces.md §3.4–§3.9, incluido `PaymentIdempotencyKeyToReverse` de C38) y los enums de puerto `ClaseDeRecaudador`, `ClaseDeMedioDeRecaudo`, `ModalidadDePago`, `EleccionDeAbono`, `FormaDeAplicacion`, `MotivoDeNoDescuento` (con `DeductionPriority`, C56), `ResultadoDelContrato` (con `Answered`, C28), `EstadoDeCartera`, `EstadoDeObligacion`, `ConceptoDeObligacion`, `RolEnLaObligacion`, `FormaDeResolucion`, con los números de data-model §9.4; propiedades de DTO en inglés (C26)
+- [ ] T0146 [P] Crear `src/Core/IngenIA365ERP.Application/Common/Integration/Lending/IConsultaDeObligaciones.cs` con `ObligacionesAsync`/`CuotasDeNominaAsync` y sus DTO `ConsultaDeObligaciones`, `ObligacionesDePersonasDto`, `ObligacionesDePersonaDto` (`MigratedNotActivated`), `ObligacionDto` (con `ClaseDeObligacion`), `ConsultaDeCuotasDeNomina`, `CuotasDeNominaDto`, `CuotaDeNominaDto` (interfaces.md §6.1)
+  · conectar `IDeberDeConservacionDelTitular` de la fase 2 (solicitudes del titular) a `IConsultaDeObligaciones`, para que la revocación de una finalidad de crédito vea las obligaciones vivas y cerradas del titular
+- [ ] T0147 [P] Crear `src/Core/IngenIA365ERP.Application/Common/Integration/Lending/IReservasDeCartera.cs` con `ReservarAsync`/`LiberarAsync`, `SolicitudDeReserva`, `SolicitudDeLiberacion`, `ResultadoDeReservaDto` y `EstadosDeReserva` (interfaces.md §5.2); y ampliar `IConsultasDeCartera.cs` sin romper `CarteraNoHabilitada`: `EstadoCrediticioDto` suma `TotalQuota`, `DaysPastDue`, `BlockReason`, `AllowsSale` como `init`; `LineaDeCreditoDto.Periodicities`; `EstadosCrediticios` y `EstadosDeValidacion.NotIncorporated` (interfaces.md §5.1, DE-12)
+- [ ] T0148 Crear los provisionales `ConsultaDeObligacionesSinActivar.cs`, `ContratoDeObligacionesSinActivar.cs` y `ReservasDeCarteraNoHabilitada.cs` en `src/Core/IngenIA365ERP.Application/Common/Integration/Lending/` con las respuestas de interfaces.md §3.17 y §5.2 (códigos `Lending.NotActivated` y `NotEnabled`; mensajes en español de data-model §10) y registrarlos en `src/Core/IngenIA365ERP.Application/DependencyInjection.cs` junto a `ConsultasDeCarteraNoHabilitada` (las implementaciones reales los reemplazan en US5 y US6) (T0098)
+- [ ] T0149 [P] Agregar `HayEnCurso(IApplicationDbContext db)` a `src/Core/IngenIA365ERP.Application/Common/Persistence/TransaccionExplicita.cs` (DE-02, §2.6) (T0099)
+- [ ] T0150 [P] Dobles unitarios de los puertos, sólo en `tests/`: `tests/IngenIA365ERP.Application.Tests/Common/Integration/Lending/ConsultaDeObligacionesDePrueba.cs`, `ContratoDeObligacionesDePrueba.cs` (registra llamadas, responde por ítem lo que la prueba configure: `Applied`, `Rejected`, excedente, `AlreadyApplied`) y `ReservasDeCarteraDePrueba.cs` **(nuevo)** (R118)
+
+#### Sección A.2 — Nómina recauda por el contrato (E-03, T92, R103–R109; G2–G5, G7, G10 «propuesta por defecto»)
+
+- [ ] T0151 [P] Entidad `src/Core/IngenIA365ERP.Domain/Entities/Payroll/Transactions/PayrollLoanDeduction.cs` y `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Payroll/PayrollLoanDeductionConfiguration.cs` (`PAY_PayrollLoanDeductions`, columnas de data-model parte 3 §7.1, `UK_PAY_PayrollLoanDeductions_Run_Employee_Obligation` filtrado vivas, sin FK a `LND_`), enum `PayrollLoanDeductionStatus` en `Domain/Enums/Payroll` y `DbSet` en `ApplicationDbContext`/`IApplicationDbContext`
+- [ ] T0152 [P] Columnas nuevas en `src/Core/IngenIA365ERP.Domain/Entities/Payroll/SettlementDeduction.cs` (`ObligationPublicId`, `ObligationNumber` nvarchar(30), `CarteraReversalPublicId`) con `UK_PAY_SettlementDeductions_Termination_Obligation` en `SettlementDeductionConfiguration.cs`; en `PayrollNovelty.cs` (`ObligationPublicId`, `ObligationNumber`) con `IX_PAY_Novelties_ObligationPublicId` filtrado en `PayrollNoveltyConfiguration.cs`; en `src/Core/IngenIA365ERP.Domain/Entities/Payroll/Transactions/PayrollRun.cs` (`LendingActivationAckBy` nvarchar(150), `LendingActivationAckAt`) en `PayrollRunConfiguration.cs`. `LoanPortfolioId`, su FK, IX y `UK_PAY_SettlementDeductions_Termination_Loan` **se conservan** en esta sección (los suelta el retiro, CH37) pero ningún código nuevo los lee
+- [ ] T0153 Crear `src/Core/IngenIA365ERP.Application/Payroll/Settlements/PropuestaDeDescuentosDeCartera.cs` (R104) y cambiar `src/Core/IngenIA365ERP.Application/Payroll/Services/SettlementInputLoader.cs` (`ProponerDeudasAsync`, l. 630-737): propone por `IConsultaDeObligaciones.ObligacionesAsync([empleado], hoy, IncludeAsCoDebtor: false)` según `DeduccionAlRetiroModo`; `DeudaPropuesta` cambia `LoanPortfolioId` por `ObligationPublicId`/`ObligationNumber`; `DefinitivaCalculator.SincronizarDeduccionesAsync` y `Coincide` emparejan por `ObligationPublicId` (T0102, T0103)
+- [ ] T0154 Agregar el gancho `antesDeContabilizar` a `src/Core/IngenIA365ERP.Application/Payroll/Settlements/Common/SettlementRunWorkflow.cs` (antes de `poster.PostAsync`) y crear `src/Core/IngenIA365ERP.Application/Payroll/Services/RecaudoPorNomina.cs` **(ubicación nueva)**: arma el lote del contrato (`NonInteractive`, `Recaudador("NOM", Payroll)`, `OwnPayrollDeduction`, pagador = la persona del empleado, `ReferenciaDeRecibo` = el NM o la liquidación, clave `NOM:{runPublicId:N}:{obligationPublicId:N}` en orden ascendente) y traduce las respuestas; lo llaman directo (nunca por `ISender`) la definitiva y la ordinaria dentro de su `TransaccionExplicita` (T91)
+- [ ] T0155 Cambiar `src/Core/IngenIA365ERP.Application/Payroll/Settlements/Settlement/ApproveSettlementCommand.cs` (l. 116-234): en `antesDeContabilizar` vuelve a consultar (`Payroll.Settlement.LoanProposalOutdated`), aplica por `RecaudoPorNomina` con fecha valor = aprobación, todo o nada (`Payroll.Settlement.LoanAmountsChanged` con `data` de Cartera), guarda `CarteraTransactionPublicId`/`RemainingBalanceAfter`; suma `AcknowledgeLendingPendingActivation` (`Payroll.LendingPendingActivationAckRequired`, columnas de `PAY_PayrollRuns`); se retiran `CuentaDebitoDelDescuentoAsync`, `FormaDePagoNomina` y la llamada a `RecaudoDeCredito` (T0104)
+- [ ] T0156 Cambiar `src/Core/IngenIA365ERP.Application/Payroll/Settlements/Settlement/ReverseAndDiscardSettlementCommands.cs` (reversa por `ReversarAsync`, guarda `CarteraReversalPublicId`, rechazo → revierte todo; nuevo texto de `SettlementReversedWithPortfolioDto`) y `AdjustSettlementDeductionCommand.cs` (pide `SimularAsync` con `FreeAmount` y guarda el saldo exacto) (R105, T0105)
+- [ ] T0157 Enmienda D-08 de la 010 (T53, R107; pregunta C1 «propuesta por defecto: sí»): `DESC_CARTERA` vuelve a `AffectsAccounting = true` en `src/Core/IngenIA365ERP.Domain/Payroll/Calculation/Rules/ICalculationRule.cs` (l. 136), `src/Core/IngenIA365ERP.Domain/Payroll/Settlements/Rules/ProposedDeductionsRule.cs` (l. 35-38) y `AdjustSettlementDeductionCommand.cs` (l. 92); `src/Core/IngenIA365ERP.Application/Payroll/Services/SettlementAccountingPoster.cs` (l. 29, 51) y `PayrollAccountingPoster.cs` (l. 77) dejan de omitir esas líneas; sin cuentas en el concepto responden los códigos que **ya existen** `Payroll.Settlement.ConceptAccountsMissing` y `Payroll.ConceptWithoutAccounts` (T0101)
+- [ ] T0158 Cambiar `src/Core/IngenIA365ERP.Application/Payroll/Services/CalculationInputLoader.cs` (l. 143-149): deja de leer `PayrollDeductionEntries` tipo DN y pide `CuotasDeNominaAsync(personas, inicio, fin)`; cada cuota materializa una `PAY_Novelties` `LoanDeduction` por empleado, obligación y período (`ObligationPublicId`, `ObligationNumber`, concepto `DESC_CARTERA`), reemplazada al recalcular y anulada al descartar (C55); con `MigratedNotActivated` deja el aviso `Payroll.LendingPendingActivation` (R106, R109)
+- [ ] T0159 Cambiar `src/Core/IngenIA365ERP.Domain/Payroll/Calculation/PayrollCalculationEngine.cs` (l. 222-227): la cuota de Cartera ya no salta el tope `MAX_DEDUCCION_SALARIO_PCT`; va primera entre las deducciones autorizadas, después de las de ley (G5); lo que no cabe no se difiere y queda no descontado con motivo `DeductionCap` o `InsufficientNet` en la explicación de la línea (T0100)
+- [ ] T0160 Cambiar `src/Core/IngenIA365ERP.Application/Payroll/Runs/CalculatePayrollRun/CalculatePayrollRunCommand.cs` para escribir `PAY_PayrollLoanDeductions` (`Calculated`) por empleado y obligación con esperado, descontado, no descontado, motivo y la línea enlazada (T0107)
+- [ ] T0161 Cambiar `src/Core/IngenIA365ERP.Application/Payroll/Runs/ApprovePayrollRun/ApprovePayrollRunCommand.cs`: pasa a `TransaccionExplicita` (sigue reintentable) y, **antes** de armar el NM (l. 150-157), aplica el lote por `RecaudoPorNomina` con `CycleInstallment` por lo descontado y los `NoDescontado` (fecha valor = fin del período, A9); un rechazo o excedente baja la línea `DESC_CARTERA` a lo aplicado, sube el neto, completa la fila (`Applied`/`PartiallyApplied`/`NotApplied`/`Rejected`, `AppliedAmount`, `CarteraReceiptPublicId`, `ResultCode`, `ResultMessage`) y avisa `Payroll.LoanDeductionNotApplied`; suma `AcknowledgeLendingPendingActivation` como `ConfirmWithoutSegregation`; y `src/Core/IngenIA365ERP.Application/Payroll/Runs/ReversePayrollRun/ReversePayrollRunCommand.cs` reversa por el contrato todo o nada y deja las filas `Reversed` (G3) (T0108)
+- [ ] T0162 Ruta `GET /api/payroll/runs/{runId}/loan-deductions` (`Payroll.Runs.View`, `ListPayrollLoanDeductionsQuery` en `src/Core/IngenIA365ERP.Application/Payroll/Runs/ListPayrollLoanDeductionsQuery.cs`) en `src/Presentation/IngenIA365ERP.API/Endpoints/Payroll/PayrollRunsEndpoints.cs`; el cuerpo de `POST /api/payroll/runs/{runId}/approve` y de `POST /api/payroll/settlements/terminations/{runId}/approve` acepta `acknowledgeLendingPendingActivation` (api.md §24) (T0109)
+- [ ] T0163 Pantallas de Nómina (modificadas, con `IndicadorDeCarga`/`EstadoDeCarga` en cada zona que cargan o guardan): `src/Presentation/IngenIA365ERP.Shared/Pages/Nomina/Liquidacion.razor` (al aprobar: aviso de «Cartera por activar» con casilla de reconocimiento, vista previa del lote y panel de descuentos de Cartera por `loan-deductions`) y `LiquidacionDefinitiva.razor` (l. 115, 146, 320, 373: saldo exacto en vez del «aproximado», recálculo en un clic ante `LoanProposalOutdated`, reconocimiento, reversión que reversa en Cartera); clientes `src/Presentation/IngenIA365ERP.Shared/Services/Nomina/NominaClient.Liquidacion.cs` y `NominaClient.Definitiva.cs` sin poner `Authorization` a mano; mensajes en español sin códigos
+- [ ] T0164 Ampliar `PAY_SettlementDeductions`/`PAY_Novelties` en las pantallas de reportes de Nómina que hoy muestran el crédito heredado (`src/Core/IngenIA365ERP.Application/Payroll/Settlements/Settlement/SettlementDeductionsQuery.cs`, `SettlementDeductionDtos.cs`, `SettlementDocumentModelBuilder.cs`, `src/Core/IngenIA365ERP.Application/Payroll/Reports/ReportesDeNomina.cs`): muestran `ObligationNumber` en lugar de leer `LND_LoanPortfolios`
+
+#### Sección A.3 — Personas y retiro de asociado (E-04, T94, R110; A5 «propuesta por defecto: sí»)
+
+- [ ] T0165 [P] Cambiar `src/Core/IngenIA365ERP.Application/Core/People/Commands/DeletePerson/DeletePersonCommand.cs` (l. 35-40) a `ObligacionesAsync([persona], hoy, IncludeAsCoDebtor: true)` con el mensaje nuevo de `Person.HasActiveLoans`, y `src/Core/IngenIA365ERP.Application/Core/People/Queries/GetPersonDetailQuery.cs` (l. 146-170) para armar `PortfolioSummaryDto` (con `LendingStatus`) desde la misma llamada; los ahorros siguen en `SavingsAccounts` (T0111)
+- [ ] T0166 [P] Cambiar `src/Core/IngenIA365ERP.Application/Lending/Withdrawals/Queries/WithdrawalQueries.cs` (l. 68) y `Commands/ProcessWithdrawal/ProcessWithdrawalCommand.cs` (l. 46) a la consulta de obligaciones; `src/Core/IngenIA365ERP.Application/Lending/Statements/Commands/GenerateStatements/GenerateStatementsCommand.cs` (l. 36), `Statements/Queries/StatementQueries.cs` (l. 66, sin `Include(CreditLine)`) y `src/Core/IngenIA365ERP.Application/Lending/Reports/PersonPortfolioReportQuery.cs` (l. 71) pierden la parte de crédito (R110) (T0112)
+- [ ] T0167 [P] Retirar la rama de `LND_CreditLineParameters` de `src/Infrastructure/IngenIA365ERP.Persistence/Services/AccountReferenceFinder.cs` (l. 29): las cuentas de Cartera entran con la matriz de US7 (T96, R121)
+
+#### Sección A.4 — Comercial con Cartera (E-02, T95, R111–R115; A6, G6, G9 «propuesta por defecto»)
+
+- [ ] T0168 [P] Columnas de la venta en `src/Core/IngenIA365ERP.Domain/Entities/Inventory/Documents/DocumentPayment.cs` y `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Inventory/Documents/DocumentPaymentConfiguration.cs`: `ReservedLoanNumber` nvarchar(30), `ReservationPublicId`, `CreditLineCode` nvarchar(20), `ConsultationEvidence` nvarchar(64) (C67) y `CreditWithoutLending` bit `DEFAULT 0` (A6), selladas al confirmar como el resto del pago (data-model parte 3 §8.1)
+- [ ] T0169 [P] `CreditWithoutLending` en `src/Core/IngenIA365ERP.Domain/Entities/Core/Payments/PaymentMeans.cs` y `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Core/Payments/PaymentMeansConfiguration.cs` (bit `DEFAULT 0`), con su regla en `src/Core/IngenIA365ERP.Application/Core/PaymentMeans/ReglasDeMedioDePago.cs` y `PaymentMeansCommands.cs`/`PaymentMeansDtos.cs`/`ImportPaymentMeansCommand.cs` (sólo clases de crédito, inmutable con pagos); casilla en `src/Presentation/IngenIA365ERP.Shared/Pages/Maestros/MediosDePago.razor` con `IndicadorDeCarga` (A6 «propuesta por defecto: sí»; si el dueño la rechaza, esta tarea y la columna de T0168 salen de la feature y quedan como precondición de activación, T95) (T0116)
+- [ ] T0170 [P] Entidad `src/Core/IngenIA365ERP.Domain/Entities/Inventory/Documents/LendingObligationResponse.cs` **(ubicación nueva)** (H) y `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Inventory/Documents/LendingObligationResponseConfiguration.cs` (`INV_LendingObligationResponses`, columnas de data-model parte 3 §8.3, `UK_INV_LendingObligationResponses_Message (MessagePublicId)` sin filtro, `IX_INV_LendingObligationResponses_Payment`), enums `LendingObligationOutcome` y `LendingObligationState` (data-model §9.2) y `DbSet`; su único escritor, `DestinoInventario`, lo crea US6
+- [ ] T0171 [P] Contrato `src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/VentaACreditoRegistradaV2.cs` (v1 + `ReservedLoanNumber`, `ReservationPublicId`) y su entrada en `CatalogoDeMensajesV1.cs` (destino `Lending`; `OriginModule = INV` y `AdmiteProceso = false` cuando la fase 2 agregue esos campos a `TipoDeMensaje`, T10); `src/Core/IngenIA365ERP.Application/Inventory/Integration/EmisionDeInventario.cs` emite sólo v2 (con `CreditLineCode` de la línea elegida) y no emite v2 ni `AjusteDeVentaACredito` para pagos con `CreditWithoutLending`; `FuenteDeEmisionDeInventario.cs` (l. 137-139) pone `ReservedLoanNumber` como referencia del pago (D3) (T0115)
+- [ ] T0172 Cambiar `src/Core/IngenIA365ERP.Application/Inventory/Sales/CreditoEnLaVenta.cs` (l. 51-91): aplica la respuesta de `EstadoCrediticioAsync` según interfaces.md §5.3 (lee `Cartera.ConsultaSegundos` y `Cartera.PoliticaSinRespuesta` con token de cancelación enlazado); gana `ReservarAsync`, que llama `IReservasDeCartera` **dentro** de la unidad de trabajo de la confirmación (también si queda en aprobación), bajo un punto de guardado propio (`CreateSavepointAsync`/`RollbackToSavepointAsync`) que ante una falla técnica vuelve a él y responde `NoResponse` en los dos motores (C25); orden de cerrojos de C24 (filas de Inventario → reserva → numerador de Inventario); con `CreditWithoutLending` no consulta ni reserva y sella «Contabilidad» (T0113)
+- [ ] T0173 [P] Cambiar `src/Core/IngenIA365ERP.Application/Inventory/Sales/EvaluateSaleCreditQuery.cs` (l. 110) para devolver el origen real; `src/Core/IngenIA365ERP.Application/Inventory/Documents/DiscardInventoryDraftCommand.cs` y `src/Core/IngenIA365ERP.Application/Inventory/Pos/PosDraftCommands.cs` (`DiscardPosDraftCommand`, l. 471) llaman `LiberarAsync` cuando el pago tiene reserva (T22); `src/Core/IngenIA365ERP.Domain/Inventory/Parameters/ParametrosDeInventario.cs`: `Cartera.CuentaPorCobrarRegistradaPor` pasa su defecto a «Cartera» y se fuerza a «Contabilidad» mientras `Cartera.IntegracionHabilitadaDesde` no rija (D16) (T0114)
+
+#### Sección A.5 — Migraciones aditivas previas al retiro
+
+- [ ] T0174 Generar con `tools/scripts/add-migration.ps1` el par `NominaRecaudaPorElContrato` en `src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/Application/` y `…SqlServer/Application/` (DT §2.26, data-model parte 3 §7, R108): crea `PAY_PayrollLoanDeductions`; agrega las columnas de T0152 y sus índices; y en `Up()` la **copia idempotente** (transformación de datos existentes, no semilla; C73) `ObligationPublicId = LND_LoanPortfolios.PublicId`, `ObligationNumber = PortfolioNumber` en `PAY_SettlementDeductions` y `PAY_Novelties` donde `LoanPortfolioId` no es nulo y el destino sigue nulo, con SQL por proveedor; revisar que el scaffold no traiga operaciones ajenas (ninguna sobre `COR_`/`ADM_` de la fase 2 ni sobre `LND_`); `check-migration-parity.ps1` pasa
+- [ ] T0175 Generar el par `ComercioConCartera` (DT §2.26, data-model parte 3 §8): `INV_LendingObligationResponses`; columnas de T0168 y T0169 (las dos `CreditWithoutLending` sujetas a A6); scaffold revisado y paridad (depende de T0174 en el tiempo)
+- [ ] T0176 Verificar el cierre del paso 1 de T88: `grep` sin resultados de `LoanPortfolios`, `PayrollDeductionEntries`, `RecaudoDeCredito` y `Domain.Entities.Lending` fuera de `Application/Lending`, `Domain/Entities/Lending`, `Configurations/Lending`, `Endpoints/Lending`, `ApplicationDbContext` e `IApplicationDbContext`; corren verdes las pruebas de la sección A, «Nomina e2e», `Payroll/LiquidacionDefinitivaTests` (reversión por el contrato, l. 146, 189), `Core/AltaDePersonaEnUnPasoTests` (l. 100) y `Ventas/CreditoProvisionalTests` en los dos motores
+
+#### Sección A.6 — Enmiendas a otras features (documentos de diseño)
+
+- [ ] T0177 [P] Enmiendas a la 012 (T97, C16, C18, C21): en `specs/012-inventario-comercial/spec.md`, FR-062 («Comercial guarda número y estado del crédito, nunca saldos ni cuotas», T95) y la regla «el mensaje lo origina la persona» con la excepción de T11; en `specs/012-inventario-comercial/contracts/mensajes.md` §12 «Versiones», que el consumidor de Cartera admite toda versión de la familia de la venta y responde `ObligacionRechazada` a la que no acepta (C16), §11 «Estados de entrega», `ValidationFailed` directo desde `Pending`/`InBatch` (C18), y `MotivoSinComprobante.NotIncorporated` aditivo (C21); en `specs/012-inventario-comercial/tasks.md`, cerrar con remisión a la 013 las tareas IC T661–T667, la rama Cartera de T886 y T1026–T1027
+- [ ] T0178 [P] Enmienda D-08 de la 010 en `specs/010-nomina-prestaciones-pila-dian/data-model.md` y `research.md` (`DESC_CARTERA` contabiliza contra el puente «recaudos por nómina para Cartera», T53) y enmienda de la 009 en `specs/009-contabilidad-niif/contracts/contabilizacion.md`: las filas de Cartera remiten a la enmienda E-01 de la 013 (T96)
+
+#### Sección B.1 — Diagnóstico por ambiente (T87, R123; H7)
+
+- [ ] T0179 [P] Escribir `specs/013-cartera-financiera/diagnostico-cartera-heredada.sql`, sólo lectura, con bloques POSTGRESQL y SQL SERVER (data-model §13.4): filas de las 55 retiradas (−1 si no existe) y su total; filas de las 38 conservadas (informativo); `LND_Transactions` con `SavingsLineId` o `CdatAccrualDate` no nulos; `LND_PayrollDeductions` y `LND_PayrollDeductionPeriods` con `ContributionAmount > 0`; `LND_SiplaGroupParameters`; `PAY_SettlementDeductions` con `LoanPortfolioId` no nulo por `Status`; `PAY_Novelties` con `LoanPortfolioId` no nulo; `ACC_Documents` con `OriginModule = 'CAR'` por `SourceType` y tipo (`DS`, `RC`, `CA`, `PV`, `DN`); filas que la copia de C73 no encontraría; y si ya existe `LND.RetiroHeredado.Aprobado`
+- [ ] T0180 (dueño) Correr el diagnóstico en la base local y en DEV y QA, en cada base de cooperativa y en `ingenia365erp`, antes de fusionar, y anotar los resultados en el runbook; si una tabla de crédito tiene datos de ahorro o aportes, o `LND_SiplaGroupParameters` tiene filas, el retiro se detiene y decide el dueño (preguntas H1, H3, H4; propuesta por defecto: conservar SIPLA sin FK, retirar las cinco de H3, aprobar con constancia si hay `ACC_Documents` `CAR`). Pregunta **H7**: el dueño nombra al segundo revisor; la corrida en PDN, con autorización expresa, queda para Polish
+
+#### Sección B.2 — Mudanza de lo conservado a `Savings` (T3, R125, C89; A10 «propuesta por defecto: sí»), commit 2 de T88
+
+- [ ] T0181 Mover las 38 entidades conservadas (data-model §13.1: ahorros y depósitos 7, caja y chequeras 4, aportes 2, retiros 2, SIPLA 5, compartidas 5, asociados y servicios 10, zonas 3) de `src/Core/IngenIA365ERP.Domain/Entities/Lending/` a `src/Core/IngenIA365ERP.Domain/Entities/Savings/` con espacio `IngenIA365ERP.Domain.Entities.Savings` y sus 38 configuraciones de `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/` a `Configurations/Savings/` **sin cambiar ningún `ToTable`**; `SiplaGroupParameterConfiguration` pierde la navegación `CreditLine`, la FK y el índice (la columna `CreditLineId` queda requerida como dato, §7.6 de DT); actualizar los `using` de `ApplicationDbContext.cs` (l. 162-259), `IApplicationDbContext.cs` (l. 102-136), `Application/Debit/Cards/**`, `Application/Core/People/Queries/GetPersonDetailQuery.cs` y `Application/CDT/**` que los lean (T0121)
+- [ ] T0182 Mover los handlers conservados de `src/Core/IngenIA365ERP.Application/Lending/` a `src/Core/IngenIA365ERP.Application/Savings/` (`SavingsAccounts`, `SavingsParameters`, `SavingsInterest` con `LiquidateSavingsInterestCommand`, `Contributions`, `Statements`, `Withdrawals`, `WithdrawalStatuses`, `Zones`, `SubZones`, `ZoneTypes`, `SiplaParameters`, `TransactionCodes`, y `Reports/PersonPortfolioReportQuery.cs`); `LiquidateCDTInterestCommand` sigue en `Application/CDT/InterestLiquidation` sin cambios (T96)
+- [ ] T0183 Mover los 12 archivos de rutas conservadas de `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/` a `src/Presentation/IngenIA365ERP.API/Endpoints/Savings/` con prefijo `/api/savings/{mismo sufijo}` (tabla de api.md §25) y crear `src/Presentation/IngenIA365ERP.API/Endpoints/Reports/SavingsReportsEndpoints.cs` con `/api/reports/savings/person-portfolio/{id}` (+ `/pdf`, **sin créditos**) y `/api/reports/savings/savings-statement/{id}/pdf`, sacados de `LendingReportsEndpoints.cs`; conservan sus permisos de hoy (ninguno) y la exención por nombre de T0123
+- [ ] T0184 Mover las 18 pantallas conservadas (`Aportes`, `CDTDetalle`, `CDTNuevo`, `Certificados`, `CodigosMovimiento`, `CuentasAhorro`, `Depositos`, `DetalleAhorro`, `EstadosRetiro`, `Extractos`, `LiquidacionInteresAhorro`, `LiquidacionInteresCDT`, `ParametrosAhorro`, `ParametrosSipla`, `RetiroAsociado`, `Retiros`, `TiposZona`, `Zonas`, con sus `.razor.css`) de `src/Presentation/IngenIA365ERP.Shared/Pages/CarteraFinanciera/` a `src/Presentation/IngenIA365ERP.Shared/Pages/AhorrosYAportes/` **con las mismas rutas `/cartera/...`** (reservadas, DT §2.16) y cambiar las URL de API que llaman a `/api/savings/*` y `/api/reports/savings/*`; `src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor` (l. 68-104) gana el grupo «Ahorros y aportes» con sus 16 enlaces; `src/Presentation/IngenIA365ERP.Shared/Services/Manual/ManualCatalogo.cs` pasa sus temas a `Modulos.AhorrosYAportes` (R126)
+- [ ] T0185 [P] Regla de auditoría «.Savings» → módulo `Savings` (no encadenado) **antes** de «.Core» y de «.Lending» en `src/Core/IngenIA365ERP.Application/Common/Audit/ModuloDeAuditoria.cs` (C89; las reglas «.Compliance» y «.NationalValues» y los módulos encadenados `Lending`, `Compliance`, `NationalValues` de `AuditoriaEncadenada`/`AuditRetention` son de la fase 2)
+
+#### Sección B.3 — Retiro de todo lo heredado de crédito (T86, T88 paso 3, T89, T96, R126, R127)
+
+- [ ] T0186 Borrar las 55 entidades de crédito de `src/Core/IngenIA365ERP.Domain/Entities/Lending/` (lista de data-model §13.1, incluidas `LendingTransaction` de `LND_Transactions` y las cinco de H3: `PeriodicityParameter`, `DeductionValue`, `InterestRate`, `OnlineQuery`, `RecreationApplication`), sus 55 configuraciones de `Configurations/Lending/` (incluida `LoanTransactionConfiguration.cs`, que configura la heredada `LendingTransaction`: su nombre queda libre para la nueva de T0209) y sus `DbSet` en `ApplicationDbContext`/`IApplicationDbContext`; `SettlementDeductionConfiguration.cs` y `SettlementDeduction.cs` sueltan `LoanPortfolioId`, su navegación, FK, IX y `UK_PAY_SettlementDeductions_Termination_Loan`; `PayrollNovelty.cs` suelta `LoanPortfolioId` (T0119, T0120)
+- [ ] T0187 Borrar el código de crédito de `src/Core/IngenIA365ERP.Application/Lending/`: carpetas `Accruals` (con `AccrueInterestCommand`), `Classifications` (con `ClassifyPortfolioCommand`), `Defaults`, `HousingParameters`, `InterestRates`, `LoanApplications` (con `DisburseLoanCommand`), `LoanPortfolios`, `Payments` (con `ProcessPaymentCommand`, `PaymentQueries` y `Services/RecaudoDeCredito.cs`), `PayrollDeductionConcepts`, `PayrollDeductions` (con `ProcessPayrollDeductionCommand`), `PeriodicityParameters`, `PortfolioAccounts`, `ProvisionParameters`, `ScoringParameters`, `TermRates` y `Reports/PortfolioAgingQuery.cs` (T96, R128); `Application/Lending` queda vacío para la Cartera nueva
+- [ ] T0188 Borrar los 15 archivos de rutas de crédito de `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/` (63 rutas: `AccrualsEndpoints`, `ClassificationsEndpoints`, `DefaultsEndpoints`, `HousingParametersEndpoints`, `InterestRatesEndpoints`, `LoanApplicationsEndpoints`, `LoanPortfoliosEndpoints`, `PaymentsEndpoints`, `PayrollDeductionConceptsEndpoints`, `PayrollDeductionsEndpoints`, `PeriodicityParametersEndpoints`, `PortfolioAccountsEndpoints`, `ProvisionParametersEndpoints`, `ScoringParametersEndpoints`, `TermRatesEndpoints`), el archivo `src/Presentation/IngenIA365ERP.API/Endpoints/Reports/LendingReportsEndpoints.cs` entero (sus rutas conservadas ya se mudaron en T0183; el centro de informes nuevo lo reescribe la fase de informes, T99) y los PDF `src/Presentation/IngenIA365ERP.API/Reports/LoanStatementReport.cs` y `PortfolioAgingReport.cs`; ninguna deja alias (404)
+- [ ] T0189 Borrar las 21 pantallas de crédito y sus `.razor.css` (`Solicitudes`, `SolicitudCredito`, `CarteraCreditos`, `DetalleCredito`, `Recaudos`, `MoraYCobro`, `Desembolsos`, `LineasCredito`, `TasasInteres`, `TasasPlazo`, `ParametrosProvision`, `ParametrosScoring`, `ConceptosDescuento`, `ParametrosVivienda`, `ParametrosPeriodicidad`, `CuentasCartera`, `CausacionIntereses`, `CalificacionCartera`, `DescuentoNomina` de `Shared/Pages/CarteraFinanciera/`, y `Shared/Pages/Reportes/CarteraPorEdades.razor`, `ExtractoCredito.razor`); quitar la carpeta `CarteraFinanciera` vacía; en `NavMenu.razor` retirar las 18 entradas de crédito (16 del grupo y 2 de reportes); en `src/Presentation/IngenIA365ERP.Shared/Pages/CentroReportes.razor` (l. 85-131) las 3 tarjetas de crédito; en `ManualCatalogo.cs` los 16 temas de crédito y los de reportes `extracto-credito` y `cartera-edades`, y `Modulos.Cartera = "Cartera"` queda para los temas nuevos (CH50: la rama acepta un tramo sin pantallas de crédito; `TodoEnlaceDelMenuTieneSuPagina` y `ManualCatalogoTests` siguen verdes)
+- [ ] T0190 [P] Borrar el bloque `Lending` (22 tuplas, l. 52-74) y el rol `LoanOfficer` (l. 161) de `src/Infrastructure/IngenIA365ERP.Identity/Seed/IdentitySeedData.cs` (T89, R127)
+- [ ] T0191 [P] Retirar el proyecto `src/Infrastructure/IngenIA365ERP.Legacy/` entero (`IngenIA365ERP.Legacy.csproj`, `DependencyInjection.cs`, `Adapters/ILegacyAdapter.cs`, `Adapters/LendingLegacyAdapter.cs`), su línea en `IngenIA365ERP.slnx` (l. 14) y la exclusión de `tests/IngenIA365ERP.Architecture.Tests/Helpers/RepoPath.cs` (l. 34) (H6 «propuesta por defecto: sí»); `dotnet build IngenIA365ERP.slnx` con 0 errores
+- [ ] T0192 Correr verdes las pruebas de T0119 a T0124 y la regresión sin contenedores; confirmar que `voucher-types.json` conserva `DS`, `RC`, `CA`, `PV`, `DN` (T54) y que el modelo intermedio compila sin ninguna entidad nueva de Cartera
+
+#### Sección B.4 — Migración destructiva `RetiroDeLaCarteraHeredada` (T87, R122, data-model §13.3), commit propio
+
+- [ ] T0193 Generar con `tools/scripts/add-migration.ps1` el par `RetiroDeLaCarteraHeredada` sobre el **modelo intermedio** (sin las 55 y sin ninguna entidad `LND_` nueva; después de `ComercioConCartera`, con `ValoresNacionales` y `PlataformaParaCartera` de la fase 2 ya generadas, C103) y escribir su `Up()` en este orden: (1) guarda — PostgreSQL `DO $$ … RAISE EXCEPTION`, SQL Server cursor que termina en `THROW 50013` (50012 es de la 012) — que cuenta filas, **incluidas las dadas de baja**, de las 55 (saltando las inexistentes), `LND_SiplaGroupParameters`, `PAY_SettlementDeductions` y `PAY_Novelties` con `LoanPortfolioId` no nulo y `ACC_Documents` con `OriginModule = 'CAR'`, y se niega nombrando tabla y cantidad salvo la fila viva `COR_SystemSettings.SettingKey = 'LND.RetiroHeredado.Aprobado'`; (2) suelta las 40 FK de data-model §13.2 y sus índices; (3) borra `PAY_SettlementDeductions.LoanPortfolioId` (después de su FK, IX y UK; en SQL Server los índices antes que la columna) y `PAY_Novelties.LoanPortfolioId`; (4) borra las 55 tablas. `Down()` recrea vacías las 55, sus FK y las columnas `PAY_`, y lo declara. Revisar que el scaffold no traiga ninguna operación sobre las 38 conservadas ni sobre `ACC_Documents`; `check-migration-parity.ps1` pasa (T0122, T0125)
+- [ ] T0194 (dueño) Cabecera `MIGRACION-DESTRUCTIVA-APROBADA` en el `Up()` de los dos archivos con la referencia del respaldo `<base>-AAAAMMDD-pre-f013.dump` y el segundo revisor que nombre el dueño (pregunta H7); **commit propio** que sólo contiene el par y su designer/snapshot
+- [ ] T0195 [P] Runbook `docs/operaciones/cartera-retiro-heredado.md` (molde `docs/operaciones/inventario-retiro-heredado.md`): diagnóstico con `diagnostico-cartera-heredada.sql`; respaldo `<base>-AAAAMMDD-pre-f013.dump` de cada base de cooperativa, de `ingenia365erp` y de la base administrativa (por los valores nacionales de la fase 2); cuándo y cómo insertar a mano la fila `LND.RetiroHeredado.Aprobado` (`ModulePrefix 'LND'`) sólo si hay filas; segundo revisor; DbMigrator PreSync (AutoMigrate apagado en QA y PDN); verificación posterior; restauración; la pérdida declarada si la copia de C73 no encontró un crédito (Principio XII); revisión de usuarios con `ui.pagina-inicio = /cartera/recaudos`; aviso del grupo de menú «Ahorros y aportes» y de las URL `/api/savings/*` en las notas de la promoción
+- [ ] T0196 Correr `RetiroDeLaCarteraHeredadaTests` en PostgreSQL y SQL Server y la regresión de «Nomina e2e», «Inventario e2e», «Contabilidad e2e» y `Core/AltaDePersonaEnUnPasoTests` sobre el modelo intermedio (T0125)
+
+#### Sección C.1 — Enumeraciones y piezas puras
+
+- [ ] T0197 [P] Enumeraciones en `src/Core/IngenIA365ERP.Domain/Enums/Lending/` (un archivo por grupo temático), con los nombres de DT §2.7 y los números de data-model §9.1 (C65), más las fijadas en data-model parte 1 §10 (`RepaymentPeriodicity`, `CreditLineStatus`, `CreditLineClosedReason`, `DebtorKind`, `InterestTaxTreatment`, `RepaymentChannel`, `CreditPartyRole`, `InsuranceBase`, `InsuranceAccrualTiming`, `CollateralKind`, `PromissoryNoteKind`, `PromissoryNoteStatus`, `CommercialTermKind`, `LendingNumberKind`, `ApplicationKind`, `CreditApplicationStatus`, `ApplicationCheckKind`, `CheckStage`, `CheckOutcome`, `ScreeningContext`, `ScreeningOutcome`, `BureauQueryPurpose`, `CreditLimitKind`, `CreditLimitOrigin`, `DebtorBlockReason`, `PreferenceOrigin`, `AttributionLevelKind`, `GoverningBodyKind`, `FractionComparison`, `MajorityBase`, `BodyMemberRole`, `SessionKind`, `SessionMode`, `SessionStatus`, `AttendanceStatus`, `SessionItemKind`, `VotingRule`, `VoteValue`, `VoteMethod`, `KinshipKind`, `RelatedPartySource`, `SaleObligationStatus`, `LoanLinkKind`, `TermsVersionCause`, `DisbursementForm`) y en la parte 2 «Nombres fijados» las que usan las tablas de `CarteraNucleo` (`InboundEvaluationOutcome`, `SaleReconciliationOutcome`, `MigrationLoadStatus`, `MigrationPartStatus`, `MigrationDifferenceKind`, `AccountingFactPartSource`, `ArrearsHistoryOrigin`, `NonDeductionReason`, `LoanPayrollLinkOrigin`, `InsolvencyRegime`, `PriorNoticeStatus` (calculado), `CreditReportClaimStatus`, `IssuedDocumentEventKind`, `DocumentDeliveryMode`); las de K2–K6 se crean también ahora con sus valores (data-model §0.14: «los valores de enum de entregas posteriores existen desde K1»); `EntregaDeCartera` (`K1 = 1` … `K6b = 7`) y la constante `CatalogoDeCartera.EntregaVigente = K1` en `src/Core/IngenIA365ERP.Domain/Lending/CatalogoDeCartera.cs` **(ubicación nueva)**; `LendingDecisionSubjects` con `RiskPolicyVersion` (C52) y `AccionesDeSegregacion` como constantes (T0128)
+- [ ] T0198 [P] `src/Core/IngenIA365ERP.Domain/Lending/Rates/AritmeticaDecimal.cs` (T26, M5): potencia entera por cuadrados, `RaizEntera(x, n)` por Newton a 24 decimales, TIR por Newton con bisección; sólo `decimal`; la única aproximación del motor se documenta en el XML del método (T0126)
+- [ ] T0199 [P] `src/Core/IngenIA365ERP.Domain/Common/VigenciaBitemporal.cs` (T38, R3; si la fase 2 ya la creó para valores nacionales, se le suma la sobrecarga para versiones propias de Cartera): `Vigente(versiones, D, R)` con la regla única de data-model §0.6 (sin `ValidTo` guardado; `RegisteredAt ≤ R`, `ValidFrom ≤ D`, desempate por `VersionNumber`) y la variante con `Sequence`/`KnownAt`/`SupersedesPublicId` (T0127)
+- [ ] T0200 [P] Documentos normativos de Cartera (T45, R2; data-model §12.4): tipos `Anexo1` y `ReglaDePerdidaEsperada` en `src/Core/IngenIA365ERP.Domain/Lending/Risk/Normativa/` (sólo forma y reglas de forma; los motores que los usan son de US9 y K6a); `src/Core/IngenIA365ERP.Application/Lending/Risk/ValidadorDeDocumentoNormativoDeCartera.cs` implementa `IValidadorDeDocumentoNormativo` (de la fase 2) para `SarcAnexo1` y `ReglaDePerdidaEsperada` y se registra en DI; los JSON embebidos de la versión inicial (`Verified = false` salvo lo cotejado; Anexo 1 del 2025-01-31 y CE 100 del 2026-05-12) se agregan junto a los de `PlatformNationalValuesSeeder` (fase 2) para que la semilla central los registre (dueño: pregunta **E8**, cotejo del Anexo; propuesta por defecto: sembrar sin verificar y alertar `Cartera.NormativaPendienteDeValidar`) (T0137)
+
+#### Sección C.2 — Persistencia base de Cartera
+
+- [ ] T0201 [P] `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/PrecisionDeCartera.cs` con los alias `Monto` (18,2), `TasaAnual` (9,6), `TasaEquivalente` (28,18), `Fraccion` (9,6), `Puntaje` (12,4) y `ValorUvr` (18,4, reservado para K6b) como métodos de extensión de `PropertyBuilder<decimal>` (molde `PrecisionDeInventario`; T35, data-model §0.4)
+- [ ] T0202 [P] Cerrojo (T34, data-model §0.10): `src/Core/IngenIA365ERP.Application/Lending/Common/ICerrojoDeCartera.cs` con `TomarSetupAsync(exclusivo)`, `BloquearDeudoresAsync(personIds, modo)` y `BloquearCreditosAsync(loanIds, modo)` y el enum `ModoDeEspera { Esperar, Saltar }` **(nombres nuevos)**; `src/Infrastructure/IngenIA365ERP.Persistence/Lending/SqlDelCerrojoDeCartera.cs` (puro, emite las sentencias por motor) y `src/Infrastructure/IngenIA365ERP.Persistence/Lending/CerrojoDeCartera.cs` (sólo las ejecuta, exige `TransaccionExplicita.HayEnCurso`); registro en `src/Infrastructure/IngenIA365ERP.Persistence/DependencyInjection.cs`; no se usa `ICerrojoPorClave` (CH19) (T0129)
+- [ ] T0203 [P] `src/Core/IngenIA365ERP.Application/Lending/Common/NumeradorDeCartera.cs` (C48, data-model §1.10): único que toca `LND_NumberSequences`, bloquea su fila al final del orden de cerrojos, crea la que falta, salta números existentes; método `AsignarAsync(LendingNumberKind, scopeKey, prefijo)` **(nombre nuevo)** (T0130)
+- [ ] T0204 `src/Core/IngenIA365ERP.Application/Lending/Ledger/RegistroDeCartera.cs` (M1, C45): primitivas de escritura del libro y de lo que lo acompaña — registrar operación, transacciones (con espejo y `ReversesTransactionId`), versión de condiciones, versión de plan con sus cuotas, posición del día y avance de la marca de agua de `LoanControl` con `Sequence`/`RegisteredAt` monótonos — sin lógica financiera (la ponen los motores de US4 y US5, que suman `Conciliar` y la escritura en bloque del proceso) (T0131; depende de las entidades de T0209 y T0210)
+- [ ] T0205 Ampliar `src/Infrastructure/IngenIA365ERP.Persistence/DbContext/GuardaDeInmutabilidad.cs` si hace falta para que cubra por marcador los hechos de Cartera y sus `[EscrituraUnica]` (la llamada desde `AdminDbContext` es de la fase 2, C68); marcar `[SinDiffDeAuditoria]` en `LoanDailyPosition`, `LoanControl`, `DebtorControl`, `AccountingFactPart`, `LendingProcessRunError` y las 17 de preparación (C46) (T0132)
+
+#### Sección C.3 — Entidades y configuraciones de `CarteraNucleo` (forma, sin comportamiento; data-model partes 1 y 2)
+
+Cada tarea crea la entidad en `src/Core/IngenIA365ERP.Domain/Entities/Lending/{Carpeta}/` y su configuración en
+`src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/{Carpeta}/`, con `HasDatabaseName` para todo
+UK/IX/CK, alias de `PrecisionDeCartera`, FK `Restrict` sólo hacia `COR_People`, `COR_Branches`, `SEC_Users`,
+`COR_Banks`, `COR_BankFileFormats` y entre tablas `LND_` del núcleo, adjuntos por `…AttachmentPublicId` sin FK, y
+agrega el `DbSet` en `ApplicationDbContext`/`IApplicationDbContext` y en el contexto de pruebas
+(`tests/IngenIA365ERP.Application.Tests/Common/TestDbContextFactory.cs`). Las tareas tocan esos dos contextos, así
+que los `DbSet` se agregan al final en T0231.
+
+- [ ] T0206 [P] Carpeta `Configuration` (data-model §1.1–§1.11, §2.15, §3.14): `LendingSetup` (fila única; la siembra la migración con `Id = 1`), `CreditLine`, `CreditLineVersion` (H), `CreditLineRateBand` (H), `CreditLineDocumentRequirement` (H), `CreditLineInsurance` (H), `CreditLineCollateralRule` (H), `CommercialTermEquivalence` (H), `LendingFactType` (con `ShortCode` nvarchar(4) y `UK_LND_FactTypes_ShortCode`), `LendingNumberSequence` (`NextValue` bigint, `UK_LND_NumberSequences_Kind_Scope`), `UserCreditLineScope`, `ContributionBalanceLoad` (H)
+- [ ] T0207 [P] Carpeta `Origination` (data-model §2.1–§2.14): `CreditApplication`, `CreditApplicationParty`, `CreditApplicationDocument`, `CreditApplicationCheck` (H), `CreditScore` (H), `ScreeningResult` (H, liberación `[EscrituraUnica]`), `BureauQuery` (H), `Collateral` (`CK_LND_Collaterals_Kind`), `PromissoryNote`, `CreditLimit` (H), `DebtorBlock` (H, levantamiento `[EscrituraUnica]`), `LoanNumberReservation` (con `ConsultationEvidence` y único por `IdempotencyKey`), `DebtorControl` (`[SinDiffDeAuditoria]`), `PrepaymentPreference` (H, `CK_LND_PrepaymentPreferences_Scope`)
+- [ ] T0208 [P] Carpeta `Governance` (data-model §3.1–§3.13): `AttributionMatrix`, `AttributionLevel`, `AttributionRule` (H, C42), `CreditDecision` (H, `CK_LND_CreditDecisions_Decider`), `GoverningBody` (con prefijo de acta, C48), `GoverningBodyRuleVersion` (H, C44), `GoverningBodyMember`, `Session`, `SessionAttendance`, `SessionItem`, `SessionVote` (H, con `ReplacesVoteId`, `ReplacementReason`, `ReplacedAt` y único filtrado a no reemplazados, C75), `RelatedParty`, `CaseParticipation` (H)
+- [ ] T0209 [P] Carpetas `Loans`, `Schedules`, `Transactions` y `Projections` (data-model §4, §5, §6): `Loan`, `LoanParty`, `LoanTermsVersion` (H, `RulesVersion`), `InsuranceClaim` y `InsolvencyProceeding` (datos de K1, T102), `RepaymentScheduleVersion` (H), `RepaymentInstallment` (H, `AuditableEntityLong`, C43), `LoanTransaction` (H, `AuditableEntityLong`, en `Entities/Lending/Transactions`, `ReversesTransactionId`, `CK_LND_LoanTransactions_Origin`, `CK_LND_LoanTransactions_Amount`, índice único de la causación filtrado a `Kind = Accrual` y `ReversesTransactionId` nulo, C50), `LoanControl` (`[SinDiffDeAuditoria]`; nace en el mismo `SaveChanges` que su crédito), `LoanDailyPosition` (H, `AuditableEntityLong`, `[SinDiffDeAuditoria]`)
+- [ ] T0210 [P] Carpeta `Operations` (data-model §7): `LoanOperation` (H, `AuditableEntityLong`, UK `(CollectorCode, IdempotencyKey)`, columnas de puerto como texto nvarchar(30), §0.7), `DisbursementOrder` (`PaidByFile`, C10; `CK_LND_DisbursementOrders_Form`, `_Net`, `_PaidByFile`), `DisbursementOrderResult` (H, C44), `DisbursementFile` (H, anulación `[EscrituraUnica]`), `DisbursementFileLine` (H), `InstallmentNonDeduction` (H, data-model §24.9)
+- [ ] T0211 [P] Carpetas `Integration` y `Payroll` (data-model §21.1, §21.2, §22.1–§22.3, §24.5): `LendingInboundMessage` (no H, reprocesable; `UK_LND_InboundMessages_MessagePublicId`), `LendingInboundMessageEvaluation` (H), `AccountingFactPart` (H, `[SinDiffDeAuditoria]`, `UK_LND_AccountingFactParts_Batch`; `MonthlyCloseId` y `MonthlyCloseReopeningId` como columnas **sin FK** hasta `CarteraRiesgo`, C66), `LendingProcessRun` (`UK_LND_ProcessRuns_DailyCycle`, `_Close`, `_Running`), `LendingProcessRunError` (`[SinDiffDeAuditoria]`), `LoanPayrollLink` (C44; `PayrollAgreementId` nace en K2)
+- [ ] T0212 [P] Carpetas `Collections` y `Documents` (data-model §26.1, §26.2, §26.11, §26.12, §27): `DebtorMessage` (H), `DebtorMessageEvent` (H, `AuditableEntityLong`, `DestinationAddress` en el evento `Sent`, C57), `PriorNotice` (H, datos de K1), `CreditReportClaim` (datos de K1), `IssuedLendingDocument` (H), `IssuedDocumentLoan` (H), `IssuedDocumentEvent` (H) — los tres documentos se adelantan a K1 (pregunta **I5**, propuesta por defecto: sí; si el dueño la rechaza, salen de `CarteraNucleo` y nacen con `CarteraInformes`)
+- [ ] T0213 [P] Carpeta `Migration` (data-model §29, §30, §21.5): `MigrationLoad`, `MigrationLoadPart` (`BatchNumber`, una fila por archivo, C64), `MigrationLoadDifference` (H), `MigrationSaleReconciliation`, `ProvisionalCollection` (H con `[EscrituraUnica]`, C44), `LendingActivation` (H, `SessionItemId` no nulo, C61; `ProvisionalCollectionsReviewAttachmentPublicId`, C62) y las 17 de preparación `MigrationLoanRow`, `MigrationInstallmentRow`, `MigrationBalanceRow`, `MigrationRiskDataRow`, `MigrationRestructuringRow` (con `Cause` de `TermsVersionCause`, C97), `MigrationCollateralRow`, `MigrationCoDebtorRow`, `MigrationCreditLimitRow`, `MigrationBlockRow`, `MigrationAuthorizationRow`, `MigrationPriorNoticeRow`, `MigrationBureauReportRow`, `MigrationClaimRow`, `MigrationRelatedPartyRow`, `MigrationChargedOffRow`, `MigrationSaleRow`, `MigrationArrearsHistoryRow` (H, `[SinDiffDeAuditoria]`, tablas `LND_Migration{…}` de DT §2.3)
+- [ ] T0214 Verificar contra data-model que ninguna tabla nueva reutiliza un nombre heredado ni falta alguna de las 74 + 17 de `CarteraNucleo` (data-model §14), y que `LND_Setup.ActivationId` → `LND_Activations` y las FK internas no forman ciclos que impidan generar (el cierre base y la conciliación de ventas apuntan como fija C66) (T0133)
+
+#### Sección C.4 — Permisos, plantillas de rol y parámetros
+
+- [ ] T0215 [P] Crear `src/Infrastructure/IngenIA365ERP.Identity/Seed/LendingPermissionCatalogSeeder.cs` con los 123 códigos `Lending.*` de DT §2.14 y C85 (descripción en español; prefijo `Lending`), llamado por `PhaseZeroSecuritySeeder.cs` **antes** de `BuiltInRolesSeeder`, nunca por el DbMigrator (T60); en `BuiltInRolesSeeder.cs`, lista de exclusión de `CompanyAdmin` con `Lending.Decisions.*` y `Lending.Sessions.Vote` (como `PermisosSaasGlobales`, T61); `PermisosLimitables` admite los códigos operativos `Lending.Disbursements.Execute`, `Lending.CreditLimits.Assign`, `Lending.ValidationFailures.Confirm`, `Lending.Payments.BackdateBeforeClose` (data-model parte 3 §6) (T0134)
+- [ ] T0216 [P] Las trece plantillas `cartera.administrador`, `cartera.asesor`, `cartera.analista`, `cartera.jefe`, `cartera.comite-credito`, `cartera.comite-riesgos`, `cartera.gerente`, `cartera.consejo`, `cartera.gestor-cobranza`, `cartera.oficial-cumplimiento`, `cartera.contador`, `cartera.auditor`, `cartera.revisor-fiscal` en `src/Core/IngenIA365ERP.Application/Security/Roles/Plantillas/PerfilesSugeridos.cs` (módulo `Lending`; servidas por `GET /api/admin/roles/templates?module=Lending`), con `cartera.administrador` sin decisiones ni voto (C86) y asesor y jefe con `Lending.PrepaymentPreferences.Manage` (C85); `CreateSuggestedLendingRolesCommand` lo crea US17 (T0134)
+- [ ] T0217 [P] Catálogo `src/Core/IngenIA365ERP.Domain/Lending/Parameters/ParametrosDeCartera.cs` **(ubicación nueva, molde `Domain/Inventory/Parameters/ParametrosDeInventario.cs`)** con `Modulo = "LND"`, todas las claves de data-model §12.1 (K1 a K6a), su tipo, valores, defecto, ámbitos, límite legal que la acota y `DisponibleDesde` por `EntregaDeCartera`; registro en `CatalogoDeParametros.Modulos` (`src/Core/IngenIA365ERP.Domain/Common/Parametros/CatalogoDeParametros.cs`; el mecanismo `EntregaDeModulo` y los ámbitos `CreditLine`/`LendingFactType` son de la fase 2). Las reglas de pisos y techos (`ReglasDeParametrosDeCartera`) no son de esta fase (T0135)
+
+#### Sección C.5 — Semillas
+
+- [ ] T0218 [P] `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/LendingFactTypesSeeder.cs` (Order 90, CH36) que siembra `LND_FactTypes` desde las entradas `CAR → Accounting` del catálogo de mensajes de Cartera (de la fase 2) con los `ShortCode` de `contracts/mensajes.md` §2 / `contabilidad.md` §2.1 (`DES`, `DRV`, `ACO`, `ICA`, `MCA`, `SCA`, `AFV`, `CSU`, `CRE`, `PAP`, `PRV`, `ANR`, `ANA`, `CIS`, `SFR`, `SFS`, `RCA`, `DCC`, `CPI`, `DET`, `RCL`, `RCI`, `GCO`, `REE`, `MOD`, `NOV`, `CON`, `CAS`, `ACT`, `CAP`, `CIR`, `CRA`, `CAD`, `CRO`, `GCT`), idempotente, actualiza nombres, nunca borra; los tres contingentes salen si el dueño rechaza la pregunta **A3** (propuesta por defecto: sí) (T0136)
+- [ ] T0219 [P] Comprobante `CN` «Novedades de cartera» (módulo `CAR`) en `src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/Data/voucher-types.json`, sembrado por `VoucherTypesSeeder.cs` en las cooperativas existentes sin tocar `DS`, `RC`, `CA`, `PV`, `DN` (T54; pregunta **C6**, propuesta por defecto: `CN` sí, cruce `PG`); los mapeos `ACC_LendingVoucherMappings` (`LendingVoucherMappingsSeeder`, Order 89) son de US7
+
+#### Sección C.6 — `ProcesadorDeCartera` (esqueleto; T5, PM-13, C59)
+
+- [ ] T0220 Constante `NombresDeArrendamiento.ProcesoDeCartera = "lending.process"` en `src/Core/IngenIA365ERP.Application/Common/Execution/NombresDeArrendamiento.cs` (la fila la siembra `PlataformaParaCartera`, fase 2); `src/Core/IngenIA365ERP.Application/Lending/Processes/IEjecutorDeCorridaDeCartera.cs` **(nuevo)** con `Clase` (`LendingProcessKind`) y `EjecutarTandaAsync(corrida, presupuesto, ct)`; opciones `Lending:Process` (`Enabled`, `IntervalSeconds` 30, `BudgetSeconds` 60, `LeaseTtlSeconds` 120, `MaxParallelCooperatives` 2, `StartTimeLocal` «00:30», `BatchSize` 250) en `src/Presentation/IngenIA365ERP.API/Integration/OpcionesDelProcesoDeCartera.cs` **(nuevo)** y en `appsettings.json` (con `Enabled = false` en la fixture de pruebas, quickstart §1.7)
+- [ ] T0221 `src/Presentation/IngenIA365ERP.API/Integration/ProcesadorDeCartera.cs` (`BackgroundService`, registrado sólo en `Program.cs`): por cada pasada recorre el directorio de cooperativas con `MaxParallelCooperatives`, por `IEjecutorEnCooperativa` toma el arrendamiento `lending.process` de cada base, salta las que no tienen `LND_Setup.ActivationDate`, toma las corridas `Requested`/`Running` por orden y las conduce tanda por tanda por el ejecutor de su clase hasta agotar el presupuesto (menor que el TTL), deja `Completed`, `CompletedWithErrors` o `Failed` con `LND_ProcessRunErrors`, usa `HoyLocal` (T9) y firma como el proceso de la cooperativa (T8); las cuatro clases sin ejecutor registrado quedan `Requested` con advertencia — los ejecutores los agregan US4 (`DailyCycle`, `NationalValueCorrection`) y US9 (`MonthlyClose`, `CloseReopen`) (T0138)
+
+#### Sección D.1 — Puertos y piezas con firma estable (C106)
+
+- [ ] T0222 [P] Declarar `src/Core/IngenIA365ERP.Application/Common/Integration/Accounting/IContabilidadParaCartera.cs` con sus cinco métodos y los DTO de `contracts/contabilidad.md` §16.1 (`ResultadoDeEvaluacionContableDto`, `HallazgoDeCarteraDto`, `CombinacionDeSaldo`, `SaldosMapeadosDeCarteraDto`, `ConjuntoDeCuentasDeCarteraDto`, `EstadoDePeriodoContable`, `EstadoDelPeriodoDto`, `IndicadoresDeLaEntidadDto`, `IndicadorRegistradoDto`, `CuentaBancariaDeOrigenDto`) —firma definitiva: US7 no la cambia— y el provisional `ContabilidadParaCarteraProvisional.cs` **(nuevo)** en la misma carpeta con el comportamiento mínimo de T0142, registrado en `src/Core/IngenIA365ERP.Application/DependencyInjection.cs`; US7 lo reemplaza por el adaptador real `ContabilidadParaCartera` (T0142)
+- [ ] T0223 [P] Crear en `src/Core/IngenIA365ERP.Application/Lending/Integration/` los esqueletos con firma estable de `ModoDePasoDeCartera.cs` (defecto de `LND_FactTypes`, `NoPasa` sin contabilidad iniciada, `Always` en informativos; US7 suma vigencias, ámbitos, herencia de reversos y acompañantes), `ValidacionPreviaContableDeCartera.cs` (llama `EvaluarAsync` fuera del cerrojo, nunca bloquea, sella `PrevalidationOutcome`; US7 suma el bloqueo en pantalla, la reducción por combinación y la alerta), `FechaContable.cs` (mitad contable sobre `EstadoDelPeriodoAsync`; US3/US7 la completan y US9 suma la mitad de los cierres de Cartera) y `CategoriaContableDeCartera.cs` (categoría de crédito nuevo hasta que US9 la complete con el último cierre vigente) (T0142)
+- [ ] T0224 Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/EmisionDeCartera.cs` (CH42, molde `EmisionDeInventario`), el único que arma `SolicitudDeEmision` de Cartera, con el sobre de T13 (fecha contable por `FechaContable`, sucursal contable, tercero, `Currency = COP`), el modo por `ModoDePasoDeCartera` y por ahora sólo los informativos `CargaDeCarteraAplicada` y `CarteraActivada` (`Always`, `Confirmation`); US3 en adelante le suman sus familias (T0143)
+- [ ] T0225 [P] Crear el esqueleto de `src/Core/IngenIA365ERP.Application/Lending/Integration/DoblesDePrueba/TesoreriaDePrueba.cs` (`IDestinoDeMensajes` del destino `Treasury`: consume `OrdenDeGiroEmitida` y `AnulacionDeOrdenDeGiro` y responde `Processed` sin estado propio) y la guarda `src/Presentation/IngenIA365ERP.API/Integration/DoblesDePruebaDeCartera.cs` **(nuevo)** con `Registrar(services, configuration, environment)`, llamada desde `Program.cs`: registra los dobles sólo con `Lending:TestDoubles:Enabled = true` **y** `!IHostEnvironment.IsProduction()`, y con la configuración pidiéndolos en producción lanza `InvalidOperationException` al arrancar con un mensaje en español (T20, FR-089); `appsettings.Development.json` y la fixture con `Enabled = true`. US3 suma la emisión del resultado del giro y US5 el `RecaudadorDePrueba` sobre la misma guarda (T0142)
+- [ ] T0226 Verificar que `IConsultaDeObligaciones` y `ConsultaDeObligacionesSinActivar` (sección A.1) ya cumplen C106 («sin activar», firma estable) y que su doble `ConsultaDeObligacionesDePrueba` existe; sin cambios si es así
+
+#### Sección D.2 — Camino mínimo de la activación (C107)
+
+- [ ] T0227 Crear en `src/Core/IngenIA365ERP.Application/Lending/Migration/MigrationLoadCommands.cs` `CreateMigrationLoadCommand` (`IOperacionIdempotente`; `{ cutoffDate, notes? }`; numera con `NumeradorDeCartera`; con Cartera activada `Lending.Activation.AlreadyActivated`) y en `ApplyMigrationLoadCommand.cs` su forma para una **carga sin partes** (C107: `Applied`, conteos en cero, `IsBalanced = SalesReconciled = true`, `ActivationDeadline`, `CargaDeCarteraAplicada` por `EmisionDeCartera`); US8 completa las dos con las partes, las validaciones entre partes, el cuadre y la conciliación (T0143)
+- [ ] T0228 Crear en `src/Core/IngenIA365ERP.Application/Lending/Activation/` `RequisitosDeActivacion.cs` en su forma mínima (`LoadApplied`, `DateInTerm`, `AccountingMonthOpen`, `ReceiptsCollectorRegistered` y `TreasuryDestinationRegistered` por `IRegistroDeIntegracion`; el carácter de producción por `IHostEnvironment.IsProduction()`), `GetLendingActivationStatusQuery` (`ActivationReadinessDto`) y `ActivateLendingCommand.cs` con el contrato completo de api.md §19.3 (`IOperacionIdempotente`, `sessionItemPublicId` obligatorio validado contra `LND_SessionItems`: sesión cerrada, punto `Decision` aprobado, sujeto `ActivationDifferences` de esa carga), que para la carga sin partes escribe en una `TransaccionExplicita` lo de T0143; US17 cambia la validación del punto por `PuntoDeActaCerrado` y US8 completa requisitos, nacimiento de créditos, cierre base y cobros provisionales (T0143)
+- [ ] T0229 Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/MigrationEndpoints.cs` con `GET/POST /api/lending/migration/loads`, `GET …/{id}` y `POST …/{id}/apply` (`Lending.Migration.Load`), y `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/ActivationEndpoints.cs` con `GET /api/lending/activation` y `POST /api/lending/activation` (`Lending.Activation.Execute`), `.RequirePermission` en cada ruta, `Idempotency-Key` en las escrituras y el 404 genérico; registrarlos en `Program.cs` (US17 los pasa al grupo base `LendingGroup`; US8 suma las demás rutas de §19) (T0144)
+- [ ] T0230 Agregar a `tests/IngenIA365ERP.API.IntegrationTests/Lending/CarteraE2E.cs` el ayudante `ActivarCarteraAsync(fx, coop, opciones?)` **(nombre de C107)**: registra por `/api/core/integration-participants` los dobles `TST` (Recaudo) y `TES` (Tesorería) con `Class = Test`; deja el acta de activación —un órgano, una sesión cerrada con un punto `Decision` aprobado de sujeto `ActivationDifferences` sobre la carga— sembrada con el `ApplicationDbContext` de la cooperativa desde la fixture mientras no existan las rutas de órganos y sesiones (US17 la pasa a HTTP); exige (o inicia, como `CooperativaAisladaAsync(…, primerEjercicioContable)`) la contabilidad con el mes de hoy abierto; crea la carga con corte = hoy − 1, la aplica vacía y activa con fecha = hoy por `POST /api/lending/activation`; devuelve la fecha de activación y el `PublicId` de la activación. Es el único camino con que las e2e de las fases 4 a 12 obtienen una cooperativa activada (sin `Skip`) (T0144)
+
+#### Sección C.7 — Migración `CarteraNucleo` y cierre de la fase
+
+- [ ] T0231 Agregar los `DbSet` de todas las entidades de T0206 a T0213 en `src/Infrastructure/IngenIA365ERP.Persistence/DbContext/ApplicationDbContext.cs`, `src/Core/IngenIA365ERP.Application/Common/Interfaces/IApplicationDbContext.cs` y `tests/IngenIA365ERP.Application.Tests/Common/TestDbContextFactory.cs`; `dotnet build IngenIA365ERP.slnx` con 0 errores y las pruebas de T0126 a T0140 verdes sin contenedores
+- [ ] T0232 Generar con `tools/scripts/add-migration.ps1` el par `CarteraNucleo` (después de `RetiroDeLaCarteraHeredada` y antes de `CarteraRiesgo`, C103; data-model §14; par **regenerable** hasta la tarea que congela los pares de K1 al cierre de la fase 14, C104): las 74 tablas de negocio y las 17 de preparación de la lista de data-model §14, **sin** FK hacia tablas de riesgo (C66) y con la fila `LND_Setup` `Id = 1` sembrada idempotente (`INSERT … WHERE NOT EXISTS`); revisar que el scaffold no traiga operaciones sobre tablas existentes (ni `PAY_`, `INV_`, `COR_`, ni las 38 de `Savings`) ni reutilice un nombre heredado; `check-migration-parity.ps1` pasa; `dotnet ef migrations has-pending-model-changes` limpio en los dos motores
+- [ ] T0233 Correr en PostgreSQL y SQL Server la colección «Cartera e2e» (`RetiroDeLaCarteraHeredadaTests`, `CarteraDesplegadaSinActivarTests`, `ActivacionDeCarteraDePruebaTests`) y la regresión de «Nomina e2e», «Inventario e2e» y «Contabilidad e2e» con `CarteraNucleo` aplicada; confirmar con el administrador de una cooperativa que `GET /api/admin/permissions/mine` trae los 123 `Lending.*` y que `GET /api/admin/roles/templates?module=Lending` devuelve las trece plantillas (T0141, T0144)
+- [ ] T0234 [P] Documentación de las enmiendas: `docs/manual/liquidaciones-especiales.md` (la definitiva propone por la consulta de obligaciones, aprueba todo o nada, reversa en Cartera y muestra el saldo exacto; «Cartera por activar») y `docs/operaciones/nomina-primer-periodo.md` (`DESC_CARTERA` contabiliza contra el puente «recaudos por nómina para Cartera»: parametrizar sus cuentas antes de la primera nómina con descuentos; la ordinaria como pagaduría interna y el panel de descuentos de Cartera); ninguna menciona el nombre del sistema anterior
+
+**Checkpoint**: lo heredado de crédito ya no existe (tablas, código, rutas, pantallas, permisos y proyecto Legacy),
+lo conservado vive en `Savings` con sus mismas tablas y pantallas, Nómina, Personas, el retiro de asociado y
+Comercial hablan con Cartera sólo por los puertos de `Common.Integration.Lending` (que hoy responden «Cartera no
+activada» / «no habilitada»), y la base de Cartera —enumeraciones, precisión, aritmética, vigencia, cerrojo,
+numerador, registro, permisos, plantillas, parámetros, semillas, esqueleto del procesador y las 91 tablas de
+`CarteraNucleo`— está lista para que las historias de K1 construyan encima; los puertos y piezas que se usan antes de su
+historia tienen firma estable (C106) y `ActivarCarteraAsync` activa una cooperativa aislada sin cartera previa (C107).
+Las migraciones quedan en el orden de C103: [`ValoresNacionales`, `PlataformaParaCartera` de la fase 2] →
+`NominaRecaudaPorElContrato` → `ComercioConCartera` → `RetiroDeLaCarteraHeredada` (commit propio) → `CarteraNucleo`
+(regenerable hasta el congelamiento de K1, C104).
+
+---
+
+## Phase 4: User Story 17 - Seguridad, atribuciones, habeas data y auditoría verificable (Priority: P1) — entrega K1 (parte K1)
+
+**Goal**: dejar operable el gobierno de Cartera que todas las historias de K1 usan (FR-003 a FR-006, FR-038 a FR-040,
+FR-014 para los parámetros de Cartera; T60–T70; SC-014, SC-015):
+- **alcance** por oficina y línea que falla cerrado (`IAlcanceDeCartera`, `LND_UserCreditLineScopes`, vínculo
+  agencia → oficina en Agencias; T62);
+- **atribuciones**: matriz versionada con niveles y reglas (`EnrutadorDeAtribuciones`, `NoExceptuables`) y montos de
+  las atribuciones operativas en `SEC_PermissionAmountLimits` con `PermisosLimitables` por módulo (T63, T65);
+- **órganos, sesiones, actas y votos** con `EvaluadorDeVotacion`, cierre sellado por SHA-256, acta en PDF y el gancho
+  `IAsuntoDeActa` que las historias siguientes implementan por sujeto (T64, C48, C75);
+- **segregación por persona** (`ReglasDeSegregacion`, `RegistroDeIntervenciones`, `LND_CaseParticipations`; T66);
+- **personas vinculadas** con su plantilla (FR-040, `lending.related-parties`);
+- **auditoría de Cartera**: intento denegado, rechazo de forma, fuera de alcance, oficina y dispositivo en el evento,
+  lecturas sensibles por `LendingAuditEmitter` (T67, C89);
+- **habeas data de Cartera en K1**: lectura de reclamos sobre el reporte (`LND_CreditReportClaims`, lo migrado) y la
+  pantalla `/cartera/autorizaciones` sobre la plataforma (T69, C85, C88);
+- **parámetros de Cartera** (`ParametrosDeCartera`, ruta y pantalla) con pisos y techos legales (T42, T43), y el
+  registro de plantillas y la bandeja de alertas de Cartera con alcance (T82, C68);
+- **cola de mensajes al deudor** (C108; T74–T76, FR-122): `LND_DebtorMessages` con su historia, el motor puro
+  `VentanaLegalDeContacto` (Ley 2300), `ColaDeMensajesAlDeudor`, las tareas `cartera.mensajes` y `cartera.entregas` sobre
+  el canal `SIMULADO` y el correo de la plataforma, las rutas `/api/lending/debtor-messages` y
+  `/api/lending/message-templates` y las pantallas `/cartera/mensajes` y `/cartera/plantillas-de-mensaje`; K4 suma
+  campañas, contactos directos y canales reales.
+
+Los motores de esta fase (`EnrutadorDeAtribuciones`, `NoExceptuables`, `EvaluadorDeVotacion`, `ReglasDeSegregacion`)
+son puros y llevan casos dorados. Ningún sujeto de decisión real se aplica aquí: la solicitud y el cupo llegan con US2.
+
+**Independent Test** (quickstart §3.14, parte K1 sin créditos):
+- `lectura` llama por `curl` a `POST /api/lending/attribution-matrices` y a `POST /api/lending/sessions` → 404
+  `Generic.NotFound` y un evento `Lending.Access.Denied` en la auditoría de su cooperativa;
+- `revisor` lee matrices, órganos, actas y vinculados (la lectura de un acta deja `Lending.Session.Viewed`) y toda
+  escritura le responde 404;
+- un comando con un campo inválido queda como `Lending.Request.Rejected` con campos y códigos, sin valores;
+- una sesión del Comité de crédito sin quórum no se cierra (`Lending.Session.QuorumNotMet`); un no miembro no vota
+  (`Lending.Session.VoterExcluded`); un voto mal registrado se reemplaza y cuenta el vigente;
+- la fracción calificada de vinculados del consejo por debajo de 4/5 en una cooperativa con actividad financiera →
+  `Lending.Parameter.BelowLegalFloor`;
+- un evento `Lending.*` alterado en Mongo aparece `Altered` en `POST /api/audit/integrity/verify` (US17-3, sólo en
+  local y en la e2e);
+- en una cooperativa activada con `ActivarCarteraAsync`, un mensaje manual inmediato un domingo responde
+  `Lending.DebtorMessage.OutsideLegalWindow` con `nextAllowedAt`; programado, queda `Deferred` y `cartera.mensajes` lo
+  despacha por `SIMULADO` el lunes a la primera hora permitida (`Simulated` con el destino copiado); una versión nueva de
+  `ABONOCAP` con una variable fuera de la lista → `Lending.MessageTemplate.VariableNotAllowed`.
+
+### Tests for User Story 17
+
+> Escribirlas primero; deben fallar antes de implementar. Las e2e van en la colección «Cartera e2e» sobre
+> `CentralIdentityApiFixture`, con `CarteraE2E.CooperativaAisladaAsync` cuando cambian parámetros, órganos o matrices,
+> y corren con `DB_PROVIDER=PostgreSql` y `DB_PROVIDER=SqlServer`. Los casos dorados se calculan a mano.
+
+- [ ] T0235 [P] [US17] Crear el cargador `tests/IngenIA365ERP.Domain.Tests/Lending/Sessions/CasoDoradoDeVotacion.cs` y la teoría `tests/IngenIA365ERP.Domain.Tests/Lending/Sessions/CasosDoradosDeVotacionTests.cs` sobre `tests/IngenIA365ERP.Domain.Tests/Lending/Sessions/Casos/*.json` (molde `CasoDoradoDeCosteo`: JSON con comentarios, claves en español, enums por nombre; quickstart §1.4)
+  · casos: `01-quorum-mayoria-absoluta` (composición 5, presentes 3 pasa `MoreThan 1/2`; presentes 2 no); `02-mayoria-de-presentes-elegibles` (abstención no suma a favor); `03-radicador-excluido` (US2-6: su voto se rechaza y no cuenta en los elegibles); `04-vinculado-cuatro-quintos` (US2-7: composición 5, interesado excluido, 4 a favor pasa y 3 no: `5 × favorables ≥ 4 × composición`, la base sigue siendo la composición); `05-suplente-por-principal-ausente` y `06-suplente-con-principal-presente` (F7: sólo vota el primero); `07-voto-reemplazado` (C75: cuenta el vigente); `08-sin-actividad-financiera` (la mayoría de los estatutos de la versión de reglas); `09-fraccion-endurecida` (5/6 de la cooperativa sobre el piso 4/5); `10-comparacion-en-enteros` (`votos × den` frente a `num × base`, sin decimales)
+- [ ] T0236 [P] [US17] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Attributions/CasoDoradoDeAtribuciones.cs` y `tests/IngenIA365ERP.Domain.Tests/Lending/Attributions/CasosDoradosDeAtribucionesTests.cs` sobre `tests/IngenIA365ERP.Domain.Tests/Lending/Attributions/Casos/*.json` (T63, quickstart §1.4 y §2.7)
+  · matriz del ensayo (analista hasta 5.000.000, gerencia hasta 20.000.000, Comité de crédito hasta 100.000.000, Consejo sin techo; excepción por puntaje): 3.000.000 → analista, 15.000.000 → gerencia, 60.000.000 → comité, 150.000.000 → consejo; vinculado con 1.000.000 → consejo (forzado, FR-040); puntaje bajo con 3.000.000 → nivel de excepción, y con 60.000.000 → comité (gana el mayor; los niveles no se acumulan); regla por línea, modalidad, plazo, clase de garantía y `PolicyException` que sube el mínimo; el monto que manda es el **consolidado** (deudor y codeudor); sujeto `CreditLimit` con su regla propia; `NoExceptuables`: capacidad de pago, autorización, listas y usura → `Lending.Attribution.NotExceptionable` con los motivos; la explicación lista cada razón (`AmountCeiling`, `Rule`, `RelatedParty`, `Exception`) como en `POST /attribution-matrices/preview`
+- [ ] T0237 [P] [US17] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Segregation/ReglasDeSegregacionTests.cs` (T66, FR-005, quickstart §1.4)
+  · regla fija: `Radicar` × `Decidir` y `Radicar` × `Votar` sobre el mismo expediente → conflicto con la acción previa; misma persona con dos `SEC_Users.Id` → conflicto; dos usuarios sin persona comparan sólo por `UserId`; par `Decidir × Desembolsar` activo por defecto → conflicto; par inactivo → pasa; un par activo no muerde entre expedientes distintos; el resultado trae `Accion`, `AccionPrevia` y su instante para `Lending.Segregation.Conflict`
+- [ ] T0238 [P] [US17] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/HuellaDeCarteraTests.cs`: el SHA-256 canónico de `HuellaDeCartera` (claves en orden fijo, decimales con punto, fechas ISO) es estable entre corridas y plataformas, distingue `0.10` de `0.1` sólo si la precisión declarada lo exige y sale en hexadecimal minúscula de 64 (data-model §0.13)
+- [ ] T0239 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Common/AlcanceDeCarteraTests.cs` (T62, FR-004, SC-015): sin filas en `SEC_UserBranchAssignments` no hay oficinas; con `Lending.Scope.AllOffices`, todas; la oficina sale por `SEC_UserBranchAssignments` → `ADM_Branches` → `COR_Branches.TenantBranchPublicId` (`OficinasDelUsuario`), sin cambiar la semántica abierta de `UserBranchScope` (prueba de regresión de la 009); sin filas en `LND_UserCreditLineScopes` no hay líneas, salvo `Lending.Scope.AllLines`; segundo plano = alcance total; memorizado por petición (una sola lectura); `FiltroDeAlcanceDeCartera` deja fuera lo de otra oficina o línea y no lo cuenta
+- [ ] T0240 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Segregation/RegistroDeIntervencionesTests.cs` (T66, quickstart §1.5): escribe `LND_CaseParticipations` sin guardar, en el `SaveChanges` del acto; usuario sin `SEC_Users.PersonId` → `Lending.Security.UserWithoutPerson` con `data.howToFix`; con `Segregacion.Incompatibilidades` leído por `LectorDeParametros` a la fecha del acto; compara por `SEC_Users.Id` resuelto por `IActorActual`, nunca el entero del token
+- [ ] T0241 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Attributions/AttributionMatrixCommandsTests.cs` sobre `AddAttributionMatrixVersionCommand`, `ListAttributionMatricesQuery`, `GetAttributionMatrixQuery` y `PreviewAttributionRoutingQuery` (api.md §3.5.1)
+  · sin nivel colegiado final sin techo → `Lending.Attribution.MatrixWithoutTopLevel`; `Rank` repetido, permiso de nivel fuera de `Lending.Decisions.*`, más de un `IsExceptionLevel` o de un `IsBoardLevel` → `Lending.Attribution.MatrixInvalid` con `data.reason`; nivel colegiado sobre un órgano sin `DecidesCredit` o inexistente → `Lending.GoverningBody.NotFound`; `ValidFrom` anterior a `HoyLocal` → rechazo; la versión anterior queda vigente hasta la víspera (lectura por `VigenciaBitemporal` a D y R); `ContentSha256` sellado; la vista previa no escribe
+- [ ] T0242 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Sessions/GoverningBodyCommandsTests.cs` sobre `CreateGoverningBodyCommand`, `AddGoverningBodyRulesVersionCommand`, `AddGoverningBodyMemberCommand`, `EndGoverningBodyMemberCommand` y `DeactivateGoverningBodyCommand` (api.md §3.6)
+  · código duplicado → `Catalogo.CodigoDuplicado` con el nombre del existente; un segundo `BoardOfDirectors` activo → rechazo; fracción de vinculados bajo el límite `VINCULADOS_FRACCION_CALIFICADA` en una cooperativa con actividad financiera (perfil regulatorio vigente) → `Lending.Parameter.BelowLegalFloor` con `data { limitCode, limitValue, source }`; vigencias cruzadas de la misma persona → `Lending.GoverningBody.MemberOverlaps`; miembro que no es persona viva del maestro → `Core.Person.NotFound`; desactivar un órgano que nombra un nivel vigente → `Lending.GoverningBody.InUse` con `data.matrixVersion`
+- [ ] T0243 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Sessions/SessionCommandsTests.cs` con un `IAsuntoDeActa` falso por sujeto (api.md §5, T64, C75)
+  · `RecordSessionAttendanceCommand` pasa `Draft → Open`, sella la versión de reglas vigente en `HeldOn`, la composición, el quórum requerido y los presentes elegibles; `AddSessionItemCommand` calcula la regla (`RelatedPartyQualified` si hay vinculado en entidad con actividad financiera) y los excluidos (radicador, solicitante, persona del vínculo); sujeto no pendiente → `Lending.Session.SubjectNotPending`; nivel efectivo de otro órgano → `Lending.Session.SubjectNotForBody`
+  · votos: con `Sessions.RecordVotes` el de cualquier miembro (`RecordedBySecretary`); con `Sessions.Vote` sólo el propio; sin ninguno → `Lending.Permission.Required` con `data.permissionCodes`; excluido o no miembro → `Lending.Session.VoterExcluded` con `data.reason`; sesión no abierta → `Lending.Session.NotOpen`; cerrada → `Lending.Session.Closed`; voto de reemplazo con motivo marca `ReplacedAt` en el anterior en el mismo guardado (C75); presencia con passkey o TOTP por `IDesafiosDePresencia` (`Approvals.Presence.Invalid`, `.Expired`, `.TotpReused`), miembro sin usuario → `Lending.Session.MemberNotUser`
+  · `CloseSessionCommand`: sin quórum → `Lending.Session.QuorumNotMet` con `{ required, present }`; con quórum calcula cada punto con `EvaluadorDeVotacion`, llama `IAsuntoDeActa.AlDecidirAsync`, escribe `LND_CreditDecisions` (sólo los puntos `Decision`), numera con `NumeradorDeCartera` (`SessionMinutes`, prefijo del órgano), sella `ContentSha256` y emite el PDF; si un asunto falla **nada queda**; `expectedContentSha256` viejo → `Lending.Decision.ContentChanged`
+- [ ] T0244 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Sessions/PuntoDeActaCerradoTests.cs` (api.md §1.9): un `sessionItemPublicId` de un punto de sesión cerrada con el mismo sujeto y un resultado aprobatorio pasa; otro sujeto, punto abierto o resultado `Deny` → `Lending.Session.ItemMismatch` con `{ expectedSubject, itemSubject, itemOutcome }`
+- [ ] T0245 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Attributions/RelatedPartyCommandsTests.cs` sobre `RegisterRelatedPartyCommand`, `EndRelatedPartyCommand`, `ListRelatedPartiesQuery` e `ImportRelatedPartiesCommand` (api.md §3.7, plantillas.md §2): `Spouse` o `Relative` sin la persona del vínculo → `Lending.RelatedParty.LinkRequired`; vigencias cruzadas del mismo vínculo → `Lending.RelatedParty.Duplicate`; grado por encima del límite legal → rechazo; listar emite `Lending.RelatedParty.Viewed` por `LendingAuditEmitter`; la plantilla con un documento inexistente es error de fila y columna y no guarda nada; lo importado prevalece sobre la parte `related-parties` de la migración para la misma persona y fundamento
+- [ ] T0246 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Common/SetUserCreditLineScopesCommandTests.cs` sobre `GetLendingUserScopeQuery` y `SetUserCreditLineScopesCommand` (api.md §3.8): reemplaza el conjunto y da de baja lógica lo retirado; dos por defecto → `Lending.Scope.DefaultDuplicate`; una línea fuera del alcance de quien asigna → 404 de la línea; las oficinas salen de solo lectura desde `SEC_UserBranchAssignments` con su sucursal contable
+- [ ] T0247 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Security/CreateSuggestedLendingRolesCommandTests.cs`: crea las trece por defecto o las pedidas, sin `Lending.Decisions.*` ni `Lending.Sessions.Vote` en `cartera.administrador` (C86); repetir no duplica y las informa en `alreadyExisting[]`; una clave desconocida va en `omitted[]`; cada rol creado es de la cooperativa y editable
+- [ ] T0248 [P] [US17] Ampliar `tests/IngenIA365ERP.Application.Tests/Common/Approvals/SetPermissionAmountLimitCommandHandlerTests.cs`: `PermisosLimitables` admite por módulo los cuatro códigos operativos de Cartera (`Lending.Disbursements.Execute`, `Lending.CreditLimits.Assign`, `Lending.ValidationFailures.Confirm`, `Lending.Payments.BackdateBeforeClose`) y rechaza cualquier otro `Lending.*` con `Approvals.AmountLimit.NotLimitable` y su lista; los cuatro `Inventory.*` siguen igual; `ListPermissionAmountLimitsQuery` filtra por módulo (T63, T65, api.md §3.5.2)
+- [ ] T0249 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Common/ReglasDeParametrosDeCarteraTests.cs` (T42, T43, quickstart §1.5): una vigencia menos estricta que su `LIMITE` (p. ej. `Cobranza.HorarioLunesAViernes` más amplio que `COBRANZA_HORA_FIN_LV`) → `Lending.Parameter.BelowLegalFloor` con el límite y su fuente; al leer rige lo más estricto entre la cooperativa y el límite vigente en D; una clave de K2, K4 o K6a → `Lending.Parameter.NotYetAvailable` con `data.availableFrom`; `Segregacion.Incompatibilidades` sin `Lending.Segregation.Manage` → `Parameters.PermissionRequired`; con `informacionHasta` la lectura es bitemporal (T38)
+- [ ] T0250 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Audit/AuditoriaDeCarteraTests.cs` (T67, F9, F10): un comando del grupo `/api/lending` rechazado por su validador deja `Lending.Request.Rejected` con el comando, los campos y los códigos, sin valores; un `Result.Failure` regulatorio queda `Rejected` con su código; un comando `IConOficina` lleva la oficina en el metadato `Office` y, sin ella, la oficina por defecto del usuario; el dispositivo es el User-Agent más `X-Dispositivo`; los eventos van a los módulos `Lending`, `Compliance` o `NationalValues` según el espacio de nombres
+- [ ] T0251 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Audit/LendingAuditEmitterTests.cs` (molde de las pruebas de `InventoryAuditEmitter`): cada método escribe su evento de la lista fija (`Lending.Payoff.Viewed`, `Lending.CreditBureauReport.Viewed`, `Lending.Document.Reprinted`, `Lending.Document.Verified`, `Lending.Report.Exported`, `Lending.Session.Viewed`, `Lending.RelatedParty.Viewed`, `Lending.CreditStatus.Queried`, `Lending.Access.OutOfScope`, `Lending.ScreeningMatch.Released`) en la base de auditoría del **PublicId** de la cooperativa (`LaAuditoriaSeNombraPorElPublicIdDelTenant`), nunca lanza hacia quien lee y devuelve el `EventId` (que la consulta de cupo de Comercial usa como `EvidenceId`, T67)
+- [ ] T0252 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Collections/CreditReportClaimQueriesTests.cs` sobre `ListCreditReportClaimsQuery` (K1 sólo lectura, C88): filtra por estado y persona, respeta el alcance por la oficina del crédito y no expone escrituras en K1
+- [ ] T0253 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Alerts/AlertasDeCarteraConAlcanceTests.cs` (C68, SC-015): `ListAlertsQuery` con módulo `Lending` muestra una alerta `Cartera.*` sólo a quien tiene un permiso destinatario del tipo **y** alcance sobre la oficina y la línea guardadas en `COR_Alerts`; sin destinatario va a `CompanyAdmin` con `withoutRecipient`; el cuerpo nombra el crédito por su número, nunca al deudor
+- [ ] T0254 [P] [US17] Llenar la regla `tests/IngenIA365ERP.Architecture.Tests/Principles/LasConsultasDeCarteraRespetanElAlcance.cs` (el esqueleto lo deja el Setup): toda consulta de `Application/Lending` que devuelva solicitudes, créditos, cupos, garantías, actas o alertas recibe `IAlcanceDeCartera` y aplica `FiltroDeAlcanceDeCartera`; lista de excepciones con motivo (`ListAttributionMatricesQuery`, `ListGoverningBodiesQuery`, `ListParametersQuery`: catálogos sin oficina); agregar las consultas de esta fase
+- [ ] T0255 [P] [US17] Llenar `tests/IngenIA365ERP.Architecture.Tests/Principles/LasLecturasSensiblesDeCarteraSeAuditan.cs` con la lista cerrada de research §13 y C89 (los diez eventos de T0251) y la regla: cada consulta marcada como lectura sensible llama a `LendingAuditEmitter`; las de esta fase: `GetSessionQuery`, `GetSessionMinutesPdfQuery`, `ListRelatedPartiesQuery`
+- [ ] T0256 [P] [US17] Llenar `tests/IngenIA365ERP.Architecture.Tests/Principles/LosCodigosViewDeCarteraNoTienenDatosPersonales.cs`: los `Lending.*.View` sembrados son exactamente los de api.md §2.1 (`CreditLines`, `Parameters`, `Scoring`, `Attributions`, `GoverningBodies`, `MessageTemplates`, `Processes`, `PayrollAgreements`, `Dashboard`, `Templates`, `Alerts`); los DTO devueltos por rutas `.View` no tienen propiedades de documento, correo ni teléfono personal (C84: de los miembros de órganos sólo nombre y cargo)
+- [ ] T0257 [P] [US17] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/LaSegregacionNoUsaUserIdDelToken.cs` con las carpetas `Application/Lending/{Origination, Sessions, Attributions, Segregation}` y `Domain/Lending/{Attributions, Sessions, Segregation}` (R135)
+- [ ] T0258 [P] [US17] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/LosHechosInmutablesNoSeModifican.cs` con los hechos de esta fase: `AttributionMatrix`, `AttributionLevel`, `AttributionRule`, `CreditDecision`, `GoverningBodyRuleVersion`, `SessionVote` (con `ReplacedAt` `[EscrituraUnica]`) y `CaseParticipation` (C42, C75)
+- [ ] T0259 [P] [US17] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/LosEndpointsProtegidosExigenPermiso.cs`: todo grupo de `Endpoints/Lending/*.cs` lleva el metadato `.AuditarIntentoDenegado(ModuloDeAuditoria.Lending)` además de `.RequirePermission` en cada ruta (T67, api.md §1.1)
+- [ ] T0260 [P] [US17] Agregar a `tests/IngenIA365ERP.Architecture.Tests/Principles/LosComandosDeCarteraLlevanClave.cs` y a `tests/IngenIA365ERP.Architecture.Tests/Principles/TextosDeCarteraTests.cs` los comandos y los códigos de error de esta fase (mensajes en español, sin códigos técnicos ni el nombre del sistema anterior)
+- [ ] T0261 [P] [US17] Crear `tests/IngenIA365ERP.Shared.Tests/Cartera/GobiernoDeCarteraClientTests.cs` y `tests/IngenIA365ERP.Shared.Tests/Cartera/ConfiguracionDeCarteraClientTests.cs`: toda escritura manda `Idempotency-Key` (la misma en el reintento) y ningún método pone `Authorization` (`ElTokenDeSesionLoPoneElHandler`); un 422 `Lending.Permission.Required` se devuelve como error de negocio con sus permisos
+- [ ] T0262 [US17] Crear el ayudante `tests/IngenIA365ERP.API.IntegrationTests/Lending/UsuariosDeCartera.cs` **(nuevo)** (molde `Security/UsuariosDelEnsayo` de la 012): crea por HTTP los roles con `POST /api/lending/activation/suggested-roles`, los usuarios de quickstart §2.7 (`admin`, `asesor.o1`, `asesor.o2`, `analista`, `jefe`, `gerente`, `comite.1..3`, `secretaria`, `oficial`, `contadora`, `auditor`, `revisor`, `sinpersona`, `lectura`), los vincula a su persona del maestro (salvo `sinpersona`), asigna oficinas y líneas (`PUT /api/lending/scopes/users/{userPublicId}`) y los montos operativos (`POST /api/lending/amount-limits`), y devuelve un cliente autenticado por usuario
+- [ ] T0263 [US17] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/SeguridadYHabeasDataDeCarteraTests.cs` (colección «Cartera e2e», cooperativa aislada; quickstart §3.14 y el Independent Test de esta fase)
+  · `lectura` → 404 y `Lending.Access.Denied` en `POST /attribution-matrices`, `/sessions`, `/governing-bodies`, `/related-parties`; `revisor` lee todo y toda escritura le responde 404 (US17-2); un campo inválido deja `Lending.Request.Rejected` (F9); una línea de `asesor.o1` no aparece para un usuario sin esa línea (cuando US1 publique las líneas: la tarea de US1 amplía esta clase)
+  · órganos y actas: Comité de crédito con tres principales y Consejo con cinco principales y dos suplentes (quickstart §2.7); sesión sin quórum → `Lending.Session.QuorumNotMet`; no miembro → `Lending.Session.VoterExcluded`; `secretaria` registra votos de otros y `comite.2` sólo el propio (`Lending.Permission.Required` para el ajeno); voto de reemplazo; `minutes.pdf` de una sesión abierta sale marcado «SIN CERRAR»; fracción de vinculados 3/4 en `coop_obligada` → `Lending.Parameter.BelowLegalFloor`
+  · integridad: un evento `Lending.*` alterado y otro borrado en el Mongo del contenedor aparecen `Altered` y `Deleted` en `POST /api/audit/integrity/verify` (US17-3, SC-014)
+  · lo que necesita créditos (US17-1 por desembolso, US17-4 en el archivo de centrales, US17-5 con una obligación viva) lo agregan a esta misma clase las fases de US2, US3, US16 y del contrato de obligaciones, sobre una cooperativa activada con `CarteraE2E.ActivarCarteraAsync` (C107), nunca con `Skip`
+
+#### Cola de mensajes al deudor (C108)
+
+- [ ] T0264 [P] [US17] Crear el cargador `tests/IngenIA365ERP.Domain.Tests/Lending/Collections/CasoDoradoDeVentanaLegal.cs` y la teoría `tests/IngenIA365ERP.Domain.Tests/Lending/Collections/CasosDoradosDeVentanaLegalTests.cs` sobre `Casos/*.json` (molde de los de Nómina; `contracts/adaptadores-y-archivos.md` §4.5), con los casos de K1 calculados a mano: `01-destinatario-no-obligado` (`Excluido(RecipientNotObligated)`), `02-fallecido-con-reclamacion` y `03-insolvencia-sin-cobranza` (sí el informativo), `04-canal-no-autorizado` y `05-carta-sin-autorizacion-de-canal` (`Letter` sólo con dirección), `06-cobranza-sin-evidencia`, `07-sin-destino`, `08-entrega-de-documento-exenta`, `09-domingo-difiere-al-lunes`, `10-festivo-nacional-difiere` (el «Manual» de Nómina no cuenta, E5), `11-fuera-de-horario`, `12-tope-diario-cuenta-informativos`, `13-informativo-no-fija-canal-semanal` (I2), `14-sin-ventana-en-14-dias` (`Excluido(NoWindow)`), `15-horario-de-la-cooperativa-mas-estricto`; los de contacto directo (`WeeklyChannelLocked` por gestiones) los suma K4 (pregunta I2, propuesta por defecto; lo valida el abogado)
+- [ ] T0265 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Collections/ColaDeMensajesAlDeudorTests.cs` (T74, `adaptadores-y-archivos.md` §4.1–§4.4, data-model §26.1–§26.2): el mensaje nace en la misma unidad de trabajo que lo motiva y sin guardar por su cuenta; el motor decide al programar `Queued`, `Deferred` (con `NextAttemptAt` y motivos) o `Excluded`; `IdempotencyKey` `{origen}:{entidad}:{propósito}:{fecha}` único (la repetición devuelve el mismo); sella `TemplatePublicId`/`TemplateVersion` vigentes, `ChannelCode` y `Subject`/`Body` renderizados una vez; sólo deudor o codeudor obligado (nunca `COR_References`); antes de la activación no encola y no programa con fecha anterior al registro de la activación (FR-142); si la causa se reversa, el que no salió se cancela en la misma transacción; `COR_Notifications` no se usa
+- [ ] T0266 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Collections/TareasDeMensajesAlDeudorTests.cs` (T75, §4.6): `cartera.mensajes` toma hasta 200 vencidos en orden de `RequestedFor`, reevalúa con el motor, cancela el de cobranza de un crédito al día, lee el destino del maestro **al despachar** y lo copia en el evento `Sent`/`Simulated` (C57), y registra por `RegisterDebtorMessageAttemptCommand` (idempotente por `PublicId` + `Attempt`): `Ok` → `Sent`, `Ok` de `SIMULADO` → `Simulated`, `ChannelUnavailable` → `Deferred(ChannelUnavailable)` y tras `Mensajes.Reintentos` `Failed`, `Rejected`/`InvalidData` → `Failed` con alerta `Cartera.MensajeAlDeudorFallido` al jefe de cartera; `cartera.entregas` registra `Delivered`/`Failed` de los `Sent` de las últimas 72 horas cuyo canal consulta entrega; las dos salen si Cartera no está activada y corren por `IEjecutorEnCooperativa`
+- [ ] T0267 [P] [US17] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Collections/DebtorMessageCommandsTests.cs` y `MessageTemplateQueriesTests.cs` (api.md §14.1, §14.2): `SendDebtorMessageCommand` inmediato fuera de ventana → `Lending.DebtorMessage.OutsideLegalWindow` con `data.nextAllowedAt`, canal semanal → `.WeeklyChannelUsed`, `.ChannelNotAuthorized`, `.RecipientNotObligated`, `Lending.Authorization.WithoutEvidence`; programado fuera de ventana → 201 `Deferred` con el nuevo instante; `CancelDebtorMessageCommand` sólo antes de `Sent` (`Lending.DebtorMessage.AlreadySent`), con motivo; `ListDebtorMessagesQuery` y `GetDebtorMessageQuery` filtran por `IAlcanceDeCartera` y `GetContactWindowQuery` no escribe; plantillas: listar por propósito, canal y fecha, historial (`Lending.MessageTemplate.NotFound`), versión nueva con variable fuera de la lista → `.VariableNotAllowed` con `data.allowed[]`, SMS largo → aviso `.SmsTooLong`, vigencias cruzadas → `.Overlaps`, vista previa sin clave
+- [ ] T0268 [P] [US17] Ampliar en `tests/IngenIA365ERP.Architecture.Tests/Principles/` `LaCobranzaNuncaContactaReferencias.cs` (`Application/Lending/Collections` y la cola no leen `COR_References`), `LosComandosDeCarteraLlevanClave.cs` (`SendDebtorMessageCommand`, `CancelDebtorMessageCommand`, el comando de versión de plantilla), `ElMotorDeCarteraEsDecimal.cs` y `LaCarteraUsaLaFechaLocal.cs` (`Domain/Lending/Collections`), `LosHechosInmutablesNoSeModifican.cs` (`DebtorMessage`, `DebtorMessageEvent`), `LasConsultasDeCarteraRespetanElAlcance.cs` (mensajes), `LosCodigosViewDeCarteraNoTienenDatosPersonales.cs` (`MessageTemplates.View`) y `LasPantallasDeCarteraEstanEnElMenu.cs` (`/cartera/mensajes`, `/cartera/plantillas-de-mensaje`)
+- [ ] T0269 [US17] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/MensajesAlDeudorTests.cs` **(nuevo)** (colección «Cartera e2e», dos motores, cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync`, reloj de la suite y `CorrerTareasProgramadasAsync`): envío manual inmediato en horario por `SIMULADO` → `Simulated` con el destino copiado; el mismo un domingo → `OutsideLegalWindow`; programado para el domingo → `Deferred` y despachado el lunes a la primera hora permitida; cancelación antes de salir; versión nueva de `ABONOCAP` con variable inválida rechazada y válida usada por el siguiente mensaje (el anterior conserva su versión)
+
+### Implementation for User Story 17
+
+#### Dominio: constantes y motores puros
+
+- [ ] T0270 [P] [US17] Crear `src/Core/IngenIA365ERP.Domain/Lending/Attributions/LendingDecisionSubjects.cs` con las diez constantes de sujeto (`CreditApplication`, `CreditLimit`, `Novelty`, `Condonation`, `WriteOffBatch`, `PortfolioEvaluation`, `ImpairmentModelChange`, `ActivationDifferences`, `ValidationFailureException`, `RiskPolicyVersion`; S4, C52) y `src/Core/IngenIA365ERP.Domain/Lending/Segregation/AccionesDeSegregacion.cs` con los diez tokens de T66
+- [ ] T0271 [P] [US17] Crear `src/Core/IngenIA365ERP.Domain/Lending/HuellaDeCartera.cs` (SHA-256 canónico, molde `InputsHasher`; M15, §2.8): es la primera fase que lo necesita (`ContentSha256` de matrices, sesiones y decisiones); US1 y US2 lo reutilizan para versiones de línea y simulaciones (hace pasar T0238)
+- [ ] T0272 [US17] Crear el motor puro `src/Core/IngenIA365ERP.Domain/Lending/Attributions/EnrutadorDeAtribuciones.cs` y `src/Core/IngenIA365ERP.Domain/Lending/Attributions/NoExceptuables.cs` (T63, R132): entrada `SujetoAEnrutar` **(nuevo)** (sujeto, línea, modalidad, monto consolidado, plazo, clases de garantía, puntaje bajo el mínimo, alertas, excepción a la política, días de mora, concepto, hay vinculado) y la matriz como datos; salida `EnrutamientoDeAtribucion` **(nuevo)** con el nivel efectivo (el mayor por `Rank` entre techo, reglas, consejo forzado y excepción), las razones y la lista de no exceptuables; sin IO, sólo `decimal` (hace pasar T0236)
+- [ ] T0273 [US17] Crear el motor puro `src/Core/IngenIA365ERP.Domain/Lending/Sessions/EvaluadorDeVotacion.cs` (T64, R133, F7, C75): recibe la regla sellada (fracciones numerador/denominador, `FractionComparison`, `MajorityBase`), la composición vigente, la asistencia con suplencias, los votos vigentes y los excluidos con motivo; devuelve quórum, elegibles, conteos, resultado y la explicación (`EvaluationExplanation`); compara en enteros (hace pasar T0235)
+- [ ] T0274 [US17] Crear el motor puro `src/Core/IngenIA365ERP.Domain/Lending/Segregation/ReglasDeSegregacion.cs` (T66): intervenciones previas del expediente, acto pedido, usuario y persona, pares activos; devuelve el conflicto con la acción previa o ninguno (hace pasar T0237)
+
+#### Dominio: comportamiento de las entidades de gobierno
+
+> Las clases y sus configuraciones nacen en la fase 3 con la migración `CarteraNucleo`; aquí se les da comportamiento,
+> sin cambiar columnas.
+
+- [ ] T0275 [P] [US17] Completar `src/Core/IngenIA365ERP.Domain/Entities/Lending/Governance/AttributionMatrix.cs`, `AttributionLevel.cs` y `AttributionRule.cs`: fábrica que publica la matriz **completa** con sus niveles y reglas, invariantes de data-model §3.1–§3.3 (un nivel colegiado final sin techo, un solo nivel de excepción y un solo consejo, permisos de `Lending.Decisions.*` en los individuales) y `ContentSha256`
+- [ ] T0276 [P] [US17] Completar `src/Core/IngenIA365ERP.Domain/Entities/Lending/Governance/GoverningBody.cs`, `GoverningBodyRuleVersion.cs` y `GoverningBodyMember.cs` (data-model §3.5–§3.7): versión de reglas como hecho, miembros con vigencia sin cruces, suplente atado a su principal
+- [ ] T0277 [P] [US17] Completar `src/Core/IngenIA365ERP.Domain/Entities/Lending/Governance/Session.cs`, `SessionAttendance.cs`, `SessionItem.cs` y `SessionVote.cs` (data-model §3.8–§3.11): transiciones `Draft → Open → Closed`, sello de reglas y quórum al abrir, puntos con regla y excluidos, voto de reemplazo con `ReplacedAt`, nada editable tras cerrar (`Lending.Session.Closed`)
+- [ ] T0278 [P] [US17] Completar `src/Core/IngenIA365ERP.Domain/Entities/Lending/Governance/CreditDecision.cs` (H; `CK_LND_CreditDecisions_Decider`: exactamente uno de usuario o punto de sesión), `RelatedParty.cs`, `CaseParticipation.cs` (H) y `UserCreditLineScope.cs`
+
+#### Application: alcance, segregación, auditoría y parámetros
+
+- [ ] T0279 [US17] Crear `src/Core/IngenIA365ERP.Application/Common/Interfaces/Security/IAlcanceDeCartera.cs` con el record `AlcanceDeCartera(TodasLasOficinas, Oficinas, OficinaPorDefecto, TodasLasLineas, Lineas)`, `Vacio`, `Total` y `AlcanceDeCarteraCerrado` (molde `IAlcanceDeInventario`); extraer `src/Core/IngenIA365ERP.Application/Common/Security/OficinasDelUsuario.cs` **(nuevo en el código; nombre de T62)** con el salto `SEC_UserBranchAssignments` → `ADM_Branches` → `COR_Branches` y hacer que `src/Presentation/IngenIA365ERP.API/Services/UserBranchScope.cs` lo reutilice con su semántica abierta (T62, R131)
+- [ ] T0280 [US17] Crear `src/Presentation/IngenIA365ERP.API/Services/AlcanceDeCarteraDeLaPeticion.cs` (memorizado por petición, total en segundo plano, permisos `Lending.Scope.AllOffices` y `Lending.Scope.AllLines`) y `src/Core/IngenIA365ERP.Application/Lending/Common/FiltroDeAlcanceDeCartera.cs` con `AsegurarAsync` para los comandos (404 genérico del recurso y evento `Lending.Access.OutOfScope`); registrar en `src/Presentation/IngenIA365ERP.API/Program.cs` (hace pasar T0239)
+- [ ] T0281 [US17] Crear `src/Core/IngenIA365ERP.Application/Lending/Segregation/RegistroDeIntervenciones.cs` (único escritor de `LND_CaseParticipations`; T66, data-model §0.11): `VerificarAsync(expediente, accion)` con `ReglasDeSegregacion` y el parámetro `Segregacion.Incompatibilidades` a la fecha, y `Registrar(...)` sin guardar; resuelve la persona del usuario por `SEC_Users.PersonId` y responde `Lending.Security.UserWithoutPerson` (hace pasar T0240)
+- [ ] T0282 [US17] Crear `src/Core/IngenIA365ERP.Application/Common/Audit/IConOficina.cs` (marcador con `BranchPublicId`) y ampliar `src/Core/IngenIA365ERP.Application/Common/Behaviors/AuditBehavior.cs` para escribir el metadato `Office` (o la oficina por defecto de `IAlcanceDeCartera`) y el dispositivo (User-Agent más `X-Dispositivo`, leído por `OrigenDeLaPeticion`); F10, T67
+- [ ] T0283 [US17] Crear el metadato de grupo `AuditarIntentoDenegado(ModuloDeAuditoria)` en `src/Presentation/IngenIA365ERP.API/Filters/AuditoriaDeIntentoDenegadoFilter.cs` **(nuevo)**: antes del 404 de `PermissionAuthorizationFilter` registra `Lending.Access.Denied` por `RegistrarAsync` sin propagar errores, y ante una respuesta `Validation.Invalid` registra `Lending.Request.Rejected` (comando, campos y códigos, sin valores) porque `ValidationBehavior` corre antes que `AuditBehavior` (T67, F9; hace pasar T0250)
+- [ ] T0284 [US17] Crear `src/Core/IngenIA365ERP.Application/Lending/Common/LendingAuditEmitter.cs` (molde `InventoryAuditEmitter`) con los diez eventos de T0251 y sumar sus constantes a `src/Core/IngenIA365ERP.Application/Common/Audit/AuditEventTypes.cs`; registrar en `src/Core/IngenIA365ERP.Application/DependencyInjection.cs` (T67, C89; hace pasar T0251)
+- [ ] T0285 [US17] Completar `src/Core/IngenIA365ERP.Domain/Lending/Parameters/ParametrosDeCartera.cs` (el catálogo del módulo `LND` que la base de Cartera de la fase 3 creó y registró en `CatalogoDeParametros.Modulos`) con **todas** las claves de data-model §12.1, su tipo, valores, defecto «pendiente de validar», ámbitos, límite `LIMITE` que las acota, permiso propio (`Segregacion.Incompatibilidades` → `Lending.Segregation.Manage`) y entrega (`EntregaDeModulo`: K1, K2, K4, K6a)
+- [ ] T0286 [US17] Crear `src/Core/IngenIA365ERP.Application/Lending/Common/ReglasDeParametrosDeCartera.cs` (`IReglasDeParametros` del módulo `LND`): rechaza lo menos estricto que el límite nacional vigente con `Lending.Parameter.BelowLegalFloor` (dirección de `CatalogoDeLimitesLegales`), alerta `Cartera.LimiteLegalMasEstricto` cuando un límite nuevo deja una vigencia menos estricta, y la lectura de Cartera toma lo más estricto (T42; hace pasar T0249)
+
+#### Application: atribuciones, órganos, sesiones y vinculados
+
+- [ ] T0287 [US17] Cambiar `PermisosLimitables` en `src/Core/IngenIA365ERP.Application/Common/Approvals/ErroresDeAprobaciones.cs` para admitir códigos por módulo (los cuatro `Inventory.*` de hoy más los cuatro operativos de Cartera) y filtrar `ListPermissionAmountLimitsQuery` por módulo, sin tocar `MotorDeAprobaciones` (T63, T65; hace pasar T0248); mantener `InventarioClient.PermisosLimitables` del lado cliente
+- [ ] T0288 [US17] Crear en `src/Core/IngenIA365ERP.Application/Lending/Attributions/` `AddAttributionMatrixVersionCommand` (+ handler y validador; `IOperacionIdempotente`, `IConMotivo`), `ListAttributionMatricesQuery`, `GetAttributionMatrixQuery`, `PreviewAttributionRoutingQuery` y el lector `MatrizVigenteDeAtribuciones` **(nuevo)** sobre `VigenciaBitemporal` (a D con información hasta R); la vista previa usa el monto recibido como consolidado y US2 le suma la exposición del deudor (hace pasar T0241)
+- [ ] T0289 [US17] Crear en `src/Core/IngenIA365ERP.Application/Lending/Sessions/` los comandos y consultas de órganos de api.md §3.6 (`CreateGoverningBodyCommand`, `AddGoverningBodyRulesVersionCommand`, `AddGoverningBodyMemberCommand`, `EndGoverningBodyMemberCommand`, `DeactivateGoverningBodyCommand`, `ListGoverningBodiesQuery`, `GetGoverningBodyQuery`); la fracción de vinculados se valida contra `VINCULADOS_FRACCION_CALIFICADA` y el perfil regulatorio vigente (`INormativaVigente`, `IValoresNacionales`) (hace pasar T0242)
+- [ ] T0290 [US17] Crear `src/Core/IngenIA365ERP.Application/Lending/Sessions/IAsuntoDeActa.cs` (`AlDecidirAsync`, `DescribirAsync`; T64) con su registro `AsuntosDeActa` **(nuevo)** que resuelve por `SubjectType` y falla al arrancar si dos implementaciones declaran el mismo sujeto, y `PuntoDeActaCerrado` **(nuevo)**, la validación única del `sessionItemPublicId` que usan las demás historias (`Lending.Session.ItemMismatch`; hace pasar T0244)
+- [ ] T0291 [US17] Crear en `src/Core/IngenIA365ERP.Application/Lending/Sessions/` `CreateSessionCommand`, `RecordSessionAttendanceCommand`, `AddSessionItemCommand`, `UpdateSessionItemCommand`, `RemoveSessionItemCommand` (`Lending.Session.ItemHasVotes`), `CreateSessionPresenceChallengeCommand` (sobre `IDesafiosDePresencia` e `IWebAuthnService`, base64url por `wwwroot/js/webauthn.js`), `RecordSessionVoteCommand` y `CloseSessionCommand` (cierre en `TransaccionExplicita`: `EvaluadorDeVotacion`, `IAsuntoDeActa`, `LND_CreditDecisions`, `NumeradorDeCartera`, SHA-256 y PDF, todo o nada), más `ListSessionsQuery`, `GetSessionQuery` y `ListSessionItemsQuery`; cada voto y cada cierre escriben su `CaseParticipation` (`Votar`, `Decidir`) por `RegistroDeIntervenciones` (hace pasar T0243)
+- [ ] T0292 [US17] Crear `src/Presentation/IngenIA365ERP.API/Reports/ActaDeSesionReport.cs` **(nuevo)** (QuestPDF) y `GetSessionMinutesPdfQuery`: acta con órgano, número, fecha, asistentes, quórum, puntos, votos por persona, resultado, condiciones, fundamento de los vinculados y la huella; «SIN CERRAR» si la sesión no está cerrada; «AMBIENTE DE PRUEBAS – SIN VALIDEZ» fuera de producción (T73); el PDF cerrado queda como adjunto de módulo no borrable (`MinutesAttachmentPublicId`) y su lectura audita `Lending.Session.Viewed`
+- [ ] T0293 [US17] Crear en `src/Core/IngenIA365ERP.Application/Lending/Attributions/` `RegisterRelatedPartyCommand`, `EndRelatedPartyCommand`, `ListRelatedPartiesQuery` (auditada) y el lector `VinculadosVigentes` **(nuevo)** que US2 usa para enrutar (hace pasar T0245)
+- [ ] T0294 [US17] Crear en `src/Core/IngenIA365ERP.Application/Lending/Common/` `GetLendingUserScopeQuery` y `SetUserCreditLineScopesCommand` (hace pasar T0246)
+- [ ] T0295 [US17] Crear `CreateSuggestedLendingRolesCommand` en `src/Core/IngenIA365ERP.Application/Security/Roles/Plantillas/CreateSuggestedLendingRolesCommand.cs` (api.md §19.4, T61; `Security.Roles.Create`; `{ templateKeys?[] }`, por defecto las trece plantillas `cartera.*` de `PerfilesSugeridos`; idempotente: lo que ya existe va en `alreadyExisting[]`) y su ruta `POST /api/lending/activation/suggested-roles` en `ActivationEndpoints.cs` (hace pasar T0247; la usan `UsuariosDeCartera` y el requisito `LendingRolesCreated` de US8)
+- [ ] T0296 [US17] Crear `ListCreditReportClaimsQuery` en `src/Core/IngenIA365ERP.Application/Lending/Collections/` (K1 sólo lectura sobre `LND_CreditReportClaims`; las escrituras son de K4) (hace pasar T0252)
+
+#### Application: plantillas y alertas de Cartera
+
+- [ ] T0297 [US17] Crear `src/Core/IngenIA365ERP.Application/Lending/Imports/CatalogoDePlantillasDeCartera.cs` (T82) con la definición de `lending.related-parties` (columnas exactas de plantillas.md §2; ninguna crea personas) y `ImportRelatedPartiesCommand` sobre `EjecutorDeImportacion`; `ListLendingTemplatesQuery` y `GetLendingTemplateQuery` devuelven el registro de plantillas.md §0.1 con `canDownload`, `canImport` y la entrega (`CatalogoDeCartera.EntregaVigente`); US1 y US2 suman `lending.credit-lines` y `lending.contribution-balances`
+- [ ] T0298 [US17] Ampliar `src/Core/IngenIA365ERP.Application/Common/Alerts/VisibilidadDeAlertas.cs` para que las alertas del módulo `Lending` filtren por la oficina y la línea de `COR_Alerts` (C68) con `IAlcanceDeCartera` (hace pasar T0253)
+
+#### Cola de mensajes al deudor (C108)
+
+> `LND_DebtorMessages` y `LND_DebtorMessageEvents` ya tienen su forma en `CarteraNucleo` (fase 3); el puerto
+> `ICanalDeMensajeria` con `MensajeriaSimulada` y `CanalDeCorreo`, las plantillas versionadas sobre
+> `COR_NotificationTemplates`, `RenderizadorDePlantillasDeMensaje`, el comando de versión y la semilla de las nueve
+> plantillas son de la fase 2. Esta fase pone la cola, el despachador, las rutas y las pantallas.
+
+- [ ] T0299 [P] [US17] Verificar (o agregar con la numeración de data-model §9) en `src/Core/IngenIA365ERP.Domain/Enums/Lending/` `DebtorMessageEventKind`, `DebtorMessageOrigin` y `ContactWindowReason` (fijados en `adaptadores-y-archivos.md` §4.2 y §4.5), y crear el motor puro `src/Core/IngenIA365ERP.Domain/Lending/Collections/VentanaLegalDeContacto.cs` con `SolicitudDeContacto`, `ReglasDeContacto`, `HistorialDeContactos`, `EstadoDelTitular` y `DecisionDeContacto` (`Permitido`, `Diferido`, `Excluido`), las once reglas en su orden y el aplazamiento de hasta 14 días; sin IO, `DateOnly`/`TimeOnly`, semana de lunes a domingo en hora de Colombia (T74; hace pasar T0264); K4 suma las gestiones con contacto directo al historial
+- [ ] T0300 [P] [US17] Completar `src/Core/IngenIA365ERP.Domain/Entities/Lending/Collections/DebtorMessage.cs` (inmutable desde que nace, fábrica con todo lo sellado) y `DebtorMessageEvent.cs` (sólo inserción; `DestinationAddress` en `Sent`/`Simulated`, C57; `Reasons`, `NextAttemptAt`, `Attempt`), sin cambiar columnas (si hace falta una, se regenera `CarteraNucleo`, C104)
+- [ ] T0301 [US17] Crear `src/Core/IngenIA365ERP.Application/Lending/Collections/ColaDeMensajesAlDeudor.cs` **(nuevo)**, el único escritor de `LND_DebtorMessages` y `LND_DebtorMessageEvents`: `EncolarAsync` dentro de la unidad de trabajo de quien lo motiva (sin guardar), reglas efectivas de contacto por `LectorDeParametros` (`Cobranza.HorarioLunesAViernes`, `Cobranza.HorarioSabado`, `Cobranza.ContactosPorDia`) acotadas por los `COBRANZA_*` de `CatalogoDeLimitesLegales`, días no hábiles por `ICalendarioHabil`, autorizaciones por `IAutorizacionDeDatos.VigenteAsync`, plantilla vigente por el renderizador de la fase 2, `ChannelCode` por `ICanalesDeMensajeria`; `CancelarPorCausaAsync` para el reverso de la causa; registrarlo en DI (hace pasar T0265). Lo usan desde K1 el abono con preferencia (D24, US5), la cuota no descontada (FR-112), el envío de la simulación (US2) y la entrega de documentos (US13)
+- [ ] T0302 [US17] Crear `RegisterDebtorMessageAttemptCommand` (sin ruta) y las `ITareaProgramada` `cartera.mensajes` (cada minuto) y `cartera.entregas` (periódica) en `src/Core/IngenIA365ERP.Application/Lending/Collections/Tareas/TareaDeMensajesAlDeudor.cs` **(nuevo)** y `TareaDeEntregasAlDeudor.cs` **(nuevo)** sobre `ICanalesDeMensajeria` (canal `SIMULADO` y correo de la plataforma; los reales de SMS y WhatsApp son de K4), por `IEjecutorEnCooperativa`, con la guardia de canales externos (`RealDelivery`) y la alerta `Cartera.MensajeAlDeudorFallido`; registrarlas en `src/Presentation/IngenIA365ERP.API/Program.cs` (DT §2.13; hace pasar T0266)
+- [ ] T0303 [US17] Crear en `src/Core/IngenIA365ERP.Application/Lending/Collections/` `SendDebtorMessageCommand`, `CancelDebtorMessageCommand` (`IOperacionIdempotente`, `IConMotivo` en la cancelación), `ListDebtorMessagesQuery`, `GetDebtorMessageQuery` y `GetContactWindowQuery` (api.md §14.2, `adaptadores-y-archivos.md` §4.6), y `ListMessageTemplatesQuery`, `GetMessageTemplateHistoryQuery` y `RenderMessageTemplatePreviewQuery` (api.md §14.1) sobre las plantillas versionadas de la fase 2; la escritura de una versión usa el comando de versión que dejó la fase 2 (`CreateMessageTemplateVersionCommand`; api.md lo llama `AddMessageTemplateVersionCommand`, ver Notas); los códigos `Lending.DebtorMessage.*` y `Lending.MessageTemplate.*` con su mensaje en español van a data-model §10 en esta tarea (C111) (hace pasar T0267)
+- [ ] T0304 [P] [US17] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/DebtorMessagesEndpoints.cs` (`/debtor-messages`, `/{id}`, `/{id}/cancel`, `/contact-window`; `Lending.DebtorMessages.Read/Send/Cancel`) y `MessageTemplatesEndpoints.cs` (`/message-templates`, `/{code}/history`, `/{code}/versions`, `/preview` sin clave; `Lending.MessageTemplates.View/Manage`) sobre el grupo base, con `Idempotency-Key` en las escrituras
+- [ ] T0305 [P] [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/MensajesAlDeudorClient.cs` **(nuevo)** con sus DTO en `CarteraDtos.Mensajes.cs` **(nuevo)**, y las pantallas `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Mensajes.razor` (`/cartera/mensajes`, `Lending.DebtorMessages.Read`: registro de envíos con su historia, envío manual con la ventana permitida a la vista y cancelación con motivo) y `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/PlantillasDeMensaje.razor` (`/cartera/plantillas-de-mensaje`, `Lending.MessageTemplates.View`: versiones por código y canal, editor de versión nueva con la lista blanca del propósito, largo y segmentos del SMS, `ProviderTemplateId` de WhatsApp y vista previa), con `IndicadorDeCarga`, `PermissionGate`, sin colores literales; enlaces en el grupo «Cartera» del menú
+
+#### Activación de prueba (C107)
+
+- [ ] T0306 [US17] Cambiar `tests/IngenIA365ERP.API.IntegrationTests/Lending/CarteraE2E.cs` para que `ActivarCarteraAsync` cree el acta de activación por HTTP (órgano, sesión, asistencia, punto `Decision` de sujeto `ActivationDifferences`, votos y cierre por las rutas de esta fase) en lugar de sembrarla, y `src/Core/IngenIA365ERP.Application/Lending/Activation/ActivateLendingCommand.cs` (camino mínimo de la fase 3) para validar el punto con `PuntoDeActaCerrado`; `ActivacionDeCarteraDePruebaTests` sigue verde
+
+#### API
+
+- [ ] T0307 [US17] Crear el grupo base de Cartera en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/LendingGroup.cs` **(nuevo)**: `MapGroup("/api/lending")` con `RequireAuthorization()`, `ErrorEnvelopeFilter` y `.AuditarIntentoDenegado(ModuloDeAuditoria.Lending)`, que todos los archivos de `Endpoints/Lending/*.cs` usan (api.md §1.1), incluidos `MigrationEndpoints.cs` y `ActivationEndpoints.cs` del camino mínimo de la activación (fase 3), que pasan a él
+- [ ] T0308 [P] [US17] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/AttributionsEndpoints.cs` (`/attribution-matrices`, `/amount-limits`), `GoverningBodiesEndpoints.cs`, `SessionsEndpoints.cs` (incluye `minutes.pdf`, `presence-challenge` e `items`), `RelatedPartiesEndpoints.cs` (con `template.xlsx` e `import` por `RutasDePlantilla.MapPlantilla`), `ScopesEndpoints.cs`, `TemplatesEndpoints.cs`, `AlertsEndpoints.cs` (`/alerts`, `/alert-types`, módulo `Lending`) y `CreditReportClaimsEndpoints.cs` (sólo `GET`), con los permisos exactos de api.md §3.5–§3.10, §5 y §14.4 y `Idempotency-Key` en toda escritura
+- [ ] T0309 [P] [US17] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/ParametersEndpoints.cs` (`GET /parameters`, `GET /parameters/{key}/history`, `POST /parameters/{key}/versions` sobre los de la plataforma con módulo `LND`, ámbitos `None` y `CreditLine`; `LendingFactType` lo publica US7 con `/fact-types`)
+
+#### Pantallas y cliente
+
+- [ ] T0310 [P] [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/GobiernoDeCarteraClient.cs` **(nuevo)** (atribuciones, montos operativos, órganos, sesiones con presencia, vinculados, alcance, reclamos) y `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/ConfiguracionDeCarteraClient.cs` **(nuevo)** (parámetros, plantillas, alertas), con sus DTO en `CarteraDtos.Gobierno.cs` y `CarteraDtos.Configuracion.cs` **(nuevos)**; registrarlos en `Shared`; sin `Authorization` a mano (hace pasar T0261)
+- [ ] T0311 [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Atribuciones.razor` (`/cartera/atribuciones`, `Lending.Attributions.View`): versión vigente e historial, editor de una versión nueva completa con niveles y reglas, vista previa «¿a qué nivel iría?» y pestaña de montos operativos; `IndicadorDeCarga` por zona y `PermissionGate` en las escrituras
+- [ ] T0312 [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Actas.razor` (`/cartera/actas`, `Lending.Sessions.Read`) con la pestaña «Órganos» (miembros y reglas con vigencia) y el detalle de sesión en `src/Presentation/IngenIA365ERP.Shared/Components/Cartera/SesionDialog.razor` **(nuevo)**: asistencia, quórum en vivo, puntos con excluidos, voto de secretaría o propio (passkey o TOTP por `wwwroot/js/webauthn.js`), cierre con la huella esperada y descarga del PDF; un acta cerrada se ve de sólo lectura
+- [ ] T0313 [P] [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Vinculados.razor` (`/cartera/vinculados`, `Lending.RelatedParties.Read`) con alta por `PersonSearchPicker`, fin de vigencia con motivo y la plantilla
+- [ ] T0314 [P] [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Parametros.razor` (`/cartera/parametros`, `Lending.Parameters.View`): claves agrupadas, valor vigente, fuente, límite legal y «pendiente de validar», historial y alta de vigencia con motivo (las claves de entregas futuras se muestran «disponible con K2/K4/K6a» y no se editan)
+- [ ] T0315 [P] [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Plantillas.razor` (`/cartera/plantillas`, `Lending.Templates.View`) sobre el registro de T0297, y `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Alertas.razor` (`/cartera/alertas`, `Lending.Alerts.View`) con atender y la configuración de tipos (`Lending.Alerts.Manage`)
+- [ ] T0316 [P] [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Autorizaciones.razor` (`/cartera/autorizaciones`, `Compliance.HabeasData.ViewHistory`; registrar con `Compliance.HabeasData.RecordConsent`, C85) sobre `/api/compliance/habeas-data/authorizations?personPublicId=`: autorizaciones por finalidad con su evidencia, versión y origen; las migradas sin evidencia se marcan «sin evidencia: bloquea centrales y cobranza» (FR-006)
+- [ ] T0317 [P] [US17] Crear `src/Presentation/IngenIA365ERP.Shared/Components/Cartera/AlcanceDeCarteraDeUsuario.razor` **(nuevo)** como pestaña «Alcance de Cartera» de `src/Presentation/IngenIA365ERP.Shared/Pages/Administracion/Usuarios.razor` (molde `Components/Inventario/AlcanceComercialDeUsuario.razor`), con las oficinas de sólo lectura y las líneas editables
+- [ ] T0318 [P] [US17] Agregar a `src/Presentation/IngenIA365ERP.Shared/Pages/Maestros/Agencias.razor` el selector del vínculo agencia → oficina (`TenantBranchPublicId`, que `CreateBranch`/`UpdateBranch` ya aceptan; `Branch.OfficeAlreadyLinked`) (T62, F4)
+- [ ] T0319 [US17] Agregar al grupo «Cartera» del menú (`src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor`) los enlaces de esta fase con `PermissionGate`; sumar las pantallas a `LasPantallasDeCarteraEstanEnElMenu` y a `ModulosMigrados` de `LasPantallasDicenQueEstanCargando` (`TodoEnlaceDelMenuTieneSuPagina` verde)
+
+#### Documentación
+
+- [ ] T0320 [US17] Escribir `docs/manual/cartera-gobierno-y-seguridad.md` **(nuevo)**: alcance que falla cerrado y cómo asignarlo, atribuciones (matriz, vista previa, montos operativos), órganos, sesiones y votos, segregación, vinculados, autorizaciones; la cola de mensajes al deudor (quién recibe, la ventana de la Ley 2300 con sus motivos, programar, cancelar, plantillas y sus variables, el canal simulado); y la sección de preparación para la activación (roles, personas de los usuarios, oficinas vinculadas; F4, F5)
+
+**Checkpoint**: alcance, atribuciones, actas, segregación, vinculados, parámetros, plantillas, alertas, auditoría y la
+cola de mensajes al deudor de Cartera operan por HTTP y por pantalla; los casos dorados de votación, atribuciones,
+segregación y ventana legal pasan; las pruebas de arquitectura de alcance, lecturas sensibles, códigos `View`,
+segregación, referencias e inmutables están verdes con su lista de esta fase; `SeguridadYHabeasDataDeCarteraTests` y
+`MensajesAlDeudorTests` pasan en los dos motores y `ActivarCarteraAsync` crea el acta por HTTP.
+
+---
+
+## Phase 5: User Story 1 - Parametrizar líneas de crédito que nunca superan la usura (Priority: P1) — entrega K1
+
+**Goal**: el jefe de cartera crea, versiona, cierra e importa líneas de crédito con todas sus reglas (FR-019 a FR-033,
+FR-037 para el bloque de puntaje) y el sistema **nunca** deja pasar una tasa efectiva con cargos por encima de la usura
+certificada vigente de su modalidad (FR-021, T28, SC-002). Esta fase construye la parte pura del motor que la línea y
+el simulador necesitan antes de que exista un crédito:
+- `ContadorDeDias`, `EquivalenciaDeTasas`, `TasaDelDia` y `ControlDeUsura` (`Domain/Lending/{DayCount, Rates}`; T26–T28);
+- `FechasDeVencimiento` y `GeneradorDePlan` en su generación inicial (`Domain/Lending/Schedules`; T29), con
+  `RedondeoDeCartera`, `ExplicacionDeCartera` y `VersionesDeReglas` (M8, M11, M15), porque el control de usura de la
+  línea corre sobre un **plan tipo por banda** y el simulador de US2 muestra el plan;
+- el cargador de casos dorados del motor (`CasoDoradoDeCartera`) con los casos de plan y usura; US4 le agrega las
+  operaciones, la causación y las consultas a (D, R).
+
+Además: modalidades del documento nacional `CatalogoDeModalidades` (T44), equivalencias de Comercial (FR-022), concepto
+tributario del interés (D20), la plantilla `lending.credit-lines` y el bloqueo de líneas por una usura nueva
+(`EfectoDeReplicacionUsuraEnLineas` **(nuevo)**, US1-5).
+
+**Independent Test** (quickstart §3.2): con la usura de consumo registrada en la central y replicada,
+- la plantilla de quickstart §2.8 con una modalidad inexistente en una fila: `?mode=review` lista
+  `errors[] { sheet, row, column, code, message }` sin guardar; `?mode=apply` → 422 `Import.Invalid`; corregida, entran
+  las siete líneas (US1-6);
+- una línea de consumo con tasa fija cuya efectiva con el seguro que computa supera la usura → 422
+  `Lending.Usury.Exceeded` con la usura vigente, la modalidad y la diferencia, y no se guarda nada (US1-1);
+- una línea variable `VARIBR` (IBR + margen, piso y techo) pasa y `usury-check` explica la efectiva y el margen;
+- `ROTATIVO` sin concepto tributario del interés → `Lending.CreditLine.InterestTaxConceptMissing`;
+- una versión nueva de `CONLIB` desde el mes siguiente queda como versión y la anterior rige hasta la víspera (US1-2);
+- en la colección «Valores nacionales e2e», una usura nueva menor que la tasa de una línea la bloquea
+  (`usuryBlockedSince`) y alerta `Cartera.LineaCerradaPorUsura` (US1-5).
+
+### Tests for User Story 1
+
+> Escribirlas primero; deben fallar antes de implementar. Los casos dorados se calculan a mano con decimal de 40 dígitos
+> (Python `decimal`, hoja versionada junto a los casos), nunca en Excel (T26).
+
+- [ ] T0321 [P] [US1] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/DayCount/ContadorDeDiasTests.cs` (T27, M6): de a excluida a b incluida; `Thirty360` con el 31 que no causa y el fin de febrero que completa 30; `Actual365` de base fija con el 29-02-2028 causando (D3); `Actual360`; tramos que cruzan fin de año
+- [ ] T0322 [P] [US1] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Rates/EquivalenciaDeTasasTests.cs` y `tests/IngenIA365ERP.Domain.Tests/Lending/Rates/TasaDelDiaTests.cs` (T26, T28, D1, D10)
+  · `r_d = RaizEntera(1+EA, B) − 1` a 18 decimales, la única aproximación, escrita en la explicación; B = 360 o 365 según la convención; tasa del período `(1+r_d)^n − 1`; nominal informativa (FR-020); equivalencia `Linear` `NA_m = m·((1+EA)^(1/m) − 1)` y `r_d = NA_m/B`
+  · `TasaDelDia`: corriente `min(pactada o reajustada, Tope(U_d − sobretasa))` y mora `min(pactada o relativa, Tope(U_d))`; variable con el margen en la expresión del índice, luego a EA, piso y techo (D10); indica si topó (para `Cartera.UsuraTopada` de US4)
+- [ ] T0323 [P] [US1] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Rates/ControlDeUsuraTests.cs` (T28, R36, FR-021): compara la **TIR diaria** de los flujos con fechas reales y los cargos computables, anualizada, nunca la nominal; seguro con `RetainedFraction > 0` o `SelfInsured` computa y el que no retiene no; resultado con efectiva, usura, holgura, cargos computables y explicación; real/360 sobre una EA sube la efectiva y puede bloquear (caso 03); sobretasa de cargos = efectiva con cargos − sin cargos (la sella el desembolso de US3); usura que falta → resultado «sin usura» que la aplicación traduce a `NationalValues.Missing`
+- [ ] T0324 [P] [US1] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Schedules/FechasDeVencimientoTests.cs`: vencimientos de las nueve `RepaymentPeriodicity` con la regla del día de pago (si el mes no lo tiene, el último día) y primer período irregular; 7 y 10 salen del valor del enum, nunca como literal (CH39)
+- [ ] T0325 [US1] Crear el cargador `tests/IngenIA365ERP.Domain.Tests/Lending/CasoDoradoDeCartera.cs` y la teoría `tests/IngenIA365ERP.Domain.Tests/Lending/CasosDoradosDeCarteraTests.cs` con el esquema completo de quickstart §1.2 (`condiciones`, `series`, `operaciones`, `consultas`); en esta fase la teoría corre los casos **sin operaciones**: plan esperado cuota a cuota (capital, interés, seguro, saldo), tasas efectiva y nominal y veredicto de usura; US4 extiende el corredor con operaciones y consultas sin cambiar el esquema (C105: el cargador nace aquí y US4 no lo recrea); crear también `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/calcular.py` **(nuevo)**, la hoja Python `decimal` de 40 dígitos versionada junto a los casos que produce los esperados (T26), que US4 amplía con la causación
+- [ ] T0326 [P] [US1] Escribir los casos dorados de plan y usura en `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/`: `01-cuota-fija-30-360`, `02-cuota-fija-real-365-bisiesto`, `03-cuota-fija-real-360-usura`, `04-abono-constante`, `05-cuotas-extraordinarias`, `06-pago-unico`, `07-gracia-a-capital`, `08-gracia-total-primera-cuota`, `09-gracia-total-distribuida`, `27-periodicidad-semanal-y-quincenal` y `29-equivalencia-lineal` (quickstart §1.2; SC-017, SC-023), cada uno con su hoja de cálculo versionada; los demás números de la tabla son de US4 (10, 12–15, 22–24, 26, 28, 30), US5 (11, 16–21, 31) y US6 (25) (pendiente de validar por la contadora: D1, C7 §7.7); C105: estos once casos no se reescriben en US4
+- [ ] T0327 [P] [US1] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Schedules/SumaDeCapitalDelPlanTests.cs` (propiedad, SC-017): montos, plazos, sistemas, convenciones, periodicidades, extraordinarias y gracias al azar con semilla fija → Σ capital = monto al centavo y la última cuota absorbe el residuo; `Lending.Schedule.PrincipalMismatch` nunca ocurre en el generador
+- [ ] T0328 [P] [US1] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Configuration/CreateCreditLineCommandHandlerTests.cs` y `AddCreditLineVersionCommandHandlerTests.cs` (api.md §3.1, data-model §1.2–§1.7)
+  · código duplicado → `Catalogo.CodigoDuplicado`; combinación modalidad + sub-segmento inexistente en el `CatalogoDeModalidades` vigente en `ValidFrom` → `Lending.CreditLine.ModalityUnknown`; `VIVIENDA` → `Lending.CreditLine.HousingNotAvailable` hasta K6b (D18); no asociados sin permitirlo el perfil regulatorio → `Lending.CreditLine.NonAssociatesNotAllowed`; origen comercial con tasa > 0 sin `InterestTaxTreatment` y su soporte → `Lending.CreditLine.InterestTaxConceptMissing` (D20, T44); tasa con más de 6 decimales → `Lending.Rate.TooPrecise`; `ValidFrom` anterior a hoy → `Lending.CreditLine.RetroactiveVersion`; bandas cruzadas → `Lending.CreditLine.RateBandsOverlap`; mínimos sobre máximos, defectos fuera de su lista o un concepto repetido en `ConceptPriority` → `Validation.Invalid`
+  · usura: la versión y **cada banda** pasan `ControlDeUsura` a `ValidFrom` y a hoy sobre el plan tipo; si una falla, nada se guarda y el error trae `effectiveRate`, `usuryRate`, `modalityKey`, `date`, `nationalValuePublicId` y `errors[{ field }]`; sin usura del día → `NationalValues.Missing` y alerta `Cartera.ValorNacionalFaltante` (US1-3 del lado de la línea)
+  · `Draft → Active` al pasar el control y, con origen comercial y tasa > 0, con concepto tributario; una versión nueva que pasa limpia `UsuryBlockedSince`; `ContentSha256` de la versión con sus hijas; los créditos vivos no se tocan (no hay escritura fuera de la línea)
+- [ ] T0329 [P] [US1] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Configuration/CreditLineLifecycleTests.cs` sobre `CloseCreditLineCommand`, `ReopenCreditLineCommand` (revalida la usura del día) y `DeleteCreditLineCommand` (borrado lógico sólo sin solicitudes, créditos, cupos ni mensajes; si no, `Lending.CreditLine.HasLoans` con `data.alternatives = ["Close"]`); cerrar no toca los créditos vivos y una línea cerrada no admite simular, radicar ni ventas nuevas (`Lending.CreditLine.Closed`, lo prueba US2) (FR-032)
+- [ ] T0330 [P] [US1] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Configuration/CheckCreditLineUsuryQueryTests.cs` y `ListModalitiesQueryTests.cs`: `usury-check` no escribe y devuelve efectiva, usura, holgura, cargos computables y explicación; `GET /modalities` sale del documento `CatalogoDeModalidades` vigente (`INormativaVigente`) con segmento SARC, segmento de pérdida esperada, clave de `USURA` y si admite UVR; sin documento → `NationalValues.Missing`
+- [ ] T0331 [P] [US1] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Configuration/SetCreditLineScoringCommandTests.cs` (api.md §3.3, FR-037): crea una versión que copia todo y cambia sólo el puntaje, con `Lending.Scoring.Manage`; pesos que no suman 1 o fuera de 0..1 → `Lending.Scoring.WeightsInvalid`; variable fuera de la lista de fuentes de `MotorDePuntaje` (US2) → `Lending.Scoring.VariableUnknown`
+- [ ] T0332 [P] [US1] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Configuration/SetCommercialTermEquivalencesCommandTests.cs` (FR-022, T17): versiones por `VigenciaBitemporal`; duplicado → `Lending.CommercialTermEquivalence.Duplicate`; periodicidad desconocida → `.PeriodicityUnknown`
+- [ ] T0333 [P] [US1] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Imports/ImportCreditLinesCommandTests.cs` (plantillas.md §1, US1-6): las seis hojas; `review` no guarda y `apply` es todo o nada con `Import.Invalid` y `errors[] { sheet, row, column, code, message }`; las reglas son **las mismas** del alta (mismo código: `Lending.Usury.Exceeded` en fila y columna, `Catalogo.CodigoDuplicado`, `NationalValues.Missing`); porcentajes en puntos con hasta 4 decimales a fracción de 6; `VIVIENDA` → `Import.Cell.NotYetAvailable`; aseguradora que no está en el maestro → error de fila; la misma línea con una `vigenteDesde` posterior crea versión y reemplaza entera las hijas; una versión que empieza antes de hoy en una línea con solicitudes o créditos se rechaza; `requiresReason` al crear o cerrar vigencias
+- [ ] T0334 [P] [US1] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Configuration/EfectoDeReplicacionUsuraEnLineasTests.cs` (FR-021, US1-5, data-model §1.2): al replicarse una `USURA` nueva, en la misma transacción de la réplica, se marca `UsuryBlockedSince` y `UsuryBlockedByValuePublicId` en las líneas cuya versión vigente la supera (con cada banda) y se alerta `Cartera.LineaCerradaPorUsura` (`DedupKey` por línea); una línea ya marcada no se vuelve a alertar; el efecto corre también con Cartera **sin activar** (las líneas existen antes de activar); una modalidad retirada del catálogo vigente cierra la línea con `ModalityRetired` y alerta
+- [ ] T0335 [P] [US1] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/ElMotorDeCarteraEsDecimal.cs` (sin `double`, `float`, `Math.Pow/Exp/Log` en `Domain/Lending`), `LaCarteraNoTieneValoresLegalesFijos.cs` (literales de Nómina más `365`; `7` y `10` sólo por el enum), `LosSaldosYTasasDeCarteraTienenSuPrecision.cs` (alias `TasaAnual`, `TasaEquivalente`, `Fraccion`, `Puntaje`, `Monto` en las configuraciones de líneas y equivalencias) y `LaCarteraUsaLaFechaLocal.cs` con lo de esta fase
+- [ ] T0336 [P] [US1] Ampliar `LosHechosInmutablesNoSeModifican.cs` (`CreditLineVersion` y sus cuatro hijas, `CommercialTermEquivalence`; C42), `LasConsultasDeCarteraRespetanElAlcance.cs` (`ListCreditLinesQuery` muestra sólo las líneas del alcance; `GetCreditLineQuery` fuera de alcance → 404), `LosComandosDeCarteraLlevanClave.cs` y `TextosDeCarteraTests.cs` (en `tests/IngenIA365ERP.Architecture.Tests/Principles/`) con los comandos, consultas y códigos de esta fase
+- [ ] T0337 [P] [US1] Crear `tests/IngenIA365ERP.Shared.Tests/Cartera/LineasDeCreditoClientTests.cs`: `Idempotency-Key` en crear, versionar, cerrar, reabrir, borrar, puntaje, equivalencias e importar (revisar y aplicar son dos claves); sin `Authorization` a mano; `usury-check` va sin clave
+- [ ] T0338 [US1] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/LineasDeCreditoYUsuraTests.cs` (colección «Cartera e2e», cooperativa aislada, dos motores; quickstart §1.7 y §3.2): US1-6 (plantilla con un error y corregida), US1-1 (usura excedida con usura, modalidad y diferencia, nada guardado), `InterestTaxConceptMissing`, US1-2 (versión nueva con historial; la de hoy sigue vigente hasta la víspera), `VARIBR` con `usury-check`, cierre y reapertura, borrado negado con `HasLoans` cuando hay una solicitud (con US2: se agrega allí), `Cobranza.HorarioLunesAViernes` más amplio que el techo → `Lending.Parameter.BelowLegalFloor` con el límite y su fuente (SC-018); y amplía `SeguridadYHabeasDataDeCarteraTests` con el alcance por línea: `asesor.o1` no ve `VARIBR` si no la tiene y por URL recibe el 404 genérico con `Lending.Access.OutOfScope`
+  · US1-4 (créditos vivos topados por una usura nueva) se prueba en `CausacionYLiquidacionTests` de US4, que es donde hay causación
+- [ ] T0339 [US1] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/UsuraNuevaCierraLineasTests.cs` **(nuevo)** en la colección «Valores nacionales e2e» (la central es una por host, §7.6): el maestro registra una `USURA` de consumo menor, la réplica la trae y la línea queda `usuryBlockedSince` con la alerta `Cartera.LineaCerradaPorUsura`; una versión nueva bajo la usura limpia el bloqueo; un día sin usura registrada hace que crear una versión desde ese día responda `NationalValues.Missing` y alerte `Cartera.ValorNacionalFaltante` (US1-3, US1-5); sumar la clase al filtro `F_VN` de quickstart §1.7
+
+### Implementation for User Story 1
+
+#### Dominio: motor puro de días, tasas, usura y plan
+
+- [ ] T0340 [P] [US1] Crear `src/Core/IngenIA365ERP.Domain/Lending/DayCount/ContadorDeDias.cs` (T27; hace pasar T0321)
+- [ ] T0341 [US1] Crear `src/Core/IngenIA365ERP.Domain/Lending/Rates/EquivalenciaDeTasas.cs` y `src/Core/IngenIA365ERP.Domain/Lending/Rates/TasaDelDia.cs` sobre `AritmeticaDecimal` de la fase 3 (T26, T28, D1, D10; hace pasar T0322)
+- [ ] T0342 [US1] Crear `src/Core/IngenIA365ERP.Domain/Lending/Rates/ControlDeUsura.cs` (T28, R36): flujos con fechas reales, cargos computables por seguro (`RetainedFraction`, `SelfInsured`) y TIR diaria por Newton con bisección de `AritmeticaDecimal`; devuelve `ResultadoDeUsura` **(nuevo)** con efectiva, usura usada (valor y `PublicId`), holgura, cargos y explicación (hace pasar T0323)
+- [ ] T0343 [P] [US1] Crear `src/Core/IngenIA365ERP.Domain/Lending/RedondeoDeCartera.cs` (unidad, modo y momento; el residuo en la explicación), `src/Core/IngenIA365ERP.Domain/Lending/ExplicacionDeCartera.cs` (tramo, días, tasa diaria, base) y `src/Core/IngenIA365ERP.Domain/Lending/VersionesDeReglas.cs` (`RulesVersion` `LND-AAAA.n`, la vigente `LND-2026.1`) (M8, M11, M15)
+- [ ] T0344 [US1] Crear `src/Core/IngenIA365ERP.Domain/Lending/Schedules/FechasDeVencimiento.cs` y `src/Core/IngenIA365ERP.Domain/Lending/Schedules/GeneradorDePlan.cs` (T29, R37): cuota fija por valor presente con factores reales de cada período (primer período irregular, extraordinarias, gracia), abono constante, pago único, gracia a capital o total sin capitalizar (primera cuota o distribuida), seguros por su base y periodicidad (D9); Σ capital = monto y la última cuota absorbe el resto; sin IO, `DateOnly` y `decimal` (hace pasar T0324, T0326, T0327); la regeneración por operación (abono, reajuste, nota, tramo) la agrega US4/US5 sobre esta misma clase
+- [ ] T0345 [US1] Crear la fachada `src/Core/IngenIA365ERP.Domain/Lending/MotorDeCartera.cs` (molde `MotorDeCosteo`, M1) con las entradas de esta fase (días, tasas, usura, plan); US4 la extiende con reconstrucción y causación (C105)
+
+#### Dominio: comportamiento de las entidades de configuración
+
+- [ ] T0346 [P] [US1] Completar `src/Core/IngenIA365ERP.Domain/Entities/Lending/Configuration/CreditLine.cs` (estados `Draft`, `Active`, `Closed`, cierre con motivo, bloqueo y desbloqueo por usura, código inmutable) y `CreditLineVersion.cs` con sus hijas `CreditLineRateBand.cs`, `CreditLineDocumentRequirement.cs`, `CreditLineInsurance.cs`, `CreditLineCollateralRule.cs` (fábrica de una versión completa, sólo inserción, `ContentSha256`) y `CommercialTermEquivalence.cs` (data-model §1.2–§1.9); las clases y configuraciones las dejó la fase 3 en `CarteraNucleo`
+
+#### Application
+
+- [ ] T0347 [US1] Crear `src/Core/IngenIA365ERP.Application/Lending/Configuration/` **(carpeta nueva bajo `Application/Lending`)** con `ReglasDeLineaDeCredito` **(nuevo)**, el único sitio de las reglas de una versión que comparten el alta, la versión, la reapertura y la importación (modalidad del `CatalogoDeModalidades` vigente, perfil regulatorio, D20, precisión, bandas, plan tipo por banda de monto y plazo y `ControlDeUsura` a `ValidFrom` y a hoy con la usura de la modalidad certificada por `IValoresNacionales`), y `VersionVigenteDeLinea` **(nuevo)**, el lector a (D, R) por `VigenciaBitemporal` que usan US2, US3 y US6
+- [ ] T0348 [US1] Crear en `src/Core/IngenIA365ERP.Application/Lending/Configuration/` `CreateCreditLineCommand`, `AddCreditLineVersionCommand`, `CloseCreditLineCommand`, `ReopenCreditLineCommand`, `DeleteCreditLineCommand` (+ handlers y validadores; `IOperacionIdempotente`, `IConMotivo` donde aplica) y `ListCreditLinesQuery`, `GetCreditLineQuery`, `GetCreditLineVersionQuery`, `CheckCreditLineUsuryQuery`, `ListModalitiesQuery` con los DTO de api.md §3.1 y §3.2 (`CreditLineListItemDto`, `CreditLineDto`, `CreditLineVersionDto`, `CreditLineVersionInput`); las listas filtran por `IAlcanceDeCartera` (hace pasar T0328, T0329, T0330)
+- [ ] T0349 [P] [US1] Crear `SetCreditLineScoringCommand` y `GetCreditLineScoringQuery` en `src/Core/IngenIA365ERP.Application/Lending/Configuration/` (permiso `Lending.Scoring.Manage`; valida el bloque contra la lista de variables y fuentes que expone `MotorDePuntaje` de US2) (hace pasar T0331)
+- [ ] T0350 [P] [US1] Crear `SetCommercialTermEquivalencesCommand` y `ListCommercialTermEquivalencesQuery` en `src/Core/IngenIA365ERP.Application/Lending/Configuration/` y el lector `EquivalenciasDeComercio` **(nuevo)** a la fecha de la venta que usa el consumidor de US6 (hace pasar T0332)
+- [ ] T0351 [US1] Agregar a `src/Core/IngenIA365ERP.Application/Lending/Imports/CatalogoDePlantillasDeCartera.cs` la definición de `lending.credit-lines` con sus seis hojas y columnas exactas de plantillas.md §1, y crear `ImportCreditLinesCommand` en `src/Core/IngenIA365ERP.Application/Lending/Imports/` que reusa `ReglasDeLineaDeCredito` y los comandos de versión (como `ImportAccountsCommand` reusa el alta de la 009); `factorDeMora` queda «pendiente de validar por la contadora» (§7.7) (hace pasar T0333)
+- [ ] T0352 [US1] Crear `src/Core/IngenIA365ERP.Application/Lending/Configuration/EfectoDeReplicacionUsuraEnLineas.cs` **(nuevo)**, un `IEfectoDeReplicacion` que corre en la transacción de la réplica cuando trae `USURA` o un `CatalogoDeModalidades` nuevo: marca y alerta como en T0334 y deja el conteo en `EffectsSummaryJson` de `COR_NationalValueReplications`; registrarlo junto a los efectos de la Fundacional A (hace pasar T0334)
+
+#### API
+
+- [ ] T0353 [US1] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/CreditLinesEndpoints.cs` sobre el grupo base: `/credit-lines` (lista, detalle, versión, alta, versiones, cerrar, reabrir, borrar, `usury-check` sin clave, `template.xlsx` e `import` por `RutasDePlantilla.MapPlantilla`), `/credit-lines/{id}/scoring`, `/modalities` y `/commercial-term-equivalences`, con los permisos de api.md §3.1–§3.3
+
+#### Pantallas y cliente
+
+- [ ] T0354 [P] [US1] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/LineasDeCreditoClient.cs` **(nuevo)** y `CarteraDtos.Lineas.cs` **(nuevo)** (hace pasar T0337)
+- [ ] T0355 [US1] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Lineas.razor` (`/cartera/lineas`, `Lending.CreditLines.View`): lista con estado, modalidad, versión vigente, tasa, holgura de usura y la marca «cerrada por usura desde …»; importación con revisión previa; `IndicadorDeCarga` y `PermissionGate`
+- [ ] T0356 [US1] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/LineaDetalle.razor` (`/cartera/lineas/{id:guid}`): versión vigente e historial; editor de una versión nueva que parte de la vigente con las secciones de `CreditLineVersionInput` (clasificación, tasas y bandas, mora, montos y plazos, plan, prelación, formas de pago, requisitos, seguros, garantías, cupo y aportes, concepto tributario con su soporte subido por `POST /api/attachments/uploads`); panel de usura que llama `usury-check` al salir de cada campo de tasa y muestra efectiva, usura y diferencia en español; puntaje en su pestaña con `Lending.Scoring.Manage`; cerrar, reabrir y borrar con motivo
+- [ ] T0357 [P] [US1] Agregar a `Lineas.razor` la pestaña «Equivalencias de Comercio» (son de la cooperativa, no de una línea) con `ListCommercialTermEquivalencesQuery` y `SetCommercialTermEquivalencesCommand`; sumar los enlaces al grupo «Cartera» de `src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor` con `PermissionGate` y a `LasPantallasDeCarteraEstanEnElMenu`
+
+#### Documentación
+
+- [ ] T0358 [US1] Escribir `docs/manual/cartera-lineas-de-credito.md` **(nuevo)**: qué es una versión y por qué los créditos vivos no cambian, cómo se calcula la usura (efectiva con cargos, no la nominal), bandas, seguros que computan, concepto tributario (D20), equivalencias de Comercio, la plantilla con sus hojas y qué pasa cuando llega una usura nueva
+
+**Checkpoint**: las líneas de crédito se crean, versionan, cierran, importan y se bloquean por usura con las mismas
+reglas por cualquier vía; el motor puro de días, tasas, usura y plan pasa sus casos dorados y la propiedad de la suma
+del capital; `LineasDeCreditoYUsuraTests` y `UsuraNuevaCierraLineasTests` están verdes en los dos motores.
+
+---
+
+## Phase 6: User Story 2 - Simular, radicar y aprobar con atribuciones (Priority: P1) — entrega K1
+
+**Goal**: el asesor simula sin registrar nada y radica la solicitud con sus documentos, codeudores, autorizaciones y la
+preferencia del deudor; el sistema la valida sola (listas, centrales con autorización, capacidad de pago y de
+descuento, endeudamiento consolidado, cupo, concentración, usura, requisitos, puntaje) y la lleva al nivel que le toca
+por la matriz de US17; analista, gerencia, comité o consejo deciden (los colegiados con acta), y quien radica no aprueba
+(FR-034 a FR-042, FR-049, FR-058 a FR-060; T63, T64, T66, T69, T70, T73; SC-008, SC-012, SC-015, SC-022). En la misma
+fase: **cupos** consolidados, por línea y rotativos con su disponible, bloqueos y embargos, saldos de aportes por
+plantilla (D19), el puerto de centrales con su canal `SIMULADO` (`ICentralDeRiesgo`, T71) y el resultado y la liberación
+de las listas restrictivas (`LND_ScreeningResults`, T70). El motor puro nuevo es `MotorDePuntaje` **(nuevo)**.
+
+Antes de la activación (FR-142, api.md §1.13) sólo se simula y se otorgan cupos con su evaluación y decisión; radicar
+solicitudes exige Cartera activada (`Lending.NotActivated`). Por eso la e2e de esta fase prueba la originación por cupo
+en una cooperativa sin activar y la de solicitudes en una cooperativa activada con `CarteraE2E.ActivarCarteraAsync`
+(activación de prueba sin cartera previa de la fase 3, C107), sin `Skip`.
+
+**Independent Test** (quickstart §3.5):
+- `/cartera/simulador`: plan cuota a cuota, efectiva y nominal, costo total y usura, sin escribir nada; el PDF no lleva
+  número ni código (US2-1);
+- sin un documento obligatorio la solicitud no pasa a análisis y lista lo que falta (US2-2);
+- una coincidencia en listas bloquea, alerta al oficial y sólo él la libera con motivo; quien radicó no puede (US2-3);
+- la consulta a centrales sin autorización se impide y explica cómo registrarla (US2-4);
+- tres solicitudes de 3.000.000, 15.000.000 y 60.000.000 van al analista, a la gerencia y al comité; el comité deja acta
+  con quórum, votos y SHA-256, y el voto de `comite.1`, que radicó, se rechaza (US2-5, US2-6);
+- la solicitud de un vinculado va al consejo y exige 4/5 de la composición sin que vote el interesado (US2-7);
+- una operación que supera el límite individual de concentración se bloquea con el límite y el exceso (US2-8, SC-022).
+
+### Tests for User Story 2
+
+> Escribirlas primero; deben fallar antes de implementar. e2e en «Cartera e2e» con `CarteraE2E.CooperativaAisladaAsync`,
+> los usuarios de `UsuariosDeCartera` (US17) y el doble `ContabilidadParaCarteraConDoble` marcado con un patrimonio
+> técnico en la cooperativa de la prueba (los indicadores reales los registra el contador desde US7).
+
+- [ ] T0359 [P] [US2] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Scoring/CasoDoradoDePuntaje.cs` y `tests/IngenIA365ERP.Domain.Tests/Lending/Scoring/CasosDoradosDePuntajeTests.cs` sobre `tests/IngenIA365ERP.Domain.Tests/Lending/Scoring/Casos/*.json` (FR-037)
+  · casos: `01-tres-variables` (antigüedad como asociado, relación cuota/ingreso, puntaje de central; pesos 0,4/0,4/0,2; resultado y aporte por variable); `02-bajo-el-minimo` (`BelowMinimum = true`, no rechaza); `03-sin-dato-de-central` (la variable toma los puntos de su rango «sin dato» declarado, o cero si no lo declara, y la explicación lo dice); `04-limites-de-rango` (cerrado a la izquierda, abierto a la derecha); `05-escala-0-1000` (alias `Puntaje` 12,4); la huella de entradas es estable
+- [ ] T0360 [P] [US2] Agregar a `tests/IngenIA365ERP.Domain.Tests/Lending/Attributions/Casos/` los casos de aceptación de US2: `us2-tres-montos` (3.000.000, 15.000.000, 60.000.000 → analista, gerencia, comité), `us2-5-consolidado-sobre-gerencia` (el monto pedido cabe en gerencia, el consolidado con una codeuda no → comité), `us2-7-vinculado` (consejo con regla `RelatedPartyQualified`), `us2-puntaje-bajo` (nivel de excepción) y `us2-no-exceptuables` (capacidad de pago insuficiente con `PolicyExceptionRequested` → `NotExceptionable`)
+- [ ] T0361 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/SimulateRepaymentScheduleQueryTests.cs` (api.md §4.1, FR-034, R40): no escribe nada (ni `COR_OperationKeys`); plan cuota a cuota con capital, interés, seguros, otros y saldo, `effectiveAnnualRate`, `nominalPeriodRate`, `effectiveRateWithCharges`, totales y explicación, con `RulesVersion`; monto, plazo o periodicidad fuera de la línea → `Lending.Schedule.OutOfLineRange` con `{ field, min, max }`; línea cerrada o bloqueada por usura → `Lending.CreditLine.Closed` / `Lending.Usury.Exceeded`; una efectiva sobre la usura **no** es error: 200 con `usury.passes = false` y el aviso `Lending.Usury.Exceeded`; sin usura del día → `NationalValues.Missing` y alerta `Cartera.ValorNacionalFaltante` a quien la registra (US1-3); seguros opcionales sólo los elegidos; huella `SimulationSha256` reproducible
+- [ ] T0362 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/RenderScheduleSimulationPdfQueryTests.cs` y `SendScheduleSimulationCommandTests.cs` (C87, T80): el PDF lleva «Simulación – no constituye aprobación», sin número ni código, y «AMBIENTE DE PRUEBAS – SIN VALIDEZ» fuera de producción; el envío sólo por correo y con propósito `Informative` a la persona simulada con autorización de tratamiento y correo registrado (`Lending.Authorization.Missing`, `Lending.DebtorMessage.ChannelNotAuthorized`, `.OutsideLegalWindow` con `nextAllowedAt`), y no registra nada del crédito
+- [ ] T0363 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/CreditApplicationDraftCommandsTests.cs` sobre `CreateCreditApplicationCommand`, `UpdateCreditApplicationCommand`, `AttachCreditApplicationDocumentCommand` y `RemoveCreditApplicationDocumentCommand` (api.md §4.2, data-model §2.1–§2.3)
+  · solicitante no asociado activo sin que la línea y el perfil lo admitan → `Lending.Application.NotAssociate`; codeudor repetido → `Lending.Application.DuplicateParty`; línea cerrada → `Lending.CreditLine.Closed`; forma `OwnPayroll` sin que la persona sea empleado; `payrollAgreementPublicId` → `Lending.PayrollAgreement.NotAvailable` con `availableFrom: "K2"`; editar fuera de `Draft`/`Returned` → `Lending.Application.NotEditable`; `rowVersion` vieja → `Concurrency.StaleRowVersion`; las autorizaciones del cuerpo se escriben con `IAutorizacionDeDatos.Agregar` en la misma transacción y las vigentes no se repiten; requisito desconocido → `Lending.Application.RequirementUnknown`; quitar un documento de una solicitud decidida → `Attachments.OwnerLocked`; con Cartera sin activar → `Lending.NotActivated`
+- [ ] T0364 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/SubmitCreditApplicationCommandHandlerTests.cs` (FR-035, FR-036, data-model §2.1): sin un documento obligatorio que casa por monto, tipo de solicitante, forma de pago y parte → `Lending.Application.DocumentsMissing` con `data.missing[{ code, name }]`; sin autorización `CreditProcessing` de solicitante o codeudor → `Lending.Authorization.Missing` con `{ personPublicId, purpose, howToFix }`; usuario sin persona → `Lending.Security.UserWithoutPerson`; si pasa: número `Application` por `NumeradorDeCartera` al final del cerrojo, preferencia en `LND_PrepaymentPreferences` (`Origin = Application`), validaciones de FR-036 para solicitante y codeudores, puntaje, enrutamiento a `PendingDecision` con `RoutingSha256` y `CaseParticipation` `Radicar`, todo en un `SaveChanges`
+- [ ] T0365 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/ValidacionesDeOriginacionTests.cs` (FR-036, data-model §2.4): una fila `CreditApplicationCheck` por clase, parte y etapa con `EvidenceSha256`; listas → `Blocking` no exceptuable con su `ScreeningResult`; centrales en líneas con `RequiresBureauQuery`: sin consulta vigente `Ok` → `Blocking`, con una simulada en producción → `Blocking` (`Lending.Adapter.SimulatedInProduction` por `GuardiaDeCanalesExternos`, efecto `BureauEvidenceForApproval`); capacidad de pago (ingresos − egresos − cuotas propias y externas − la cuota simulada) insuficiente → `Blocking` no exceptuable `Lending.Capacity.PaymentInsufficient`; capacidad de descuento en `OwnPayroll` contra el límite nacional `LIBRANZA_CAPACIDAD_DESCUENTO` y la certificación → `Lending.Capacity.DeductionInsufficient`; endeudamiento consolidado como deudor y codeudor; cupo → `Lending.CreditLimit.Insufficient`; concentración sobre el patrimonio técnico vigente → `Lending.Concentration.LimitExceeded` con límite, actual, pedido, exceso y base, y sin indicador vigente → `Lending.Concentration.TechnicalCapitalUnavailable` más la alerta `Cartera.PatrimonioTecnicoNoDisponible` al contador (T59); usura del día → no exceptuable; requisitos de la línea (antigüedad, edad, vínculo laboral, saldo mínimo de aportes con la fecha de la carga, D19); vinculado → `RelatedParty`; bloqueo vigente → `Lending.Debtor.Blocked`; canal caído → `Unavailable`, que bloquea hasta repetir; las `Warning` llegan al aprobador como alertas
+- [ ] T0366 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/RecordCreditDecisionCommandHandlerTests.cs` (api.md §4.3, T63, FR-038, FR-042)
+  · sin el permiso del nivel efectivo → el 404 de la solicitud; nivel colegiado → `Lending.Attribution.LevelRequired` con `{ level, governingBody }`; nivel menor que el requerido → `LevelRequired`; `Deny`, `Return` y toda excepción sin motivo → `Validation.Invalid`; `NoExceptuables` con una validación bloqueante → `Lending.Attribution.NotExceptionable` con `reasons[]`; `expectedContentSha256` distinto (cambió el consolidado) → `Lending.Decision.ContentChanged` y la solicitud se reenruta; no pendiente → `Lending.Decision.NotPending`; quien radicó → `Lending.Segregation.Conflict`; `CompanyAdmin` y `cartera.administrador` no deciden (C86)
+  · `Approve`/`ApproveWithConditions` → `Approved` con `ApprovalValidUntil` = decisión + `Originacion.DiasVigenciaDeAprobacion`, condiciones menores (monto, plazo, garantía adicional) que se revalidan contra la usura y la concentración, toma el cerrojo del deudor (T34) y escribe `CreditDecision` con huella y `CaseParticipation` `Decidir`; `Return` → `Returned`; «aprobación vencida» se calcula al leer y exige decidir de nuevo (`Approved → PendingDecision`, C53); el sujeto `CreditLimit` usa el mismo comando
+- [ ] T0367 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/ListPendingLendingDecisionsQueryTests.cs`: lo que el usuario puede decidir ahora (permiso del nivel, alcance de oficina y línea, no excluido) con `canDecide` y `excludedReason`, más lo que está en agenda de sus órganos; `asesor.o2` no ve lo de O1
+- [ ] T0368 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/AsuntosDeActaDeOriginacionTests.cs`: `AsuntoDeActaDeSolicitud` y `AsuntoDeActaDeCupo` **(nuevos)** aplican el resultado del punto al cerrar el acta (aprobación con condiciones, negación, devolución) con las mismas revalidaciones que la decisión individual; si la revalidación falla, el cierre entero se revierte; `DescribirAsync` arma el resumen del punto (número, persona, monto, nivel, vinculado, fundamento)
+- [ ] T0369 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Adapters/QueryCreditBureauCommandHandlerTests.cs` (api.md §4.4, adaptadores §3.8, T69, T73): sin autorización `CreditBureauQuery` → `Lending.Authorization.Missing`; con una migrada sin evidencia → `Lending.Authorization.WithoutEvidence`; canal caído → `Lending.Adapter.Unavailable` con `channelCode`; sin canal configurado → `Core.ExternalChannel.NotConfigured`; con éxito guarda `LND_BureauQueries` con canal sellado, autorización usada, resumen y el informe crudo como adjunto `LendingBureauReport`, `ValidUntil` = + `Centrales.DiasDeVigenciaDeConsulta`; dentro de la vigencia se reutiliza la última consulta; la respuesta trae sólo el estado; leer el informe emite `Lending.CreditBureauReport.Viewed`
+- [ ] T0370 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/ReleaseScreeningMatchCommandHandlerTests.cs` (nombre de quickstart §1.5; T70): sólo con `Compliance.RestrictiveLists.Release`, con motivo; quien radicó o pidió el cupo → `Lending.Segregation.Conflict`; no pendiente → `Lending.Screening.NotPending`; liberar escribe `ReleasedAt` (`[EscrituraUnica]`), levanta el bloqueo `RestrictiveListMatch` y emite `Lending.ScreeningMatch.Released`; la lista y el detalle exigen el mismo permiso (C84)
+- [ ] T0371 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/CreditLimitCommandsTests.cs` sobre `AssignCreditLimitCommand`, `EndCreditLimitCommand`, `RevalidateCreditLimitCommand`, `ChangePrepaymentPreferenceCommand` (cupo rotativo), `GetCreditLimitAvailabilityQuery` y `ListCreditLimitsQuery` (api.md §7.1, FR-049, FR-058, T34)
+  · disponible = cupo − saldos vivos − reservas vigentes − aprobadas sin desembolsar, calculado al leer; asignar toma el cerrojo del deudor; dentro de la atribución operativa (`SEC_PermissionAmountLimits` de `Lending.CreditLimits.Assign`) y sin nivel superior en la matriz → `Active`; si no → `PendingDecision` con `routing` y sin error; concentración y patrimonio técnico como T0365; no asociado sin línea que lo admita → `Lending.CreditLine.NonAssociatesNotAllowed`; coincidencia en listas → `Lending.Screening.Blocked` con `screeningResultPublicId`; rotativo con `CreditLineId` nulo vale para toda línea de origen comercial aplicable (C54); el rotativo registra la preferencia (`Origin = CreditLimitGrant`); `Lending.CreditLimit.Overlaps`, `.NotActive`, `.NotRevolving`; un vinculado sin decisión del consejo queda con bloqueo `LimitRevalidation` y alerta `Cartera.CupoPorRevalidar`
+- [ ] T0372 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/DebtorBlockCommandsTests.cs` sobre `RegisterDebtorBlockCommand`, `LiftDebtorBlockCommand` y `ListDebtorBlocksQuery` (api.md §7.2, FR-060): sólo `Manual` y `Garnishment` a mano, con motivo; duplicado vigente → `Lending.Block.Duplicate`; levantar uno automático → `Lending.Block.Automatic` con `{ kind, howItLifts }`; el levantamiento es `[EscrituraUnica]`; un bloqueo vigente responde `Lending.Debtor.Blocked` al originar
+- [ ] T0373 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Imports/ImportContributionBalancesCommandTests.cs` (plantillas.md §3, D19): persona inexistente → error de fila; fecha de corte futura → error; el cupo usa la última con corte ≤ D conocida en R y sella la carga usada; corregir una fila no cambia cupos ya otorgados; importar exige `Lending.CreditLimits.Assign` (C85)
+- [ ] T0374 [P] [US2] Crear la batería `tests/IngenIA365ERP.Application.Tests/Lending/Adapters/ConformidadDeCentral.cs` y su clase `CentralDeRiesgoSimuladaConformidadTests.cs` (adaptadores §3.1, §3.7, §3.9; ubicación por §7.6): las siete reglas comunes, `ChannelCode` en el resultado, `Simulado = true` sólo en el simulado; por último dígito: 1 reporte negativo, 2 sin historia, 3 puntaje bajo, 5 `ChannelUnavailable`, otro sin marcas; nunca lanza
+- [ ] T0375 [P] [US2] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Origination/ReEscaneoDeListasTests.cs` (C90, I12): la tarea `cartera.re-escaneo-de-listas` corre al aplicarse una carga nueva de listas, sale de inmediato si Cartera no está activada, consulta a deudores y codeudores vivos, deja un `ScreeningResult` `ListRescan` por hallazgo, el bloqueo automático `RestrictiveListMatch` (impide originar y vender, no toca el cobro) y la alerta `Cartera.CoincidenciaEnListas`; es idempotente por la versión de la carga
+- [ ] T0376 [P] [US2] Ampliar en `tests/IngenIA365ERP.Architecture.Tests/Principles/` las listas de `LasConsultasDeCarteraRespetanElAlcance.cs` (solicitudes, decisiones pendientes, cupos, bloqueos, consultas a centrales, resultados de listas), `LasLecturasSensiblesDeCarteraSeAuditan.cs` (`GetBureauQueryQuery`, `IssueBureauReportDownloadLinkCommand`), `LosHechosInmutablesNoSeModifican.cs` (`CreditApplicationCheck`, `CreditScore`, `ScreeningResult` con su liberación, `BureauQuery`, `CreditLimit`, `DebtorBlock` con su levantamiento, `PrepaymentPreference`, `ContributionBalanceLoad`; C42), `LaSegregacionNoUsaUserIdDelToken.cs`, `LosComandosDeCarteraLlevanClave.cs`, `ElMotorDeCarteraEsDecimal.cs` (`Domain/Lending/Scoring`), `LosProveedoresExternosSoloLosConoceSuAdaptador.cs` (centrales) y `TextosDeCarteraTests.cs`
+- [ ] T0377 [P] [US2] Crear `tests/IngenIA365ERP.Shared.Tests/Cartera/OriginacionClientTests.cs` y `CuposClientTests.cs`: `Idempotency-Key` en toda escritura (la misma en el reintento, otra tras el éxito), ninguna en simulaciones, vistas previas ni `routing`; sin `Authorization` a mano
+- [ ] T0378 [US2] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/OriginacionConAtribucionesTests.cs` (colección «Cartera e2e», dos motores; quickstart §1.7 y §3.5)
+  · **sin activar** (cooperativa aislada `coop_ensayo` y `coop_obligada`): simular sin escribir y PDF sin número (US2-1, SC-008 medido en la e2e de rendimiento); centrales sin autorización y con autorización por el simulado (US2-4); cupo rotativo de 500.000 por `jefe` dentro de su monto → `Active`; cupo de 60.000.000 → `PendingDecision` al comité, sesión con quórum, votos y acta con SHA-256 y PDF, voto de quien pidió el cupo rechazado (`Lending.Session.VoterExcluded`), decisión `ApproveWithConditions` (US2-5, US2-6 sobre el sujeto `CreditLimit`); cupo de un vinculado al consejo con 4 de 5 favorables en `coop_obligada` (US2-7); la persona de la lista cargada en `/api/compliance/restrictive-lists` → `Lending.Screening.Blocked`, la libera sólo `oficial` (US2-3); concentración excedida con límite y exceso y, sin patrimonio técnico, `TechnicalCapitalUnavailable` con la alerta (US2-8, SC-022); `sinpersona` no decide (`Lending.Security.UserWithoutPerson`); radicar una solicitud antes de activar → `Lending.NotActivated`
+  · **con Cartera activada** (otra cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync`, C107; sin `Skip`): documento faltante (US2-2); listas en la radicación (US2-3); tres solicitudes a tres niveles; reenrutamiento cuando cambia el consolidado; comité con `comite.1` radicador; vinculado; concentración en la aprobación; quien radicó no decide (`Lending.Segregation.Conflict`); y amplía `SeguridadYHabeasDataDeCarteraTests` con `asesor.o2` abriendo una solicitud de O1 (404 genérico y `Lending.Access.OutOfScope`) y el `analista` decidiendo por encima de su atribución (US17 Independent Test)
+- [ ] T0379 [US2] Agregar a `tests/IngenIA365ERP.API.IntegrationTests/Lending/UsuraNuevaCierraLineasTests.cs` («Valores nacionales e2e») el caso US1-3 del lado de la originación: sin usura del día, simular responde `NationalValues.Missing` y decidir un cupo se bloquea; los dos alertan a quien registra la usura
+- [ ] T0380 [P] [US2] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/SimulacionYCupoPerformanceTests.cs` (sólo con `RUN_PERF_TESTS=1`, SC-008): 200 simulaciones de 60 cuotas y 200 consultas de disponible sobre una cooperativa con 5.000 cupos; p95 de simulación < 2 s y de disponible < 1 s, informados en la salida
+
+### Implementation for User Story 2
+
+#### Dominio
+
+- [ ] T0381 [P] [US2] Crear el motor puro `src/Core/IngenIA365ERP.Domain/Lending/Scoring/MotorDePuntaje.cs` **(nuevo; carpeta `Domain/Lending/Scoring` nueva)**: recibe el modelo de la versión de la línea (variables, fuentes, rangos con puntos, pesos `Fraccion`, escala, mínimo) y los valores; devuelve puntaje, `BelowMinimum`, explicación por variable y huella; publica la lista cerrada de fuentes de variable que acepta `SetCreditLineScoringCommand` (hace pasar T0359)
+- [ ] T0382 [P] [US2] Completar el comportamiento de `src/Core/IngenIA365ERP.Domain/Entities/Lending/Origination/CreditApplication.cs` (estados y transiciones de data-model §8.2, edición sólo en `Draft` y `Returned`, condiciones aprobadas, vencimiento calculado), `CreditApplicationParty.cs`, `CreditApplicationDocument.cs`, `CreditApplicationCheck.cs` (H), `CreditScore.cs` (H), `ScreeningResult.cs` (H, liberación `[EscrituraUnica]`), `BureauQuery.cs` (H), `CreditLimit.cs` (H, versiones), `DebtorBlock.cs` (H, levantamiento `[EscrituraUnica]`), `PrepaymentPreference.cs` (H) y `ContributionBalanceLoad.cs` (H); las clases y configuraciones las dejó la fase 3 en `CarteraNucleo`
+
+#### Application: simulación
+
+- [ ] T0383 [US2] Crear en `src/Core/IngenIA365ERP.Application/Lending/Origination/` `SimulateRepaymentScheduleQuery` (sobre `VersionVigenteDeLinea`, `GeneradorDePlan`, `ControlDeUsura`, `IValoresNacionales` y `HuellaDeCartera`; DTO `ScheduleSimulationInput` y `ScheduleSimulationDto` de api.md §4.1) y `RenderScheduleSimulationPdfQuery` con el reporte `src/Presentation/IngenIA365ERP.API/Reports/SimulacionDeCreditoReport.cs` **(nuevo)** (QuestPDF; hace pasar T0361 y la mitad de T0362)
+- [ ] T0384 [US2] Crear `SendScheduleSimulationCommand` en `src/Core/IngenIA365ERP.Application/Lending/Origination/` sobre la cola de mensajes al deudor (`LND_DebtorMessages`, propósito `Informative`, canal correo, adjunto el PDF; T74, C87), que exige `IAutorizacionDeDatos.VigenteAsync(persona, GeneralTreatment)` y correo registrado (hace pasar el resto de T0362)
+
+#### Application: solicitud, validaciones, puntaje y enrutamiento
+
+- [ ] T0385 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Origination/ExposicionConsolidadaDelDeudor.cs` **(nuevo)**: endeudamiento con la entidad como deudor y como codeudor (capital vivo como suma de `LND_LoanTransactions` por crédito, FR-001), más reservas `Reserved` y solicitudes `Approved` vigentes; US8 le suma la carga aplicada antes de activar (FR-142); y `src/Core/IngenIA365ERP.Application/Lending/Origination/CapacidadDePago.cs` **(nuevo)** (ingresos − egresos − cuotas propias, externas y la simulada; capacidad de descuento en `OwnPayroll` contra `LIBRANZA_CAPACIDAD_DESCUENTO` y la certificación, FR-110)
+- [ ] T0386 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Origination/ValidacionDeConcentracion.cs` **(nuevo)** sobre `IContabilidadParaCartera.IndicadoresDeLaEntidadAsync` (último con corte ≤ fecha; viejo según `Contabilidad.IndicadoresVigenciaMeses` = no disponible, C33) y los parámetros `Concentracion.LimiteIndividual` / `.LimiteIndividualConGarantia` acotados por su `LIMITE`; bloquea con `Lending.Concentration.LimitExceeded` o `.TechnicalCapitalUnavailable` y alerta `Cartera.PatrimonioTecnicoNoDisponible` (T59, FR-041); la usan la decisión, el cupo y, en US3 y K3, el desembolso y la novedad
+- [ ] T0387 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Origination/ValidacionesDeOriginacion.cs` **(nuevo)**: corre, fuera del cerrojo, las trece clases de `ApplicationCheckKind` para solicitante y codeudores en la etapa pedida (`AtSubmission`, `BeforeDecision`; `BeforeDisbursement` la llama US3), escribe sus `CreditApplicationCheck` con evidencia y marca `IsExceptionable` según `NoExceptuables`; usa `ConsultaDeListasDeCartera`, la última `BureauQuery` vigente con `GuardiaDeCanalesExternos`, `CapacidadDePago`, `ExposicionConsolidadaDelDeudor`, `DisponibleDeCupo`, `ValidacionDeConcentracion`, `ControlDeUsura`, `VinculadosVigentes` y `BloqueosDelDeudor` (hace pasar T0365)
+- [ ] T0388 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Origination/EnrutamientoDeSolicitud.cs` **(nuevo)**: arma `SujetoAEnrutar` (monto consolidado, reglas, vinculado, puntaje, alertas, excepción), llama `EnrutadorDeAtribuciones` con la matriz vigente (`MatrizVigenteDeAtribuciones`), sella matriz, nivel y `RoutingSha256`, y reenruta si la huella cambió; ampliar `PreviewAttributionRoutingQuery` (US17) para sumar la exposición cuando trae `personPublicId`
+- [ ] T0389 [US2] Crear en `src/Core/IngenIA365ERP.Application/Lending/Origination/` `CreateCreditApplicationCommand`, `UpdateCreditApplicationCommand`, `AttachCreditApplicationDocumentCommand`, `RemoveCreditApplicationDocumentCommand`, `SubmitCreditApplicationCommand` (en `TransaccionExplicita`: cerrojo del deudor, validaciones, `MotorDePuntaje` → `CreditScore`, enrutamiento, número al final, preferencia, `CaseParticipation` `Radicar`, autorizaciones con `IAutorizacionDeDatos.Agregar`), `RecordCreditApplicationAnalysisCommand` (`Analizar`), `RerunCreditApplicationChecksCommand`, `CancelCreditApplicationCommand` (anular o desistir con motivo, sin cartera, FR-047), `ListCreditApplicationsQuery`, `GetCreditApplicationQuery` y `GetCreditApplicationRoutingQuery`, con la guarda `Lending.NotActivated` sobre `EstadoDeCartera` en las escrituras, `IConOficina` y `FiltroDeAlcanceDeCartera` (hace pasar T0363, T0364)
+- [ ] T0390 [US2] Agregar a `src/Core/IngenIA365ERP.Application/Attachments/Common/AdjuntosDeModulo.cs` los dueños `LoanApplicationDocument` (subida con `Lending.Applications.Create` mientras la solicitud no esté decidida, lectura con `.Read`, bloqueado al decidir) y `LendingBureauReport` (de módulo, no borrable, lectura con `Lending.CreditBureau.ReadReports`) (T81, §2.24)
+
+#### Application: decisiones
+
+- [ ] T0391 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Attributions/RecordCreditDecisionCommand.cs` (un comando para todos los sujetos; las rutas de K1 son solicitud, cupo y excepción de validación fallida) y `ListPendingLendingDecisionsQuery` (`/cartera/aprobaciones`, T65); la decisión revalida con `ValidacionesDeOriginacion` en `BeforeDecision`, aplica `RegistroDeIntervenciones` y toma el cerrojo del deudor (hace pasar T0366, T0367)
+- [ ] T0392 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Origination/AsuntoDeActaDeSolicitud.cs` y `src/Core/IngenIA365ERP.Application/Lending/Origination/AsuntoDeActaDeCupo.cs` **(nuevos)**, las implementaciones de `IAsuntoDeActa` para `CreditApplication` y `CreditLimit`, registradas en `AsuntosDeActa` (hace pasar T0368)
+
+#### Application: centrales y listas
+
+- [ ] T0393 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Adapters/ICentralDeRiesgo.cs` e `ICentralesDeRiesgo.cs` con `ConsultaACentral` e `InformeDeCentral` (adaptadores §3.2), el registro por código sellado y el defecto «sin canal» en `AddApplication`
+- [ ] T0394 [US2] Crear `src/Infrastructure/IngenIA365ERP.ExternalChannels/CreditBureaus/CentralDeRiesgoSimulada.cs` (por último dígito, recuerda por cooperativa lo que respondió, referencias `SIM-…`, artefacto marcado «SIMULADO») y registrarla en `AddExternalChannels` (sólo `Program.cs` lo llama) (hace pasar T0374)
+- [ ] T0395 [US2] Crear en `src/Core/IngenIA365ERP.Application/Lending/Adapters/` `QueryCreditBureauCommand`, `ListBureauQueriesQuery`, `GetBureauQueryQuery` (auditada) e `IssueBureauReportDownloadLinkCommand` (enlace firmado de 60 s, auditado); la credencial por `ICredencialesDeCanalExterno` y el circuito `CircuitoDeCanalExterno` de la Fundacional A (hace pasar T0369)
+- [ ] T0396 [US2] Crear `src/Core/IngenIA365ERP.Application/Lending/Origination/ConsultaDeListasDeCartera.cs` **(nuevo)**: consulta `IListasRestrictivas` (canal vigente sellado), escribe `ScreeningResult` por contexto, pone el bloqueo `RestrictiveListMatch` y alerta `Cartera.CoincidenciaEnListas` ante `Match` o `PossibleMatch`; `Unavailable` y el simulado en producción no cuentan como consulta; y en `src/Core/IngenIA365ERP.Application/Lending/Origination/` `ReleaseScreeningMatchCommand`, `ListScreeningResultsQuery` y `GetScreeningResultQuery` (hace pasar T0370)
+- [ ] T0397 [US2] Crear la tarea `src/Core/IngenIA365ERP.Application/Lending/Origination/ReEscaneoDeListas.cs` (`ITareaProgramada` `cartera.re-escaneo-de-listas`, por `IEjecutorEnCooperativa`, arrendamiento `scheduled.tasks`) y registrarla; sumar la tarea a la tabla de §2.13 en `decisiones-transversales.md` (C90) (hace pasar T0375)
+
+#### Application: cupos, bloqueos y aportes
+
+- [ ] T0398 [US2] Crear en `src/Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/` (subcarpeta de `Origination`, como los cupos de api.md §7) `DisponibleDeCupo` **(nuevo)** (calcula, nunca guarda), `AssignCreditLimitCommand` (cerrojo del deudor, `LimitesDePermisoPorUsuario` para el monto operativo, enrutamiento con sujeto `CreditLimit`, listas, centrales, concentración, preferencia del rotativo), `EndCreditLimitCommand`, `RevalidateCreditLimitCommand`, `ChangePrepaymentPreferenceCommand` (cupo rotativo; la de un crédito la publica US3), `GetCreditLimitAvailabilityQuery` y `ListCreditLimitsQuery`; y el gancho de `RegisterRelatedPartyCommand`/`EndRelatedPartyCommand` (US17) que revalida los cupos de la persona (api.md §3.7) (hace pasar T0371)
+- [ ] T0399 [P] [US2] Crear en `src/Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/` `BloqueosDelDeudor` **(nuevo)** (lector único de bloqueos vigentes), `RegisterDebtorBlockCommand`, `LiftDebtorBlockCommand` y `ListDebtorBlocksQuery` (hace pasar T0372)
+- [ ] T0400 [P] [US2] Agregar a `CatalogoDePlantillasDeCartera` la definición de `lending.contribution-balances` (plantillas.md §3) y crear `ImportContributionBalancesCommand`, `ListContributionBalancesQuery` y el lector `SaldoDeAportesVigente` **(nuevo)** en `src/Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/`, que lee primero `IConsultaDeAportes` (hoy `ConsultaDeAportesNoDisponible`) y si responde «no disponible» la última carga (D19) (hace pasar T0373)
+
+#### API
+
+- [ ] T0401 [US2] Crear en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/` `SimulationsEndpoints.cs` (`/simulations/schedule`, `/pdf` y `/send`), `ApplicationsEndpoints.cs` (`/applications` con documentos, `submit`, `analysis`, `checks/rerun`, `routing`, `cancel`), `DecisionsEndpoints.cs` (`/pending-decisions`, `/applications/{id}/decisions`, `/credit-limits/{id}/decisions`), `BureauQueriesEndpoints.cs`, `ScreeningResultsEndpoints.cs`, `CreditLimitsEndpoints.cs` (con `availability`, `prepayment-preference`, `end`, `revalidate`), `BlocksEndpoints.cs` y `ContributionBalancesEndpoints.cs` (con `template.xlsx` e `import`), con los permisos de api.md §4, §7.1, §7.2 y §7.4; las decisiones exigen ver el sujeto y el permiso del nivel se valida en el handler (404 del sujeto, api.md §1.3)
+
+#### Pantallas y cliente
+
+- [ ] T0402 [P] [US2] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/OriginacionClient.cs` **(nuevo)** (simulador, solicitudes, decisiones, centrales, listas) y `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/CuposClient.cs` **(nuevo)** (cupos, disponible, bloqueos, saldos de aportes), con `CarteraDtos.Originacion.cs` y `CarteraDtos.Cupos.cs` **(nuevos)** (hace pasar T0377)
+- [ ] T0403 [US2] Crear el componente `src/Presentation/IngenIA365ERP.Shared/Components/Cartera/SimuladorDeCredito.razor` **(nuevo)** (plan cuota a cuota, efectiva, nominal, costo total, usura con el aviso en español, imprimir y enviar) y la página `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Simulador.razor` (`/cartera/simulador`, `Lending.Simulations.Run`); el componente queda visible en toda pantalla de originación (FR-013)
+- [ ] T0404 [US2] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Solicitudes.razor` (`/cartera/solicitudes`), `SolicitudNueva.razor` (`/cartera/solicitudes/nueva`: desde la simulación, `PersonSearchPicker` y alta por `PersonaDialog`, codeudores, autorizaciones por finalidad con su evidencia, preferencia de abono, documentos por `POST /api/attachments/uploads`; radicar en tres pasos o menos, SC-009) y `SolicitudDetalle.razor` (`/cartera/solicitudes/{id:guid}`: validaciones con su evidencia, puntaje con la explicación por variable, nivel y razones, decisiones, botón «llevar a sesión» cuando el nivel es colegiado, decidir con la huella vista, cancelar con motivo); `IndicadorDeCarga` por zona y `PermissionGate`
+- [ ] T0405 [P] [US2] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Aprobaciones.razor` (`/cartera/aprobaciones`, «Mis pendientes»; T65) con decidir en un paso y el motivo de exclusión visible
+- [ ] T0406 [P] [US2] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Cupos.razor` (`/cartera/cupos`, `Lending.CreditLimits.Read`): disponible por persona, otorgar y terminar cupos, preferencia del rotativo, bloqueos y embargos, saldos de aportes con su plantilla; y la sección de listas restrictivas pendientes de liberar para el oficial (`Compliance.RestrictiveLists.Release`)
+- [ ] T0407 [US2] Sumar los enlaces de esta fase al grupo «Cartera» de `src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor` con `PermissionGate`, a `LasPantallasDeCarteraEstanEnElMenu` y a `LasPantallasDicenQueEstanCargando`
+
+#### Documentación
+
+- [ ] T0408 [US2] Escribir `docs/manual/cartera-originacion.md` **(nuevo)**: simular, radicar, qué valida el sistema y qué no admite excepción, cómo se calcula el nivel, decidir con acta, cupos y disponible, bloqueos, listas y su liberación, centrales con autorización y por qué en producción un simulado no sirve para aprobar (T73)
+
+**Checkpoint**: simulación, cupos con decisión individual y colegiada, listas, centrales, concentración y segregación
+funcionan antes de activar; la radicación y la decisión de solicitudes pasan en Application y en la e2e sobre una
+cooperativa activada con `ActivarCarteraAsync`; `MotorDePuntaje` y los casos de atribuciones de US2 pasan.
+
+---
+
+## Phase 7: User Story 3 - Desembolsar y nacer con condiciones selladas (Priority: P1) — entrega K1
+
+**Goal**: con una solicitud `Approved` y vigente, sus garantías y su pagaré perfeccionados, el desembolso de un tramo
+(transferencia, cheque o giro a tercero) crea o amplía el crédito y, en **una** transacción bajo `ICerrojoDeCartera`:
+- sella la versión de condiciones (`Origination`, `RulesVersion`) y el plan (D12: regenerado en cada tramo);
+- recoge los créditos propios por el contrato (`OwnLoanPayoff`, clave `CAR:`) y calcula el neto;
+- emite la orden de giro (`PaidByFile` sellado, C10), `CreditoDesembolsado` y `OrdenDeGiroEmitida`.
+
+Además:
+- la orden se paga por Tesorería o por el archivo plano de desembolsos con el motor común (`BankFileScope.LoanDisbursement`);
+- el resultado del giro rechazado, cheque no cobrado o anulado reversa el desembolso **desde su origen**
+  (`DisbursementReversal`, espejos, C49, `DesembolsoReversado`);
+- el crédito queda pendiente de giro nuevo o se anula, reversando sus recogidas (C11).
+
+FR-042–FR-048, FR-009, FR-012, FR-127 (enmienda A8); T12, T13, T21, T23, T28, T33, T34, T56, T71–T73, T78; C08, C10–C13,
+C15, C49, C53, C101.
+
+**Independent Test**: en una cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` (C107), desembolsar a B un crédito que recoge su
+crédito al día y comprobar:
+- el recogido queda `PaidOff` con su comprobante de aplicación (`PagoAplicado`, `OwnLoanPayoff`);
+- `DisbursementResultDto.netToDisburse` = bruto − recogido, y los dos créditos quedan enlazados (`RelatedOperationId`);
+- en `COR_IntegrationMessages` están `CreditoDesembolsado` (con `payoffDeductions`), `PagoAplicado` y
+  `OrdenDeGiroEmitida` hacia `Treasury` (quickstart §3.6.3).
+
+Luego:
+- con `TesoreriaDePrueba` responder «rechazada»: `DesembolsoReversado` sin intereses, filas espejo con
+  `ReversesTransactionId` y el crédito en `PendingDisbursement`;
+- anular el crédito: el recogido vuelve a `Active` con `PagoReversado` (C11).
+
+US3-1 a US3-6.
+
+### Tests for User Story 3
+
+#### Dominio
+
+- [ ] T0409 [P] [US3] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/ElReversoEnlazaCadaFilaConSuOriginalTests.cs` (nombre fijo, DT §2.25, T33): sobre el `LibroTeorico` de `ReconstruccionDeCredito` y la propuesta de espejos de `RegistroDeCartera.Reversar` (US4), un desembolso de **un solo tramo** reversado propone un espejo por cada fila propia (capital del tramo) y por cada fila de su causación (C101); con **varios tramos** sólo el capital del tramo y la diferencia de causación como `AccrualAdjustment` por (día valor, concepto, cuota) desde la fecha valor del tramo (C49); ningún espejo de un espejo (`Lending.Reversal.OfReversal`). US5 (fase 9) le suma los reversos de pago
+  · depende del motor de la fase 8 (bloque A)
+
+#### Application (InMemory, reloj fijo)
+
+Lo transaccional (cerrojo, numeración, idempotencia del contrato) no se prueba aquí: va en las e2e de esta fase.
+
+- [ ] T0410 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/ExecuteLoanDisbursementCommandHandlerTests.cs` con los requisitos de FR-045 y §7.2 de data-model:
+  · cada requisito incumplido responde su código y no escribe nada: `Lending.Application.ApprovalExpired` (`data.expiredAt`, US3-2), `Lending.Disbursement.GuaranteesPending` (`data.pending[] { kind, reason }`, US3-1), `Lending.Usury.Exceeded` con la usura **del día del desembolso** menor que la de la aprobación (US3-5), `Lending.Concentration.LimitExceeded`, `Lending.Concentration.TechnicalCapitalUnavailable`, `Lending.Debtor.Blocked`, `Compliance.RestrictiveList.Match` sin liberar, `Lending.Segregation.Conflict` (`Decidir × Desembolsar`), `Lending.Security.UserWithoutPerson`, `Lending.AmountLimit.Exceeded`, `Lending.Branch.AccountingBranchMissing`, `Lending.Disbursement.ExceedsApproved` (`data: { approved, disbursed, requested }`), `Lending.Disbursement.TrancheNotAllowed` (línea sin `AllowsTranches`), `Lending.Disbursement.BeneficiaryAccountMissing` (transferencia sin cuenta), `NationalValues.Missing`;
+  · en producción, un pagaré `SIMULADO` responde `Lending.Adapter.SimulatedInProduction` y dice qué configurar (T73);
+  · con `Contabilidad.FaltaDeRegla = Bloquear` y la evaluación «sin regla»: `Lending.Prevalidation.NotPostable`; con `Advertir`, sale en `warnings` y se sella `PrevalidationOutcome`; sin respuesta (D7) sigue con `NoResponse` (T56, enmienda A8);
+  · primer tramo: crea `Loan` (`Active`, `Origin = Origination`), `LoanControl` (`LastAccruedDate` = fecha valor), `LoanTermsVersion` (`Cause = Origination`, `RulesVersion` vigente, `ResultingEffectiveRate`, `ChargesSpread`, `UsuryValuePublicId` sellados, `DefaultOnInterestAllowed` desde `Mora.SobreIntereses` y nunca en vivienda), `RepaymentScheduleVersion` 1 con Σ capital = monto (`Lending.Schedule.PrincipalMismatch`), `LoanParty` desde las partes de la solicitud y `LoanPayrollLink` vigente (`Origin = Origination`, forma de pago aprobada, C44); la solicitud pasa a `Disbursed`, sus `Collateral` y `PromissoryNote` reciben `LoanId`;
+  · segundo tramo: no crea crédito, regenera el plan sobre lo desembolsado (D12) y numera `TrancheNumber = 2`;
+  · la operación `Disbursement` lleva `Number`, `Sequence` y `RegisteredAt` monótonos, `AccountingDate` de `FechaContable` y el `Payload` canónico con `InputsSha256`;
+  · el evento de auditoría lleva la distribución completa por cuota y concepto (T23);
+  · se registra la intervención `Desembolsar` en `LND_CaseParticipations` (`RegistroDeIntervenciones`, T66).
+- [ ] T0411 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/EmisionDelDesembolsoTests.cs` sobre la bandeja real (`EmisorDeMensajes` con el catálogo agregado):
+  · una `Transfer` emite `CreditoDesembolsado` (origen `LoanDisbursement`, clave `Confirmation`, `DS`, modo del tipo) y `OrdenDeGiroEmitida` (origen la orden, `Treasury`, entrega `Always`, `PaidByFile` según lo pedido, C10) en el mismo `SaveChanges`;
+  · el sobre lleva `OperationDate` = fecha contable, `BranchPublicId` = sucursal contable de la oficina y `PersonPublicId` = deudor o beneficiario (T13);
+  · el contenido sigue `mensajes.md` §10.1 y `interfaces.md` §4.2: `tranche`, `payoffDeductions`, `netToDisburse`, `plan`, sin cuentas contables (FR-126);
+  · `ThirdPartyPayment` sella un beneficiario distinto del deudor; `Check` sin cuenta destino;
+  · con A3 (C15, C91), el tramo emite aparte la baja de `CreditoAprobadoSinDesembolsar` (`Confirmation:{tipoDeHecho:N}`, `NoPasa` por defecto);
+  · el actor es la persona que desembolsa: `OriginActorKind = Person`, sin proceso.
+- [ ] T0412 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/RecogidaEnElDesembolsoTests.cs` (FR-046, data-model §7.3, T21, T91):
+  · cada crédito recogido recibe una `LoanOperation` `Payment` por `IContratoDeObligaciones.AplicarAsync` dentro de la transacción del desembolso, con:
+    - `CollectorClass = OwnLoanPayoff`, `CollectorCode = CAR`, `IdempotencyKey = CAR:{operaciónDeDesembolso:N}:{obligationPublicId:N}`;
+    - `PaymentMeansClass = InternalOffset`, `FinalityDate = ValueDate` (`Pagos.FirmezaDiasPorClaseDeMedio` 0 para el cruce interno, D23);
+    - modalidad `FullPayoff` (total) o `FreeAmount` (parcial), y `RelatedOperationId` = el desembolso;
+  · el recaudador `CAR` no se busca en el registro (exento, T91); el recogido total queda `PaidOff`;
+  · `PagoAplicado` sale por crédito recogido con su propia operación; el neto de la orden = bruto − recogido, y un neto ≤ 0 se rechaza (`CK_LND_DisbursementOrders_Net`);
+  · un recogido con mora o con pérdida de capacidad responde `Lending.Payoff.RequiresRestructuring` (`data.loans[]`) hasta K3 (US3-4);
+  · la recogida que el desembolso no autoriza (`LND_CreditApplications.PayoffRequest`) no se admite.
+  · requiere el contrato de US5 (fase 9); mientras no exista, la clase queda escrita y en rojo
+- [ ] T0413 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/ConsumeTreasuryResultCommandHandlerTests.cs` con la tabla de `interfaces.md` §4.3, una prueba por fila:
+  · `Issued` → `Disbursed`: sin efecto en el libro, `Processed`;
+  · `Issued` → `Rejected`: `DisbursementReversal` con espejos, `DesembolsoReversado` (`cause = Rejected`, `related` = el desembolso, hereda el modo, C08), crédito `PendingDisbursement`; `Disbursed`(cheque) → `CheckNotCashed`: el mismo reverso;
+  · `Issued` con anulación emitida → `Voided`: el mismo reverso; con anulación emitida → `Disbursed`: no reversa;
+  · `Amount ≠ NetAmount` → `Rejected` con `Lending.DisbursementOrder.AmountMismatch`; transición que no cabe → `Lending.DisbursementOrder.InvalidTransition`; orden inexistente → `Generic.NotFound`;
+  · cada resultado aceptado deja una `DisbursementOrderResult` (H, `ReversalOperationId` cuando reversó) y el recibo `LND_InboundMessages` (UK `MessagePublicId`) con su evaluación en el mismo `SaveChanges`; repetir el mensaje no cambia nada (SC-010);
+  · un crédito con dos tramos reversa sólo el capital del tramo y emite el acompañante `AjusteDeCausacionPorFechaValor` (C49);
+  · el reverso de un desembolso cuyo dinero ya salió se rechaza (`Lending.Reversal.DisbursementPaidOut`);
+  · el actor es el proceso con el usuario de Tesorería como usuario de origen (T8, T11);
+  · los códigos de rechazo siguen la tabla de `interfaces.md` §4.3; ver las contradicciones en las notas de coordinación.
+- [ ] T0414 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/OrdenesYAnulacionTests.cs`:
+  · `VoidDisbursementOrderCommand` sólo sobre `Issued` sin anulación pedida (`Lending.DisbursementOrder.NotVoidable` con `data.status`) y fuera de un archivo vivo (`.InFile` con `data.filePublicId`); emite `AnulacionDeOrdenDeGiro` con clave `Confirmation:{ordenPublicId:N}`, `related` = la orden (`DocumentRefV1`) y la arista de su origen hacia `OrdenDeGiroEmitida` (C12); la orden sigue `Issued`; registra la intervención `AnularOrdenDeGiro`;
+  · `ReissueDisbursementOrderCommand` sólo con el crédito `PendingDisbursement` (`.NotReissuable`): crea otro `Disbursement` del mismo tramo y otra orden con `PreviousOrderId` y `ReplacesOrderPublicId` (`Related` = la anterior); el crédito vuelve a `Active`;
+  · `VoidPendingLoanCommand` sólo sobre `PendingDisbursement` sin otro tramo vivo (`Lending.Loan.NotPendingDisbursement`); en la misma transacción reversa cada pago de recogida por `ReversarAsync` (clave `{clave CAR}:reverso`, `PagoReversado` sin `PagoReversadoPorCartera`), los recogidos vuelven a su estado y `DesembolsoReversado.payoffReversals` o la anulación posterior los nombra (C11, `mensajes.md` §10.2).
+- [ ] T0415 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/GarantiasYPagareTests.cs` (FR-043, FR-044, data-model §2.8–§2.9, `api.md` §6):
+  · `RegisterCollateralCommand` admite sólo los `CollateralKind` de la regla de la línea (`Lending.Collateral.KindNotAdmitted` con `data.admitted[]`); con el dueño decidido, `.OwnerLocked`; un codeudor sin autorización, `Lending.Authorization.Missing`;
+  · `ChangeCollateralStatusCommand` sigue `Constituted → Valid → Extinguished | Executed` (`.TransitionInvalid` con `from`/`to`); `ReleaseCollateralCommand` exige crédito `PaidOff` (`.LoanNotPaidOff`) y firmeza (`Lending.Collateral.NotFinal` con `finalityUntil`);
+  · con A3, constituir, revaluar, extinguir o ejecutar emite `GarantiaConstituida` (C15, `NoPasa`);
+  · `CreatePromissoryNoteCommand` desmaterializado llama `IDepositoDeValores.CrearPagareAsync`, sella `CustodianChannelCode`, `ExternalNoteId` e `IsSimulated` y queda `PendingSignature`; `Lending.PromissoryNote.AlreadyExists`; `Core.ExternalChannel.NotConfigured`; `Lending.Adapter.Unavailable` con el circuito abierto;
+  · `RefreshPromissoryNoteStatusCommand` y la tarea `cartera.pagares` llevan el estado del depósito; un `Rejected` del simulado (dígito 1) deja la firma rechazada sin perfeccionar;
+  · `RegisterPhysicalPromissoryNoteCustodyCommand` sólo en físico (`Lending.PromissoryNote.InvalidState`);
+  · `EndorsePromissoryNoteCommand` y `VoidPromissoryNoteCommand` por el adaptador; anular sólo con la cancelación en firme (FR-082);
+  · `GuardiaDeCanalesExternos`: en producción un `SIMULADO` nunca cuenta como perfeccionado.
+- [ ] T0416 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Adapters/ConformidadDelDepositoDeValores.cs` (batería fija, DT §2.25; en `Application.Tests` por §7.6) y su clase `ConformidadDelDepositoDeValoresSimulado.cs` (T71):
+  · los comportamientos del último dígito de `adaptadores-y-archivos.md` §3.7: 1 `Rejected`; 3 `InProcess` y `Signed` a la tercera consulta; 5 `ChannelUnavailable`; otro `Ok` y `Signed` en la consulta siguiente;
+  · nunca lanza; «ya existe» responde por la consulta;
+  · sin reintentos en escrituras; `ChannelCode` estable y `Simulado = true`.
+- [ ] T0417 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/ArchivoDeDesembolsosTests.cs` (FR-047, T78, `adaptadores-y-archivos.md` §6.2):
+  · `LoanDisbursementLines` arma cada línea desde la **copia sellada** de la orden (`Payee*`, `PayeeBankCode` = `COR_Banks.TransferCode`, `Amount` = neto, `Concept`/`LoanNumber` = número del crédito, `BatchReference` = número del archivo);
+  · `PreviewDisbursementFileQuery` deja en pendientes con motivo (`BankCodeMissing`, `NoBankAccount`, `AlreadyInFile`, o el campo obligatorio que falta);
+  · `GenerateDisbursementFileCommand` sólo toma órdenes `Issued` con `PaidByFile = true` y sin archivo vivo (`Lending.DisbursementOrder.AlreadyInFile`, `data.orders[]`); la cuenta de origen sale de `IContabilidadParaCartera.CuentasBancariasAsync` y es del banco del formato o el formato es genérico (`Lending.DisbursementFile.BankMismatch`); formato de otro ámbito → `Core.BankFileFormat.ScopeMismatch`;
+  · el adjunto `LendingDisbursementFile` (SHA-256) se sube antes de guardar `LND_DisbursementFiles` y sus líneas, y fija `CurrentDisbursementFileId` en cada orden; no se emite ningún mensaje (C10);
+  · `VoidDisbursementFileCommand` sólo sin resultados de Tesorería en ninguna orden (`Lending.DisbursementFile.HasResults`); anula en `[EscrituraUnica]`, libera las órdenes, que siguen `PaidByFile`;
+  · `BankFileFormatValidator` rechaza en `LoanDisbursement` un origen fuera de `Payee*`, `Amount`, `Concept`, `LoanNumber` y los comunes.
+- [ ] T0418 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Disbursements/TareasDeDesembolsoTests.cs`: `cartera.giros-sin-resultado` alerta `Cartera.GiroSinResultado` pasado `ResultDueOn` (hábiles de `Giros.DiasSinResultado`, `ICalendarioHabil`); `cartera.pagares` consulta los pagarés en `Created`/`PendingSignature` y, pasados los días de vigencia de la aprobación, alerta `Cartera.PagarePendienteDeFirma`; `cartera.garantias-por-vencer` alerta `Cartera.GarantiaPorVencer` por `ValidUntil` y `PolicyExpiresOn`; cada una sale si Cartera no está activada y es idempotente por el `DedupKey` (T7).
+- [ ] T0419 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/TesoreriaDePruebaTests.cs` (T20, `mensajes.md` §18; el consumo sin estado y la guarda de producción del esqueleto los prueba la fase 3, C106):
+  · `ListTestTreasuryOrdersQuery` muestra las órdenes y anulaciones recibidas;
+  · a pedido (`EmitTestDisbursementResultCommand`) emite `ResultadoDelGiro` como `TES` con la persona que prueba como usuario de origen, clave `Confirmation:{ordenPublicId:N}` y `OrderMessagePublicId`;
+  · sigue registrándose sólo por la guarda `DoblesDePruebaDeCartera` de la fase 3.
+- [ ] T0420 [P] [US3] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/FechaContableTests.cs` (nombre de quickstart §1.5, T36; US7 y US9 la amplían): fecha valor si su mes no tiene cierre de Cartera y está abierto en Contabilidad; si no, el primer día del primer mes que cumpla las dos cosas; `PeriodNotFound` del puerto deja la operación con la alerta `Contabilidad.PeriodoInexistente` y sin fecha inventada. Sobre un doble de `IContabilidadParaCartera`.
+
+#### Arquitectura
+
+- [ ] T0421 [US3] Llenar las listas de esta historia en los esqueletos de `tests/IngenIA365ERP.Architecture.Tests/Principles/` (DT §2.25):
+  · `LosComandosDeCarteraLlevanClave`: los comandos de pantalla `ExecuteLoanDisbursementCommand`, `VoidDisbursementOrderCommand`, `ReissueDisbursementOrderCommand`, `VoidPendingLoanCommand`, `GenerateDisbursementFileCommand`, `VoidDisbursementFileCommand`, comandos de garantías y pagaré, y las emisiones de `TesoreriaDePrueba`;
+  · `LosComandosDeConsumoNoTienenRuta`: `ConsumeTreasuryResultCommand`;
+  · `LosProveedoresExternosSoloLosConoceSuAdaptador`: `DepositoDeValoresSimulado`;
+  · `LosDoblesDePruebaNoSeRegistranEnProduccion`: `TesoreriaDePrueba`;
+  · `UnSoloConsumidorPorDestino`: `DestinoCartera`;
+  · `LosEndpointsProtegidosExigenPermiso`: los archivos de `Endpoints/Lending` de esta historia;
+  · `LaSegregacionNoUsaUserIdDelToken`: `Application/Lending/Disbursements`;
+  · `LasConsultasDeCarteraRespetanElAlcance`: listas de desembolsos, órdenes, archivos, garantías y pagarés;
+  · `NingunModuloEscribeMovimientosFueraDelContrato`: ningún archivo de `Disbursements` toca `NextNumber`;
+  · `LaCarteraSoloSeTocaPorSusInterfaces`: la recogida llama `IContratoDeObligaciones`, no un servicio interno de pagos.
+
+#### e2e (colección «Cartera e2e», `CentralIdentityApiFixture`, PostgreSQL y SQL Server)
+
+- [ ] T0422 [US3] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/DesembolsoYRecogidaTests.cs` (nombre fijo de quickstart §1.7) en una cooperativa aislada (`CarteraE2E.CooperativaAisladaAsync`) activada con `CarteraE2E.ActivarCarteraAsync` (C107, sin `Skip`), por HTTP con tokens reales:
+  · pagaré desmaterializado con documento terminado en 3 (`DepositoDeValoresSimulado`, firma pendiente): desembolsar responde `Lending.Disbursement.GuaranteesPending` hasta que `POST /promissory-notes/{id}/refresh` lo deja `InCustody` (US3-1);
+  · aprobación vencida con el reloj de la suite (`RelojDeLaSuite`) → `.ApprovalExpired` (US3-2);
+  · recogida de un crédito al día: comprobante, neto, enlace y los mensajes `CreditoDesembolsado`, `PagoAplicado` y `OrdenDeGiroEmitida` (US3-3);
+  · recogida de uno en mora → `Lending.Payoff.RequiresRestructuring`, también en `disbursement-preview` (`requiresRestructuring`) (US3-4);
+  · usura del día menor que la de aprobación → `Lending.Usury.Exceeded` (US3-5); los valores ficticios van en la colección «Valores nacionales e2e» o con una usura sembrada para esa prueba;
+  · `POST /api/lending/test-doubles/treasury/…` «rechazada» → `DesembolsoReversado`, espejos y `PendingDisbursement`; `POST /loans/{id}/void` → `Voided` y el recogido `Active` con `PagoReversado` (US3-6, C11);
+  · el gerente que decidió no desembolsa (`Lending.Segregation.Conflict`);
+  · archivo de desembolsos con `CSV-DESEMBOLSOS` (genérico, ámbito `LoanDisbursement`): SHA-256, enlace de descarga auditado, anulación antes de resultados y `HasResults` después.
+- [ ] T0423 [US3] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/IdempotenciaDeCarteraTests.cs` **(clase la crea esta fase; US5, US6 y US8 le suman sus casos)**:
+  · el desembolso enviado tres veces con la misma `Idempotency-Key` deja un crédito, una operación, una orden y los mismos mensajes, y la misma respuesta; con otro cuerpo → `Operation.KeyReused`;
+  · el mismo `ResultadoDelGiro` consumido dos veces (reproceso desde la bandeja) no reversa dos veces;
+  · el archivo generado dos veces con la misma clave da el mismo archivo.
+
+### Implementation for User Story 3
+
+#### Domain y persistencia
+
+- [ ] T0424 [P] [US3] Verificar en `src/Core/IngenIA365ERP.Domain/Enums/Lending/` los enums que esta historia usa (base de Cartera, fase 3) y agregar los que falten con la numeración de data-model §10 (parte 1) y §9 (parte 3):
+  · `DisbursementForm { Transfer=1, Check=2, ThirdPartyPayment=3, InKind=4 }`;
+  · `DisbursementOrderStatus`, `CollateralStatus`, `CollateralKind`, `PromissoryNoteKind`, `PromissoryNoteStatus`, `RepaymentChannel`, `TermsVersionCause`;
+  · `LoanPayrollLinkOrigin { Origination, Migration, Transfer, CommercialSale, ChannelChange }` (data-model §24.5).
+- [ ] T0425 [P] [US3] Completar con su comportamiento (la forma la dejó la fase 3 en `CarteraNucleo`, C104) en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Origination/` `Collateral.cs` y `PromissoryNote.cs` con las columnas de data-model §2.8 y §2.9 (`AuditableEntity`, `PublicId`, sin `IHechoInmutable`).
+- [ ] T0426 [P] [US3] Completar con su comportamiento (forma de la fase 3, C104) en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Operations/`:
+  · `DisbursementOrder.cs` (data-model §7.4, con `PaidByFile` y `CurrentDisbursementFileId`);
+  · `DisbursementOrderResult.cs` (§7.5, `IHechoInmutable`, C42, C44);
+  · `DisbursementFile.cs` (§7.6, `IHechoInmutable` con `VoidedAt`, `VoidedByUserId` y `VoidReason` en `[EscrituraUnica]`; estado derivado, sin columna `Status`);
+  · `DisbursementFileLine.cs` (§7.7, H).
+- [ ] T0427 [P] [US3] Completar con su comportamiento (forma de la fase 3, C104) `src/Core/IngenIA365ERP.Domain/Entities/Lending/Loans/LoanParty.cs` (§4.2) y `src/Core/IngenIA365ERP.Domain/Entities/Lending/Payroll/LoanPayrollLink.cs` (§24.5, K1 datos, `PayrollAgreementId` sin FK hasta K2).
+- [ ] T0428 [US3] Verificar contra data-model las configuraciones que dejó la fase 3 en `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/{Origination,Operations,Loans,Payroll}/` (`Collateral`, `PromissoryNote`, `DisbursementOrder`, `DisbursementOrderResult`, `DisbursementFile`, `DisbursementFileLine`, `LoanParty`, `LoanPayrollLink`) y sus `DbSet<>`; lo que falte se corrige allí y se **regenera** el par `CarteraNucleo` (C104), con:
+  · los UK, IX y CK nombrados de data-model con `HasDatabaseName`: `UK_LND_DisbursementOrders_Operation`, `IX_LND_DisbursementOrders_PendingFile` filtrado, `CK_LND_DisbursementOrders_Form`, `_Net`, `_PaidByFile`, `CK_LND_Collaterals_Kind`, `CK_LND_LoanPayrollLinks_Paymaster`, `UK_LND_DisbursementOrderResults_Message`;
+  · los filtros por motor;
+  · precisión `PrecisionDeCartera` (`Monto`, `Fraccion`);
+  · el filtro de borrado lógico.
+  · sin migración propia: las tablas son de `CarteraNucleo` (C104)
+
+#### Adaptador del depósito de valores (T71–T73)
+
+- [ ] T0429 [P] [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Adapters/IDepositoDeValores.cs`, `IDepositosDeValores.cs` (registro que resuelve por el código **sellado**), `SolicitudDePagare.cs`, `EstadoDePagare.cs`, `FirmanteDePagare.cs`, `FirmaDePagare.cs` (`adaptadores-y-archivos.md` §3.2, sobre `ResultadoExterno<T>` y `ContextoDeCanalExterno` de `Application/Common/ExternalChannels`, fase 2) y el defecto «sin canal» registrado en `AddApplication`; dos adaptadores con el mismo código hacen fallar el arranque.
+- [ ] T0430 [P] [US3] Crear `src/Infrastructure/IngenIA365ERP.ExternalChannels/Securities/DepositoDeValoresSimulado.cs` (comportamiento por último dígito, §3.7, estado en memoria por cooperativa) y registrarlo en `AddExternalChannels` (sólo `Program.cs` lo llama). Hace pasar T0416.
+- [ ] T0431 [US3] Ampliar `GuardiaDeCanalesExternos` (`Application/Lending/Adapters`, fase 2 o la primera que la cree) con la regla del pagaré: «perfeccionado» = `Signed` o `InCustody` **y** con efecto legal; en producción un `IsSimulated` nunca perfecciona (T73).
+
+#### Application — desembolso
+
+- [ ] T0432 [US3] Completar `src/Core/IngenIA365ERP.Application/Lending/Integration/EmisionDeCartera.cs` (la creó la fase 3 con los informativos de la activación; CH42, molde `EmisionDeInventario`), el único que arma `SolicitudDeEmision` de Cartera:
+  · sobre (T13): fecha contable, sucursal contable de la oficina —sin ella, `Lending.Branch.AccountingBranchMissing` antes de confirmar—, tercero, `OriginDocumentClass` como texto y `Currency = COP`;
+  · unidades y claves (`mensajes.md` §7): principal y acompañantes con `Confirmation`, lo que va aparte con `Confirmation:{tipoDeHecho:N}`;
+  · modo sellado por `ModoDePasoDeCartera`; `UsuarioDeOrigen` según T11.
+  · Esta fase agrega `CreditoDesembolsado`, `OrdenDeGiroEmitida`, `AnulacionDeOrdenDeGiro`, `DesembolsoReversado` y, con A3, la baja de `CreditoAprobadoSinDesembolsar` y `GarantiaConstituida`.
+- [ ] T0433 [P] [US3] Completar `src/Core/IngenIA365ERP.Application/Lending/Integration/FechaContable.cs` (T36; esqueleto con firma estable de la fase 3, C106) sobre `IContabilidadParaCartera.EstadoDelPeriodoAsync` y `LND_MonthlyCloses` (que no existe hasta `CarteraRiesgo`: sin cierres, sólo Contabilidad decide). Hace pasar T0420.
+- [ ] T0434 [P] [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/DisbursementInput.cs` y `DisbursementDtos.cs` (`DisbursementResultDto`, `DisbursementPreviewDto`, `DisbursementOrderDto`, `CollateralDto`, `PromissoryNoteDto`, con los campos de `api.md` §6 y §9).
+- [ ] T0435 [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/RequisitosDelDesembolso.cs` **(nuevo)**: la evaluación única, fuera del cerrojo, que comparten la vista previa y el comando (FR-042, FR-045, §7.2):
+  · aprobación vigente (`ApprovalValidUntil` frente a `HoyLocal`, C53) y garantías y pagaré perfeccionados según `LND_CreditLineCollateralRules` (cobertura mínima, `Lending.Collateral.CoverageInsufficient`);
+  · usura del día del desembolso con `ControlDeUsura` sobre `ISeriesRegulatorias` (sella la sobretasa de cargos, T28);
+  · concentración con patrimonio técnico vigente (T59, `IContabilidadParaCartera.IndicadoresDeLaEntidadAsync`), listas sin liberar y bloqueos;
+  · segregación (`ReglasDeSegregacion`, par `Decidir × Desembolsar`), persona del usuario y límite de monto de `Lending.Disbursements.Execute` (`SEC_PermissionAmountLimits`, `Lending.AmountLimit.Exceeded`);
+  · oficina con sucursal contable;
+  · validación previa contable por `ValidacionPreviaContableDeCartera`: bloquea sólo con `Bloquear` (A8); sin respuesta sigue (D7).
+- [ ] T0436 [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/PreviewDisbursementQuery.cs` (`POST /applications/{id}/disbursement-preview`, sin clave, no escribe): usura, aprobación, garantías pendientes, recogidas con `toPayOff` (liquidación de cada recogido por `ReconstruccionDeCredito`) y `requiresRestructuring`, neto, plan propuesto (`GeneradorDePlan`), validación previa, segregación y `expectedPreviewSha256` (`HuellaDeCartera`).
+- [ ] T0437 [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/ExecuteLoanDisbursementCommand.cs` (+ validador, `IOperacionIdempotente`, permiso `Lending.Disbursements.Execute`, `acknowledgeWarnings`), dentro de `TransaccionExplicita`:
+  · (1) `RequisitosDelDesembolso`;
+  · (2) cerrojo de T34: `LND_Setup` compartido → `LND_DebtorControls` del deudor y los codeudores → `LND_LoanControls` del crédito (en un tramo siguiente) y de los recogidos en una sentencia;
+  · (3) puesta al día de los recogidos y del crédito (tramo siguiente) por `PuestaAlDiaDeCredito` (US4), con partes `LoanCatchUp` (C04);
+  · (4) recogidas por `IContratoDeObligaciones.AplicarAsync` con la clase `OwnLoanPayoff` (lote, una respuesta por ítem; si alguno no queda `Applied` el desembolso aborta);
+  · (5) por `RegistroDeCartera`: `Loan` + `LoanControl` + `LoanParty` + `LoanPayrollLink` (primer tramo); `LoanOperation` `Disbursement` con `TrancheNumber` y `DisbursementForm`; fila `+Principal` del libro; `LoanTermsVersion` `Origination` con la versión de la línea, la banda que casó, `ResultingEffectiveRate`, `ChargesSpread` y `UsuryValuePublicId`; `RepaymentScheduleVersion` regenerada (D12); `LoanDailyPosition` del día;
+  · (6) `DisbursementOrder` por el neto con beneficiario y cuenta sellados (I10: propuestos desde la persona, corregibles), `PaidByFile` sólo en `Transfer` y `ResultDueOn` + `Giros.DiasSinResultado` hábiles;
+  · (7) solicitud `Disbursed`, garantías y pagaré con `LoanId`, intervención `Desembolsar`;
+  · (8) numeración al final por `NumeradorDeCartera` (`Loan`, `Operation`, `DisbursementOrder`);
+  · (9) emisión por `EmisionDeCartera`;
+  · (10) un `SaveChanges`.
+  · Hace pasar T0410 a T0412
+- [ ] T0438 [P] [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/ListLoanDisbursementsQuery.cs`, `ListDisbursementOrdersQuery.cs` y `GetDisbursementOrderQuery.cs` (`api.md` §9.1–§9.2: cuenta enmascarada en la lista y completa en el detalle; filtro `FiltroDeAlcanceDeCartera`).
+- [ ] T0439 [P] [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/VoidDisbursementOrderCommand.cs` y `ReissueDisbursementOrderCommand.cs` (permisos `Lending.DisbursementOrders.Void` y `Lending.Disbursements.Execute`, motivo, intervención). Hacen pasar T0414.
+- [ ] T0440 [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/ReversoDeDesembolso.cs` **(nuevo)**, el reverso desde su origen que usan el consumidor de Tesorería y la anulación:
+  · `LoanOperation` `DisbursementReversal` con `ReversesOperationId`, y `ReversedByOperationId` del original en `[EscrituraUnica]`;
+  · `RegistroDeCartera.Reversar` (espejos: un solo tramo → capital y su causación, C101; varios → sólo el capital y `Conciliar` con `AccrualAdjustment` desde la fecha valor del tramo, C49);
+  · crédito `PendingDisbursement` sin otro tramo vivo;
+  · `DesembolsoReversado` con `cause`, `loanStatusAfter` y `payoffReversals`, que hereda el modo del original (C08);
+  · `Lending.Reversal.DisbursementPaidOut` si la orden ya está `Disbursed`.
+- [ ] T0441 [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/VoidPendingLoanCommand.cs` (`Lending.Disbursements.Void`, motivo): crédito `Voided` con `VoidedOn`/`VoidReason` y, en la misma transacción, el reverso de cada pago de recogida por `IContratoDeObligaciones.ReversarAsync` (C11).
+- [ ] T0442 [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/ConsumeTreasuryResultCommand.cs` (sin ruta) y el destino:
+  · el comando aplica la tabla de `interfaces.md` §4.3 y escribe en un `SaveChanges` el recibo `LND_InboundMessages`, `LND_InboundMessageEvaluations`, la `DisbursementOrderResult` y, si corresponde, `ReversoDeDesembolso`;
+  · `src/Core/IngenIA365ERP.Application/Lending/Integration/DestinoCartera.cs` (destino `Lending`, T17) con la familia `ResultadoDelGiro` v1. Si US6 (fase 10) aún no lo creó, esta tarea lo crea sólo con esa familia y US6 suma las de Comercial.
+  · `VersionesAceptadasDeCartera` con `ResultadoDelGiro` v1;
+  · `ResultadoDelGiroV1` en `CatalogoDeMensajesHaciaCarteraV1` si la fase 2 no lo declaró.
+  · Hace pasar T0413.
+
+#### Application — garantías y pagaré
+
+- [ ] T0443 [P] [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/Collaterals/{ListCollateralsQuery,GetCollateralQuery,RegisterCollateralCommand,UpdateCollateralCommand,ChangeCollateralStatusCommand,ReleaseCollateralCommand}.cs` (`api.md` §6.1; adjuntos `LendingGuaranteeDocument` por `AdjuntosDeModulo`, bloqueados al decidirse el dueño, T81; `GarantiaConstituida` con A3). Hacen pasar la parte de garantías de T0415.
+- [ ] T0444 [P] [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/PromissoryNotes/{ListPromissoryNotesQuery,CreatePromissoryNoteCommand,RefreshPromissoryNoteStatusCommand,RegisterPhysicalPromissoryNoteCustodyCommand,EndorsePromissoryNoteCommand,VoidPromissoryNoteCommand}.cs` (`api.md` §6.2; el canal se sella al crear y se resuelve por él después; el documento cruce sigue siendo el número del crédito, FR-044). Hacen pasar la parte del pagaré de T0415.
+
+#### Application — archivo de desembolsos (T78)
+
+- [ ] T0445 [P] [US3] Agregar `LoanDisbursement = 4` a `BankFileScope` en `src/Core/IngenIA365ERP.Domain/Enums/Core/BankFiles.cs` y la lista de orígenes admitidos por ámbito en `src/Core/IngenIA365ERP.Application/Common/BankFiles/BankFileFormatValidator.cs` (`adaptadores-y-archivos.md` §6.1); el filtro por ámbito en `/maestros/formatos-bancarios`. Las pruebas de formatos de la 010 siguen verdes.
+- [ ] T0446 [P] [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/LoanDisbursementLines.cs` (molde `Application/Payroll/Dispersion/PayrollDisbursementLines.cs`: orígenes genéricos `Payee*`/`Amount`/`Concept` más `LoanNumber`, sin conocer la nómina) sobre `FlatFileWriter`.
+- [ ] T0447 [US3] Crear `src/Core/IngenIA365ERP.Application/Lending/Disbursements/Files/{ListDisbursementFilesQuery,ListDisbursementSourceAccountsQuery,PreviewDisbursementFileQuery,GenerateDisbursementFileCommand,IssueDisbursementFileDownloadLinkCommand,VoidDisbursementFileCommand}.cs` (`api.md` §9.3, permiso `Lending.DisbursementFiles.Generate`), con:
+  · adjunto `LendingDisbursementFile` de módulo y no borrable, registrado en `AdjuntosDeModulo` (DT §2.24), subido antes del guardado;
+  · enlace de 60 s auditado;
+  · numerador `DisbursementFile`.
+  · el namespace evita el choque con `Application/Payroll/Dispersion/GenerateDisbursementFileCommand` (ver notas)
+  · Hacen pasar T0417.
+
+#### Application — tareas y doble de prueba
+
+- [ ] T0448 [P] [US3] Crear en `src/Core/IngenIA365ERP.Application/Lending/Disbursements/Tareas/` las `ITareaProgramada` `cartera.giros-sin-resultado`, `cartera.pagares` y `cartera.garantias-por-vencer` (DT §2.13, arrendamiento `scheduled.tasks`, salen si Cartera no está activada) y registrarlas en `Program.cs`. Hacen pasar T0418.
+- [ ] T0449 [US3] Completar `src/Core/IngenIA365ERP.Application/Lending/Integration/DoblesDePrueba/TesoreriaDePrueba.cs` (esqueleto y guarda `DoblesDePruebaDeCartera` de la fase 3, C106) con `ListTestTreasuryOrdersQuery` y `EmitTestDisbursementResultCommand` (api.md §20; `IOperacionIdempotente`, `Lending.TestDoubles.Operate`), que emite `ResultadoDelGiro` v1 como `TES` por `EmisorDeMensajes` con la persona que prueba como usuario de origen. US5 (fase 9) le suma `RecaudadorDePrueba` sobre la misma guarda. Hace pasar T0419.
+
+#### API y pantallas
+
+- [ ] T0450 [US3] Crear en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/` (todos con `.RequirePermission`, el 404 genérico y el `Idempotency-Key` de las escrituras):
+  · `CollateralsEndpoints.cs` y `PromissoryNotesEndpoints.cs` (`api.md` §6);
+  · `DisbursementsEndpoints.cs` (§9.1, con la vista previa bajo `/applications/{id}`);
+  · `DisbursementOrdersEndpoints.cs` (§9.2);
+  · `DisbursementFilesEndpoints.cs` (§9.3);
+  · `LoansEndpoints.cs` sólo con `POST /loans/{id}/void` (§8.4); US4 le suma las consultas;
+  · `TestDoublesEndpoints.cs` con `/test-doubles/treasury/…`, mapeado sólo si el doble está registrado.
+- [ ] T0451 [P] [US3] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/{DesembolsosClient,GarantiasClient,ArchivosDeDesembolsoClient,DoblesDePruebaClient}.cs` (tipados, sin `Authorization` a mano, `Idempotency-Key` en las escrituras) y registrarlos.
+- [ ] T0452 [US3] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Desembolsos.razor` (`/cartera/desembolsos`, `Lending.Disbursements.Execute`). Tres pestañas:
+  · desembolsar: vista previa con usura, garantías pendientes, recogidas con «requiere reestructuración», neto y plan, y confirmar con los avisos;
+  · órdenes: anular y nuevo giro;
+  · archivos: formato, cuenta de origen, pendientes con motivo, generar, descargar y anular.
+  · `IndicadorDeCarga`/`EstadoDeCarga` por zona y sin colores literales.
+- [ ] T0453 [US3] Agregar a `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/SolicitudDetalle.razor` (`/cartera/solicitudes/{id:guid}`, US2) la zona «Garantías y pagaré» (registrar, cambiar estado, adjuntar, pagaré físico o desmaterializado con «actualizar estado») y el botón «Desembolsar» hacia `/cartera/desembolsos?solicitud=`.
+- [ ] T0454 [US3] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/DoblesDePrueba.razor` (`/cartera/dobles-de-prueba`, sólo fuera de producción, `Lending.TestDoubles.Operate`, rótulo «AMBIENTE DE PRUEBAS»): órdenes recibidas y resultado por orden. US5 suma el recaudador de prueba.
+- [ ] T0455 [US3] Agregar al grupo «Cartera» del menú (`NavMenu`) los enlaces a `/cartera/desembolsos` y `/cartera/dobles-de-prueba` con `PermissionGate`, y las páginas a `LasPantallasDeCarteraEstanEnElMenu` y `TodoEnlaceDelMenuTieneSuPagina`; el de dobles sólo se dibuja si el servidor los tiene.
+
+#### Documentación
+
+- [ ] T0456 [US3] Escribir `docs/manual/cartera-desembolso-y-garantias.md` **(nuevo)**: requisitos, tramos, recogida y reestructuración, orden de giro y `PaidByFile`, archivo de desembolsos, resultado del giro, reverso y anulación, pagaré físico frente a simulado en producción (T73). Agregarlo a `docs/INDICE-DOCUMENTACION.md`.
+
+**Checkpoint**: T0410 a T0420 verdes, y `DesembolsoYRecogidaTests` e `IdempotenciaDeCarteraTests` verdes en los dos
+motores. Un crédito nace con condiciones y plan sellados. Un giro rechazado lo deja como si el desembolso no hubiera
+existido y lo hace pendiente de giro.
+
+---
+
+## Phase 8: User Story 4 - Causación diaria y liquidación a cualquier fecha (Priority: P1) — entrega K1
+
+**Goal**: el **motor puro** de Cartera (M1–M16), que nació en US1 con días, tasas, usura y plan inicial (C105), se
+extiende para dar en decimal exacto:
+- fecha exigible y plan **regenerado** y versionado con `RulesVersion`;
+- causación por diferencia de acumulados, altura de mora y suspensión;
+- `ReconstruccionDeCredito` como única fuente de saldos a (D, R).
+
+Sobre el motor:
+- `RegistroDeCartera` escribe la causación en bloque, la marca de agua y las posiciones diarias versionadas;
+- `ProcesadorDeCartera` corre el ciclo diario por cooperativa, en tandas de 250 con un `SaveChanges` por tanda y
+  hechos por partes y por crédito (T14, C02–C04);
+- la réplica encola la corrida `NationalValueCorrection` (C05);
+- `GetLoanSettlementQuery` y `GetLoanStatementQuery` responden a `date`/`recordedAsOf` (C83);
+- `VerifyLendingLedgerIntegrityQuery` compara el libro con la reconstrucción.
+
+FR-010, FR-011, FR-012, FR-062–FR-070; SC-001, SC-002, SC-007, SC-017, SC-020, SC-023; T5–T7, T24–T30, T33–T36,
+T38–T40; C02–C05, C46, C47, C50, C59, C83.
+
+**Independent Test**: liquidar un crédito a tres fechas (pasada, hoy, futura con `validUntil`) y repetir: idéntico al
+centavo y con la misma huella. Con `recordedAsOf` de ayer, idéntico aunque hoy se registre un pago con fecha valor
+anterior (US4-6).
+
+Saltar un día con el reloj de la suite y correr la tanda siguiente:
+- causa los dos días, cada uno con su tasa, sin duplicar (US4-4);
+- repetir la tanda no escribe nada (US4-1);
+- un crédito con cuota vencida causa sólo mora sobre lo vencido, sin pasar la usura del día (US4-2);
+- al cruzar los 60 días de consumo, lo nuevo va a suspenso con `CausacionSuspendida` (US4-3).
+
+`POST /api/lending/integrity/verify` no encuentra diferencias. Quickstart §3.8.
+
+### Tests for User Story 4
+
+#### Dominio · casos dorados y propiedades (se escriben antes del motor y deben fallar)
+
+> C105: `ContadorDeDias`, `EquivalenciaDeTasas`, `TasaDelDia`, `ControlDeUsura`, `FechasDeVencimiento`, el
+> `GeneradorDePlan` inicial, `RedondeoDeCartera`, `ExplicacionDeCartera`, `VersionesDeReglas`, `HuellaDeCartera`, la
+> fachada `MotorDeCartera`, el cargador `CasoDoradoDeCartera` con `calcular.py`, sus pruebas sueltas,
+> `SumaDeCapitalDelPlanTests` y los casos 01–09, 27 y 29 nacen en US1 (fase 5) y US17 (fase 4). Esta fase los
+> **extiende**: no crea esos archivos otra vez.
+
+- [ ] T0457 [P] [US4] Extender el cargador `tests/IngenIA365ERP.Domain.Tests/Lending/CasoDoradoDeCartera.cs` y la teoría `CasosDoradosDeCarteraTests.cs` (de US1) para correr `operaciones` con fecha valor y `registradoEn` (R) y `consultas` (D, R) con lo esperado **por día, cuota y concepto al centavo**, con las `series` (usura por modalidad certificada con `registradoEn`, IBR, festivos nacionales); al final comprobar Σ libro teórico = saldos del estado por concepto y cuota y la huella repetida; ampliar `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/calcular.py` (de US1) con la causación, la mora y la reconstrucción (T26); nunca Excel. Los casos de US1 siguen pasando sin tocarlos.
+- [ ] T0458 [P] [US4] Escribir el caso de plan que falta, `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/30-desembolso-por-tramos.json` (D12: plan regenerado en cada tramo sobre lo desembolsado, Σ capital = desembolsado y el residuo en la última cuota, SC-017), y agregar a `01-cuota-fija-30-360.json` y `07-gracia-a-capital.json` una sección `consultas` (D, R) con la causación esperada pagando a tiempo, sin cambiar su plan esperado.
+- [ ] T0459 [P] [US4] Escribir los casos de causación, mora y usura en `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/`:
+  · `10-vencimiento-en-festivo.json`: art. 829, el sábado hábil (D2), el interés de esos días en la cuota siguiente;
+  · `12-suspension-y-reanudacion.json`: consumo a 60 días; lo causado antes no se reclasifica;
+  · `13-usura-baja.json`: topada desde ese día, fija y variable;
+  · `14-correccion-de-usura.json`: con R anterior no cambia; con R posterior, ajuste y saldo a favor (T28);
+  · `15-tasa-variable-ibr.json`: margen en la expresión del índice, piso, techo y usura (D10); último índice publicado;
+  · `22-dos-dias-sin-causar.json`, `23-liquidacion-futura.json` (D11, `ValidaHasta`);
+  · `24-tolerancia-de-saldo-residual.json` (`Mora.ToleranciaDeSaldoVencido`);
+  · `26-credito-migrado-con-suspenso.json`: saldo inicial por concepto, capital por cuota conservado (D5);
+  · `28-seguro-sobre-saldo.json` (D9).
+  · Los casos 11, 16–21, 25 y 31 (pagos y Comercial) los escriben US5 y US6 (fases 9 y 10) con este mismo cargador; los 01–09, 27 y 29 son de US1 (C105).
+- [ ] T0460 [P] [US4] Crear o ampliar las pruebas sueltas de las piezas puras que esta fase agrega o extiende, en `tests/IngenIA365ERP.Domain.Tests/Lending/`:
+  · ampliar `Schedules/FechasDeVencimientoTests.cs` (de US1) con la fecha exigible por `CalendarioHabil` (festivo nacional y sábado hábil, D2);
+  · crear `Delinquency/AlturaDeMoraTests.cs`: tolerancia; sin las cubiertas por anticipo; el capital vence el día siguiente a la fecha exigible;
+  · crear `Accrual/ReglaDeSuspensionTests.cs`: umbral vigente de la modalidad, reestructurado más de una vez, insolvencia, castigo; reanudación por la regla por defecto;
+  · crear `RedondeoDeCarteraTests.cs` sobre `RedondeoDeCartera` (de US1): unidad, modo `AwayFromZero`/`ToEven`/`Up`/`Down` y momento; residuo visible; tasa con más de 6 decimales → `Lending.Rate.TooPrecise`;
+  · ampliar `HuellaDeCarteraTests.cs` (de US17) con la huella de una liquidación: independiente del orden de EF y con el prefijo de `RulesVersion`.
+- [ ] T0461 [P] [US4] Crear las propiedades de esta historia (nombres fijos, DT §2.25) en `tests/IngenIA365ERP.Domain.Tests/Lending/` y ampliar la de US1:
+  · ampliar `SumaDeCapitalDelPlanTests.cs` (de US1) con planes **regenerados** (tramos, reajuste de tasa, abonos) desde la primera cuota no vencida y con el plan migrado (D5): Σ capital = saldo al centavo y la numeración conservada;
+  · `ReproducibilidadDeLiquidacionTests.cs`: misma entrada, misma huella y mismo resultado a D pasada, hoy y futura, repetido; con R anterior a una operación posterior, idéntico (US4-6, SC-001);
+  · `CausacionIdempotenteTests.cs`: causar d dos veces equivale a una; causar d sin `LastAccruedDate = d − 1` se rechaza (SC-020);
+  · `RendimientoDeCausacionTests.cs`: 50.000 créditos sintéticos, motor solo, con calentamiento, menos de 60 s; corre siempre, sin bandera (§7.6, SC-007).
+
+#### Application (InMemory, reloj fijo, servicios reales)
+
+- [ ] T0462 [P] [US4] Ampliar `tests/IngenIA365ERP.Application.Tests/Lending/Ledger/RegistroDeCarteraTests.cs` (de la fase 3, que fijó las primitivas; único escritor del libro, la marca de agua, las posiciones, las operaciones, las condiciones y el plan; C45):
+  · la causación del proceso entra en bloque, sin `ChangeTracker`, y deja un evento resumen por tanda (T67);
+  · avanza `LastAccruedDate` sólo de d − 1 a d;
+  · `Sequence` y `RegisteredAt = max(UtcNow, LastRegisteredAt + 1 tick)`;
+  · `LoanDailyPosition`: una por crédito y día; una operación con fecha valor anterior agrega `Version` nueva para cada día cambiado y nunca sobrescribe;
+  · `Conciliar` registra cada diferencia por (día valor, concepto, cuota) como `AccrualAdjustment`, `SuspenseReclassification` o `PaymentReallocation` con fecha contable del período abierto, enlazada a su operación;
+  · cada `LoanTransaction` de la causación guarda el `MessagePublicId` de su parte o de su mensaje (T14).
+- [ ] T0463 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Engine/CargadorDeReconstruccionTests.cs`:
+  · lectura en bloque de 1..N créditos en unas cinco consultas;
+  · sólo operaciones con `RegisteredAt ≤ R` sin reverso registrado ≤ R y versiones de condiciones ≤ R (T24);
+  · y `SeriesRegulatoriasDeCarteraTests.cs`: `ISeriesRegulatorias` sobre `IValoresNacionales.LeerSerieAsync` una vez por corrida; usura por la modalidad certificada que el catálogo vigente en D asigna (T44); festivos nacionales de `ICalendarioHabil`; conocidos en R (`VigenciaBitemporal`, T38); falta de valor → `NationalValues.Missing`.
+- [ ] T0464 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Accrual/RunDailyAccrualCommandHandlerTests.cs` (una tanda a la fecha d):
+  · causa `CurrentInterest`, `DefaultInterest` y `Insurance` por cuota (US4-1, US4-2);
+  · repetir la tanda no escribe;
+  · un crédito con marca d − 3 se causa de a una fecha hasta d (US4-4);
+  · las partes: una por fecha × sucursal contable × tipo × tanda, cada una con su fila `LND_AccountingFactParts` (`SourceKind = DailyCycleBatch`), totales por dimensiones, `LoanListSha256`, mensaje masivo `InteresCausado`/`MoraCausada`/`SeguroCausado` con clave `Confirmation:{parte:N}`, modo `PorLotes` con `FinDeCausacion` y lote `BatchTrigger.LendingAccrualRun` con `BatchScopeKey` `AccrualRun:{fecha}` (T56), todo en el `SaveChanges` de la tanda;
+  · `CausacionSuspendida`/`CausacionReanudada` por crédito, origen la parte, clave `Confirmation:{crédito:N}` (C02), `Always` sin comprobante;
+  · `DimensionContableCambiada` detectada por el ciclo (deudor que deja de ser empleado, C8): `PorLotes` sin vigencia propia (`ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite`);
+  · un crédito que falla queda en `LND_ProcessRunErrors` con `Cartera.CreditoSinCausar` y su marca no avanza; los demás siguen;
+  · una modalidad sin usura de d deja un error de grupo (`LoanId` nulo) con `Cartera.ValorNacionalFaltante`;
+  · `OriginActorKind = Process` sólo en los tipos con `AdmiteProceso` (T11).
+- [ ] T0465 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Accrual/PuestaAlDiaDeCreditoTests.cs` (T6, C04, data-model §22.4): una operación sobre un crédito con marca anterior a su fecha valor lo pone al día en su propia transacción con partes `LoanCatchUp` (una por tipo, `TriggerOperationId`, `catchUpOperation` en el contenido, `batchNumber = 1`) y la tanda del día lo cuenta como `SkippedLoans`.
+- [ ] T0466 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Accrual/ReajusteDeTasaTests.cs` (FR-067, C47), paso (2) del ciclo:
+  · en la fecha de reajuste toma `IValoresNacionales.LeerUltimoPublicadoAsync` del índice, suma el margen en la expresión del índice, pasa a EA y aplica piso, techo y usura (D10);
+  · registra `LoanOperation` `RateReset` numerada, sin filas de libro, con su `LoanTermsVersion` (`Cause = RateReset`) y la versión del plan que recalcula cuota o plazo según lo pactado;
+  · un índice viejo alerta `Cartera.IndiceDesactualizado`.
+- [ ] T0467 [P] [US4] Ampliar `tests/IngenIA365ERP.Application.Tests/Lending/Processes/ProcesadorDeCarteraTests.cs` (nombre de quickstart §1.5; el esqueleto lo probó la fase 3) con el `ProcesadorDeCartera` conducido a mano:
+  · recorre sólo cooperativas activadas, a lo sumo `MaxParallelCooperatives` a la vez, dentro de `BudgetSeconds`, y renueva `lending.process` entre tandas;
+  · orden de toma de data-model §22.1: la `Running`, la `NationalValueCorrection` pendiente, el `DailyCycle` siguiente uno a la vez hasta `HoyLocal` pasada `StartTimeLocal`, y luego un `MonthlyClose`/`CloseReopen` `Requested` (lo conduce US9);
+  · retoma desde `CursorLoanId`; `UK_LND_ProcessRuns_Running` impide dos corridas a la vez;
+  · cada tanda va por `IEjecutorEnCooperativa` con origen `Tarea:cartera.diario:{fecha}`;
+  · el paso (8) verifica una muestra con `VerifyLendingLedgerIntegrityQuery`;
+  · una cooperativa que falla no detiene a las demás (FR-066).
+- [ ] T0468 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Processes/ProcessRunCommandsTests.cs`:
+  · `RequestLendingProcessRunCommand` (`{ kind: DailyCycle, date? }`) sólo encola (202) con la persona como actor (T8);
+  · otra corrida de la misma clase y fecha `Requested` o `Running` → `Lending.Process.AlreadyRunning`;
+  · `MonthlyClose` o `NationalValueCorrection` → `Lending.ProcessRun.KindNotOrderable`;
+  · `RetryLendingProcessRunCommand` con motivo sólo en `Failed`/`CompletedWithErrors` (`Lending.ProcessRun.NotRetryable`).
+- [ ] T0469 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Accrual/CorreccionDeValorNacionalTests.cs` (T28, C03, C05):
+  · `EfectoDeReplicacionCorreccionDeValorNacional` inserta en la transacción de la réplica una corrida `NationalValueCorrection` `Requested` (`NationalValueReplicationId`, `AffectedFrom`/`AffectedTo`) sólo si llega una fila con `SupersedesPublicId` que cubre días ya causados y Cartera está activada;
+  · `RunNationalValueCorrectionCommand` por tandas registra `AccrualAdjustment` por (día valor, concepto, cuota) con `ProcessRunId`, sus partes `NationalValueCorrectionBatch` (`AjusteDeCausacionPorFechaValor`, `PorLotes`, `Confirmation:{parte:N}`, `cause = NationalValueCorrection`, `correctedNationalValue`);
+  · si se cobró de más, `CreditBalanceRecognized` con `SaldoAFavorReconocido` por crédito (C02);
+  · una liquidación con R anterior a la corrección no cambia.
+- [ ] T0470 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Settlement/GetLoanSettlementQueryHandlerTests.cs` y `GetLoanStatementQueryHandlerTests.cs`:
+  · la liquidación a (D, R) por concepto y cuota con la explicación (días, tasas, bases) sale de `ReconstruccionDeCredito`, no del libro;
+  · D futura sin pagos intermedios, con la última usura conocida y `validUntil` (D11); `NationalValues.Missing` sólo si D ≤ hoy;
+  · consultar no escribe y audita `Lending.Payoff.Viewed` con D, R y la huella (`LendingAuditEmitter`, T67);
+  · fuera de alcance de oficina o línea → 404 genérico con `Lending.Access.OutOfScope`;
+  · el estado de cuenta (FR-069): cuotas pagadas, vencidas, cubiertas y por vencer; días de mora; saldos; versiones del plan; marcas; los no aplicados de `LND_InstallmentNonDeductions`. Calificación y etapa quedan vacías hasta US9 y K4.
+- [ ] T0471 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Ledger/VerifyLendingLedgerIntegrityQueryHandlerTests.cs`: Σ libro a d = reconstrucción(d, ahora) por concepto y cuota para todo d ≤ `LastAccruedDate`; una fila agregada a mano en la prueba aparece como `mismatch` con `ledger` y `reconstruction` y levanta alerta; muestra (`sampleSize`) y completa; no corrige nada.
+- [ ] T0472 [P] [US4] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Processes/VigilanciaDeCarteraTests.cs`: la tarea `cartera.vigilancia` levanta `Cartera.ProcesoDiarioNoCorrio` si el `DailyCycle` de ayer no está completo pasada la tolerancia y `Cartera.CreditoSinCausar` por los errores vigentes de `LND_ProcessRunErrors`; idempotente por `DedupKey`; sale si Cartera no está activada. `Cartera.CierreMensualPendiente` la suma US9.
+
+#### Arquitectura
+
+- [ ] T0473 [US4] Llenar las listas de esta historia en `tests/IngenIA365ERP.Architecture.Tests/Principles/` (DT §2.25):
+  · `ElMotorDeCarteraEsDecimal`: sin `double`, `float`, `Math.Pow`, `Math.Exp`, `Math.Log` en `Domain/Lending`;
+  · `NadieEscribeElLibroDeCarteraFueraDelRegistro`: `LND_LoanTransactions`, `LND_LoanControls`, `LND_LoanDailyPositions`, `LND_LoanOperations`, `LND_LoanTermsVersions` y el plan, C45;
+  · `LosSaldosYTasasDeCarteraTienenSuPrecision`: las columnas de §4–§7 y §22, con el alias;
+  · `LaCarteraUsaLaFechaLocal`: `Application/Lending`, `Domain/Lending`, `ProcesadorDeCartera`;
+  · `LaCarteraNoTieneValoresLegalesFijos`: los literales de Nómina más `365`; `7` y `10` sólo por el valor del enum, CH39;
+  · `EmisionesDeProcesoPermitidas`: los tipos de causación, suspensión, anticipo, dimensión, ajuste y saldo a favor admiten proceso; `CreditoDesembolsado` y `PagoAplicado` no;
+  · `LosValoresNacionalesSeLeenEnUnSoloSitio`: `ISeriesRegulatorias` no lee `COR_NationalValues` directamente;
+  · `LasLecturasSensiblesDeCarteraSeAuditan`: `GetLoanSettlementQuery`, `GetLoanStatementQuery`.
+  · Además, ampliar `NingunTrabajoDeFondoOperaSinCooperativa` con `ProcesadorDeCartera` y comprobar que `PrincipioXI_ContableImmutable` y `LosHechosInmutablesNoSeModifican` ya ven `Entities/Lending/Transactions` y las entidades H de esta fase.
+
+#### e2e (colección «Cartera e2e», dos motores)
+
+- [ ] T0474 [US4] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/CausacionYLiquidacionTests.cs` (nombre fijo de quickstart §1.7) en una cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` (C107), con `Lending:Process:Enabled = false` y tandas a mano con `RunDailyAccrualCommand` y `RelojDeLaSuite`:
+  · repetir la tanda no duplica;
+  · la vencida causa sólo mora;
+  · suspensión con `CausacionSuspendida`;
+  · un día sin correr y la puesta al día;
+  · dos tandas simultáneas sobre los mismos créditos no causan dos veces (`SKIP LOCKED`/`READPAST`, T34);
+  · `GET /loans/{id}/settlement?date=&recordedAsOf=` pasada, de hoy y futura, repetida idéntica (C83, SC-001);
+  · `NationalValues.Missing` frena un crédito y no a los demás;
+  · `POST /integrity/verify` sin diferencias;
+  · `POST /process-runs` responde 202 y una segunda `Lending.Process.AlreadyRunning`;
+  · la auditoría de la corrida queda en la base de auditoría de su cooperativa (PublicId, lección de la 009).
+- [ ] T0475 [US4] Agregar a `tests/IngenIA365ERP.API.IntegrationTests/Lending/ValoresNacionalesYReplicaTests.cs` (colección «Valores nacionales e2e», la crea la fase 2) el escenario de T28: el maestro corrige la usura con `SupersedesPublicId` después de causar; la réplica encola la corrida `NationalValueCorrection`; la corrida deja ajuste y saldo a favor; una liquidación con R anterior no cambia (SC-002).
+- [ ] T0476 [US4] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/CausacionDiariaPerformanceTests.cs` con `[FactDeRendimiento]` (omitida sin `RUN_PERF_TESTS=1`, nunca con `return`), escenario de quickstart §1.8:
+  · 50.000 créditos vivos cargados por la migración en una cooperativa aislada; una pasada completa del ciclo en menos de 30 min;
+  · mientras corre, en otra cooperativa los pagos y consultas siguen dentro de SC-008;
+  · deja medidos tandas, partes, mensajes, líneas del resumido del día (pregunta C5), filas de `LND_LoanDailyPositions` (D13) y de `COR_IntegrationMessages` (B3), y un día saltado puesto al día sin duplicados.
+  · depende de la migración y la activación de US8 (fase 13) y del contrato de US5 (fase 9)
+
+### Implementation for User Story 4
+
+#### Bloque A — el motor puro se extiende (`Domain/Lending`, sin IO ni EF, `DateOnly`, sólo `decimal`)
+
+C105: lo que el motor necesita antes de que exista un crédito (días, tasas, usura, vencimientos, plan inicial,
+redondeo, explicación, versiones de reglas, huella y la fachada) nació en US1 y US17; aquí se le suman la causación,
+la mora, la suspensión, la regeneración del plan y la reconstrucción a (D, R).
+
+- [ ] T0477 [P] [US4] Extender `src/Core/IngenIA365ERP.Domain/Lending/VersionesDeReglas.cs` (de US1) con el despacho por `RulesVersion` para los créditos vivos (T29) y `ExplicacionDeCartera.cs` (de US1) con los tramos de causación: días, tasa del día, base, tope de usura y suspensión.
+- [ ] T0478 [P] [US4] Extender `src/Core/IngenIA365ERP.Domain/Lending/Schedules/FechasDeVencimiento.cs` (de US1) con la fecha exigible por `CalendarioHabil` de `Domain/Common/Calendar` (fase 2): un vencimiento en día no hábil se exige el hábil siguiente y el sábado cuenta como hábil (D2). Hace pasar la ampliación de `FechasDeVencimientoTests`.
+- [ ] T0479 [US4] Extender `src/Core/IngenIA365ERP.Domain/Lending/Schedules/GeneradorDePlan.cs` (de US1, T29) con la **regeneración**:
+  · regenera desde la primera cuota no vencida conservando la numeración, por tramo nuevo (D12), reajuste de tasa y abono (US5 suma `ReduceTerm`/`ReduceInstallment`);
+  · plan migrado con el capital por cuota conservado (D5);
+  · proyección de la causación de T25 suponiendo pagos a tiempo para las `consultas` de los casos;
+  · Σ capital = saldo y la última absorbe el residuo (`Lending.Schedule.PrincipalMismatch`).
+  · Hace pasar `30-desembolso-por-tramos.json` y la ampliación de `SumaDeCapitalDelPlanTests`
+- [ ] T0480 [P] [US4] Crear en `src/Core/IngenIA365ERP.Domain/Lending/`:
+  · `Accrual/Causacion.cs`: `U(A(d)) − U(A(d−1))` por concepto y cuota; ventana compuesta o lineal que se reinicia al cambiar base o tasa; corriente sobre capital no vencido (incluido el de una cuota en día no hábil hasta su exigible), mora sobre capital vencido, sobre intereses sólo con la regla sellada y nunca en vivienda; seguros según `InsuranceAccrualTiming` y base (D9); el interés nunca entra a la base (T25); usa `TasaDelDia` y `ContadorDeDias` de US1;
+  · `Accrual/ReglaDeSuspension.cs`: suspensión y reanudación como transiciones del estado (T30);
+  · `Delinquency/AlturaDeMora.cs`: días de mora con tolerancia y fecha exigible, sin las cubiertas por anticipo; la entrada de «descontado pendiente de giro» existe desde K1 (T30).
+- [ ] T0481 [US4] Crear `src/Core/IngenIA365ERP.Domain/Lending/Replay/{EntradaDeReconstruccion,EstadoDelCredito,LibroTeorico,ReconstruccionDeCredito}.cs` (T24, research R32):
+  · ordena por (fecha valor, `Sequence`) y parte del plan inicial o migrado;
+  · avanza por segmentos entre eventos (vencimientos y exigibles, operaciones, cambios de usura, índice y parámetros, cruces de umbral, fin de gracia, D) con acumulados cerrados;
+  · devuelve saldos por cuota y concepto, capital vencido, altura, suspensión, tasa del día, anticipo, saldo a favor y plan, el `LibroTeorico` por (día valor, concepto, cuota) y la explicación;
+  · D futura se proyecta sin pagos con `ValidaHasta`.
+  · Interpreta las operaciones `Disbursement`, `DisbursementReversal`, `OpeningBalance` y `RateReset`, con un punto de extensión por `LoanOperationKind` al que US5 suma `Payment`, `PaymentReversal` y `CreditBalanceResolution` (con `AplicadorDePagos`) y US6 suma `CommercialAdjustment`.
+- [ ] T0482 [US4] Extender la fachada `src/Core/IngenIA365ERP.Domain/Lending/MotorDeCartera.cs` (de US1, molde `MotorDeCosteo`) con causar un crédito de d − 1 a d, reconstruir a (D, R) y verificar, además de simular plan y controlar usura, que ya expone. Hace pasar T0457 a T0461.
+
+#### Domain y persistencia — proyecciones, corridas y partes
+
+- [ ] T0483 [P] [US4] Verificar (forma de la fase 3; un cambio regenera `CarteraNucleo`, C104) `src/Core/IngenIA365ERP.Domain/Entities/Lending/Transactions/LoanTransaction.cs` y `Entities/Lending/Loans/LoanControl.cs` con las columnas de data-model §5.1 y §5.2, y en sus configuraciones:
+  · `CK_LND_LoanTransactions_Origin` (exactamente uno de `OperationId` y `ProcessRunId`) y `_Amount`;
+  · los únicos de la causación `UK_LND_LoanTransactions_Accrual` y `_AccrualNoInst` filtrados a `Kind = Accrual`, `ReversesTransactionId` nulo y cuota con o sin valor (C50, T21 capa 4), y `UK_LND_LoanTransactions_Reverses`;
+  · los IX de §5.1; `[SinDiffDeAuditoria]` en `LoanControl` (C46) y **no** en `LoanTransaction`.
+- [ ] T0484 [P] [US4] Verificar y completar (forma de la fase 3, C104) `src/Core/IngenIA365ERP.Domain/Entities/Lending/Projections/LoanDailyPosition.cs` (data-model §6.1, `AuditableEntityLong`, `IHechoInmutable`, `[SinDiffDeAuditoria]`; `DailyRating` nulo hasta US9) y su configuración con `UK_LND_LoanDailyPositions_Loan_Date_Version` y el IX `(PositionDate, BranchId, CreditLineId)`.
+- [ ] T0485 [P] [US4] Verificar y completar (forma de la fase 3, C104) `src/Core/IngenIA365ERP.Domain/Entities/Lending/Integration/{LendingProcessRun,LendingProcessRunError,AccountingFactPart}.cs` (data-model §22.1–§22.3) y el enum `AccountingFactPartSource { DailyCycleBatch, LoanCatchUp, NationalValueCorrectionBatch, MonthlyClose, CloseReopening }` (nuevo en data-model) en `Domain/Enums/Lending`, con sus configuraciones:
+  · `UK_LND_ProcessRuns_DailyCycle`, `_Close` (también para `Kind = 3`), `_Running` filtrados;
+  · los UK de errores y de partes (`UK_LND_AccountingFactParts_Batch`, por `TriggerOperationId`, por `MessagePublicId`);
+  · las FK `MonthlyCloseId` y `MonthlyCloseReopeningId` sin restricción hasta `CarteraRiesgo` (C66);
+  · `[SinDiffDeAuditoria]` en errores y partes (C46).
+  · lo que falte se corrige en la fase 3 y se regenera `CarteraNucleo` (C104)
+
+#### Application — libro, carga y series
+
+- [ ] T0486 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Engine/CargadorDeReconstruccion.cs` (lectura en bloque 1..N a R) y `src/Core/IngenIA365ERP.Application/Lending/Engine/SeriesRegulatoriasDeCartera.cs` (`ISeriesRegulatorias`, sobre los lectores únicos de T40). Hacen pasar T0463.
+- [ ] T0487 [US4] Completar `src/Core/IngenIA365ERP.Application/Lending/Ledger/RegistroDeCartera.cs` (el esqueleto lo deja la base, fase 3):
+  · causación en bloque sin `ChangeTracker`, con el evento resumen por tanda;
+  · avance de la marca de agua (sólo de d − 1 a d), `Sequence` y `RegisteredAt` monótonos, y posiciones versionadas;
+  · `Reversar` (espejos de T33 con C49 y C101) y `Conciliar` (diferencias por día valor, concepto y cuota);
+  · altas de operación, versión de condiciones y plan (C45);
+  · transiciones de `LoanStatus` de data-model §8.1.
+  · Hace pasar T0462.
+- [ ] T0488 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Accrual/PartesDeHechosDeCartera.cs` **(nuevo)**, el armado de `LND_AccountingFactParts` y de sus contenidos masivos y por crédito para `EmisionDeCartera` (T14, C02–C04, `mensajes.md` §10.0, §10.4–§10.6):
+  · una parte por fuente × fecha × sucursal contable × tipo × tanda, con totales por combinación de `LoanFactDimensionsV1`;
+  · lista por crédito con `LoanListSha256` y `controlTotal`;
+  · `partNumber` ordinal en la corrida.
+- [ ] T0489 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Accrual/PuestaAlDiaDeCredito.cs` **(nuevo)**: causa un crédito de su marca + 1 hasta la fecha pedida, en la transacción de la operación que lo pide, con partes `LoanCatchUp` (C04). La usan el desembolso de un tramo siguiente, la recogida, el contrato y todo lo que opere sobre un crédito. Hace pasar T0465.
+
+#### Application — ciclo diario, corridas y corrección
+
+- [ ] T0490 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Accrual/RunDailyAccrualCommand.cs` (sin ruta: una tanda a la fecha d por `IEjecutorEnCooperativa`) y `CicloDiarioDeCartera.cs` **(nuevo)**, los pasos de DT §2.13 en orden:
+  · (1) marca de agua de la réplica usada (`NationalValuesWatermark`);
+  · (2) reajuste de tasas variables;
+  · (3) causación corriente, mora y seguros con `MotorDeCartera`;
+  · (4) suspensión y reanudación;
+  · (5) gancho de anticipos al vencer, vacío hasta US5;
+  · (6) bloqueos automáticos (`Bloqueos.DiasDeMoraParaBloquear`, con el servicio de bloqueos de US2) y dimensión contable cambiada;
+  · (7) gancho de cobranza, vacío hasta K4;
+  · (8) la muestra de verificación.
+  · Cada tanda: `TransaccionExplicita`, cerrojo con salto, carga en bloque, motor, `RegistroDeCartera`, partes y mensajes por `EmisionDeCartera`, y un `SaveChanges`.
+  · Hace pasar T0464 y T0466.
+- [ ] T0491 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Accrual/ReajusteDeTasa.cs` **(nuevo)** (paso 2, FR-067, C47): operación `RateReset` numerada, `LoanTermsVersion` `RateReset` y versión del plan, por `RegistroDeCartera`.
+- [ ] T0492 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Processes/{RequestLendingProcessRunCommand,RetryLendingProcessRunCommand,ListLendingProcessRunsQuery,GetLendingProcessRunQuery}.cs` (`api.md` §16.4, permisos `Lending.Processes.Run`/`.View`, 202, `IOperacionIdempotente`, errores sin datos del deudor). Hacen pasar T0468.
+- [ ] T0493 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Accrual/EfectoDeReplicacionCorreccionDeValorNacional.cs` (`IEfectoDeReplicacion`, C05) y `RunNationalValueCorrectionCommand.cs` (sin ruta, una tanda de la corrida, T28): ajustes, saldo a favor y partes. Hacen pasar T0469.
+- [ ] T0494 [US4] Completar `src/Presentation/IngenIA365ERP.API/Integration/ProcesadorDeCartera.cs` (el esqueleto lo deja la base, fase 3), un `BackgroundService` registrado sólo en `Program.cs`, con las opciones `Lending:Process` (`Enabled`, `IntervalSeconds` 30, `BudgetSeconds` 60, `LeaseTtlSeconds` 120, `MaxParallelCooperatives` 2, `StartTimeLocal` «00:30», `BatchSize` 250) en `appsettings.json`:
+  · toma `lending.process` (`NombresDeArrendamiento.ProcesoDeCartera`) y lo renueva entre tandas;
+  · elige la corrida en el orden de data-model §22.1 y crea el `DailyCycle` siguiente sólo con el anterior `Completed`/`CompletedWithErrors`;
+  · conduce las tandas con `CursorLoanId`, reintenta crédito por crédito el que falla y cierra la corrida con `TotalsJson`/`ResultSha256` como evento resumen.
+  · Hace pasar T0467.
+- [ ] T0495 [P] [US4] Crear la `ITareaProgramada` `cartera.vigilancia` en `src/Core/IngenIA365ERP.Application/Lending/Processes/Tareas/VigilanciaDeCartera.cs` (cada hora; `Cartera.ProcesoDiarioNoCorrio`, `Cartera.CreditoSinCausar`) y registrarla en `Program.cs`. Hace pasar T0472.
+
+#### Application — consultas del crédito y verificación
+
+- [ ] T0496 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Settlement/{GetLoanSettlementQuery,GetLoanStatementQuery}.cs` (`LoanSettlementDto` de `api.md` §8.1, con `fingerprint`, `explanation` y `validUntil`; auditoría `Lending.Payoff.Viewed` por `LendingAuditEmitter`; alcance por `FiltroDeAlcanceDeCartera`). Hacen pasar T0470.
+- [ ] T0497 [P] [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Loans/{ListLoansQuery,GetLoanQuery,GetRepaymentScheduleQuery,ListRepaymentScheduleVersionsQuery,ListLoanOperationsQuery,GetLoanOperationQuery,ListLoanTransactionsQuery}.cs` (`api.md` §8.1):
+  · los saldos de la lista salen de la posición diaria vigente;
+  · el detalle de operación es el comprobante de aplicación con `distribution` y `messages`;
+  · el libro es sólo lectura.
+- [ ] T0498 [US4] Crear `src/Core/IngenIA365ERP.Application/Lending/Ledger/VerifyLendingLedgerIntegrityQuery.cs` (`{ loanPublicIds?, sampleSize?, upTo? }`, permiso `Lending.Integrity.Verify`, sin clave; una diferencia levanta alerta y no corrige nada). Hace pasar T0471.
+
+#### API y pantallas
+
+- [ ] T0499 [US4] Completar `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/LoansEndpoints.cs` con las consultas de `api.md` §8.1 (`date` y `recordedAsOf`, C83). Crear `ProcessRunsEndpoints.cs` (§16.4) e `IntegrityEndpoints.cs` (§16.5). Todo con `.RequirePermission` y el 404 genérico.
+- [ ] T0500 [P] [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/{CreditosClient,CorridasDeCarteraClient}.cs` y registrarlos.
+- [ ] T0501 [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Creditos.razor` (`/cartera/creditos`, `Lending.Loans.Read`): búsqueda por número, deudor, línea, oficina, estado y mora, dentro del alcance.
+- [ ] T0502 [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/CreditoDetalle.razor` (`/cartera/creditos/{id:guid}`) con pestañas:
+  · resumen;
+  · liquidación con fecha D y «con la información hasta» R, y la explicación;
+  · estado de cuenta;
+  · plan con sus versiones;
+  · operaciones y comprobantes;
+  · libro;
+  · garantías y orden de giro.
+  · La pestaña de liquidación exige `Payoffs.Read` (`PermissionGate`).
+  · `IndicadorDeCarga` por zona; textos sin códigos técnicos (`TextosDeCarteraTests`).
+- [ ] T0503 [US4] Agregar al grupo «Cartera» del menú el enlace a `/cartera/creditos` con `PermissionGate` y la página a `LasPantallasDeCarteraEstanEnElMenu`. Las corridas se ven en el detalle de `/cartera/bandeja-de-mensajes` (ver notas: DT §2.16 no fija pantalla de corridas).
+
+#### Documentación
+
+- [ ] T0504 [P] [US4] Escribir `docs/manual/cartera-causacion-y-liquidacion.md` **(nuevo)**, para la contadora:
+  · convenciones, equivalencia y tope de usura;
+  · causación del día (d − 1, d] y puesta al día;
+  · suspensión, día no hábil y reajuste;
+  · liquidación a (D, R) y su reproducibilidad;
+  · cómo leer un caso dorado.
+- [ ] T0505 [P] [US4] Escribir `docs/operaciones/cartera-proceso-diario.md` **(nuevo)**:
+  · opciones `Lending:Process` y arrendamiento;
+  · ver, reintentar y ordenar corridas;
+  · día sin causar y alertas;
+  · corrección de valor nacional;
+  · `POST /integrity/verify`;
+  · volumen y partición por año (D13).
+  · Agregar los dos documentos a `docs/INDICE-DOCUMENTACION.md`.
+
+**Checkpoint**:
+- los casos dorados de esta fase y las cuatro propiedades pasan al centavo;
+- `RendimientoDeCausacionTests` termina en menos de 60 s;
+- `CausacionYLiquidacionTests` está verde en los dos motores;
+- una cooperativa activada causa sola cada día desde las 00:30, se pone al día sin duplicar y liquida a cualquier (D, R)
+  con el mismo resultado;
+- el libro es igual a la reconstrucción.
+
+---
+
+## Phase 9: User Story 5 - Aplicar y reversar pagos con prelación y simulación previa (Priority: P1) — entrega K1
+
+**Goal**: todo dinero que reduce una obligación entra por `IContratoDeObligaciones` (FR-083, FR-087, T31, T91), con sus
+cinco operaciones reales en `ContratoDeObligacionesDeCartera`, corriendo **dentro de la unidad de trabajo del
+recaudador** (I-4): listar y simular sin escribir (`Answered`, C28), aplicar en lote con la forma interactiva (huella,
+«la distribución cambió», T32) y la no interactiva (nunca «cambió», C39), reversar dejando el crédito como si el pago no
+hubiera existido (T33, FR-080, FR-081) y resolver saldos a favor y anticipos (FR-076, FR-083). Prelación sellada y siete
+modalidades en `AplicadorDePagos` (la misma función simula y aplica, FR-072); anticipo que no reduce intereses (FR-074,
+D6, D8); abono extraordinario con la elección del deudor o su preferencia vigente y, sin ella, saldo a favor (Ley 2032,
+FR-075, D24; permiso `Lending.PrepaymentPreferences.Manage`, C85); excedente al recaudador (D5); fecha valor con D4,
+atribución antes de un cierre por `IPermissionChecker` (C41), exención de Nómina (A9) y corte de la migración; clases de
+medio con firmeza (FR-082, D23; C30); Nómina como recaudador real desde K1 con sus no descontados (T92, C32, C55); los
+dobles `RecaudadorDePrueba` y `TesoreriaDePrueba` con clave `TST:` y guardia de producción (T20, FR-089, C35) y su
+pantalla `/cartera/dobles-de-prueba`.
+
+**Independent Test**: con Cartera activada en una cooperativa aislada (`CarteraE2E.ActivarCarteraAsync`, C107) y el recaudador de prueba (`TST`): un abono
+extraordinario simulado devuelve los dos planes; se aplica «reducir plazo» con su `SimulationId`; se reversa desde
+`/cartera/creditos/{id}` y saldos por concepto, cuotas, días de mora, causación y calificación informativa son
+idénticos a los de antes (US5 Independent Test, SC-003, SC-004). Repetir tres veces la misma clave `TST:{guid:N}`
+devuelve el comprobante original (SC-010); el `jefe` no puede reversar un pago de Nómina
+(`Lending.Reversal.OwnedByCollector`); con `IHostEnvironment` de producción y `Lending:TestDoubles:Enabled = true` la API
+no arranca (FR-089). Quickstart §3.9.
+
+### Tests for User Story 5
+
+#### Dominio
+
+- [ ] T0506 [P] [US5] Escribir los casos dorados del contrato de pagos en `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/`: `11-dos-cuotas-vencidas-valor-libre.json`, `16-abono-extraordinario-plazo-o-cuota.json`, `17-anticipo-tres-cuotas.json`, `18-cuota-del-ciclo-antes-del-vencimiento.json`, `19-fecha-valor-anterior.json`, `20-reverso-con-pago-posterior.json`, `21-reverso-de-pago-que-cancelo.json` y `31-abono-mayor-que-el-capital.json`, con la forma de quickstart §1.2 (claves en español, enums por nombre, operaciones con fecha valor y `registradoEn`, esperado por día, cuota y concepto al centavo), calculados con decimal de 40 dígitos en la hoja Python versionada junto a los casos (T26), cargados por `CasoDoradoDeCartera` y corridos por `CasosDoradosDeCarteraTests` (dueño: la contadora los lee y firma; mientras no lo haga rigen las propuestas D4, D6, D7 y D8)
+  · 11: prelación `OldestInstallmentFirst` — gastos informados, seguros, mora con su suspenso, corriente con su suspenso, capital; la cuota más antigua completa antes de la siguiente (US5-1)
+  · 16: una simulación sin elección devuelve dos alternativas con su huella; con la elección, la versión del plan regenerada; sin preferencia, `CreditBalance` (D24)
+  · 17 y 18: el anticipo cubre cada cuota en su vencimiento, aplica parcial si no alcanza (D6) y no reduce intereses; la cuota del ciclo pagada antes de vencer deja el resto como anticipo de esa cuota (D8)
+  · 19 a 21: redistribución del pago posterior con su fecha valor y su elección; reverso de un pago que canceló reabre cuotas, mora y altura
+  · 31: abono extraordinario mayor que el capital = cancelación, excedente al recaudador (D5)
+- [ ] T0507 [P] [US5] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Payments/AplicadorDePagosTests.cs` y `PrelacionTests.cs`: las siete modalidades de `PaymentModality` (FR-071) sobre un `EstadoDelCredito` armado a mano; `FullPayoff` aplica el anticipo del mismo crédito y nunca el saldo a favor (D7); `PastDue` cubre sólo lo vencido; `CycleInstallment` = vencido + cuota del período; `SpecificInstallment` rechazada si hay anteriores impagas salvo `AllowsSpecificInstallmentOutOfOrder` de la versión sellada; `FreeAmount` por prelación; todo abono o anticipo cubre primero lo vencido (FR-072); el excedente nunca entra a conceptos; la alternativa `ConceptFirst`; misma entrada → misma distribución (simular = aplicar)
+- [ ] T0508 [P] [US5] Crear las propiedades `tests/IngenIA365ERP.Domain.Tests/Lending/Replay/ReversoComoSiNoHubieraExistidoTests.cs` (secuencias de pagos al azar: reversar uno = reconstruir sin él — saldos por concepto, cuotas, días de mora, suspensión —, con y sin pagos posteriores; SC-004) y la parte de pagos de `ElReversoEnlazaCadaFilaConSuOriginalTests.cs` (nombre fijo, DT §2.25, T33: cada fila propia del pago reversado tiene su espejo con `ReversesTransactionId` y las diferencias van como `AccrualAdjustment`, `PaymentReallocation` o `SuspenseReclassification`; la parte del desembolso es de US3)
+- [ ] T0509 [P] [US5] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Payments/HuellaDeSimulacionTests.cs` **(nuevo)**: el `SimulationId` de `HuellaDeCartera` es SHA-256 canónico de crédito, modalidad, valor, fecha valor, elección y distribución (líneas, plan nuevo, excedente); cambia si cambia la distribución, **no** cambia si sólo corrió la causación de días que no tocan la distribución (T32, R40); orden, decimales y fechas canónicos
+
+#### Application
+
+- [ ] T0510 [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/ContratoDeObligacionesDeCarteraTests.cs` (InMemory, reloj fijo, puertos de Contabilidad y permisos sustituidos; lo transaccional va en e2e, quickstart §1.5): orden de los pasos de `interfaces.md` §3.3; rechazos con su código de `data-model.md` §10.1 y la respuesta común §3.4
+  · listar y simular: `Answered` con `Lending.ObligationContract.Listed` / `.Simulated`; antes de activar, `Answered` vacío con `Lending.NotActivated` (§3.17); escrituras antes de activar: `Rejected` con `Lending.NotActivated` en cada ítem
+  · recaudador: fuera del registro → `Lending.Contract.CollectorNotRegistered`; versión adoptada inexistente → `Integration.Participant.VersionNotSupported`; `OwnLoanPayoff` exento del registro (T91); fila `TST` con `IsTestDouble` en producción no cuenta
+  · clases de medio (§3.14): desconocida → `Lending.Contract.UnknownMeansClass`; `AssociateCredit`/`CustomerCredit` → `Lending.Payment.MeansClassNotAllowed` (C30); `OwnPayrollDeduction` sólo `Payroll`; `InternalOffset` sólo `OwnLoanPayoff`, `Contributions`, resoluciones y `Test`
+  · fechas: futura o anterior a `HoyLocal − Pagos.DiasMaximosFechaValor` → `Lending.Payment.ValueDateOutOfRange` (salvo `Payroll`, A9); en un mes con cierre de Cartera, sin `Lending.Payments.BackdateBeforeClose` o por encima de su límite en `SEC_PermissionAmountLimits` → `Lending.Payment.ValueDateBeforeClosing`, consultado por `IPermissionChecker` sobre el usuario que actúa y nunca su alcance (C41); `ValueDate` ≤ corte de la carga activada → `Lending.Contract.BeforeCutoff`
+  · obligación `PendingDisbursement`, `PaidOff`, `Voided` o `Novated` → `Lending.Payment.ObligationNotPayable`; `WrittenOff` paga con `RecuperacionDeCastigada`
+  · forma: `SimulationId` obligatorio en `Interactive` y prohibido en `NonInteractive` (`Validation.Invalid`); `DeductionFileLinePublicId` lleno en K1 → `Validation.Invalid`; `NoDescontado` sólo con `Payroll` y `NonInteractive`
+  · abono extraordinario: interactivo sin elección → `Lending.Payment.PreferenceMissing` (rechazo); no interactivo con preferencia → `ChoiceFromPreference = true`; sin preferencia → saldo a favor con el aviso `Lending.Payment.PreferenceMissing` en `Warnings` y `SaldoAFavorReconocido` acompañante (ver notas, contradicción 4)
+  · validación previa contable sin regla o sin respuesta: nunca rechaza, avisa `Lending.Prevalidation.NotPostable` / `.NoResponse` y sella `PrevalidationOutcome` aunque `Contabilidad.FaltaDeRegla = Bloquear` (A8, §3.12)
+  · aseguradora pagadora de una reclamación `InProcess` de esa obligación → la reclamación pasa a `Paid` con `InsuranceClaimId` en la operación (T102)
+  · eventos: `Lending.ObligationContract.Attempted` por el contexto aparte antes de validar; `.Applied` / `.Reversed` / `.CreditBalanceResolved` / `.Rejected` en `COR_AuditOutbox` con la distribución completa por cuota y concepto (T23, T68)
+- [ ] T0511 [P] [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Payments/EmisionDePagosTests.cs` **(nuevo)**: un pago emite `PagoAplicado` (`Confirmation`, origen la operación, tercero el pagador, `dimensions.collectorClass`) y en su misma unidad, cuando corresponden, `AnticipoRecibido`, `CobroDeInteresEnSuspenso`, `RecuperacionDeCastigada`, `SaldoAFavorReconocido` (`cause = NoPrepaymentPreference`) y `AjusteDeCausacionPorFechaValor` (`cause = ValueDatedOperation`), todos con el modo sellado del principal (C01, C03); aparte `CausacionReanudada` y `DimensionContableCambiada` con `Confirmation:{tipoDeHecho:N}`; la puesta al día crea sus partes (C04); comprobante `RC` y `DN` con `Payroll` (lo resuelve Contabilidad, aquí sólo la clase); `PagoReversado` con `related` = el pago, `initiatedBy` y el modo heredado (C08); `PagoReversadoPorCartera` sólo cuando reversa Cartera, al destino `Receipts` para `Receipts` y `Test`; `SaldoAFavorResuelto` con `resolution` y `balanceKind`; ningún contenido trae cuentas (`LosHechosDeCarteraNoLlevanCuentas`); `PagoAplicado` y sus acompañantes no admiten proceso (T11, C14)
+- [ ] T0512 [P] [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Payments/ResolverSaldoAFavorTests.cs` **(nuevo)**: `RefundThroughCollector` baja el saldo a favor o el anticipo y emite `SaldoAFavorResuelto`; `ApplyToOtherObligation` aplica como `Payment` `InternalOffset` con pagador el deudor y clave `{IdempotencyKey}:destino`, sólo a obligaciones del mismo deudor (`Lending.CreditBalance.TargetNotOwned`); `ApplyAsExtraordinaryPrincipal` sólo para un saldo nacido de un abono sin preferencia (si no, `Lending.Payment.ModalityNotAllowed`), con la elección del deudor y versión del plan; `Amount` mayor que lo disponible → `Lending.CreditBalance.Insufficient`; un saldo a favor en una `PaidOff` se resuelve aquí (§3.9)
+- [ ] T0513 [P] [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Payments/SimulateLoanPaymentQueryHandlerTests.cs`, `PreviewLoanPaymentReversalQueryHandlerTests.cs` y `ReverseLoanPaymentCommandHandlerTests.cs` (nombres de quickstart §1.5): la simulación de pantalla usa `AplicadorDePagos` igual que el contrato y no escribe; `Lending.Payment.ValueDateOutOfRange` con `data.minDate`; `Lending.Payment.SpecificInstallmentBlocked` con `data.pendingBefore[]` (ver notas, contradicción 3); el aviso `Lending.Payment.AdvanceDoesNotReduceInterest` en `Advance`; el reverso por pantalla rechaza `CollectorClass = Payroll` y `Contributions` con `Lending.Reversal.OwnedByCollector` (T31, C37), un reverso con `Lending.Reversal.OfReversal`, una operación que no es pago con `Lending.LoanOperation.NotPayment`, una vista previa vieja con `Lending.Reversal.PreviewChanged` (`data.previewSha256`); emite `PagoReversado` y `PagoReversadoPorCartera`; los reversos de `OwnLoanPayoff` no se piden por aquí
+- [ ] T0514 [P] [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Payments/ChangePrepaymentPreferenceCommandHandlerTests.cs`: versión nueva en `LND_PrepaymentPreferences` (H) con `Origin = DebtorRequest`, operación `PreferenceChange` sin filas de libro y motivo obligatorio; `Choice` nulo = revocada; crédito no activo → `Lending.Loan.NotActive`; se lee la última con `RegisteredAt ≤ R` (T24); sin `Lending.PrepaymentPreferences.Manage` → el 404 genérico (C85)
+- [ ] T0515 [P] [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/ObligacionesDeCarteraTests.cs` **(nuevo)**: `ObligacionesAsync` por persona como deudor y codeudor, `IsLive` con castigadas, `IncludeClosed` con `ClosedOn`, saldos de la reconstrucción a `Date` en lote para cientos de personas (`CargadorDeReconstruccion`); `CuotasDeNominaAsync` devuelve sólo obligaciones vivas como deudor con forma de pago nómina propia (`LND_LoanPayrollLinks`) y cuotas que vencen en el período, sin las cubiertas por anticipo y con `PastDueIncluded = 0` en K1 (C32), en el orden de la libranza; sin activar: `NotActivated`, sin obligaciones, `MigratedNotActivated` para deudores y codeudores de la carga aplicada vigente (C26, §12 de `interfaces.md`); no aplica el alcance de Cartera
+- [ ] T0516 [P] [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/NoDescontadosDeNominaTests.cs` **(nuevo)**: un `NoDescontado` del lote de Nómina se guarda en `LND_InstallmentNonDeductions` con `Origin = Contract`, recaudador, motivo (`MotivoDeNoDescuento`, con `DeductionPriority`, C56), `ContractOperationKey` y `SourceItemPublicId`; repetir la clave devuelve lo ya registrado; la cuota sigue exigible en la reconstrucción; alerta `Cartera.CuotaNoDescontadaPorNomina` al jefe de cartera; no emite hecho contable; respuesta `Applied` con «la cuota sigue exigible» (§3.4)
+- [ ] T0517 [P] [US5] Ampliar las pruebas de Nómina que la fase 3 dejó contra el puerto «sin activar» (`tests/IngenIA365ERP.Application.Tests/Payroll/RecaudoPorNominaTests.cs`, `CalculatePayrollRunCommandHandlerTests.cs`, `ApproveSettlementCommandHandlerTests.cs`) con un `IConsultaDeObligaciones` y un `IContratoDeObligaciones` que responden obligaciones: la ordinaria materializa **una** `PAY_Novelties` `LoanDeduction` por empleado, obligación y período desde `CuotasDeNominaAsync`, que el recálculo reemplaza y el descarte del borrador anula (C55, patrón de `RecurringNovelties`); aprobar aplica el lote antes del NM con `CycleInstallment` por lo descontado y `NoDescontado` por el resto (C32); un `Rejected` o un excedente baja la línea y avisa `Payroll.LoanDeductionNotApplied` (G2); la definitiva todo o nada (`Payroll.Settlement.LoanProposalOutdated`, `.LoanAmountsChanged`); reversar ambas por `ReversarAsync` (G3)
+- [ ] T0518 [P] [US5] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/DoblesDePruebaTests.cs` **(nuevo)**: `RecaudadorDePrueba` llama al contrato con recaudador `TST` clase `Test`, propone `TST:{guid:N}` y acepta una repetida (C35), resuelve saldos y registra cada `PagoReversadoPorCartera` recibido (responde `Processed` sin estado propio); `TesoreriaDePrueba` consume `OrdenDeGiroEmitida` y `AnulacionDeOrdenDeGiro` sin estado propio y emite `ResultadoDelGiro` como `TES` con `Confirmation:{orden:N}`, `related` la orden y `OrderMessagePublicId` (C12), con la persona que prueba como usuario de origen; `EscritorDelRegistroDeIntegracion` rechaza filas `TST` en producción (`Integration.Participant.TestDoubleInProduction`)
+
+#### Arquitectura
+
+- [ ] T0519 [US5] Llenar las listas de las pruebas que la fase 1 dejó como esqueleto en `tests/IngenIA365ERP.Architecture.Tests/Principles/`:
+  · `LaCarteraSoloSeTocaPorSusInterfaces.cs`: los cinco métodos y la constante `VersionDelContrato` de `IContratoDeObligaciones`, los dos de `IConsultaDeObligaciones`; fuera de Cartera sólo los stubs y los dobles los implementan; Nómina no depende de `Domain.Entities.Lending` ni de `Application.Lending` (C34)
+  · `LosPuertosDeCarteraValidanYAuditanSusEscrituras.cs` (T101): `AplicarAsync`, `ReversarAsync` y `ResolverSaldoAFavorAsync` ejecutan su validador y escriben su evento
+  · `LosDoblesDePruebaNoSeRegistranEnProduccion.cs` (FR-089, T20): recorre el DI con `IHostEnvironment` de producción —sin `RecaudadorDePrueba`, `TesoreriaDePrueba` ni rutas `/api/lending/test-doubles`— y comprueba que con `Lending:TestDoubles:Enabled = true` el arranque falla
+  · `UnSoloConsumidorPorDestino.cs`: los dobles ocupan `Treasury` y `Receipts`
+  · `NadieEscribeElLibroDeCarteraFueraDelRegistro.cs`: el contrato, el reverso y la resolución escriben `LoanOperation`, `LoanTransaction` y el plan sólo por `RegistroDeCartera` (C45)
+  · `LosComandosDeCarteraLlevanClave.cs`: `ReverseLoanPaymentCommand`, `ChangePrepaymentPreferenceCommand`, `ApplyTestCollectorPaymentCommand`, `ReverseTestCollectorPaymentCommand`, `ResolveTestCollectorCreditBalanceCommand`, `EmitTestDisbursementResultCommand`; los métodos del contrato **no** son `IOperacionIdempotente` (T21)
+  · `LasConsultasDeCarteraRespetanElAlcance.cs`: `SimulateLoanPaymentQuery`, `PreviewLoanPaymentReversalQuery`, `GetPrepaymentPreferenceQuery`; `LasLecturasSensiblesDeCarteraSeAuditan.cs`: `Lending.ObligationContract.Listed` y `.Simulated`
+  · `LosHechosInmutablesNoSeModifican.cs`: `PrepaymentPreference`, `InstallmentNonDeduction`; `LaCarteraUsaLaFechaLocal.cs`: `ReglasDeFechaValor` y el contrato
+  · `LasPantallasDeCarteraEstanEnElMenu.cs` y `LasPantallasDicenQueEstanCargando.cs`: `/cartera/dobles-de-prueba`
+
+#### e2e (colección «Cartera e2e», PostgreSQL y SQL Server)
+
+- [ ] T0520 [US5] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/ContratoDeObligacionesTests.cs` (nombre de quickstart §1.7) sobre una cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` (C107, sin `Skip`), filas `TST` del registro y créditos desembolsados por las rutas de US3: listar y simular `Answered` (C28); las siete modalidades; abono con dos planes y la elección con su `SimulationId`; pago mayor que el total → cancelado y excedente; abono no interactivo sin preferencia → saldo a favor y su resolución como abono; distribución cambiada tras correr una tanda con `RunDailyAccrualCommand` y el reloj de la suite; anticipo de tres cuotas y `AnticipoAplicado` al vencer; reverso desde `POST /api/lending/loans/{id}/operations/{operationId}/reversal-preview` y `/reverse` del primero de dos pagos (redistribución del posterior; saldos, cuotas, mora y causación como antes; `PagoReversadoPorCartera` visible en `GET /api/lending/test-doubles/collector/reversals`); reverso de un reverso; fecha valor 5 y 6 días atrás; recaudador fuera del registro; un pago a un castigado emite `RecuperacionDeCastigada` (quickstart §3.9; SC-003, SC-004)
+- [ ] T0521 [P] [US5] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/NominaRecaudaPorElContratoTests.cs` (nombre de DT §2.25): ordinaria quincenal con la cuota de Cartera desde `CuotasDeNominaAsync`, tope y `DeductionCap`, aprobación que aplica el lote antes del NM dentro de `TransaccionExplicita`, `GET /api/payroll/runs/{runId}/loan-deductions`, `LND_InstallmentNonDeductions` con origen `Contract` y la alerta; cuota ya pagada por otro medio que vuelve como excedente; reverso de la ordinaria y de la definitiva por el contrato; definitiva con `LoanProposalOutdated` cuando entra un pago entre la propuesta y la aprobación; **I-4**: una aprobación que falla después de aplicar no deja la aplicación en Cartera; un usuario `jefe` no reversa el pago de Nómina (`Lending.Reversal.OwnedByCollector`, US10-6) (FR-088, FR-112)
+- [ ] T0522 [P] [US5] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/ConcurrenciaPagoYCausacionTests.cs` (nombre de DT §2.25) con sus escenarios de pagos: un pago mientras la tanda causa el mismo crédito (el proceso salta con `SKIP LOCKED`/`READPAST` y el pago pone al día, ninguno se pierde); dos recaudadores interactivos sobre la misma obligación (uno aplica, el otro `Lending.Payment.DistributionChanged`); dos no interactivos (los dos aplican, el segundo sobre el estado nuevo, C39); un lote de Nómina y otro del recaudador de prueba sobre los mismos créditos sin interbloqueo (orden por Id, §3.11); `Lending.Contract.TransactionRequired` al llamar sin transacción en curso (sólo verificable con base real). La fase de US6 suma los de reserva
+- [ ] T0523 [P] [US5] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/IdempotenciaDeCarteraTests.cs` (nombre de quickstart §1.7) con pago, reverso, resolución de saldo y cambio de preferencia: tres veces con la misma clave → cero duplicados, `AlreadyApplied` con el comprobante original; la misma clave con otro valor → `Lending.Contract.KeyReused`; la clave del reverso (`{clave}:reverso`) repetida con otro motivo → `KeyReused`; las rutas de pantalla repiten con `Idempotent-Replayed: true` (SC-010). La fase de US6 suma reserva y mensaje
+- [ ] T0524 [P] [US5] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/DoblesDePruebaDeCarteraTests.cs` **(nuevo)**: `GET /api/lending/test-doubles/treasury/orders` muestra la orden emitida por un desembolso; `POST …/treasury/orders/{orderPublicId}/results` con `Rejected` → `ResultadoDelGiro` consumido por `ConsumeTreasuryResultCommand`, `DesembolsoReversado` y crédito `PendingDisbursement`; con `Disbursed` después de una anulación, no reversa; sin `Lending.TestDoubles.Operate` → 404; sin filas `TST` en la cooperativa el recaudador de prueba responde `Lending.Contract.CollectorNotRegistered` (cubre el «transferencia rechazada por `TesoreriaDePrueba`» que necesita US3; ver notas, contradicción 9)
+
+### Implementation for User Story 5
+
+#### Domain
+
+- [ ] T0525 [US5] Verificar en `src/Core/IngenIA365ERP.Domain/Enums/Lending/` (base de Cartera de la fase 3) `PaymentModality`, `PrepaymentChoice`, `AllocationOrder`, `LoanConcept`, `LoanOperationKind` (`Payment`, `PaymentReversal`, `PreferenceChange`, `CreditBalanceResolution`), `LoanTransactionKind` (`PaymentAllocation`, `PaymentReallocation`, `AdvanceReceived`, `AdvanceApplied`, `CreditBalanceRecognized`, `CreditBalanceSettled`, `Recovery`), `NonDeductionOrigin`, `PreferenceOrigin` (`Application` 1 … `InheritedFromLimit` 5) y `NonDeductionReason` con `DeductionPriority` (C56), con los números de `data-model.md` §9; agregar lo que falte (DT §2.7)
+- [ ] T0526 [US5] Crear `src/Core/IngenIA365ERP.Domain/Lending/Payments/Prelacion.cs`: el orden sellado (`AllocationOrder`, `ConceptPriority`, `SuspenseWithItsConcept`, `AllowsSpecificInstallmentOutOfOrder` de `LoanTermsVersion`), por defecto gastos informados → seguros → mora con su suspenso → corriente con su suspenso → capital, cuota más antigua primero; `ConceptFirst` como alternativa (FR-030, FR-072, `data-model.md` §1.8)
+- [ ] T0527 [US5] Crear `src/Core/IngenIA365ERP.Domain/Lending/Payments/AplicadorDePagos.cs` con `Distribuir(EstadoDelCredito, SolicitudDeDistribucion, Prelacion, RedondeoDeCartera)` → `DistribucionDePago` **(nuevo)** (líneas por cuota y concepto, `Applied`, `Advance` con su cuota, `CreditBalance`, `Surplus`, `RequiresPlanRegeneration`, avisos): las siete modalidades (T31, M10), el anticipo que cubre la cuota al vencer y no reduce intereses (D6, D8), el abono extraordinario con elección o preferencia y, sin ninguna, saldo a favor (D24), cancelación con el anticipo del mismo crédito (D7), mayor que el capital = cancelación (D5); sin IO, sin `double` ni `Math.Pow` (`ElMotorDeCarteraEsDecimal`), la **misma** función para simular y aplicar (FR-072); también expone la aplicación del anticipo al vencer que usa el paso (5) del ciclo diario de US4
+- [ ] T0528 [US5] Completar `src/Core/IngenIA365ERP.Domain/Lending/Replay/ReconstruccionDeCredito.cs` y `EntradaDeReconstruccion.cs` (motor de US4) para las operaciones `Payment`, `PaymentReversal`, `CreditBalanceResolution` y `ProvisionalCollection`: la distribución se **recalcula** desde la decisión (modalidad, valor, fecha valor, elección) en orden de fecha valor y registro, así un pago fechado atrás o un reverso redistribuyen los posteriores (D4, FR-081); los pagos con reverso registrado ≤ R no entran (T24); anticipos y saldo a favor como pasivos del crédito; altura de mora sin las cuotas cubiertas por anticipo (T30); reanudación de la causación al ponerse al día (FR-065)
+- [ ] T0529 [P] [US5] Agregar a `src/Core/IngenIA365ERP.Domain/Lending/HuellaDeCartera.cs` la huella canónica de simulación (`DeSimulacion`, **(nuevo)** como método) y a `src/Core/IngenIA365ERP.Domain/Lending/Schedules/GeneradorDePlan.cs` la regeneración tras un abono extraordinario con `ReduceTerm` o `ReduceInstallment` (versión nueva del plan, Σ capital = saldo, SC-017; FR-075)
+
+#### Puertos y validadores (`Application/Common/Integration/Lending`)
+
+- [ ] T0530 [US5] Completar en `src/Core/IngenIA365ERP.Application/Common/Integration/Lending/` (el puerto y su stub `ContratoDeObligacionesSinActivar` los dejó la fase 3) los records y enums exactos de `interfaces.md` §3.1–§3.9 y §14: `Recaudador`, `SolicitudDeListado`, `SolicitudDeSimulacion` (con `PaymentIdempotencyKeyToReverse`, C38), `SolicitudDeAplicacion`, `PagoAAplicar`, `ReferenciaDeRecibo`, `NoDescontado`, `SolicitudDeReverso`, `SolicitudDeResolucion`; salidas `RespuestaDelContratoDto<T>`, `RespuestaDeAplicacionDto`, `NoDescontadoRegistradoDto`, `ListadoDeObligacionesDto`, `ObligacionListadaDto`, `SimulacionDePagoDto`, `LineaDeDistribucionDto`, `SaldosDeObligacionDto`, `PlanResumidoDto`, `CuotaDelPlanDto`, `ComprobanteDeAplicacionDto`, `ComprobanteDeReversoDto`, `ComprobanteDeResolucionDto`; enums `ClaseDeRecaudador`, `ClaseDeMedioDeRecaudo` (`OwnPayrollDeduction = 20`, `ExternalPaymasterDeduction = 21`, `InternalOffset = 22`, data-model §9.4; ya fijados en la fase 3), `ModalidadDePago`, `EleccionDeAbono`, `FormaDeAplicacion`, `MotivoDeNoDescuento` (con `DeductionPriority`, C56), `ResultadoDelContrato` (con `Answered`, C28), `EstadoDeCartera`, `EstadoDeObligacion`, `ConceptoDeObligacion`, `RolEnLaObligacion`, `FormaDeResolucion`; valores idénticos a los del motor (DT §2.7)
+- [ ] T0531 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Contrato/SolicitudDeAplicacionValidator.cs`, `SolicitudDeReversoValidator.cs`, `SolicitudDeResolucionValidator.cs` y `SolicitudDeSimulacionValidator.cs` **(nuevo)**: forma de cada ítem (clave ≤ 150 con la gramática del recaudador de T21 y C35, `SimulationId` según la forma, motivo obligatorio en el reverso, `Concept` sólo `CreditBalance` o `Advance`, `TargetObligationPublicId` y `TargetModality` con `ApplyToOtherObligation`), errores como `Validation.Invalid` con `data.errors[] { field, code }`
+
+#### Application — Pagos
+
+- [ ] T0532 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/ReglasDeFechaValor.cs` **(nuevo)**: futura, D4 con `Pagos.DiasMaximosFechaValor` leído por `LectorDeParametros` (exenta `Payroll`, A9), mes con cierre de Cartera vigente → permiso `Lending.Payments.BackdateBeforeClose` y su límite de monto del usuario que actúa por `IPermissionChecker` e `IActorActual` (nunca el alcance, C41, D16), corte de la carga activada (`Lending.Contract.BeforeCutoff`, T84); `HoyLocal` (T9); la usan el contrato y la simulación de pantalla
+- [ ] T0533 [P] [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/ClasesDeMedioDeRecaudo.cs` **(nuevo)** (matriz clase de recaudador × clase de medio de `interfaces.md` §3.2 y §3.14; `Lending.Contract.UnknownMeansClass` y `Lending.Payment.MeansClassNotAllowed`, C30) y `FirmezaDelPago.cs` **(nuevo)**: `FinalityDate` = fecha de aplicación + días hábiles de `Pagos.FirmezaDiasPorClaseDeMedio` por `ICalendarioHabil` (D23; `InternalOffset` en firme al aplicarse), escrita en la operación y en `FinalityUntil` del comprobante (FR-082)
+- [ ] T0534 [P] [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/PreferenciaDePrepagoVigente.cs` **(nuevo)**, el único lector de `LND_PrepaymentPreferences` por crédito (o por el cupo rotativo de origen) con `RegisteredAt ≤ R` (T24); lo usan el contrato, la simulación y el nacimiento de la obligación de una venta (`InheritedFromLimit`, fase de US6)
+- [ ] T0535 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/AplicacionDePagos.cs` **(nuevo)**, el núcleo de escritura que usan `AplicarAsync`, la aplicación destino de `ResolverSaldoAFavorAsync` y la recogida de US3 (`OwnLoanPayoff`): bajo el cerrojo, idempotencia por `(CollectorCode, IdempotencyKey)` con `HuellaDeOperacion.Calcular("Lending.ObligationContract.Aplicar", cuerpo)` sin `SimulationId` (§3.10: misma huella → `AlreadyApplied` con el comprobante original; otra → `Lending.Contract.KeyReused`), puesta al día del crédito hasta la fecha valor (T6, C04), reconstrucción y `AplicadorDePagos.Distribuir`, comparación de huella en la forma interactiva (`Lending.Payment.DistributionChanged` con `Data["simulation"]`, sin escribir, T32), escritura por `RegistroDeCartera` (`LoanOperation` `Payment` con recaudador, clase de medio, pagador, recibo, `SimulationId`, `ExcessAmount`, `FinalityDate`, `PrepaymentChoice`, `ChoiceFromPreference`, `PrevalidationOutcome`; filas `PaymentAllocation`, `AdvanceReceived`, `CreditBalanceRecognized`, `Recovery`; versión del plan si cambia; `RegistroDeCartera.Conciliar` para la fecha valor anterior a lo causado), cierre de la reclamación al seguro (T102), estado `PaidOff` al cancelar, `Sequence`/`RegisteredAt` monótonos, numeración al final con `NumeradorDeCartera` en el orden del lote (T34)
+- [ ] T0536 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/ReversionDePago.cs` **(nuevo)**, el núcleo del reverso que usan `ReversarAsync`, `ReverseLoanPaymentCommand` y la anulación de un crédito con recogidas de US3 (C11): operación `PaymentReversal` con `ReversesOperationId` (UK filtrado) y `ReversedByOperationId` del original en `[EscrituraUnica]`, clave `{clave}:reverso`, un espejo por cada fila del pago con `ReversesTransactionId` y, con `RegistroDeCartera.Conciliar`, cada diferencia por (día valor, concepto, cuota) con fecha contable del período abierto (`FechaContable`, T36); los pagos posteriores redistribuidos con su fecha valor y elección (`ReallocatedPaymentNumbers`); reapertura si el pago había cancelado; `Lending.Reversal.OfReversal`; lo cerrado no se reescribe (FR-080); deja el punto de enganche para anular documentos por `VigenciaDeDocumentos` (vacío hasta la fase de US13, que lo conecta)
+- [ ] T0537 [P] [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/ResolucionDeSaldoAFavor.cs` **(nuevo)**: operación `CreditBalanceResolution` (`CreditBalanceSettled` o `−Advance`) y, según `FormaDeResolucion`, la aplicación destino por `AplicacionDePagos` con `InternalOffset`, pagador el deudor, `RelatedOperationId` y clave `{clave}:destino`; cerrojo de las dos obligaciones en orden de Id; reglas de T0512 (§3.9, `data-model.md` §7.10)
+- [ ] T0538 [US5] Ampliar `src/Core/IngenIA365ERP.Application/Lending/Integration/EmisionDeCartera.cs` (molde `EmisionDeInventario`; la base la dejó la fase de US3) con la familia de pagos: `PagoAplicado` y sus acompañantes en la unidad de la operación (C01), `PagoReversado` con `related` y modo heredado (C08), `PagoReversadoPorCartera` con `SolicitudDeEmision.Destino` según la clase del recaudador (§11.5 de `mensajes.md`), `SaldoAFavorResuelto`, `CausacionReanudada` y `DimensionContableCambiada` aparte con `Confirmation:{tipoDeHecho:N}` (`LND_FactTypes.PublicId`); sobre por T13 (`OperationDate` = fecha contable, `BranchPublicId` de la oficina del crédito, `PersonPublicId` = pagador, `OriginDocumentClass` `PaymentApplication`, `PaymentReversal`, `CreditBalanceResolution`); modo por `ModoDePasoDeCartera`; y verificar que los records `PagoAplicadoV1`, `PagoReversadoV1`, `AnticipoRecibidoV1`, `CobroDeInteresEnSuspensoV1`, `SaldoAFavorReconocidoV1`, `SaldoAFavorResueltoV1`, `RecuperacionDeCastigadaV1`, `AjusteDeCausacionPorFechaValorV1` y `PagoReversadoPorCarteraV1` (campos de `mensajes.md` §10.7–§10.14 e `interfaces.md` §3.15, con `CollectorRefV1` y `ReceiptRefV1`) están completos en `src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/` (el catálogo se declara entero en K1)
+- [ ] T0539 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/AuditoriaDeEscriturasDeCartera.cs` **(nuevo)**: escribe el intento (`Lending.ObligationContract.Attempted`, `Lending.NumberReservation.Attempted`) por un contexto y una conexión aparte, que sobrevive a la reversión de quien llama, con `OperationKey`, recaudador, método, cantidad de ítems, total, huella, usuario, oficina y dispositivo; y el hecho (`…Applied`, `…Reversed`, `…CreditBalanceResolved`, `…Rejected`; `Lending.NumberReservation.Reserved`/`.Released`) en `COR_AuditOutbox` dentro de la transacción (T68, A11); lo reutiliza la fase de US6 para las reservas
+- [ ] T0540 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/ContratoDeObligacionesDeCartera.cs`, la implementación real de las cinco operaciones con los pasos 1 a 14 de `interfaces.md` §3.3: intento, validador explícito, `TransaccionExplicita.HayEnCurso(db)` (si no, `Lending.Contract.TransactionRequired`; nunca abre ni confirma la suya), activación por `LND_Activations` (`Lending.NotActivated`), registro por `IRegistroDeIntegracion` (§3.2), validación previa por `ValidacionPreviaContableDeCartera` fuera del cerrojo y siempre como aviso (§3.12, A8), `ICerrojoDeCartera` en una pasada para todo el lote (`LND_Setup` compartido → `LND_DebtorControls` → `LND_LoanControls` por Id; los cerrojos que la transacción ya tiene no esperan), `AplicacionDePagos` / `ReversionDePago` / `ResolucionDeSaldoAFavor`, no descontados, emisión y hecho de auditoría; un rechazo de un ítem no rechaza a los demás y uno de lote se repite en cada ítem (§3.4); se llama directo, nunca por `ISender` (T91, T101)
+  · `ListarAsync` (§3.5): obligaciones vivas y las `PaidOff` con anticipo o saldo a favor por resolver; `AdmittedModalities` sin `SpecificInstallment` si la línea no la permite y sin `Advance` en un castigado; `BlockReasons`, `ValidationFailed`, `HasPaymentAgreement = false` hasta K4; lectura auditada `Lending.ObligationContract.Listed` por `LendingAuditEmitter` con D, R y la huella
+  · `SimularAsync` (§3.6): `Alternatives` con los dos planes sin `Choice`; `Notices` del anticipo; simulación de un reverso por `PaymentIdempotencyKeyToReverse` (C38; sin pago, `Generic.NotFound`); usura futura sin certificar con la última conocida (D11) y `NationalValues.Missing` en una fecha pasada
+- [ ] T0541 [US5] Escribir los no descontados en el mismo `AplicarAsync` en `src/Core/IngenIA365ERP.Application/Lending/Integration/Contrato/NoDescontadosDelLote.cs` **(nuevo)**: `LND_InstallmentNonDeductions` con `Origin = Contract`, `RepaymentInstallmentId` de la cuota, `ContractOperationKey` (UK filtrado), idempotente por clave; alerta `Cartera.CuotaNoDescontadaPorNomina` por `IAlertas` con `DedupKey` por crédito y cuota y destinatarios de `Lending.Loans.Read` del alcance; sin hecho contable (FR-112, T92, `data-model.md` §24.9)
+- [ ] T0542 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/ObligacionesDeCartera.cs` **(nuevo, nombre fijado en DT §2.9)**, la implementación real de `IConsultaDeObligaciones` (`ObligacionesAsync`, `CuotasDeNominaAsync`) por `CargadorDeReconstruccion` en bloque, con la forma de pago nómina propia de `LND_LoanPayrollLinks` (C44) y `MigratedNotActivated` desde la carga aplicada vigente (C26); sin alcance de Cartera; reemplaza a `ConsultaDeObligacionesSinActivar` en `DependencyInjection` cuando nace `CarteraNucleo` (§2 de `interfaces.md`)
+- [ ] T0543 [US5] Registrar en `src/Core/IngenIA365ERP.Application/DependencyInjection.cs` `ContratoDeObligacionesDeCartera` y `ObligacionesDeCartera` en lugar de los stubs «sin activar» de la fase 3 (Scoped, el `IApplicationDbContext` del ámbito de quien llama), y los validadores de T0531 como servicios
+- [ ] T0544 [US5] Completar el lado de Nómina que la fase 3 dejó contra el stub (sólo si falta algo al correr T0517): `src/Core/IngenIA365ERP.Application/Payroll/Services/CalculationInputLoader.cs` y `Payroll/Novelties/RecurringNovelties/RecurringNovelties.cs` materializan una `LoanDeduction` por empleado, obligación y período con `PAY_Novelties.ObligationPublicId`/`ObligationNumber`, reemplazada al recalcular y anulada al descartar (C55); `RecaudoPorNomina` arma el lote con `CycleInstallment` por lo descontado, `NoDescontado` por el resto (`SourceItemPublicId` = la fila de `PAY_PayrollLoanDeductions`) y la clave `NOM:{runPublicId:N}:{obligationPublicId:N}` en orden ascendente de `ObligationPublicId` (C32, §6.4); la definitiva con `FullPayoff`, `CycleInstallment` o `FreeAmount` según `DeduccionAlRetiroModo` y fecha valor de aprobación (D15)
+
+#### Application — pantalla
+
+- [ ] T0545 [P] [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/Queries/SimulateLoanPaymentQuery.cs` (`Lending.Payments.Simulate`, sin clave, alcance por `FiltroDeAlcanceDeCartera`): `PaymentSimulationDto` de `api.md` §10 con `simulationId`, distribución, saldos resultantes, `alternatives` (`ReduceTerm`, `ReduceInstallment`), `notices`, `validUntil`; la misma `AplicadorDePagos` que el contrato; `Lending.Payment.SpecificInstallmentBlocked` con `pendingBefore[]`
+- [ ] T0546 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/Queries/PreviewLoanPaymentReversalQuery.cs` y `Commands/ReverseLoanPaymentCommand.cs` (`Lending.Payments.Reverse`; el comando `IOperacionIdempotente` con `reason` y `expectedPreviewSha256`): la vista previa devuelve `previewSha256`, el reverso por concepto, las reasignaciones antes/después de cada pago posterior, `documentsToVoid` (vacío hasta US13), `ratingNow`/`ratingAfter` (calificación informativa diaria; nulos hasta la fase de US9 parte K1, que los llena) y `notifiesCollector`; el comando rechaza `Payroll` y `Contributions` (`Lending.Reversal.OwnedByCollector`, T31, C37), compara la huella (`Lending.Reversal.PreviewChanged`), reversa por `ReversionDePago` con `initiatedBy = Lending` y emite `PagoReversado` + `PagoReversadoPorCartera` (FR-080); el evento de auditoría lleva la distribución completa (T23)
+- [ ] T0547 [P] [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Payments/Commands/ChangePrepaymentPreferenceCommand.cs` (ruta del crédito; la del cupo rotativo es de US2) y `Queries/GetPrepaymentPreferenceQuery.cs`: versión nueva de `LND_PrepaymentPreference` (H) y operación `PreferenceChange` por `RegistroDeCartera`, motivo y constancia opcional; `Lending.PrepaymentPreferences.Manage` (C85); y en `AplicacionDePagos` encolar por la mensajería al deudor de K1 el informativo `ABONOCAP` (propósito `Informative`, variables `ValorAplicado`, `ModalidadAplicada`, `NuevaCuota`, `NuevoPlazo`) cada vez que un abono sin interacción usa la preferencia, con la opción de cambiarla (D24, quickstart §3.12)
+- [ ] T0548 [P] [US5] Verificar que `src/Infrastructure/IngenIA365ERP.Identity/Seed/LendingPermissionCatalogSeeder.cs` siembra `Lending.PrepaymentPreferences.Manage` (K1; C85: 123 códigos `Lending.*`) y que `PerfilesSugeridos` lo da a `cartera.asesor` y `cartera.jefe`, `Lending.Payments.BackdateBeforeClose` a `cartera.gerente` y `Lending.TestDoubles.Operate` a ninguna plantilla (`api.md` §2.5); agregar lo que falte con su prueba en `PerfilesSugeridosDeCarteraTests`
+
+#### Dobles de prueba
+
+- [ ] T0549 [US5] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/DoblesDePrueba/RecaudadorDePrueba.cs` (`IDestinoDeMensajes` del destino `Receipts`: consume `PagoReversadoPorCartera` y responde `Processed` sin estado propio; desde K2 `DescuentosPorPagaduria`) y sus comandos y consultas en la misma carpeta (la `TesoreriaDePrueba` de la misma carpeta, con `ListTestTreasuryOrdersQuery` y `EmitTestDisbursementResultCommand`, la dejaron la fase 3 y US3; aquí no se recrea): `ListTestCollectorObligationsQuery`, `SimulateTestCollectorPaymentQuery`, `ApplyTestCollectorPaymentCommand` (recaudador `TST`, clase `Test`, transacción por `TransaccionExplicita` alrededor del contrato, como lo haría Recaudo), `ReverseTestCollectorPaymentCommand`, `ResolveTestCollectorCreditBalanceCommand` y `ListTestCollectorReversalsQuery` (lee las entregas `Receipts` de la bandeja) (`api.md` §20, `mensajes.md` §18, T20, C35)
+- [ ] T0550 [US5] Completar la guarda `src/Presentation/IngenIA365ERP.API/Integration/DoblesDePruebaDeCartera.cs` (la creó la fase 3 con `TesoreriaDePrueba`, C106) para registrar también `RecaudadorDePrueba` y sus comandos: sólo si `Lending:TestDoubles:Enabled = true` **y** `!IHostEnvironment.IsProduction()`; si la configuración los pide en producción, `InvalidOperationException` al arrancar con un mensaje en español (FR-089, T20); `appsettings.Development.json` y la fixture `CentralIdentityApiFixture` con `Lending:TestDoubles:Enabled = true` (dueño: pregunta B4, propuesta: producción = `IsProduction()` y QA no corre como Production; si corre así, en QA no hay dobles)
+
+#### API
+
+- [ ] T0551 [US5] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/PaymentsEndpoints.cs` (grupo `/api/lending/loans`): `POST /{id}/payment-simulations` (`Lending.Payments.Simulate`, sin clave), `POST /{id}/operations/{operationId}/reversal-preview` (`Lending.Payments.Reverse`, sin clave), `POST /{id}/operations/{operationId}/reverse` (`Lending.Payments.Reverse`, `Idempotency-Key`), `GET` y `POST /{id}/prepayment-preference` (`Lending.Loans.Read` · `Lending.PrepaymentPreferences.Manage`); `RequireAuthorization`, `ErrorEnvelopeFilter`, `.RequirePermission`, el 404 genérico fuera de alcance y `.AuditarIntentoDenegado(ModuloDeAuditoria.Lending)` del grupo (`api.md` §8.3, §10). **No hay ruta para aplicar pagos** (CH47)
+- [ ] T0552 [P] [US5] Ampliar `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/TestDoublesEndpoints.cs` (lo creó US3 con `/treasury/{orders, orders/{orderPublicId}/results}`) con las rutas del recaudador de `api.md` §20 de K1 (`/api/lending/test-doubles/collector/{obligations, simulations, payments, payments/{key}/reverse, credit-balances/resolve, reversals}`), `Lending.TestDoubles.Operate`, `Idempotency-Key` en las escrituras, publicadas sólo cuando `DoblesDePruebaDeCartera` las registró (en producción no existen: 404); el cuerpo de `credit-balances/resolve` usa los valores de `FormaDeResolucion` (ver notas, contradicción 6)
+- [ ] T0553 [P] [US5] Completar `GET /api/lending/loans/{id}/operations/{operationId}` (`GetLoanOperationQuery`, de la fase de US4) como **comprobante de aplicación** (FR-077): distribución por cuota y concepto, recibo del recaudador como referencia, clase de medio, pagador, excedente, firmeza, `reverses`/`reversedBy` y los mensajes con su estado; y `GET /api/audit/logs?operationKey=` que muestra juntos el intento y el hecho del contrato y rotula «revertido con el recaudador» un intento sin hecho pasado el tiempo máximo de una transacción (A11, `api.md` §24)
+
+#### Cliente y pantallas
+
+- [ ] T0554 [P] [US5] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/PagosClient.cs` **(nuevo)** (simular, vista previa y reverso, preferencia) y amplía `DoblesDePruebaClient.cs` (de US3) con el recaudador, tipados, con `Idempotency-Key` en las escrituras y sin poner `Authorization` a mano (`ElTokenDeSesionLoPoneElHandler`); registrarlos en el `Program.cs` de Web, Web.Client y App
+- [ ] T0555 [US5] Agregar a la página `/cartera/creditos/{id:guid}` (de US4) los componentes `src/Presentation/IngenIA365ERP.Shared/Components/Cartera/Pagos/SimuladorDePago.razor` **(nuevo)** (siete modalidades, dos planes lado a lado en el abono, aviso del anticipo, excedente), `ReversoDePago.razor` **(nuevo)** (motivo, vista previa con las reasignaciones antes/después y los documentos a anular, confirmar con `expectedPreviewSha256`; oculto con `PermissionGate` para pagos de Nómina, que muestran «sólo Nómina lo reversa») y `PreferenciaDePrepago.razor` **(nuevo)** (vigente e historia, cambio con motivo); cada zona con `IndicadorDeCarga`/`EstadoDeCarga`, `PermissionGate Required="Lending.…" MostrarAviso="true"`, mensajes en español sin códigos, sin colores literales (T100); reverso en tres pasos o menos (FR-013)
+- [ ] T0556 [US5] Ampliar `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/DoblesDePrueba.razor` (`@page "/cartera/dobles-de-prueba"`, la «caja de prueba» que US3 creó con la pestaña Tesorería) con la pestaña **Recaudador** (buscar persona con `PersonSearchPicker`, listar obligaciones, simular, aplicar en forma interactiva o no interactiva con la clave `TST:{guid:N}` que propone y deja repetir, reversar por clave, resolver saldos, ver `PagoReversadoPorCartera` recibidos) y pestaña **Tesorería** (órdenes recibidas y emitir `Disbursed`, `Rejected`, `CheckNotCashed` o `Voided`); rótulo visible «Doble de prueba: no existe en producción»; si las rutas responden 404, muestra «Los dobles de prueba no están disponibles en este ambiente»; enlace en el grupo «Cartera» del menú con `PermissionGate` `Lending.TestDoubles.Operate` (`TodoEnlaceDelMenuTieneSuPagina`, `LasPantallasDeCarteraEstanEnElMenu`)
+
+#### Documentación
+
+- [ ] T0557 [P] [US5] Crear `docs/manual/cartera-pagos-y-contrato-de-obligaciones.md` **(nuevo)**: las cinco operaciones, las dos formas, las siete modalidades y la prelación, anticipos y saldos a favor, la preferencia del deudor (Ley 2032), fecha valor y atribución antes de un cierre, firmeza por clase de medio, reverso con pagos posteriores, Nómina como recaudador y sus no descontados, qué responde antes de activar; y `docs/operaciones/cartera-dobles-de-prueba.md` **(nuevo)**: cómo se habilitan (configuración, filas `TST` en `/admin/participantes-de-integracion`), qué no existe en producción y por qué el arranque falla si se piden allí; enlazarlos en `docs/INDICE-DOCUMENTACION.md` y en `ManualCatalogoTests`
+
+**Checkpoint**: un crédito se origina, desembolsa, causa, paga y reversa de punta a punta con el recaudador y la
+tesorería de prueba (primera demostración al dueño, tail «Implementation Strategy»); `ContratoDeObligacionesTests`,
+`NominaRecaudaPorElContratoTests`, `ConcurrenciaPagoYCausacionTests` (pagos), `IdempotenciaDeCarteraTests` (pagos) y
+`DoblesDePruebaDeCarteraTests` verdes en PostgreSQL y SQL Server; los casos dorados 11, 16–21 y 31 al centavo.
+
+---
+
+## Phase 10: User Story 6 - Ventas a crédito de Comercial sobre un cupo otorgado (Priority: P1) — entrega K1
+
+**Goal**: Comercial vende a crédito sobre un cupo rotativo con Cartera real (E-02, FR-145): las consultas de cupo y
+estado y de estado de validación pasan a `ConsultasDeCartera` (FR-058, FR-059, C31: verifica listas sin escribir);
+la reserva y la liberación del número a `ReservasDeCartera`, dentro de la confirmación de Comercial, bajo un punto de
+guardado propio (C25), con el orden global de cerrojos (C24) y descontando cupo (FR-057, T22); `DestinoCartera` consume
+`VentaACreditoRegistrada` v1 y v2 y `AjusteDeVentaACredito` con recibo y evaluaciones (T17): crea siempre la obligación
+con desembolso en especie (FR-050), la evalúa a la fecha de la venta (FR-051), la marca y bloquea al deudor si falla
+(FR-052), aplica los cobros provisionales guardados al activar (C62), ajusta, anula o reemplaza (FR-054, C17) y responde
+`ObligacionCreada` / `ObligacionRechazada` con la venta como raíz de cadena (FR-053, T18, C20, C95, C102); las ventas
+fechadas hasta el corte siguen la conciliación de FR-143 y las que llegan sin fila quedan no incorporadas (C63, C99);
+Comercial guarda número y estado en `INV_LendingObligationResponses` (`DestinoInventario`); la prueba de volumen del POS
+mide el orden de cerrojos.
+
+**Independent Test**: un asociado con cupo rotativo y Cartera activada (`ActivarCarteraAsync`): la consulta responde en menos de un segundo
+con disponible, estado y líneas con plazo, cuotas y periodicidades (US6-1); la confirmación de una venta en el POS
+reserva el número y repetir la reserva del mismo pago devuelve el mismo número (US6-2); la v2 crea el crédito con ese
+número, la fecha y la referencia de la factura, y Comercial guarda `ObligacionCreada` (US6-3, SC-005 en su parte de
+consumo); una venta pendiente de validar que falla crea la obligación marcada, bloquea crédito nuevo y no anula la venta
+(US6-4); una nota crédito parcial baja capital, reversa el interés de la parte devuelta y recalcula el plan (US6-5); el
+mismo mensaje dos veces no crea otro crédito (US6-7). Quickstart §3.7.
+
+### Tests for User Story 6
+
+#### Dominio
+
+- [ ] T0558 [P] [US6] Escribir el caso dorado `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/25-nota-credito-parcial-y-anulacion.json` (forma de quickstart §1.2): desembolso en especie; nota crédito parcial que baja capital, reversa el interés causado sobre la parte devuelta y recalcula el plan según `NoteRecalculation`; anulación con pagos que deja el crédito sin efecto desde su origen y lo pagado como `CreditBalance`; nota débito que sube capital y regenera el plan (FR-054, US6-5; dueño: firma de la contadora)
+- [ ] T0559 [P] [US6] Completar `ReconstruccionDeCredito` en las pruebas de `tests/IngenIA365ERP.Domain.Tests/Lending/Replay/AjusteDesdeComercialTests.cs` **(nuevo)**: el ajuste se aplica desde su fecha valor con el signo que manda (FR-054); la anulación espeja causación, mora y cargos desde el origen; la reconstrucción con R anterior al ajuste no cambia (T24)
+
+#### Application — Cartera
+
+- [ ] T0560 [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/ConsultasDeCarteraTests.cs` **(nuevo)**: `EstadoCrediticioAsync` con `Active`, `InArrears` (`DaysPastDue`), `Blocked` (`BlockReason` en español y sin detalle de listas), `NoRelationship`; `AllowsSale` por estado y `Cupo.MoraMaximaParaVender`; `TotalQuota` y `AvailableQuota` = cupo − saldos vivos − reservas vigentes − aprobadas sin desembolsar, como deudor y codeudor (FR-058); `Lines` de origen comercial que admiten el tipo de tercero con las periodicidades que tienen fila en `LND_CommercialTermEquivalences`; coincidencia en listas o falta de autorización `CreditProcessing` → `Blocked` **sin escribir** `LND_ScreeningResults` (C31); deja `Lending.CreditStatus.Queried` y `EvidenceId` = su `EventId` (FR-059); antes de activar `NotEnabled`; `EstadoDeValidacionAsync` con la tabla de `interfaces.md` §5.1 (incluidos `ConfirmedByException` → `Validated` y `Rejected` con `NotRetryableAt` → `NotIncorporated`, C102)
+- [ ] T0561 [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/ReservasDeCarteraTests.cs` **(nuevo)**: validador explícito; `Reserved` con número del numerador, `ExpiresOn` = hoy + `Reservas.DiasDeVigencia` y la evidencia de consulta (C31); la misma clave y huella → el mismo número; otra huella → `Lending.Reservation.KeyReused`; cupo insuficiente → `Rejected` con `Lending.Reservation.QuotaExceeded` (`data.availableQuota`); bloqueado o en mora que no permite vender → `Lending.Reservation.Blocked`; liberar: `Reserved` → `Released`, repetir → `Released`, una `Used` o `Expired` responde su estado sin cambiarlo (con `Code = Lending.Reservation.AlreadyUsed` en la usada; ver notas, contradicción 7), inexistente → `Lending.Reservation.NotFound`; no consulta la matriz contable (T56); `Attempted` aparte y `Reserved`/`Released` en el outbox (T68); antes de activar `NotEnabled`
+- [ ] T0562 [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/DestinoCarteraTests.cs` (nombre de quickstart §1.5) y `ConsumoDeVentaACreditoTests.cs` **(nuevo)** sobre `ConsumeCommercialCreditMessageCommand`, con la tabla de desenlaces de `data-model.md` §21.1 y `mensajes.md` §15.3–§15.4:
+  · v1 y v2; línea por FR-050 (la del mensaje, la sugerida, la por defecto del tipo de tercero), fecha de origen de la venta, valor del pago a crédito, condiciones traducidas por las equivalencias; desembolso `InKind` con la factura y `AccountsReceivableRecordedBy` en el crédito (FR-056)
+  · número: el reservado (`Reserved`/`Expired` → `Used`; la vencida alerta `Cartera.ReservaVencida`, C21) o uno nuevo si la reserva no existe o no coincide, con `numberSource = Assigned` y la evaluación anotada (C20)
+  · `pendingValidation = false` → `Processed` sin reevaluar; pendiente → evaluación a la fecha de la venta sin contarla, en orden de llegada y contando las anteriores (FR-051): estado, cupo, concentración, usura, línea con origen comercial, listas (escribe `LND_ScreeningResults`), autorización; negativa → `ValidationFailed(crédito, número, código, motivo)`, `LND_DebtorBlocks` `ValidationFailed`, `Cartera.CoincidenciaEnListas` al oficial si fue por listas, la marca no cambia causación, cobro ni calificación (FR-052)
+  · no convertible (persona inexistente, línea inválida sin alterna, periodicidad sin equivalencia, versión desconocida) → `Rejected` reprocesable, sólo la evaluación, **sin** `ObligacionRechazada` (C95, C102); un reproceso que vuelve a fallar suma otra evaluación y sigue sin respuesta
+  · recibo existente no `Rejected` → `AlreadyProcessed` sin emitir; colisión del UK por concurrencia → `AlreadyProcessed`
+  · preferencia de prepago heredada del cupo rotativo (`InheritedFromLimit`, FR-049); cobros provisionales de `LND_ProvisionalCollections` de esa factura aplicados al nacer, con su fecha valor y `CobroProvisionalIncorporado`, una sola vez (C62)
+  · validación previa contable: sólo advierte y sella `PrevalidationOutcome` (T56, D9)
+  · emite en el mismo guardado `CreditoDesembolsado` en especie y `ObligacionCreada` (`Confirmation`, origen el recibo, `CadenaDeOrden` la venta, admite proceso, usuario de origen el de Comercial, T11)
+- [ ] T0563 [P] [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/AjusteDeVentaACreditoTests.cs` **(nuevo)**: `CreditNote`/`Return` baja capital, reversa el interés de lo devuelto, recalcula y deja el exceso como saldo a favor (`CreditoAjustadoDesdeComercial` + `SaldoAFavorReconocido` `CommercialAdjustment`); `Voiding`/`VoidingByDianRejection` → crédito `Voided` sin efecto desde su origen y lo pagado a saldo a favor (`voidedFromOrigin`); `DebitNote` evaluada como venta (entrega `ValidationFailed` si falla); `Replacement` → crédito nuevo enlazado (`OriginLoanId`), `CreditoDesembolsado` con `inKind.replacesLoan` y `ObligacionCreada` con `replacesLoan` (C17); el ajuste espera a su venta; ajuste ≤ corte de una venta migrada → `Processed` sin hechos; posterior al corte sobre la obligación migrada o en cero → FR-054; de una venta aceptada sin migrar o fuera de Cartera → `NotIncorporated` y `ObligacionRechazada` `SinObligacion` no reprocesable (FR-143)
+- [ ] T0564 [P] [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/VentasAnterioresAlCorteTests.cs` **(nuevo)**: con la fila de `LND_MigrationSaleReconciliations` vigente, una venta ≤ corte responde `ObligacionCreada` `Migrated` o `CancelledBeforeCutoff` (`Processed`) o `ObligacionRechazada` `AceptadaSinMigrar` / `AceptadaFueraDeCartera` (`NotIncorporated`); **sin** fila (emitida después de activar) → `NotIncorporated`, `ObligacionRechazada` `Lending.Sale.NotIncorporated` no reprocesable y alerta `Cartera.VentaNoIncorporada` (C63, C99; dueño: pregunta I16, propuesta: fuera de Cartera); nunca se procesa como venta en vivo (FR-143)
+- [ ] T0565 [P] [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Migration/ConciliacionDeVentasDeLaCargaTests.cs` **(nuevo)**: lista sin consumir por `IMensajesEntrantes.PendientesAsync(Lending, [VentaACreditoRegistrada, AjusteDeVentaACredito], corte, página)` y clasifica por factura y pago en `Migrated`, `CancelledBeforeCutoff`, `NotMigratedWithBalance` u `OutsideLendingD29` (`SaleReconciliationOutcome`); cuenta ajustes hasta y después del corte; las ventas con `CreditWithoutLending` no aparecen; una factura no origina dos obligaciones (FR-055)
+- [ ] T0566 [P] [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/MarkLendingInboundMessageNotRetryableCommandHandlerTests.cs` y `ConfirmValidationFailureCommandHandlerTests.cs`: marcar un `Rejected` llena `NotRetryable*` y emite en la misma transacción `ObligacionRechazada` `NoConvertible` `retryable = false` con la clave de la última evaluación (C95, C102); un recibo que no está `Rejected` o ya marcado → `Lending.InboundMessage.NotMarkable`; confirmar por excepción una validación fallida cambia el recibo a `ConfirmedByException` con su `CreditDecision` (sujeto `ValidationFailureException`) y levanta el bloqueo `ValidationFailed`, no la entrega (B8); `Lending.Loan.NotValidationFailed`; `Lending.Attribution.NotExceptionable` en listas, usura, autorización o capacidad (FR-038); por encima de la atribución operativa pasa a decisión; `Lending.Segregation.Conflict`
+- [ ] T0567 [P] [US6] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Integration/TareaDeReservasVencidasTests.cs` **(nuevo)**: `cartera.reservas-vencidas` deja `Expired` las `Reserved` con `ExpiresOn` vencido, nunca reasigna el número, alerta `Cartera.ReservaVencida` con `DedupKey`, sale de inmediato si Cartera no está activada y es idempotente
+
+#### Application — Comercial
+
+- [ ] T0568 [P] [US6] Ampliar `tests/IngenIA365ERP.Application.Tests/Inventory/Sales/CreditoEnLaVentaTests.cs` y `EvaluateSaleCreditQueryTests.cs` con un `IConsultasDeCartera` y un `IReservasDeCartera` que responden como Cartera activada (tabla de `interfaces.md` §5.3): `Blocked` o `AllowsSale = false` → `Inventory.Credit.LendingBlocked`; cupo insuficiente → `Inventory.Credit.QuotaExceeded` con `availableQuota`; sin respuesta en `Cartera.ConsultaSegundos` → `Cartera.PoliticaSinRespuesta`; válida → origen `Validated`, sin aprobación provisional, `ConsultationEvidence`; reserva `Reserved` → `ReservedLoanNumber` y `ReservationPublicId` en el pago y en la v2; reserva `Rejected` → la confirmación no procede; `NoResponse` → la venta sigue sin número (D26); `NotEnabled` → crédito provisional como hoy; `CreditWithoutLending` no consulta, no reserva ni emite (A6, D29; dueño: enmienda A6, propuesta: el dato entra en E-02)
+- [ ] T0569 [P] [US6] Crear `tests/IngenIA365ERP.Application.Tests/Inventory/Integration/DestinoInventarioTests.cs` (nombre de quickstart §1.5): `ObligacionCreada` y `ObligacionRechazada` v1 escriben `INV_LendingObligationResponses` (UK `MessagePublicId`) con número, estado, código, motivo y `Retryable`, **nunca** saldos ni cuotas; responde `Processed` con el `PublicId` de la fila y `AlreadyProcessed` ante la colisión; la venta y `GetSalesDocumentCreditQuery` muestran la última respuesta (número y estado); `DiscardInventoryDraftCommand` y `DiscardPosDraftCommand` llaman `LiberarAsync` (T22)
+
+#### Arquitectura
+
+- [ ] T0570 [US6] Llenar las listas en `tests/IngenIA365ERP.Architecture.Tests/Principles/`:
+  · `El_puerto_de_Cartera_declara_exactamente_sus_dos_consultas` (ampliada, archivo de la 012): los dos métodos de `IConsultasDeCartera` y los dos de `IReservasDeCartera`
+  · `InventarioNoConoceContabilidadNiCartera.cs` y `LaCarteraSoloSeTocaPorSusInterfaces.cs`: Comercial toca Cartera sólo por `Common.Integration.Lending`; `ConsultasDeCartera` y `ReservasDeCartera` viven en `Application/Lending/Integration`; ninguna FK ni navegación de `INV_LendingObligationResponses` a `LND_`; Cartera no lee tablas `INV_` (lee la venta del contenido del mensaje)
+  · `LosPuertosDeCarteraValidanYAuditanSusEscrituras.cs`: `ReservarAsync` y `LiberarAsync`
+  · `LosComandosDeConsumoNoTienenRuta.cs`: `ConsumeCommercialCreditMessageCommand`; `UnSoloConsumidorPorDestino.cs`: `DestinoCartera` (`Lending`) y `DestinoInventario` (`Inventory`)
+  · `EmisionesDeProcesoPermitidas.cs`: `ObligacionCreada`, `ObligacionRechazada`, `CreditoDesembolsado` y `CreditoAjustadoDesdeComercial` nacidos del consumo con el usuario de origen de Comercial; ningún tipo INV admite proceso
+  · `LosComandosDeCarteraLlevanClave.cs`: `ConfirmValidationFailureCommand`, `MarkLendingInboundMessageNotRetryableCommand`; `LosHechosInmutablesNoSeModifican.cs`: `LendingInboundMessageEvaluation` y los campos `[EscrituraUnica]` de `ProvisionalCollection`; `LasLecturasSensiblesDeCarteraSeAuditan.cs`: `Lending.CreditStatus.Queried`; `LasConsultasDeCarteraRespetanElAlcance.cs`: `ListLendingInboundMessagesQuery`, `GetLendingInboundMessageQuery`, `ListLoanNumberReservationsQuery`
+
+#### e2e (colección «Cartera e2e», PostgreSQL y SQL Server) y volumen
+
+- [ ] T0571 [US6] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/CreditoConCarteraTests.cs` (nombre de DT §2.25) sobre una cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` (C107; deja el destino `Lending` habilitado), un asociado con cupo rotativo de US2 y el POS de la 012: consulta de cupo y estado (`POST /api/inventory/sales/credit-evaluations`); confirmación con reserva y la factura con el número; la reserva repetida del mismo pago devuelve el mismo número; v2 consumida con la pasada del despachador a mano y `ObligacionCreada` guardada en Comercial (mide el consumo, SC-005); validación fallida que bloquea crédito nuevo sin anular la venta y responde `Validated` tras la confirmación por excepción; nota crédito parcial con el plan nuevo; mensaje repetido; venta que excede la concentración listada como exceso (SC-022); `CreditWithoutLending` no llega a Cartera; venta fechada hasta el corte llegada después de activar → `NotIncorporated`; marcar no reprocesable una venta no convertible y ver `ObligacionRechazada` en la venta (quickstart §3.7). `Ventas/CreditoProvisionalTests` sigue verde
+- [ ] T0572 [P] [US6] Sumar a `tests/IngenIA365ERP.API.IntegrationTests/Lending/ConcurrenciaPagoYCausacionTests.cs` (la creó la fase de US5) reserva y desembolso del mismo deudor que no se pasan del cupo, y dos confirmaciones simultáneas de ventas a crédito del mismo asociado (una `QuotaExceeded`) (T34); y a `IdempotenciaDeCarteraTests.cs` tres reservas con la misma clave (un número), una con otro monto (`Lending.Reservation.KeyReused`), tres entregas del mismo mensaje de venta (un crédito, la misma respuesta) (SC-010)
+- [ ] T0573 [P] [US6] Crear o ampliar `tests/IngenIA365ERP.API.IntegrationTests/Lending/ConsultasYSimulacionesPerformanceTests.cs` (`[FactDeRendimiento]`, `RUN_PERF_TESTS=1`, quickstart §1.8) con la **prueba de volumen del POS** (C24, G6): 1.000 consultas de cupo y estado con p95 < 1 s (SC-008); y confirmaciones concurrentes del POS con reserva dentro de su transacción sobre deudores compartidos, que miden latencia de la confirmación, esperas y ningún interbloqueo en los dos motores con el orden filas de Inventario → `LND_Setup` compartido → `LND_DebtorControls` → numerador de Cartera → numerador de Inventario; deja el resultado en `docs/operaciones/cartera-ventas-a-credito.md` (dueño: pregunta G6, propuesta: reservar dentro de la unidad de trabajo; si la medición sale mal, transacción propia con `Expired` sin reasignar)
+
+### Implementation for User Story 6
+
+#### Cartera — consultas y reservas
+
+- [ ] T0574 [US6] Extraer, si US2 no lo dejó como servicio, `src/Core/IngenIA365ERP.Application/Lending/Origination/DisponibleDeCupo.cs` **(nuevo)**, el único cálculo de FR-058 (cupo − saldos vivos − reservas `Reserved` − solicitudes `Approved` sin desembolsar, como deudor y codeudor, rotativo con `CreditLineId` nulo para toda línea comercial aplicable, C54), que usan `GetCreditLimitAvailabilityQuery`, `ConsultasDeCartera`, `ReservasDeCartera` y la evaluación de la venta
+- [ ] T0575 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/ConsultasDeCartera.cs`, la implementación real de `IConsultasDeCartera` (los dos métodos de la 012 con las propiedades `init` nuevas de `interfaces.md` §5.1: `TotalQuota`, `DaysPastDue`, `BlockReason`, `AllowsSale`, `LineaDeCreditoDto.Periodicities`, `EstadosDeValidacion.NotIncorporated`): estado del deudor por bloqueos vigentes y la posición diaria, `DisponibleDeCupo`, líneas comerciales con sus equivalencias, `IListasRestrictivas` e `IAutorizacionDeDatos.VigenteAsync(persona, CreditProcessing)` **sin escribir** (C31), lectura `Lending.CreditStatus.Queried` por `LendingAuditEmitter` con la huella de entradas y respuesta (`EvidenceId`); `EstadoDeValidacionAsync` sobre `LND_InboundMessages` con la tabla de §5.1; respeta el `CancellationToken` de quien llama; `NotEnabled` antes de activar
+- [ ] T0576 [P] [US6] Crear `src/Core/IngenIA365ERP.Application/Common/Persistence/PuntoDeGuardado.cs` **(nuevo)**, junto a `TransaccionExplicita`: abre un punto de guardado con nombre sobre la transacción en curso, vuelve a él ante una excepción técnica y lo libera al terminar, en PostgreSQL y SQL Server (C25); con su prueba de integración en `tests/IngenIA365ERP.API.IntegrationTests/Database/PuntoDeGuardadoTests.cs` **(nuevo)** en los dos motores (una falla dentro no deja la transacción de afuera inutilizable)
+- [ ] T0577 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/ReservasDeCartera.cs`, la implementación real de `IReservasDeCartera`, con `SolicitudDeReservaValidator.cs` y `SolicitudDeLiberacionValidator.cs` en `Lending/Integration/Reservas/` **(nuevo)**: exige transacción en curso, corre bajo `PuntoDeGuardado` y responde `NoResponse` ante una falla técnica (D26, C25); cerrojo `LND_Setup` compartido → `LND_DebtorControls` del deudor (la fila se crea si falta) → `NumeradorDeCartera` (C24; nunca toma cerrojos de Inventario); cupo y estado bajo el cerrojo; `LND_LoanNumberReservation` con clave `INV:{paymentPublicId:N}:{monto}` (dos decimales, punto, cultura invariante), `RequestSha256`, `ConsultationEvidence`, `CreditLimitId` consumido y `ExpiresOn`; sin evaluación contable (T56); auditoría por `AuditoriaDeEscriturasDeCartera` (T22, T68); reemplaza a `ReservasDeCarteraNoHabilitada` en `DependencyInjection` junto con `ConsultasDeCartera`
+- [ ] T0578 [P] [US6] Crear la tarea `cartera.reservas-vencidas` en `src/Presentation/IngenIA365ERP.API/Integration/Tareas/TareaDeReservasVencidas.cs` **(nuevo)** (`ITareaProgramada`, diaria, por `IEjecutorEnCooperativa`, sale si Cartera no está activada; DT §2.13) y registrarla en `Program.cs`
+
+#### Cartera — consumidor de Comercial
+
+- [ ] T0579 [US6] Completar `src/Core/IngenIA365ERP.Application/Lending/Integration/DestinoCartera.cs` (lo creó la fase de US3 con `ResultadoDelGiro`) y `VersionesAceptadasDeCartera.cs` con la familia de Comercial: `Acepta` admite **toda** versión de `VentaACreditoRegistrada` y `AjusteDeVentaACredito` (C16) y la consume con `ConsumeCommercialCreditMessageCommand`; `PlanearLote` una unidad por trabajo; `TotalesDelLoteAsync` cero; lee sólo por `IMensajesEntrantes`; corre por `IEjecutorEnCooperativa` con el actor «Proceso de integración» (`mensajes.md` §15.1)
+- [ ] T0580 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/ConsumeCommercialCreditMessageCommand.cs` **(nuevo, nombre de DT §2.10)**, sin ruta e `IReintentableAnteConcurrencia` (molde `PostInventoryMessagesCommand`): en **un** `SaveChanges` el recibo `LND_InboundMessages` (UK `MessagePublicId`), una `LND_InboundMessageEvaluations` por evaluación, el efecto y los mensajes; reprocesa un `Rejected` sumando evaluación; traduce cada desenlace a `ResultadoDeConsumo` (`Processed`, `AlreadyProcessed`, `Rejected`, `ValidationFailed(ref, número, código, motivo)`, `Retry`; T17, `mensajes.md` §14.4)
+- [ ] T0581 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/ConversionDeVentaACredito.cs` **(nuevo)**: persona viva por el sobre (`Lending.Sale.PersonNotFound`), línea por FR-050 (`Lending.Sale.CreditLineInvalid`), condiciones por `LND_CommercialTermEquivalences` (`Lending.Sale.PeriodicityWithoutEquivalence`; ver notas, contradicción 15), versión conocida (`Integration.VersionNotAccepted`); lo no convertible deja `Rejected` reprocesable sin respuesta (C95)
+- [ ] T0582 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/EvaluacionDeVentaACredito.cs` **(nuevo)**: las verificaciones de FR-051 a la fecha de la venta con lo vigente entonces (estado, cupo sin contar esa venta por `DisponibleDeCupo`, concentración con patrimonio técnico vigente, usura por `ControlDeUsura`, línea con origen comercial, listas restrictivas guardando `LND_ScreeningResults`, autorización), en orden de llegada y contando las ya creadas; `ChecksJson` con cada resultado y su evidencia; una aprobación de Comercial no sustituye una atribución de Cartera
+- [ ] T0583 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/NacimientoDeObligacionDeVenta.cs` **(nuevo)**: crea siempre la obligación (FR-050): `Loan` con `Origin = Commercial`, la factura y `SaleObligationStatus`, su `LoanControl`, la versión de condiciones (`RulesVersion`) y el plan, la operación `Disbursement` `InKind` por `RegistroDeCartera` con `InboundMessageId`, el número reservado o del numerador al final del orden de cerrojos (T22, T34; reserva → `Used` con `LoanId`), la preferencia heredada del cupo (`InheritedFromLimit`), y la marca de validación fallida con el bloqueo `ValidationFailed` en `LND_DebtorBlocks` (FR-052); aplica en el mismo guardado los `LND_ProvisionalCollections` de esa factura como operaciones `ProvisionalCollection` (`PaymentAllocation` con su fecha valor, sin recaudador y en firme), escribe `LoanId`, `OperationId`, `AppliedAt` y `MessagePublicId` una sola vez y emite `CobroProvisionalIncorporado` (C62); validación previa sólo como aviso (T56)
+- [ ] T0584 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/AjusteDesdeComercial.cs` **(nuevo)**: busca la obligación por el recibo de la venta (`originalMessageId`) y aplica `CreditNote`, `Return`, `Voiding`, `VoidingByDianRejection`, `DebitNote` y `Replacement` por la tabla de `mensajes.md` §12.3 con operación `CommercialAdjustment` (diferencias por `RegistroDeCartera.Conciliar`, exceso a `CreditBalanceRecognized`, `Voided` en las anulaciones, plan según `NoteRecalculation`), la nota débito evaluada por `EvaluacionDeVentaACredito`, el reemplazo por `NacimientoDeObligacionDeVenta` con `OriginLoanId` y `ObligacionCreada` (C17); emite `CreditoAjustadoDesdeComercial` con `related` = el desembolso en especie y su acompañante `SaldoAFavorReconocido`
+- [ ] T0585 [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/VentasAnterioresAlCorte.cs` **(nuevo)**: con `origin.operationDate` ≤ corte de la carga activada, nunca procesa en vivo: responde según la fila vigente de `LND_MigrationSaleReconciliations` (`Migrated`, `CancelledBeforeCutoff` con su obligación nacida en la activación y `ResultingLoanId`; `NotMigratedWithBalance` aceptada u `OutsideLendingD29` → `NotIncorporated`); sin fila → `NotIncorporated`, `ObligacionRechazada` `Lending.Sale.NotIncorporated` y `Cartera.VentaNoIncorporada` (C63, C99; dueño: I16); ajustes ≤ corte de una migrada → `Processed` sin hechos; de una no incorporada → `SinObligacion`
+- [ ] T0586 [US6] Ampliar `EmisionDeCartera` con `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/RespuestasAComercial.cs` **(nuevo)**: `ObligacionCreada` (origen el recibo, `Confirmation`, `CadenaDeOrden` = la venta, destino `Inventory`, contenido de `mensajes.md` §11.1 con `numberSource`, `reservationPublicId`, `replacesLoan`, plan en `LoanPlanSummaryV1`) y `ObligacionRechazada` (`Confirmation:{evaluationPublicId:N}`, `motive` `NoConvertible`, `AceptadaSinMigrar`, `AceptadaFueraDeCartera` o `SinObligacion`, `retryable = false`; §11.2), las dos con `AdmiteProceso = true` y el usuario de Comercial como usuario de origen (T11); y verificar que `ObligacionCreadaV1` y `ObligacionRechazadaV1` están completos en `Contracts/Lending`
+- [ ] T0587 [P] [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Migration/ConciliacionDeVentasDeLaCarga.cs` **(nuevo)**: el clasificador de FR-143 por factura y pago sobre `IMensajesEntrantes.PendientesAsync` y las partes `loans` y `sales` de la carga, que escribe las filas de `LND_MigrationSaleReconciliations` de una versión del cuadre; lo llaman `ApplyMigrationLoadCommand` y `ActivateLendingCommand` de la fase de US8, dueña de las marcas, las diferencias y su aceptación (ver notas, contradicción 12)
+
+#### Cartera — comandos de pantalla y API
+
+- [ ] T0588 [P] [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Integration/Comercial/MarkLendingInboundMessageNotRetryableCommand.cs` (`Lending.Messages.Reprocess`, `IOperacionIdempotente`, motivo; `NotRetryable*` y `ObligacionRechazada` `NoConvertible` en la misma transacción; C95, C102), `ListLendingInboundMessagesQuery.cs` y `GetLendingInboundMessageQuery.cs` (`Lending.Messages.Read`, alcance por la oficina del crédito) y `src/Core/IngenIA365ERP.Application/Lending/Loans/Commands/ConfirmValidationFailureCommand.cs` (`Lending.ValidationFailures.Confirm` con su límite, `CreditDecision` por `EnrutadorDeAtribuciones` y `NoExceptuables`, segregación por `RegistroDeIntervenciones`, levanta el bloqueo, recibo `ConfirmedByException`; B8)
+- [ ] T0589 [P] [US6] Crear `src/Core/IngenIA365ERP.Application/Lending/Origination/Queries/ListLoanNumberReservationsQuery.cs` (`Lending.NumberReservations.Read`; `api.md` §7.3)
+- [ ] T0590 [US6] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/InboundMessagesEndpoints.cs` (`GET /api/lending/inbound-messages`, `GET /{messagePublicId}`, `POST /{messagePublicId}/mark-not-retryable` con `Idempotency-Key`; `api.md` §16.2) y `NumberReservationsEndpoints.cs` (`GET /api/lending/number-reservations`), y agregar `POST /api/lending/loans/{id}/validation-failure/confirm` a `LoansEndpoints.cs` (`api.md` §8.2); `.RequirePermission`, `ErrorEnvelopeFilter`, el 404 genérico y la auditoría de intentos denegados del grupo
+
+#### Comercial (enmienda E-02)
+
+- [ ] T0591 [US6] Crear `src/Core/IngenIA365ERP.Application/Inventory/Integration/DestinoInventario.cs` (destino `Inventory`, el único; DT §2.9, CH9): acepta `ObligacionCreada` v1 y `ObligacionRechazada` v1, escribe `INV_LendingObligationResponses` en el mismo `SaveChanges` con `DocumentId` y `DocumentPaymentId` resueltos por `creditPaymentPublicId`, `ValidationStatus` (`LendingObligationState`, `data-model.md` §9), responde `Processed`/`AlreadyProcessed`; registrarlo en `DependencyInjection` (`UnSoloConsumidorPorDestino`); y que `GetSalesDocumentCreditQuery` (`Inventory/Sales/SalesQueries.cs`) muestre número y estado de la última respuesta y calcule «disponible» con el registro (T16)
+- [ ] T0592 [US6] Completar en `src/Core/IngenIA365ERP.Application/Inventory/Sales/CreditoEnLaVenta.cs` y `EvaluateSaleCreditQuery.cs` lo que la fase 3 dejó para Cartera habilitada (sólo si falta al correr T0568): aplicar cada respuesta real de la tabla de `interfaces.md` §5.3, reservar dentro de la confirmación (también si queda en aprobación) y guardar `ReservedLoanNumber`, `ReservationPublicId`, `CreditLineCode` y `ConsultationEvidence` en `INV_DocumentPayments` (C67); `FuenteDeEmisionDeInventario` imprime el número como referencia del pago; `EmisionDeInventario.VentasACreditoAsync` emite la v2
+- [ ] T0593 [P] [US6] Mostrar en la venta de Comercial (`src/Presentation/IngenIA365ERP.Shared/Pages/Ventas/` donde la 012 muestra el crédito de la venta) el número del crédito y su estado de Cartera («validada», «validación fallida», «migrada», «cancelada antes del corte», «no incorporada», «pendiente: queda para reproceso» con el motivo), con `IndicadorDeCarga`; nunca saldos ni cuotas (enmienda de FR-062 de la 012)
+
+#### Cliente y pantallas de Cartera
+
+- [ ] T0594 [P] [US6] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/MensajesRecibidosClient.cs` **(nuevo)** (recibos, marcar no reprocesable) y sumar a `PagosClient`/el cliente de créditos la confirmación por excepción y a la de cupos la lista de reservas; sin `Authorization` a mano y con `Idempotency-Key` en las escrituras
+- [ ] T0595 [US6] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/BandejaDeMensajes.razor` (`@page "/cartera/bandeja-de-mensajes"`) con la pestaña **Recibidos** (recibos de Comercial y Tesorería con estado, evaluaciones, crédito, respuesta enviada; acción «Marcar no reprocesable» con motivo bajo `PermissionGate` `Lending.Messages.Reprocess`); la fase de US7 le suma la pestaña de los mensajes emitidos (ver notas); enlace en el menú «Cartera»; `IndicadorDeCarga` por zona, sin colores literales
+- [ ] T0596 [P] [US6] Agregar a la página `/cartera/creditos/{id:guid}` el aviso de «validación fallida» con su motivo y la acción «Confirmar por excepción» (`Lending.ValidationFailures.Confirm`, motivo; si pasa a decisión, lo dice), y la referencia a la factura de origen; y a `/cartera/cupos` (de US2) la pestaña **Reservas de número** (`Lending.NumberReservations.Read`): número, estado, valor, persona, pago de Comercial, vencimiento y crédito que lo usó
+
+#### Documentación
+
+- [ ] T0597 [P] [US6] Crear `docs/manual/cartera-ventas-a-credito.md` **(nuevo)**: cupo rotativo y consulta, reserva del número y por qué puede no haberla, cómo nace la obligación de una venta, validación fallida y su confirmación por excepción, notas, anulaciones y reemplazos, ventas hasta el corte, mensajes no reprocesables; y `docs/operaciones/cartera-ventas-a-credito.md` **(nuevo)** con la medición del POS (T0573) y qué igualar en los parámetros de Comercial al activar; actualizar `docs/manual/inventario-documentos-y-kardex.md` en lo que la venta a crédito guarda de Cartera; enlazarlos en `docs/INDICE-DOCUMENTACION.md`
+
+**Checkpoint**: las ventas a crédito de COOFLOPAL tienen cartera: consulta, reserva, v2, obligación creada o marcada,
+ajustes y respuestas guardadas en Comercial; `CreditoConCarteraTests` verde en los dos motores, los escenarios de
+reserva y mensaje de `ConcurrenciaPagoYCausacionTests` e `IdempotenciaDeCarteraTests` verdes,
+`Ventas/CreditoProvisionalTests` sin cambios, y la medición del POS anotada.
+
+---
+
+## Phase 11: User Story 7 - Contabilidad recibe cada hecho de Cartera sin que Cartera escriba asientos (Priority: P1) — entrega K1
+
+**Goal**: los hechos que Cartera emite a la bandeja (`CAR → Accounting`) llegan a Contabilidad por el **único**
+consumidor del destino `Accounting` (`DestinoContabilidad`, ahora enrutador de dos emisores, T15) y se convierten en
+comprobantes con la matriz `ACC_LendingPostingRules` (dimensiones por código, especificidad por pesos, hecho `*` en los
+roles de saldo, C77), **siempre por `AccountingPoster`** (un solo camino al libro). La unidad es **una operación y su
+modo** (C01): un comprobante por unidad, con el tipo del hecho principal; los reversos heredan el modo de su original
+(C08). La causación sale por lotes resumidos (un comprobante por día y tipo de comprobante, con la sucursal en cada
+línea y una línea por crédito en las cuentas que exigen tercero o cruce; `ScheduleKey` de C06, granularidad `PorHecho`
+de C07, alcance de C09). Antes de confirmar, Cartera pregunta si es contabilizable (`IContabilidadParaCartera.
+EvaluarAsync`); «Bloquear» sólo muerde en las pantallas de Cartera (A8, C80). La conciliación compara por conjuntos de
+cuentas y explica cada diferencia con los hechos pendientes (T58). Contabilidad no cierra un mes que Cartera, activada,
+no cerró (T57). `DESC_CARTERA` vuelve a contabilizar en Nómina contra el puente (T53, enmienda D-08 de la 010). Todo lo
+que cambia de la 009 queda enmendado en el mismo cambio (E-01, `contracts/contabilidad.md` §25). FR-008, FR-012,
+FR-041 (indicadores), FR-125–FR-130, FR-146, FR-147; SC-006, SC-018; T11–T15, T36, T51–T59; C01–C09, C15, C21–C23,
+C29, C33, C77–C82, C91–C94.
+
+**Independent Test**: en una cooperativa aislada con la contabilidad iniciada (CUIF, sucursales SUC1/SUC2, meses
+abiertos), la matriz cargada por plantilla y la completitud vacía salvo un hueco deliberado: desembolsar un crédito
+(`DS` con las cuentas de su línea, modalidad, sub-segmento y concepto, cruce `PG` + número del crédito); causar dos días
+con `RunDailyAccrualCommand` (un `CA` resumido por día, una línea por crédito en la cuenta de interés que exige tercero,
+cada línea en su sucursal); pagar por el `RecaudadorDePrueba` (`RC` con `RecaudoPorAplicar` de la clase `Test`) y
+reversar el pago (`PagoReversado` como comprobante nuevo, el original intacto); intentar desembolsar contra el hueco
+(422 `Lending.Prevalidation.NotPostable` con `FaltaDeRegla = Bloquear`) y pagar por el contrato contra el mismo hueco
+(aplica, sella `NotPostable`, alerta `Cartera.HechoNoContabilizable`, el hecho queda `Rejected`); crear la regla,
+reprocesar y ver el comprobante; conciliar a la fecha con diferencia cero; `ReverseDocumentCommand` sobre un comprobante
+`CAR` → `ModuleOwned`. La reclasificación por categoría y la conciliación al cierre las completa la fase 12 sobre la
+misma clase. Lo hace `Lending/ContabilizacionDeCarteraPorMensajesTests` en PostgreSQL y SQL Server.
+
+### Tests for User Story 7 ⚠️
+
+> Se escriben primero y deben fallar (no compilar o dar rojo). Los de Application usan el `ApplicationDbContext` de
+> pruebas y reloj fijo; lo transaccional (colisión del índice, `SKIP LOCKED`, reintento por concurrencia) se prueba en
+> las e2e. Volumen con `[FactDeRendimiento]` (omitida sin `RUN_PERF_TESTS=1`, nunca `return`).
+
+#### Arquitectura (`tests/IngenIA365ERP.Architecture.Tests/Principles/`)
+
+- [ ] T0598 [P] [US7] Completar CarteraNoConoceContabilidad.cs (esqueleto con lista vacía del Setup) con las cuatro comprobaciones de `contracts/contabilidad.md` §1.2 y §26 (T51, T59, C34):
+  · ArchUnit: `IngenIA365ERP.Application.Lending*`, `IngenIA365ERP.Domain.Lending*` y `IngenIA365ERP.Domain.Entities.Lending*` no dependen de ningún espacio con segmento `Accounting` salvo `IngenIA365ERP.Application.Common.Integration.Accounting`;
+  · regex sobre el fuente de `Application/Lending` y `Domain/Entities/Lending`: ni `"ACC_"`, ni `AccountingPoster`, ni `DbSet` cuyas entidades sean de `Entities.Accounting` (reflexión sobre `IApplicationDbContext`);
+  · reflexión: `IContabilidadParaCartera` declara **exactamente** `EvaluarAsync`, `SaldosDeCuentasMapeadasAsync`, `EstadoDelPeriodoAsync`, `IndicadoresDeLaEntidadAsync` y `CuentasBancariasAsync`;
+  · la inversa: `IngenIA365ERP.Application.Accounting.Lending*` no depende de `Domain.Entities.Lending*` ni de `Application.Lending*`.
+- [ ] T0599 [P] [US7] Completar LosHechosDeCarteraNoLlevanCuentas.cs: recorre por reflexión, recursivamente en sus bloques (`LoanFactDimensionsV1`, `ConceptAmountV1`, `LoanFactLineV1`, `GeneralImpairmentLineV1`…), todos los records de `Application/Common/Integration/Contracts/Lending` y los tipos de `CatalogoDeMensajesDeCarteraV1`, y rechaza toda propiedad cuyo nombre empiece por `Account` o `Cuenta` (FR-126, `contracts/contabilidad.md` §1.2).
+- [ ] T0600 [P] [US7] Completar LoDeCarteraSeCorrigeConComprobanteNuevo.cs (molde `LoDeInventarioNoSeReversa`): ningún tipo de `Application/Lending` ni de `Application/Accounting/Lending` llama a `AccountingPoster.PrepareReversalAsync` (regex); `PrepareReversalAsync` contiene la guarda que devuelve `AccountingErrors.DocumentLendingCorrectsWithNewVoucher` para origen `CAR`, antes de `ReasonRequired` (T55).
+- [ ] T0601 [P] [US7] Ampliar LaCarteraSoloSeTocaPorSusInterfaces.cs: `IDimensionesDeCartera` vive en `Application.Common.Integration.Lending` y declara exactamente `CatalogoAsync` y `CombinacionesEnUsoAsync` (enmienda A1, C27); `Application/Accounting/Lending` sólo conoce a Cartera por ese puerto y por la bandeja.
+- [ ] T0602 [P] [US7] Ampliar LosComandosDeConsumoNoTienenRuta.cs (+ `PostLendingFactsCommand`, `PostLendingSummaryGroupCommand`), UnSoloConsumidorPorDestino.cs (el destino `Accounting` sigue con un solo `IDestinoDeMensajes`, `DestinoContabilidad`, ahora en `Application/Accounting/Integration`) y LosHechosInmutablesNoSeModifican.cs (+ `LendingPosting`, `RegulatoryIndicator`); comprobar que `PrincipioXI_ContableImmutable` (cubre `Entities/Accounting/Transactions`, donde vive `LendingPosting`), `NingunModuloEscribeMovimientosFueraDelContrato` y `LaContabilidadNoTieneCuentasEnCodigo` siguen verdes **sin tocarlas** (§26).
+- [ ] T0603 [P] [US7] Ampliar LosEndpointsProtegidosExigenPermiso.cs para que recorra `Endpoints/Accounting/LendingIntegrationEndpoints.cs` y `Endpoints/Lending/AccountingIntegrationEndpoints.cs`; LosCodigosViewDeCarteraNoTienenDatosPersonales.cs: `/api/lending/accounting/facts` y `/fact-parts/{id}` exigen `Lending.Messages.Read`, nunca un `*.View` (§2.14); LasConsultasDeCarteraRespetanElAlcance.cs (+ `GetLendingAccountingReconciliationQueryHandler`, `ListLendingAccountingFactsQueryHandler`, `GetAccountingFactPartQueryHandler`).
+- [ ] T0604 [P] [US7] Ampliar LasPantallasDeCarteraEstanEnElMenu.cs, TodoEnlaceDelMenuTieneSuPagina.cs y LasPantallasDicenQueEstanCargando.cs con `/contabilidad/cartera/matriz`, `/contabilidad/cartera/tipos-de-comprobante`, `/contabilidad/cartera/completitud`, `/contabilidad/cartera/lotes`, `/contabilidad/cartera/lotes/{Id:guid}`, `/contabilidad/indicadores-regulatorios` y `/cartera/conciliacion-contable` (DT §2.16: página, ruta, permiso y `IndicadorDeCarga`).
+
+#### Application — lado contable (`tests/IngenIA365ERP.Application.Tests/Accounting/Lending/`)
+
+- [ ] T0605 [P] [US7] Crear los casos dorados JSON del constructor en Casos/ (escenario común `Casos/escenario.json`: CUIF, matriz con los roles de T52, mapeos de §5, sucursales y personas; cada caso agrega `matrizExtra`) y el ejecutor ConstructorDeLineasDeCarteraTests.cs con el ayudante EscenarioContableDeCartera.cs (molde `EscenarioContable` de la 012). Cada caso compara cuenta, lado, importe, tercero, cruce, sucursal y centro, y además pasa `AccountingPoster.ValidarAsync`. Obligatorios:
+  · los quince ejemplos de `contracts/contabilidad.md` §24 (desembolso por transferencia y en especie con `PuenteComercial` y `CuentaPorCobrarComercial` cruzando `FV` + factura; causación; pago con anticipo, cobro de suspenso y saldo a favor en **un** `RC` (C93); pago por Nómina en `DN`; reverso de un pago en A tras un cierre que lo pasó a C, que restituye en C (T55); corrección de usura del ejemplo 15);
+  · un caso por cada tipo de negocio de `OperacionesDeCartera` (los de K3 y K4 declarados en K1 incluidos), importe negativo que invierte el lado, ceros descartados, suma de líneas iguales;
+  · traslados (`DimensionContableCambiada`, `CarteraReclasificadaPorCalificacion` con naturaleza crédito al revés en `DeterioroIndividual`) y recibo `SameAccounts` cuando las dos puntas resuelven la misma cuenta, sucursal, tercero y cruce;
+  · `DeterioroCalculado` con los movimientos `Increase`, `DecreaseSameYear`, `DecreasePriorYears`, `Transfer` y el nivel general o adicional desde `GeneralImpairmentLineV1` (C93); castigo con el suspenso que sale de `SuspensoEnOrden` y entra a `CastigadaEnOrden` (C81, «pendiente de validar»);
+  · los tres contingentes con `ContraContingenteAcreedora` contra `ContingenteAcreedora` (C91) y sin cruce cuando aún no hay crédito;
+  · tercero natural del rol (aseguradora en `SeguroPorPagar`, pagador en `RecaudoPorAplicar`, beneficiario en `DesembolsoPorGirar`) y el mapa de líneas hecho/concepto/crédito.
+- [ ] T0606 [P] [US7] Crear ResolutorDeReglasDeCarteraTests.cs con el ayudante MatrizDePruebaDeCartera.cs (cuentas CAR, doble de `IDimensionesDeCartera`, hechos ya contabilizados): exigidas por igualdad exacta, opcionales por igualdad o `*`; pesos Línea 512, Empleado 256, Gracia 128, Sub-segmento 64, Reestructurado 32, PorCuentaDelAsociado 16, Sucursal 4 y Hecho 2 **sólo** en los roles de resultado (C77); el centro de costo se asigna a la línea y **no** se compara ni pesa; hecho `*` obligatorio en saldo, orden, pasivo, puente, diferido y contingentes; vigencia por la fecha contable del hecho (también en un reverso: la matriz de **su** fecha, T55); importe cero no pide regla; sin candidata → `Accounting.LendingRule.Missing` con `data { operation, role, values, date, loans }`; dos candidatas nunca empatan (`contracts/contabilidad.md` §3.3).
+- [ ] T0607 [P] [US7] Crear LendingPostingRuleCommandsTests.cs (crear, versión, desactivar, mapeo de comprobantes):
+  · dimensiones: `Accounting.LendingRule.DimensionRequired`, `.DimensionNotAllowed`, `.DimensionCodeUnknown` (línea, modalidad o sub-segmento que `IDimensionesDeCartera` no conoce; sub-segmento que no es de la modalidad);
+  · cuenta: `AccountEligibility.Verificar(…, ModuloContable.Cartera)` → `Accounting.Account.NotEligible`; naturaleza distinta de la del rol se guarda con aviso;
+  · vigencia: versión nueva cierra la anterior la víspera; `.Overlaps`; `.RetroactiveOverPosted` con `data { lastPostedDate, document }` y la excepción de la clave nueva sin hechos contabilizados que casen (§3.5);
+  · `DimensionKey` con el formato de §3.1 y `SpecificityWeight` calculado al guardar; desactivar exige motivo y nunca borra;
+  · `SetLendingVoucherMappingCommand`: tipo que no es `Usage = Module`, `ModuleCode = CAR` y activo → `Accounting.VoucherType.NotAllowedForModule`; resolución `(hecho, clase)` antes que `(hecho, *)`.
+- [ ] T0608 [P] [US7] Crear ImportLendingPostingRulesCommandHandlerTests.cs y GetLendingRulesTemplateQueryTests.cs sobre `EjecutorDeImportacion` (molde `ImportInventoryPostingRulesCommandHandlerTests`): columnas de §3.7 (`operacion` … `notas`, booleanos `S`/`N`/vacío), `mode=review` no guarda, `mode=apply` todo o nada con 422 `Import.Invalid` y `data.errors[] { row, column, code }`, fila con clave existente y fecha posterior = versión nueva, las mismas reglas que el alta una a una; la plantilla trae **filas sugeridas sin cuenta** por modalidad y categoría de las líneas activas, marcadas «pendiente de validar», y ninguna regla sembrada (C70); evento `Accounting.LendingRules.Imported`.
+- [ ] T0609 [P] [US7] Crear PostLendingFactsCommandHandlerTests.cs, un caso por fila de `contracts/contabilidad.md` §7.2:
+  · `Processed(PublicId, código, número)` con comprobante y recibos `ACC_LendingPostings` en un solo guardado; el tipo de la unidad lo da el **hecho principal** (C01: `PagoAplicado` + `AnticipoRecibido` + `CobroDeInteresEnSuspenso` + `SaldoAFavorReconocido` → un `RC`; con `CollectorClass = Payroll` → `DN`);
+  · `AlreadyProcessed` por recibo existente y por colisión del único `MessagePublicId` (`ConsumoDeCartera.EsColisionDelRecibo`);
+  · `Rejected` por `Integration.VersionNotAccepted`, `Accounting.LendingFact.CurrencyNotSupported`, `.Unbalanced` (incluido más de dos decimales), `Accounting.LendingRule.Missing`, `Accounting.VoucherType.NotFound`, `Accounting.Period.Closed`, con los errores de la 009 traducidos a hecho, concepto y crédito;
+  · `Retry` con `Accounting.LendingFact.WaitingForOriginal` (original `Pending`, `InBatch` o `Rejected`; un original `NotApplicable` no retiene) y con `Accounting.Period.NotFound`, que además levanta `Contabilidad.PeriodoInexistente`;
+  · informativo, valor cero y mismas cuentas: recibo sin comprobante con `NoVoucherReason` `Informational`, `ZeroValue`, `SameAccounts` (C21);
+  · `Date` = `Origin.OperationDate` (nunca hoy), `Kind = Regular`, origen `AccountingOrigin("CAR", "LendingDocument", …)`, `RegistradoPor` = usuario de origen o nulo si `OriginActorKind = Process` («Proceso de integración», C23); el handler no escribe ninguna tabla `COR_Integration*`.
+- [ ] T0610 [P] [US7] Crear AgrupadorDeResumidosDeCarteraTests.cs y PostLendingSummaryGroupCommandHandlerTests.cs (§10.3, §10.4): clave `{fecha contable}|{tipo de comprobante}` con `PorDia` y `+|{sucursal}` con `PorDiaYSucursal` (C09: «tipo» = tipo de comprobante); un `CA` por día con interés, mora, seguro y ajustes; débitos y créditos sin netear por cuenta, lado, sucursal y centro; las cuentas que exigen tercero, cruce o base conservan una línea **por crédito** con su deudor y `PG` + número; una parte que falla queda `Rejected` y sus dependientes del lote esperan sin tumbar el grupo; origen `LendingPostingBatch`, `RegistradoPor` nulo, una fila de recibo por hecho con el mismo `AccountingDocumentId` y `BatchPublicId`; repetir el grupo no crea nada; con `PorHecho` (C07) `PlanearLote` devuelve una unidad por operación.
+- [ ] T0611 [P] [US7] Crear tests/IngenIA365ERP.Application.Tests/Accounting/Integration/DestinoContabilidadConDosEmisoresTests.cs (§6): `Acepta` busca el tipo en el catálogo agregado y responde por `OriginModule`; `ConsumirAsync` reparte por `UnidadDeConsumo.OriginModule` (`INV` a los comandos de Inventario sin cambios, `CAR` a los de Cartera); `PlanearLote` nunca mezcla módulos; `TotalesDelLoteAsync` suma `ACC_InventoryPostings` y `ACC_LendingPostings` por separado; `ScheduleIntegrationBatchesCommand` usa el respaldo de Inventario sólo con claves `INV`; `ListPendingIntegrationMessagesQuery(módulo, desde, hasta)` filtra por módulo y `PendingInventoryMessagesQuery` sigue contando sólo `INV`.
+- [ ] T0612 [P] [US7] Crear EvaluateLendingPostingQueryTests.cs (§13.1, §13.3): usa el mismo `ConstructorDeLineasDeCartera`, somete a `AccountingPoster.ValidarVariosAsync`, no numera ni deja entidades rastreadas; una pregunta por combinación distinta de hecho, rol y dimensiones; devuelve `HallazgoDeCarteraDto` con `QuienCorrigeDto` según la tabla de §13.3 (una fila por código); no evalúa `NoPasa`, informativos ni mensajes a otros destinos; más de dos decimales es hallazgo del emisor.
+- [ ] T0613 [P] [US7] Crear GetLendingRulesCompletenessQueryTests.cs y GetLendingAccountBalancesQueryTests.cs (§3.7, §14.1): combinaciones en uso (doble de `IDimensionesDeCartera`) y roles exigidos sin regla vigente; clases de recaudador registradas sin `RecaudoPorAplicar` y `OwnLoanPayoff` siempre pedida (T91); reglas con cuenta que dejó de ser elegible; hechos sin mapeo o mapeados a un tipo inactivo; avisos (puentes que exigen cruce, cuentas de la causación resumida que exigen tercero o cruce, naturaleza distinta); conjuntos de cuentas como componentes conexos combinación ↔ cuenta por familia de rol (dos categorías en una auxiliar; una combinación con reglas por sucursal); saldo por `MovimientosContables` con `AlcanceDeSucursales.SinRestriccion` incluida la apertura `AP`; combinaciones sin regla en `UnresolvedCombinations`; sin contabilidad iniciada `Accounting.NotInitialized`.
+- [ ] T0614 [P] [US7] Crear GetEntityIndicatorsQueryTests.cs y RegisterRegulatoryIndicatorCommandHandlerTests.cs (§15, T59, C33, C78) (dueño: pregunta C3; rige registrar con soporte y vigencia de 6 meses): resultado del ejercicio = clases 4 a 7 del año sin el comprobante `CI`; pérdidas = cuentas de **clase 3 con naturaleza débito**, elegidas sin códigos literales; patrimonio técnico y solvencia = el último no reemplazado con corte ≤ fecha, devuelto con su corte **sin juzgar la vigencia**; registrar otro del mismo corte con `SupersedesPublicId` lo reemplaza; soporte de tipo `RegulatoryIndicatorSupport`; evento `Accounting.RegulatoryIndicator.Registered`.
+- [ ] T0615 [P] [US7] Crear tests/IngenIA365ERP.Application.Tests/Accounting/Periods/ClosePeriodConCarteraTests.cs (§12, T57): (a) recibo `CarteraActivada` con fecha ≤ fin de M sin `CierreDeCarteraRealizado` de M no reabierto (sin `CierreDeCarteraReabierto` cuyo `RelatedMessagePublicId` sea él) → 422 `Accounting.Period.LendingNotClosed` sin reconocimiento, `data { month, activationDate, lastLendingClose }`; (b) entregas `CAR` `Pending`, `InBatch` o `Rejected` con fecha contable en M → `Accounting.Period.LendingPending` reconocible con `AcknowledgeLendingPending`; (c) última `CargaDeCarteraAplicada` sin `CarteraActivada` posterior cuyo día siguiente al corte cae en M → `Accounting.Period.LendingLoadWillExpire` reconocible con `AcknowledgeLendingLoad`; sin `CarteraActivada` cierra como hoy; los reconocimientos quedan en el evento de cierre.
+- [ ] T0616 [P] [US7] Ampliar tests/IngenIA365ERP.Application.Tests/Accounting/Posting/AccountingPosterTests.cs (guarda `CAR` en las dos puntas de `PrepareReversalAsync`) y tests/IngenIA365ERP.Application.Tests/Accounting/Documents/DocumentCommandsTests.cs (`ReverseDocumentCommand` sobre un comprobante `CAR` → `Accounting.Document.ModuleOwned` con el mensaje de §9; en un resumido `LendingPostingBatch`, cuántos créditos reúne); actualizar las pruebas que cuentan tipos de comprobante sembrados (+1, `CN`) y permisos contables (+6).
+- [ ] T0617 [P] [US7] Crear tests/IngenIA365ERP.Application.Tests/Common/Integration/LotesDeCarteraTests.cs: `OrderIntegrationBatchCommand` con `OriginModule = CAR` sólo toma entregas `CAR` y responde `Accounting.LendingBatch.AlreadyRunning` con `data { batchPublicId, number }`; el lote `LendingAccrualRun` toma las entregas `InBatch` sin lote con alcance `AccrualRun:{x}`, x ≤ d (C09); el lote `LendingMonthlyClose` sólo las de su `LendingClose:{aaaa-mm}`; `ReprocessMessagesCommand` y `SendNotApplicableMessagesCommand` sobre hechos `CAR` (la fecha contable original se conserva).
+
+#### Application — lado de Cartera (`tests/IngenIA365ERP.Application.Tests/Lending/Integration/`)
+
+- [ ] T0618 [P] [US7] Crear ModoDePasoDeCarteraTests.cs y ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite.cs (DT §2.25, prueba de Application; §10.1, T56):
+  · precedencia vigencia del tipo (ámbito `LendingFactType`) → vigencia general → defecto de la tabla; sin vigencia y con la contabilidad sin iniciar, `NoPasa`; un modo guardado a propósito se respeta;
+  · acompañantes sellan el modo del principal y `Contabilidad.ModoDePaso` en ámbito `LendingFactType` se rechaza para un acompañante (C01); `DesembolsoReversado`, `PagoReversado` y `ReversoDeCierre` heredan el modo sellado de su original (`ModoDeEntrega.Heredado`, C08); contingentes `NoPasa`; informativos `Always`;
+  · `DimensionContableCambiada` sin vigencia propia: `EnLinea` emitida por una operación, `PorLotes` resumido `FinDeCausacion` emitida por el proceso; con vigencia propia rige para los dos;
+  · `ScheduleKey` `CAR.{ShortCode}|{disparador}|{hora}|{granularidad}` ≤ 60 caracteres con `LND_FactTypes.ShortCode`, hora vacía en `FinDeCausacion` y `CierreDeCartera`, `Hora` sellado como `HoraDiaria`, granularidad `PorHecho`/`PorDia`/`PorDiaYSucursal` (C06, C07); un acompañante pone su corto con el disparador, la hora y la granularidad del principal;
+  · `BatchScopeKey`: `AccrualRun:{d}` para las partes de la causación de d y `AccrualRun:{d+1}` para un hecho `FinDeCausacion` nacido fuera de la corrida durante d (C09); `LendingClose:{aaaa-mm}` para el cierre.
+- [ ] T0619 [P] [US7] Crear ValidacionPreviaContableDeCarteraTests.cs con un doble de `IContabilidadParaCartera` (§13.2, A8, C80): por origen —pantalla (desembolso; novedad, condonación y castigo quedan para K3 con la misma vía), contrato, consumidor de Comercial, procesos y cobros provisionales—, con hallazgos y sin respuesta (excepción o `Contabilidad.ValidacionPreviaSegundos` agotado); sólo en pantalla `FaltaDeRegla = Bloquear` responde 422 `Lending.Prevalidation.NotPostable` con `data.errors[] { factType, role, combination, account, rule, whoFixes }` y `PoliticaSinRespuesta = Bloquear` 422 `Lending.Prevalidation.NoResponse`; en todo lo demás advierte y sella `PrevalidationOutcome` (`Postable`, `NoResponse`, `NotPostable = 4`, `NotApplicable`); `FaltaDeRegla` gobierna **todo** hallazgo (cuenta inactiva incluida); se reduce a una pregunta por combinación; corre **fuera** del cerrojo; la reserva de número no se evalúa; alerta `Cartera.HechoNoContabilizable` con `DedupKey` por combinación y día para `Accounting.LendingRules.Manage` y `Lending.Messages.Reprocess`.
+- [ ] T0620 [P] [US7] Ampliar FechaContableTests.cs (la creó US3 sobre el esqueleto de la fase 3), mitad contable con el adaptador real (T36, §8): fecha valor en mes abierto → la misma; mes cerrado en Contabilidad → primer día del primer mes abierto; mes inexistente → se queda en él (el consumidor reintenta); `EstadoDelPeriodoAsync` que falla hace fallar la operación sin fecha supuesta. La mitad «Cartera tiene cierre vigente del mes» la agrega la fase 12 (T0668).
+- [ ] T0621 [P] [US7] Crear ConciliacionContableDeCarteraTests.cs y SaldosContablesDeCarteraTests.cs (§14.2, T58, C51): el saldo de Cartera por **fecha contable** ≤ corte con la combinación que informó el último hecho que movió o reclasificó ese saldo; las familias de la tabla de §14.2 (capital, intereses, pagos por cuenta y cargos, deterioro individual, general y adicional, anticipos, saldos a favor, suspenso, castigada, puentes en cero, `DesembolsoPorGirar` = órdenes emitidas sin resultado); cada diferencia explicada hecho por hecho por los `Pending`, `InBatch`, `Rejected` y `NotApplicable` recalculados con el mismo constructor (por el puerto); con cero pendientes la diferencia es cero; lo que los hechos no explican en un puente se rotula «del otro lado»; descuadre sin explicar → `Cartera.DescuadreContable` una por corte y conjunto; filtra por `IAlcanceDeCartera`; contabilidad sin iniciar → `Lending.Accounting.NotStarted`.
+- [ ] T0622 [P] [US7] Crear DimensionesDeCarteraTests.cs y ContabilidadParaCarteraTests.cs: `CatalogoAsync` con líneas (también cerradas), modalidades con sus sub-segmentos del `CatalogoDeModalidades` vigente, conceptos, clases de recaudador y tipos de hecho; `CombinacionesEnUsoAsync(fecha)` con saldo o movimiento a la fecha, **sin** alcance de oficinas (T62); el adaptador delega en las consultas de §1.1 sin HTTP, su validador rechaza en `CombinacionDeSaldo.Role` un rol de resultado o un nombre desconocido (C29), y `CuentasBancariasAsync` reutiliza `ListBankAccountsQuery`.
+- [ ] T0623 [P] [US7] Crear MovimientoContingenteDeCarteraTests.cs (§19, `mensajes.md` §10.24, C15, C91, C92, C94) (dueño: pregunta A3; rige emitir los tres en `NoPasa`): aprobación (+), desembolso de cada tramo, vencimiento, desistimiento y anulación (−); cupo otorgado o ampliado (+), reducido o vencido (−), **usarlo o pagarlo no lo mueve** (C92); garantía constituida o revaluada al alza (+), liberada, extinguida, ejecutada o revaluada a la baja (−); `balanceAfter`; claves `Confirmation` sobre su operación, `Confirmation:{tipoDeHecho:N}` cuando lo mueve otra operación y `Confirmation:{solicitud|cupo|garantía:N}` con la parte como origen cuando lo detecta el ciclo (C94); `AdmiteProceso = true` sólo para estos tres y los de T11.
+- [ ] T0624 [P] [US7] Verificar (la fase 3 ya ajustó `CasoDoradoLiquidacion` y los casos de la cuota de Cartera) y completar las pruebas de Nómina de la enmienda D-08 con el lado contable (T53, §17.2) (dueño: pregunta C1; rige «sí, contra el puente»): en tests/IngenIA365ERP.Domain.Tests/Payroll/Calculation/Casos/ la línea `DESC_CARTERA` pasa a `AffectsAccounting = true` (`CasoDoradoLiquidacion` y los de la cuota de Cartera); tests/IngenIA365ERP.Application.Tests/Payroll/ (`PayrollAccountingPosterTests`, `SettlementAccountingPosterTests`, `ApproveSettlementCommandHandlerTests`): el `NM` y la definitiva llevan `DESC_CARTERA` débito salarios por pagar y crédito la cuenta del concepto (el puente «recaudos por nómina para Cartera»); sin cuentas → los existentes `Payroll.ConceptWithoutAccounts` y `Payroll.Settlement.ConceptAccountsMissing`; un no descontado no tiene asiento.
+
+#### e2e (`tests/IngenIA365ERP.API.IntegrationTests/Lending/`, colección «Cartera e2e»)
+
+- [ ] T0625 [US7] Crear ContabilizacionDeCarteraPorMensajesTests.cs (cooperativa aislada con `CarteraE2E.CooperativaAisladaAsync`, contabilidad iniciada, activada con `CarteraE2E.ActivarCarteraAsync` (C107), matriz por plantilla, PostgreSQL y SQL Server; el despachador apagado y conducido con `fx.Despachador`): el recorrido del Independent Test más:
+  · el doble `ContabilidadParaCarteraConDoble` sin respuesta en una cooperativa marcada: desembolso con `ConfirmarConPendiente` sella `NoResponse`; con `Bloquear` responde 422 `Lending.Prevalidation.NoResponse` (D7);
+  · lote resumido `CA` por día en `/api/accounting/lending/batches` con `trigger = LendingAccrualRun` y un ajuste por fecha valor registrado el día d que entra en el lote del día siguiente (C09);
+  · `DimensionContableCambiada` por lotes cuando la persona deja de ser empleada (lo detecta el ciclo, C8) y en línea cuando la emite una operación;
+  · la cuenta por cobrar de Comercial de una venta con crédito provisional se reclasifica a cartera por el `CreditoDesembolsado` en especie y el `CobroProvisionalIncorporado` deja la provisional en cero por factura (US7-6);
+  · Contabilidad intenta cerrar un mes con un hecho `CAR` rechazado → `Accounting.Period.LendingPending`;
+  · los hechos `INV` del mismo host siguen igual (una venta con su `FV`); al final `ElBalanceDePruebaCuadra`.
+- [ ] T0626 [US7] Ampliar `CausacionDiariaPerformanceTests` (la de la fase del motor, `[FactDeRendimiento]`, `RUN_PERF_TESTS=1`) para medir el `CA` resumido de 50.000 créditos con cuentas de interés que exigen tercero: líneas del comprobante del día (~20.000 esperadas), tiempo de `PostLendingSummaryGroupCommand` y del lote (pregunta C5; rige aceptar uno por día con la sucursal por línea).
+
+### Implementation for User Story 7
+
+#### Dominio, persistencia y semillas
+
+- [ ] T0627 [P] [US7] Crear las entidades del lado contable (`contracts/contabilidad.md` §4; `data-model.md` parte 3 §5): `LendingPostingRule`, `LendingVoucherMapping` y `RegulatoryIndicator` en src/Core/IngenIA365ERP.Domain/Entities/Accounting/Lending/, y `LendingPosting` (`AuditableEntityLong`, `IHechoInmutable`) en src/Core/IngenIA365ERP.Domain/Entities/Accounting/Transactions/LendingPosting.cs; `RegulatoryIndicator` hecho de sólo inserción; enum `RegulatoryIndicatorKind { TechnicalCapital, SolvencyRatio }` con la numeración de `data-model.md` §9.2.
+- [ ] T0628 [P] [US7] Agregar los valores nuevos a enums y constantes existentes: `PrevalidationOutcome.NotPostable = 4` y `BatchTrigger.LendingAccrualRun = 7`, `LendingMonthlyClose = 8` en src/Core/IngenIA365ERP.Domain/Enums/Integration/IntegrationEnums.cs; `ClavesDeLote.FinDeCausacion` y `.CierreDeCartera` en src/Core/IngenIA365ERP.Application/Common/Integration/ClavesDeLote.cs; valor `PorHecho` de la granularidad de Cartera (C07); motivo de recibo `SameAccounts` donde vive `NoVoucherReason` (C21). Si la fase de plataforma ya los agregó, la tarea sólo verifica números y nombres.
+- [ ] T0629 [US7] Crear src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Accounting/LendingIntegrationConfigurations.cs (molde `InventoryIntegrationConfigurations`): tablas, tipos y nulos de `data-model.md` parte 3 §5; `UK_ACC_LendingPostingRules_DimensionKey_ValidFrom` filtrado vivos e `IX_ACC_LendingPostingRules_Operation_Role`; `MappingKey` único filtrado vivos; `UK_ACC_LendingPostings_MessagePublicId` **sin filtro** e índices `(SourcePublicId)`, `(RelatedMessagePublicId)`, `(AccountingDocumentId)`, `(BatchPublicId)`, `(OperationDate)`; `IX_ACC_RegulatoryIndicators_Kind_Cutoff` y `UK_…_Supersedes` filtrado no nulo; FK `Restrict` sólo a cuenta, sucursal, centro, tipo de comprobante y documento cruce, **ninguna a `LND_`** (T51); nombres largos con `HasDatabaseName`; filtro de borrado lógico; `IApplicationDbContext` y `ApplicationDbContext` suman los cuatro `DbSet`.
+- [ ] T0630 [P] [US7] Semillas (dueño: pregunta C6; rige agregar `CN` y mantener `PG`): verificar que src/Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/Data/voucher-types.json ya trae `CN` «Novedades de cartera» (`Usage = Module`, `ModuleCode = CAR`; lo sembró la fase 3) y que `VoucherTypesSeeder.cs` registra en el log la colisión con un `CN` existente de otro uso; crear Data/lending-voucher-mappings.json y LendingVoucherMappingsSeeder.cs (**Order 89**, DT §2.21) con las filas de `contracts/contabilidad.md` §5 (incluidas `PagoAplicado|Payroll`, `PagoReversado|Payroll` y `RecuperacionDeCastigada|Payroll` en `DN`, C79), `IsSeeded = true` y `ValidatedAt` nulo («pendiente de validar»); idempotente y sin reemplazar un mapeo que la cooperativa cambió.
+- [ ] T0631 [P] [US7] Ampliar src/Infrastructure/IngenIA365ERP.Identity/Seed/AccountingPermissionCatalogSeeder.cs con `Accounting.LendingRules.View/Manage`, `Accounting.LendingBatches.View/Run` y `Accounting.RegulatoryIndicators.View/Manage` (sembrados por la API al arrancar, nunca el DbMigrator; plantillas `cartera.contador` y `cartera.auditor` los reciben según `PerfilesSugeridos`); agregar el tipo de adjunto `RegulatoryIndicatorSupport` (con subida, `Accounting.RegulatoryIndicators.Manage`, no borrable una vez registrado el indicador) a src/Core/IngenIA365ERP.Application/Attachments/Common/AdjuntosDeModulo.cs.
+- [ ] T0632 [US7] Generar la migración par aditiva `IntegracionContableDeCartera` con tools/scripts/add-migration.ps1 (PostgreSQL y SQL Server; DT §2.26): las cuatro tablas `ACC_` de T0629 y nada más; revisar que el scaffold no arrastre cambios ajenos y que `Feature004_MigrationParity` siga verde. **Orden de C103**: esta migración va **después** de `CarteraRiesgo`; se genera aquí sólo para que las e2e de esta fase corran, es regenerable (C104) y la fase 12 la quita y la vuelve a generar detrás de `CarteraRiesgo`; no se aplica fuera de local ni de las e2e hasta el congelamiento de K1 (fase 14).
+
+#### Catálogos fijos y matriz (`src/Core/IngenIA365ERP.Application/Accounting/Lending/Reglas/`)
+
+- [ ] T0633 [P] [US7] Crear OperacionesDeCartera.cs (los 35 tipos de hecho que van a Contabilidad, C110, de `contracts/contabilidad.md` §2.1: código = `Type` del mensaje, corto, clase B/I, roles de débito y crédito por concepto, modo y comprobante por defecto, entrega, lista fija de acompañantes por principal de `mensajes.md`), RolesDeCuentaDeCartera.cs (los 26 roles de §2.2 con naturaleza, familia, exigidas, opcionales con su peso, motivos admitidos, tercero natural, cruce y la tabla concepto → rol; `ContingenteAcreedora`/`ContraContingenteAcreedora` de C91) y OrigenesDeCartera.cs (`LendingDocument`, `LendingPostingBatch`). Datos fijos en código (T52) (dueño: preguntas C4, C7 y C8; rigen la dimensión «reestructurado», los roles `IngresoDiferido` y `GastoDeCastigoOCondonacion` sin cuenta y «empleado» del estado actual de la persona).
+- [ ] T0634 [US7] Crear ResolutorDeReglasDeCartera.cs (`CargarAsync`: carga en bloque las reglas de un rango de fechas, sin seguimiento) y MatrizVigenteDeCartera.cs (`Resolver`, puro, el mismo código en validación previa, consumo, vista previa, conciliación y `ResolveLendingRuleQuery`), con la resolución de §3.3 y la regla de la categoría de §3.4 (la que trae el hecho; subcategorías a su letra) (depende de T0633).
+- [ ] T0635 [US7] Crear ReglasDeLaMatrizDeCartera.cs (§3.6) y los comandos y consultas de la matriz en LendingPostingRuleCommands.cs, LendingPostingRuleQueries.cs y LendingVoucherMappingCommands.cs: `CreateLendingPostingRuleCommand`, `AddLendingPostingRuleVersionCommand`, `DeactivateLendingPostingRuleCommand`, `SetLendingVoucherMappingCommand`, `ListLendingPostingRulesQuery`, `GetLendingPostingRuleQuery`, `ListLendingPostingRuleVersionsQuery`, `GetLendingRulesCatalogQuery`, `ListLendingVoucherMappingsQuery`, `ResolveLendingRuleQuery`; `DimensionKey` y `SpecificityWeight` calculados al guardar; errores de `api.md` §23.7 con mensaje que dice qué hacer.
+- [ ] T0636 [US7] Crear ImportLendingPostingRulesCommand.cs y GetLendingRulesTemplateQuery.cs sobre `EjecutorDeImportacion` (columnas de §3.7, mismas reglas que T0635, filas sugeridas sin cuenta desde `IDimensionesDeCartera`, hoja de instrucciones aparte) y GetLendingRulesCompletenessQuery.cs en Consultas/ (§3.7; recaudadores registrados por `IRegistroDeIntegracion`).
+
+#### Lo común del consumidor y el enrutador (`src/Core/IngenIA365ERP.Application/Accounting/Integration/`, C82)
+
+- [ ] T0637 [US7] Extraer de `Application/Accounting/Inventory` a la carpeta común, **sin cambiar el comportamiento de Inventario** (T51): `ConjuntosDeCuentas` (unión-búsqueda combinación ↔ cuenta, generalizada a cualquier familia de roles), el recibo común (consulta de recibo existente, `EsColisionDelRecibo`), la revisión de versión y de moneda; mudar `DestinoContabilidad.cs` y `VersionesAceptadas.cs` (ahora por módulo de origen). Correr las pruebas de `Application.Tests/Accounting/Inventory` sin tocarlas.
+- [ ] T0638 [US7] Convertir `DestinoContabilidad` en enrutador de dos emisores (§6): `Acepta` por el `OriginModule` del catálogo agregado; `ConsumirAsync` por `UnidadDeConsumo.OriginModule` (campo nuevo en src/Core/IngenIA365ERP.Application/Common/Integration/IDestinoDeMensajes.cs si la plataforma no lo trajo); `PlanearLote` separa por módulo (`AgrupadorDeResumidos` para INV, `AgrupadorDeResumidosDeCartera` para CAR); `TotalesDelLoteAsync` suma los dos recibos; `OrderIntegrationBatchCommand.OriginModule`; `ListPendingIntegrationMessagesQuery(módulo, desde, hasta)` con la lógica de `PendingInventoryMessagesQuery`, que queda filtrando `INV`; `ScheduleIntegrationBatchesCommand` usa el respaldo de Inventario sólo con claves `INV` (depende de T0637).
+
+#### El consumidor de Cartera (`src/Core/IngenIA365ERP.Application/Accounting/Lending/Contabilizacion/` y `Lotes/`)
+
+- [ ] T0639 [US7] Crear ConstructorDeLineasDeCartera.cs (sin IO): de una unidad de hechos y la matriz cargada arma el `PostingRequest` con las reglas comunes de §7.3 (tipo del mapeo del principal, `Date` = fecha contable, descripción, origen, `Kind = Regular`, `RegistradoPor`, sucursal por línea y por punta, centro de la regla ganadora si la cuenta lo maneja, tercero natural del rol, cruce `PG` + número o `FV` + factura en los roles de Comercial, sin `TaxBase`, suma de líneas iguales, mapa de líneas) y verifica que cada hecho cuadre con dos decimales; usa `OperacionesDeCartera`, `RolesDeCuentaDeCartera` y `MatrizVigenteDeCartera` (depende de T0634).
+- [ ] T0640 [US7] Crear TiposDeComprobanteDeCartera.cs (resolución `(hecho, clase)` → `(hecho, *)`, `NotFound`, `NotAllowedForModule`), ConsumoDeCartera.cs y PostLendingFactsCommand.cs (+ validador hermano, `IReintentableAnteConcurrencia`, sin ruta ni permisos) con los once pasos de §7.1: lectura por `IMensajesEntrantes`, unidad, versión, moneda, recibo existente, original pendiente, informativo, constructor, `ZeroValue`/`SameAccounts`, `AccountingPoster.PrepareAsync` (sin guardar; `Accounting.Period.NotFound` → `Retry` + `Contabilidad.PeriodoInexistente`), una fila de `ACC_LendingPostings` por hecho y **un** `SaveChangesAsync`; resultados de §7.2 (depende de T0639).
+- [ ] T0641 [US7] Crear Lotes/AgrupadorDeResumidosDeCartera.cs y Contabilizacion/PostLendingSummaryGroupCommand.cs (§10.3, §10.4): grupos por fecha contable y tipo de comprobante (y sucursal en `PorDiaYSucursal`), `ValidarVariosAsync` con carga en bloque, exclusión de lo que falla y sus dependientes del lote, suma sin netear salvo las cuentas con tercero, cruce o base (una línea por crédito), un `PrepareAsync` por grupo con origen `LendingPostingBatch` y `RegistradoPor` nulo, recibos con el mismo `AccountingDocumentId` y `BatchPublicId`, un guardado por grupo; el lote carga una vez reglas, cuentas, tipos, períodos, sucursales y terceros (§10.5) (depende de T0640).
+- [ ] T0642 [P] [US7] Crear las consultas de Consultas/ (§1.1, §10.5, §21.1): `EvaluateLendingPostingQuery` (detrás de `EvaluarAsync`, §13.1), `GetLendingAccountBalancesQuery` (§14.1, con `ConjuntosDeCuentas` y `MovimientosContables`), `GetAccountingPeriodStatusQuery` (contabilidad iniciada, estado del mes de la fecha y primer mes abierto desde ella), `GetEntityIndicatorsQuery` (§15, C78), `PreviewLendingBatchQuery` (no numera ni guarda; `cutoffMessagePublicId`), `ListLendingBatchesQuery`, `GetLendingBatchQuery`, `GetLendingBatchTotalsQuery` y `ListLendingPostingsQuery`; y `RegisterRegulatoryIndicatorCommand` (+ `ListRegulatoryIndicatorsQuery`) con soporte obligatorio y `SupersedesPublicId` para corregir el mismo corte.
+- [ ] T0643 [US7] Completar el puerto src/Core/IngenIA365ERP.Application/Common/Integration/Accounting/IContabilidadParaCartera.cs (firma estable y DTO de §16.1 desde la fase 3, C106; no cambian) con su implementación real: crear el adaptador en proceso src/Core/IngenIA365ERP.Application/Accounting/Lending/ContabilidadParaCartera.cs (molde `ContabilidadParaInventario`) que delega en las consultas de T0642 y en `ListBankAccountsQuery`, con el validador de roles de saldo de C29; registrarlo en DI en lugar de `ContabilidadParaCarteraProvisional` de la fase 3 (depende de T0642).
+
+#### Enmienda de la 009 en el código (§25.4)
+
+- [ ] T0644 [US7] Extender lo contable existente para `CAR`: guarda en `AccountingPoster.PrepareReversalAsync` (src/Core/IngenIA365ERP.Application/Accounting/Posting/AccountingPoster.cs) y códigos de §23 en `AccountingErrors`; mensaje propio para `CAR` en `ReverseDocumentCommand` (cuántos créditos reúne un resumido, contados en `ACC_LendingPostings`); `EnlacesDeOrigen` en Application y en src/Presentation/IngenIA365ERP.Shared/Services/Contabilidad/EnlacesDeOrigen.cs (`LendingDocument` → el hecho en la bandeja de Cartera; `LendingPostingBatch` → `/contabilidad/cartera/lotes/{Id:guid}`); `AccountReferenceFinder` (src/Infrastructure/IngenIA365ERP.Persistence/Services/AccountReferenceFinder.cs) y `ListInvalidParameterizationsQuery` miran `ACC_LendingPostingRules` (si la rama de la cartera heredada sigue, se retira aquí en el mismo cambio); `AccountingAuditEmitter` suma `Accounting.Lending.Posted`, `.Rejected`, `.BatchProcessed`, `Accounting.LendingRules.Imported` y `Accounting.RegulatoryIndicator.Registered`, escritos por el `PublicId` de la cooperativa.
+- [ ] T0645 [US7] Ampliar `ClosePeriodCommand` en src/Core/IngenIA365ERP.Application/Accounting/Periods/PeriodCommands.cs con `AcknowledgeLendingPending` y `AcknowledgeLendingLoad` y las tres comprobaciones de §12 leídas sólo de los recibos `ACC_LendingPostings` y de las entregas (`ListPendingIntegrationMessagesQuery` con `CAR`), sin leer `LND_`; el cuerpo de `POST /api/accounting/periods/{year}/{month}/close` (src/Presentation/IngenIA365ERP.API/Endpoints/Accounting/PeriodsEndpoints.cs) acepta los dos reconocimientos; `/contabilidad/periodos` (src/Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/Periodos.razor) muestra el estado de Cartera del mes o el bloqueo con enlace a `/cartera/cierres`, y ofrece «Procesar ahora» (lote manual `CAR`) y «Cerrar de todos modos» en los avisos.
+
+#### Lado de Cartera (`src/Core/IngenIA365ERP.Application/Lending/Integration/`)
+
+- [ ] T0646 [US7] Completar ModoDePasoDeCartera.cs con la resolución de §10.1 sobre `ILectorDeParametros` (módulo `LND`, ámbitos `None` y `LendingFactType` sobre `LND_FactTypes`), `NoPasa` sin contabilidad iniciada por `EstadoDelPeriodoAsync`, la regla de `DimensionContableCambiada` según quién la emite, la herencia de los reversos y el sellado de los acompañantes; y en `EmisionDeCartera` el sellado de `ScheduleKey` (C06, C07) y `BatchScopeKey` (C09) en cada entrega `CAR → Accounting`. Completa el esqueleto con firma estable de la fase 3 (C106) sin cambiar su firma.
+- [ ] T0647 [US7] Crear el lote de la causación en el guardado con que termina la corrida `DailyCycle` (src/Core/IngenIA365ERP.Application/Lending/Accrual/ y src/Presentation/IngenIA365ERP.API/Integration/ProcesadorDeCartera.cs): `COR_IntegrationBatches` con `BatchTrigger.LendingAccrualRun`, que toma las entregas `InBatch` sin lote con alcance `AccrualRun:{x}`, x ≤ d, en el **mismo** `SaveChanges` de la última tanda (T5, T56, C09); sin entregas, no crea lote.
+- [ ] T0648 [US7] Completar ValidacionPreviaContableDeCartera.cs (esqueleto con firma estable de la fase 3, C106; molde `ValidacionPreviaContable` de la 012; §13.1–§13.3) y cablearla: arma los hechos con los mismos objetos de `EmisionDeCartera`, reduce a una pregunta por combinación, llama a `EvaluarAsync` fuera del cerrojo con `Contabilidad.ValidacionPreviaSegundos`, decide por origen (pantalla: `ExecuteLoanDisbursementCommand`; contrato: `ContratoDeObligacionesDeCartera.AplicarAsync`/`ReversarAsync`; consumidor de Comercial; procesos; cobros provisionales) y sella `PrevalidationOutcome` en la operación o la parte; levanta `Cartera.HechoNoContabilizable`. Los comandos de K3 (novedad, condonación, castigo) la usarán con origen pantalla.
+- [ ] T0649 [P] [US7] Completar FechaContable.cs (esqueleto de la fase 3, C106, completado por US3; T36, §8) con el adaptador real: mes de la fecha valor; mientras Contabilidad tenga el mes cerrado, el siguiente; fecha contable = fecha valor si no se movió, si no el primer día del mes; mes inexistente no se salta; una falla de `EstadoDelPeriodoAsync` falla la operación. Deja el punto de extensión para la mitad de Cartera (cierre vigente del mes) que agrega T0704.
+- [ ] T0650 [P] [US7] Crear DimensionesDeCartera.cs, implementación de `IDimensionesDeCartera` (§16.2) sobre líneas, el documento `CatalogoDeModalidades` vigente (`INormativaVigente`), `LoanConcept`, `ClaseDeRecaudador`, el catálogo de mensajes y las combinaciones en uso (posiciones del día y libro), sin alcance de oficinas; registrarla en DI.
+- [ ] T0651 [US7] Crear SaldosContablesDeCartera.cs y ConciliacionContableDeCartera.cs (§14.2, T58) y las consultas `GetLendingAccountingReconciliationQuery`, `ListLendingAccountingFactsQuery` (estado y comprobante desde la entrega, sin leer `ACC_`) y `GetAccountingFactPartQuery` en src/Core/IngenIA365ERP.Application/Lending/Integration/Queries/; `SaldosContablesDeCartera` arma las `CombinacionDeSaldo` desde el libro o desde una carga aplicada, para que el cuadre de activación de US8 use el mismo cálculo (§14.3) y para responder si la regla `RecaudoPorAplicar|Payroll` resuelve (combinación en `UnresolvedCombinations`); alerta `Cartera.DescuadreContable` al contador y al jefe de cartera.
+- [ ] T0652 [US7] Crear MovimientoContingenteDeCartera.cs **(nuevo)** (emisor de los tres contingentes de §19 sobre `EmisionDeCartera`) y cablearlo en el mismo `SaveChanges` de: la decisión que aprueba, desiste o anula una solicitud (`RecordCreditDecisionCommand` y el cierre de sesión `CloseSessionCommand`), cada tramo de `ExecuteLoanDisbursementCommand`, `AssignCreditLimitCommand`/`EndCreditLimitCommand`/la decisión sobre un cupo, `RegisterCollateralCommand`/`ChangeCollateralStatusCommand`/`ReleaseCollateralCommand`, y el ciclo diario (vencimiento de una aprobación o de un cupo, liberación tras la firmeza) con la parte de su tanda como origen (dueño: pregunta A3; si el dueño rechaza A3, se quitan del catálogo y de los roles sin tocar nada más).
+- [ ] T0653 [US7] Verificar que la enmienda D-08 de la 010 (T53, §17.2) que hizo la fase 3 quedó completa (dueño: pregunta C1; rige «sí») y cerrar lo que falte: `DESC_CARTERA` con `AffectsAccounting = true` en la ordinaria y en la definitiva; sin las excepciones de src/Core/IngenIA365ERP.Domain/Payroll/Calculation/Rules/ICalculationRule.cs (`LineFactory`), src/Core/IngenIA365ERP.Domain/Payroll/Settlements/Rules/ProposedDeductionsRule.cs y src/Core/IngenIA365ERP.Application/Payroll/Settlements/Settlement/AdjustSettlementDeductionCommand.cs, y las omisiones de src/Core/IngenIA365ERP.Application/Payroll/Services/SettlementAccountingPoster.cs y PayrollAccountingPoster.cs; retirar `CuentaDebitoDelDescuentoAsync` de ApproveSettlementCommand.cs si el retiro de lo heredado no lo hizo; actualizar los comentarios D-08 que dicen «Cartera contabiliza el recaudo».
+
+#### API (rutas con `.RequirePermission`; el mismo 404 sin permiso)
+
+- [ ] T0654 [P] [US7] Crear src/Presentation/IngenIA365ERP.API/Endpoints/Accounting/LendingIntegrationEndpoints.cs (molde `InventoryIntegrationEndpoints`) con las rutas de `contracts/contabilidad.md` §21.1 y `api.md` §23 bajo `/api/accounting/lending` (reglas, catálogo, versiones, desactivar, plantilla, importar, resolver, completitud, mapeos, lotes, vista previa, lote manual 202 con `Idempotency-Key` y motivo, recibos) y `/api/accounting/regulatory-indicators` (`GET`, `POST`).
+- [ ] T0655 [P] [US7] Crear src/Presentation/IngenIA365ERP.API/Endpoints/Lending/AccountingIntegrationEndpoints.cs con `GET /api/lending/accounting/facts`, `GET /api/lending/accounting/fact-parts/{id}` (`Lending.Messages.Read`) y `GET /api/lending/accounting/reconciliation?date=&branch=` (`Lending.Reconciliation.View`) (`api.md` §16.3), dentro del grupo `/api/lending` con `.AuditarIntentoDenegado(ModuloDeAuditoria.Lending)`.
+
+#### Pantallas y clientes (`IndicadorDeCarga`/`EstadoDeCarga`, sin colores literales, `PermissionGate`)
+
+- [ ] T0656 [P] [US7] Crear src/Presentation/IngenIA365ERP.Shared/Services/Contabilidad/IntegracionContableDeCarteraClient.cs **(nuevo)** con sus DTO (matriz, mapeos, completitud, lotes, recibos, indicadores) y src/Presentation/IngenIA365ERP.Shared/Services/Cartera/ConciliacionContableClient.cs **(nuevo)** (hechos, partes, conciliación); tipados, registrados en DI, sin poner `Authorization` a mano; las escrituras mandan `Idempotency-Key` donde la ruta la lleva.
+- [ ] T0657 [US7] Crear src/Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/Cartera/Matriz.razor (`/contabilidad/cartera/matriz`, molde `Pages/Contabilidad/Inventario/Matriz.razor`): pestañas por familia de rol (cartera e intereses; deterioro; orden y castigada; recaudo y puentes; desembolso y Comercial; pasivos con el deudor; resultados; contingentes), alta, versión y desactivación con motivo, «¿a qué cuenta va?», descarga y carga de la plantilla con revisión previa, y al elegir una cuenta sus reglas (FR-016 de la 009); `Accounting.LendingRules.View/Manage`.
+- [ ] T0658 [P] [US7] Crear Pages/Contabilidad/Cartera/TiposDeComprobanteDeCartera.razor (`/contabilidad/cartera/tipos-de-comprobante`, mapeos con «pendiente de validar») y Pages/Contabilidad/Cartera/Completitud.razor (`/contabilidad/cartera/completitud?date=`, cada hallazgo con quién lo corrige y el enlace a la pantalla de §13.3).
+- [ ] T0659 [P] [US7] Crear Pages/Contabilidad/Cartera/Lotes.razor (`/contabilidad/cartera/lotes`, lista con disparador `LendingAccrualRun`/`LendingMonthlyClose`, vista previa y lote manual con motivo) y Pages/Contabilidad/Cartera/Lote.razor (`/contabilidad/cartera/lotes/{Id:guid}`: comprobantes, hechos, créditos de cada parte y rechazos); `Accounting.LendingBatches.View/Run`.
+- [ ] T0660 [P] [US7] Crear src/Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/IndicadoresRegulatorios.razor (`/contabilidad/indicadores-regulatorios`): lista con corte, fuente, soporte, «vigente hasta» calculado con `Contabilidad.IndicadoresVigenciaMeses` y registro con adjunto de soporte; `Accounting.RegulatoryIndicators.View/Manage`.
+- [ ] T0661 [P] [US7] Crear src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/ConciliacionContable.razor (`/cartera/conciliacion-contable?date=`): conjuntos con saldo de Cartera, contable, diferencia y su explicación hecho por hecho; puentes por clase; pestaña «Hechos» con la lista de hechos contables y el detalle de una parte con su lista por crédito; `Lending.Reconciliation.View` y `Lending.Messages.Read`.
+- [ ] T0662 [US7] Agregar al menú (src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor) los enlaces de T0657 a T0661 con su `PermissionGate`: en el grupo «Contabilidad» un subgrupo «Cartera» y «Indicadores regulatorios»; en el grupo «Cartera», «Conciliación contable».
+
+#### Documentación
+
+- [ ] T0663 [P] [US7] Aplicar la enmienda E-01 a los artefactos de la 009 (`contracts/contabilidad.md` §25.1–§25.3): specs/009-contabilidad-niif/spec.md (entrada, alcance, US4, FR-016, FR-017, FR-022, FR-030, FR-036–FR-041, SC-004), specs/009-contabilidad-niif/contracts/contabilizacion.md (§2–§5: la fila única de Cartera por hechos), y las notas de research.md, data-model.md, plan.md y tasks.md de la 009 («reemplazadas por la 013»).
+- [ ] T0664 [P] [US7] Agregar a docs/manual/contabilidad-contrato-de-contabilizacion.md la sección «Cartera: por hechos» (matriz, validación previa, modos y lotes, regla de cierre, comprobantes nuevos) y crear docs/manual/cartera-integracion-contable.md **(nuevo)** para la contadora: cómo diligenciar la plantilla de la matriz desde las filas sugeridas, roles y pesos, los quince asientos de ejemplo de §24, la conciliación y qué hacer con un rechazo; lista de lo «pendiente de validar» (C2, C4, C6, C7, C8, C10, C77, C81).
+
+**Checkpoint**: Contabilidad recibe y contabiliza cada hecho de Cartera por la matriz, en línea o por lotes; la validación
+previa bloquea sólo en pantallas; la conciliación da cero sin pendientes; `ClosePeriodCommand` conoce a Cartera; las
+e2e «Inventario e2e», «Contabilidad e2e» y «Nomina e2e» siguen verdes sin cambios salvo las de `DESC_CARTERA`; la
+completitud vacía en la cooperativa de ensayo.
+
+---
+
+## Phase 12: User Story 9 - Calificación, arrastre y deterioro con cierre mensual (Priority: P1) — entrega K1 (Anexo 1)
+
+**Goal**: cada día cada crédito tiene una calificación **informativa** (mismo motor, no se guarda salvo la copia de la
+posición); al cerrar el mes una corrida `MonthlyClose` del `ProcesadorDeCartera` calcula la calificación oficial con
+arrastre por modalidad SARC, las reglas de reestructurados, pago único y crédito nuevo, las subcategorías, el
+deterioro individual del Anexo 1 y el general, y la **congela** con R sellado (T47): las tandas guardan las líneas y
+una transacción final inserta el encabezado, el general, las partes con `CarteraReclasificadaPorCalificacion` (todo
+saldo con categoría) y `DeterioroCalculado` (delta frente al cierre anterior o al base), el informativo
+`CierreDeCarteraRealizado` y el lote `LendingMonthlyClose`. Reabrir es otra corrida (`CloseReopen`, C58) que deja la
+reapertura y emite `ReversoDeCierre`; volver a cerrar crea `Version + 1`. La política SARC de la cooperativa, ligada a
+un punto de acta (C52), sólo endurece la norma (`PoliticaSarcEfectiva`). El modelo por segmento lo elige
+`SelectorDeModeloDeDeterioro` (K1 siempre Anexo 1, con la marca `ObligatoryModelUnavailable` si hay obligación, D28).
+Sin patrimonio técnico vigente se aplica lo conservador de D19 y la concentración bloquea (T59). FR-093, FR-098–FR-107,
+FR-140, FR-146; SC-006, SC-013, SC-021, SC-023; T45–T50, T59; C33, C52, C58, C59, C66, C76.
+
+**Independent Test**: en una cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` (C107; nace el cierre base sin líneas), preparar créditos en cada rango de mora
+de consumo, comercial y microcrédito (un deudor con consumo en C, consumo en A y comercial en A; un pago único vencido;
+un reestructurado; uno calificado peor por análisis), causar hasta fin de mes, ordenar el cierre (202) y correr sus
+tandas: comparar calificación, causa, subcategoría y deterioro de cada crédito con el cálculo a mano de los casos
+dorados; ver el reporte de cambios, los hechos `CarteraReclasificadaPorCalificacion` (A→C de capital, intereses,
+deterioro y suspenso) y `DeterioroCalculado` como diferencia frente al base, el lote `PV` contabilizado y la
+conciliación al último día en cero; intentar cerrar Contabilidad antes (`Accounting.Period.LendingNotClosed`) y
+después; reabrir el último (y no otro), volver a cerrar con `Version + 1`; registrar un pago con fecha valor del mes
+cerrado que no reescribe el cierre. Lo hace `Lending/CierreMensualDeCarteraTests` en los dos motores.
+
+### Tests for User Story 9 ⚠️
+
+#### Dominio (`tests/IngenIA365ERP.Domain.Tests/Lending/Risk/`)
+
+- [ ] T0665 [P] [US9] Crear el cargador CasoDoradoDeRiesgo.cs, el ejecutor CasosDoradosDeRiesgoTests.cs y los casos de K1 en Casos/ (`quickstart.md` §1.3), calculados a mano y con la explicación esperada: `r01-rangos-por-modalidad` (altura de mora en días hábiles con el calendario que se recibe), `r02-subcategorias` (condición tipada por días o meses en E), `r03-arrastre-por-modalidad` (US9-1), `r04-arrastre-no-alcanza-codeudas`, `r05-reestructurado`, `r06-pago-unico` (US9-5), `r07-credito-nuevo`, `r08-analisis-solo-peor` (US9-4), `r09-insolvencia`, `r10-deterioro-individual-anexo1` (base = capital − garantía admisible por meses de mora; conceptos en suspenso al 100 %), `r11-deterioro-general` (mínimo del perfil más adicional, por dimensión, con su compensación del individual), `r12-politica-mas-estricta`, `r13-redondeo-del-deterioro` (centavo y peso), `r14-homologacion-contable`, `r15-selector-sin-k6a`. Mientras rija D19: sin excepción de aportes en el arrastre ni descuento de aportes en el deterioro.
+- [ ] T0666 [P] [US9] Crear PoliticaSarcEfectivaTests.cs (máximo por celda entre norma y política validada; si la norma se endurece después gana la norma; celda menos estricta detectada con su ruta), SelectorDeModeloDeDeterioroTests.cs (por segmento: no obligada → `ArrearsAnnex1`/`NotObligated`; obligada sin K6a → `ArrearsAnnex1` con la marca; `EntregaDeCartera` decide la disponibilidad de K6a) e HistorialDeMoraTests.cs (fuente que manda por mes —cierre vigente sobre carga complementaria sobre migración—, meses posteriores al corte cubiertos por las transacciones, novaciones y refinanciaciones seguidas, completitud con los meses que pide `ReglaDePerdidaEsperada`).
+
+#### Arquitectura (`tests/IngenIA365ERP.Architecture.Tests/Principles/`)
+
+- [ ] T0667 [P] [US9] Completar LosCierresDeCarteraNoSeReescriben.cs (amplía `LosHechosInmutablesNoSeModifican` a `MonthlyClose`, `MonthlyCloseLoan`, `MonthlyCloseGeneralImpairment`, `MonthlyCloseReopening`, `LoanArrearsHistoryEntry` y `RiskPolicyVersion` —con `[EscrituraUnica]` en su validación—; ninguna escritura de `Status` ni `SupersededAt` sobre un cierre, R61); ampliar LaCarteraNoTieneValoresLegalesFijos.cs con la exención comentada por archivo de `Domain/Lending/Risk/Normativa` y ElMotorDeCarteraEsDecimal.cs a `Domain/Lending/Risk`; LosComandosDeCarteraLlevanClave.cs (+ `OrderMonthlyCloseCommand`, `ReopenMonthlyCloseCommand`, `SetAnalysisRatingCommand`, `LiftAnalysisRatingCommand`, `AddRiskPolicyVersionCommand`, `ValidateRiskPolicyVersionCommand`); LosComandosDeConsumoNoTienenRuta.cs (+ `ExecuteMonthlyCloseCommand`, `CreateBaseCloseCommand`, sin ruta); LasConsultasDeCarteraRespetanElAlcance.cs (+ consultas de calificación, cierres, líneas y cambios); LasPantallasDeCarteraEstanEnElMenu.cs (+ `/cartera/cierres`, `/cartera/cierres/{id:guid}`).
+
+#### Application (`tests/IngenIA365ERP.Application.Tests/Lending/Risk/`)
+
+- [ ] T0668 [P] [US9] Ampliar tests/IngenIA365ERP.Application.Tests/Lending/Integration/FechaContableTests.cs con la mitad de Cartera: una fecha valor en un mes con cierre de Cartera vigente salta al primer día del mes siguiente sin cierre y abierto (FR-078, FR-080, US9-2); un cierre reabierto no cuenta; la causación de d y los hechos del cierre de M (último día de M) nunca saltan.
+- [ ] T0669 [P] [US9] Crear OrderMonthlyCloseCommandHandlerTests.cs y GetMonthlyCloseReadinessQueryTests.cs (T47, `api.md` §12.3): requisitos `PreviousClose` (el mensual anterior o, en el primero tras activar, el base aunque sea del mismo mes, T49), `AccountingPeriodOpen`, `AccrualUpToDate`, `ReplicaSynced`, `NoRunInProgress`, cada uno con su código (`Lending.MonthlyClose.PreviousMissing`, `.AccountingPeriodClosed`, `.AccrualBehind`, `.ReplicationUnavailable`, `Lending.Process.AlreadyRunning` con `data.processRunPublicId`) y `Lending.MonthlyClose.AlreadyClosed` con una versión vigente; responde 202 con la corrida `Requested`, `RequestedByKind = Person` y origen `Orden:{PublicId}`.
+- [ ] T0670 [P] [US9] Crear ExecuteMonthlyCloseCommandHandlerTests.cs (T47, T48, `contracts/contabilidad.md` §11, `mensajes.md` §10.17) (dueño: preguntas C2 y C4; rigen «mismo ejercicio primero» y la reclasificación completa):
+  · las tandas guardan `LND_MonthlyCloseLoans` enlazadas a la corrida y el historial del mes, **sin** mensajes; líneas sin encabezado no cuentan y el reintento las retoma por `CursorLoanId`;
+  · la transacción final (con `LND_Setup` exclusivo) inserta encabezado con `InformationCutoffAt`, marca de agua, documentos usados con SHA-256, política, modelo por segmento y marcas (`ObligatoryModelUnavailable`, `UnvalidatedParameters` con su JSON, `IncompleteHistory`), el general, una parte por tanda × sucursal × tipo con clave `Close:{versión}` y origen la parte, en orden `CarteraReclasificadaPorCalificacion` → `DeterioroCalculado`, el informativo `CierreDeCarteraRealizado` y el lote `LendingMonthlyClose` con `LendingClose:{aaaa-mm}`;
+  · reclasificación sólo de los créditos que cambiaron de letra (E1 → E2 no produce líneas), con capital, intereses, pagos por cuenta, deterioro individual de cada concepto y suspenso, y `previousDimensions` del cierre anterior o del base;
+  · deterioro en delta en la categoría nueva frente al saldo vigente (anterior menos lo consumido en el mes, ya reclasificado): `Increase`, `DecreaseSameYear` hasta lo llevado al gasto en el mismo año por crédito y concepto, `DecreasePriorYears` por el resto (o todo a recuperación con `TodoARecuperacion`), `Transfer` del adicional; general y adicional en `generalImpairment`;
+  · el primer cierre tras activar compara con el base y no reconoce otra vez el deterioro migrado (US8-5, SC-013); fecha contable = último día de M.
+- [ ] T0671 [P] [US9] Crear ReopenMonthlyCloseCommandHandlerTests.cs (C58, §11.4): encola 202 la corrida `CloseReopen`; sólo el último cierre vigente (`Lending.MonthlyClose.NotLast`), nunca el base (`.BaseNotReopenable`), antes del cierre contable (`.AccountingPeriodClosed`, con `AccountingPeriodStatusJson` sellado); la corrida inserta `LND_MonthlyCloseReopenings`, una parte `CloseReopening` por parte del cierre con `ReversedPartId`, su `ReversoDeCierre` (clave `Reopen:{versión}`, `related` la parte original, misma fecha contable, modo heredado C08, dimensiones vigentes) y `CierreDeCarteraReabierto` con `Related` el `CierreDeCarteraRealizado`; crea su propio lote; encabezado y líneas intactos; el estado `Reopened` y la vigencia de las líneas se derivan; volver a cerrar crea `Version + 1` con `SupersedesCloseId`.
+- [ ] T0672 [P] [US9] Crear CreateBaseCloseCommandHandlerTests.cs (T49): `Kind = Base` fechado al corte (no tiene que ser fin de mes), líneas desde `LND_MigrationRiskData` enlazadas al cierre (no a una corrida), general desde sus filas generales, historial `Migration` desde `LND_MigrationArrearsHistory`, sin hechos ni partes; un solo base por cooperativa; `ActivationId` lleno.
+- [ ] T0673 [P] [US9] Crear AddRiskPolicyVersionCommandHandlerTests.cs y ValidateRiskPolicyVersionCommandHandlerTests.cs (T45, `data-model.md` §23.10): `Lending.RiskPolicy.LessStrict` con `data.cells[] { path, norm, proposed }`, `.SchemaInvalid`, `ValidFrom ≥ HoyLocal`, huella canónica; validar exige un punto de acta del consejo con sujeto `RiskPolicyVersion` (C52; `Lending.Session.ItemMismatch`) y que no la valide quien la registró (`Lending.Segregation.Conflict`); `[EscrituraUnica]` sobre la validación; estado calculado.
+- [ ] T0674 [P] [US9] Crear SetAnalysisRatingCommandHandlerTests.cs y ListDailyRatingsQueryTests.cs (FR-099, FR-101, T46): análisis igual o mejor que el de las reglas → `Lending.AnalysisRating.NotWorse` con `data.ruleCategory`; motivo obligatorio; una vigente por crédito; levantar exige motivo (`.NotActive`); el cierre la lee a R. La calificación diaria usa el mismo motor (con arrastre según `Riesgo.CalificacionDiariaConArrastre`) y se rotula «Informativa»; `GET /loans/{id}/rating?date=&recordedAsOf=` no escribe nada; el ciclo diario llena `DailyRating` y `DailyRatingSubcategory` de la posición.
+- [ ] T0675 [P] [US9] Crear CategoriaContableDeCarteraTests.cs y LectorDeIndicadoresDeLaEntidadTests.cs: la categoría contable vigente de un crédito es la `AccountingRating` de su línea del último cierre vigente (mensual o base), nunca la diaria; el que nace después del último cierre lleva la de `RatingCause.NewLoan` sellada al desembolsar; el novado, la del anterior (§3.4). Indicadores: más viejo que `Contabilidad.IndicadoresVigenciaMeses` o ninguno → «no disponible» (C33); sin dato, el arrastre y el deterioro no aplican aportes (D19) y la validación de concentración responde `Lending.Concentration.TechnicalCapitalUnavailable` y alerta `Cartera.PatrimonioTecnicoNoDisponible` (dueño: pregunta C3; rige bloquear).
+- [ ] T0676 [P] [US9] Crear EfectoDeReplicacionObligacionSobrevenidaTests.cs y GetImpairmentModelBySegmentQueryTests.cs (T50, D28): una vigencia del perfil o una `ReglaDePerdidaEsperada` replicada **después** de registrar la activación que obliga a la cooperativa levanta `Cartera.ObligacionSobrevenida` (y `Cartera.ModeloObligatorioNoDisponible` sin K6a) para el contador y el jefe de cartera, y lista los créditos sin historial completo; antes de activar no alerta; el selector la refleja desde el primer cierre dentro de la vigencia.
+- [ ] T0677 [P] [US9] Ampliar tests/IngenIA365ERP.Application.Tests/Lending/Integration/ValidadorDeDocumentoNormativoDeCarteraTests.cs (o crearla si la plataforma no la dejó): `SarcAnexo1` y `ReglaDePerdidaEsperada` se validan al registrarlos en la central contra su esquema tipado (segmentos, rangos contiguos sin huecos por segmento, porcentajes entre 0 y 1, subcategorías tipadas, tramos de garantía); un documento inválido → `NationalValues.Document.Invalid` con la ruta.
+- [ ] T0678 [P] [US9] Ampliar `TareasDeCarteraTests` y `ProcesadorDeCarteraTests` (los de la fase del motor): `cartera.cierre-programado` crea la corrida `MonthlyClose` sólo con `Riesgo.CierreProgramado` activo y, si sus requisitos fallan, alerta `Cartera.CierreProgramadoFallido`; `cartera.vigilancia` levanta `Cartera.CierreMensualPendiente` pasado `Riesgo.DiaLimiteCierre` (dueño: pregunta E6; rige manual con alerta al día 10); el procesador toma `MonthlyClose` y `CloseReopen` `Requested` al final del orden de `data-model.md` §22.1, una a la vez, y nunca se cruzan con la causación.
+
+#### e2e (`tests/IngenIA365ERP.API.IntegrationTests/Lending/`, colección «Cartera e2e»)
+
+- [ ] T0679 [US9] Crear CierreMensualDeCarteraTests.cs (cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` y su cierre base, PostgreSQL y SQL Server; corrida conducida a mano): el recorrido del Independent Test y `quickstart.md` §3.11: orden 202 y tandas; arrastre (US9-1); reporte de cambios con anterior, nueva y causa (US9-3); análisis que empeora y rechazo del que mejora (US9-4); pago único (US9-5); primer cierre en delta frente al base; pago con fecha valor del mes cerrado (con `Lending.Payments.BackdateBeforeClose`) que no reescribe el cierre y se reconoce en M+1 (US9-2); `Accounting.Period.LendingNotClosed` antes de cerrar Cartera y cierre contable después; reapertura del último, rechazo de reabrir uno que no es el último y de reabrir con el período contable cerrado; `Version + 1`; cooperativa marcada como obligada en su perfil, sin K6a: cierre con Anexo 1, marca y alerta (US9-8).
+- [ ] T0680 [US9] Ampliar tests/IngenIA365ERP.API.IntegrationTests/Lending/ContabilizacionDeCarteraPorMensajesTests.cs (T0625) con el cierre del mes: el lote `PV` del cierre (`trigger = LendingMonthlyClose`) contabiliza la reclasificación A→C de capital, intereses, deterioro y suspenso (US7-4) y el deterioro en delta; la conciliación al último día del mes da cero (SC-006); la reapertura deja un `PV` nuevo con los reversos y la conciliación vuelve a cero tras cerrar `Version + 1`.
+- [ ] T0681 [US9] Ampliar `CausacionDiariaPerformanceTests` (`[FactDeRendimiento]`) con el cierre mensual sobre la misma cartera de 50.000 créditos: tiempo por tanda y de la transacción final, partes y líneas del `PV` resumido; medido, sin umbral (`quickstart.md` §1.8).
+
+### Implementation for User Story 9
+
+#### Dominio: normativa, política y motores puros
+
+- [ ] T0682 [P] [US9] Crear las enumeraciones de riesgo en src/Core/IngenIA365ERP.Domain/Enums/Lending/RiskEnums.cs con la numeración de `data-model.md` §9.1: `RatingCategory`, `RatingSubcategory`, `RatingCause`, `ImpairmentModel`, `ModelBasis`, `MonthlyCloseKind`, `MonthlyCloseStatus` (calculado), `ArrearsHistoryOrigin` **(nuevo en data-model)**, `RiskPolicyVersionStatus` (calculado). Si la base de Cartera ya las declaró, sólo se verifican nombres y números.
+- [ ] T0683 [P] [US9] Completar los documentos tipados (su forma y reglas de forma las dejó la fase 3) src/Core/IngenIA365ERP.Domain/Lending/Risk/Normativa/Anexo1.cs (segmentos SARC, rangos por segmento y categoría, reglas especiales de pago único y crédito nuevo, porcentajes por segmento × categoría × subcategoría con condición tipada y base, garantías por naturaleza con tramos en meses, aportes, arrastre, suspensión, reestructurados y general por perfil; T45) y ReglaDePerdidaEsperada.cs (tipos de organización obligados, meses de historial exigidos, antelación del aviso), con su esquema parcial para la política.
+- [ ] T0684 [US9] Completar la semilla de contenido (los JSON iniciales los registró la fase 3) de los documentos `SarcAnexo1` y `ReglaDePerdidaEsperada` vigentes (JSON embebidos que carga `PlatformNationalValuesSeeder` de la plataforma) con `Verified = false` en cada tabla transcrita (dueño: pregunta E8; del Anexo 1 en K1 sólo la tabla de comercial persona jurídica viene como imagen y la coteja la contadora; pregunta E1: «pendiente de validar» no bloquea, marca el cierre); y completar src/Core/IngenIA365ERP.Application/Lending/Risk/ValidadorDeDocumentoNormativoDeCartera.cs (de la fase 3), implementación de `IValidadorDeDocumentoNormativo` para `SarcAnexo1`, `SarcAnexo2` (rechaza hasta K6a) y `ReglaDePerdidaEsperada`, registrada en DI (depende de T0683).
+- [ ] T0685 [P] [US9] Crear src/Core/IngenIA365ERP.Domain/Lending/Risk/PoliticaSarcEfectiva.cs (`Combinar(norma, política)` puro: máximo por celda, lista de celdas menos estrictas) y HomologacionDeCalificacion.cs (calificación contable A–E y subcategorías a su letra).
+- [ ] T0686 [US9] Crear src/Core/IngenIA365ERP.Domain/Lending/Risk/MotorDeCalificacion.cs en dos fases (T46): por crédito, candidatas de mora (`AlturaDeMora` en días hábiles), modelo, pago único, crédito nuevo, reestructurado, evaluación (entrada vacía hasta K3), análisis e insolvencia; luego arrastre por deudor y modalidad SARC (no alcanza codeudas; sin excepción de aportes mientras rija D19 o sin indicadores vigentes); devuelve la peor con su causa, las candidatas, la subcategoría y la calificación contable, con explicación (depende de T0682, T0683, T0685).
+- [ ] T0687 [US9] Crear MotorDeDeterioroIndividual.cs (base = capital − valor admisible de garantías por tiempo de mora, hipotecarias y no hipotecarias − aportes a prorrata sólo si las condiciones de la norma y los indicadores lo permiten; porcentaje de la política efectiva; conceptos suspendidos al 100 %; redondeo `Riesgo.RedondeoDeterioro`, pregunta E9) y MotorDeDeterioroGeneral.cs (mínimo del perfil acotado por `DETERIORO_GENERAL_MINIMO`, adicional de la política y su uso para compensar el individual, por sucursal, modalidad, sub-segmento, empleado y modelo), ambos en src/Core/IngenIA365ERP.Domain/Lending/Risk/ (depende de T0686).
+- [ ] T0688 [P] [US9] Crear src/Core/IngenIA365ERP.Domain/Lending/Risk/SelectorDeModeloDeDeterioro.cs (por segmento: modelo, fundamento y marca; K6a sólo con `CatalogoDeCartera.EntregaVigente ≥ K6a`; obligación desde el perfil y la regla vigentes) e HistorialDeMora.cs (`Construir`: fuente por mes, novaciones, completitud con los meses de la regla; la regla de meses faltantes se aplica en K6a).
+
+#### Persistencia y migración
+
+- [ ] T0689 [P] [US9] Crear las entidades en src/Core/IngenIA365ERP.Domain/Entities/Lending/Risk/: `MonthlyClose`, `MonthlyCloseLoan` (`[SinDiffDeAuditoria]`; columnas de K6a nulas desde K1), `MonthlyCloseGeneralImpairment`, `MonthlyCloseReopening`, `LoanArrearsHistoryEntry` (`[SinDiffDeAuditoria]`), `AnalysisRating` y `RiskPolicyVersion` (validación `[EscrituraUnica]`), todas hechos (`IHechoInmutable`) salvo `AnalysisRating`, con las columnas de `data-model.md` §23.1–§23.6 y §23.10.
+- [ ] T0690 [US9] Crear src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/RiskConfigurations.cs: índices `UK_LND_MonthlyCloses_Period`, `UK_LND_MonthlyCloses_Base` filtrado, `(CloseDate)`; en las líneas `UK (ProcessRunId, LoanId)` y `UK (MonthlyCloseId, LoanId)` filtrados y la verificación de que sólo una de las dos FK va llena; `UK (MonthlyCloseId)` en reaperturas; historial `(LoanId, PeriodYear, PeriodMonth)` y `UK (ProcessRunId, LoanId)` filtrado; `UK (LoanId)` filtrado de análisis vigentes; `UK (VersionNumber)` e `IX (ValidFrom, VersionNumber)` de la política; precisión por los alias de `PrecisionDeCartera`; nombres con `HasDatabaseName`; y las FK `LND_AccountingFactParts.MonthlyCloseId` y `.MonthlyCloseReopeningId` que la base dejó sin crear (C66); `DbSet` en `IApplicationDbContext` (depende de T0689).
+- [ ] T0691 [US9] Generar la migración par aditiva `CarteraRiesgo` con tools/scripts/add-migration.ps1 (DT §2.26: `LND_RiskPolicyVersions`, `LND_MonthlyCloses`, `…Loans`, `…GeneralImpairments`, `…Reopenings`, `LND_LoanArrearsHistory`, `LND_AnalysisRatings` y las FK de C66) **en el orden de C103**: quitar el par `IntegracionContableDeCartera` de la fase 11, generar `CarteraRiesgo` justo después de `CarteraNucleo` y regenerar `IntegracionContableDeCartera` detrás de él (C104); revisar los dos scaffolds y `Feature004_MigrationParity` (depende de T0690).
+
+#### Application (`src/Core/IngenIA365ERP.Application/Lending/Risk/`)
+
+- [ ] T0692 [US9] Crear CargadorDeRiesgo.cs **(nuevo)**: lectura en bloque, para una tanda de créditos y una fecha de corte con R, de la reconstrucción a fin de mes (`CargadorDeReconstruccion`), garantías vigentes con su valor admisible, codeudores, análisis vigentes a R, línea del cierre anterior o del base, historial, deudor y modalidad SARC (para el arrastre carga **todos** los créditos de los deudores de la tanda), y del contexto: política validada vigente (`LND_RiskPolicyVersions`), documentos por `INormativaVigente` con SHA-256, límites por `IValoresNacionales`, indicadores por T0696, aportes por `IConsultaDeAportes` (`ConsultaDeAportesNoDisponible` en K1), perfil regulatorio.
+- [ ] T0693 [US9] Crear los comandos de la política SARC: AddRiskPolicyVersionCommand.cs, ValidateRiskPolicyVersionCommand.cs y GetRiskPolicyQuery.cs (`api.md` §12.1), y AsuntoDeActaPoliticaSarc.cs **(nuevo)**, implementación de `IAsuntoDeActa` para el sujeto `RiskPolicyVersion` de `LendingDecisionSubjects` (C52), con la segregación por `RegistroDeIntervenciones` (quien registró no valida).
+- [ ] T0694 [US9] Crear SetAnalysisRatingCommand.cs, LiftAnalysisRatingCommand.cs, ListAnalysisRatingsQuery.cs, ListDailyRatingsQuery.cs y GetLoanRatingQuery.cs **(nuevo)** (`GET /api/lending/loans/{id}/rating?date=&recordedAsOf=`); y en el ciclo diario (paso de posiciones de `RegistroDeCartera`) el cálculo de `DailyRating`/`DailyRatingSubcategory` con `MotorDeCalificacion` (dueño: pregunta E7; rige arrastre en la informativa, apagable).
+- [ ] T0695 [US9] Completar CategoriaContableDeCartera.cs (esqueleto con firma estable de la fase 3, C106), lector único de la categoría contable vigente (§3.4) y cablearlo en `EmisionDeCartera` para la dimensión `riskCategory` de todo hecho de un crédito, y en `ExecuteLoanDisbursementCommand` para sellar en `CreditoDesembolsado` la categoría `NewLoan`; reemplaza la categoría de crédito nuevo que el esqueleto daba a todo crédito.
+- [ ] T0696 [US9] Crear LectorDeIndicadoresDeLaEntidad.cs **(nuevo)** sobre `IContabilidadParaCartera.IndicadoresDeLaEntidadAsync` con la vigencia `Contabilidad.IndicadoresVigenciaMeses` (C33): da «disponible» o «no disponible» con el corte; lo usan el motor de calificación y deterioro (D19) y la validación de concentración de US2 (desembolso, cupo y novedad que aumenten el endeudamiento: `Lending.Concentration.TechnicalCapitalUnavailable` y alerta `Cartera.PatrimonioTecnicoNoDisponible` al contador; FR-041), que deja de leer el puerto por su cuenta.
+- [ ] T0697 [US9] Crear OrderMonthlyCloseCommand.cs (202, `IOperacionIdempotente`) y GetMonthlyCloseReadinessQuery.cs con los requisitos de T47 (el período contable por `EstadoDelPeriodoAsync`; la réplica por `ReplicateNationalValuesCommand` antes de fijar la marca de agua; la causación al día por `LND_LoanControls`).
+- [ ] T0698 [US9] Crear ExecuteMonthlyCloseCommand.cs (sin ruta; una tanda por `IEjecutorEnCooperativa` con la persona que ordenó como actor) en dos pasos: (1) tandas que calculan con T0686/T0687/T0688 y guardan `MonthlyCloseLoan` e historial `MonthlyClose` del mes con el cursor y los errores por crédito en `LND_ProcessRunErrors`; (2) transacción final con `LND_Setup` exclusivo (`ICerrojoDeCartera`) que revalida los requisitos, inserta encabezado, general, partes y mensajes por `EmisionDeCartera` (§11.1–§11.3), el informativo y el lote `BatchTrigger.LendingMonthlyClose`, y deja `TotalsJson`/`ResultSha256` como evento resumen de la corrida (depende de T0692, T0697).
+- [ ] T0699 [US9] Crear ReopenMonthlyCloseCommand.cs (202; motivo, atribución con `Lending.MonthlyClose.Reopen` y acta opcional según `api.md` §12.3) y la ejecución de la corrida `CloseReopen` (una transacción con `LND_Setup` exclusivo: reapertura, partes `CloseReopening` con `ReversoDeCierre`, `CierreDeCarteraReabierto`, lote propio; T47, C58).
+- [ ] T0700 [US9] Integrar `MonthlyClose` y `CloseReopen` en src/Presentation/IngenIA365ERP.API/Integration/ProcesadorDeCartera.cs (orden de `data-model.md` §22.1; `CurrentStep` 1 líneas / 2 transacción final; reintento con `POST /api/lending/process-runs/{id}/retry`) y la tarea `cartera.cierre-programado` (`ITareaProgramada`, sale si Cartera no está activada; con `Riesgo.CierreProgramado` crea la corrida o alerta `Cartera.CierreProgramadoFallido`); sumar `Cartera.CierreMensualPendiente` a `cartera.vigilancia`.
+- [ ] T0701 [US9] Crear CreateBaseCloseCommand.cs (sin ruta, C60): cierre `Base` al corte desde `LND_MigrationRiskData`, general e historial migrado, sin hechos (T49); cablearlo ya en el camino mínimo de `ActivateLendingCommand` de la fase 3 (C107: con la carga vacía nace un cierre base sin líneas, para que el primer cierre mensual de una cooperativa activada con `ActivarCarteraAsync` tenga su `PreviousClose`); US8 lo llama con las tandas de la carga.
+- [ ] T0702 [P] [US9] Crear las consultas del cierre: ListMonthlyClosesQuery.cs, GetMonthlyCloseQuery.cs, ListMonthlyCloseLoansQuery.cs, GetMonthlyCloseChangesQuery.cs (reporte de cambios contra la línea del `PreviousCloseId`, derivado al leer), y el cuadre del cierre por `ConciliacionContableDeCartera` a `CloseDate`; estado y vigencia de líneas derivados de la reapertura; todas filtradas por `FiltroDeAlcanceDeCartera`.
+- [ ] T0703 [P] [US9] Crear GetImpairmentModelBySegmentQuery.cs, GetArrearsHistoryCompletenessQuery.cs (K1, `api.md` §12.5) y EfectoDeReplicacionObligacionSobrevenida.cs (`IEfectoDeReplicacion`, misma transacción de la réplica, sólo con Cartera activada) más el gancho en `AddRegulatoryProfileVersionCommand` que evalúa la obligación al registrar el perfil (T50); alertas `Cartera.ObligacionSobrevenida` y `Cartera.ModeloObligatorioNoDisponible` (si la plataforma ya registró el efecto con otro nombre, se unifica en éste).
+- [ ] T0704 [US9] Completar `FechaContable` (T0649) con la mitad de Cartera: mientras el mes tenga un cierre de Cartera vigente (no reabierto), pasa al siguiente (T36, §8).
+
+#### API, pantallas y documentación
+
+- [ ] T0705 [P] [US9] Crear src/Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs con `/api/lending/risk/policy`, `/risk/ratings`, `/risk/analysis-ratings`, `/risk/monthly-closes` (lista, `{year}/{month}/readiness`, `{year}/{month}/close` 202, `{id}`, `{id}/loans`, `{id}/changes`, `{id}/reconciliation`, `{id}/reopen` 202), `/risk/impairment-model` (`GET`; `POST /elections` no existe hasta K6a) y `/risk/arrears-history/completeness`, más `GET /api/lending/loans/{id}/rating`, con los permisos de `api.md` §12 y `Idempotency-Key` en las escrituras.
+- [ ] T0706 [P] [US9] Crear src/Presentation/IngenIA365ERP.Shared/Services/Cartera/RiesgoClient.cs **(nuevo)** con sus DTO (política, calificaciones, análisis, cierres, líneas, cambios, cuadre, modelo por segmento, completitud del historial); tipado, en DI, sin `Authorization` a mano.
+- [ ] T0707 [US9] Crear src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Cierres.razor (`/cartera/cierres`: cierres con estado y marcas, requisitos del mes con su detalle, ordenar y reabrir con motivo, seguimiento de la corrida; pestaña «Calificación informativa» con la lista diaria) y Pages/Cartera/Cierre.razor (`/cartera/cierres/{id:guid}`: encabezado con R, documentos y política; líneas por crédito; reporte de cambios; cuadre con Contabilidad con enlace a `/cartera/conciliacion-contable`; partes emitidas y su comprobante; reaperturas), con `IndicadorDeCarga` por zona y `PermissionGate`.
+- [ ] T0708 [P] [US9] Crear src/Presentation/IngenIA365ERP.Shared/Components/Cartera/PoliticaSarc.razor **(nuevo)** (norma, política y efectiva por celda; registrar versión y validarla con el punto de acta) para la pestaña «Riesgo» de `/cartera/parametros`, y Components/Cartera/CalificacionDelCredito.razor **(nuevo)** (informativa del día, oficial del último cierre y calificación por análisis con poner y levantar) para `/cartera/creditos/{id:guid}`; agregar `/cartera/cierres` al grupo «Cartera» del menú.
+- [ ] T0709 [P] [US9] Crear docs/manual/cartera-riesgo-y-cierre-mensual.md **(nuevo)** (calificación, arrastre, deterioro del Anexo 1, política del consejo, análisis, cierre y reapertura, reporte de cambios, qué es «pendiente de validar» y la marca de modelo obligatorio) y docs/operaciones/cartera-cierre-mensual.md **(nuevo)** (runbook: requisitos, orden, seguimiento y reintento de la corrida, cuadre, cierre contable después del de Cartera, reapertura antes del contable, registro de patrimonio técnico vigente; lo que valida la contadora: C2, C4, E8, E9).
+
+**Checkpoint**: el primer cierre mensual tras la activación califica, deteriora y congela con R sellado; sus hechos
+salen por partes en un `PV` que Contabilidad contabiliza; la conciliación al último día da cero; Contabilidad no
+cierra el mes antes que Cartera; la reapertura del último cierre funciona y deja `Version + 1` al volver a cerrar;
+los casos dorados r01–r15 pasan al centavo.
+
+---
+
+## Phase 13: User Story 8 - Migrar la cartera vigente y cuadrar antes de activar (Priority: P1) — entrega K1
+
+**Goal**: la cooperativa arma una **carga** con fecha de corte en **17 partes** (`lending.migration.{parte}`, una hoja
+cada una, admite `.csv`, **varios archivos por parte**, C64), la revisa y la aplica: aplicar **sólo guarda la carga**,
+su validación entre partes, su **cuadre** contra Contabilidad (FR-141) y su **conciliación de ventas** (FR-143); las
+diferencias se aceptan con motivo y **punto de acta** (D17); los cobros provisionales se revisan antes (C62); y la
+**activación** (`ActivateLendingCommand`), fechada el día siguiente al corte, dentro del plazo y con el mes contable
+abierto, con **acta obligatoria** (C61), verifica los requisitos contra el registro de participantes (Recaudo,
+Tesorería), el perfil (K6a si es obligada), el Anexo 1, la usura, los roles y las oficinas, y hace nacer **en una
+transacción con guardados por tandas de 1.000 créditos** (C60) créditos, saldos iniciales sin hechos, cierre base,
+cupos, bloqueos, autorizaciones, avisos, reclamos, vinculados, no aplicados «Cartera sin activar» y los cobros
+provisionales guardados; habilita el destino `Lending` en la misma transacción y emite `CarteraActivada`
+(FR-139–FR-143, T83–T85, US8-1 a US8-9). Esta fase **completa** el camino mínimo de la activación que dejó la fase 3
+(C107: carga vacía, acta, requisitos contra el registro, `ActivarCarteraAsync`): suma las partes, el cuadre, la
+conciliación, el nacimiento de créditos y de lo del deudor, los cobros provisionales y los requisitos que faltan, sin
+romper la activación sin cartera previa que usan las e2e de las fases 4 a 12.
+
+**Independent Test**: en una cooperativa aislada, una carga de 100 créditos con un descuadre deliberado de capital:
+una fila cuyo plan no suma el capital queda marcada con fila y columna y nada se guarda (US8-1); aplicada, el cuadre
+muestra la diferencia por concepto, modalidad, sub-segmento, categoría y cuenta (US8-2); activar sin aceptarla →
+`Lending.Activation.DifferencesNotAccepted` (US8-3); aceptada con punto de acta y activada con fecha C+1, cada crédito
+nace con su `OpeningBalance` por concepto sin hechos y existe el cierre base (US8-4); la liquidación de cada uno a C
+coincide con lo cargado; con una fecha distinta de C+1 → `Lending.Activation.CutoffInvalid` y una carga nueva deja la
+anterior `Replaced` (US8-9); en ambiente de producción simulado sin Recaudo ni Tesorería reales →
+`Lending.Activation.RequirementsMissing` con lo que falta (US8-7, US8-8).
+
+### Tests for User Story 8
+
+> Se escriben primero y deben fallar. Las de Application corren en InMemory con reloj fijo; las e2e, en la colección
+> «Cartera e2e», en PostgreSQL y SQL Server, cada una en su **cooperativa aislada** (`CarteraE2E.CooperativaAisladaAsync`).
+
+- [ ] T0710 [P] [US8] Pruebas `CatalogoDePlantillasDeMigracionTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Imports/CatalogoDePlantillasDeMigracionTests.cs` (T82, plantillas.md §5.2, §5.3, §6, §0.3):
+  · las 17 claves `lending.migration.{loans, installments, balances, risk-data, restructurings, co-debtors, collaterals, charged-off, sales, credit-limits, blocks, authorizations, prior-notices, bureau-reports, claims, related-parties, arrears-history}` y `lending.provisional-collections` existen en `CatalogoDePlantillasDeCartera`, cada una con una sola hoja `Datos` y aceptación de `.csv`;
+  · los encabezados de cada parte son **exactamente** los de plantillas.md §5.3 y §6 (lista dorada en la prueba: cambiar una columna rompe la prueba, porque la plantilla se congela antes de publicarse) con su tipo de valor (`Persona`, `Sucursal`, `Monto`, `Porcentaje` en puntos, `Enumeracion` por nombre, número o etiqueta, número de crédito `^[A-Za-z0-9-]+$` de 20 en mayúsculas, mes `AAAA-MM`);
+  · ninguna definición crea personas; la hoja «Instrucciones» se genera de la definición y el libro vacío lleva sólo encabezados en la fila 1 (`PlantillaDeImportacion`).
+- [ ] T0711 [P] [US8] Pruebas `CuadresDeMigracionTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Migration/CuadresDeMigracionTests.cs` (plantillas.md §5.3.2–§5.3.4, §5.3.9; FR-139):
+  · el plan pendiente suma el capital: diferencia → `Lending.Schedule.PrincipalMismatch` en la fila y columna `capital` (US8-1);
+  · cuadres por crédito de `balances` contra `installments`: `Principal` = Σ `capital`; `CurrentInterest` + `CurrentInterestInSuspense` = Σ `interesCorriente`; `DefaultInterest` + `DefaultInterestInSuspense` = Σ `interesDeMora`; `Insurance` = Σ `seguro`; `CollectionFee` + `OtherCharge` = Σ `otros` → `Lending.Migration.BalanceMismatch` con `data { loanNumber, concept, declared, computed }`; `Advance` y `CreditBalance` sólo en `balances`; `Principal` obligatorio;
+  · venta: `saldoAlCorte` = `valorOriginal` − `cobrosExternos` + `notasYAjustes`, si no `BalanceMismatch`; `Migrated` exige saldo > 0, `CancelledBeforeCutoff` saldo 0;
+  · `diasDeMora` frente a lo que dicen las cuotas vencidas e impagas al corte: diferencia → **aviso** `Lending.Migration.ArrearsMismatch`; episodio de `prior-notices` que no es el vigente según las cuotas → aviso `Lending.Migration.EpisodeNotCurrent` y la fila no se migra;
+  · fechas crecientes por cuota; `interesCorriente` sólo en cuotas vencidas o en curso.
+- [ ] T0712 [P] [US8] Pruebas `ImportMigrationPartCommandHandlerTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Migration/ImportMigrationPartCommandHandlerTests.cs` (plantillas.md §5.1, C64; api.md §19.1):
+  · `review` corre las mismas reglas que `apply` y no guarda; `apply` es todo o nada **para ese archivo** y escribe una fila de `LND_MigrationLoadParts` por archivo (`BatchNumber` consecutivo, nombre, SHA-256, filas, quién y cuándo) más sus filas de preparación;
+  · el mismo archivo (mismo SHA-256) otra vez a la misma parte → «sin cambio»; una llave repetida en otra tanda de la parte → `Import.Row.Duplicate` nombrando la tanda; `replace=true` pasa todas las tandas anteriores de la parte a `Superseded` (sus filas se conservan y dejan de contar) antes de agregar el archivo;
+  · un documento que no está vivo en `COR_People`, una sucursal no vinculada a una oficina, una línea sin versión vigente al corte → `Import.Cell.NotFound`; modalidad `VIVIENDA` → `Lending.Migration.HousingNotAvailable` (D18); una oficina o línea fuera del alcance de quien importa → `Import.Cell.NotFound` (T62); tasa pactada sobre la usura vigente al corte → aviso `Lending.Usury.Exceeded`, no error;
+  · referencias a otra parte que todavía no se cargó (un número de crédito de `loans`) son **avisos** al importar;
+  · carga que no está en `Draft` → `Lending.Migration.LoadNotDraft`; sin `Idempotency-Key` → el error común; auditoría `Import.Reviewed` / `Import.Applied` con el SHA-256 en el módulo `Lending`; la revisión carga los catálogos en bloque (una consulta por catálogo, no por fila).
+- [ ] T0713 [P] [US8] Pruebas `ApplyMigrationLoadCommandHandlerTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Migration/ApplyMigrationLoadCommandHandlerTests.cs` (plantillas.md §5.4; data-model §29; T83):
+  · las nueve validaciones entre partes de §5.4 con 422 `Lending.Migration.CrossPartErrors` (`data.errors[] { part, row, column, message }`, con la tanda): parte obligatoria vacía (`Lending.Migration.PartMissing`; una carga **sin ninguna parte** sigue siendo válida: es la activación sin cartera previa de C107), crédito citado que no está en `loans`/`charged-off`, crédito sin cuotas, saldos o `risk-data`, cuadres de T0711, `sales`↔`loans` uno a uno en las migradas, número en `loans` y en `charged-off` a la vez, cupos que se cruzan en el tiempo, persona dada de baja después de importar, historial incompleto de una cooperativa obligada (`Lending.Migration.ArrearsHistoryRequired` con créditos y meses);
+  · con un error no se guarda nada y la carga sigue `Draft`;
+  · OK: carga `Applied` con `AppliedAt/By`, `ActivationDeadline` = corte + `Pagos.DiasMaximosFechaValor` sellado, `TotalsJson`, conteos, `ValidationSummaryJson` con `manualPrevails[]` (cupos, bloqueos, autorizaciones y vinculados registrados a mano antes para la misma persona y concepto); la `Applied` anterior pasa a `Replaced` con `ReplacedByLoadId` (con el mismo corte o con otro, US8-9); emite el informativo `CargaDeCarteraAplicada` (Always, `Confirmation`, contenido de mensajes.md con `replacesLoadPublicId`) en el mismo `SaveChanges`;
+  · calcula y guarda el cuadre (`LND_MigrationLoadDifferences` `BalanceCheck` por `DimensionKey`, con `AccountSetDisplay` sólo para mostrar) con un doble de `IContabilidadParaCartera.SaldosDeCuentasMapeadasAsync` y la conciliación de ventas (`LND_MigrationSaleReconciliations`) con un doble de `IMensajesEntrantes.PendientesAsync`, ambos con `CheckVersion = 1` y sus huellas en la carga; el mensaje de venta acumulado **no** se consume;
+  · al reemplazar una carga, los cupos otorgados a mano se revalidan contra la nueva (`Cartera.CupoPorRevalidar`, FR-142);
+  · Cartera ya activada → `Lending.Activation.AlreadyActivated`.
+- [ ] T0714 [P] [US8] Pruebas `ConciliacionYAceptacionDeMigracionTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Migration/ConciliacionYAceptacionDeMigracionTests.cs` (FR-141, FR-143, D17, D29, T83; api.md §19.2):
+  · las cuatro clases de `SaleReconciliationOutcome`: `Migrated` (con `MigrationLoanRowId`), `CancelledBeforeCutoff` cargada por plantilla (con `MigrationSaleRowId`), `NotMigratedWithBalance` (nace su `MigrationLoadDifference` `SaleNotMigrated`) y `OutsideLendingD29` marcada desde la lista (nace su diferencia `SaleOutsideLending`, que no bloquea como «no migrada con saldo» pero se acepta venta por venta); ajustes de cada venta contados hasta y después del corte;
+  · `MarkMigrationSaleCommand` sólo con la carga `Applied`, motivo obligatorio, sobre una venta pendiente (si no, `Lending.MigrationLoad.SaleNotPending`); las ventas con `CreditWithoutLending` no aparecen;
+  · `AcceptMigrationDifferencesCommand`: una lista de diferencias, motivo y un `SessionItem` cerrado con resultado aprobado y sujeto `ActivationDifferences` de esa carga (si no, `Lending.Session.ItemMismatch`); escritura única de la aceptación (`[EscrituraUnica]`); con el par `CargarMigracion × AceptarDiferencias` activo en `Segregacion.Incompatibilidades`, quien cargó no acepta (`Lending.Segregation.Conflict`); la aceptación es de esa carga y de esa versión;
+  · `GetMigrationBalanceCheckQuery` exige `Lending.Reconciliation.View` (C85) y no trae datos personales; sin contabilidad iniciada responde `Lending.Accounting.NotStarted`.
+- [ ] T0715 [P] [US8] Pruebas `ReviewProvisionalCollectionsCommandHandlerTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Activation/ReviewProvisionalCollectionsCommandHandlerTests.cs` (plantillas.md §6; C62; api.md §19.3): la factura es una venta con `VentaACreditoRegistrada` acumulado **confirmada después del corte** (no una de la migración); la suma de una factura no supera su valor a crédito (`Lending.ProvisionalCollection.ExceedsSale`); `fechaValor` entre la venta y hoy; llave `factura` + `referenciaContable` sin repetir; la revisión deja el archivo como adjunto y devuelve `{ stagedAttachmentPublicId, sha256, rows, errors[] }` **sin guardar filas**; con errores, 422 `Import.Invalid`.
+- [ ] T0716 [P] [US8] Pruebas `RequisitosDeActivacionTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Activation/RequisitosDeActivacionTests.cs` (FR-142, T84; api.md §19.3 `ActivationReadinessDto`), con `IHostEnvironment` falso en los dos valores:
+  · cada código de requisito con su estado y quién lo arregla (`whoFixes`): `LoadApplied`, `DifferencesAccepted`, `SalesReconciled`, `DateInTerm`, `AccountingMonthOpen` (doble de `IContabilidadParaCartera.EstadoDelPeriodoAsync`), `ReceiptsCollectorRegistered` y `TreasuryDestinationRegistered` (en producción: participantes reales con adopción vigente de «ProveedorDeObligaciones» y «OrdenDeGiroEmitida»; un `Class = Test` no cuenta), `ExpectedLossAvailable` (cooperativa obligada a la fecha de activación o desde una fecha posterior por su perfil o por `ReglaDePerdidaEsperada`, sin K6a desplegada), `ExpectedLossParameters` y `ArrearsHistoryComplete` (sólo donde K6a está desplegada), `Annex1Current`, `UsuryForActiveLines` (usura de la modalidad certificada de cada línea activa a la fecha de activación), `LendingRolesCreated`, `OfficesLinkedToAccountingBranches` (toda oficina con créditos en la carga vinculada a una sucursal contable), `PayrollBridgeRuleResolved` (`RecaudoPorAplicar` con `CollectorClass = Payroll` resuelta por `IContabilidadParaCartera.EvaluarAsync`);
+  · fuera de producción los de Recaudo, Tesorería y K6a no bloquean y una obligada sin K6a activa con la marca `ObligatoryModelUnavailable` (FR-105);
+  · avisos que no bloquean: `CommercialParametersToAdjust`, `PayrollConceptAccounts`, `UsersWithoutScope`.
+- [ ] T0717 [P] [US8] Pruebas `ActivateLendingCommandHandlerTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Activation/ActivateLendingCommandHandlerTests.cs` (FR-140–FR-143, T84, C60–C63; data-model §30.1):
+  · negativas: fecha ≠ corte + 1 → `Lending.Activation.CutoffInvalid` (`data.expected`); registro después de `ActivationDeadline` o con el mes de C+1 cerrado en Contabilidad → `.DeadlinePassed`; diferencias sin aceptar → `.DifferencesNotAccepted`; un requisito pendiente → `.RequirementsMissing` (`data.missing[]`); sin `sessionItemPublicId` o con un punto que no es de esa carga → `Lending.Session.ItemMismatch`; segunda activación → `.AlreadyActivated`; cobros provisionales que ya no validan → `Import.Invalid` o `Lending.ProvisionalCollection.ExceedsSale`;
+  · **recalcula** cuadre y conciliación: con la misma huella sigue; con otra, nace `CheckVersion + 1` con sus filas (las marcas de ventas se copian), se guarda **fuera** de la transacción de la activación y responde `.DifferencesNotAccepted`;
+  · nace todo (contra la carga de prueba): `LND_Loans` con origen `Migration` y el número de origen; condiciones selladas con `RulesVersion`; plan desde `installments` conservando el capital por cuota (D5); `LND_LoanControls` con `LastAccruedDate` = corte; partes, garantías, pagaré, `LND_LoanPayrollLinks` y preferencias; una operación `OpeningBalance` por crédito con una transacción por concepto fechada al corte y **ningún mensaje contable**; castigados como `WrittenOff` con su saldo; cierre base `Kind = Base` fechado al corte con líneas, deterioro general e historial migrado (origen `Migration`); cupos, bloqueos (con `LND_InsuranceClaims` en `InProcess` por cada crédito con seguro de vida deudores y `LND_InsolvencyProceedings` en `Negotiating`), autorizaciones (`Origin = Migration` por `IAutorizacionDeDatos.Agregar`), avisos (`Migrated*`), reportes vigentes en `LND_PriorNotices.MigratedReportedNegativeSince`, reclamos `InProcess`, vinculados; lo registrado a mano antes prevalece;
+  · ventas: `ResultingLoanId` en la conciliación; la cancelada antes del corte nace como obligación en cero, con número, en la línea de la carga o en la de `CommercialDefaultFor` del tipo de tercero si se marcó desde la lista;
+  · cuotas de créditos con forma de pago `OwnPayroll` vencidas entre C+1 y el registro e impagas → `LND_InstallmentNonDeductions` con origen `Activation`, motivo «Cartera sin activar», y alerta `Cartera.CuotaNoDescontadaPorNomina`;
+  · un cupo otorgado a mano que excede un límite con lo que nace → bloqueado «cupo por revalidar» y `Cartera.CupoPorRevalidar`;
+  · `LND_ProvisionalCollections` guardados con `LoanId`/`OperationId`/`AppliedAt`/`MessagePublicId` nulos; el SHA-256 del archivo entra en la huella de idempotencia;
+  · `LND_Setup.ActivationDate/ActivationId/ActivatedAt` escritos una vez; la carga `Activated`; el destino `Lending` activo en `COR_IntegrationParticipants` por `EscritorDelRegistroDeIntegracion`; `CarteraActivada` con su contenido; el numerador `Loan` arranca por encima del mayor número numérico migrado; `LND_Activations` con requisitos, conteos, `IsProductionEnvironment`, `CommercialAdjustmentsJson` y `PayrollWarningAcknowledged`;
+  · misma `Idempotency-Key` y mismo cuerpo → la misma respuesta sin repetir nada.
+- [ ] T0718 [P] [US8] Pruebas `VentasDeLaMigracionEnElConsumidorTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Migration/VentasDeLaMigracionEnElConsumidorTests.cs` (FR-143, C63, C102; data-model §21.5; mensajes.md `ObligacionCreada`/`ObligacionRechazada`): tras activar, el consumidor de ventas de US6 recibe la `VentaACreditoRegistrada` acumulada y busca su fila de conciliación de la versión aceptada: `Migrated` → `ObligacionCreada` con el número migrado y estado `Migrated`; `CancelledBeforeCutoff` → `ObligacionCreada` con el número de la obligación en cero; `NotMigratedWithBalance` aceptada y `OutsideLendingD29` → `ObligacionRechazada` **no reprocesable** con «aceptada sin migrar en la activación»; venta fechada hasta el corte **sin fila** → recibo `NotIncorporated`, `ObligacionRechazada` no reprocesable con `Lending.Sale.NotIncorporated` y alerta `Cartera.VentaNoIncorporada` (C63, C99; propuesta de la pregunta I16); ajustes acumulados de esas ventas: hasta el corte se dan por procesados, después siguen FR-054 sobre la obligación (migrada o en cero), y los de una aceptada sin migrar responden `SinObligacion`; `EstadoDeValidacionAsync` informa migradas y canceladas como validadas y las aceptadas sin migrar como `NotIncorporated`; ninguna venta anterior al corte se procesa como mensaje en vivo.
+- [ ] T0719 [P] [US8] Pruebas `CargaVigenteAntesDeActivarTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Migration/CargaVigenteAntesDeActivarTests.cs` (FR-142, T85, T94; interfaces.md §6, tabla «desplegada, sin activar»): con una carga `Applied`, `IConsultaDeObligaciones.ObligacionesAsync` y `CuotasDeNominaAsync` responden sin obligaciones exigibles y con `MigratedNotActivated = true` para deudores **y codeudores** de esa carga (no de una `Replaced` ni de un `Draft`); `DeletePersonCommand` de uno de ellos → `Person.HasActiveLoans`; el endeudamiento consolidado de un cupo otorgado antes de activar cuenta los créditos de la carga como si hubieran nacido (deudor y codeudor), y el grupo conectado, la concentración y los vinculados también; después de activar, nadie lee la preparación.
+- [ ] T0720 [P] [US8] Pruebas `ContratoAntesDelCorteTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Activation/ContratoAntesDelCorteTests.cs` (FR-142; data-model §10.1): activada Cartera, un `AplicarAsync` con fecha valor igual o anterior al corte se rechaza con `Lending.Contract.BeforeCutoff` («debía venir en la carga»); uno con fecha valor C+1 entra con su fecha valor; antes de activar sigue `Lending.NotActivated`.
+- [ ] T0721 [US8] Llenar las listas de las pruebas de arquitectura con lo de esta historia en `tests/IngenIA365ERP.Architecture.Tests/Principles/` (DT §2.25): `LosComandosDeCarteraLlevanClave` (+ `CreateMigrationLoadCommand`, `ImportMigrationPartCommand`, `ApplyMigrationLoadCommand`, `MarkMigrationSaleCommand`, `AcceptMigrationDifferencesCommand`, `ReviewProvisionalCollectionsCommand`, `ActivateLendingCommand`); `LosEndpointsProtegidosExigenPermiso` (+ `MigrationEndpoints.cs`, `ActivationEndpoints.cs`); `NadieEscribeElLibroDeCarteraFueraDelRegistro` (la activación escribe saldos iniciales sólo por `RegistroDeCartera`); `SoloElNumeradorNumera`; `LosHechosInmutablesNoSeModifican` (+ `LendingActivation`, `MigrationLoadDifference`, `ProvisionalCollection` con sus `[EscrituraUnica]`, las 17 `Migration…Row`); `LosCierresDeCarteraNoSeReescriben` (el cierre base); `LosCodigosViewDeCarteraNoTienenDatosPersonales` (el cuadre bajo `Reconciliation.View` sin documentos ni nombres); `LasPantallasDeCarteraEstanEnElMenu`, `TodoEnlaceDelMenuTieneSuPagina` y `LasPantallasDicenQueEstanCargando` (+ `/cartera/migracion`, `/cartera/activacion`); `LaCarteraSoloSeTocaPorSusInterfaces` (la activación no lee `PAY_` ni `INV_`: el aviso de `DESC_CARTERA` lo pregunta la pantalla a Nómina).
+- [ ] T0722 [US8] Prueba e2e `MigracionYActivacionDeCarteraTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/MigracionYActivacionDeCarteraTests.cs` (quickstart §3.3, §3.4; SC-013), colección «Cartera e2e», en los dos motores, en una cooperativa aislada con contabilidad de ensayo (apertura al corte) y los dobles de Recaudo y Tesorería:
+  · carga de 100 créditos por las 17 partes (cuotas en **dos archivos**), una fila con el plan descuadrado y un deudor inexistente marcados con fila y columna (US8-1); un error entre partes al aplicar (`CrossPartErrors`);
+  · aplicar sólo guarda; otra carga con corte C deja la anterior `Replaced` (US8-9); cuadre con la diferencia de capital (US8-2) y conciliación con migradas, una cancelada, una no migrada con saldo y una de servicios marcada `OutsideLendingD29`;
+  · activar sin aceptar → `DifferencesNotAccepted` (US8-3); con fecha C+2 → `CutoffInvalid`; aceptar con un punto de sesión cerrado (y un usuario distinto de quien cargó); revisar cobros provisionales; activar con el punto de acta: créditos, `OpeningBalance` sin filas en `COR_IntegrationMessages` contables, cierre base, cupo por revalidar, no aplicados `Activation`, destino `Lending` activo y `CarteraActivada` (US8-4);
+  · liquidación a C de cada crédito migrado = saldos cargados (`GET /api/lending/loans/{id}/settlement?date=C`);
+  · el despachador entrega las ventas acumuladas y Comercial recibe `ObligacionCreada`/`ObligacionRechazada` según T0718 (`INV_LendingObligationResponses`); una venta fechada hasta C que llega después → `Cartera.VentaNoIncorporada`;
+  · las cuotas vencidas entre C+1 y el registro no generan mensajes al deudor fechados antes del registro;
+  · el primer cierre mensual después de activar emite sólo la diferencia frente al cierre base (US8-5, con el cierre de US9);
+  · misma `Idempotency-Key` en la activación → una sola activación.
+- [ ] T0723 [US8] Casos con carga aplicada en `tests/IngenIA365ERP.API.IntegrationTests/Lending/CarteraDesplegadaSinActivarTests.cs` (T85, FR-142; la clase la crea la fase de las enmiendas previas), colección «Cartera e2e», en los dos motores: con una carga `Applied` la ordinaria y la definitiva con deudores de la carga exigen `acknowledgeLendingPendingActivation` (`Payroll.LendingPendingActivationAckRequired`); borrar a un deudor o codeudor de la carga → `Person.HasActiveLoans`; el contrato sigue «Cartera no activada»; Contabilidad avisa `Accounting.Period.LendingLoadWillExpire` al cerrar el mes que contiene C+1 (recibió `CargaDeCarteraAplicada`).
+- [ ] T0724 [US8] Prueba de volumen `ActivacionDeCarteraPerformanceTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/ActivacionDeCarteraPerformanceTests.cs` (C60; quickstart §1.8; SC-013), con `[FactDeRendimiento]` (omitida con motivo sin `RUN_PERF_TESTS=1`) (no el `return` silencioso que tapa el verde): carga aplicada de **50.000 créditos** sintéticos (≈1,5 millones de cuotas, en varios archivos por parte) con el cuadre aceptado en una cooperativa aislada; `ActivateLendingCommand` termina sin agotar la memoria del host; una falla provocada en la **última tanda** deja la base como antes (ningún crédito, ningún cierre base, destino `Lending` inactivo, carga `Applied`); mide tiempo total y por tanda de 1.000, memoria máxima y filas nacidas por tabla (sin umbral de tiempo; se anota en las notas de la entrega).
+
+### Implementation for User Story 8
+
+#### Domain
+
+- [ ] T0725 [P] [US8] Verificar (o agregar) los enums `MigrationLoadStatus` (`Draft` 1, `Applied` 2, `Replaced` 3, `Activated` 4), `MigrationPartStatus` (`Imported`, `Superseded`), `MigrationDifferenceKind` (`BalanceCheck`, `SaleNotMigrated`, `SaleOutsideLending`) y `SaleReconciliationOutcome` (`Migrated`, `CancelledBeforeCutoff`, `NotMigratedWithBalance`, `OutsideLendingD29`) en `src/Core/IngenIA365ERP.Domain/Enums/Lending/` con la numeración de `data-model.md` §9 (C65), si la fase de la base de Cartera no los dejó.
+- [ ] T0726 [P] [US8] Completar con su comportamiento las entidades `MigrationLoad` y `MigrationLoadPart` en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Migration/` (su forma la dejó la fase 3 en `CarteraNucleo`; un cambio de columnas regenera el par, C104; data-model §29.1, §29.2): `MigrationLoadPart` es una fila **por archivo** (C64).
+- [ ] T0727 [P] [US8] Verificar y completar (forma de la fase 3, C104) las 17 entidades de preparación `Migration{Loan, Installment, Balance, RiskData, Restructuring, Collateral, CoDebtor, CreditLimit, Block, Authorization, PriorNotice, BureauReport, Claim, RelatedParty, ChargedOff, Sale, ArrearsHistory}Row` (H) en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Migration/MigrationRows.cs` (data-model §29.3) con columnas comunes `MigrationLoadPartId`, `RowNumber`, `PersonId` y `SourceLoanNumber`; `AuditableEntityLong` en cuotas, saldos e historial; `[SinDiffDeAuditoria]`.
+  · donde `data-model.md` §29.3 y `plantillas.md` §5.3 difieren, la columna sigue a la plantilla (dueña de las columnas de importación, §7.6): cuotas con `CurrentInterest`, `DefaultInterest`, `Insurance`, `OtherCharges` y `ProjectedInterest` informativo; `risk-data` una fila por crédito con `GeneralImpairment` por crédito y `EnteredEOn`; `sales` con `Outcome`, `SourceLoanNumber` y `BalanceAtCutoff ≥ 0`; `prior-notices` una fila por episodio con dos comunicaciones; `bureau-reports` y `claims` con las columnas de la plantilla; `MigrationRestructuringRow.Cause` (`TermsVersionCause`, C97); `MigrationChargedOffRow.HistoricalApprovalReference` (C64). Ver «Notas de coordinación».
+- [ ] T0728 [P] [US8] Completar con su comportamiento (forma de la fase 3, C104) `MigrationLoadDifference` (H, aceptación `[EscrituraUnica]`), `MigrationSaleReconciliation` (marcas editables sólo con la carga `Applied`), `ProvisionalCollection` (H; `LoanId`, `OperationId`, `AppliedAt`, `MessagePublicId` `[EscrituraUnica]`) y `LendingActivation` (H; `SessionItemId` no nulo, C61) en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Migration/` (data-model §21.5, §29.4, §29.5, §30.1).
+
+#### Persistence
+
+- [ ] T0729 [US8] Verificar contra data-model las configuraciones que dejó la fase 3 en `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/Migration/` y corregir lo que falte (data-model §21.5, §29, §30; `HasDatabaseName` en los nombres largos, filtro de borrado lógico, `PrecisionDeCartera` por alias): `UK (Status)` filtrados `[Status] = 1`, `= 2` y `= 4` en `LND_MigrationLoads`; `UK (MigrationLoadId, PartKey, BatchNumber)` y `UK (MigrationLoadId, PartKey, FileSha256)` filtrado `[Status] = 1 AND [IsDeleted] = 0`; `UK (MigrationLoadPartId, RowNumber)` en las 17; `UK (MigrationLoadId, CheckVersion, DimensionKey)`; `UK (MigrationLoadId, CheckVersion, CreditPaymentPublicId)`, `(MessagePublicId)`, `(InvoiceNumber)`; `UK (ActivationId, RowNumber)` y `UK (InvoiceNumber, AccountingReference)`; `UK (MigrationLoadId)` en `LND_Activations`; FK de `LND_Setup.ActivationId`. Con la sintaxis de filtro de cada motor. **Sin migración propia**: son de `CarteraNucleo`; una corrección regenera el par (C104).
+
+#### Application — plantillas y carga
+
+- [ ] T0730 [US8] Declarar las 17 definiciones `lending.migration.{parte}` y `lending.provisional-collections` en `src/Core/IngenIA365ERP.Application/Lending/Imports/DefinicionesDeMigracion.cs` (nuevo) y registrarlas en `CatalogoDePlantillasDeCartera` (T82; plantillas.md §5.3, §6): columnas, tipos, obligatoriedad, llave, `personalData = true`, `availableFrom = K1`, permiso de importación `Lending.Migration.Load` (la 7, `Lending.Activation.Execute`).
+- [ ] T0731 [P] [US8] Crear `CuadresDeMigracion` (nuevo, sin IO) en `src/Core/IngenIA365ERP.Application/Lending/Migration/CuadresDeMigracion.cs`: suma del plan, cuadres por concepto de `balances`, ecuación de la venta, mora declarada frente a la que dicen las cuotas (aviso), episodio vigente (aviso); lo usan la importación de una parte (dentro de un archivo) y la aplicación (entre partes).
+- [ ] T0732 [US8] Completar `CreateMigrationLoadCommand` (camino mínimo de la fase 3, C107; `IOperacionIdempotente`; `{ cutoffDate, notes? }`; un borrador nuevo deja el borrador anterior `Replaced`; con Cartera activada `Lending.Activation.AlreadyActivated`; numera con `NumeradorDeCartera`), `ListMigrationLoadsQuery` y `GetMigrationLoadQuery` (`Lending.MigrationLoad.NotFound`; resumen por parte y tanda, diferencias pendientes y aceptadas, lo registrado a mano que prevalece) en `src/Core/IngenIA365ERP.Application/Lending/Migration/MigrationLoadCommands.cs` (api.md §19.1).
+- [ ] T0733 [US8] Crear `ImportMigrationPartCommand` (`IOperacionIdempotente`; `{ loadPublicId, part, mode, replace, archivo, reason }`) con su handler sobre `EjecutorDeImportacion` en `src/Core/IngenIA365ERP.Application/Lending/Migration/ImportMigrationPartCommand.cs` (plantillas.md §5.1, §5.3; C64): una tanda por archivo con su SHA-256 («sin cambio» si se repite), llave única entre tandas vivas, `replace=true` → tandas anteriores `Superseded`, resolución en bloque de personas (documento → `COR_People` vivo), sucursales vinculadas, líneas con versión vigente al corte y catálogos de `data-model.md` §9; `CuadresDeMigracion` dentro del archivo; referencias a otras partes como avisos; alcance de oficina y línea (`FiltroDeAlcanceDeCartera`); registra la intervención `CargarMigracion` por `RegistroDeIntervenciones`.
+- [ ] T0734 [US8] Crear `CuadreDeMigracion` (nuevo) y `GetMigrationBalanceCheckQuery` en `src/Core/IngenIA365ERP.Application/Lending/Migration/CuadreDeMigracion.cs` (FR-141, T58, R27): arma las combinaciones (concepto, modalidad, sub-segmento, categoría, oficina) de la carga —capital, intereses, suspenso, anticipos, saldos a favor, deterioro individual y general, castigada— y compara por conjunto con `IContabilidadParaCartera.SaldosDeCuentasMapeadasAsync(corte, combinaciones)`; vivienda fuera hasta K6b; escribe `LND_MigrationLoadDifferences` `BalanceCheck` y la huella `BalanceCheckSha256`; sin contabilidad iniciada `Lending.Accounting.NotStarted`. Cartera no resuelve cuentas: muestra el conjunto que devolvió Contabilidad.
+- [ ] T0735 [US8] Crear `ConciliacionDeVentasDeMigracion` (nuevo), `GetMigrationSalesReconciliationQuery` y `MarkMigrationSaleCommand` (`IOperacionIdempotente`; `{ messagePublicId, classification: CancelledBeforeCutoff | OutsideLendingD29, reason }`) en `src/Core/IngenIA365ERP.Application/Lending/Migration/ConciliacionDeVentasDeMigracion.cs` (FR-143, T83, data-model §21.5): lee por páginas, sin consumir, `IMensajesEntrantes.PendientesAsync(Lending, VentaACreditoRegistrada, corte, página)`; clasifica por factura contra `sales` y `loans`; ajustes por fecha; nace la diferencia de las no migradas con saldo y de las marcadas fuera de Cartera; huella `SalesReconciliationSha256`; `Lending.MigrationLoad.SaleNotPending`.
+- [ ] T0736 [US8] Completar `ApplyMigrationLoadCommand` (la fase 3 lo dejó para la carga sin partes, que sigue valiendo, C107; `IOperacionIdempotente`; `{ reason }`) en `src/Core/IngenIA365ERP.Application/Lending/Migration/ApplyMigrationLoadCommand.cs` (plantillas.md §5.4; T83): las nueve validaciones entre partes con `CuadresDeMigracion`, todo o nada en una `TransaccionExplicita`; historial obligatorio de los segmentos cubiertos de una obligada (por el selector de modelo de deterioro de US9 y `ReglaDePerdidaEsperada`); `manualPrevails[]`; cuadre y conciliación (`CheckVersion = 1`); `ActivationDeadline`; la `Applied` anterior → `Replaced`; revalidación de cupos a mano contra la carga nueva (T0739); `CargaDeCarteraAplicada` por `EmisionDeCartera`; respuesta `{ status, counts, balanceCheck, salesReconciliation, manualPrevails, replacedLoadPublicId?, warnings }`.
+- [ ] T0737 [US8] Crear `AcceptMigrationDifferencesCommand` (`IOperacionIdempotente`; `{ differencePublicIds[], sessionItemPublicId, reason }`) en `src/Core/IngenIA365ERP.Application/Lending/Migration/AcceptMigrationDifferencesCommand.cs` y la implementación `AsuntoDeDiferenciasDeActivacion` (nuevo) de `IAsuntoDeActa` para el sujeto `ActivationDifferences` en `src/Core/IngenIA365ERP.Application/Lending/Migration/AsuntoDeDiferenciasDeActivacion.cs` (D17, T64, T66): `DescribirAsync` lista las diferencias, las ventas fuera de Cartera y lo que el acta declara (vivienda fuera hasta K6b, plan migrado conservado, D5); el punto debe ser `Decision` cerrado y aprobado; segregación por el par `CargarMigracion × AceptarDiferencias` con `RegistroDeIntervenciones`; actualiza `IsBalanced` y `SalesReconciled` de la carga.
+- [ ] T0738 [P] [US8] Agregar los códigos de error de la migración y la activación de `data-model.md` §10.1 (C71, C98) —`Lending.Activation.RequirementsMissing`, `.CutoffInvalid`, `.DeadlinePassed`, `.DifferencesNotAccepted`, `.AlreadyActivated`; `Lending.Migration.LoadNotDraft`, `.CrossPartErrors`, `.ArrearsHistoryRequired`, `.PartMissing`, `.BalanceMismatch`, `.HousingNotAvailable`, avisos `.ArrearsMismatch` y `.EpisodeNotCurrent`; `Lending.ProvisionalCollection.ExceedsSale`; `Lending.Contract.BeforeCutoff`; `Lending.Sale.NotIncorporated`— más los de `api.md` §19 que §10.1 no lista (`Lending.MigrationLoad.NotFound`, `.SaleNotPending`, `Lending.Accounting.NotStarted`), con el mensaje en español que dice qué hacer, en `src/Core/IngenIA365ERP.Application/Lending/Migration/MigrationErrors.cs` (nuevo) y en `TextosDeCarteraTests`.
+
+#### Application — antes de activar
+
+- [ ] T0739 [US8] Crear `CargaVigenteDeCartera` (nuevo, lector de la carga `Applied`: personas como deudor o codeudor, exposición por persona y por grupo para cupos) en `src/Core/IngenIA365ERP.Application/Lending/Migration/CargaVigenteDeCartera.cs` y conectarlo (FR-142, T85, T94, interfaces.md §6):
+  · `ConsultaDeObligacionesSinActivar` y `ObligacionesDeCartera` llenan `MigratedNotActivated` en `ObligacionesDePersonaDto` y `CuotasDeNominaDto` desde él;
+  · el evaluador de cupos de US2 suma la exposición de la carga como si hubiera nacido (endeudamiento consolidado como deudor y codeudor, grupo conectado, concentración, vinculados);
+  · `RevalidacionDeCupos` (nuevo) en el mismo archivo: al aplicar una carga que reemplaza otra y al activar, cada cupo otorgado a mano que excede un límite o es de un vinculado sin decisión del consejo queda bloqueado con «cupo por revalidar» (`DebtorBlock` FR-060) y alerta `Cartera.CupoPorRevalidar` (`DedupKey` `…:{cupo}`).
+
+#### Application — activación
+
+- [ ] T0740 [US8] Completar `RequisitosDeActivacion` y `GetLendingActivationStatusQuery` (forma mínima de la fase 3, C107) con todos los requisitos (`ActivationReadinessDto`: estado, carga vigente, fecha que correspondería, plazo, requisitos con `{ code, status, detail, whoFixes }` y avisos) en `src/Core/IngenIA365ERP.Application/Lending/Activation/RequisitosDeActivacion.cs` (FR-142, T84; api.md §19.3): lee el registro por `IRegistroDeIntegracion` (adopciones vigentes, sin `Class = Test`), el perfil y el selector de modelo de deterioro, la entrega desplegada del módulo `LND` (`EntregaDeModulo`) para K6a, `INormativaVigente` (`SarcAnexo1`), `IValoresNacionales` (`USURA` por modalidad certificada de cada línea activa), los roles de las plantillas `cartera.*` de `PerfilesSugeridos`, las sucursales de las oficinas de la carga, `IContabilidadParaCartera.EstadoDelPeriodoAsync` y `.EvaluarAsync` (`RecaudoPorAplicar|Payroll`); el carácter de producción sale de `IHostEnvironment.IsProduction()`, nunca de la cooperativa.
+- [ ] T0741 [US8] Crear `ReviewProvisionalCollectionsCommand` (`IOperacionIdempotente`, porque escribe el adjunto) en `src/Core/IngenIA365ERP.Application/Lending/Activation/ReviewProvisionalCollectionsCommand.cs` (plantillas.md §6, C62): revisión previa con `EjecutorDeImportacion` contra las ventas acumuladas confirmadas después del corte (`IMensajesEntrantes.PendientesAsync`), suma por factura contra su valor a crédito; guarda el archivo como adjunto `Direct` de dueño de módulo (no borrable) y devuelve `stagedAttachmentPublicId`, SHA-256, filas y errores; no guarda filas. Expone la validación como `ValidacionDeCobrosProvisionales` (nuevo) para que la activación la vuelva a correr en su transacción.
+- [ ] T0742 [US8] Completar `CreateBaseCloseCommand` (lo creó US9 y ya lo llama el camino mínimo de la activación con la carga vacía; sin ruta; exige transacción en curso por `TransaccionExplicita.HayEnCurso` y no guarda por su cuenta) para llamarlo por las tandas de la carga (FR-140, T49, C66; data-model §23.1, §32.1): `LND_MonthlyCloses` `Kind = Base` fechado al **corte** (no tiene que ser fin de mes) con `ActivationId`, sus `LND_MonthlyCloseLoans` desde `risk-data` (días de mora, calificación, subcategoría, causa, deterioro por concepto, suspenso, tiempo en E) y `LND_MonthlyCloseGeneralImpairments` sumando el general por crédito por dimensión (oficina, modalidad, sub-segmento); historial migrado en `LND_LoanArrearsHistory` con origen `Migration`; **sin hechos** ni `CierreDeCarteraRealizado`; nunca se reabre.
+- [ ] T0743 [US8] Crear `NacimientoDeCreditosMigrados` (nuevo) en `src/Core/IngenIA365ERP.Application/Lending/Activation/NacimientoDeCreditosMigrados.cs` (FR-140, T83, T84; data-model §29.3 «Al activar nace»): por tanda de créditos de la carga arma `Loan` (origen `Migration`, número de origen, oficina, línea, asesor, factura y la identidad de la venta en las migradas), `LoanTermsVersion` sellada con la versión de la línea vigente al corte y lo pactado (`RulesVersion`), `RepaymentScheduleVersion` + `RepaymentInstallment` desde `installments` (capital por cuota conservado; el interés lo causa el motor desde el corte, D5), `LoanControl` (`LastAccruedDate` = corte), `LoanParty`, `Collateral` (una garantía puede respaldar varios créditos), `PromissoryNote` (canal y id externo sellados), `LoanPayrollLink` (C44), `PrepaymentPreference`, marcas de reestructuración, y la operación `OpeningBalance` con sus transacciones por concepto fechadas al corte **por `RegistroDeCartera`**, sin `EmisionDeCartera`; los de `charged-off` como `WrittenOff` con su saldo en control; no numera créditos migrados.
+- [ ] T0744 [US8] Crear `NacimientoDeLoDelDeudorMigrado` (nuevo) en `src/Core/IngenIA365ERP.Application/Lending/Activation/NacimientoDeLoDelDeudorMigrado.cs` (FR-139, FR-142, C64, T69, T102): `CreditLimit` (origen `Migration`), `DebtorBlock` (con `Deceased`, una `InsuranceClaim` por crédito con seguro de vida deudores; con `Insolvency`, la `InsolvencyProceeding`), autorizaciones por `IAutorizacionDeDatos.Agregar` (`Origin = Migration`; sin evidencia, el crédito vive y se cobra pero no consulta ni reporta a centrales ni recibe mensajes de cobranza), `PriorNotice` con columnas `Migrated*` y `MigratedReportedNegativeSince` desde `bureau-reports`, `CreditReportClaim` `InProcess`, `RelatedParty`; lo registrado a mano antes para la misma persona y concepto prevalece y se cuenta en `CountsJson`.
+- [ ] T0745 [US8] Completar `ActivateLendingCommand` (camino mínimo de la fase 3, C107: la activación sin cartera previa sigue igual; `IOperacionIdempotente`; `{ migrationLoadPublicId, activationDate, provisionalCollectionsAttachmentPublicId?, sessionItemPublicId, acknowledgeWarnings, payrollWarningAcknowledged, reason }`; el SHA-256 de los cobros provisionales entra en la huella) en `src/Core/IngenIA365ERP.Application/Lending/Activation/ActivateLendingCommand.cs` (FR-142, T84, C60–C62; data-model §30.1, §32.3):
+  · antes de la transacción: fecha = corte + 1, plazo y mes abierto, punto de acta del sujeto `ActivationDifferences` de esa carga, `RequisitosDeActivacion`; recalcula cuadre y conciliación y, si la huella cambió, guarda `CheckVersion + 1` (marcas copiadas) y responde `.DifferencesNotAccepted`;
+  · en una `TransaccionExplicita`, con `LND_Setup` exclusivo por `CerrojoDeCartera`: revalida los cobros provisionales (`ValidacionDeCobrosProvisionales`); por tandas de **1.000 créditos** llama a `NacimientoDeCreditosMigrados` y guarda con `ChangeTracker.Clear()` entre tandas; `NacimientoDeLoDelDeudorMigrado`; `CreateBaseCloseCommand`; obligaciones en cero de las ventas `CancelledBeforeCutoff` (número por `NumeradorDeCartera`, línea de la carga o `CommercialDefaultFor`) y `ResultingLoanId`; no aplicados `Activation` en `LND_InstallmentNonDeductions` para las cuotas `OwnPayroll` vencidas entre C+1 y el registro (alerta `Cartera.CuotaNoDescontadaPorNomina`); `RevalidacionDeCupos`; `LND_ProvisionalCollections`; `LND_Activations`; `LND_Setup`; carga `Activated`; el numerador `Loan` por encima del mayor número numérico migrado; destino `Lending` activo por `EscritorDelRegistroDeIntegracion`; `CarteraActivada`; un último guardado y `Commit`; si algo falla, no queda nada;
+  · auditoría `Lending.Activation.Registered` (nuevo) con requisitos, conteos y huellas en el módulo `Lending`.
+- [ ] T0746 [P] [US8] Rechazar en `ContratoDeObligacionesDeCartera` (`src/Core/IngenIA365ERP.Application/Lending/Payments/ContratoDeObligacionesDeCartera.cs`, de US5) un pago con fecha valor igual o anterior al corte de la carga activada con `Lending.Contract.BeforeCutoff` (FR-142; los pagos de C+1 en adelante entran con su fecha valor).
+- [ ] T0747 [US8] Agregar la rama de las ventas de la migración al consumidor de ventas de US6 (`DestinoCartera`, `src/Core/IngenIA365ERP.Application/Lending/Integration/`) y a `ConsultasDeCartera.EstadoDeValidacionAsync` (FR-143, C63, C99, data-model §21.5): una `VentaACreditoRegistrada` fechada hasta el corte nunca se procesa en vivo; busca su fila de conciliación de la versión aceptada y responde según T0718; sin fila, recibo `NotIncorporated`, `ObligacionRechazada` no reprocesable (`Lending.Sale.NotIncorporated`) y alerta `Cartera.VentaNoIncorporada` (destinatarios de data-model §11); ajustes por fecha (hasta el corte, procesados; después, FR-054 sobre la obligación; de una aceptada sin migrar, `SinObligacion`).
+
+#### API
+
+- [ ] T0748 [US8] Completar `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/MigrationEndpoints.cs` (la fase 3 lo creó con crear, listar, detalle y aplicar) con las demás rutas de `api.md` §19.1 y §19.2 bajo `/api/lending/migration/loads`: listar, detalle, crear, `{id}/parts/{part}/template.xlsx` (con `?withData=true` exige además `Lending.Reports.ExportPersonalData`, §0.6) y `{id}/parts/{part}/import?mode=&replace=` por `RutasDePlantilla.MapPlantilla` generalizada (la clave de la parte sale de la ruta; un `{part}` desconocido → `Lending.Template.NotFound`), `{id}/apply`, `{id}/balance-check` (`Lending.Reconciliation.View`), `{id}/reconciliation`, `{id}/reconciliation/marks`, `{id}/differences/accept` (`Lending.Migration.AcceptDifferences`); `.RequirePermission` en cada una, `Idempotency-Key` en las escrituras, cuerpo hasta 16 MB más el multipart.
+- [ ] T0749 [US8] Completar `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/ActivationEndpoints.cs` (la fase 3 lo creó con `GET`/`POST /api/lending/activation`; US17 le sumó `suggested-roles`) con el resto de `api.md` §19.3: `GET /api/lending/activation`, `GET …/provisional-collections/template.xlsx`, `POST …/provisional-collections/review` (multipart) y `POST /api/lending/activation` (201 con `{ activationPublicId, activationDate, loans, openingTransactions, baseClosePublicId, creditLimits, revalidatedLimits, nonDeductionsMarked, provisionalCollectionsStored, messages }`), todas con `Lending.Activation.Execute`; registrar los dos grupos en `Program.cs`.
+- [ ] T0750 [P] [US8] Exponer desde `CuadreDeMigracion` y `ConciliacionDeVentasDeMigracion` la lectura por carga (sin escribir) que usará la vista `migration-reconciliation` de K1; la vista misma (consulta, registro, permisos de C84 y auditoría de exportación) la publica la base del centro de informes al cierre de la fase 14 (C109).
+
+#### Shared (pantallas)
+
+- [ ] T0751 [P] [US8] Crear los métodos del cliente en `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/CarteraClient.Migracion.cs` y `CarteraClient.Activacion.cs` (nuevos, parciales del `CarteraClient`) con sus DTO en `CarteraDtos.Migracion.cs` (nuevo): rutas de §19, `Idempotency-Key` por intento, sin poner `Authorization` a mano; la subida multipart de cada archivo de parte por la API (estas plantillas no van por la subida directa de adjuntos).
+- [ ] T0752 [US8] Crear la pantalla `/cartera/migracion` en `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Migracion.razor` (DT §2.16, quickstart §3.3): lista de cargas con estado; carga nueva con corte; por parte, descargar plantilla (vacía y con datos), subir uno o varios archivos con revisión previa (resultado por fila y columna, libro de revisión en Excel) y reemplazar la parte; aplicar con motivo; pestañas «Cuadre» (por concepto, modalidad, sub-segmento, categoría y conjunto de cuentas), «Ventas» (cuatro clases, marcar desde la lista con motivo) y «Diferencias» (aceptar varias con un punto de sesión elegido de las sesiones cerradas); `IndicadorDeCarga` con una `EstadoDeCarga` por zona, `PermissionGate` por acción, sin colores literales.
+- [ ] T0753 [US8] Crear la pantalla `/cartera/activacion` en `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Activacion.razor` (quickstart §3.4): lista de requisitos de `ActivationReadinessDto` con quién arregla cada uno y enlace a su pantalla; aviso de `DESC_CARTERA` preguntado a Nómina por `GET /api/payroll/concept-definitions/DESC_CARTERA/accounts` (el comando no lee `PAY_`) y casilla de reconocimiento; lo que Comercial debe ajustar (fecha de habilitación = fecha de activación, política «sin respuesta», quién registra la cuenta por cobrar); revisión de cobros provisionales; elección del punto de acta; fecha propuesta C+1 (no editable a otra) y plazo; activar con confirmación; después, el resumen de lo nacido y los «cobros sin obligación» pendientes. `IndicadorDeCarga`, `PermissionGate`, sin colores literales.
+- [ ] T0754 [P] [US8] Agregar «Migración» y «Activación» al grupo «Cartera» del menú con `PermissionGate` (`Lending.Migration.Load`, `Lending.Activation.Execute`) en el componente de menú de `src/Presentation/IngenIA365ERP.Shared/` y su tema en `Services/Manual/ManualCatalogo.cs`; ninguna dice el nombre del sistema anterior.
+
+#### Documentación
+
+- [ ] T0755 [US8] Escribir el runbook `docs/operaciones/cartera-puesta-en-marcha.md` (nuevo; molde `docs/operaciones/inventario-puesta-en-marcha.md`; quickstart §11): lo que debe existir antes (plantillas.md §0.2, retiro hecho, valores nacionales y Anexo 1 revisados, perfil, roles por `CreateSuggestedLendingRolesCommand`, alcances, `SEC_Users.PersonId`, órganos, matriz con la completitud vacía, `RecaudoPorAplicar|Payroll`, `DESC_CARTERA` con cuentas, patrimonio técnico en `ACC_RegulatoryIndicators`, oficinas vinculadas, Recaudo y Tesorería reales registrados); el orden de plantillas de plantillas.md §0.1; la carga por partes con varios archivos y la carga de ensayo en producción sin activar (y su efecto en Nómina, Personas y el cierre contable); cuadre y conciliación, aceptación por acta y el acta de activación (C61, qué declara); la regla C+1, el plazo y el mes contable; cobros provisionales; la activación y su verificación con SQL de comprobación en los dos motores; lo que Comercial ajusta el mismo día; los primeros días y el primer cierre contra el cierre base; qué hacer si falla (todo o nada: corregir y volver a activar; con el plazo vencido, carga con corte nuevo). Sin el nombre del sistema anterior.
+- [ ] T0756 [P] [US8] Agregar la sección de Cartera (partes de la migración, varios archivos por parte, cobros provisionales, orden de carga) a `docs/manual/plantillas-de-importacion.md`, remitiendo a `specs/013-cartera-financiera/contracts/plantillas.md` §5–§6 sin copiar las columnas.
+
+**Checkpoint**: una cooperativa aislada migra 100 créditos por partes, cuadra contra Contabilidad, acepta con acta, revisa
+cobros provisionales y activa en C+1 con todo naciendo en una transacción; los requisitos de producción se niegan con
+la lista; la venta acumulada recibe su respuesta; `MigracionYActivacionDeCarteraTests` verde en los dos motores y
+`ActivacionDeCarteraPerformanceTests` medida con 50.000 créditos.
+
+---
+
+## Phase 14: User Story 13 - Documentos al deudor, parte K1: plan de pagos, paz y salvo y certificado de saldo (Priority: P2) — entrega K1 (I5)
+
+**Goal**: la infraestructura de documentos emitidos (`LND_IssuedDocuments`, `LND_IssuedDocumentLoans`,
+`LND_IssuedDocumentEvents`, en `CarteraNucleo` por C88) y tres clases —`PaymentPlan`, `LoanClearance`/`GeneralClearance`,
+`BalanceCertificate`— emitidas **en un paso** (descarga o correo) con número por clase, firma por parámetro, copia de la
+identificación del titular, **código de verificación** Crockford base32 con QR a `/cartera/verificar?codigo=`, PDF
+guardado con su SHA-256 (QuestPDF + QRCoder), firmeza en el paz y salvo, verificación por usuarios de la cooperativa,
+anulación manual y **automática** al reversar lo que lo respaldaba (`VigenciaDeDocumentos`); extracto y certificado
+tributario responden `Lending.Document.KindNotAvailable` hasta K5 (FR-131, FR-132, T80, C88, US13-1, US13-2, US13-4).
+Al cierre de la fase, y de K1, dos piezas más: la **base del centro de informes** con las siete vistas de K1 (C109,
+marcadas US15) y el **congelamiento** de los pares `CarteraNucleo`, `CarteraRiesgo` e `IntegracionContableDeCartera`
+(C104).
+
+**Independent Test**: pedir un paz y salvo general para un deudor con saldo → `Lending.Document.ClearanceDenied` con la
+obligación; pedirlo para uno sin saldo → se emite con número, código `XXXX-XXXX-XXXX-XXXX` y estado `SubjectToFinality`;
+verificar el código → auténtico con sus datos esenciales; reversar el pago que canceló el crédito → el paz y salvo
+verifica `Voided`; reimprimir da el mismo PDF byte a byte; pedir un extracto → `KindNotAvailable`. Además, la parte
+K1 de `InformesYTableroDeCarteraTests` (registro, `aging` con y sin `ExportPersonalData`, alcance de oficina) y, tras
+el congelamiento, `has-pending-model-changes` limpio y la colección «Cartera e2e» verde en los dos motores.
+
+### Tests for User Story 13
+
+- [ ] T0757 [P] [US13] Pruebas de los motores puros en `tests/IngenIA365ERP.Domain.Tests/Lending/Documents/VigenciaDeDocumentosTests.cs` y `CodigoDeVerificacionTests.cs` (T80, adaptadores-y-archivos.md §8.3, §8.4, §8.8): un reverso anula todo documento que cubra el crédito con `InformationCutoff` igual o posterior al registro de lo reversado y deja los anteriores; un documento ya anulado no se anula dos veces; el estado calculado (`Voided` con evento de anulación; `SubjectToFinality` mientras hoy < `FinalityUntil`; `Valid` en otro caso; el paso a vigente lo da la fecha); el código tiene 16 caracteres del alfabeto Crockford (80 bits) mostrados en cuatro grupos; la normalización acepta minúsculas, guiones y espacios y lleva `I`/`L` → `1` y `O` → `0`.
+- [ ] T0758 [P] [US13] Pruebas `IssueLendingDocumentCommandHandlerTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Documents/IssueLendingDocumentCommandHandlerTests.cs` (FR-131, adaptadores-y-archivos.md §8.1–§8.7; api.md §15):
+  · antes de activar → `Lending.NotActivated`; `Statement` y `TaxCertificate` → `Lending.Document.KindNotAvailable` (`data.availableFrom = "K5"`); sin `Documentos.Firmante.Nombre`/`.Cargo` → `Lending.Document.SignerMissing`; fuera del alcance de oficina o línea → el 404 genérico;
+  · **paz y salvo de una obligación**: saldo distinto de cero a hoy con la información de ahora → `ClearanceDenied` con `data.obligations[]`; en cero → `FinalityUntil` = registro del pago que canceló + días hábiles de `Pagos.FirmezaDiasPorClaseDeMedio` de su clase de medio (cruce interno, cero) por `ICalendarioHabil`, `PayoffOperationId` en la línea;
+  · **paz y salvo general**: todas las obligaciones como deudor (y como codeudor sólo con `Documentos.PazYSalvoIncluyeCodeudas`, que queda en `CoversCoDebts`) en cero; una venta de la persona con mensaje en reproceso → `ClearanceDenied` con `data.pendingSales[] { invoice, messagePublicId }` (US13-4); una venta aceptada sin migrar en la activación no lo niega y queda en `OutsideLendingNote`;
+  · **certificado de saldo**: liquidación a la fecha D con R = el instante de emisión (T24), huella de la liquidación y `RulesVersion`; una D futura se proyecta sin pagos y el documento dice hasta cuándo vale;
+  · **plan de pagos**: la versión del plan vigente en R con las condiciones selladas y tasas efectiva y nominal;
+  · un paso: número con el prefijo de la clase por `NumeradorDeCartera` al final, copia de la identificación del titular, código único (una colisión se regenera antes de guardar), PDF por `IDocumentoDeCarteraRenderer` subido **antes** de guardar como adjunto `LendingIssuedDocument` con su SHA-256, evento `Issued`, `IsTestEnvironment` y `SignerName/Title` sellados, todo en un `SaveChanges`; con `Email`, además el `DebtorMessage` `DocumentDelivery` con el PDF (plantilla `ENVIODOC`), exento de ventanas por pedirlo el titular (I3) y negado sin correo o sin autorización de tratamiento general (`Lending.DebtorMessage.ChannelNotAuthorized`); misma `Idempotency-Key` → el mismo documento; la emisión se audita y cuenta como lectura sensible.
+- [ ] T0759 [P] [US13] Pruebas `DocumentosEmitidosDeCarteraTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Documents/DocumentosEmitidosDeCarteraTests.cs` (FR-132, D21; api.md §15): `VerifyLendingDocumentQuery` normaliza el código y responde `{ authentic, status, kind, number, issuedAt, holder, essentialData, voided? }` (con motivo y fecha si está anulado) y audita `Lending.Document.Verified`; un código de otra base o inexistente → `Lending.Document.NotFound` con «el código no corresponde a un documento de esta cooperativa»; `IssueLendingDocumentDownloadLinkCommand` devuelve el enlace de 60 s del **mismo** PDF guardado y audita `Lending.Document.Reprinted`; un anulado no se reimprime para entregarlo (`Lending.Document.VoidedCannotReissue`); `VoidLendingDocumentCommand` exige motivo y `Lending.Documents.Void`, segunda anulación → `Lending.Document.AlreadyVoided`; `SendLendingDocumentCommand` de un anulado → `VoidedCannotReissue`, y cuando su mensaje queda `Sent` el documento recibe el evento `Delivered` con el `DebtorMessageId`; `ListIssuedLendingDocumentsQuery` filtra por clase, persona, crédito, estado y fechas y respeta el alcance.
+- [ ] T0760 [P] [US13] Pruebas `DocumentosDeCarteraReportTests` en `tests/IngenIA365ERP.API.IntegrationTests/Reports/DocumentosDeCarteraReportTests.cs` (sin contenedores, molde `RepresentacionGraficaReportTests`; adaptadores-y-archivos.md §8.10): las tres clases de K1 producen un PDF válido con membrete (nombre y NIT de `COR_Companies`), firmante, número, fecha, código, copia de la identificación y un QR cuyo contenido es `{urlDeLaAplicacion}/cartera/verificar?codigo=XXXX-XXXX-XXXX-XXXX`; con `IsTestEnvironment` lleva «AMBIENTE DE PRUEBAS – SIN VALIDEZ»; el paz y salvo sujeto a firmeza lleva «La cancelación está sujeta a firmeza hasta el {fecha}»; el general lleva «Certifica sólo las obligaciones de crédito de la cooperativa», si incluyó codeudas y las ventas fuera de Cartera; el mismo modelo da los mismos bytes (reimpresión idéntica: el PDF se guarda, no se regenera).
+- [ ] T0761 [US13] Llenar las listas de arquitectura con lo de esta historia en `tests/IngenIA365ERP.Architecture.Tests/Principles/`: `LosComandosDeCarteraLlevanClave` (+ `IssueLendingDocumentCommand`, `IssueLendingDocumentDownloadLinkCommand`, `SendLendingDocumentCommand`, `VoidLendingDocumentCommand`); `LasLecturasSensiblesDeCarteraSeAuditan` (+ `Lending.Document.Reprinted`, `Lending.Document.Verified` y la emisión; ver «Notas de coordinación»); `LosHechosInmutablesNoSeModifican` (+ `IssuedLendingDocument`, `IssuedDocumentLoan`, `IssuedDocumentEvent`); `SoloElNumeradorNumera`; `LosEndpointsProtegidosExigenPermiso` (+ `DocumentsEndpoints.cs`); `LasPantallasDeCarteraEstanEnElMenu`, `TodoEnlaceDelMenuTieneSuPagina` y `LasPantallasDicenQueEstanCargando` (+ `/cartera/documentos`, `/cartera/verificar`); `LaCarteraNoTieneValoresLegalesFijos` sobre `Domain/Lending/Documents` (los días de firmeza salen del parámetro).
+- [ ] T0762 [US13] Prueba e2e `DocumentosDeCarteraTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/DocumentosDeCarteraTests.cs` (quickstart §3.13), colección «Cartera e2e», en los dos motores, en una cooperativa activada: plan de pagos, paz y salvo de una obligación y certificado de saldo por `POST /api/lending/documents` con descarga y con correo; paz y salvo general negado con saldo (US13-1), negado con una venta en reproceso nombrando la factura y emitido mencionando la aceptada sin migrar (US13-4); verificación del código por un usuario con `Lending.Documents.Verify` (US13-2) y 404 sin el permiso; reimpresión con el mismo SHA-256; anulación manual; extracto → `KindNotAvailable`; misma `Idempotency-Key` → un solo documento.
+- [ ] T0763 [US13] Prueba e2e `ElReversoAnulaLosDocumentosTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/ElReversoAnulaLosDocumentosTests.cs` (adaptadores-y-archivos.md §10, Edge Case), colección «Cartera e2e», en los dos motores: se paga el saldo total, se emite el paz y salvo, se reversa ese pago por pantalla (`ReverseLoanPaymentCommand`, respuesta con `voidedDocuments[]`) y el paz y salvo verifica `Voided` con el motivo y la operación causa; lo mismo por `ReversarAsync` del contrato con el recaudador de prueba; un documento emitido **antes** del pago reversado no se anula.
+
+#### Base del centro de informes (K1) — pruebas (C109, US15)
+
+> C109: la base del centro de informes y las siete vistas de K1 (DT §2.15) son de K1 y se construyen aquí, al cierre de K1, cuando ya existen los datos que leen (fases 4, 9, 12 y 13); K2–K4 suman sus vistas en sus fases y K5 completa US15.
+
+- [ ] T0764 [P] [US15] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Reports/FiltrosDeInformeDeCarteraTests.cs`: rango `from > to` → `Lending.Report.RangeInvalid`; más de cinco años → `.RangeTooLong`; filtro propio fuera de su lista (`groupBy`, `by`, `dateKind`) → `.FilterInvalid` con los admitidos; `asOf` por defecto hoy en la fecha local; `branch` y `line` fuera del alcance → resultado vacío, nunca otra oficina (api.md §17)
+- [ ] T0765 [P] [US15] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Reports/VistasDeCarteraK1Tests.cs` (InMemory con créditos sembrados por el registro del libro de la fase 3): `aging` con los rangos de `Informes.RangosDeEdad` (y `ranges` propio), saldo de capital y calificación informativa; `placement` por línea, oficina, asesor y mes con tasa y plazo promedio ponderados; `receipts` por línea, recaudador, modalidad y clase de medio, con reversos aparte; `transactions` por fecha valor, contable y de registro; `usury` con las dos secciones y `Informes.PuntosAlertaUsura`; `debtor-messages` con motivo de exclusión o diferimiento; `migration-reconciliation` con sus dos secciones; columnas ocultas `_credito`, `_persona`, `_operacion`, `_mensaje` presentes en la tabla y omitidas por los exportadores (FR-133; api.md §17)
+- [ ] T0766 [P] [US15] Ampliar las pruebas de arquitectura `tests/IngenIA365ERP.Architecture.Tests/Principles/LasConsultasDeCarteraRespetanElAlcance.cs` (toda consulta de `Application/Lending/Reports` y `GetLendingDashboardQuery` pasa por `IAlcanceDeCartera`/`FiltroDeAlcanceDeCartera`), `LosCodigosViewDeCarteraNoTienenDatosPersonales.cs` (el DTO del tablero no expone persona, documento ni crédito) y `LosEndpointsProtegidosExigenPermiso.cs` (`Endpoints/Reports/LendingReportsEndpoints.cs` con **una ruta por vista**, cada una con `.RequirePermission("Lending.Reports.View")` y `.RequirePermissionWhenExporting`) (DT §2.25)
+- [ ] T0767 [US15] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/InformesYTableroDeCarteraTests.cs` (colección «Cartera e2e», cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync`, dos motores), parte K1 (C109): registro `GET /api/reports/lending` sin las vistas de datos personales para quien no tiene `Loans.Read`; `aging` json y xlsx con y sin `ExportPersonalData` (404 genérico y sin auditar sin él; con él, un evento `Lending.Report.Exported` con la cooperativa y las filas en la base de auditoría de la cooperativa); usuario de una oficina en `placement` y `receipts`; `debtor-messages` y `migration-reconciliation` responden con sus columnas (FR-133, FR-138). La parte K5 la suma la fase de US15 (K5)
+
+### Implementation for User Story 13
+
+#### Domain
+
+- [ ] T0768 [P] [US13] Verificar (o agregar) los enums `IssuedDocumentKind` (`PaymentPlan`, `Statement`, `LoanClearance`, `GeneralClearance`, `BalanceCertificate`, `TaxCertificate`), `IssuedDocumentEventKind` (`Issued`, `Delivered`, `Voided` = 3), `IssuedDocumentStatus` (calculado, no es columna) y `DocumentDeliveryMode` (`Download`, `Email`) en `src/Core/IngenIA365ERP.Domain/Enums/Lending/` con la numeración de `data-model.md` §9.
+- [ ] T0769 [P] [US13] Completar con su comportamiento las entidades `IssuedLendingDocument`, `IssuedDocumentLoan` e `IssuedDocumentEvent` (H) en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Documents/` (forma de la fase 3, C104) con las columnas de `data-model.md` §27 (`HolderTaxIdType`, `HolderTaxId`, `HolderName`, `AsOfDate`, `TaxYear`, `SettlementSha256`, `PdfAttachmentPublicId`, `SignerName`, `SignerTitle`, `IsTestEnvironment`, `DeliveryMode`…; data-model manda sobre los nombres de `adaptadores-y-archivos.md` §8.2, ver «Notas de coordinación»).
+- [ ] T0770 [P] [US13] Crear los motores puros `VigenciaDeDocumentos` (qué documentos anula un reverso), `CodigoDeVerificacion` (nuevo: generar con una fuente de bytes inyectada, formatear y normalizar) y `EstadoDeDocumentoEmitido` (nuevo: estado calculado a una fecha) en `src/Core/IngenIA365ERP.Domain/Lending/Documents/` (T80; sin IO, `DateOnly`).
+
+#### Persistence
+
+- [ ] T0771 [US13] Verificar las configuraciones que dejó la fase 3 en `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/Documents/` (una corrección regenera `CarteraNucleo`, C104): `UK (Number)`, `UK (VerificationCode)`, `(PersonId)`; `UK (IssuedDocumentId, LoanId)` y `(LoanId)`; `UK (IssuedDocumentId)` filtrado `[Kind] = 3` en los eventos (una anulación); `HasDatabaseName` en los nombres largos. **Sin migración propia**: son de `CarteraNucleo` (C88).
+- [ ] T0772 [P] [US13] Fijar los prefijos por clase `PP` (plan de pagos), `PS` (paz y salvo de una obligación), `PSG` (paz y salvo general), `CS` (certificado de saldo), `EX` y `CT` (K5) en `src/Core/IngenIA365ERP.Application/Lending/Documents/PrefijosDeDocumentosDeCartera.cs` (nuevo), que `NumeradorDeCartera` usa al crear la fila que falta de `LND_NumberSequences` (`Kind = IssuedDocument`, `ScopeKey` = la clase).
+
+#### Application
+
+- [ ] T0773 [P] [US13] Registrar el dueño `LendingIssuedDocument` en `AdjuntosDeModulo` (`src/Core/IngenIA365ERP.Application/Common/Attachments/AdjuntosDeModulo.cs`; T81, adaptadores-y-archivos.md §9): lectura con `Lending.Documents.Read`, sin subida, no borrable, formato `Direct` y `Available` desde el servidor, fuera de la papelera de 90 días.
+- [ ] T0774 [US13] (dueño: pregunta I6 de DT §5; rige la propuesta por defecto «imagen de firma y logotipo como adjuntos opcionales») Registrar los dueños `LendingLogo` y `LendingSignatureImage` en `AdjuntosDeModulo` (lectura `Lending.Documents.Read`, subida y reemplazo con `Lending.Parameters.Manage`, borrables sólo al reemplazarlos; un documento emitido conserva su PDF) y su carga en `/cartera/parametros` (C90, C101). Si el dueño la rechaza, esta tarea se omite y el PDF lleva sólo nombre, cargo, código y QR.
+- [ ] T0775 [US13] Crear el puerto `IDocumentoDeCarteraRenderer` y los modelos por clase `ModelosDeDocumentoDeCartera` (nuevo: encabezado común con membrete, firmante, titular, número, fecha, código, URL de verificación y leyendas; cuerpo por clase) en `src/Core/IngenIA365ERP.Application/Lending/Documents/IDocumentoDeCarteraRenderer.cs` (DT §2.9; molde `ISettlementDocumentRenderer`).
+- [ ] T0776 [US13] Crear `ConstructorDeDocumentosDeCartera` (nuevo) en `src/Core/IngenIA365ERP.Application/Lending/Documents/ConstructorDeDocumentosDeCartera.cs` (adaptadores-y-archivos.md §8.5, §8.6): por clase valida y arma el modelo y las líneas de `IssuedDocumentLoan`; liquidación por `GetLoanSettlementQuery` a (D, R = emisión) con su huella; plan vigente en R; obligaciones de la persona por la consulta interna del libro (como deudor y, según el parámetro, como codeudor); ventas en reproceso por los recibos `LND_InboundMessages` de la persona; ventas aceptadas sin migrar por `LND_MigrationSaleReconciliations` de la carga activada; firmeza con `Pagos.FirmezaDiasPorClaseDeMedio` e `ICalendarioHabil`; firmante por `Documentos.Firmante.*` (`LectorDeParametros`); `EssentialDataJson` con lo que mostrará la verificación.
+- [ ] T0777 [US13] Crear `IssueLendingDocumentCommand` (`IOperacionIdempotente`; `{ kind, personPublicId, loanPublicId?, cutoffDate?, period?, year?, delivery }`) en `src/Core/IngenIA365ERP.Application/Lending/Documents/IssueLendingDocumentCommand.cs` (T80, FR-013; api.md §15): Cartera activada (`EstadoDeCartera`), clases de K5 → `KindNotAvailable`, alcance por `IAlcanceDeCartera`, `ConstructorDeDocumentosDeCartera`, código por `CodigoDeVerificacion` con reintento ante colisión, render, subida del PDF **antes** de guardar (`IBlobStore`, adjunto `LendingIssuedDocument`), numeración al final, documento + líneas + evento `Issued` y, con `Email`, el `DebtorMessage` `DocumentDelivery` (plantilla `ENVIODOC`) en un `SaveChanges`; respuesta 201 `{ documentPublicId, number, verificationCode, status, finalityUntil?, download?, debtorMessagePublicId? }`; auditoría de emisión por `LendingAuditEmitter`.
+- [ ] T0778 [P] [US13] Crear `ListIssuedLendingDocumentsQuery`, `GetIssuedLendingDocumentQuery` (con eventos), `IssueLendingDocumentDownloadLinkCommand` (enlace de 60 s del PDF guardado, `Lending.Document.Reprinted`), `VoidLendingDocumentCommand` (motivo, evento `Voided`) y `VerifyLendingDocumentQuery` (normaliza, `Lending.Document.Verified`) en `src/Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentQueries.cs` y `IssuedDocumentCommands.cs` (api.md §15), con `Lending.Document.NotFound`, `.AlreadyVoided` y `.VoidedCannotReissue`; el estado siempre por `EstadoDeDocumentoEmitido`.
+- [ ] T0779 [US13] Crear `SendLendingDocumentCommand` (`IOperacionIdempotente`; `{ recipientPersonPublicId? }`) en `src/Core/IngenIA365ERP.Application/Lending/Documents/SendLendingDocumentCommand.cs` y el gancho que agrega el evento `Delivered` (con `DebtorMessageId`) cuando el `DebtorMessage` de origen `IssuedDocument` queda `Sent` en el despachador `cartera.mensajes` (adaptadores-y-archivos.md §8.7; propósito `DocumentDelivery`, exento de ventanas por I3, exige correo y autorización de tratamiento general).
+- [ ] T0780 [US13] Llamar a `VigenciaDeDocumentos` **dentro** de los tres comandos que reversan, en su misma unidad de trabajo —`ReverseLoanPaymentCommand` (US5), `ReversarAsync` de `ContratoDeObligacionesDeCartera` (US5) y el reverso del desembolso (US3)— con un escritor común `AnulacionDeDocumentosPorReverso` (nuevo) en `src/Core/IngenIA365ERP.Application/Lending/Documents/AnulacionDeDocumentosPorReverso.cs` que agrega los eventos `Voided` con motivo («Se reversó {operación}…») y operación causa, y devuelve `voidedDocuments[]` para la respuesta del reverso (api.md §10).
+- [ ] T0781 [P] [US13] Agregar los errores `Lending.Document.ClearanceDenied`, `.VoidedCannotReissue`, `.KindNotAvailable`, `.SignerMissing` (data-model §10.1) y `.NotFound`, `.AlreadyVoided` (api.md §15) con su mensaje en español en `src/Core/IngenIA365ERP.Application/Lending/Documents/DocumentErrors.cs` (nuevo) y en `TextosDeCarteraTests`.
+
+#### API
+
+- [ ] T0782 [US13] Crear `DocumentosDeCarteraReport` (QuestPDF + QRCoder, carta) y `DocumentoDeCarteraPdfRenderer : IDocumentoDeCarteraRenderer` en `src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeCarteraReport.cs` (molde `SettlementDocumentReport`/`SettlementDocumentPdfRenderer`; adaptadores-y-archivos.md §8.10): una plantilla con encabezado común y cuerpo por clase; el plan de pagos cuota a cuota con capital, interés, seguros y cuota y las tasas efectiva y nominal; el certificado de saldo por concepto; el QR a la URL de la aplicación; leyendas de ambiente, firmeza, alcance del general y ventas fuera de Cartera; logotipo e imagen de firma sólo si existen (T0774). Registrar el renderer en `Program.cs`.
+- [ ] T0783 [US13] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/DocumentsEndpoints.cs` (nuevo) con las siete rutas de `api.md` §15 / adaptadores-y-archivos.md §8.11 bajo `/api/lending/documents` y su permiso (`Documents.Read`, `.Issue`, `.Reprint`, `.Void`, `.Verify`), `Idempotency-Key` en las escrituras; no hay ruta anónima de verificación (D21).
+
+#### Shared (pantallas)
+
+- [ ] T0784 [P] [US13] Crear los métodos del cliente en `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/CarteraClient.Documentos.cs` (nuevo) con sus DTO en `CarteraDtos.Documentos.cs` (nuevo).
+- [ ] T0785 [US13] Crear la pantalla `/cartera/documentos` en `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Documentos.razor`: buscar por persona, crédito, clase, estado y fechas; diálogo «Emitir» de un paso (clase, persona, crédito, fecha de corte en el certificado de saldo, descarga o correo) con una confirmación; negativa con la lista de obligaciones o facturas que la causan; detalle con eventos; reimprimir, enviar y anular con motivo según permisos (`PermissionGate`). Y el botón «Documentos» en el detalle del crédito `/cartera/creditos/{id:guid}` que abre el diálogo con el crédito elegido. `IndicadorDeCarga`, sin colores literales.
+- [ ] T0786 [US13] Crear la pantalla `/cartera/verificar` en `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Verificar.razor` que lee `?codigo=` (el QR la abre con sesión iniciada; sin sesión, el login con `?returnUrl=` vuelve a ella) y muestra auténtico o anulado con sus datos esenciales; enlaces «Documentos» y «Verificar documento» en el grupo «Cartera» del menú con `PermissionGate` y tema en `ManualCatalogo.cs`.
+
+#### Documentación
+
+- [ ] T0787 [US13] Escribir el manual `docs/manual/cartera-documentos-al-deudor.md` (nuevo): las tres clases de K1 y cuándo se niegan, firmeza del paz y salvo, el código y el QR, quién verifica (sólo usuarios de la cooperativa, D21), reimpresión idéntica, anulación manual y automática por reverso, configuración del firmante (y, con I6, logotipo e imagen), y que el extracto y el certificado tributario llegan con K5.
+
+#### Base del centro de informes (K1) (C109, US15)
+
+- [ ] T0788 [US15] Crear `src/Core/IngenIA365ERP.Application/Lending/Reports/FiltrosDeInformeDeCartera.cs` (`from`, `to`, `asOf`, `branch`, `line`, `modality`, `subsegment`, `advisor`, `payer`, `collector`, `stage`, `format`; validación de rango y de filtros propios) y `VistaDeInformeDeCartera.cs` (metadato: `Key`, `Name`, `Description`, `FileName`, `Filters`, `OwnFilters`, `PersonalData`, `AvailableFrom` como `EntregaDeCartera`, `RequiredPermission`), molde `FiltrosDeInformeDeInventario` y `VistaDeInformeDeInventario` (T99)
+- [ ] T0789 [US15] Reescribir `src/Presentation/IngenIA365ERP.API/Endpoints/Reports/LendingReportsEndpoints.cs` como `InventoryReportsEndpoints`: registro `GET /api/reports/lending` leído de la metadata de las rutas publicadas y filtrado por permiso; `LendingReportsRoutes.MapVistaDeCartera` **(nuevo, molde `InventoryReportsRoutes.MapVistaDeInventario`)** que publica la vista con `.RequirePermission("Lending.Reports.View")`, `RequirePermissionWhenExporting("Lending.Reports.Export")`, y en las vistas con datos del deudor, además, `Lending.Loans.Read` y `RequirePermissionWhenExporting("Lending.Reports.ExportPersonalData")` (C84); entrega por `EntregaDeInformes.EntregarAsync`; auditoría `Lending.Report.Exported` por `LendingAuditEmitter` en cada exportación a archivo. Las rutas heredadas `aging`, `aging/pdf` y `loan-statement/{id}/pdf` ya las retiró la fase 3 y no vuelven (T99, R-08)
+- [ ] T0790 [P] [US15] Crear las consultas de K1 en `src/Core/IngenIA365ERP.Application/Lending/Reports/Vistas/`: `AgingReportQuery.cs`, `PlacementReportQuery.cs`, `ReceiptsReportQuery.cs`, `TransactionsReportQuery.cs`, `UsuryReportQuery.cs`, `DebtorMessagesReportQuery.cs`, `MigrationReconciliationReportQuery.cs` **(nombres nuevos, patrón `…ReportQuery` de Inventario)**; cada una devuelve `TablaExportable` con las columnas de api.md §17, lee posiciones diarias (`LND_LoanDailyPositions`), operaciones y transacciones con el alcance aplicado en la consulta (no en memoria), y la calificación informativa por el mismo motor al leer (T46); hacen pasar T0765
+- [ ] T0791 [US15] Registrar las siete vistas de K1 en `LendingReportsEndpoints.MapVistas` con su `VistaDeInformeDeCartera` (`AvailableFrom = K1`)
+- [ ] T0792 [P] [US15] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/InformesDeCarteraClient.cs` (registro, vista en json, descarga por formato; sin cabecera `Authorization` a mano) y `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Informes.razor` (`/cartera/informes?vista=`): selector armado del registro, filtros comunes y propios, grilla con profundización por las columnas ocultas (`_credito` → `/cartera/creditos/{id}`, `_operacion`, `_mensaje` → bandeja), botones de exportar sólo con el permiso, `IndicadorDeCarga`, sin colores literales (T98, T100)
+- [ ] T0793 [US15] Agregar `/cartera/informes` al grupo «Cartera» de `src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor` con `PermissionGate` `Lending.Reports.View`, y en `src/Presentation/IngenIA365ERP.Shared/Pages/CentroReportes.razor` las tarjetas de Cartera que vuelven con las vistas nuevas («Cartera por edades» → `aging`, «Movimientos de un crédito» → `transactions`, «Usura» → `usury`) con `NavigateTo` a páginas con `@page` (`TodoEnlaceDelMenuTieneSuPagina`, `LasPantallasDeCarteraEstanEnElMenu`); el texto no nombra al sistema anterior (R126)
+
+#### Cierre de K1 — congelamiento de las migraciones (C104)
+
+> Tarea de base de entrega (sin historia): es la última de K1 y va después de todo lo que cambia el esquema de K1.
+
+- [ ] T0794 Congelar los tres pares de K1 (C103, C104): borrar y **regenerar una última vez** con `tools/scripts/add-migration.ps1`, en PostgreSQL y SQL Server y en este orden, `CarteraNucleo`, `CarteraRiesgo` e `IntegracionContableDeCartera` sobre el modelo final de K1 (detrás de `RetiroDeLaCarteraHeredada`); revisar a mano el snapshot de cada motor y el SQL de los seis archivos (`dotnet ef migrations script` de cada par): sólo las tablas de su lista de data-model §14 (`CarteraNucleo` con las 74 + 17, sin FK hacia riesgo; `CarteraRiesgo` con las siete y las FK de C66; `IntegracionContableDeCartera` con las cuatro `ACC_`), índices con nombre de 63 caracteres o menos, filtros por motor, FK `Restrict`, la fila `LND_Setup` `Id = 1` por `INSERT … WHERE NOT EXISTS`, ninguna operación sobre tablas existentes ni sobre las 38 de `Savings`; `check-migration-parity.ps1` y `dotnet ef migrations has-pending-model-changes` limpios en los dos motores; correr «Cartera e2e», «Valores nacionales e2e», «Nomina e2e», «Inventario e2e» y «Contabilidad e2e» con `DB_PROVIDER=PostgreSql` y `SqlServer`. Commit propio con los tres pares, sus designers y snapshots. **Desde aquí los pares de K1 quedan congelados**: todo cambio de esquema posterior (K2–K6b, o una corrección de K1 ya promovida) es una migración nueva, nunca una regeneración; es el primer momento en que estos pares pueden aplicarse fuera de local y de las e2e.
+
+**Checkpoint**: en una cooperativa activada se emiten plan de pagos, paz y salvo y certificado de saldo con código y
+QR; la verificación distingue auténtico y anulado; el reverso del pago que canceló anula el paz y salvo;
+`DocumentosDeCarteraTests` y `ElReversoAnulaLosDocumentosTests` verdes en los dos motores; el centro de informes de
+Cartera publica las siete vistas de K1 con la parte K1 de `InformesYTableroDeCarteraTests` verde; los tres pares de K1
+están congelados y K1 queda lista para promover.
+
+---
+
+## Phase 15: User Story 10 - Libranza: pagadurías, archivo de descuentos y no aplicados (Priority: P2) — entrega K2
+
+**Goal**: pagadurías con convenio versionado (persona jurídica del maestro, formatos de ida y vuelta elegidos por
+referencia, tope, ventana de giro, regla del no aplicado, forma de pago alterna), capacidad de descuento al radicar
+por libranza (Ley 1527), archivo de descuentos inmutable por pagaduría y período con sus novedades, entregado a
+Recaudo como `DescuentosPorPagaduria`; consumo de `EnvioDeDescuentosConfirmado` y `ResultadoDeDescuentos`; lo
+descontado queda «pendiente de giro» sin mora para el deudor dentro del umbral; no aplicados con motivo, aviso y
+seguimiento; traslado de la libranza conservando su fecha; la nómina propia como convenio sin archivo; migración
+`CarteraLibranza` (FR-108–FR-116, US10-1 a US10-6, SC-016; T30, T78, T92, C19, C32, C44, C56, C71).
+
+**Independent Test**: con la pagaduría P y su convenio, rechazar una radicación por libranza que excede la capacidad
+mostrando lo disponible; generar el archivo del período con 20 obligaciones (huella, novedades, `DescuentosPorPagaduria`);
+confirmar el envío y cargar en el recaudador de prueba una respuesta con 17 descontados y 3 no aplicados: los 17
+quedan pendientes de giro sin mora dentro del umbral y los 3 identificados con motivo, aviso al deudor y acción del
+convenio; aplicar el giro con la referencia de la línea; trasladar una libranza a otra pagaduría con la fecha
+original; ver el cuadre en `payroll-deduction-reconciliation` (quickstart §4).
+
+### Tests for User Story 10
+
+- [ ] T0795 [P] [US10] Casos dorados `NovedadesDeLibranzaTests` en `tests/IngenIA365ERP.Domain.Tests/Lending/Payroll/NovedadesDeLibranzaTests.cs` sobre `tests/IngenIA365ERP.Domain.Tests/Lending/Payroll/Casos/*.json` (T78, FR-113, FR-111)
+  · sin archivo base → todas `New`; cuota distinta → `Change` con `PreviousAmount`; obligación cancelada o trasladada → `Cancellation`; igual → `Unchanged`
+  · `IncludesPastDue` suma lo vencido en `PastDueAmount`; líneas en orden de `LibranzaDate` (prelación cronológica, FR-111)
+  · una línea por obligación (`UK (PayrollDeductionFileId, LoanId)`); totales por novedad
+- [ ] T0796 [P] [US10] Casos dorados del pendiente de giro en `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/k2-pendiente-de-giro-*.json` (nuevo) para `CasosDoradosDeCarteraTests` (T30, FR-114)
+  · cuota descontada y no girada, vencida, dentro de `PaymasterArrearsThresholdDays`: `AlturaDeMora` no la cuenta y la calificación diaria no cambia
+  · superado el umbral sellado: la altura cuenta desde el vencimiento de la cuota
+  · girada con fecha valor del descuento: la cuota queda pagada en esa fecha, sin mora ni ajuste
+- [ ] T0797 [P] [US10] Pruebas de `CapacidadDeDescuento` (nuevo, motor puro) en `tests/IngenIA365ERP.Domain.Tests/Lending/Payroll/CapacidadDeDescuentoTests.cs` (FR-110, D13)
+  · tope efectivo = el más estricto entre `Libranza.CapacidadDeDescuento`, `DeductionCapFraction` del convenio y el límite `LIBRANZA_CAPACIDAD_DESCUENTO`
+  · base = salario o pensión **después de los descuentos de ley** certificados; descuentos vigentes + cuota nueva ≤ tope × base; devuelve la capacidad disponible
+- [ ] T0798 [P] [US10] Pruebas `FlatFileReaderTests` en `tests/IngenIA365ERP.Application.Tests/Common/BankFiles/FlatFileReaderTests.cs` (T78)
+  · ida y vuelta con `FlatFileWriter` en ancho fijo y delimitado (lo escrito se lee igual); errores por línea y campo; cabecera y totales ignorados en el detalle
+  · los orígenes de vuelta `ResultCode`, `DeductedAmount`, `DeductionDate` se tipan (texto, monto, fecha)
+- [ ] T0799 [P] [US10] Prueba de Application `LosFormatosElegidosPorReferenciaNoCompitenPorVigencia` en `tests/IngenIA365ERP.Application.Tests/Core/BankFiles/LosFormatosElegidosPorReferenciaNoCompitenPorVigencia.cs` (T78, DT §2.25)
+  · dos formatos genéricos `PayrollDeductionRequest` con la misma vigencia se crean; en `PayrollDisbursement` siguen chocando (`Core.BankFileFormat.Overlaps`)
+  · `BankFileFormatValidator` rechaza `LoanNumber` en `PayrollDisbursement` y `ResultCode` en `PayrollDeductionRequest`; los ámbitos 5 y 6 con `BankId` no nulo se rechazan
+- [ ] T0800 [P] [US10] Pruebas `PayrollAgreementCommandsTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/PayrollAgreementCommandsTests.cs` (FR-108, api.md §13.1, plantillas.md §8)
+  · crear: pagador no jurídico → `Lending.PayrollAgreement.PayerNotLegalEntity`; sin registro de operador de libranza en el perfil regulatorio vigente → `.OperatorRegistrationMissing`; código repetido → `Catalogo.CodigoDuplicado`; un solo convenio `IsOwnPayroll` y con la persona jurídica de la cooperativa (I13)
+  · versión: cruce → `.VersionOverlaps`; formatos de otro ámbito → `Core.BankFileFormat.ScopeMismatch`; tope o ventana menos estrictos que su límite → `Lending.Parameter.BelowLegalFloor`; la versión usada por un archivo `Sent` no se edita
+  · contactos: personas del maestro; la consulta bajo `PayrollAgreements.View` sólo muestra nombre, cargo y contacto institucional (C84)
+  · plantilla `lending.payroll-agreements`: todo o nada, errores por fila y columna, ninguna persona creada
+- [ ] T0801 [P] [US10] Pruebas `ArchivoDeDescuentosTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/ArchivoDeDescuentosTests.cs` y archivo dorado `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/Casos/descuentos-*.esperado.txt` (nuevo; regenerable sólo con `CARTERA_ESCRIBIR_ESPERADO=1`) (FR-113, T78, C19, I9)
+  · 20 obligaciones: exigible del período y, con `IncludesPastDue`, lo vencido; novedades contra el último `Sent`; SHA-256; adjunto `LendingPayrollDeductionFile` subido antes de guardar la fila
+  · emite `DescuentosPorPagaduria` hacia `Receipts` con adjunto, huella, totales y líneas estructuradas (`deductionFileLinePublicId`, documento, obligación, valor), sin bytes
+  · regenerar antes del envío → versión `n + 1` y la anterior `Superseded` (`related`); después de `Sent` → `Lending.PayrollFile.AlreadySent`; anular sólo desde `Generated`; sin versión vigente → `Lending.PayrollAgreement.NoCurrentVersion`; el convenio de la nómina propia no genera archivo
+  · vista previa sin escribir; evento de auditoría resumen por archivo (`[SinDiffDeAuditoria]` de las líneas, C46)
+- [ ] T0802 [P] [US10] Pruebas `ConsumoDeRespuestasDeLibranzaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/ConsumoDeRespuestasDeLibranzaTests.cs` (mensajes.md §12.5, §12.6, FR-114, FR-115)
+  · `EnvioDeDescuentosConfirmado`: `Generated` → `Sent` con `SentAt`, radicado y mensaje; ya `Sent` → `Processed` sin efecto; `Superseded`/`Voided` → `Rejected` `Lending.PayrollFile.Superseded`; huella distinta → `.HashMismatch`
+  · `ResultadoDeDescuentos`, todo o nada: descontado → `LND_PayrollDeductionResults` con `TransferDueDate` y `PaymasterArrearsThresholdDays` sellados; no aplicado → `LND_InstallmentNonDeductions` origen `PaymasterResult` con el motivo traducido por `LND_PayrollAgreementResultCodes`, seguimiento automático según `NonDeductionAction`, mensaje `Informative` `NOAPLICPAG` y alerta `Cartera.NoAplicadoDePagaduria` (DedupKey por archivo); parcial → las dos cosas
+  · `Generated` pasa a `Sent` con el resultado; línea ajena o `expectedAmount` distinto → `Rejected` `Lending.PayrollFile.LineMismatch` con las líneas en `data`; un resultado posterior reemplaza (`SupersedesResultId`); el recibo es único por `MessagePublicId`
+- [ ] T0803 [P] [US10] Pruebas `PagoDePagaduriaPorElContratoTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payments/PagoDePagaduriaPorElContratoTests.cs` (interfaces.md §3.7, A9)
+  · pago `ExternalPaymasterDeduction` de P sobre una obligación con pendiente de P sin `DeductionFileLinePublicId` → `Lending.Payment.PaymasterReferenceRequired`; referencia no pendiente → `.PaymasterReferenceInvalid`
+  · con referencia: fecha valor = `DeductionDate` aunque pase `Pagos.DiasMaximosFechaValor`, pagaduría como pagador y tercero de `PagoAplicado`, `LND_LoanOperations.PayrollDeductionResultId` escrito, el pendiente se levanta
+  · sin pendiente, el pago va sin referencia y no levanta nada; reversar el pago vuelve a dejar el pendiente
+- [ ] T0804 [P] [US10] Pruebas `TrasladoDeLibranzaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/TrasladoDeLibranzaTests.cs` (FR-116, US10-5, C44)
+  · traslado a otra pagaduría con convenio: cierra el vínculo vigente (`ValidTo`, `EndReason`) y abre otro `Origin = Transfer` con la misma `LibranzaDate` y `PreviousLinkId`; no es `LoanNovelty`
+  · capacidad contra la certificación nueva → `Lending.Payroll.DeductionCapacityExceeded` con `available` y `requested`; crédito sin pagaduría → `Lending.Loan.NotPayroll`
+  · retiro sin nuevo empleador → vínculo `ChannelChange` con `AlternateRepaymentChannel` del convenio y mensaje `Informative` `PASOACAJA`
+  · pasar entre con y sin libranza emite `DimensionContableCambiada` (sub-segmento `ConLibranza`/`SinLibranza`) en la misma transacción
+- [ ] T0805 [P] [US10] Pruebas `NoAplicadosDeLibranzaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/NoAplicadosDeLibranzaTests.cs` (FR-112, FR-115, C32, C88)
+  · la lista incluye los de la nómina propia nacidos en K1 (origen `Contract`) y los de `Activation`; filtra por alcance de oficina y línea
+  · resolver con `MovedToCashPayment`, `SentToCollection` o `Closed` exige motivo, avisa al deudor por sus canales autorizados; dos veces → `Lending.InstallmentNonDeduction.AlreadyResolved`
+  · desde K2, un `NoDescontado` de Nómina recibe en la misma transacción el seguimiento automático del convenio de la nómina propia
+- [ ] T0806 [P] [US10] Pruebas `CuotasDeNominaConConvenioTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/CuotasDeNominaConConvenioTests.cs` (interfaces.md §6.1, C32)
+  · con convenio de nómina propia `IncludesPastDue` (o seguimiento `IncludedInNextFile`), `CuotasDeNominaAsync` devuelve `PastDueIncluded` con lo no descontado del período anterior; sin él, como en K1 (`PastDueIncluded = 0`)
+  · `Order` = prelación por `LibranzaDate`; sólo obligaciones vivas como deudor con vínculo `OwnPayroll`
+- [ ] T0807 [P] [US10] Pruebas `RadicacionPorLibranzaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Origination/RadicacionPorLibranzaTests.cs` (FR-108–FR-110, US10-1)
+  · solicitud con forma `PaymasterDeduction`: convenio vigente obligatorio (`Lending.PayrollAgreement.NotAvailable`), certificación `LendingPayrollCertification` con fecha, capacidad excedida → 422 `Lending.Payroll.DeductionCapacityExceeded` con lo disponible y su `LND_CreditApplicationChecks`
+  · sin registro de operador de libranza vigente en el perfil → `Lending.PayrollAgreement.OperatorRegistrationMissing`
+  · el desembolso crea el vínculo con `PayrollAgreementId`, `EmployeeIdAtPaymaster`, `LibranzaDate` y la certificación
+- [ ] T0808 [P] [US10] Pruebas `TareasDeLibranzaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Payroll/TareasDeLibranzaTests.cs` (§2.13, FR-114)
+  · `cartera.archivos-de-descuento`: convenio cuya antelación llegó sin archivo → `Cartera.ArchivoDeDescuentosPendiente` (DedupKey convenio y período); sale si Cartera no está activada
+  · `cartera.giros-de-pagaduria`: pendiente con `TransferDueDate` vencida → `Cartera.GiroDePagaduriaAtrasado` con alcance; umbral superado → mensaje `Informative` al deudor una sola vez y la cuota vuelve a contar para la altura de mora
+  · corren por `IEjecutorEnCooperativa` con el actor del proceso
+- [ ] T0809 [P] [US10] Pruebas `RecaudadorDePruebaDeLibranzaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/TestDoubles/RecaudadorDePruebaDeLibranzaTests.cs` (mensajes.md §18, api.md §20)
+  · consume `DescuentosPorPagaduria`; `ConfirmTestPayrollFileSentCommand` emite `EnvioDeDescuentosConfirmado` como `REC` con la persona que prueba de usuario de origen
+  · `EmitTestPayrollDeductionResultCommand` lee el archivo con el formato de vuelta (`FlatFileReader`) y emite `ResultadoDeDescuentos`; archivo inválido → `Import.Invalid`; en producción no existen
+- [ ] T0810 [US10] Ampliar las pruebas de arquitectura con las piezas de K2 en `tests/IngenIA365ERP.Architecture.Tests/Principles/`
+  · `LosComandosDeCarteraLlevanClave` (comandos de convenio, archivo, traslado, no aplicados, dobles de K2); `LosComandosDeConsumoNoTienenRuta` (`ConsumePayrollDeductionResultCommand`, `ConsumePayrollFileSentCommand`); `LasConsultasDeCarteraRespetanElAlcance` (archivos, no aplicados, pendientes de giro)
+  · `LosHechosInmutablesNoSeModifican` (`PayrollDeductionFileLine`, `PayrollDeductionResult`, `NonDeductionFollowUp`); `LosSaldosYTasasDeCarteraTienenSuPrecision` (montos y `DeductionCapFraction`); `LasLecturasSensiblesDeCarteraSeAuditan` (enlace de descarga del archivo)
+  · `LaCarteraNoTieneValoresLegalesFijos` sobre `Domain/Lending/Payroll`; `CadaParametroRespetaLaEntregaDeSuModulo` (claves `Libranza.*` disponibles con `EntregaVigente = K2`); `LasPantallasDeCarteraEstanEnElMenu` y `TodoEnlaceDelMenuTieneSuPagina` (pantallas de K2)
+- [ ] T0811 [US10] Prueba e2e `LibranzaYArchivoDeDescuentosTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/LibranzaYArchivoDeDescuentosTests.cs`, colección «Cartera e2e», cooperativa aislada, en los dos motores (quickstart §1.7 y §4)
+  · capacidad excedida al radicar; archivo de 20 obligaciones con huella; envío confirmado y respuesta con tres no aplicados por el doble; pendiente de giro sin mora dentro del umbral a lo largo de ciclos diarios; giro con referencia; traslado con fecha original; `Lending.PayrollFile.AlreadySent`; reporte de cuadre
+- [ ] T0812 [P] [US10] Prueba de volumen `ArchivoDeDescuentosPerformanceTests` (`[FactDeRendimiento]`, `RUN_PERF_TESTS=1`) en `tests/IngenIA365ERP.API.IntegrationTests/Lending/ArchivoDeDescuentosPerformanceTests.cs` (SC-016)
+  · 5.000 obligaciones de una pagaduría: archivo en < 1 min; respuesta con no aplicados: el 100 % con motivo; ningún deudor con mora imputada dentro de la ventana de giro
+
+### Implementation for User Story 10
+
+#### Domain
+
+- [ ] T0813 [P] [US10] Agregar las enumeraciones de K2 en `src/Core/IngenIA365ERP.Domain/Enums/Lending/Libranza.cs` con la numeración de `data-model.md` §9: `PayrollAgreementStatus`, `NonDeductionFollowUpAction`, `PayrollResultOutcome` (si `PayrollFileStatus` y `PayrollNoveltyKind` no los dejó la fase 3, aquí)
+- [ ] T0814 [P] [US10] Ampliar `src/Core/IngenIA365ERP.Domain/Enums/Core/BankFiles.cs`: `BankFileScope.PayrollDeductionRequest = 5`, `PayrollDeductionResult = 6` con la marca `SeleccionPorReferencia` (atributo **(nuevo)** `SeleccionPorReferenciaAttribute` en el mismo archivo) y `BankFieldSource` 80–88 (ida) y 90–92 (vuelta) con sus comentarios (§2.6, `data-model.md` §9.3)
+- [ ] T0815 [P] [US10] Crear las entidades de convenio en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Payroll/`: `PayrollAgreement`, `PayrollAgreementVersion` (con `NonDeductionAction`, `AlternateRepaymentChannel`, `TransferWindowDays?`, `DeductionCapFraction?`), `PayrollAgreementContact`, `PayrollAgreementResultCode` (`data-model.md` §24.1–§24.4), con pruebas de dominio de vigencia y estado en `tests/IngenIA365ERP.Domain.Tests/Lending/Payroll/PayrollAgreementTests.cs`
+- [ ] T0816 [P] [US10] Crear `PayrollDeductionFile` (transiciones `Generated` → `Superseded`/`Sent`/`Voided` y sus columnas de una sola escritura), `PayrollDeductionFileLine` (H), `PayrollDeductionResult` (H) y `NonDeductionFollowUp` (H) en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Payroll/` (`data-model.md` §24.6–§24.10, diagrama §32.4)
+- [ ] T0817 [P] [US10] Crear el motor puro `NovedadesDeLibranza` en `src/Core/IngenIA365ERP.Domain/Lending/Payroll/NovedadesDeLibranza.cs` (lo exigible del período por obligación contra las líneas del archivo base → líneas con `PayrollNoveltyKind`, orden por `LibranzaDate`) y `CapacidadDeDescuento` (nuevo) en `src/Core/IngenIA365ERP.Domain/Lending/Payroll/CapacidadDeDescuento.cs`
+- [ ] T0818 [US10] Llevar el «pendiente de giro» a la reconstrucción: entrada `CuotaPendienteDeGiro` (nuevo: cuota, fecha del descuento, vencimiento de la ventana, umbral sellado) en `EntradaDeReconstruccion` y regla en `src/Core/IngenIA365ERP.Domain/Lending/Delinquency/AlturaDeMora.cs` que excluye esas cuotas mientras la mora de la pagaduría no supere el umbral (T30: «desde K2»); sin cambio de `RulesVersion` para lo que no tiene pendientes
+
+#### Persistence y migración
+
+- [ ] T0819 [US10] Crear las configuraciones en `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/Payroll/` (`LND_PayrollAgreements` con `UK (IsOwnPayroll)` filtrado y `UK (Code)` filtrado vivos; versiones sin cruce; `LND_PayrollDeductionFiles` con los tres únicos de `data-model.md` §24.6; líneas con `[SinDiffDeAuditoria]`; resultados con `UK (PayrollDeductionFileLineId, InboundMessageId)`; seguimientos) y sus `DbSet`; nombres largos con `HasDatabaseName`; precisión con `PrecisionDeCartera`
+- [ ] T0820 [US10] Agregar las columnas de K2 a tablas de K1 en sus configuraciones: `LND_LoanOperations.PayrollDeductionResultId`, `LND_InboundMessages.PayrollDeductionFileId`, `LND_LoanPayrollLinks.PayrollAgreementId` (FK), `LND_InstallmentNonDeductions.PayrollDeductionResultId` (FK, `UK` filtrado no nulo), `LND_CreditApplications.PayrollAgreementId` (`data-model.md` §31 y parte 3 §14)
+- [ ] T0821 [US10] Generar la migración par `CarteraLibranza` con `tools/scripts/add-migration.ps1` en `src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/` y `.SqlServer/`: las 8 tablas, las 5 columnas y las filas de adopción `EnvioDeDescuentosConfirmado` v1 y `ResultadoDeDescuentos` v1 del participante `CAR` (`INSERT … WHERE NOT EXISTS`); aditiva; revisar con `check-migration-parity.ps1`
+
+#### Application — formatos y lectura de archivos
+
+- [ ] T0822 [P] [US10] Crear `FlatFileReader` y `FlatFileReadResult` (puros, inversos de `FlatFileWriter`) en `src/Core/IngenIA365ERP.Application/Common/BankFiles/FlatFileReader.cs`
+- [ ] T0823 [US10] Hacer que `SolapadoAsync` de `src/Core/IngenIA365ERP.Application/Core/BankFiles/BankFileFormatCommands.cs` no aplique el cruce de vigencias a los ámbitos con `SeleccionPorReferencia`, y que `BankFileFormatValidator` (`src/Core/IngenIA365ERP.Application/Common/BankFiles/BankFileFormatValidator.cs`) admita los orígenes por ámbito de `adaptadores-y-archivos.md` §6.1 y exija `BankId` nulo en 5 y 6
+- [ ] T0824 [US10] Ajustar `/maestros/formatos-bancarios` (`src/Presentation/IngenIA365ERP.Shared/Pages/Maestros/FormatosBancarios*.razor`): filtro por ámbito y vista previa del formato de vuelta con un archivo de prueba leído por `FlatFileReader`
+
+#### Application — convenios, archivo y respuestas
+
+- [ ] T0825 [US10] Crear los comandos y consultas de convenios en `src/Core/IngenIA365ERP.Application/Lending/Payroll/Agreements/`: `CreatePayrollAgreementCommand`, `AddPayrollAgreementVersionCommand`, `SetPayrollAgreementContactsCommand`, `ListPayrollAgreementsQuery`, `GetPayrollAgreementQuery`, `ListPendingPayrollTransfersQuery` (api.md §13.1), todos `IOperacionIdempotente` los de escritura, con sus errores de `data-model.md` §10
+- [ ] T0826 [US10] Registrar la plantilla `lending.payroll-agreements` (hojas `Convenios`, `Contactos`, `CodigosDeRespuesta`) en `CatalogoDePlantillasDeCartera` con `ImportPayrollAgreementsCommand` en `src/Core/IngenIA365ERP.Application/Lending/Imports/PayrollAgreementsTemplate.cs` (plantillas.md §8)
+- [ ] T0827 [US10] Crear `PayrollDeductionLines` (nuevo; molde `LoanDisbursementLines`) en `src/Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionLines.cs`: lee en bloque con `CargadorDeReconstruccion` lo exigible del período y lo vencido de las obligaciones con vínculo vigente al convenio, llama a `NovedadesDeLibranza` contra el último `Sent` y arma los valores por origen para `FlatFileWriter`
+- [ ] T0828 [US10] Crear `GeneratePayrollDeductionFileCommand`, `VoidPayrollDeductionFileCommand`, `PreviewPayrollDeductionFileQuery`, `ListPayrollDeductionFilesQuery`, `GetPayrollDeductionFileQuery` e `IssuePayrollDeductionFileDownloadLinkCommand` en `src/Core/IngenIA365ERP.Application/Lending/Payroll/Files/`: numera con `NumeradorDeCartera`, sube el adjunto `LendingPayrollDeductionFile` antes de guardar, emite `DescuentosPorPagaduria` por `EmisionDeCartera` en la misma transacción con `related` a la versión reemplazada; el enlace se audita como lectura sensible
+- [ ] T0829 [US10] Registrar en `AdjuntosDeModulo` el dueño `LendingPayrollDeductionFile` (lectura `Lending.PayrollDeductionFiles.Read`, sin subida, no borrable) y confirmar `LendingPayrollCertification` (adaptadores-y-archivos.md §9)
+- [ ] T0830 [US10] Crear `ConsumePayrollFileSentCommand` **(nuevo)** y `ConsumePayrollDeductionResultCommand` en `src/Core/IngenIA365ERP.Application/Lending/Payroll/Results/` (sin ruta) y engancharlos en `DestinoCartera` y `VersionesAceptadasDeCartera` (tipos `REC` v1): efectos de T0802, todo o nada, recibo en `LND_InboundMessages` con `PayrollDeductionFileId`, mensajes al deudor nacidos en la misma transacción
+- [ ] T0831 [US10] Cargar los pendientes de giro en `CargadorDeReconstruccion` (`src/Core/IngenIA365ERP.Application/Lending/Engine/CargadorDeReconstruccion.cs`): resultados `Deducted`/`PartiallyDeducted` no reemplazados ni girados, con su ventana y umbral sellados, hacia la entrada de T0818
+
+#### Application — contrato, nómina propia, originación y traslado
+
+- [ ] T0832 [US10] Ampliar `ContratoDeObligacionesDeCartera.AplicarAsync` (`src/Core/IngenIA365ERP.Application/Lending/Payments/`) para `ExternalPaymasterDeduction` con `DeductionFileLinePublicId`: exige la referencia si hay un pendiente de esa pagaduría, valida que esté pendiente, fija la fecha valor en la del descuento sin el límite D4 (A9), escribe `PayrollDeductionResultId` en la operación; retira el rechazo de K1 del campo lleno
+- [ ] T0833 [US10] Aplicar desde K2 la regla del convenio de la nómina propia a los `NoDescontado` que recibe `AplicarAsync` (seguimiento automático `NonDeductionFollowUp`, aviso `NOAPLICPAG`) y a `CuotasDeNominaAsync` de `ObligacionesDeCartera` (`PastDueIncluded`, `Order` por `LibranzaDate`) (FR-112, FR-115, C32)
+- [ ] T0834 [US10] Agregar al radicar por libranza (las validaciones de FR-036 de US2 que escriben `LND_CreditApplicationChecks`) la verificación de convenio vigente, registro de operador y `CapacidadDeDescuento` contra la certificación, con `Lending.Payroll.DeductionCapacityExceeded`; el desembolso de US3 crea el vínculo con `PayrollAgreementId` (FR-108–FR-110)
+- [ ] T0835 [US10] Crear `TransferLoanPayrollCommand` en `src/Core/IngenIA365ERP.Application/Lending/Payroll/Transfers/TransferLoanPayrollCommand.cs` (`Lending.PayrollTransfers.Manage`, `IOperacionIdempotente`, cerrojo por crédito): cierra y abre el vínculo, verifica capacidad, pasa a la forma alterna sin pagaduría nueva con aviso `PASOACAJA`, emite `DimensionContableCambiada` si cambia el sub-segmento (FR-116, C44)
+- [ ] T0836 [US10] Crear `ListInstallmentNonDeductionsQuery` y `ResolveInstallmentNonDeductionCommand` en `src/Core/IngenIA365ERP.Application/Lending/Payroll/NotApplied/` (api.md §13.3; `Lending.InstallmentNonDeduction.AlreadyResolved`)
+
+#### Application — tareas, informes, dobles y textos
+
+- [ ] T0837 [US10] Crear las tareas `cartera.archivos-de-descuento` y `cartera.giros-de-pagaduria` (`ITareaProgramada`, diarias, salen si Cartera no está activada) en `src/Core/IngenIA365ERP.Application/Lending/Payroll/Tasks/` y registrarlas en el `ProgramadorDeTareas`
+- [ ] T0838 [P] [US10] Agregar las vistas `payroll-agreements` y `payroll-deduction-reconciliation` al centro de informes de Cartera (`src/Core/IngenIA365ERP.Application/Lending/Reports/`, `TablaExportable`, columnas de api.md §17, `_credito` oculta; datos personales con `Loans.Read` y `ExportPersonalData`, C84)
+- [ ] T0839 [P] [US10] Ampliar `RecaudadorDePrueba` (`src/Core/IngenIA365ERP.Application/Lending/TestDoubles/`) con el consumo de `DescuentosPorPagaduria`, `ConfirmTestPayrollFileSentCommand` y `EmitTestPayrollDeductionResultCommand` (api.md §20)
+- [ ] T0840 [P] [US10] Registrar los códigos de error de K2 con su mensaje en español en el catálogo de errores de Cartera y en `TextosDeCarteraTests`: `Lending.PayrollAgreement.*`, `Lending.Payroll.DeductionCapacityExceeded`, `Lending.Loan.NotPayroll`, `Lending.PayrollFile.AlreadySent`/`.Superseded`/`.HashMismatch`/`.LineMismatch`, `Lending.PayrollDeductionFile.NotFound`, `Lending.Payment.PaymasterReferenceRequired`/`.PaymasterReferenceInvalid`, `Lending.InstallmentNonDeduction.AlreadyResolved`; y llevarlos a `data-model.md` §10 en la misma tarea (hoy no están)
+- [ ] T0841 [US10] Subir `CatalogoDeCartera.EntregaVigente` a `K2` (`src/Core/IngenIA365ERP.Domain/Enums/Lending/EntregaDeCartera.cs` o donde lo dejó la fase 2): habilita las claves `Libranza.*` y los tipos de alerta de K2 sembrados con `DisponibleDesde = K2`
+
+#### API
+
+- [ ] T0842 [US10] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollAgreementsEndpoints.cs`, `PayrollDeductionFilesEndpoints.cs` y `PayrollNotAppliedEndpoints.cs` (más `POST /loans/{id}/payroll-transfer`) con las rutas, permisos y `Idempotency-Key` de api.md §13; y las dos rutas de K2 del doble en `TestDoublesEndpoints.cs`
+
+#### Shared
+
+- [ ] T0843 [P] [US10] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/LibranzaClient.cs` (convenios, plantilla, archivos, vista previa, descarga, no aplicados, traslado) y sus DTO
+- [ ] T0844 [US10] Crear las pantallas `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Pagadurias.razor` (`/cartera/pagadurias`) y `Pagaduria.razor` (`/cartera/pagadurias/{id:guid}`: versiones, contactos, códigos de respuesta, pendientes de giro), `ArchivosDeDescuento.razor` (`/cartera/archivos-de-descuento`) y `ArchivoDeDescuento.razor` (`/cartera/archivos-de-descuento/{id:guid}`), `NoAplicados.razor` (`/cartera/no-aplicados`); acción «Trasladar libranza» en `/cartera/creditos/{id:guid}`; botones del doble en `/cartera/dobles-de-prueba`; `IndicadorDeCarga` por zona, `PermissionGate` por acción
+- [ ] T0845 [US10] Agregar «Pagadurías», «Archivos de descuento» y «No aplicados» al grupo **Cartera** de `src/Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor` con su `PermissionGate`
+
+#### Documentación y datos del dueño
+
+- [ ] T0846 [P] [US10] Escribir `docs/manual/cartera-libranza-y-pagadurias.md` (nuevo): convenio, formatos de ida y vuelta, archivo y sus novedades, respuesta, pendiente de giro, no aplicados, traslado, nómina propia
+- [ ] T0847 [US10] Cargar el valor de `LIBRANZA_UMBRAL_MORA_PAGADURIA` y del parámetro `Libranza.UmbralDeMoraDePagaduria` cotejado contra la CBCF antes de liberar K2 (C71; «pendiente de validar»); sin valor, la tarea de giros no imputa nunca (dueño)
+- [ ] T0848 [US10] Registrar los layouts de ida y vuelta de cada pagaduría de la cooperativa como formatos de los ámbitos 5 y 6 y la cooperativa como persona jurídica para su convenio de nómina propia (preguntas I8 e I13; por defecto: formatos genéricos que aporta el dueño; en pruebas, el doble emite el resultado) (dueño)
+
+**Checkpoint**: una pagaduría genera su archivo inmutable, Recaudo (o el doble) confirma y responde, lo descontado no
+genera mora dentro del umbral, lo no aplicado queda identificado y en gestión, la libranza se traslada conservando su
+fecha y la nómina propia sigue su convenio. Domain, Application y arquitectura de US10 verdes; `LibranzaYArchivoDeDescuentosTests`
+verde en PostgreSQL y SQL Server tras `CarteraLibranza`.
+
+---
+
+## Phase 16: User Story 11 - Novedades y condonaciones con aprobación (Priority: P2) — entrega K3
+
+**Goal**: novedades clasificadas por su **causa** (reestructuración o modificación) sobre cinco mecanismos (prórroga,
+cambio de fecha, cambio de tasa, novación, refinanciación), con simulación del plan y de la calificación,
+consentimiento firmado de codeudores y garantes, decisión por atribución (con acta cuando el nivel lo exige) y
+aplicación que crea versión de condiciones y de plan o un crédito enlazado; condonaciones por concepto con su
+atribución; eventos del deudor (fallecimiento, retiro, embargo), reclamación al seguro e insolvencia por pantalla; la
+recogida en mora se tramita como refinanciación; base de K3 (entidades y migración `CarteraNovedades`, también para
+castigo y evaluación de US14) (FR-090–FR-094, FR-097, FR-098, US11-1 a US11-5; T29, T63, T64, T102, C51; contabilidad
+K3).
+
+**Independent Test**: reestructurar un crédito en C (prórroga pedida por dificultades de pago): se clasifica como
+reestructuración, la simulación muestra el plan nuevo y la calificación que no mejora; sin la aceptación firmada del
+codeudor el aprobador decide con motivo; aplicada, el crédito conserva su número con el plan anterior como versión,
+queda marcado con su conteo y Contabilidad recibe `CreditoReestructurado` (`CN`). Una condonación de mora sobre la
+atribución del gerente va al nivel siguiente con motivo y emite `CondonacionAprobada` (quickstart §5, pasos 1 a 7).
+
+### Tests for User Story 11
+
+- [ ] T0849 [P] [US11] Pruebas del motor puro `ClasificadorDeNovedad` (nuevo) en `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/ClasificadorDeNovedadTests.cs` (FR-090)
+  · crédito en mora, o pedido «por dificultades de pago» (`requestMotive = Hardship`), o acuerdo de insolvencia, o recogida en mora → `Restructuring` cualquiera sea el mecanismo
+  · a petición del deudor sin deterioro: `Modification` sólo si la mora reciente está dentro del límite del `SarcAnexo1` vigente; si no, la explicación para `Lending.Novelty.ModificationNotAllowed` (`recentDaysPastDue`, `limit`)
+  · la explicación que va a `CauseDeterminationJson`
+- [ ] T0850 [P] [US11] Casos dorados de plan por novedad en `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/k3-*.json` (nuevo) para `CasosDoradosDeCarteraTests` (T29, FR-091)
+  · prórroga con más cuotas y capitalización de intereses (Σ capital del plan nuevo = saldo + capitalizado); cambio de fecha de pago; cambio de tasa topada por la usura vigente (`Lending.Usury.Exceeded`)
+  · refinanciación que recoge dos créditos; novación: el crédito enlazado parte del saldo del anterior; los costos de la reestructuración no entran al plan del deudor
+  · el plan se regenera desde la fecha de la decisión con la `RulesVersion` vigente
+- [ ] T0851 [P] [US11] Casos dorados de riesgo de K3 en `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/Casos/r-k3-*.json` (nuevo) (FR-093, FR-098)
+  · novación: el enlazado hereda calificación, marca, conteo e historial de mora (`HistorialDeMora.Construir` sigue el enlace); reestructurado dos veces: interés reconocido sólo al cobrarlo
+  · insolvencia: la calificación se mantiene en la del último cierre anterior a `StartDate`; fracaso: pasa a la que fija la norma desde `FailedOn`
+- [ ] T0852 [P] [US11] Pruebas de dominio de `LoanNovelty`, `LoanNoveltyConsent` y `Waiver` en `tests/IngenIA365ERP.Domain.Tests/Lending/Operations/NoveltyAndWaiverTests.cs`: transiciones de `LoanNoveltyStatus` y `WaiverStatus`, edición sólo en `Draft`, congelada al aplicar, `Accepted` exige adjunto, resolución de un rechazo sólo con `Refused`
+- [ ] T0853 [P] [US11] Pruebas `TramiteDeNovedadTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Novelties/TramiteDeNovedadTests.cs` (api.md §11.1, FR-091)
+  · `RequestLoanNoveltyCommand`: causa calculada, `Lending.Loan.NotActive`, `ModificationNotAllowed`, consentimientos `Pending` creados por cada codeudor, avalista y propietario de garantía del crédito
+  · `SimulateLoanNoveltyQuery`: plan nuevo, calificación ahora y después, conteo, usura, concentración, validación previa contable; no escribe y su huella (`HuellaDeCartera`) va a `SimulationSha256` al radicar
+  · `SubmitLoanNoveltyCommand`: enruta con `EnrutadorDeAtribuciones` (sujeto `Novelty`; vinculado → consejo con acta); usura y concentración; quien radica no decide (`Lending.Segregation.Conflict`); decisiones por `RecordCreditDecisionCommand`
+- [ ] T0854 [P] [US11] Pruebas `ConsentimientoDeGarantesTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Novelties/ConsentimientoDeGarantesTests.cs` (FR-092, US11-2)
+  · `RegisterNoveltyConsentCommand`: persona ajena → `Lending.Novelty.PartyUnknown`; aceptación sin adjunto `LendingNoveltyConsent` rechazada; otrosí o pagaré nuevo
+  · aplicar con un consentimiento pendiente → `Lending.Novelty.ConsentMissing` (`parties[]`); con `DoNotApply` la novedad no se aplica; con `ApplyWithGuaranteeExtinguished` la garantía pasa a `Extinguished` sólo si la cobertura restante cumple la línea o hay excepción aprobada (si no, `Lending.Novelty.CoverageInsufficient` con `required` y `remaining`)
+  · una novación exige constituir sus propias garantías
+- [ ] T0855 [P] [US11] Pruebas `AplicacionDeNovedadTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Novelties/AplicacionDeNovedadTests.cs` (FR-090, FR-091, US11-3, mensajes.md §10.20)
+  · prórroga, fecha o tasa: operación `TermsChange` por `RegistroDeCartera`, `LND_LoanTermsVersions` nueva con `NoveltyId` y causa, plan nuevo; el número del crédito se conserva y el plan anterior queda como versión
+  · novación y refinanciación: crédito enlazado (`OriginLoanId`, `OriginLinkKind`), el anterior `Novated` (o pagado por la recogida, clave `CAR:`), `ResultingLoanId`; hereda marca, conteo, calificación e historial
+  · emite `CreditoReestructurado`, `CreditoModificado` o `CreditoNovado` en línea (`CN`) con `previousDimensions`, planes y conteo, y `DimensionContableCambiada` si cambia una dimensión; `Contabilidad.FaltaDeRegla = Bloquear` sin regla → `Lending.Prevalidation.NotPostable`
+  · `NotApproved`, `AlreadyApplied`; segregación entre radicar y aplicar; acuerdo de insolvencia: la novedad ligada cierra el proceso en `Agreement`
+- [ ] T0856 [P] [US11] Pruebas `CondonacionesTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Waivers/CondonacionesTests.cs` (FR-094, US11-5, mensajes.md §10.21)
+  · `RequestWaiverCommand`: cada línea no supera el saldo del concepto a `AsOfDate` (`Lending.Waiver.ExceedsBalance` con `concept` y `balance`); capital sólo con nivel de excepción (`Lending.Waiver.PrincipalRequiresException`); días de mora y vinculado sellados al radicar
+  · enrutamiento por concepto, monto, días de mora y vinculado: sobre la atribución del gerente va al nivel siguiente; siempre con motivo; acta cuando el nivel la exige
+  · `ApplyWaiverCommand`: operación `Waiver` y transacciones `Waiver`; `CondonacionAprobada` con `impairmentApplied` (deterioro individual del último cierre, por concepto) e `impairmentShortfall`; `NotApproved`; segregación
+- [ ] T0857 [P] [US11] Pruebas `EventosDelDeudorTests` en `tests/IngenIA365ERP.Application.Tests/Lending/DebtorEvents/EventosDelDeudorTests.cs` (FR-097, FR-098, T102, api.md §11.4)
+  · fallecimiento: bloqueo del deudor, reclamación `InProcess` por cada crédito con seguro de vida deudores (aseguradora de la línea o la indicada), cobranza, mensajes de cobro y reporte negativo suspendidos; la causación sigue salvo `Causacion.ContinuaTrasFallecimiento`; repetido → `Lending.DebtorEvent.Duplicate`
+  · retiro de la cooperativa y embargo: bloquean el cupo con su soporte; el retiro deja constancia para el proceso de retiro (la consulta de obligaciones lo informa)
+  · `ChangeInsuranceClaimStatusCommand` a `Denied` o `Withdrawn` levanta la suspensión; desde otro estado → `Lending.InsuranceClaim.NotInProcess`; `Paid` sólo lo pone el contrato
+  · insolvencia: `OpenInsolvencyProceedingCommand` suspende causación, cobro, mensajes y jurídico de todos los créditos del deudor y bloquea crédito nuevo; `Lending.Insolvency.AlreadyOpen`; `RecordInsolvencyFailureCommand` → `Failed`; desde otro estado → `.NotNegotiating`
+- [ ] T0858 [P] [US11] Pruebas `RecogidaEnMoraDesdeK3Tests` en `tests/IngenIA365ERP.Application.Tests/Lending/Novelties/RecogidaEnMoraDesdeK3Tests.cs` (FR-046, spec «Reglas de convivencia»)
+  · una novedad `Refinancing` con `payoffLoans` en mora se clasifica `Restructuring`, recoge por `OwnLoanPayoff` y el crédito nuevo hereda la marca; el desembolso común con recogida en mora sigue respondiendo `Lending.Payoff.RequiresRestructuring`, ahora con el enlace a la novedad
+- [ ] T0859 [P] [US11] Ampliar las pruebas del lado contable de US7 (`tests/IngenIA365ERP.Application.Tests/Accounting/Lending/ConstructorDeLineasDeCarteraTests.cs`) con los ejemplos de K3 de `contabilidad.md` (capitalización a `IngresoDiferido`, ejemplo 13 de condonación contra deterioro y `GastoDeCastigoOCondonacion`, `CreditoNovado` que traslada los roles del crédito anterior al nuevo); si la fase 11 ya los cubre, sólo se agregan los que falten
+- [ ] T0860 [US11] Ampliar las pruebas de arquitectura en `tests/IngenIA365ERP.Architecture.Tests/Principles/`: `LosComandosDeCarteraLlevanClave` (comandos de novedad, consentimiento, condonación, eventos, insolvencia); `LasConsultasDeCarteraRespetanElAlcance` (listas y detalle); `NadieEscribeElLibroDeCarteraFueraDelRegistro` (`TermsChange`, `Waiver`); `LosHechosInmutablesNoSeModifican`; `LosSaldosYTasasDeCarteraTienenSuPrecision`; `LaSegregacionNoUsaUserIdDelToken` (carpetas `Novelties`, `Waivers`); `CadaParametroRespetaLaEntregaDeSuModulo` (`EntregaVigente = K3`); pantallas en el menú
+- [ ] T0861 [US11] Prueba e2e `NovedadesYCondonacionesTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/NovedadesYCondonacionesTests.cs`, colección «Cartera e2e», cooperativa aislada, dos motores (quickstart §5, pasos 1–7)
+  · prórroga clasificada como reestructuración; codeudor sin consentimiento con las dos salidas; misma obligación y crédito enlazado; mejora por tramos y recaída en los cierres siguientes; condonación al nivel siguiente; insolvencia; fallecimiento con la reclamación cerrada por el pago de la aseguradora por el recaudador de prueba (T102); `CreditoReestructurado` contabilizado en `CN`
+
+### Implementation for User Story 11
+
+#### Domain (base de K3)
+
+- [ ] T0862 [P] [US11] Agregar las enumeraciones de K3 en `src/Core/IngenIA365ERP.Domain/Enums/Lending/Novedades.cs` con la numeración de `data-model.md` §9: `NoveltyMechanism`, `NoveltyCause`, `LoanNoveltyStatus`, `NoveltyLoanRole`, `ConsentPartyRole`, `ConsentStatus`, `ConsentRefusalResolution`, `WaiverStatus`, `InsolvencyRegime`, y las de US14 que viajan en la misma migración: `WriteOffBatchStatus`, `WriteOffItemStatus`, `PortfolioEvaluationStatus`
+- [ ] T0863 [P] [US11] Crear `LoanNovelty`, `LoanNoveltyLoan`, `LoanNoveltyConsent`, `Waiver` y `WaiverLine` en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Operations/` (`data-model.md` §25.1–§25.5)
+- [ ] T0864 [P] [US14] Crear `WriteOffBatch`, `WriteOffBatchItem` (en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Operations/`), `PortfolioEvaluation` y `PortfolioEvaluationLoan` (en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Risk/`) con sus transiciones (`data-model.md` §25.6, §23.7): van aquí porque comparten la migración `CarteraNovedades`; su comportamiento lo construye la fase de US14
+- [ ] T0865 [P] [US11] Crear el motor puro `ClasificadorDeNovedad` (nuevo) en `src/Core/IngenIA365ERP.Domain/Lending/Risk/ClasificadorDeNovedad.cs` (lee los límites del `Anexo1` tipado; sin literales legales)
+- [ ] T0866 [US11] Extender `GeneradorDePlan` y `MotorDeCartera` (`src/Core/IngenIA365ERP.Domain/Lending/Schedules/`) con la regeneración por novedad (capitalización, nuevo plazo, nueva fecha, nueva tasa, saldo inicial del enlazado) y la entrada de la reconstrucción que reconoce la versión de condiciones con `NoveltyId`
+
+#### Persistence y migración
+
+- [ ] T0867 [US11] Crear las configuraciones de K3 en `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/Operations/` y `…/Risk/` para las nueve tablas (únicos de `data-model.md` §25 y §23.7; `UK (WriteOffBatchId, LoanId)`, `UK (PortfolioEvaluationId, LoanId)`, `UK (LoanNoveltyId, PersonId, CollateralId)`, `UK (WaiverId, Concept, InstallmentNumber)`) y sus `DbSet`
+- [ ] T0868 [US11] Agregar las columnas de K3 a tablas de K1: `LND_InsolvencyProceedings.AgreementNoveltyId`, `LND_LoanTermsVersions.NoveltyId`, `LND_LoanOperations.NoveltyId`, `.WaiverId`, `.WriteOffBatchItemId` (parte 3 §14)
+- [ ] T0869 [US11] Generar la migración par `CarteraNovedades` con `tools/scripts/add-migration.ps1` (nueve tablas y cinco columnas, aditiva) en los dos proyectos de migraciones, después de T0864 y T0867–T0868; revisar paridad
+
+#### Application — novedades
+
+- [ ] T0870 [US11] Crear `RequestLoanNoveltyCommand`, `SimulateLoanNoveltyQuery`, `SubmitLoanNoveltyCommand`, `CancelLoanNoveltyCommand`, `ListLoanNoveltiesQuery` y `GetLoanNoveltyQuery` en `src/Core/IngenIA365ERP.Application/Lending/Novelties/` (api.md §11.1), con número por `NumeradorDeCartera`, `RatingAtRequest` de la calificación oficial vigente, cerrojo por crédito y registro en `RegistroDeIntervenciones` (`Radicar`)
+- [ ] T0871 [US11] Habilitar el sujeto `Novelty` en las decisiones de US2: reglas de la matriz de atribuciones por mecanismo, causa, monto y vinculado; `IAsuntoDeActa` de la novedad para el nivel colegiado (`src/Core/IngenIA365ERP.Application/Lending/Novelties/AsuntoDeNovedad.cs`); `POST /novelties/{id}/decisions` sobre `RecordCreditDecisionCommand`
+- [ ] T0872 [US11] Crear `RegisterNoveltyConsentCommand` en `src/Core/IngenIA365ERP.Application/Lending/Novelties/RegisterNoveltyConsentCommand.cs` y registrar el dueño de adjunto `LendingNoveltyConsent` en `AdjuntosDeModulo` (lectura `Novelties.Read`, subida `Novelties.Request`, bloqueado al decidirse la novedad)
+- [ ] T0873 [US11] Crear `ApplyLoanNoveltyCommand` en `src/Core/IngenIA365ERP.Application/Lending/Novelties/ApplyLoanNoveltyCommand.cs` (`Lending.Novelties.Apply`): consentimientos y salidas del rechazo, cobertura y garantía extinguida, validación previa contable (A8), operación `TermsChange` y versiones por `RegistroDeCartera`, crédito enlazado en novación y refinanciación (recogida por `OwnLoanPayoff`), cierre del proceso de insolvencia, mensajes `CreditoReestructurado`/`CreditoModificado`/`CreditoNovado` y `DimensionContableCambiada` por `EmisionDeCartera`, todo en un `SaveChanges`
+- [ ] T0874 [US11] Llevar la recogida en mora a la refinanciación: el mensaje de `Lending.Payoff.RequiresRestructuring` del desembolso de US3 remite a `/cartera/novedades`, y la novedad `Refinancing` admite `payoffLoans` en mora (FR-046)
+- [ ] T0875 [US11] Agregar el cambio de oficina del crédito como novedad sin efecto en la causa (`NoveltyMechanism.BranchChange`, **(nuevo)**), que emite `DimensionContableCambiada` (C51: «la oficina sólo cambia por novedad de K3»); si el dueño prefiere otra vía, se retira (ver notas)
+
+#### Application — condonaciones
+
+- [ ] T0876 [US11] Crear `RequestWaiverCommand`, `ApplyWaiverCommand`, `CancelWaiverCommand` y `ListWaiversQuery` en `src/Core/IngenIA365ERP.Application/Lending/Waivers/` (api.md §11.2), sujeto `Condonation` en las decisiones, `IAsuntoDeActa` cuando el nivel exige acta, operación `Waiver` por `RegistroDeCartera` y `CondonacionAprobada` con lo que sale contra el deterioro individual del último cierre
+
+#### Application — eventos del deudor, reclamación al seguro e insolvencia
+
+- [ ] T0877 [US11] Crear `RegisterDebtorEventCommand`, `ListDebtorEventsQuery`, `ChangeInsuranceClaimStatusCommand`, `OpenInsolvencyProceedingCommand` y `RecordInsolvencyFailureCommand` en `src/Core/IngenIA365ERP.Application/Lending/DebtorEvents/` (api.md §11.4; permisos `DebtorEvents.Manage`, `Insolvency.Manage`): el evento se guarda como `LND_DebtorBlocks`; las reclamaciones y el proceso se escriben en las tablas que nacieron en K1; los mensajes de cobro en cola del deudor se cancelan en la misma transacción
+- [ ] T0878 [US11] Verificar que la causación (T30), `VentanaLegalDeContacto` y la consulta de cupo leen la insolvencia y la reclamación creadas por pantalla igual que las migradas; completar `Regime` y `Authority` de lo migrado al tramitarlo (C64)
+
+#### Informes, textos y entrega
+
+- [ ] T0879 [P] [US11] Agregar la vista `restructured` al centro de informes de Cartera (`src/Core/IngenIA365ERP.Application/Lending/Reports/`; columnas de api.md §17, filtro `mechanism`)
+- [ ] T0880 [P] [US11] Registrar los códigos de K3 de novedades, condonaciones y eventos con su mensaje en español en el catálogo de errores y en `TextosDeCarteraTests`: `Lending.Novelty.NotFound`, `.ModificationNotAllowed`, `.PartyUnknown`, `.ConsentMissing`, `.CoverageInsufficient`, `.NotApproved`, `.AlreadyApplied`; `Lending.Waiver.ExceedsBalance`, `.PrincipalRequiresException`, `.NotApproved`; `Lending.DebtorEvent.Duplicate`; `Lending.InsuranceClaim.NotInProcess`; `Lending.Insolvency.AlreadyOpen`, `.NotNegotiating`; y llevarlos a `data-model.md` §10
+- [ ] T0881 [US11] Subir `CatalogoDeCartera.EntregaVigente` a `K3`
+
+#### API
+
+- [ ] T0882 [US11] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/NoveltiesEndpoints.cs`, `WaiversEndpoints.cs` y `DebtorEventsEndpoints.cs` (más las rutas de escritura de `/insurance-claims` y `/insolvency-proceedings`, cuyas lecturas son de K1) con permisos, `Idempotency-Key` y el 404 genérico (api.md §11.1, §11.2, §11.4)
+
+#### Shared
+
+- [ ] T0883 [P] [US11] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/NovedadesClient.cs` (novedades, consentimientos, decisiones, condonaciones, eventos del deudor, reclamaciones, insolvencia) y sus DTO
+- [ ] T0884 [US11] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Novedades.razor` (`/cartera/novedades`: lista, radicación con simulación del plan y la calificación, consentimientos con adjunto, decisión, aplicar con las salidas del rechazo) y `Condonaciones.razor` (`/cartera/condonaciones`); en `/cartera/creditos/{id:guid}` las acciones «Registrar evento del deudor» e «Insolvencia» y la pestaña de reclamaciones; las pendientes en «Mis pendientes» (`/cartera/aprobaciones`); `IndicadorDeCarga`, `PermissionGate`
+- [ ] T0885 [US11] Agregar «Novedades» y «Condonaciones» al grupo **Cartera** de `NavMenu.razor` con su `PermissionGate`
+
+#### Documentación
+
+- [ ] T0886 [P] [US11] Escribir `docs/manual/cartera-novedades-y-condonaciones.md` (nuevo): causa y mecanismo, simulación, consentimientos, atribución y acta, aplicación, crédito enlazado, condonación, fallecimiento, insolvencia
+- [ ] T0887 [US11] Validar con la contadora los roles `IngresoDiferido` y `GastoDeCastigoOCondonacion` sembrados sin cuenta y «pendiente de validar» (pregunta C7; por defecto: sí, sin cuenta; mientras no tengan cuenta, rige `Contabilidad.FaltaDeRegla`) (dueño)
+
+**Checkpoint**: una novedad se clasifica por su causa, se simula, recoge consentimientos, se decide por atribución y
+se aplica con su versión de plan o su crédito enlazado; las condonaciones salen contra el deterioro; fallecimiento e
+insolvencia suspenden lo que deben. La migración `CarteraNovedades` deja también las tablas de castigo y evaluación.
+Pruebas de US11 verdes; `NovedadesYCondonacionesTests` verde en los dos motores.
+
+---
+
+## Phase 17: User Story 14 - Castigo y seguimiento de la cartera castigada (Priority: P3) — entrega K3
+
+**Goal**: el jefe de cartera arma un **lote de castigo** en el que cada crédito cumple los requisitos de la norma (ya
+no es asociado, aportes cruzados, informes motivados y concepto de irrecuperabilidad) y de la política (deterioro
+total, altura mínima de mora, gestiones agotadas), o queda rechazado con `Lending.WriteOff.RequirementMissing` (C98)
+y lo que falta; el consejo lo aprueba con acta; aplicarlo deja cada crédito `WrittenOff` con referencia al punto del
+acta, emite `CreditoCastigado` y, si el tipo de entidad reporta castigos, alerta el plazo; la castigada sigue en
+cobranza y sus pagos son recuperaciones visibles en `charge-offs`. Además, la **evaluación de cartera** como lote
+recomendado por el comité de riesgos y aprobado por el consejo, cuya recalificación entra al cierre del mes de
+efecto (FR-095, FR-096, FR-102, US14-1 a US14-3; T64, T66, C81, C98).
+
+**Independent Test**: proponer un lote con un deudor que sigue siendo asociado (rechazado con el requisito) y otro
+que cumple; aprobarlo con acta del consejo y aplicarlo: el crédito queda castigado con referencia al punto,
+Contabilidad recibe `CreditoCastigado` (`PV`) y, en una entidad obligada, se alerta el plazo; aplicar un pago por el
+recaudador de prueba sobre el castigado: queda como recuperación y se ve en `charge-offs`. Aplicar una evaluación de
+cartera y ver la candidata `Evaluation` en el cierre del mes de efecto (quickstart §5, pasos 8 a 10).
+
+### Tests for User Story 14
+
+- [ ] T0888 [P] [US14] Pruebas del motor puro `RequisitosDeCastigo` (nuevo) en `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/RequisitosDeCastigoTests.cs` (FR-095, US14-1)
+  · norma: deudor asociado vigente → falta «ya no es asociado»; aportes sin cruzar → falta; sin informe motivado o sin concepto de irrecuperabilidad → falta
+  · política: deterioro individual del último cierre menor que el saldo (si `Castigo.ExigeDeterioroTotal`), altura menor que `Castigo.DiasMinimosDeMora`, gestiones registradas menos que `Castigo.GestionesMinimas` (desde K4; en K3, el informe motivado las acredita)
+  · devuelve cada requisito con resultado y evidencia (lo que va a `RequirementsJson`) y la lista `missing[]`
+- [ ] T0889 [P] [US14] Pruebas `LoteDeCastigoTests` en `tests/IngenIA365ERP.Application.Tests/Lending/WriteOffs/LoteDeCastigoTests.cs` (api.md §11.3)
+  · `CreateWriteOffBatchCommand`: los que cumplen quedan `Included` con sus montos e `ImpairmentAtCutoff`; los que no, `Rejected` con lo que falta; `AddWriteOffBatchItemCommand` sobre uno que no cumple → `Lending.WriteOff.RequirementMissing` con `data.missing[]`; fuera de `Draft` → `Lending.WriteOffBatch.NotDraft`; `NotFound`
+  · `SubmitWriteOffBatchCommand` congela el lote; el punto del acta del consejo lo pasa a `Approved` o `Rejected` por `IAsuntoDeActa`
+  · `ApplyWriteOffBatchCommand`: sin aprobación → `Lending.WriteOff.ApprovalRequired`; punto ajeno → `Lending.Session.ItemMismatch`; quien armó no aplica (`ArmarLoteDeCastigo × AplicarCastigo`, `Lending.Segregation.Conflict`); `Contabilidad.FaltaDeRegla = Bloquear` sin regla → `Lending.Prevalidation.NotPostable`
+  · por ítem: operación `WriteOff` por `RegistroDeCartera`, crédito `WrittenOff` con `WrittenOffOn`, `CreditoCastigado` con `impairmentApplied`, `impairmentShortfall` y `suspenseWrittenOff` (C81) y `CausacionSuspendida` (`cause = WriteOff`); los requisitos se vuelven a verificar al aplicar
+  · `SupervisorReportRequired` desde el perfil regulatorio vigente y alerta `Cartera.PlazoRegulatorioPorVencer` con `SupervisorReportDueDate`; registrar el reporte una sola vez
+- [ ] T0890 [P] [US14] Pruebas `CarteraCastigadaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/WriteOffs/CarteraCastigadaTests.cs` (FR-096, US14-3)
+  · la castigada causa en los conceptos de suspenso con su marca (interés en control), sigue en la consulta de obligaciones y en el contrato; un pago emite `RecuperacionDeCastigada` en la unidad de `PagoAplicado`
+  · la vista `charge-offs` reúne lo castigado, lo recuperado y las gestiones (las de K4 cuando existan)
+- [ ] T0891 [P] [US14] Pruebas `EvaluacionDeCarteraTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Risk/EvaluacionDeCarteraTests.cs` (FR-102, api.md §12.6)
+  · `PreparePortfolioEvaluationCommand`: corte y mes de efecto según el tipo de entidad (semestral o anual); otra evaluación sin aplicar del mismo corte → `Lending.PortfolioEvaluation.Overlaps`; líneas editables sólo en `Draft` con `RuleRatingAtCutoff` y justificación
+  · el punto del comité de riesgos la deja `Recommended` y el del consejo `Approved` (por `IAsuntoDeActa`); `ApplyPortfolioEvaluationCommand` con puntos ajenos → `Lending.Session.ItemMismatch`; aplicada → `Applied`
+  · el cierre mensual del mes de efecto recibe `RatingCause.Evaluation` como candidata de cada crédito evaluado y la mantiene hasta la siguiente evaluación aplicada; nunca reescribe cierres anteriores
+- [ ] T0892 [P] [US14] Ampliar las pruebas del lado contable (`ConstructorDeLineasDeCarteraTests`) con el ejemplo 14 de `contabilidad.md` (castigo contra deterioro, `GastoDeCastigoOCondonacion` por la diferencia, `CastigadaEnOrden`/`ContraOrdenControl`, suspenso que sale de `SuspensoEnOrden`, y la recuperación posterior); si la fase 11 ya lo cubre, sólo se verifica
+- [ ] T0893 [US14] Ampliar las pruebas de arquitectura: `LosComandosDeCarteraLlevanClave` (lote, ítems, envío, aplicación, reporte al supervisor, evaluación); `LasConsultasDeCarteraRespetanElAlcance` (lotes, evaluaciones); `NadieEscribeElLibroDeCarteraFueraDelRegistro` (`WriteOff`); `LosCierresDeCarteraNoSeReescriben` (la evaluación entra sólo al cierre del mes de efecto); `CadaParametroRespetaLaEntregaDeSuModulo` (claves `Castigo.*`); `LaSegregacionNoUsaUserIdDelToken` (carpeta `WriteOffs`); pantallas en el menú
+- [ ] T0894 [US14] Prueba e2e `CastigoYRecuperacionTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/CastigoYRecuperacionTests.cs`, colección «Cartera e2e», cooperativa aislada, dos motores: asociado vigente rechazado con el requisito; lote aprobado en sesión del consejo con votos y acta; `CreditoCastigado` contabilizado en `PV`; alerta del plazo en un perfil obligado; recuperación por el recaudador de prueba visible en `charge-offs`
+- [ ] T0895 [US14] Prueba e2e `EvaluacionDeCarteraTests` **(nuevo)** en `tests/IngenIA365ERP.API.IntegrationTests/Lending/EvaluacionDeCarteraTests.cs`, colección «Cartera e2e», cooperativa aislada, dos motores: preparar, recomendar en el comité, aprobar en el consejo, aplicar y cerrar el mes de efecto con la candidata `Evaluation` en el reporte de cambios
+
+### Implementation for User Story 14
+
+#### Domain
+
+- [ ] T0896 [P] [US14] Crear el motor puro `RequisitosDeCastigo` (nuevo) en `src/Core/IngenIA365ERP.Domain/Lending/Risk/RequisitosDeCastigo.cs`: recibe la condición de asociado, el cruce de aportes, los adjuntos, el deterioro del último cierre, la altura de mora, el conteo de gestiones y los parámetros vigentes; devuelve requisitos con resultado y evidencia
+- [ ] T0897 [US14] Verificar que `MotorDeCalificacion` recibe la candidata `Evaluation` con su categoría y subcategoría propuestas y la combina como la peor (T46); agregar el caso dorado `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/Casos/r-k3-evaluacion.json` (nuevo) si la fase 12 no lo dejó
+
+#### Application — castigo
+
+- [ ] T0898 [US14] Crear `CreateWriteOffBatchCommand`, `AddWriteOffBatchItemCommand`, `RemoveWriteOffBatchItemCommand`, `SubmitWriteOffBatchCommand`, `ListWriteOffBatchesQuery` y `GetWriteOffBatchQuery` en `src/Core/IngenIA365ERP.Application/Lending/WriteOffs/` (`Lending.WriteOffs.Prepare`; registro `ArmarLoteDeCastigo` en `RegistroDeIntervenciones`): la condición de asociado se lee del maestro de personas, el cruce de aportes por `IConsultaDeAportes` (con «no disponible» mientras rija D19, el requisito se acredita con soporte adjunto), el deterioro del último cierre vigente, las gestiones de `LND_CollectionActions` cuando exista K4
+- [ ] T0899 [US14] Crear `AsuntoDeLoteDeCastigo` (`IAsuntoDeActa`) en `src/Core/IngenIA365ERP.Application/Lending/WriteOffs/AsuntoDeLoteDeCastigo.cs`: el punto del consejo (regla `Majority`) aprueba o rechaza el lote y escribe su `LND_CreditDecisions` con sujeto `WriteOffBatch`
+- [ ] T0900 [US14] Crear `ApplyWriteOffBatchCommand` en `src/Core/IngenIA365ERP.Application/Lending/WriteOffs/ApplyWriteOffBatchCommand.cs` (`Lending.WriteOffs.Apply`): revalida requisitos, validación previa contable (A8), por ítem la operación `WriteOff` y sus transacciones por `RegistroDeCartera`, `WriteOffOperationId`, `CreditoCastigado` por `EmisionDeCartera` (`impairmentApplied`, `impairmentShortfall`, `suspenseWrittenOff`), `CausacionSuspendida`; sella `SupervisorReportRequired` y `SupervisorReportDueDate` y levanta `Cartera.PlazoRegulatorioPorVencer`; un solo `SaveChanges` con transacción explícita para lotes grandes
+- [ ] T0901 [US14] Crear `RegisterWriteOffSupervisorReportCommand` **(nuevo)** en `src/Core/IngenIA365ERP.Application/Lending/WriteOffs/` (`Lending.WriteOffs.Apply`; escribe una vez `SupervisorReportedAt`, `SupervisorReportReference` y el adjunto) y la ruta `POST /write-off-batches/{id}/supervisor-report` **(nueva)**: `data-model.md` §25.6 trae las columnas y ninguna ruta las escribe
+- [ ] T0902 [P] [US14] Agregar al catálogo `ParametrosDeCartera` las claves de política de castigo **(nuevas)**, `DisponibleDesde = K3`, ámbito `None`, sembradas «pendiente de validar»: `Castigo.ExigeDeterioroTotal` (bool, true), `Castigo.DiasMinimosDeMora` (int, sin valor hasta que el dueño lo fije), `Castigo.GestionesMinimas` (int, 0 hasta K4); y el plazo del reporte de castigos al supervisor como dato del documento `TiposDeOrganizacion` (FR-095; ver notas) (dueño)
+- [ ] T0903 [P] [US14] Agregar la vista `charge-offs` al centro de informes de Cartera (columnas de api.md §17: crédito, deudor, fecha de castigo, punto de acta, saldo castigado, recuperado, gestiones, último contacto)
+
+#### Application — evaluación de cartera
+
+- [ ] T0904 [US14] Crear `PreparePortfolioEvaluationCommand`, `ApplyPortfolioEvaluationCommand`, `ListPortfolioEvaluationsQuery` y `GetPortfolioEvaluationQuery` en `src/Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/` (`Lending.PortfolioEvaluations.Prepare`/`.Apply`, `Ratings.Read` para leer; número por `NumeradorDeCartera`) y `AsuntoDeEvaluacionDeCartera` (`IAsuntoDeActa`: `Recommendation` del comité de riesgos, `Decision` del consejo)
+- [ ] T0905 [US14] Hacer que el cálculo del cierre mensual de US9 (el cargador de entradas de `MotorDeCalificacion` en `src/Core/IngenIA365ERP.Application/Lending/Risk/`) lea la evaluación aplicada vigente al mes de cierre y pase la candidata `Evaluation`; el reporte de cambios muestra la causa
+
+#### Textos, entrega y API
+
+- [ ] T0906 [P] [US14] Registrar los códigos de US14 con su mensaje en español en el catálogo de errores y en `TextosDeCarteraTests`: `Lending.WriteOff.RequirementMissing` (C98), `Lending.WriteOff.ApprovalRequired`, `Lending.WriteOffBatch.NotFound`, `.NotDraft`, `Lending.PortfolioEvaluation.NotFound`, `.Overlaps`; llevar a `data-model.md` §10 los que falten
+- [ ] T0907 [US14] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/WriteOffBatchesEndpoints.cs` (api.md §11.3 más la ruta de T0901) y agregar `/risk/evaluations` a `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs` (api.md §12.6), con permisos, `Idempotency-Key` y el 404 genérico
+
+#### Shared
+
+- [ ] T0908 [P] [US14] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/CastigosClient.cs` (lotes, ítems, aplicación, reporte al supervisor, evaluaciones) y sus DTO
+- [ ] T0909 [US14] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Castigos.razor` (`/cartera/castigos`: armar el lote con la verificación por crédito y lo que falta, enviarlo al consejo, aplicarlo con el punto del acta, registrar el reporte al supervisor) y `Evaluaciones.razor` (`/cartera/evaluaciones`: preparar, líneas con categoría propuesta y justificación, puntos del comité y del consejo, aplicar); `IndicadorDeCarga`, `PermissionGate`
+- [ ] T0910 [US14] Agregar «Castigos» y «Evaluación de cartera» al grupo **Cartera** de `NavMenu.razor` con su `PermissionGate`
+
+#### Documentación
+
+- [ ] T0911 [P] [US14] Escribir `docs/manual/cartera-castigo-y-evaluacion.md` (nuevo): requisitos de la norma y de la política, lote, acta del consejo, aplicación, reporte al supervisor, recuperaciones, evaluación de cartera y su efecto en el cierre
+
+**Checkpoint**: un lote de castigo sólo admite créditos que cumplen, lo aprueba el consejo con acta y su aplicación
+deja la castigada en control, en cobranza y con sus recuperaciones a la vista; la evaluación de cartera recalifica
+desde el cierre de su mes de efecto. Pruebas de US14 verdes; `CastigoYRecuperacionTests` y `EvaluacionDeCarteraTests`
+verdes en los dos motores. Con esto K3 está completa.
+
+---
+
+## Phase 18: User Story 12 - Cobranza por etapas que respeta la ley (Priority: P2) — entrega K4
+
+**Goal**: etapas de cobranza versionadas por días de mora (preventiva, administrativa, prejurídica, jurídica) que el
+ciclo diario aplica (paso 7); reparto de gestores por reglas con historia de sólo inserción y agenda; gestiones
+inmutables con contacto directo, promesas con estado derivado y acuerdos de pago sobre lo vencido; cobro jurídico con
+abogado del maestro; campañas que excluyen con constancia; gasto de cobranza sólo después de informarlo; aviso previo
+por episodio con constancia como condición del reporte negativo (Leyes 1266 y 2157); reclamos sobre el reporte con
+aceptación tácita; mensajes de cobranza que respetan la Ley 2300 contando también los contactos directos; SMS y
+WhatsApp reales por contrato; registro de la etapa migrada al desplegar K4 (C64); migración `CarteraCobranza`
+(FR-117–FR-124, US12-1 a US12-5, SC-011, SC-012; T75, T77, T102, C57, C64, C88, C90).
+
+**Independent Test**: un crédito que pasa de 30 días cambia de etapa en el ciclo siguiente y se asigna a un gestor por
+la regla; un mensaje de cobranza programado para un domingo sale el lunes a la primera hora permitida con el evento
+`Deferred`; un contacto directo por teléfono el lunes impide un WhatsApp el miércoles; una promesa para el viernes
+queda cumplida sola con el pago e incumplida sin él; una campaña por WhatsApp excluye al que no lo autorizó; un
+crédito que llega al reporte negativo sin aviso con constancia no se reporta y quien recae en mora necesita un aviso
+nuevo (quickstart §6).
+
+### Tests for User Story 12
+
+- [ ] T0912 [P] [US12] Casos dorados `RepartoDeGestores` en `tests/IngenIA365ERP.Domain.Tests/Lending/Collections/Casos/reparto-*.json` (nuevo) para `CasosDoradosDeRepartoTests` (nuevo) en `tests/IngenIA365ERP.Domain.Tests/Lending/Collections/CasosDoradosDeRepartoTests.cs` (FR-118, T77)
+  · la primera regla que casa por prioridad (oficina, etapa, línea, pagaduría, rango de saldo); reparto por número y por saldo con pesos; el deudor completo a un solo gestor si la regla lo pide; resultado reproducible (orden por `PublicId`)
+- [ ] T0913 [P] [US12] Agregar casos dorados de `VentanaLegalDeContacto` con contactos directos en `tests/IngenIA365ERP.Domain.Tests/Lending/Collections/Casos/*.json` al cargador `CasosDoradosDeVentanaLegalTests` (lo crearon, con los casos base de K1, US17 parte K1 por C108; adaptadores-y-archivos.md §4.5, US12-2)
+  · el caso de US12-2 (teléfono el lunes, WhatsApp el miércoles → `WeeklyChannelLocked`, apertura del martes 17 tras el festivo); `Letter` sin autorización de canal; `CollectionFeeNotice` sujeto al canal semanal; gestión anulada que deja de contar
+- [ ] T0914 [P] [US12] Pruebas de los motores puros de cobranza (nuevos) en `tests/IngenIA365ERP.Domain.Tests/Lending/Collections/`: `EtapasDeCobranza` (etapa para unos días de mora, incluida la preventiva con días negativos; rangos cruzados o con huecos inválidos), `EstadoDePromesa` (`Pending`, `Kept` con `ToleranceAmount`, `Broken` al vencer, anulada si su gestión lo fue), `CumplimientoDeAcuerdo` (`Current`, `Fulfilled`, `Broken`) y `AvisoPrevioPorEpisodio` (episodio por la primera cuota impaga, una o dos comunicaciones en días distintos bajo el umbral, fecha más temprana = última constancia + `MinimumDays`, `SIMULADO` en producción no es constancia, episodio cerrado al ponerse al día, recaída = episodio nuevo — US12-5)
+- [ ] T0915 [P] [US12] Pruebas `EtapasYRepartoTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/EtapasYRepartoTests.cs` (api.md §14.5)
+  · `AddCollectionStageVersionCommand`: rangos inválidos → `Lending.CollectionStage.RangesInvalid`; gasto por encima del techo → `Lending.Parameter.BelowLegalFloor`; versión nueva cierra la anterior
+  · `AssignCollectorCommand` con motivo y `PreviousAssignmentId`; `DistributeCollectionsCommand` con `previewOnly` no escribe; reglas `LND_CollectorAssignmentRules` (crear, cerrar vigencia); `GetCollectorAgendaQuery` con promesas, seguimientos, cuotas de acuerdos y cambios de etapa del día, con alcance
+- [ ] T0916 [P] [US12] Pruebas `CobranzaDelCicloDiarioTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/CobranzaDelCicloDiarioTests.cs` (paso 7 de §2.13, FR-117, FR-119, FR-120, FR-123)
+  · un crédito que pasa de 30 días entra a la etapa siguiente (`CollectionStageHistory`, `Source = DailyCycle`, corrida enlazada) y se asigna por la regla; encola el mensaje de la plantilla de la etapa (`OriginKind = CollectionStage`) y, si la etapa lo pide, abre el aviso previo del episodio
+  · promesa vencida sin pago → alerta al gestor y vuelve a la agenda; acuerdo incumplido → vuelve a la etapa que le corresponde; reclamo vencido sin respuesta → `TacitlyAccepted` con alerta; episodio que llega al punto de reporte sin constancia → `Cartera.AvisoPrevioSinConstancia`
+  · excluye fallecido con reclamación `InProcess`, insolvencia `Negotiating` y cobro suspendido; nada antes de la activación ni con fecha anterior al registro (FR-142); repetir la tanda no duplica; no corre si `EntregaVigente < K4`
+- [ ] T0917 [P] [US12] Pruebas `GestionesPromesasYAcuerdosTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/GestionesPromesasYAcuerdosTests.cs` (api.md §14.6, §14.7, FR-119, FR-120)
+  · `RecordCollectionActionCommand`: sólo deudor o codeudor (`Lending.CollectionAction.ContactNotObligated`; contacto `Paymaster` sólo para la gestión ante la pagaduría), contacto directo que fija el canal de la semana; `VoidCollectionActionCommand` con motivo
+  · promesa: queda `Kept` sola al entrar un pago con fecha valor ≤ la prometida por el contrato; `Broken` sin él
+  · `CreatePaymentAgreementCommand` sólo sobre lo vencido (si cambia condiciones → `Lending.PaymentAgreement.ChangesTerms`, se tramita como novedad con `PaymentAgreementId`); aprobar con segregación (`Lending.Segregation.Conflict`), `Lending.PaymentAgreement.NotProposed`; cumplimiento derivado de los pagos vigentes
+- [ ] T0918 [P] [US12] Pruebas `CobroJuridicoTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/CobroJuridicoTests.cs` (FR-124, api.md §14.8): `OpenLegalProcessCommand` fuera de la etapa jurídica → `Lending.LegalProcess.LoanNotInLegalStage`; abogado persona del maestro; actuaciones con adjuntos `LendingLegalProcessDocument`; honorarios o gastos con `ChargeableToDebtor` siguen la regla de gastos de cobranza; la insolvencia suspende el proceso (`SuspendedByInsolvencyId`); cerrar con resultado
+- [ ] T0919 [P] [US12] Pruebas `GastoDeCobranzaTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/GastoDeCobranzaTests.cs` (FR-121, T77, mensajes.md §10.19)
+  · la regla de la etapa (base, tarifa, tope bajo el techo, momento) propone el gasto y encola el `CollectionFeeNotice` (`GASTOCOBR`); sin `Sent` o `Delivered` del aviso, causarlo se rechaza
+  · `CauseCollectionFeesCommand` (nuevo) causa por persona los gastos ya informados: operación `Charge` por `RegistroDeCartera` y `GastoDeCobranzaCausado` (`CA`) con `noticeDebtorMessagePublicId`, `stageCode` y el tercero si es cuenta por pagar; una reestructuración no traslada costos (FR-091)
+- [ ] T0920 [P] [US12] Pruebas `CampanasTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/CampanasTests.cs` (US12-4, api.md §14.9): vista previa con destinatarios y excluidos por motivo; programar crea un `DebtorMessage` por destinatario con `CampaignId` y, el excluido, con su evento `Excluded` y motivo (sin autorización de WhatsApp → `ChannelNotAuthorized`); cancelar escribe `Cancelled` en los que siguen en cola; conteos
+- [ ] T0921 [P] [US12] Pruebas `AvisoPrevioYReclamosTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/AvisoPrevioYReclamosTests.cs` (FR-123, T69, api.md §14.3, §14.4)
+  · `SendPriorNoticeCommand` crea el `DebtorMessage` `PriorNotice`; ya completo → `Lending.PriorNotice.AlreadyEvidenced`; `RegisterPriorNoticeEvidenceCommand` (carta con guía `LendingPriorNoticeEvidence`) → evento `Sent` con el adjunto; repetida → `.EvidenceDuplicate`; estado derivado con la constancia y la fecha más temprana de reporte; lo migrado (`MigratedReportedNegativeSince`) cuenta
+  · `RegisterCreditReportClaimCommand` con `DueDate` en días hábiles nacionales (`PlazosDelTitular`); prórroga una vez (`.AlreadyExtended`); responder y retirar; fuera de `InProcess` → `Lending.CreditReportClaim.NotInProcess`; marca «reclamo en trámite» mientras está en curso
+- [ ] T0922 [P] [US12] Pruebas `RegistroDeEtapasMigradasTests` en `tests/IngenIA365ERP.Application.Tests/Lending/Collections/RegistroDeEtapasMigradasTests.cs` (C64): al desplegar K4, cada crédito vivo con `CollectionStageCode` migrado recibe su primera entrada `Source = Migration` (por código de etapa; si no casa, por sus días de mora a la fecha), idempotente, con evento resumen; los que no tenían etapa entran por el ciclo
+- [ ] T0923 [P] [US12] Batería `ConformidadDeMensajeria` aplicada a los adaptadores reales de SMS y WhatsApp en `tests/IngenIA365ERP.Application.Tests/Common/Messaging/ConformidadDeMensajeriaTests.cs` (adaptadores-y-archivos.md §3, §4.7; T71, T72)
+  · con un servidor HTTP falso: `Ok`, `Rejected`, `InvalidData`, `ChannelUnavailable` sin lanzar; consulta de entrega; WhatsApp sin `ProviderTemplateId` no se usa; credencial leída por `CredencialesDeCanalExternoEnArchivo` por cooperativa y código; circuito abierto tras `Canales.UmbralDeFallas`
+- [ ] T0924 [US12] Ampliar las pruebas de arquitectura: `LaCobranzaNuncaContactaReferencias` (gestiones, campañas, avisos, cobro jurídico); `LosComandosDeCarteraLlevanClave` (comandos de K4); `LasConsultasDeCarteraRespetanElAlcance` (cobranza, agenda, promesas, acuerdos, jurídico, campañas, avisos, reclamos); `LosHechosInmutablesNoSeModifican` (`CollectionStageHistoryEntry`, `CollectorAssignment`, `CollectionAction`, `PaymentPromise`, `PaymentAgreementInstallment`, `LegalProcessAction`); `NadieEscribeElLibroDeCarteraFueraDelRegistro` (`Charge`); `LosProveedoresExternosSoloLosConoceSuAdaptador` y `LasCredencialesDeCanalesExternosNoTocanLaBase` (adaptadores de SMS y WhatsApp); `LaCarteraNoTieneValoresLegalesFijos` sobre `Domain/Lending/Collections`; `CadaParametroRespetaLaEntregaDeSuModulo` (`EntregaVigente = K4`); pantallas en el menú
+- [ ] T0925 [US12] Prueba e2e `CobranzaYAvisoPrevioTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/CobranzaYAvisoPrevioTests.cs`, colección «Cartera e2e», cooperativa aislada, dos motores (quickstart §6): etapas y gestor; domingo → siguiente ventana; canal de la semana; promesa cumplida e incumplida; campaña que excluye al no autorizado; aviso previo por episodio con dos comunicaciones; gasto sólo tras su aviso; reclamo con aceptación tácita; acuerdo incumplido que vuelve a su etapa; jurídico suspendido por insolvencia
+- [ ] T0926 [US12] Prueba e2e `NingunMensajeSaleFueraDeLaVentanaTests` en `tests/IngenIA365ERP.API.IntegrationTests/Lending/NingunMensajeSaleFueraDeLaVentanaTests.cs` (SC-011, adaptadores-y-archivos.md §4.9): mensajes programados para un domingo, un festivo, después de las 19:00, sobre el tope diario, tras un contacto directo y por un canal revocado; para cada `Sent` o `Delivered` reconstruye la entrada del motor con lo conocido en ese instante y exige `Permitido` (si la fase de mensajes de K1 ya la creó, se amplía con los contactos directos)
+
+### Implementation for User Story 12
+
+#### Domain
+
+- [ ] T0927 [P] [US12] Agregar las enumeraciones de K4 en `src/Core/IngenIA365ERP.Domain/Enums/Lending/Cobranza.cs` con la numeración de `data-model.md` §9: `MessageCampaignStatus`, `AssignmentDistribution`, `CollectionActionChannel`, `CollectionActionResult`, `PaymentPromiseStatus` (calculado), `PaymentAgreementStatus`, `PaymentAgreementPerformance` (calculado), `LegalProcessStatus`, `LegalActionKind`
+- [ ] T0928 [P] [US12] Crear `CollectionStage`, `CollectionStageHistoryEntry` (H), `CollectorAssignmentRule`, `CollectorAssignment` (H), `CollectionAction` (H), `PaymentPromise` (H), `PaymentAgreement`, `PaymentAgreementInstallment` (H), `LegalProcess`, `LegalProcessAction` (H) y `MessageCampaign` en `src/Core/IngenIA365ERP.Domain/Entities/Lending/Collections/` (`data-model.md` §26.3–§26.10)
+- [ ] T0929 [P] [US12] Crear los motores puros en `src/Core/IngenIA365ERP.Domain/Lending/Collections/`: `RepartoDeGestores`, `EtapasDeCobranza` (nuevo), `EstadoDePromesa` (nuevo), `CumplimientoDeAcuerdo` (nuevo), `AvisoPrevioPorEpisodio` (nuevo; el episodio sale de la reconstrucción, T24)
+- [ ] T0930 [US12] Sumar al `HistorialDeContactos` de `VentanaLegalDeContacto` las gestiones con `IsDirectContact` no anuladas (adaptadores-y-archivos.md §4.8)
+
+#### Persistence y migración
+
+- [ ] T0931 [US12] Crear las configuraciones de K4 en `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/Collections/` para las once tablas (índices de `data-model.md` §26; `UK (Code, ValidFrom)` de etapas; `UK (CollectionActionId)` de promesas; `UK (PaymentAgreementId, Number)`) y sus `DbSet`; columnas nuevas `LND_DebtorMessages.CampaignId` (FK, índice filtrado) y `LND_LoanNovelties.PaymentAgreementId` (FK)
+- [ ] T0932 [US12] Generar la migración par `CarteraCobranza` con `tools/scripts/add-migration.ps1` (once tablas y dos columnas, aditiva) en los dos proyectos; revisar paridad
+
+#### Application — etapas, reparto, agenda y ciclo diario
+
+- [ ] T0933 [US12] Crear `ListCollectionStagesQuery` y `AddCollectionStageVersionCommand` en `src/Core/IngenIA365ERP.Application/Lending/Collections/Stages/` (`Lending.CollectionStages.Manage`; reglas de gasto bajo el techo nacional) y `CollectionStagesSeeder` **(nuevo**, semilla de cooperativa, Order 91**)**: las cuatro etapas por defecto «pendiente de validar», idempotente
+- [ ] T0934 [US12] Crear `AssignCollectorCommand`, `DistributeCollectionsCommand`, `ListCollectorAssignmentsQuery`, los comandos de reglas de reparto (`CreateCollectorAssignmentRuleCommand`, `CloseCollectorAssignmentRuleCommand`, **(nuevos)**; `data-model.md` §26.6 trae la tabla y api.md no la ruta) y `GetCollectorAgendaQuery` en `src/Core/IngenIA365ERP.Application/Lending/Collections/Assignments/` (`Lending.Collections.Assign`, `.Read`)
+- [ ] T0935 [US12] Crear `CobranzaDelCicloDiario` (nuevo) en `src/Core/IngenIA365ERP.Application/Lending/Collections/CobranzaDelCicloDiario.cs` e invocarlo como paso 7 de `RunDailyAccrualCommand` (§2.13) dentro de la misma tanda y `SaveChanges`: etapas y asignación, mensajes de la etapa, aviso previo del episodio, gasto propuesto con su `CollectionFeeNotice`, promesas vencidas (alerta `Cartera.PromesaIncumplida` **(nuevo tipo)** al gestor), acuerdos incumplidos, reclamos con aceptación tácita y `Cartera.AvisoPrevioSinConstancia`; sólo con `EntregaVigente ≥ K4`
+- [ ] T0936 [US12] Crear `RegisterMigratedCollectionStagesCommand` **(nuevo**, sin ruta**)** en `src/Core/IngenIA365ERP.Application/Lending/Collections/Stages/` que `CollectionStagesSeeder` ejecuta después de sembrar las etapas en cada cooperativa activada: el paso de despliegue de K4 de C64
+
+#### Application — gestiones, promesas, acuerdos, jurídico y gastos
+
+- [ ] T0937 [US12] Crear `RecordCollectionActionCommand`, `VoidCollectionActionCommand`, `ListCollectionActionsQuery` y `ListPaymentPromisesQuery` en `src/Core/IngenIA365ERP.Application/Lending/Collections/Actions/` (`Lending.Collections.RecordActivity`; la decisión vigente del motor se guarda con la gestión; el contacto es deudor, codeudor o la pagaduría)
+- [ ] T0938 [US12] Crear `CreatePaymentAgreementCommand`, `ApprovePaymentAgreementCommand`, `CancelPaymentAgreementCommand` y `ListPaymentAgreementsQuery` en `src/Core/IngenIA365ERP.Application/Lending/Collections/Agreements/` (número por `NumeradorDeCartera`; segregación entre crear y aprobar)
+- [ ] T0939 [US12] Crear `OpenLegalProcessCommand`, `RecordLegalProcessActionCommand`, `CloseLegalProcessCommand` y `ListLegalProcessesQuery` en `src/Core/IngenIA365ERP.Application/Lending/Collections/Legal/` y registrar el dueño de adjunto `LendingLegalProcessDocument` (lectura `Collections.Read`, subida `LegalProcesses.Manage`, no borrable); la apertura de una insolvencia (fase de US11) suspende los procesos abiertos del deudor
+- [ ] T0940 [US12] Crear `CauseCollectionFeesCommand` **(nuevo)** y `ListPendingCollectionFeesQuery` **(nuevo)** en `src/Core/IngenIA365ERP.Application/Lending/Collections/Fees/` (`Lending.CollectionStages.Manage`): causa, por persona, los gastos cuyo `CollectionFeeNotice` ya tiene `Sent` o `Delivered`; operación `Charge` y `GastoDeCobranzaCausado` por `EmisionDeCartera` (ver notas: `mensajes.md` §10.19 no admite proceso)
+
+#### Application — campañas, aviso previo y reclamos
+
+- [ ] T0941 [US12] Crear `CreateMessageCampaignCommand`, `PreviewMessageCampaignQuery`, `ScheduleMessageCampaignCommand`, `CancelMessageCampaignCommand` y `ListMessageCampaignsQuery` en `src/Core/IngenIA365ERP.Application/Lending/Collections/Campaigns/` (`Lending.Campaigns.Manage`): programar evalúa la ventana por destinatario y deja cada mensaje con su evento; nunca destinatarios que no sean deudor o codeudor obligado
+- [ ] T0942 [US12] Crear `SendPriorNoticeCommand` y `RegisterPriorNoticeEvidenceCommand` en `src/Core/IngenIA365ERP.Application/Lending/Collections/PriorNotices/` (`Lending.PriorNotices.Send`, `.RegisterEvidence`; adjunto `LendingPriorNoticeEvidence`; constancia sólo si `GuardiaDeCanalesExternos` responde con efecto) y ampliar `ListPriorNoticesQuery` de K1 con el estado derivado de `AvisoPrevioPorEpisodio`
+- [ ] T0943 [US12] Crear `RegisterCreditReportClaimCommand`, `ExtendCreditReportClaimCommand`, `AnswerCreditReportClaimCommand` y `WithdrawCreditReportClaimCommand` en `src/Core/IngenIA365ERP.Application/Lending/Collections/Claims/` (`Lending.CreditReportClaims.Manage`; plazos con `PlazosDelTitular` y `ICalendarioHabil`; enlace opcional a `COR_DataSubjectRequests`)
+
+#### Application — canales reales, informes, textos y entrega
+
+- [ ] T0944 [US12] Crear los adaptadores reales de SMS y de WhatsApp del proveedor que contrate la cooperativa en `src/Infrastructure/IngenIA365ERP.ExternalChannels/Messaging/` (`ICanalDeMensajeria`, `ChannelCode` propio, `Capacidades`, `ProbarAsync`, consulta de entrega), registrados en `AddExternalChannels`, credencial en el Secret `erp-canales-externos`; WhatsApp exige `ProviderTemplateId` (preguntas I1 e I15; por defecto, credencial por cooperativa y canal, plantillas registradas por la cooperativa; mientras no haya contrato, quedan `SIMULADO`) (dueño)
+- [ ] T0945 [P] [US12] Agregar las vistas `collection-stages`, `promises`, `payment-agreements` y `prior-notices` al centro de informes de Cartera (columnas de api.md §17, `_credito` oculta, datos personales con `Loans.Read` y `ExportPersonalData`)
+- [ ] T0946 [P] [US12] Registrar los códigos de K4 con su mensaje en español en el catálogo de errores y en `TextosDeCarteraTests`: `Lending.CollectionStage.RangesInvalid`, `Lending.CollectionAction.ContactNotObligated`, `Lending.PaymentAgreement.ChangesTerms`, `.NotProposed`, `Lending.LegalProcess.LoanNotInLegalStage`, `Lending.PriorNotice.AlreadyEvidenced`, `.EvidenceDuplicate`, `Lending.CreditReportClaim.NotInProcess`, `.AlreadyExtended` (los `Lending.DebtorMessage.*` los registró US17 parte K1); el tipo de alerta `Cartera.PromesaIncumplida` (nuevo) en `TiposDeAlerta` con `DisponibleDesde = K4`; llevar a `data-model.md` §10 y §11 lo que falte
+- [ ] T0947 [US12] Subir `CatalogoDeCartera.EntregaVigente` a `K4`
+
+#### API
+
+- [ ] T0948 [US12] Crear en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/` `CollectionStagesEndpoints.cs`, `CollectorAssignmentsEndpoints.cs` (más `/agenda` y las reglas de T0934), `CollectionActionsEndpoints.cs` (más `/promises`), `PaymentAgreementsEndpoints.cs`, `LegalProcessesEndpoints.cs`, `CampaignsEndpoints.cs` y `CollectionFeesEndpoints.cs` (nuevo); agregar las rutas de escritura de K4 a `PriorNoticesEndpoints.cs` y `CreditReportClaimsEndpoints.cs` (sus lecturas son de K1, C88); permisos, `Idempotency-Key` y el 404 genérico (api.md §14)
+
+#### Shared
+
+- [ ] T0949 [P] [US12] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/CobranzaClient.cs` (etapas, reglas, asignaciones, agenda, gestiones, promesas, acuerdos, jurídico, campañas, gastos, avisos, reclamos, ventana de contacto) y sus DTO
+- [ ] T0950 [US12] Crear en `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/` `EtapasDeCobranza.razor` (`/cartera/etapas-de-cobranza`: versiones de etapas y reglas de reparto), `Cobranza.razor` (`/cartera/cobranza`: cartera por etapa y gestor, asignar, repartir, gastos por causar), `Agenda.razor` (`/cartera/agenda`: compromisos del día, registrar gestión y promesa mostrando antes lo que dice `contact-window`), `AcuerdosDePago.razor` (`/cartera/acuerdos-de-pago`), `Campanas.razor` (`/cartera/campanas`), `AvisosPrevios.razor` (`/cartera/avisos-previos`, con una pestaña de reclamos sobre el reporte) y `Juridico.razor` (`/cartera/juridico`); ninguna deja elegir una referencia personal; `IndicadorDeCarga`, `PermissionGate`
+- [ ] T0951 [US12] Agregar «Etapas de cobranza», «Cobranza», «Agenda», «Acuerdos de pago», «Campañas», «Avisos previos» y «Cobro jurídico» al grupo **Cartera** de `NavMenu.razor` con su `PermissionGate`
+
+#### Documentación y despliegue
+
+- [ ] T0952 [P] [US12] Escribir `docs/manual/cartera-cobranza-y-aviso-previo.md` (nuevo): etapas, reparto y agenda, gestiones y Ley 2300, promesas y acuerdos, gastos informados, jurídico, campañas, aviso previo por episodio y reclamos
+- [ ] T0953 [US12] Escribir `docs/operaciones/cartera-despliegue-k4.md` (nuevo): paso de despliegue de C64 (la semilla de etapas y el registro de la etapa migrada corren al arrancar la API; cómo verificar el evento resumen y la tabla de equivalencia de códigos migrados), habilitar SMS y WhatsApp por cooperativa (Secret, `ProbarAsync`, plantillas aprobadas) y validar las etapas sembradas «pendiente de validar» con la cooperativa
+- [ ] T0954 [US12] Validar con el dueño y la contadora las etapas por defecto, las reglas de gasto y `Cobranza.ToleranciaDePromesa` (nuevo en `data-model.md` §26.8, sin fila en §12.1: se agrega al catálogo con `DisponibleDesde = K4`, defecto 0) (dueño)
+
+**Checkpoint**: la cartera en mora avanza por sus etapas, se reparte y se gestiona con agenda; promesas y acuerdos se
+siguen solos contra los pagos; ningún mensaje sale fuera de la ventana de la Ley 2300 contando los contactos
+directos; ningún dato negativo queda listo para reportarse sin aviso con constancia de su episodio; los reclamos se
+dan por aceptados al vencer. Pruebas de US12 verdes; `CobranzaYAvisoPrevioTests` y `NingunMensajeSaleFueraDeLaVentanaTests`
+verdes en los dos motores tras `CarteraCobranza`.
+
+---
+
+## Phase 19: User Story 13 (resto) - Extracto y certificado tributario (Priority: P2) — entrega K5
+
+**Goal**: completar los documentos al deudor de FR-131 con las dos clases que la conciliación dejó para K5 (C88,
+T80, pregunta I5): el **extracto** de un período (`IssuedDocumentKind.Statement`) y el **certificado tributario** del
+año (`IssuedDocumentKind.TaxCertificate`: intereses pagados en el año por crédito, con los de vivienda separados, y
+el saldo de la deuda al 31 de diciembre), sobre la infraestructura de documentos que la fase 14 dejó en K1
+(`LND_IssuedDocument*` en `CarteraNucleo`, `IssueLendingDocumentCommand`, `NumeradorDeCartera`, `DocumentosDeCarteraReport`,
+`VigenciaDeDocumentos`, verificación interna D21). Suma la comparación del SHA-256 de un PDF con el guardado, que
+research R149 deja para K5. Con esta fase `Lending.Document.KindNotAvailable` deja de responder para las dos clases.
+
+**Independent Test**: con un crédito de dos años de historia, emitir el extracto de un trimestre (saldo inicial,
+operaciones por fecha valor, saldo final) y el certificado tributario del año anterior, cada uno con número, código y
+PDF; verificar los dos códigos en `/cartera/verificar`; reversar un pago del año certificado y ver que el certificado
+queda `Voided` por `VigenciaDeDocumentos`; pedir el certificado del año en curso y recibir el rechazo por año no
+terminado (quickstart §7 paso 1; US13-3).
+
+### Tests for User Story 13 (resto)
+
+- [ ] T0955 [P] [US13] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Documents/ExtractoDeCreditoTests.cs` contra el armador puro `ExtractoDeCredito` **(nuevo)** de `Domain/Lending/Documents` (todavía inexistente: debe fallar): con un `EstadoDelCredito` de `ReconstruccionDeCredito` a D = `PeriodFrom − 1` y otro a D = `PeriodTo`, ambos con R = la emisión, devuelve saldo inicial por concepto, las operaciones del período ordenadas por fecha valor (desembolso, pagos con su distribución por concepto, reversos con su original, cargos, causación agregada por mes y concepto) y saldo final por concepto; saldo inicial + movimientos = saldo final al centavo en todos los conceptos de `LoanConcept`; un período sin movimientos y con saldo produce extracto (condición de adaptadores-y-archivos.md §8.1); un período posterior a la cancelación sin movimientos produce el rechazo nombrado
+- [ ] T0956 [P] [US13] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Documents/CertificadoTributarioTests.cs` contra `CertificadoTributario` **(nuevo)** de `Domain/Lending/Documents`: suma por crédito los intereses **efectivamente pagados** en el año (transacciones `PaymentAllocation` y `PaymentReallocation` de `CurrentInterest`, `DefaultInterest`, `CurrentInterestInSuspense` y `DefaultInterestInSuspense` con fecha valor en el año, netas de sus reversos conocidos a R); separa en otra sección los créditos cuyo segmento SARC sea `VIVIENDA` según el catálogo de modalidades vigente al 31 de diciembre (vacía hasta K6b); saldo de capital y de intereses de cada crédito al 31 de diciembre con R = la emisión; un crédito cancelado en el año aparece con saldo cero; uno desembolsado después del año no aparece (FR-131; US13-3)
+  - La definición «pagado = aplicado por el contrato con fecha valor en el año, neto de reversos a R» se fija aquí **(nuevo)** y la valida la contadora junto con los casos dorados (quickstart §12).
+- [ ] T0957 [P] [US13] Ampliar `tests/IngenIA365ERP.Domain.Tests/Lending/Documents/VigenciaDeDocumentosTests.cs` (lo crea la fase 14): el reverso de un pago con fecha valor dentro del año certificado y registro anterior a la emisión anula el certificado tributario cuyo `InformationCutoff` es igual o posterior al registro de lo reversado; el mismo reverso anula el extracto del período que contenía el pago; un extracto de un período anterior, emitido antes del registro del pago reversado, no se anula (T80; FR-132)
+- [ ] T0958 [P] [US13] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Documents/DocumentosDeK5Tests.cs` (InMemory, reloj fijo, servicios reales): con `CatalogoDeCartera.EntregaVigente` por debajo de K5, `Statement` y `TaxCertificate` → `Lending.Document.KindNotAvailable` con `data.availableFrom = "K5"`; con K5, `Statement` sin `period` o con `from > to` → `Lending.Document.PeriodInvalid` **(nuevo)**; rango mayor que cinco años → el mismo código; `TaxCertificate` del año en curso o futuro → `Lending.Document.TaxYearNotClosed` **(nuevo)**; titular sin créditos en el año → `Lending.Document.NothingToCertify` **(nuevo)**; número con el prefijo de su clase (`EX-` y `CT-` **(nuevo)** en `LND_NumberSequences`, `Kind = IssuedDocument`, `ScopeKey` = la clase); `EssentialDataJson` con período o año, créditos y totales; `RulesVersion` y `SettlementSha256` sellados; `delivery = Email` crea el `DebtorMessage` `DocumentDelivery` (FR-131, FR-132; api.md §15; data-model §27.1)
+- [ ] T0959 [P] [US13] Ampliar `tests/IngenIA365ERP.Application.Tests/Lending/Documents/VerifyLendingDocumentQueryTests.cs` (lo crea la fase 14; si no existe, crearlo): con `sha256` en la consulta, `pdfMatches = true` sólo si coincide con `ContentSha256` del documento; una huella mal formada → `Validation.Invalid`; la comparación queda en la misma lectura auditada `Lending.Document.Verified` con el resultado (research R149, «comparar el SHA-256 de un PDF subido» en K5)
+- [ ] T0960 [US13] Ampliar `tests/IngenIA365ERP.API.IntegrationTests/Lending/DocumentosDeCarteraTests.cs` (colección «Cartera e2e», lo crea la fase 14) con los casos de K5 en una cooperativa aislada (`CarteraE2E.CooperativaAisladaAsync`), en PostgreSQL y SQL Server: extracto de un trimestre con descarga en un paso (`POST /api/lending/documents`, `Idempotency-Key`) y su PDF; certificado tributario del año anterior con avance del reloj de la suite (`RelojDeLaSuite`) a enero; verificación de los dos códigos; reverso de un pago del año por `RecaudadorDePrueba` que deja el certificado `Voided`; certificado del año en curso → 422 `Lending.Document.TaxYearNotClosed`; sin `Lending.Documents.Issue` → 404 genérico; repetir la emisión con la misma clave → el mismo documento (SC-010)
+
+### Implementation for User Story 13 (resto)
+
+#### Entrega y dominio
+
+- [ ] T0961 [US13] Subir `CatalogoDeCartera.EntregaVigente` a `EntregaDeCartera.K5` en `src/Core/IngenIA365ERP.Domain/Lending/CatalogoDeCartera.cs` (o donde la fase 3 lo haya dejado) y ajustar la guarda de clases de `IssueLendingDocumentCommand` para que `Statement` y `TaxCertificate` se admitan desde K5; la entrega K5 se promueve sólo con las fases 19, 20 y 21 completas (T43, C88)
+  - Si el dueño adelanta K6a antes de K5, ver la nota de coordinación sobre `EntregaVigente` lineal.
+- [ ] T0962 [P] [US13] Crear `src/Core/IngenIA365ERP.Domain/Lending/Documents/ExtractoDeCredito.cs` y `CertificadoTributario.cs` **(nuevos)**, puros (`DateOnly`, sólo `decimal`, sin IO), sobre `EstadoDelCredito` y `LibroTeorico` de `Domain/Lending/Replay`, con los modelos de salida `ExtractoDto`-equivalentes de dominio (`LineaDeExtracto`, `InteresesPagadosPorCredito`) y su explicación; hacen pasar T0955 y T0956
+
+#### Application
+
+- [ ] T0963 [US13] Ampliar `src/Core/IngenIA365ERP.Application/Lending/Documents/IssueLendingDocumentCommand.cs` (y su validador): rama `Statement` (período obligatorio, hasta cinco años, carga con `CargadorDeReconstruccion` a las dos fechas con R = la emisión) y rama `TaxCertificate` (año terminado según la fecha local de la cooperativa, todos los créditos de la persona como deudor con historia en el año), los errores nuevos `Lending.Document.PeriodInvalid`, `.TaxYearNotClosed` y `.NothingToCertify` en el catálogo de errores de Cartera y en data-model §10.1, `LND_IssuedDocumentLoans` con `LastOperationId`/`LastTransactionId` de cada crédito; la emisión sigue siendo un paso y cuenta como lectura sensible (T67)
+- [ ] T0964 [P] [US13] Ampliar `src/Core/IngenIA365ERP.Application/Lending/Documents/VerifyLendingDocumentQuery.cs` con `Sha256` opcional y la respuesta `pdfMatches` **(nuevo)**; el navegador calcula la huella con `crypto.subtle` y nunca sube el archivo (`LosAdjuntosNoPasanPorElServidor` no se toca)
+- [ ] T0965 [P] [US13] Ampliar el puerto `IDocumentoDeCarteraRenderer` (`Application/Lending/Documents`) con los modelos de extracto y certificado tributario, y `src/Presentation/IngenIA365ERP.API/Reports/DocumentosDeCarteraReport.cs` con sus dos plantillas QuestPDF: membrete, firmante (`Documentos.Firmante.*`), número, código y QR, copia de la identificación del titular, leyenda de ambiente de pruebas; el certificado con la sección «Créditos de vivienda» y la leyenda de que certifica sólo las obligaciones de crédito de la cooperativa; precedente de forma `WithholdingCertificateReport` (adaptadores-y-archivos.md §8.10)
+
+#### API y pantallas
+
+- [ ] T0966 [US13] Publicar en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/DocumentsEndpoints.cs` el parámetro `sha256` de `GET /api/lending/documents/verify/{code}` y documentarlo en contracts/api.md §15; las clases nuevas no cambian la ruta de emisión (api.md §15)
+- [ ] T0967 [US13] Ampliar `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Documentos.razor` (`/cartera/documentos`, de la fase 14) y su cliente `DocumentosDeCarteraClient` en `Shared/Services/Cartera`: selector de período para el extracto y de año para el certificado, emitir en ≤ 2 pasos (SC-009), `IndicadorDeCarga` por zona, mensajes en español claro; y `Verificar.razor` (`/cartera/verificar`) con «Comparar con un PDF» que calcula la huella en el navegador por `wwwroot/js/` (archivo nuevo `huella-de-archivo.js` **(nuevo)**) y muestra si coincide
+- [ ] T0968 [US13] Documentar en `docs/manual/cartera-documentos-al-deudor.md` **(nuevo; si la fase 14 ya lo creó, ampliarlo)** las dos clases, la definición de intereses pagados, la sección de vivienda (vacía hasta K6b), la anulación automática y la comparación de PDF; registrar el tema en `ManualCatalogo` (`ManualCatalogo.Modulos.Cartera`)
+
+**Checkpoint**: las seis clases de `IssuedDocumentKind` se emiten, verifican y anulan; `DocumentosDeCarteraTests` verde en
+los dos motores con los casos de K5; T0955 a T0959 verdes.
+
+---
+
+## Phase 20: User Story 15 - Reportes de gestión, cosechas, concentración y tablero (Priority: P3) — entrega K5
+
+**Goal**: completar US15 sobre la base del centro de informes de Cartera que K1 dejó (C109: registro
+`GET /api/reports/lending`, `VistaDeInformeDeCartera`, `MapVistaDeCartera`, `FiltrosDeInformeDeCartera`, entrega por
+`EntregaDeInformes`, alcance, auditoría `Lending.Report.Exported`, permisos de C84, la pantalla `/cartera/informes?vista=`
+y las siete vistas de K1, construidas al cierre de la fase 14; K2–K4 suman las suyas): publicar las vistas de K5
+(`quality`, `vintages`, `concentration`, `issued-documents`; `bureau-exclusions` la publica la fase 21), el tablero
+`GET /api/lending/dashboard` y la pantalla `/cartera/tablero` (FR-133–FR-135, FR-138). K5 se entrega antes que K6a
+porque `EntregaVigente` es ordinal (C109).
+
+**Independent Test**: generar la cosecha de los créditos de seis meses de desembolso y comparar la mora a 30, 60 y 90
+días con un cálculo a mano; abrir el tablero con un usuario de una sola oficina y ver sólo su oficina (US15-1);
+generar la concentración y ver al deudor cercano al límite señalado con su porcentaje (US15-2); exportar `aging` sin
+`ExportPersonalData` → 404 genérico; con él, una auditoría `Lending.Report.Exported` (quickstart §7 pasos 2–4 y 7).
+
+> La base del centro de informes y las vistas de K1 (filtros, registro, rutas, siete consultas, cliente, pantalla
+> `/cartera/informes` y la parte K1 de `InformesYTableroDeCarteraTests`) ya no son de esta fase: por C109 van al cierre
+> de la fase 14 (subsección «Base del centro de informes (K1)»).
+
+### Tests for User Story 15
+
+- [ ] T0969 [P] [US15] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Reports/CalidadCosechasYConcentracionTests.cs`: `quality` = cartera bruta, vencida, vencida/bruta, en riesgo (B–E por la calificación oficial del último cierre vigente a `asOf`), riesgo/bruta, deterioro y cobertura, cuadrando con el cierre; `vintages` sobre seis meses de desembolso con la mora a 30, 60 y 90 días por mes de maduración contra un cálculo a mano (prueba independiente de US15); `concentration` por deudor, grupo conectado, línea, sector y pagaduría con el porcentaje del límite de `Concentracion.LimiteIndividual` (o `...ConGarantia`) sobre el patrimonio técnico de `IndicadoresDeLaEntidadAsync`, y la señal cuando supera el umbral de aviso; sin patrimonio técnico vigente la vista sale sin porcentaje y con la advertencia, no falla (FR-134; US15-2)
+  - Definiciones fijadas aquí **(nuevo)**, a validar por la contadora: «vencida» = saldo de capital de créditos con días de mora mayores que `Informes.DiasCarteraVencida` **(nuevo)**; cosecha = saldo de capital con días de mora ≥ N al cierre del mes de maduración sobre el monto desembolsado del mes de desembolso, leído de las líneas vigentes de `LND_MonthlyCloseLoans` (y del cierre base para los meses anteriores a la activación); grupo conectado = el mismo cálculo que usa la validación de concentración de US2; sector = la actividad económica de la persona en el maestro («Sin sector» si falta).
+- [ ] T0970 [P] [US15] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Reports/GetLendingDashboardQueryTests.cs`: fichas `saldo`, `colocacion-del-mes`, `calidad`, `deterioro`, `recaudo-vs-esperado` (recaudo del mes sobre lo exigible del mes según los planes vigentes), `cosechas`, `cumplimiento-de-promesas` (vacía con «disponible con cobranza» si no hay K4), `mensajes-pendientes-y-rechazados`, `alertas-pendientes`; cada una con `previousValue` del mes anterior, `unit`, `severity` y `link` a la vista o pantalla; un usuario con alcance de una oficina sólo suma su oficina (US15-1); el tablero no trae ningún dato personal (`Dashboard.View` es de los `View`, T60) (FR-135; api.md §17 «Tablero»)
+- [ ] T0971 [US15] Ampliar `tests/IngenIA365ERP.API.IntegrationTests/Lending/InformesYTableroDeCarteraTests.cs` (su parte K1 la creó la base del centro de informes al cierre de K1) con la parte K5: `quality`, `vintages` con seis meses de reloj de la suite, `concentration` con el deudor cerca del límite señalado (US15-2), `issued-documents`; tablero de un usuario de una oficina (US15-1) (FR-133–FR-135, FR-138)
+
+### Implementation for User Story 15
+
+#### Parámetro de K5
+
+- [ ] T0972 [US15] Sembrar en el catálogo `ParametrosDeCartera` (`Domain/Lending/Parameters/ParametrosDeCartera.cs`, de la fase 3) la clave `Informes.DiasCarteraVencida` **(nuevo)** (int ≥ 0, defecto 30, «pendiente de validar», `DisponibleDesde = K5`) y verificar que `Informes.RangosDeEdad` e `Informes.PuntosAlertaUsura` existen con sus defectos de data-model §12.1; registrarla en data-model §12.1 (`CadaParametroRespetaLaEntregaDeSuModulo`)
+
+#### Vistas de K5 y tablero
+
+- [ ] T0973 [P] [US15] Crear `src/Core/IngenIA365ERP.Application/Lending/Reports/Vistas/QualityReportQuery.cs`, `VintagesReportQuery.cs`, `ConcentrationReportQuery.cs` e `IssuedDocumentsReportQuery.cs` con las columnas de api.md §17: calidad desde las líneas vigentes del último cierre a `asOf` (deterioro y categorías oficiales, nunca la diaria); cosechas desde `LND_MonthlyCloseLoans` vigentes y el cierre base; concentración con el patrimonio técnico de `IContabilidadParaCartera.IndicadoresDeLaEntidadAsync` y la vigencia `Contabilidad.IndicadoresVigenciaMeses` (C33), reusando el cálculo de grupo conectado de la validación de concentración de US2; documentos emitidos con el estado calculado; `concentration` con `by=debtor|group` y `issued-documents` marcadas con datos personales (C84). Hacen pasar T0969
+- [ ] T0974 [US15] Registrar las cuatro vistas en `LendingReportsEndpoints.MapVistas` con `AvailableFrom = K5`
+- [ ] T0975 [P] [US15] Crear `src/Core/IngenIA365ERP.Application/Lending/Reports/GetLendingDashboardQuery.cs` con `LendingDashboardDto { asOf, scope { branches[], lines[] }, tiles[] }` sobre las posiciones diarias, los cierres y las alertas dentro del alcance (`branch`, `line`, `asOf` opcionales, siempre dentro de `IAlcanceDeCartera`); hace pasar T0970
+- [ ] T0976 [US15] Publicar `GET /api/lending/dashboard` en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/DashboardEndpoints.cs` **(nuevo archivo)** con `.RequirePermission("Lending.Dashboard.View")` dentro del grupo `/api/lending` (`AuditarIntentoDenegado(ModuloDeAuditoria.Lending)`)
+- [ ] T0977 [P] [US15] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/TableroDeCarteraClient.cs` y `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Tablero.razor` (`/cartera/tablero`): fichas con `.kpi-card` de `componentes.css`, filtros de oficina y línea limitados al alcance, cada ficha enlaza a su vista o pantalla, `IndicadorDeCarga`; enlace en el menú con `PermissionGate` `Lending.Dashboard.View`
+- [ ] T0978 [US15] Documentar en `docs/manual/cartera-informes-y-tablero.md` **(nuevo)** las vistas por entrega, sus filtros, las definiciones de calidad, cosecha y concentración (con la nota «a validar por la contadora»), los permisos de C84 y la auditoría de exportaciones; registrar el tema en `ManualCatalogo.Modulos.Cartera`
+
+**Checkpoint**: `InformesYTableroDeCarteraTests` verde en los dos motores con su parte K5 (la parte K1 quedó verde al
+cierre de K1); `/cartera/tablero` y las cuatro vistas de K5 publicadas; `TodoEnlaceDelMenuTieneSuPagina` verde.
+
+---
+
+## Phase 21: User Story 16 - Reportes regulatorios: SICSES y centrales de riesgo (Priority: P3) — entrega K5
+
+**Goal**: al cierre de cada período, el contador valida y genera el **formato de cartera de créditos del SICSES** y
+los **archivos para cada central de riesgo**, sobre un motor genérico de layouts puro (`Domain/Common/Layouts`: 
+`LayoutDeArchivo`, `ValidadorDeLayout`, `EscritorPorLayout`) y layouts embebidos como **dato versionado** con
+vigencia, fuente y cotejo por campo (`CatalogoDeLayoutsDeCartera`, molde `PilaLayoutCatalog`); un campo sin cotejar
+deja la advertencia `Lending.Regulatory.LayoutSinCotejar` y la marca «modelo obligatorio no disponible» (D28) va
+como advertencia y **nunca dentro del archivo**. Las proyecciones `ProyeccionSicsesCartera` (del cierre mensual
+vigente) y `ProyeccionCentralDeRiesgo` (novedades desde el último archivo cargado, sólo con autorización de reporte
+con evidencia y, si el dato es negativo, con aviso previo `Complete` de su episodio) alimentan `LND_RegulatoryFiles`
+(versiones `Validated` sin archivo, `Generated`, `Superseded`, `Uploaded` con radicado) y `LND_RegulatoryFileLines`.
+Genera la migración `CarteraInformes` (T79; FR-136, FR-137; SC-012, SC-019; D28).
+
+**Independent Test**: generar el formato del SICSES de un mes cerrado con un crédito con un dato inválido → la
+validación lo señala y la generación deja una versión `Validated` sin archivo con `Lending.Regulatory.BlockingIssues`;
+corregido, se genera con la advertencia `LayoutSinCotejar` reconocida, SHA-256 y descarga; marcarlo cargado con el
+radicado impide regenerar el período; en el archivo de una central, un deudor con dato negativo sin aviso con constancia
+queda fuera y listado en `bureau-exclusions` (US16-1, US16-2; quickstart §7 pasos 5–7).
+
+### Tests for User Story 16
+
+- [ ] T0979 [P] [US16] Crear `tests/IngenIA365ERP.Domain.Tests/Common/Layouts/LayoutsDeArchivoTests.cs` con sus casos en `tests/IngenIA365ERP.Domain.Tests/Common/Layouts/Casos/*.json` **(los archivos de caso, nuevos)**: ancho fijo y delimitado; registros por código (cabecera, detalle, totales); formatos `Text`, `Integer`, `Amount2`, `AmountPoint2`, `Rate`, `Date` con `pattern`; `pad` y `align`; `constant` en vez de `path`; obligatorio vacío → `Blocking`; valor fuera de `allowedValues` → `Blocking` con registro, campo, crédito y ruta; largo excedido → `Blocking`; `EscritorPorLayout` nunca escribe una fila con bloqueantes y devuelve bytes y SHA-256 deterministas con la codificación y el fin de línea del layout (adaptadores-y-archivos.md §7.1–§7.2; SC-019)
+- [ ] T0980 [P] [US16] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Regulatory/CatalogoDeLayoutsDeCarteraTests.cs`: todos los JSON embebidos de `Application/Lending/Regulatory/Layouts/` cargan y cumplen el esquema; uno mal formado hace fallar la carga (como `PilaLayoutCatalog`); elige el vigente por clase, central y fecha de fin del período; dos vigentes cruzados de la misma clase y central → error de carga; `unverifiedFields` cuenta los campos sin `verified`; un layout con un campo sin cotejar sigue siendo vigente (T79, C72)
+- [ ] T0981 [P] [US16] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Regulatory/ProyeccionSicsesCarteraTests.cs`: una fila por crédito de las líneas **vigentes** del cierre mensual del período (un cierre reabierto no cuenta; su `Version + 1` sí); deudor copiado del maestro a la fecha de corte; saldos por concepto, días de mora, calificación y subcategoría, deterioro individual y general, garantías, reestructuración y modalidad; sin cierre del mes → `Lending.MonthlyClose.NotFound`; un cierre con `ObligatoryModelUnavailable` devuelve la advertencia `ModeloObligatorioNoDisponible` y **ningún campo** del archivo la lleva; el cierre con `UnvalidatedParameters` suma la advertencia de normativa pendiente (T41, D28; adaptadores-y-archivos.md §7.4)
+- [ ] T0982 [P] [US16] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Regulatory/ProyeccionCentralDeRiesgoTests.cs`: novedades desde el último archivo `Uploaded` de esa central (desembolsos, pagos, mora, cancelaciones, castigos); titular sin autorización `CreditBureauReport` con evidencia → excluido `NoReportAuthorization`; dato negativo sin aviso `Complete` de su episodio o antes de `EarliestReportDate` → excluido `NoPriorNoticeEvidence` y alerta `Cartera.AvisoPrevioSinConstancia`; fallecido con reclamación `InProcess` → `DeceasedClaimInProcess`; insolvencia → `Insolvency`; pagaduría en mora dentro del umbral → `PaymasterArrearsWithinThreshold` (K2); reclamo en trámite → incluido con la marca; reporte negativo hecho sin aviso (migrado en `MigratedReportedNegativeSince` o de un archivo anterior) → línea de **retiro** `IsWithdrawalOfUnnoticedReport`; permanencia del dato negativo con `PERMANENCIA_NEGATIVO_VECES_MORA` y `PERMANENCIA_NEGATIVO_MESES_MAXIMOS` leídos como límites (nunca literales); codeudores reportados con su propia autorización (FR-006, FR-123, FR-137; SC-012; data-model §28.2)
+- [ ] T0983 [P] [US16] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Regulatory/CasosDoradosDeLayoutsDeCarteraTests.cs` con los archivos dorados `tests/IngenIA365ERP.Application.Tests/Lending/Regulatory/Casos/*.esperado.txt` (SICSES de un cierre de doce créditos de todas las modalidades de K1, y uno por cada central sembrada): comparación **byte a byte**; con `CARTERA_ESCRIBIR_ESPERADO=1` se reescriben (sólo a propósito, tras cotejar a mano; molde `PILA_ESCRIBIR_ESPERADO`); sin la variable nunca escribe (quickstart §1.4; §7.6 de las transversales)
+- [ ] T0984 [P] [US16] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Regulatory/ArchivosRegulatoriosCommandsTests.cs`: `ValidateSicsesFileQuery` no guarda nada; `GenerateSicsesFileCommand` con bloqueantes deja una fila `Validated` sin archivo con `IssuesJson` y responde `Lending.Regulatory.BlockingIssues` (`data { regulatoryFilePublicId, version, issues[] }`); sin bloqueantes y con advertencias exige `acknowledgeWarnings` (si no, el aviso `Lending.Regulatory.LayoutSinCotejar`); regenerar crea `Version + 1` y deja la anterior `Superseded` con su archivo; el archivo se sube como adjunto `LendingRegulatoryFile` **antes** de guardar la fila; `MarkRegulatoryFileUploadedCommand` exige `Generated` (`Lending.RegulatoryFile.NotGenerated`) y después el período de esa clase y central no se regenera (`Lending.Regulatory.AlreadyUploaded`); descargar una `Validated` → `Lending.RegulatoryFile.NoFile`; central desconocida → `Lending.Regulatory.BureauUnknown`; cada generación escribe un evento resumen por archivo (`LND_RegulatoryFileLines` va `[SinDiffDeAuditoria]`, C46) (adaptadores-y-archivos.md §7.5; api.md §18)
+- [ ] T0985 [US16] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/SicsesYCentralesTests.cs` (colección «Cartera e2e», cooperativa aislada con un cierre mensual hecho, dos motores): validar con un crédito con documento inválido → la incidencia nombra el crédito y el campo; generar → `Validated` sin archivo; corregido el dato en el maestro y vuelto a cerrar el mes (reapertura y `Version + 1`), generar con `acknowledgeWarnings = true` → `Generated`, SHA-256, descarga por enlace firmado; marcar cargado con radicado y luego intentar regenerar → 422; archivo de central con un deudor sin aviso con constancia y otro sin autorización de reporte → excluidos y listados en `GET /api/reports/lending/bureau-exclusions`; sin `Lending.RegulatoryFiles.Read` la lista y la descarga → 404 genérico; el revisor fiscal lee pero no genera (US16-1, US16-2; SC-012)
+- [ ] T0986 [P] [US16] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/LosCodigosViewDeCarteraNoTienenDatosPersonales.cs` (las rutas regulatorias van con `RegulatoryFiles.Read`, nunca con un `View`), `LosEndpointsProtegidosExigenPermiso.cs` (`Endpoints/Lending/RegulatoryEndpoints.cs`) y `LaCarteraNoTieneValoresLegalesFijos.cs` (exención por archivo para los JSON de `Application/Lending/Regulatory/Layouts/`, nunca para el código de las proyecciones) (DT §2.25)
+
+### Implementation for User Story 16
+
+#### Decisión previa del dueño
+
+- [ ] T0987 [US16] Confirmar la pregunta **E11** (DT §7.7): si el primer vencimiento del formato de cartera del SICSES de COOFLOPAL llega antes que K5, se adelanta a K1 **sólo** el formato de cartera (T0979 a T0981, T0983, T0984, T0988 a T0994, T0996, T0997 y T0999 a T1001, en su parte SICSES, con `LND_RegulatoryFiles` y `LND_RegulatoryFileLines` en una migración `CarteraInformes` generada en K1 tras `IntegracionContableDeCartera`); propuesta por defecto: sí, si la fecha lo exige; la parte de centrales sigue en K5. Anotar la respuesta en specs/013-cartera-financiera/decisiones-transversales.md §7.7 (dueño)
+
+#### Dominio y layouts
+
+- [ ] T0988 [P] [US16] Crear el motor genérico puro en `src/Core/IngenIA365ERP.Domain/Common/Layouts/`: `LayoutDeArchivo.cs` (registros, campos, ancho fijo o delimitado, codificación, fin de línea), `ValidadorDeLayout.cs` (inconsistencias con severidad `Blocking`/`Warning`, registro, campo, crédito, ruta y mensaje), `EscritorPorLayout.cs` (bytes y SHA-256; nunca escribe una fila con bloqueantes); la PILA (`PilaLayout`, `PilaWriter`) no se toca. Hace pasar T0979
+- [ ] T0989 [P] [US16] Crear las entidades `src/Core/IngenIA365ERP.Domain/Entities/Lending/Documents/RegulatoryFile.cs` (columnas de data-model §28.1; `FileName`, `FileSha256` y `FileAttachmentPublicId` escritos una vez; `UploadedAt`, `UploadedByUserId`, `FilingNumber`, `FilingDate` y `SupersededAt` con `[EscrituraUnica]`) y `RegulatoryFileLine.cs` (`AuditableEntityLong`, `IHechoInmutable`, `[SinDiffDeAuditoria]`; columnas de §28.2); los enums `RegulatoryFileKind` y `RegulatoryFileStatus` ya los dejó la fase 3 en `Domain/Enums/Lending`
+- [ ] T0990 [US16] Crear los layouts embebidos en `src/Core/IngenIA365ERP.Application/Lending/Regulatory/Layouts/`: `sicses-cartera-1-2026-12-01.json` (`SICSES-CARTERA-v1`) y uno por central, `central-{CODIGO}-1-2026-12-01.json`, todos con `verified = false`, fuente «por cotejar» y `notes`; registrarlos como recursos embebidos en el `.csproj` de Application (dueño)
+  - Pregunta **I7** (DT §5-I): el dueño aporta el instructivo vigente del formato de cartera y los layouts de las centrales que usa COOFLOPAL; propuesta por defecto: se cargan con `verified = false`. Mientras no lleguen, los campos se reconstruyen del instructivo público con `verified = false` y las centrales sembradas son las que el dueño nombre (propuesta **(nuevo)**: `DATACREDITO` y `TRANSUNION`).
+- [ ] T0991 [US16] Crear `src/Core/IngenIA365ERP.Application/Lending/Regulatory/CatalogoDeLayoutsDeCartera.cs`: carga y valida el esquema de todos los JSON al arrancar (un JSON mal formado impide arrancar), elige el vigente por clase, central y fecha de fin del período, expone `ListRegulatoryLayoutsQuery`; registro en la composición de Application. Hace pasar T0980
+
+#### Persistencia y migración
+
+- [ ] T0992 [US16] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/RegulatoryFileConfiguration.cs` y `RegulatoryFileLineConfiguration.cs`: tablas `LND_RegulatoryFiles` y `LND_RegulatoryFileLines`, índices `UK (PeriodYear, PeriodMonth, Version)` filtrado `[Kind] = 1 AND [IsDeleted] = 0`, `UK (BureauCode, PeriodYear, PeriodMonth, Version)` filtrado `[Kind] = 2 AND [IsDeleted] = 0`, `UK (RegulatoryFileId, LoanId, PersonId)`, FK `Restrict` a `LND_MonthlyCloses`, `LND_Loans`, `COR_People`, `LND_PriorNotices`; precisión con `PrecisionDeCartera` (`Monto`); `DbSet<>` en `IApplicationDbContext`, `ApplicationDbContext` y `TestApplicationDbContext`
+- [ ] T0993 [US16] Generar la migración par **`CarteraInformes`** con `tools/scripts/add-migration.ps1` (PostgreSQL y SQL Server) en `src/Infrastructure/IngenIA365ERP.Persistence.Migrations.*`: aditiva, sólo `LND_RegulatoryFiles` y `LND_RegulatoryFileLines` (las `LND_IssuedDocument*` ya están en `CarteraNucleo`, C88); revisar que el scaffold no arrastre cambios ajenos; `tools/scripts/check-migration-parity.ps1` verde (DT §2.26; data-model §31)
+
+#### Application
+
+- [ ] T0994 [P] [US16] Crear `src/Core/IngenIA365ERP.Application/Lending/Regulatory/ProyeccionSicsesCartera.cs`: del cierre mensual vigente del período (`Kind = Monthly`, sin reapertura posterior) y sus líneas, una fila por crédito con los caminos (`path`) que usan los layouts; la periodicidad del reporte y su día límite salen del perfil regulatorio vigente (nivel de supervisión, documento `TiposDeOrganizacion`); devuelve las advertencias de D28 y de normativa sin validar. Hace pasar T0981
+- [ ] T0995 [P] [US16] Crear `src/Core/IngenIA365ERP.Application/Lending/Regulatory/ProyeccionCentralDeRiesgo.cs`: novedades desde el último `Uploaded` de la central (por `LND_RegulatoryFileLines` del archivo anterior), autorización `CreditBureauReport` con evidencia por `IAutorizacionDeDatos.VigenteAsync`, aviso previo por episodio desde `LND_PriorNotices`, reclamos desde `LND_CreditReportClaims`, exclusiones con motivo, retiros de reportes sin aviso, permanencia por los límites `PERMANENCIA_NEGATIVO_*` leídos por `IValoresNacionales`. Hace pasar T0982
+- [ ] T0996 [US16] Crear `src/Core/IngenIA365ERP.Application/Lending/Regulatory/RegulatoryFileCommands.cs`: `ValidateSicsesFileQuery`, `GenerateSicsesFileCommand`, `ValidateCreditBureauFileQuery`, `GenerateCreditBureauFileCommand` (los dos `IOperacionIdempotente`), `MarkRegulatoryFileUploadedCommand`, `ListRegulatoryFilesQuery`, `GetRegulatoryFileQuery`, `IssueRegulatoryFileDownloadLinkCommand` (enlace firmado del adjunto, auditado como lectura sensible); `RegulatoryFileErrors` con `Lending.Regulatory.LayoutSinCotejar` (aviso), `.BlockingIssues`, `.BureauUnknown`, `.AlreadyUploaded`, `Lending.RegulatoryFile.NotFound`, `.NoFile`, `.NotGenerated`; nombre de archivo con `NumeradorDeCartera` (`Kind = RegulatoryFile`); adjunto `LendingRegulatoryFile` subido antes de guardar; evento resumen por archivo (C46). Hace pasar T0983 y T0984
+- [ ] T0997 [US16] Verificar en `AdjuntosDeModulo` que `LendingRegulatoryFile` es de módulo, no borrable y legible con `Lending.RegulatoryFiles.Read` (T81, DT §2.24); si la fase que creó los tipos de adjunto no le puso regla de lectura, agregarla
+- [ ] T0998 [P] [US16] Crear la vista `bureau-exclusions` en `src/Core/IngenIA365ERP.Application/Lending/Reports/Vistas/BureauExclusionsReportQuery.cs` (filtros `bureau`, `year`, `month`; columnas Crédito, Deudor, Motivo, Gestión sugerida · `_credito`; datos personales) y registrarla en `LendingReportsEndpoints.MapVistas` con `AvailableFrom = K5` (api.md §17)
+- [ ] T0999 [US16] Levantar `Cartera.PlazoRegulatorioPorVencer` para el SICSES desde la tarea `cartera.vigilancia` (DT §2.13): cuando falten los días que fije el perfil para el día límite del período y no haya una generación `Generated` o `Uploaded`, alerta a `Lending.RegulatoryReports.Generate` con clave `…:{aaaa-mm}`; `Cartera.AvisoPrevioSinConstancia` ya lo levanta la proyección de centrales al encontrar un episodio en su punto de reporte sin constancia (adaptadores-y-archivos.md §5.5)
+
+#### API, cliente y pantallas
+
+- [ ] T1000 [US16] Crear `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/RegulatoryEndpoints.cs` **(nombre nuevo)** con las nueve rutas de api.md §18 bajo `/api/lending/regulatory` (`layouts`, `sicses/{year}/{month}/validate|generate`, `bureaus/{bureauCode}/{year}/{month}/validate|generate`, `files`, `files/{id}`, `files/{id}/download-link`, `files/{id}/mark-uploaded`), cada una con su `.RequirePermission` (`RegulatoryFiles.Read`, `RegulatoryReports.Generate`, `CreditBureauFiles.Generate`, `RegulatoryFiles.MarkUploaded`); las generaciones exigen `Idempotency-Key`
+- [ ] T1001 [P] [US16] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/RegulatorioDeCarteraClient.cs` **(nuevo)** y las pantallas `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Sicses.razor` (`/cartera/sicses`) y `Centrales.razor` (`/cartera/centrales`): período, validar, ver incidencias por crédito y campo, generar reconociendo advertencias en un diálogo («El formato tiene N de M campos sin cotejar»; «Cierre con el modelo obligatorio no disponible»), versiones con estado, descarga, marcar cargado con radicado y comprobante; en centrales, lista de excluidos con su motivo; `IndicadorDeCarga`, sin colores literales; enlaces en el grupo «Cartera» del menú con `PermissionGate` `Lending.RegulatoryFiles.Read` (T98, T100)
+- [ ] T1002 [US16] Escribir el runbook `docs/operaciones/cartera-sicses-y-centrales.md` **(nuevo)**: cotejar un layout (publicar la versión nueva del JSON con `verified: true`, `verifiedBy`, `verifiedOn`, `verifiedAgainst`; exige despliegue), regenerar los `.esperado.txt` con `CARTERA_ESCRIBIR_ESPERADO=1`, generar y cargar en el portal, qué hacer con las exclusiones, la marca de D28; y registrar en `ManualCatalogo` el tema de las dos pantallas
+- [ ] T1003 [US16] Pasar el archivo del SICSES de un cierre de prueba por el validador de la Superintendencia y el de cada central por su validador, y cotejar campo por campo contra el instructivo (SC-019; preguntas I7 y E11; quickstart §7 paso 5, §12) (dueño)
+  - Rige mientras tanto: el layout es vigente con `verified = false` y cada generación lleva `LayoutSinCotejar` (precedente D-43 de la PILA).
+
+**Checkpoint**: `SicsesYCentralesTests` y `CasosDoradosDeLayoutsDeCarteraTests` verdes en los dos motores;
+`CarteraInformes` aplicada en local en los dos motores; K5 completa (fases 19, 20 y 21) lista para DEV y QA.
+
+---
+
+## Phase 22: Entrega K6a - Pérdida esperada (US9 ampliada, US8-10) (Priority: P1 para la primera cooperativa obligada) — entrega K6a
+
+**Goal**: el modelo de **pérdida esperada** del Anexo 2 completo y configurable para todo tipo de entidad (Q2):
+documento `SarcAnexo2` tipado y validado en la central; `MotorDePerdidaEsperada` con `FuncionLogistica` en decimal
+(PI con puntaje logístico por segmento, tipo de organización y variables, incluido el historial de mora; PDI por tipo
+de garantía y tiempo en incumplimiento; exposición) y explicación crédito por crédito; `HomologacionDeCalificacion` de
+la pérdida esperada a A–E; `SelectorDeModeloDeDeterioro` que, con `EntregaVigente = K6a`, aplica la pérdida esperada
+a `CONSUMO_LIBRANZA`, `CONSUMO_SIN_LIBRANZA` y `COMERCIAL_PN` en las obligadas y en las que adoptan voluntariamente;
+**adopción y desistimiento** voluntarios con acta, estudio de impacto y aviso (`LND_ImpairmentModelElections`);
+**carga complementaria del historial de mora** (`LND_ArrearsHistoryLoads`, plantilla `lending.arrears-history`); la
+guarda de activación de US8-10 y la obligación sobrevenida con K6a (US9-9). No hay hechos contables nuevos: el cierre
+emite los mismos `DeterioroCalculado` y `CarteraReclasificadaPorCalificacion`. Genera `CarteraPerdidaEsperada`
+(T45, T46, T49, T50; FR-099, FR-105, FR-106, FR-140, FR-142; SC-021, SC-023).
+
+**Independent Test**: en `coop_obligada`, cerrar un mes con créditos de los tres segmentos cubiertos y de los demás:
+los cubiertos se deterioran por pérdida esperada (PI, PDI, exposición y deterioro iguales al cálculo a mano de los
+casos pe01–pe03) y el resto por el Anexo 1; intentar dejar uno cubierto en el Anexo 1 se rechaza citando la norma; en
+`coop_ensayo`, adoptar voluntariamente con acta y aviso y ver que el primer cierre de su vigencia emite sólo la
+diferencia frente al anterior, y desistir; activar una obligada sin historial completo → negada con la lista
+(quickstart §8; US8-10, US9-6, US9-7, US9-9).
+
+### Tests for K6a
+
+- [ ] T1004 [P] [US9] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/FuncionLogisticaTests.cs` contra `FuncionLogistica` (todavía inexistente): `1 / (1 + e^(−z))` en `decimal` con `AritmeticaDecimal` (exponencial por serie con reducción de argumento), simétrica (`f(−z) = 1 − f(z)`), monótona, en (0, 1) para |z| ≤ 50, igual a la referencia con 18 decimales en una tabla de puntos; el puntaje se redondea a la escala del documento y nada más (E9); nunca usa `double` ni `Math.Exp` (`ElMotorDeCarteraEsDecimal`) (research R55)
+- [ ] T1005 [P] [US9] Crear los casos dorados de pérdida esperada en `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/Casos/` — `pe01-consumo-con-libranza.json`, `pe02-consumo-sin-libranza.json`, `pe03-comercial-persona-natural.json`, `pe04-historial-parcial-mayor-observada.json`, `pe05-historial-parcial-del-corte.json`, `pe06-historial-parcial-fija.json`, `pe07-pi-voluntaria.json`, `pe08-homologacion.json`, `pe09-segmento-fuera-del-modelo.json`, `pe10-novacion-hereda-historial.json` — con valores calculados a mano (PI, PDI por días en incumplimiento, exposición, deterioro por crédito, calificación homologada A–E y explicación), cargados por `CasoDoradoDeRiesgo` en `CasosDoradosDeRiesgoTests` (de la fase 12) (quickstart §1.3; SC-021, SC-023) (dueño)
+  - La contadora firma los valores a mano (quickstart §12); las tablas del Anexo 2 que vienen como imágenes las transcribe el equipo con `verified = false` (pregunta **E8**, propuesta por defecto).
+- [ ] T1006 [P] [US9] Ampliar `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/SelectorDeModeloDeDeterioroTests.cs` (de la fase 12): con K6a, obligada → `ExpectedLossAnnex2` / `Obligated` en los tres segmentos y `ArrearsAnnex1` / `Obligated` en los demás, sin marca; no obligada con adopción vigente a la fecha → `Voluntary` desde su `ValidFrom`, y tras el desistimiento `NotObligated` desde su fecha, sin tocar cierres anteriores; obligación sobrevenida por una vigencia del perfil → pérdida esperada desde el primer cierre dentro de esa vigencia; sin K6a, el caso r15 sigue igual (Anexo 1 con `ObligatoryModelUnavailable`) (T50; US9-6, US9-7, US9-9)
+- [ ] T1007 [P] [US9] Ampliar `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/HistorialDeMoraTests.cs` (de la fase 12): la fuente que manda por mes (cierre vigente sobre carga complementaria más reciente sobre migración); completitud con los meses de `ReglaDePerdidaEsperada` a la fecha del primer cierre en PE, o desde el desembolso si es más joven; meses posteriores al corte cubiertos por transacciones; novación y refinanciación siguen el historial del antecesor (`PredecessorLoanNumber`); regla de meses faltantes `MayorObservada`, `DelCorte` y `Fija` (con `Riesgo.MesesFaltantesDiasFijos` **(nuevo)**) (T49; FR-105)
+- [ ] T1008 [P] [US9] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/Normativa/Anexo2Tests.cs`: el JSON semilla de `SarcAnexo2` se deserializa al tipo `Anexo2`; variables con tipo cerrado; cortes crecientes; PI por tipo de organización con la clave `VOLUNTARIA`; PDI por tipo de garantía y tramos de días; tabla de homologación cubre todo el rango de PI; `PoliticaSarcEfectiva.Combinar` acepta sobreescrituras del Anexo 2 sólo más estrictas celda por celda (data-model §23.10) (T45)
+- [ ] T1009 [P] [US9] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Risk/RegisterImpairmentModelElectionCommandHandlerTests.cs`: sin K6a → `Lending.ImpairmentModel.NotAvailable` (y la ruta no existe, 404); obligada que adopta o desiste → `Lending.ImpairmentModel.Obligated`; crédito vivo de un segmento cubierto sin historial completo → `.IncompleteHistory` con la lista; `ValidFrom` antes del aviso más la antelación sellada de `ReglaDePerdidaEsperada` → `.NoticeOutOfTerm` con `earliestValidFrom` (pregunta E2); adopción y desistimiento alternan (dos adopciones seguidas → rechazo); punto de acta del consejo que no corresponde → `Lending.Session.ItemMismatch`; quien registra sin `SEC_Users.PersonId` → `Lending.Security.UserWithoutPerson`; la elección registrada audita con módulo `Lending` y no recalcula ningún cierre (FR-105; data-model §23.8)
+  - Los nombres de error siguen data-model §23.8 (`IncompleteHistory`, `Obligated`, `NotAvailable`); api.md §12.4 dice `HistoryIncomplete` y `ObligatoryNoWithdrawal`: ver contradicciones.
+- [ ] T1010 [P] [US8] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Risk/ImportArrearsHistoryCommandTests.cs`: plantilla `lending.arrears-history` con revisión previa, todo o nada y errores por fila y columna; crédito fuera de la carga → `Lending.ArrearsHistory.LoanNotInLoad`; mes con cierre mensual de Cartera → `.MonthClosed`; después del primer cierre en PE de los segmentos cubiertos → `.LoadClosed`; `fuente` distinta entre filas → error de columna; aplicar escribe `LND_ArrearsHistoryLoads` con SHA-256 y `LND_LoanArrearsHistory` con origen `ComplementaryLoad` y `ArrearsHistoryLoadId`, sin transacciones ni hechos; volver a cargar un mes no borra nada y la carga más reciente manda; la revisión trae `extra.completeness[]` por segmento (contracts/plantillas.md §7; FR-140)
+- [ ] T1011 [P] [US9] Ampliar `tests/IngenIA365ERP.Application.Tests/Lending/Risk/ExecuteMonthlyCloseCommandHandlerTests.cs` (de la fase 12) con K6a: las líneas de segmentos en PE llevan `ProbabilityOfDefault`, `LossGivenDefault`, `ExposureAtDefault`, `ImpairmentModel = ExpectedLossAnnex2`, `AccountingRating` homologada y `ExplanationJson`; candidata del modelo de la regla del Anexo 2 (FR-099) y la peor con arrastre, reestructurados, evaluación y análisis igual que en el Anexo 1; `IncompleteHistory` y `IncompleteHistoryJson` con los créditos sin historial completo y la regla de meses faltantes aplicada; el reporte de cambios los lista; deterioro general en segmentos PE según el parámetro por modelo y tipo de entidad del documento; `DocumentsUsedJson` incluye `SarcAnexo2` con su SHA-256; los mensajes son los mismos tipos de K1 (`DeterioroCalculado` en delta, `CarteraReclasificadaPorCalificacion`); el primer cierre en PE compara contra el cierre anterior vigente en Anexo 1 y no lo cambia (US9-6, US9-7, US9-9; T47, T48)
+- [ ] T1012 [P] [US8] Ampliar `tests/IngenIA365ERP.Application.Tests/Lending/Activation/ActivateLendingCommandHandlerTests.cs` (de la fase 13): con K6a, una obligada sin parámetros de FR-106 vigentes a la fecha del primer cierre que los use, o con créditos migrados de segmentos cubiertos sin historial completo → `Lending.Activation.RequirementsMissing` con `data.missing[]` que lista lo que falta y los créditos (`Lending.Migration.ArrearsHistoryRequired`); completada la carga complementaria, activa; una no obligada no exige historial (US8-10; FR-142)
+- [ ] T1013 [P] [US9] Ampliar `tests/IngenIA365ERP.Application.Tests/Lending/Risk/EfectoDeReplicacionObligacionSobrevenidaTests.cs` (de la fase 2 o 12): con K6a, registrar una versión del perfil o una `ReglaDePerdidaEsperada` que obliga después de la activación no se niega nunca por falta de historial; lista los créditos sin historial completo, alerta `Cartera.ObligacionSobrevenida` y `Cartera.HistorialDeMoraIncompleto` al contador y al jefe de cartera, y ya no deja la marca `ObligatoryModelUnavailable` en los cierres siguientes (FR-105; T50; US9-9)
+- [ ] T1014 [P] [US9] Ampliar `tests/IngenIA365ERP.Architecture.Tests/Principles/CadaParametroRespetaLaEntregaDeSuModulo.cs` (`Riesgo.MesesFaltantesDiasFijos` y las claves de K6a no se ofrecen antes de K6a) y `LaCarteraNoTieneValoresLegalesFijos.cs` (ningún coeficiente, corte, PI ni PDI del Anexo 2 en `Domain/Lending/Risk` ni en `Application/Lending/Risk`; exención por archivo sólo para el JSON semilla) (DT §2.25)
+- [ ] T1015 [US9] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/PerdidaEsperadaTests.cs` (colección «Cartera e2e», dos motores, cooperativas aisladas `coop_obligada` y `coop_ensayo`): activación de una obligada con historial incompleto negada con la lista, carga complementaria y activación (US8-10); cierre con los tres segmentos en PE y los demás en Anexo 1, y desistimiento de la obligada rechazado (US9-6); adopción voluntaria con acta, estudio y aviso, primer cierre de su vigencia en delta y desistimiento que vuelve al Anexo 1 sin recalcular (US9-7); obligación sobrevenida por el **perfil** de la cooperativa aislada (nunca una `ReglaDePerdidaEsperada` nueva en la central, que tocaría a todo el host) con la lista de créditos sin historial (US9-9); `POST /api/lending/risk/impairment-model/elections` sin `ImpairmentModel.Manage` → 404 genérico (quickstart §1.7, §8; SC-023)
+
+### Implementation for K6a
+
+#### Entrega, normativa y semillas
+
+- [ ] T1016 [US9] Subir `CatalogoDeCartera.EntregaVigente` a `EntregaDeCartera.K6a`; con ello `SelectorDeModeloDeDeterioro` deja de devolver la marca para las obligadas y las claves y rutas de K6a quedan disponibles (T50; R15)
+- [ ] T1017 [P] [US9] Crear el documento tipado `src/Core/IngenIA365ERP.Domain/Lending/Risk/Normativa/Anexo2.cs` (segmentos de PE, variables con tipo cerrado parametrizado, coeficientes, cortes, PI por tipo de organización con clave `VOLUNTARIA`, PDI por tipo de garantía y tramos de días en incumplimiento, VEA, homologación a A–E, deterioro general por modelo y tipo de entidad con fuente) y registrar su validador en la implementación de Cartera de `IValidadorDeDocumentoNormativo` para `RegulatoryDocumentKind.SarcAnexo2` (T45); hace pasar T1008
+- [ ] T1018 [US9] Agregar la semilla central `sarc-anexo2-{fecha}.json` a `PlatformNationalValuesSeeder` (Admin, Order 6, JSON embebido) con la versión consolidada vigente, `Verified = 0` y fuente; se replica a cada cooperativa por la réplica de valores nacionales (data-model §12.4) (dueño)
+  - Pregunta **E8**: el equipo transcribe con `verified = false` lo que viene como imagen (cortes del puntaje, PDI por días, homologación) y el dueño y la contadora cotejan contra la circular consolidada; rige mientras tanto con la marca `UnvalidatedParameters` en el cierre (T41).
+- [ ] T1019 [P] [US9] Sembrar en `ParametrosDeCartera` la clave `Riesgo.MesesFaltantesDiasFijos` **(nuevo)** (int ≥ 0, sin valor; obligatoria cuando `Riesgo.ReglaMesesFaltantes = Fija`, que sin ella se rechaza al guardar) con `DisponibleDesde = K6a`, y registrarla en data-model §12.1
+
+#### Dominio
+
+- [ ] T1020 [P] [US9] Crear `src/Core/IngenIA365ERP.Domain/Lending/Risk/FuncionLogistica.cs` y, si `AritmeticaDecimal` no la tiene, la exponencial en decimal en `src/Core/IngenIA365ERP.Domain/Lending/Rates/AritmeticaDecimal.cs`; hacen pasar T1004
+- [ ] T1021 [US9] Crear `src/Core/IngenIA365ERP.Domain/Lending/Risk/MotorDePerdidaEsperada.cs`: por crédito, variables del modelo desde el estado reconstruido, el historial de mora (`HistorialDeMora.Construir`) y las garantías; puntaje redondeado a la escala del documento; PI de la tabla del tipo de organización (o `VOLUNTARIA`); PDI por tipo de garantía y días en incumplimiento; exposición por concepto; deterioro = PI × PDI × exposición al centavo (`Riesgo.RedondeoDeterioro`); explicación por componente (FR-106); sin IO, `DateOnly`, sólo `decimal`
+- [ ] T1022 [US9] Ampliar `src/Core/IngenIA365ERP.Domain/Lending/Risk/HomologacionDeCalificacion.cs` (de K1, caso r14) con la homologación de PE a A–E del Anexo 2 y `RatingCause.Homologation`; ampliar `MotorDeCalificacion` para que en segmentos PE la candidata del modelo salga de la regla del Anexo 2 (FR-099) y `SelectorDeModeloDeDeterioro` con las elecciones voluntarias y la obligación por perfil (T46, T50); `HistorialDeMora` con la regla `Fija` y `Riesgo.MesesFaltantesDiasFijos`. Hacen pasar T1005 a T1007
+- [ ] T1023 [P] [US9] Crear `src/Core/IngenIA365ERP.Domain/Entities/Lending/Risk/ImpairmentModelElection.cs` (H; columnas de data-model §23.8; enum `ImpairmentModelElectionKind { VoluntaryAdoption, VoluntaryWithdrawal }` **(nuevo en data-model)** en `Domain/Enums/Lending`) y `ArrearsHistoryLoad.cs` (H; columnas de §23.9); agregar a `LoanArrearsHistoryEntry` la propiedad `ArrearsHistoryLoadId` (nula)
+
+#### Persistencia y migración
+
+- [ ] T1024 [US9] Crear `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/ImpairmentModelElectionConfiguration.cs` (`LND_ImpairmentModelElections`, `UK (ValidFrom)`, FK a `LND_SessionItems`) y `ArrearsHistoryLoadConfiguration.cs` (`LND_ArrearsHistoryLoads`, FK a `LND_MigrationLoads`); FK de `LND_LoanArrearsHistory.ArrearsHistoryLoadId`; `DbSet<>` en los tres contextos
+- [ ] T1025 [US9] Generar la migración par **`CarteraPerdidaEsperada`** con `tools/scripts/add-migration.ps1`: aditiva, `LND_ImpairmentModelElections`, `LND_ArrearsHistoryLoads` y la columna `LND_LoanArrearsHistory.ArrearsHistoryLoadId` con su FK e índice; paridad verificada (DT §2.26; data-model §31)
+
+#### Application
+
+- [ ] T1026 [US9] Crear `src/Core/IngenIA365ERP.Application/Lending/Risk/RegisterImpairmentModelElectionCommand.cs` (`IOperacionIdempotente`, validador, `IAsuntoDeActa` para el punto del consejo; sella `NoticeLeadDays` y `RegulatoryDocumentPublicId` de `ReglaDePerdidaEsperada`; verifica historial por `HistorialDeMora`) y `ListImpairmentModelElectionsQuery`; errores `Lending.ImpairmentModel.NotAvailable`, `.IncompleteHistory`, `.NoticeOutOfTerm`, `.Obligated` en data-model §10.1. Hace pasar T1009
+- [ ] T1027 [US8] Crear `src/Core/IngenIA365ERP.Application/Lending/Risk/ImportArrearsHistoryCommand.cs` sobre el ejecutor común de plantillas y registrar `lending.arrears-history` en `CatalogoDePlantillasDeCartera` (`Lending.ArrearsHistory.Import`, «se importa con K6a» antes de la entrega); errores `Lending.ArrearsHistory.LoanNotInLoad`, `.MonthClosed`, `.LoadClosed`; evento resumen por carga (C46). Hace pasar T1010
+- [ ] T1028 [US9] Ampliar `ExecuteMonthlyCloseCommand` (`Application/Lending/Risk`) para usar `MotorDePerdidaEsperada` en los segmentos que el selector deja en PE, llenar las columnas PE de `LND_MonthlyCloseLoans`, la marca `IncompleteHistory` y su JSON, el deterioro general por modelo y `DocumentsUsedJson` con `SarcAnexo2`; `GetMonthlyCloseChangesQuery` lista los créditos sin historial completo. Hace pasar T1011
+- [ ] T1029 [US8] Ampliar `ActivateLendingCommand` (`Application/Lending/Activation`) con los requisitos de una obligada en K6a (parámetros de FR-106 vigentes y historial completo de los cubiertos), y `EfectoDeReplicacionObligacionSobrevenida` y `AddRegulatoryProfileVersionCommand` con la lista de créditos sin historial y sus alertas. Hacen pasar T1012 y T1013
+
+#### API y pantallas
+
+- [ ] T1030 [US9] Publicar en `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs` `GET` y `POST /api/lending/risk/impairment-model/elections` (`Ratings.Read` y `ImpairmentModel.Manage`, `Idempotency-Key`) y `GET /api/lending/risk/arrears-history/template.xlsx` y `POST …/import?mode=` (`ArrearsHistory.Import`) (api.md §12.4, §12.5)
+- [ ] T1031 [P] [US9] Ampliar `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Cierres.razor` (`/cartera/cierres`) con la sección «Modelo de deterioro» **(nuevo, sin ruta nueva)**: modelo por segmento con su fundamento, elecciones y el diálogo de adopción o desistimiento (punto de acta, estudio, aviso con su fecha y soporte, segmentos, fecha desde con la más temprana admitida); y `CierreDetalle.razor` (`/cartera/cierres/{id:guid}`) con PI, PDI, exposición y explicación por crédito en PE y la lista de historial incompleto; cliente `CierresDeCarteraClient` ampliado; `IndicadorDeCarga`
+- [ ] T1032 [US9] Escribir el runbook `docs/operaciones/cartera-perdida-esperada.md` **(nuevo)**: registrar y cotejar `SarcAnexo2` (maestro), completar el historial con la carga complementaria, adoptar o desistir (plazos del aviso, pregunta E2), qué pasa con la obligación sobrevenida, cómo leer las columnas PE del cierre; y el tema del manual en `ManualCatalogo`
+- [ ] T1033 [US9] Validar con la contadora los casos pe01–pe10, la transcripción del Anexo 2 y la regla de meses faltantes sembrada «la mayor observada» (preguntas E2, E8, E9; quickstart §12) (dueño)
+
+**Checkpoint**: `PerdidaEsperadaTests` verde en los dos motores; casos pe01–pe10 verdes; `CarteraPerdidaEsperada`
+aplicada en local; K6a lista para DEV y QA. Si el dueño adelanta K6a antes de K5 (primera cooperativa obligada), ver
+la nota de coordinación sobre `EntregaVigente`.
+
+---
+
+## Phase 23: Entrega K6b - Vivienda con la Ley 546 y UVR (Priority: P3) — entrega K6b
+
+**Goal**: levantar la exclusión de vivienda de K1 (D18): líneas, originación, desembolso y migración de créditos de
+modalidad `VIVIENDA`, en pesos o en **UVR**, con las reglas de la Ley 546 de 1999 como parámetros con fuente (tasa
+fija salvo pacto de rebaja, cobrada vencida y sin capitalizar; tope `TOPE_TASA_VIVIENDA`; plazo, porcentaje
+financiable general y de vivienda de interés social, relación cuota-ingreso; hipoteca de primer grado) y sellada en
+una **`RulesVersion` nueva**; valores nacionales `UVR` y `TOPE_TASA_VIVIENDA` registrados y replicados; E1/E2 de
+vivienda por tiempo en E; vivienda dentro del cuadre de activación; el certificado tributario con los intereses de
+vivienda aparte. La migración `CarteraVivienda` se genera **sólo si hace falta** (FR-024; D18; DT §6).
+
+**Independent Test**: registrar `UVR` y `TOPE_TASA_VIVIENDA` en la central y verlos replicados; crear una línea de
+vivienda en UVR con tasa fija bajo el tope, originar, desembolsar y causar treinta días: el capital en pesos sigue a la
+UVR del día, no hay mora sobre intereses aunque `Mora.SobreIntereses` esté encendido, y el crédito sella la
+`RulesVersion` de vivienda; migrar un crédito de vivienda y verlo en el cuadre; cerrar un mes con uno en E por
+tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
+
+### Tests for K6b
+
+- [ ] T1034 [P] Crear los casos dorados del motor de vivienda en `tests/IngenIA365ERP.Domain.Tests/Lending/Casos/`: `61-vivienda-pesos-tasa-fija.json`, `62-vivienda-uvr-cuota-constante-en-uvr.json`, `63-vivienda-uvr-pago-y-reverso.json`, `64-vivienda-sin-mora-sobre-intereses.json`, `65-vivienda-prepago-sin-penalidad.json` **(nombres nuevos; la quickstart llega a `60-…`)**, cargados por `CasoDoradoDeCartera`: plan en UVR, conversión diaria con la serie `UVR`, intereses vencidos sin capitalizar, tope de vivienda del día además de la usura, liquidación a fechas pasadas, de hoy y futuras con la UVR proyectada sólo para mostrar (SC-001, SC-017, SC-023) (dueño)
+  - La contadora firma los valores a mano (quickstart §12).
+- [ ] T1035 [P] Crear `tests/IngenIA365ERP.Domain.Tests/Lending/Risk/Casos/r21-vivienda-e1-e2-por-tiempo-en-e.json` **(nuevo)** en `CasosDoradosDeRiesgoTests`: subcategorías E1/E2 de vivienda por `MonthsInE` con la condición tipada del `SarcAnexo1`; garantía hipotecaria con su tabla por meses de mora (SC-021, SC-023)
+- [ ] T1036 [P] Crear `tests/IngenIA365ERP.Application.Tests/Lending/Housing/ReglasDeViviendaTests.cs` **(nuevo)**: con K6b, una versión de línea `VIVIENDA` con tasa variable → rechazo; tasa sobre `TOPE_TASA_VIVIENDA` vigente → rechazo con el tope y la fuente; plazo, porcentaje financiable (general y VIS) y cuota-ingreso fuera de los límites → rechazo nombrando el límite; garantía hipotecaria que no es de primer grado (`MortgageRank`) → no se desembolsa; `Mora.SobreIntereses` no aplica a vivienda; sin K6b, `Lending.CreditLine.HousingNotAvailable` y `Lending.Migration.HousingNotAvailable` siguen como en K1; sin `UVR` del día, causar un crédito en UVR → `NationalValues.Missing` sólo para él (FR-024; D18)
+- [ ] T1037 [P] Ampliar `tests/IngenIA365ERP.Application.Tests/Lending/Activation/ActivateLendingCommandHandlerTests.cs` y las pruebas del cuadre de la carga (de la fase 13): con K6b las cuentas de vivienda entran al cuadre por concepto, modalidad, sub-segmento, categoría y cuenta, y el acta ya no declara vivienda fuera (FR-141)
+- [ ] T1038 [P] Ampliar `CertificadoTributarioTests` (T0956) con un crédito de vivienda en UVR: sus intereses van a la sección de vivienda, en pesos a la UVR de la fecha de cada pago
+- [ ] T1039 Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/ViviendaConUvrTests.cs` (colección «Cartera e2e», cooperativa aislada, dos motores): antes de K6b vivienda no se origina ni se migra (la prueba fija ese comportamiento por la guarda de entrega); con K6b, el recorrido de la prueba independiente por HTTP, con `UVR` y `TOPE_TASA_VIVIENDA` registrados en la **colección «Valores nacionales e2e»** o como valores de la cooperativa aislada sembrados en la fixture, nunca en DEV ni QA (§7.6 de las transversales; quickstart §1.7)
+
+### Implementation for K6b
+
+#### Decisiones previas
+
+- [ ] T1040 Decidir y anotar en specs/013-cartera-financiera/data-model.md §0.4 y §31 si hacen falta columnas UVR (alias `ValorUvr`, 18,4) y en qué tablas `LND_` (propuesta **(nuevo)**: unidad del crédito en `LND_LoanTermsVersions.DenominationUnit`, cuota en UVR en `LND_RepaymentInstallments`, valor en UVR y UVR del día en `LND_LoanTransactions` y en `LND_LoanDailyPositions`; los montos en pesos siguen en `Monto`); si no hacen falta, no se genera `CarteraVivienda` (DT §2.26)
+- [ ] T1041 Confirmar con la contadora el tratamiento contable de la **corrección monetaria** del capital en UVR: propuesta **(nuevo)** = un tipo de hecho nuevo `CorreccionMonetariaUvrCausada` emitido por el ciclo diario como parte de la causación (código corto propio en `LND_FactTypes`, modo de los masivos, comprobante `CA`), con su rol de cuenta en la matriz; y si el certificado tributario incluye la corrección monetaria pagada junto a los intereses de vivienda (dueño)
+  - No hay pregunta en DT §5 para esto: es nueva (ver notas de coordinación). Mientras no responda, rige la propuesta.
+
+#### Valores nacionales, catálogo y límites
+
+- [ ] T1042 [P] Habilitar `UVR` (`Pesos`, valor diario, sin clave) y `TOPE_TASA_VIVIENDA` (`EA`, sin clave) como códigos esperados de `CodigosDeValorNacional` para la alerta de vigencia próxima de la central (C69) y `Cartera.ValorNacionalFaltante` en la cooperativa con créditos de vivienda; carga de la serie UVR por la plantilla `saas.national-values` (`ImportNationalValuesCommand`) descrita en el runbook
+- [ ] T1043 [P] Agregar a `CatalogoDeLimitesLegales` (`Domain/Common/NationalValues`) los límites de vivienda **(nuevos)** `VIVIENDA_PLAZO_MINIMO_MESES`, `VIVIENDA_PLAZO_MAXIMO_MESES`, `VIVIENDA_FINANCIABLE`, `VIVIENDA_FINANCIABLE_VIS`, `VIVIENDA_CUOTA_INGRESO` con unidad, dirección de lo estricto y fuente (Ley 546 de 1999), sembrados «pendiente de validar» en la semilla central, y registrarlos en data-model §12.5; verificar que el documento `CatalogoDeModalidades` vigente marca `VIVIENDA` con «admite UVR» y la clave del tope (T44)
+- [ ] T1044 Publicar una versión nueva de `SarcAnexo1` en la semilla central con las filas de vivienda verificadas o `verified = false` (rangos, subcategorías E1/E2 por meses en E, garantía hipotecaria por meses de mora), si la versión de K1 no las traía completas (T45) (dueño)
+  - Pregunta **E8**: lo transcrito va con `verified = false` hasta el cotejo.
+
+#### Dominio y Application
+
+- [ ] T1045 Agregar a `VersionesDeReglas` (`Domain/Lending/VersionesDeReglas.cs`) la `RulesVersion` de vivienda (`LND-AAAA.n`, la siguiente) con las reglas de la Ley 546: tasa fija, interés vencido sin capitalizar, sin mora sobre intereses, tope de vivienda además de la usura, prepago sin penalidad; `ControlDeUsura`/`TasaDelDia` toman el menor entre usura y tope; los créditos de K1 conservan la suya (T29; FR-024)
+- [ ] T1046 Ampliar el motor (`GeneradorDePlan`, `Causacion`, `AplicadorDePagos`, `ReconstruccionDeCredito`, `RedondeoDeCartera`) para créditos en UVR: plan y saldos en UVR con conversión a pesos por la serie `UVR` leída por `ISeriesRegulatorias`/`IValoresNacionales.LeerSerieAsync`; pagos en pesos convertidos a UVR a la fecha valor; precisión `ValorUvr`; hace pasar T1034
+- [ ] T1047 Levantar las guardas de vivienda en la versión de línea (`Lending.CreditLine.HousingNotAvailable`), en la solicitud y en la migración (`Lending.Migration.HousingNotAvailable`, plantilla `loans` y demás partes) cuando `EntregaVigente ≥ K6b`, con las validaciones de T1036 en `CreditLineVersion`, la solicitud y el desembolso (hipoteca de primer grado por `MortgageRank`); el cuadre de activación incluye vivienda (FR-141). Hace pasar T1036 y T1037
+- [ ] T1048 Si T1041 adopta el hecho nuevo: agregar `CorreccionMonetariaUvrCausada` al catálogo de mensajes de Cartera (`CatalogoDeMensajesDeCarteraV1`), a `LND_FactTypes` (semilla `LendingFactTypesSeeder`, Order 90, `DeliveredIn = K6b`), a contracts/mensajes.md y a la matriz contable (`RolesDeCuentaDeCartera`, contracts/contabilidad.md), con su prueba en `ConstructorDeLineasDeCarteraTests`; sin él, la corrección monetaria no llega a Contabilidad y el cuadre de vivienda no cierra
+- [ ] T1049 [P] Revisar con el dueño los campos de vivienda y UVR del layout del SICSES (`sicses-cartera-*.json`) y publicar una versión nueva del JSON si el instructivo los pide (T79) (dueño)
+- [ ] T1050 Subir `CatalogoDeCartera.EntregaVigente` a `EntregaDeCartera.K6b`
+
+#### Persistencia, pantallas y documentación
+
+- [ ] T1051 Sólo si T1040 lo decide: columnas UVR en las entidades y configuraciones (`PrecisionDeCartera.ValorUvr`) y la migración par **`CarteraVivienda`** con `tools/scripts/add-migration.ps1`, aditiva (DT §2.26)
+- [ ] T1052 [P] Ampliar las pantallas `/cartera/lineas/{id:guid}` (unidad pesos/UVR, límites de vivienda con su fuente), `/cartera/simulador` (plan en UVR con la equivalencia en pesos a la UVR de hoy y la leyenda de proyección), `/cartera/creditos/{id:guid}` (saldo en UVR y en pesos, UVR del día) y sus clientes de `Shared/Services/Cartera`; `IndicadorDeCarga`, sin colores literales
+- [ ] T1053 Escribir `docs/manual/cartera-vivienda-y-uvr.md` **(nuevo)**: reglas de la Ley 546 como parámetros, UVR y tope, migración de vivienda, E1/E2, certificado tributario; y el paso en el runbook de valores nacionales para registrar la serie UVR
+
+**Checkpoint**: `ViviendaConUvrTests` verde en los dos motores; casos 61–65 y r21 verdes; `CarteraVivienda`
+generada sólo si T1040 la pidió; K6b lista para DEV y QA.
+
+---
+
+## Phase 24: Polish & Cross-Cutting Concerns
+
+**Goal**: cerrar cada entrega de la 013 (K1 a K6b) como se cerraron la 009 a la 012: pruebas de arquitectura de DT
+§2.25 verdes y comprobado que muerden; documentación en su sitio (manuales en `docs/manual`, runbooks en
+`docs/operaciones`, `docs/INDICE-DOCUMENTACION.md`, el manual del sistema en la app, la sección de la 013 en
+`CLAUDE.md` y sus totales remedidos); rendimiento y volumen medidos (SC-007, SC-008, SC-016, C60); la quickstart
+recorrida en DEV y QA por entrega, con el QA por rol, los pasos de SC-009 y la app MAUI a mano; ninguna pantalla,
+informe, documento ni manual con el nombre del sistema anterior; promoción por entrega a DEV y QA y a producción
+**sólo con `pg_dump` por base, segundo revisor del retiro (H7) y autorización expresa del dueño**; y la salida en vivo
+de COOFLOPAL **condicionada a Recaudo y Tesorería reales** (Q1 B).
+
+**Independent Test**: para cada entrega Kn, `dotnet test tests/IngenIA365ERP.Architecture.Tests` verde; las e2e del
+filtro `F_Kn` (y `F_VN` en K1) de quickstart §1.7 verdes con `DB_PROVIDER=PostgreSql` y `DB_PROVIDER=SqlServer`; la
+sección de la quickstart de esa entrega anotada con su resultado en DEV y QA; y, tras la autorización, la entrega
+verificada **contra la base de producción**, no contra el repositorio.
+
+### Tests (transversales, al cierre de cada entrega)
+
+- [ ] T1054 [P] Correr al cierre de cada entrega todas las pruebas de arquitectura de DT §2.25 (nuevas y ampliadas) y comprobar que **muerden**: para cada una, introducir en una rama descartable la violación que vigila (un `new LoanTransaction` fuera de `RegistroDeCartera`, un literal legal en `Domain/Lending/Risk`, una ruta de `Endpoints/Lending` sin `.RequirePermission`, una consulta de informe sin alcance, un `NavLink` sin página, una pantalla de `Pages/Cartera` sin `IndicadorDeCarga`, una lectura de `ADM_` fuera del replicador) y ver que falla; anotar el resultado en las notas de release de la entrega; ninguna se relaja para pasar
+- [ ] T1055 [P] Verificar que `tests/IngenIA365ERP.Architecture.Tests/Principles/TextosDeCarteraTests.cs` (de la fase 1) recorre `Shared/Pages/Cartera`, `Shared/Pages/AhorrosYAportes`, el menú, `ManualCatalogo`, `CentroReportes`, las plantillas de importación de Cartera, las plantillas de mensaje sembradas, los textos de `DocumentosDeCarteraReport`, los layouts regulatorios, los mensajes de error de Cartera y los `docs/manual/cartera-*.md`, y que ninguno dice el nombre del sistema anterior; revisión a mano con `grep -rni` sobre `src/Presentation` y `docs/manual` del nombre y sus variantes (FR-144, T98; memoria «sin el nombre SOLIDO en el producto»)
+- [ ] T1056 Correr la lista de quickstart §1.9 («lo que debe seguir verde») en los dos motores al cierre de cada entrega: «Nomina e2e», «Contabilidad e2e», «Inventario e2e» y las de Application de otros módulos; `CreditoProvisionalTests` y `LiquidacionDefinitivaTests` con sus cambios esperados
+
+### Rendimiento y volumen
+
+- [ ] T1057 Completar (la crearon US4 y US7; no se duplica) `tests/IngenIA365ERP.API.IntegrationTests/Lending/CausacionDiariaPerformanceTests.cs` con `[FactDeRendimiento]` (omitida sin `RUN_PERF_TESTS=1`, nunca un `return`): 50.000 créditos vivos sintéticos cargados por la migración en una cooperativa aislada; una pasada completa del ciclo diario, tanda por tanda con `RunDailyAccrualCommand`; mientras corre, otra cooperativa del mismo host aplica pagos por el contrato y consulta cupos; umbral < 30 min y p95 de la otra cooperativa dentro de SC-008; deja medidos tandas, partes, mensajes, líneas del comprobante resumido (pregunta C5), filas de `LND_LoanDailyPositions` y `COR_IntegrationMessages`, un día saltado y su puesta al día, y el cierre mensual sobre la misma cartera (sin umbral) (SC-007, SC-020; quickstart §1.8)
+  - Si la fase de US4 ya la creó, completarla con lo que falte en vez de duplicarla.
+- [ ] T1058 [P] Completar (la creó US6; no se duplica) `tests/IngenIA365ERP.API.IntegrationTests/Lending/ConsultasYSimulacionesPerformanceTests.cs` (`[FactDeRendimiento]`): sobre la misma cartera, 1.000 consultas de cupo y estado por la consulta de Comercial (p95 < 1 s) y 500 simulaciones de plan y 500 de pago (p95 < 2 s); deja medida la confirmación del POS con reserva de número dentro de su transacción (pregunta G6) (SC-008)
+- [ ] T1059 [P] Completar (la creó US8; no se duplica) `tests/IngenIA365ERP.API.IntegrationTests/Lending/ActivacionDeCarteraPerformanceTests.cs` (`[FactDeRendimiento]`): carga aplicada de 50.000 créditos (≈1,5 millones de cuotas) con su cuadre aceptado; `ActivateLendingCommand` termina sin agotar memoria y **todo o nada** (una falla provocada en la última tanda deja la base como antes); mide tiempo total y por tanda de 1.000, memoria máxima y filas por tabla (C60; SC-013)
+- [ ] T1060 [P] Completar (la creó US10; no se duplica) `tests/IngenIA365ERP.API.IntegrationTests/Lending/ArchivoDeDescuentosPerformanceTests.cs` (`[FactDeRendimiento]`, K2): pagaduría con 5.000 obligaciones; archivo en < 1 min; respuesta con no aplicados identificados al 100 % con su motivo; ciclos diarios a lo largo de la ventana de giro sin mora imputada (SC-016)
+- [ ] T1061 [P] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/Performance/InformesYRegulatoriosPerformanceTests.cs` **(nuevo)** (`[FactDeRendimiento]`, K5): sobre la cartera de 50.000 créditos con un cierre hecho, la generación del SICSES y de un archivo de central, y las vistas `aging`, `quality`, `vintages` y el tablero; sin umbral fijado por la spec: se mide y se anota, y se abre una tarea si alguna pasa de lo que la petición HTTP admite
+- [ ] T1062 Crear `tools/scripts/carga-cartera-sintetica.ps1` **(nuevo, molde `carga-inventario-valorizado.ps1`)**: túnel SSH, sesión pedida en el momento, sin credenciales en el guion, `-Api` para una API local; arma los libros de las partes de migración con N créditos sintéticos sobre personas existentes de la cooperativa de ensayo y los aplica por la API, para medir en DEV y QA la causación, el cierre y los informes con volumen real
+- [ ] T1063 Correr T1057 a T1061 con `RUN_PERF_TESTS=1` en `DB_PROVIDER=PostgreSql` y `DB_PROVIDER=SqlServer` antes de cada promoción de la entrega a la que pertenecen, y anotar los tiempos en las notas de release y en la fila de totales de `CLAUDE.md`
+
+### Documentación
+
+- [ ] T1064 [P] Revisar y completar los manuales de `docs/manual/` de la 013 (los de cada historia y los de las fases 19 a 23): un índice `docs/manual/cartera.md` **(nuevo)** que los enlaza por entrega; la sección «Cartera: por hechos» en `docs/manual/contabilidad-contrato-de-contabilizacion.md` (contracts/contabilidad.md); las plantillas `lending.*` en `docs/manual/plantillas-de-importacion.md`; los varios emisores, el registro de participantes y los canales externos en `docs/manual/plataforma-de-integracion.md`; el aviso del grupo de menú «Ahorros y aportes» (research R126); los dos caminos de correo (notificaciones de usuario y mensajes al deudor)
+- [ ] T1065 [P] Revisar y completar los runbooks de `docs/operaciones/`: `cartera-retiro-heredado.md` (diagnóstico, respaldo `<base>-AAAAMMDD-pre-f013.dump`, fila `LND.RetiroHeredado.Aprobado`, segundo revisor, `THROW 50013`); `cartera-puesta-en-marcha.md` **(nuevo)** con quickstart §11 entero (lo que tiene que existir, ensayo general en QA, ensayo en producción sin activar, la salida paso a paso, condiciones de salida) y los recordatorios de Nómina y Contabilidad mientras haya una carga aplicada sin activar; `cartera-sicses-y-centrales.md` y `cartera-perdida-esperada.md` (fases 21 y 22); el registro de valores nacionales por el maestro y la serie UVR; el secreto `erp-canales-externos` con `tools/scripts/crear-secreto-canales-externos.ps1`; el diagnóstico y el respaldo por entrega
+- [ ] T1066 [P] Registrar en `src/Presentation/IngenIA365ERP.Shared/Services/Manual/ManualCatalogo.cs` los temas de `ManualCatalogo.Modulos.Cartera` que falten (líneas, simulador, solicitudes y actas, desembolsos, créditos y liquidación, cierres, documentos, informes y tablero, SICSES y centrales, migración y activación, bandeja de mensajes, valores nacionales) y comprobar `tests/IngenIA365ERP.Shared.Tests/Manual/ManualCatalogoTests.cs`
+- [ ] T1067 [P] Actualizar `docs/INDICE-DOCUMENTACION.md` con los manuales y runbooks de la 013 y `docs/operaciones/estado-y-pendientes.md` con una entrada por entrega (estado en DEV, QA y producción, release, respaldos) y los pendientes abiertos: Recaudo y Tesorería (Q1), los cotejos de layouts (I7, SC-019), el Anexo 2 (E8), la corrección monetaria UVR (T1041), la verificación MAUI
+- [ ] T1068 Escribir la sección de la feature 013 en `CLAUDE.md` (molde de las secciones de la 009 a la 012): entregas y su estado, reglas que no se negocian (un solo escritor del libro, `ReconstruccionDeCredito` como única fuente de saldos, Cartera no escribe asientos ni conoce cuentas y cruza por mensajes, contrato de obligaciones con su versión, valores nacionales con un registro central y una réplica, cierres inmutables con R sellado, modelo de deterioro por cooperativa y segmento, layouts como dato con cotejo, documentos con código de verificación, Cartera no se activa en producción sin Recaudo y Tesorería), migraciones de DT §2.26, permisos sembrados por la API, pantallas `/cartera/*`, pruebas con nombre fijo y recetas; y en «Stack» y «Multi-tenancy» lo que la 013 cambia (base administrativa con valores nacionales)
+- [ ] T1069 Remedir los **Totales** de `CLAUDE.md` con los comandos de su tabla (rutas REST, páginas Blazor con `@page`, clases `*Report`, pruebas sin contenedores por proyecto, pruebas de integración con omitidas y su motivo, errores de compilación) al cierre de cada entrega, con la fecha y lo que suma la 013 frente a la medición anterior
+
+### QA por rol, ensayo y MAUI (DEV y QA)
+
+- [ ] T1070 Recorrer en DEV y en QA la quickstart de cada entrega (§2 preparación, §3 K1, §4 K2, §5 K3, §6 K4, §7 K5, §8 K6a, §9 K6b) con las cooperativas `coop_ensayo` y `coop_obligada`, anotando el resultado de cada paso en las notas de release; lo que necesita valores ficticios en la central no se ensaya en DEV ni QA (§7.6 de las transversales)
+- [ ] T1071 Hacer el QA por rol de quickstart §10 en DEV y en QA con los usuarios de §2.7 y las trece plantillas de rol creadas con `CreateSuggestedLendingRolesCommand`: la tabla de acciones por rol (incluido que `cartera.administrador` no decide ni vota, C86), cada «no» por `curl` → 404 genérico y auditado, el cambio de cooperativa sin F5, el `IndicadorDeCarga` en toda zona; anotar diferencias y corregirlas antes de promover
+- [ ] T1072 Medir en QA los pasos de SC-009 operación por operación (simular 1, radicar ≤ 3, aprobar ≤ 2, desembolsar ≤ 3, simular un pago ≤ 2, consultar 1, emitir un documento ≤ 2) y que un asesor con la capacitación básica radica su primera solicitud completa en menos de diez minutos; medir SC-005 de punta a punta con el despachador real (quickstart §3.7)
+- [ ] T1073 Probar a mano la app MAUI en Windows y Android: pantallas de Cartera, simulador, votación en presencia con passkey o TOTP, documentos (descarga y verificación), tablero; no hay pruebas de navegador en el repositorio (quickstart §10 punto 4)
+
+### Promoción por entrega
+
+- [ ] T1074 Promover cada entrega a DEV y a QA por GitOps: migraciones de la entrega por el Job PreSync del DbMigrator (base por base, `AutoMigrate` apagado), permisos `Lending.*` sembrados por la API al arrancar (`LendingPermissionCatalogSeeder`), y verificación **contra la base** (tablas de la migración, permisos, `/health/ready`, réplica de valores nacionales al día); en K1, el diagnóstico de filas heredadas de quickstart §2.2 en cada base antes de `RetiroDeLaCarteraHeredada`
+- [ ] T1075 Nombrar el segundo revisor de la migración destructiva `RetiroDeLaCarteraHeredada` y obtener el diagnóstico por base en producción (también la administrativa) con autorización expresa; donde haya filas heredadas, la fila `COR_SystemSettings` `LND.RetiroHeredado.Aprobado` después del respaldo (pregunta **H7**, propuesta por defecto: el dueño nombra al revisor y el diagnóstico se hace con su autorización; Principio XII) (dueño) (producción)
+- [ ] T1076 Promover K1 a producción **con autorización expresa del dueño**: `pg_dump -Fc` de cada base (administrativa y de cada cooperativa) con nombre `<base>-AAAAMMDD-pre-f013.dump`; migraciones de K1 en el orden de C103 (`ValoresNacionales` Admin, `PlataformaParaCartera`, `NominaRecaudaPorElContrato`, `ComercioConCartera`, `RetiroDeLaCarteraHeredada` en su commit, y los pares congelados al cierre de K1 `CarteraNucleo`, `CarteraRiesgo`, `IntegracionContableDeCartera`, más `CarteraInformes` si E11 la adelantó) por el Job PreSync; sincronización por GitOps; verificación contra la base (tablas, permisos, la ruta `/api/lending/*` responde «Cartera no activada» donde corresponde, Nómina y Comercial siguen como antes, `CarteraDesplegadaSinActivarTests` reproducida a mano); notas de release con los respaldos y el revisor (dueño) (producción)
+- [ ] T1077 Promover K2 a K6b a producción, cada una **con autorización expresa del dueño** y su `pg_dump -Fc` por base (`<base>-AAAAMMDD-pre-f013-kN.dump` **(nuevo)**), su migración aditiva (`CarteraLibranza`, `CarteraNovedades`, `CarteraCobranza`, `CarteraInformes`, `CarteraPerdidaEsperada`, `CarteraVivienda` si existe) y verificación contra la base; K6a antes de la salida de la primera cooperativa obligada (FR-105, FR-142) (dueño) (producción)
+
+### COOFLOPAL
+
+- [ ] T1078 Hacer el ensayo general en QA de quickstart §11.2 con la parametrización real de COOFLOPAL (líneas, matriz de la contadora con completitud vacía, atribuciones, órganos, vinculados, plantillas de mensaje validadas, roles, alcances, perfil regulatorio), su contabilidad de ensayo con la apertura a un corte pasado, la carga real a ese corte, el recorrido de §3 con los dobles hasta el primer cierre con conciliación en cero, y la comparación con cifras de referencia de una muestra por línea con cada diferencia explicada y aprobada por el jefe de cartera (dueño)
+- [ ] T1079 Validar con la contadora (Rafaela Lastra España) lo que quickstart §12 le asigna: casos dorados del motor y de riesgo firmados, matriz contable con roles, tipos de comprobante (`CN` nuevo) y cruce (C4, C6–C8), `DESC_CARTERA` contra el puente (C1), disminución del deterioro, patrimonio técnico y solvencia (C2, C3), parámetros «pendiente de validar» que COOFLOPAL usa, definiciones de calidad y cosecha de los informes, el cuadre de activación y el acta (dueño)
+- [ ] T1080 Ensayo en producción sin activar (quickstart §11.3), con autorización expresa: COOFLOPAL parametriza en su base y aplica una carga de ensayo con un corte anterior; coordinar antes con Nómina y Contabilidad de COOFLOPAL que mientras haya una carga aplicada sin activar cada nómina y definitiva exigen reconocer «Cartera por activar», Personas no deja borrar a esos deudores y Contabilidad avisa `Accounting.Period.LendingLoadWillExpire` (dueño) (producción)
+- [ ] T1081 Salida en vivo de COOFLOPAL (quickstart §11.4) **sólo si se cumplen las doce condiciones de §11.5**, en particular la 1: **Recaudo y Tesorería especificadas, construidas y en producción**, con su recaudador `Receipts` y su destino `Treasury` registrados en COOFLOPAL con versiones vigentes y sin ningún doble de prueba (Q1 B; FR-089, FR-142; US8-7); con autorización expresa del dueño y en la fecha que él fije: corte C, carga real, cuadre en cero o aceptado con acta, activación C+1 con su punto de acta, Comercial el mismo día, primeros días vigilados y primer cierre contra el cierre base antes de `Riesgo.DiaLimiteCierre`; evidencia de cada paso en las notas de release (dueño) (producción)
+  - Mientras Recaudo y Tesorería no existan, esta tarea no se ejecuta: la activación en producción la niega `Lending.Activation.RequirementsMissing`. COOFLOPAL no es obligada a la pérdida esperada: sale con el Anexo 1 y no necesita K6a.
+
+**Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
+sólo con Recaudo y Tesorería reales.
+
+---
+
+## Dependencies & Execution Order
+
+### Entre fases
+
+**Setup y fundacionales**
+- **Fase 1 (Setup)**: no depende de nada.
+- **Fase 2 (plataforma)**: depende de la 1. Bloquea todo lo demás, porque valores nacionales, registro de
+  participantes, bandeja con varios emisores, canales externos y alertas con alcance son la base de cada
+  historia.
+- **Fase 3 (enmiendas, retiro y base)**: depende de la 2. El orden interno no se negocia (T88, C103):
+  1. Nómina y Comercial pasan a los puertos «sin activar» y van a producción en ese estado.
+  2. Después se retira lo heredado, en su propio commit, con respaldo y segundo revisor (H7).
+  3. Recién después nacen las entidades de Cartera y la migración `CarteraNucleo`.
+  4. Al final quedan los esqueletos de los puertos contables y de la tesorería de prueba (C106), y una activación
+     mínima sin cartera previa con el ayudante e2e `ActivarCarteraAsync` (C107). Con eso, las e2e de las fases 4
+     a 12 corren sin `Skip`.
+- **Orden de las migraciones** (C103): `ValoresNacionales` y `PlataformaParaCartera` (fase 2), luego
+  `NominaRecaudaPorElContrato`, `ComercioConCartera`, `RetiroDeLaCarteraHeredada` y `CarteraNucleo` (fase 3),
+  `CarteraRiesgo` (fase 12) e `IntegracionContableDeCartera` (fase 11, generada después de `CarteraRiesgo`).
+  Los pares de K1 se regeneran hasta la tarea que los congela al final de la fase 14 (C104), y antes no se aplican
+  fuera de local ni de las e2e.
+
+**K1**
+- **US17, parte K1 (fase 4)**: va primero, porque US2 (atribuciones, sesiones, segregación) y todas las pantallas
+  dependen de su alcance y sus permisos.
+- **US1 (fase 5)** antes de US2: no hay solicitud sin línea.
+- **US2 → US3 → US4 → US5**: es la cadena del crédito; cada una necesita lo que nace en la anterior. El motor puro
+  nace en US1 (días, tasas, usura y plan inicial, C105), y US4 lo extiende con causación y reconstrucción.
+- **US6 (fase 10)**: necesita US5 (contrato) y los cupos de US2.
+- **US7 (fase 11)**: necesita los hechos que emiten US3, US4 y US5. Su matriz y su consumidor pueden empezar
+  apenas exista el catálogo de mensajes de la fase 2.
+- **US9, parte K1 (fase 12)**: necesita US4 (posiciones y mora) y US7 (reclasificación y conciliación).
+- **US8 (fase 13)**: necesita todo lo anterior de K1. Cierra K1 con el cierre base y la activación.
+- **US13, parte K1, y la base del centro de informes (fase 14)**: necesitan US4 (liquidación). Pueden correr en
+  paralelo con US8. La fase cierra K1 con la tarea que congela los pares de migración (C104).
+
+**K2 a K6b**
+- **K2 a K5**: cada entrega necesita K1 completa. K2 (US10), K3 (US11 y US14) y K4 (US12) no dependen entre sí,
+  salvo que US14 usa las actas de US17 y la evaluación de cartera de US11. K5 (US13, US15 y US16) lee lo de
+  todas.
+- **K6a**: necesita K1 (US9) y va **después de K5**, porque `EntregaVigente` es ordinal (C109). Se adelanta antes de
+  la primera cooperativa obligada; COOFLOPAL no lo está.
+- **K6b**: necesita K6a sólo para las reglas de vivienda que la pérdida esperada toque.
+
+**Polish**
+- **Fase 24**: va al final de cada entrega para su documentación y su promoción, y al final de todo para
+  `CLAUDE.md`.
+
+### Dentro de cada fase
+
+1. Pruebas primero, y fallando.
+2. Después enumeraciones y entidades, motores puros, Application, Infrastructure y migración (cuando la fase
+   la genera), API, cliente y pantallas.
+3. Al final, e2e y documentación.
+
+Una prueba de arquitectura nace vacía en la fase 1, y la llena la fase dueña de la pieza que vigila.
+
+## Parallel Examples
+
+- **Fase 2**: valores nacionales, registro de participantes, canales externos y listas restrictivas tocan
+  archivos distintos y pueden ir a la vez. La bandeja con varios emisores va sola, porque cambia una pieza
+  que usa la 012 en producción.
+- **K1, después de la fase 5**: la extensión del motor de US4 (casos dorados de causación y reconstrucción en
+  `tests/IngenIA365ERP.Domain.Tests/Lending/Casos`) avanza en paralelo con US2 y US3. La matriz contable de US7 (`ACC_LendingPostingRules` y su pantalla)
+  avanza en paralelo con US5.
+- **K2, K3 y K4**: pueden ir en paralelo entre sí, cada una con su migración, una vez cerrada K1.
+
+## Implementation Strategy
+
+### MVP = K1
+
+K1 completa es lo mínimo para salir en vivo:
+- fases 1 a 14;
+- el `CLAUDE.md` y los runbooks de K1, de la fase 24.
+
+Hay dos puntos de control antes:
+1. **Fin de la fase 3**: Nómina y Comercial funcionan igual que hoy contra los puertos «sin activar», y lo heredado
+   está retirado. Se puede promover a DEV y QA sin Cartera.
+2. **Fin de la fase 9 (US5)**: un crédito se origina, desembolsa, causa, paga y reversa de punta a punta con el
+   recaudador y la tesorería de prueba. Es la primera demostración al dueño.
+
+### Entregas incrementales
+
+K1 → K2 → K3 → K4 → K5 → K6a → K6b. Cada entrega:
+- tiene su migración par;
+- se cierra con sus e2e verdes en los dos motores;
+- se promueve a DEV y QA.
+
+Producción va **sólo con autorización expresa del dueño**, con respaldo por base, y la activación de una
+cooperativa exige Recaudo y Tesorería reales.
+
+### Lo que no hace esta lista
+
+No construye Recaudo ni Tesorería (feature 014, por especificar). Tampoco construye un recaudo, una caja o un giro
+provisionales (Q1 B): fuera de producción sólo existen los dobles de prueba.
+
+## Notes
+
+- Cada tarea cita la T, C, FR o pregunta que la origina. Lo que no está en DT va **(nuevo)** y se lleva a DT en
+  la misma tarea.
+- Se hace commit por tarea o por grupo lógico, y nunca se mezcla el retiro destructivo con otro cambio.
+- Las cifras de `CLAUDE.md` (rutas, pantallas, pruebas) se vuelven a medir al cierre de cada entrega.
+
+
+---
+
+## Apéndice: notas de coordinación entre fases
+
+### Notas de coordinación (PA)
+
+**Lo que estas fases esperan de antes**: nada fuera del repositorio actual (rama `013-cartera-financiera` sobre
+`48aa85e4`) y de las decisiones del dueño que rigen por propuesta (B1, B4, B5, B6, E1, E3, E4, E5, E8, E10, F11, I1, I2,
+I12, I14, I15, A3, A7, A8).
+
+**Lo que dejan para fases posteriores** (por nombre):
+- Fundacional B: crear `IConsultaDeObligaciones` (la usa ya `RespondDataSubjectRequestCommand`, T0085); agregar
+  `VentaACreditoRegistradaV2` a `Contracts/Inventory` y a `CatalogoDeMensajesV1` (T18); no volver a crear
+  `MessageChannel` ni `DebtorMessagePurpose` (T0042); meter `Lending` en `AuditoriaEncadenada.Modulos` y
+  `AuditRetention.ModulosDeDiezAnios` junto con la regla «.Savings» de la mudanza (C89); llenar la lista de 55
+  nombres de los esqueletos del retiro (T0005); agregar a la fixture el ayudante `CorrerProcesoDeCarteraAsync` al
+  crear el esqueleto de `ProcesadorDeCartera` (T0012); sembrar `Lending.*` (incluido `Lending.MessageTemplates.*`).
+- US1: resolutor de ámbito `CreditLine` en el `IResolutorDeAmbitoDeParametro` compuesto (T0064).
+- US2: `ICentralDeRiesgo` con `CentralDeRiesgoSimulada` y `ConformidadDeCentral`; `LND_ScreeningResults`,
+  `ReleaseScreeningMatchCommand` y la tarea `cartera.re-escaneo-de-listas` sobre `IListasRestrictivas`.
+- US3: `IDepositoDeValores` con `DepositoDeValoresSimulado` y `ConformidadDelDepositoDeValores`; `BankFileScope.LoanDisbursement`.
+- US4: `EfectoDeReplicacionCorreccionDeValorNacional` (C05) y la parte «corrida `NationalValueCorrection`» de
+  `ValoresNacionalesYReplicaTests` (T0037).
+- US6: `MotivoSinComprobante.NotIncorporated`; `DestinoInventario` es de Fundacional B (E-02).
+- US7: `PrevalidationOutcome.NotPostable`; reparto CAR de `DestinoContabilidad`, `TotalesDelLoteAsync` con recibos de
+  Cartera, `VistaDeBandejaDeCartera` con alcance; resolutor de ámbito `LendingFactType`.
+- US9: validadores y semilla central de `SarcAnexo1` y `ReglaDePerdidaEsperada` (en `PlatformNationalValuesSeeder`);
+  `EfectoDeReplicacionObligacionSobrevenida` y la evaluación que trae `GET/POST /api/core/regulatory-profile`.
+- US17: implementación de `IFiltroDeAlcanceDeAlertas` con `IAlcanceDeCartera` (T0087).
+- Polish: montar el Secret `erp-canales-externos` en los manifiestos (producción) y actualizar CLAUDE.md.
+- US17 parte K1 (fase 4, C108): la cola de mensajes al deudor (`LND_DebtorMessages`, tareas `cartera.mensajes` y
+  `cartera.entregas`), las rutas `/api/lending/message-templates` y `/api/lending/debtor-messages` y las pantallas
+  `/cartera/plantillas-de-mensaje` y `/cartera/mensajes`, sobre el renderizador, la versión y la semilla de esta fase.
+
+**Nombres que fijé y no estaban en DT** (marcados **(nuevo)** en sus tareas): `ExternalChannels:CredentialsPath`;
+`NationalValues.Replicated` (evento); `ValidadoresDeDocumentosNormativosTests`, `CatalogoDeLimitesLegalesTests`,
+`RegistroCentralDeValoresNacionalesTests`, `RegistroDeIntegracionTests`, `ConsumoConValidacionFallidaTests`,
+`MensajesEntrantesPendientesTests`, `AlertasConAlcanceYModuloTests`, `PerfilRegulatorioTests`,
+`PlataformaParaCarteraTests`; `ListMissingPlatformNationalValuesQuery` y `GET /api/saas/national-values/missing`;
+`ErroresDeValoresNacionales`; `RegistroCentralDeValoresNacionales` (implementación); `TareaDeReplicaDeValoresNacionales`;
+`EfectoDeReplicacionLimitesLegales`; `VistaDeBandejaDeInventario`; `ClavesDeRecaudador`; `SinCredencialesDeCanalExterno`;
+`ListasSinProveedores`; `LendingMessageTemplatesSeeder` (Order 91); `CatalogoDePlantillasDePlataforma`;
+`IFiltroDeAlcanceDeAlertas`; tarea `cumplimiento.plazos-del-titular`; `BloquesComunesDeCarteraV1.cs` (archivo); las
+carpetas `Domain/Enums/ExternalChannels`, `Domain/Lending/Parameters`, `Application/Core/{NationalValues,
+RegulatoryProfile, IntegrationParticipants, ExternalChannels}`, `Application/Compliance/{RestrictiveLists,
+DataSubjectRequests}`, `Application/Payroll/NationalValues`, `Application/Common/Imports`, `API/Endpoints/Saas`,
+`API/Endpoints/Compliance`, `Shared/Services/Compliance`, `tests/…/IntegrationTests/NationalValues`.
+
+**Contradicciones encontradas en los artefactos**:
+1. **Orden de migraciones**: *resuelto por C103* (enmienda T88 y §2.26): `ValoresNacionales` y `PlataformaParaCartera`
+   se generan primero, en esta fase; la fase 3 genera después `NominaRecaudaPorElContrato`, `ComercioConCartera`,
+   `RetiroDeLaCarteraHeredada` y `CarteraNucleo`. data-model §14 y quickstart §1.1 deben alinearse.
+2. **`IConsultaDeObligaciones` llega tarde**: `RespondDataSubjectRequestCommand` (T69 b, contracts/interfaces.md
+   §10.3) la necesita y C106 la deja en la fase 3 (sin activar), que con C103 corre entera después de esta. **Resuelto**: T0085
+   consulta por `IDeberDeConservacionDelTitular` (nuevo) y la fase 3 lo conecta a `IConsultaDeObligaciones`.
+3. **Enums de Cartera en un puerto de plataforma**: `ICanalDeMensajeria` (plataforma) y `COR_NotificationTemplates`
+   usan `MessageChannel` y `DebtorMessagePurpose`, que data-model §9.1 pone en `Domain/Enums/Lending`. La plataforma
+   queda dependiendo de un enum de Cartera; los creé en la fase 2 (T0042). Lo mismo con `GuardiaDeCanalesExternos`
+   (en `Application/Lending/Adapters`, DT §2.9 «Cartera») y `RenderizadorDePlantillasDeMensaje`
+   (`Application/Lending/Collections`) y el circuito de plataforma que lee `Canales.UmbralDeFallas` del módulo `LND`.
+4. **`ADM_NationalValueCounters`**: DT §2.26 lista dos tablas en `ValoresNacionales`; C44 y data-model §14, tres. Rige §7.
+5. **Columnas de `COR_ExternalChannelSettings`**: data-model §4.7 (`ChannelCode` 40, `CredentialKey` 100, `Reason` 300,
+   `VerifiedByUserId`/`VerifiedByName`) frente a adaptadores-y-archivos §3.3 (30, 120, 400, `VerifiedBy`). Rige
+   data-model (§7.6: tablas).
+6. **Errores de canales externos**: adaptadores §3.3 fija `Core.ExternalChannel.UnknownChannel` y `.CredentialMismatch`;
+   api.md §21.2 usa `.ChannelUnknown`, `.CredentialKeyRequired` y `.CredentialMissing`; data-model §10.2 sólo tiene
+   `.Overlaps`. Usé `ChannelUnknown`/`CredentialKeyRequired`/`CredentialMissing` (api.md, contrato de rutas) más
+   `CredentialMismatch` (adaptadores); hay que unificarlos en data-model §10.2.
+7. **Errores sólo en api.md**: `NationalValues.CodeUnknown`, `.KeyInvalid`, `.CodeNotAvailable`, `.NotFound`,
+   `.DocumentKindNotAvailable`, `.DocumentNotFound`, `.AlreadyReviewed`; `Integration.Participant.InUse`;
+   `Core.RegulatoryProfile.Overlaps`, `.OrganizationTypeUnknown`; `Compliance.HabeasData.NoCurrentPolicy`;
+   `Compliance.DataSubjectRequest.NotFound/AlreadyExtended/NotOpen`; `Compliance.RestrictiveList.NotFound`: faltan en
+   data-model §10.2, que el brief señala como fuente de los códigos.
+8. **Revisión de un valor nacional**: data-model §4.4 admite varias revisiones (vale la más reciente: «validada si su
+   revisión más reciente es `Confirmed`»); api.md §21.3 responde `NationalValues.AlreadyReviewed`. Además el cuerpo
+   difiere (`Note` en el modelo, `notes` en la ruta de valores, `{ status, notes }` en la de documentos frente a
+   `decision`). Rige data-model (varias, la última vale) y `decision` en ambas rutas.
+9. **Perfil regulatorio**: data-model §4.5 (`SupervisionLevel`/`NiifGroup` tinyint, `EmployeeFundCategory`,
+   `LibranzaOperator*`) frente a interfaces.md §11.1 (`string`, `Category`, `IsPayrollOperator`,
+   `PayrollOperatorRegistration*`) y api.md §21.4 (`payrollOperatorRegistration`, `category`). La tabla manda en
+   columnas; los DTO deben alinearse.
+10. **Semilla de `CAR`**: data-model §4.6 la siembra con `ValidFrom = 1900-01-01` e `IsEnabled = 0`; mensajes.md §13.2
+    dice «sin vigencia» (pero `ValidFrom` no admite nulo). Rige data-model.
+11. **`FESTIVO` en la plantilla**: plantillas.md §10 pide `valor = 1` y `unidad = Dias`; data-model §3.1 dice `Value` y
+    `Unit` nulos en `FESTIVO`. Además la plantilla no lista la unidad `Veces` y da `clave` texto 40 frente a `Key` 60.
+12. **Códigos de participante**: C35 describe `CAR` como «recogida de Cartera, recaudador sin fila»; data-model §4.6 y
+    mensajes.md §13.2 lo siembran como destino `Lending` (que es lo que hace la semilla). Son dos usos del mismo
+    código; conviene decirlo explícito en C35.
+13. **`Lending` en la cadena de auditoría**: DT §2.6 lo agrega en K1 sin condición; hacerlo antes de la mudanza a
+    `Savings` (fase 3) encadenaría los eventos de los handlers heredados de ahorros. Lo dejé para la fase 3 (C89).
+14. **`ValoresNacionalesYReplicaTests`** (quickstart §1.7) mezcla plataforma y Cartera (la corrida
+    `NationalValueCorrection` con ajuste y saldo a favor): queda partida entre esta fase y la de US4.
+15. **Alertas «Cartera.*» levantadas por la plataforma**: `Cartera.ValorNacionalFaltante`, `.IndiceDesactualizado`,
+    `.ReplicaDeValoresNacionalesAtrasada`, `.CanalExternoNoDisponible` y `.LimiteLegalMasEstricto` tienen módulo
+    `Lending` (data-model §11) pero las levantan piezas de plataforma, incluso en cooperativas sin Cartera activada:
+    sus destinatarios (`Lending.Processes.Run`, `Lending.Parameters.Manage`) no existen en roles hasta la activación,
+    así que caerán en `CompanyAdmin` con `WithoutRecipient` (aceptable por SC-022, pero conviene decidirlo).
+
+### Notas de coordinación (PB)
+
+**Lo que esta fase espera de fases anteriores**
+- De la **fase 1 (Setup)**: los esqueletos con lista vacía de `LaCarteraSoloSeTocaPorSusInterfaces`,
+  `LaCarteraHeredadaNoVuelve`, `NingunaTablaConservadaApuntaALaCarteraRetirada`, `ElEspacioLendingEsSoloCartera`,
+  `ElMotorDeCarteraEsDecimal`, `NadieEscribeElLibroDeCarteraFueraDelRegistro`, `LosSaldosYTasasDeCarteraTienenSuPrecision`,
+  `LaCarteraUsaLaFechaLocal` y `CadaParametroRespetaLaEntregaDeSuModulo`; la colección «Cartera e2e» y el ayudante
+  `CarteraE2E.CooperativaAisladaAsync` sobre `CentralIdentityApiFixture`; las carpetas `Domain/Entities/Lending/*`,
+  `Domain/Enums/Lending`, `Application/Lending/*`.
+- De la **fase 2 (plataforma)**: `TipoDeMensaje` con `OriginModule`/`AdmiteProceso` (para la entrada de
+  `VentaACreditoRegistradaV2`, que esta fase agrega con la forma actual si la fase 2 aún no llegó, y la fase 2 la
+  completa con las demás); `CatalogoDeMensajesDeCarteraV1` con los 35 tipos `CAR → Accounting` (lo lee
+  `LendingFactTypesSeeder`); `IValidadorDeDocumentoNormativo` y `PlatformNationalValuesSeeder`; el mecanismo
+  `EntregaDeModulo` y los ámbitos `ParameterScopeKind.CreditLine`/`LendingFactType`; la fila `lending.process` de
+  `COR_BackgroundLeases`; el registro de participantes (`NOM` sembrado) y la habilitación de destinos por el registro
+  (`DestinosHabilitadosAsync` y `GetSalesDocumentCreditQuery` por cooperativa, R114), sin la cual
+  `CarteraDesplegadaSinActivarTests` no puede afirmar «sin intentos hacia Lending»; las reglas «.Compliance» y
+  «.NationalValues» de `ModuloDeAuditoria` y los módulos encadenados; los permisos `Core.*` y `Compliance.*` de
+  `DomainPermissionCatalogSeeder`; los tipos de alerta `Cartera.*` en `AlertTypesSeeder`; `VigenciaBitemporal` si la
+  usó primero para valores nacionales (T0199 la amplía, no la duplica).
+
+**Lo que deja para fases posteriores**
+- Implementaciones reales de los puertos: `ContratoDeObligacionesDeCartera` y `ObligacionesDeCartera` (US5),
+  `ConsultasDeCartera` y `ReservasDeCartera` (US6), `IDimensionesDeCartera` (US7, que también suma su método a
+  `LaCarteraSoloSeTocaPorSusInterfaces`); `LosPuertosDeCarteraValidanYAuditanSusEscrituras` y los validadores
+  `SolicitudDeAplicacionValidator` etc. llegan con los reales.
+- `DestinoInventario` (consumidor de `ObligacionCreada`/`ObligacionRechazada`, único escritor de
+  `INV_LendingObligationResponses`) y la pestaña «Crédito» con número y estado: US6.
+- `RegistroDeCartera.Conciliar` y la escritura en bloque de la causación: US4/US5. Ejecutores de corrida:
+  `DailyCycle` y `NationalValueCorrection` (US4), `MonthlyClose` y `CloseReopen` (US9). `RequestLendingProcessRunCommand`
+  y `/api/lending/process-runs`: US4.
+- `CreateSuggestedLendingRolesCommand`, `LendingAuditEmitter`, alcance y segregación: US17. `ReglasDeParametrosDeCartera`:
+  US1 (o quien primero valide un parámetro de Cartera).
+- `CarteraRiesgo` y las FK de `LND_AccountingFactParts` hacia los cierres (C66): US9. `IntegracionContableDeCartera`,
+  `LendingVoucherMappingsSeeder` y `Accounting.Lending*`: US7 (se genera después de `CarteraRiesgo`, C103). El
+  congelamiento de los tres pares de K1: tarea final de la fase 14 (C104).
+- Las piezas de la sección D las completan sus historias (C106): `FechaContable` y `TesoreriaDePrueba` (emisión del
+  resultado del giro) US3; `RecaudadorDePrueba` US5; el adaptador real de `IContabilidadParaCartera`,
+  `ModoDePasoDeCartera` y `ValidacionPreviaContableDeCartera` US7; `CategoriaContableDeCartera` y la mitad de cierres
+  de `FechaContable` US9. La activación (C107) la completa US8 con partes, cuadre, conciliación, nacimiento de créditos
+  y cobros provisionales; US9 le cablea el cierre base; US17 pasa la validación del acta a `PuntoDeActaCerrado` y el
+  acta de `ActivarCarteraAsync` a HTTP.
+- `LendingReportsEndpoints` nuevo (registro y vistas): la fase de informes (T99). `ModulosMigrados += "Cartera"` y
+  `LasPantallasDeCarteraEstanEnElMenu`: la primera historia que cree `Shared/Pages/Cartera`.
+- `NominaRecaudaPorElContratoTests`, `CreditoConCarteraTests`, `ConcurrenciaPagoYCausacionTests`: con Cartera activada
+  por `ActivarCarteraAsync` (US5/US6). `CarteraDesplegadaSinActivarTests` se vuelve a correr sin cambios cuando lleguen los reales.
+- Diagnóstico y retiro en PDN (con autorización expresa, respaldo y segundo revisor): Polish.
+
+**Nombres fijados aquí que no estaban en DT (marcados (nuevo) en sus tareas)**
+`PuertosProvisionalesDeCarteraTests`, `RecaudoPorNominaTests` (como archivo; el nombre del servicio sí es de DT),
+`ListPayrollLoanDeductionsQueryTests`, `DeletePersonCommandHandlerTests` (lo nombra quickstart, el archivo es nuevo),
+`RetiroDeAsociadoConObligacionesTests`, `CreditoSinCarteraTests`, `ReservasDeCarteraDePrueba`,
+`AritmeticaDecimalTests`, `EnumeracionesDeCarteraTests`, `CerrojoDeCarteraSqlTests`, `NumeradorDeCarteraTests`,
+`GuardaDeInmutabilidadDeCarteraTests`, `ModeloDeCarteraNucleoTests`, `PermisosDeCarteraTests`, `ParametrosDeCarteraTests`,
+`LendingFactTypesSeederTests`, `PiezasTempranasDeCarteraTests`, `ActivacionSinCarteraPreviaTests`,
+`ActivacionDeCarteraDePruebaTests`, `ContabilidadParaCarteraProvisional`, `DoblesDePruebaDeCartera` (la guarda, que
+US5 completa); los casos dorados `cartera-01…04-*.json` de Nómina; los métodos de `ICerrojoDeCartera`
+(`TomarSetupAsync`, `BloquearDeudoresAsync`, `BloquearCreditosAsync`) y el enum `ModoDeEspera`;
+`NumeradorDeCartera.AsignarAsync`; `IEjecutorDeCorridaDeCartera`; `OpcionesDelProcesoDeCartera`; las ubicaciones
+`Application/Payroll/Services/RecaudoPorNomina.cs`, `Application/Payroll/Settlements/PropuestaDeDescuentosDeCartera.cs`,
+`Domain/Entities/Inventory/Documents/LendingObligationResponse.cs`, `Domain/Lending/CatalogoDeCartera.cs`,
+`Domain/Lending/Parameters/ParametrosDeCartera.cs` y las subcarpetas por grupo en `Configurations/Lending/{Carpeta}/`.
+
+**Contradicciones encontradas en los artefactos**
+1. **Mapa de fases frente al orden de migraciones.** *Resuelto por C103*: la fase 2 genera primero `ValoresNacionales`
+   y `PlataformaParaCartera` (no tocan `LND_`) y esta fase genera después sus cuatro pares; la fase ya no se parte.
+   data-model §13.3/§14, `plan.md` y quickstart §1.1 deben alinearse a C103.
+2. **`LND_FactTypes`: 47 o 35 filas.** *Resuelto por C110*: se siembran **35** (los hechos que van a Contabilidad, con
+   `ShortCode`); data-model §1.11 debe decir 35.
+3. **Números de `ClaseDeMedioDeRecaudo`.** `contracts/interfaces.md` §3.1 da `OwnPayrollDeduction = 101`,
+   `ExternalPaymasterDeduction = 102`, `InternalOffset = 103`; data-model §9.4 da 20, 21, 22. Rige data-model (C65 y
+   §7.6 «enums: `data-model.md`»); interfaces.md debe corregirse.
+4. **Nombre del único de `INV_LendingObligationResponses`.** data-model parte 2 «Nombres fijados» lo llama
+   `UK_INV_LendingObligationResponses_MessagePublicId`; la parte 3 §8.3,
+   `UK_INV_LendingObligationResponses_Message`. Se usó el de la parte 3 (dueña de la tabla).
+5. **Columnas de `ComercioConCartera`.** DT §2.26 lista sólo `ReservedLoanNumber`, `CreditLineCode` y
+   `CreditWithoutLending`; DT §2.6, C67 y data-model §8.1/§14 suman `ReservationPublicId` y `ConsultationEvidence`.
+   Rige C67 (§7 gana sobre §2); DT §2.26 quedó sin actualizar.
+6. **`LND_FactTypes` «desde el catálogo de mensajes de Cartera».** El catálogo de Cartera es pieza de plataforma (fase 2)
+   mientras la semilla es de esta fase: dependencia cruzada que no está en el mapa; si la fase 2 no lo deja con
+   `ShortCode`, la semilla no tiene de dónde leerlo (se propone que el `ShortCode` viva en `TipoDeMensaje` o en una
+   tabla de la semilla).
+7. **Entidad conservada `LendingDocument`** (`LND_Documents`, compartida) se muda a `Domain.Entities.Savings` con un
+   nombre que empieza por `Lending`; `ElEspacioLendingEsSoloCartera` («todo lo que se llame `Lending` es de la Cartera
+   nueva», R125) debe comprobar por espacio de nombres, no por nombre de tipo, o la entidad debe renombrarse (cambiar el
+   nombre de la clase no toca la tabla). Ningún artefacto lo decide.
+8. **`VigenciaBitemporal`** la nombra DT §2.2/§2.8 como plataforma (`Domain/Common`) y la usa primero la lectura de
+   valores nacionales (fase 2, T38), pero el brief la asigna a esta fase. Se escribió la tarea para ampliar, no
+   duplicar.
+9. **Activación para las e2e**: *resuelto por C107* (sección D.2). Queda una aproximación declarada: mientras no existan
+   las rutas de órganos y sesiones (US17), `ActivarCarteraAsync` siembra el acta con el contexto de la cooperativa desde
+   la fixture; US17 la pasa a HTTP. Y una carga **sin partes** es válida (activación sin cartera previa): US8 no debe
+   tratarla como `Lending.Migration.PartMissing`.
+10. **`CarteraDesplegadaSinActivarTests`** se define (DT §2.25, interfaces.md §12) como la prueba de la Cartera
+   «desplegada y sin activar» con las implementaciones reales, pero el estado intermedio de esta fase sólo tiene los
+   provisionales; la prueba se escribe aquí con aserciones que valen para los dos (interfaces.md §3.17 dice que se
+   comportan igual) y se repite sin cambios cuando lleguen los reales.
+11. **`ParametrosDeCartera`**: ningún artefacto asigna a una fase concreta el catálogo de claves (DT §2.20,
+    data-model §12.1); el brief no lo nombra para esta fase. Se incluyó aquí (T0217) porque `LND_FactTypes` y el
+    procesador lo necesitan y porque es «base de Cartera»; si la fase 2 ya lo creó, T0217 se reduce a completar las
+    claves.
+12. **D-08 de la 010** (`DESC_CARTERA` con asiento, T53) aparece en DT como decisión contable (frente E-01, US7),
+    pero el cambio es de código de Nómina y es inseparable del retiro de `RecaudoDeCredito` (que hoy baja el pasivo
+    con la cuenta que Nómina le pasaba): se hizo aquí (T0157); la regla `RecaudoPorAplicar` con
+    `CollectorClass = Payroll` en la matriz sigue siendo de US7.
+
+### Notas de coordinación (PC)
+
+**Lo que estas fases esperan de las anteriores** (por nombre):
+- **Setup**: los esqueletos de las pruebas de arquitectura de DT §2.25 con lista vacía (`LasConsultasDeCarteraRespetanElAlcance`,
+  `LasLecturasSensiblesDeCarteraSeAuditan`, `LosCodigosViewDeCarteraNoTienenDatosPersonales`, `LosComandosDeCarteraLlevanClave`,
+  `LaCarteraNoTieneValoresLegalesFijos`, `ElMotorDeCarteraEsDecimal`, `LosSaldosYTasasDeCarteraTienenSuPrecision`,
+  `LaCarteraUsaLaFechaLocal`, `LasPantallasDeCarteraEstanEnElMenu`, `LosProveedoresExternosSoloLosConoceSuAdaptador`,
+  `TextosDeCarteraTests`); la colección «Cartera e2e» con `CarteraE2E.CooperativaAisladaAsync` y el doble
+  `ContabilidadParaCarteraConDoble` capaz de devolver un patrimonio técnico en la cooperativa que la prueba marca; la colección
+  «Valores nacionales e2e»; el proyecto `IngenIA365ERP.ExternalChannels` con `AddExternalChannels`.
+- **Fundacional A**: `IValoresNacionales`, `ICalendarioHabil`, `INormativaVigente` con los documentos `CatalogoDeModalidades`,
+  `TiposDeOrganizacion` y `CatalogoDeLimitesLegales` (con `VINCULADOS_FRACCION_CALIFICADA`, `LIBRANZA_CAPACIDAD_DESCUENTO`,
+  `CONCENTRACION_INDIVIDUAL*`, `COBRANZA_*`, `TITULAR_*`); el perfil regulatorio vigente; `IEfectoDeReplicacion` con su
+  registro; `IListasRestrictivas` con `CanalDeListasCargadas` y `ListasSimuladas`, la carga `/api/compliance/restrictive-lists`;
+  `IAutorizacionDeDatos.VigenteAsync`/`Agregar` por finalidad; `ResultadoExterno<T>`, `ContextoDeCanalExterno`,
+  `ICredencialesDeCanalExterno`, `CircuitoDeCanalExterno`, `GuardiaDeCanalesExternos` con los cuatro efectos y
+  `CanalesExternosOptions`; `COR_Alerts` con oficina y línea (C68) y los tipos `Cartera.*` de K1 sembrados con sus
+  destinatarios; `EntregaDeModulo` y `ParametrosDeCartera` registrado como módulo `LND` en `CatalogoDeParametros.Modulos`;
+  `LectorDeParametros` con `informacionHasta`; los módulos `Lending`, `Compliance` y `NationalValues` en la cadena de
+  auditoría; `RutasDePlantilla.MapPlantilla` generalizado (lo necesita `compliance.restrictive-lists`); la cola de mensajes a
+  personas (`ICanalDeMensajeria`, `CanalDeCorreo`).
+- **Fundacional B**: el camino mínimo de `ActivateLendingCommand` y `CarteraE2E.ActivarCarteraAsync` (C107), que esta fase
+  pasa a HTTP; `EmisionDeCartera`; los enums de `Domain/Enums/Lending` con la numeración de data-model §9; **las clases y configuraciones de
+  todas las tablas de `CarteraNucleo`** que estas fases usan (configuración, originación y gobierno de data-model §1–§3) con
+  `PrecisionDeCartera`; `AritmeticaDecimal`; `ICerrojoDeCartera` con el paso por deudor (`LND_DebtorControls`);
+  `NumeradorDeCartera` (clases `Application`, `SessionMinutes`); `EstadoDeCartera` sobre `LND_Setup`; el puerto
+  `IContabilidadParaCartera` (firma estable con su provisional, C106) e `IConsultaDeAportes` con `ConsultaDeAportesNoDisponible`;
+  `LendingPermissionCatalogSeeder` con los 123 códigos, `PerfilesSugeridos` de Cartera y la exclusión de `Lending.Decisions.*` y `Lending.Sessions.Vote` en
+  `CompanyAdmin` y `cartera.administrador`; el grupo «Cartera» del menú.
+
+**Lo que dejan para las fases posteriores**:
+- **US3 (desembolso)**: `ValidacionesDeOriginacion` en la etapa `BeforeDisbursement`, `ValidacionDeConcentracion`,
+  `RegistroDeIntervenciones` (`Desembolsar`, `AnularOrdenDeGiro`), `PuntoDeActaCerrado`, `VersionVigenteDeLinea`,
+  `ControlDeUsura` (también sella la sobretasa de cargos), `GeneradorDePlan` para el plan inicial; `ChangePrepaymentPreferenceCommand`
+  del crédito (api.md §8.3) es de esa fase; garantías reales y pagaré (`RegisterCollateralCommand`, `/promissory-notes`) también.
+- **US4 (motor)**: extiende `CasoDoradoDeCartera`/`CasosDoradosDeCarteraTests` con operaciones y consultas (casos 10–26, 28,
+  30, 31), `MotorDeCartera` con reconstrucción y causación, `GeneradorDePlan` con la regeneración por operación, y prueba
+  US1-4 (créditos vivos topados por usura, `Cartera.UsuraTopada`) en `CausacionYLiquidacionTests` con `TasaDelDia`.
+- **US6 (Comercial)**: `EquivalenciasDeComercio`, `DisponibleDeCupo`, `BloqueosDelDeudor`, `ConsultaDeListasDeCartera`
+  (la consulta de cupo verifica listas sin escribir, C31) y `LendingAuditEmitter.CreditStatusQueried`.
+- **US7 (contable)**: la implementación real de `IndicadoresDeLaEntidadAsync` y `/api/accounting/regulatory-indicators`;
+  hasta entonces todo cupo, desembolso y novedad responde `Lending.Concentration.TechnicalCapitalUnavailable` (T59), salvo
+  en las e2e que marcan el doble. La ruta `/api/lending/parameters/fact-types` y el ámbito `LendingFactType` también.
+- **US8 (migración y activación)**: completar la activación con la migración (las e2e de estas fases ya corren con
+  `ActivarCarteraAsync`, C107); sumar a `ExposicionConsolidadaDelDeudor` la carga aplicada antes de activar (FR-142);
+  revalidar cupos con `RevalidateCreditLimitCommand`.
+- **US3, US16 y el contrato de obligaciones**: ampliar `SeguridadYHabeasDataDeCarteraTests` con US17-1 (desembolso sin
+  permiso), US17-4 (deudor sin autorización fuera del archivo de centrales) y US17-5 (revocación con una obligación viva,
+  que necesita `ObligacionesDeCartera` real); llamar a `LendingAuditEmitter` en liquidación, documentos y exportaciones.
+- **K3, K4, US9, US8**: implementar `IAsuntoDeActa` para `Novelty`, `Condonation`, `WriteOffBatch`, `PortfolioEvaluation`,
+  `RiskPolicyVersion`, `ImpairmentModelChange`, `ActivationDifferences` y validar sus actas con `PuntoDeActaCerrado`;
+  `RecordCreditDecisionCommand` ya sirve a todo sujeto (K3 publica sus rutas).
+- **Polish**: QA por rol de las pantallas de estas fases y la verificación una por una de los tres pasos de FR-013/SC-009
+  para simular, radicar y aprobar.
+
+**Nombres fijados aquí que no estaban en DT** (marcados **(nuevo)** en su tarea; llevarlos a DT §2 al implementar):
+- Motores y tipos puros: `SujetoAEnrutar`, `EnrutamientoDeAtribucion`, `ResultadoDeUsura`, `MotorDePuntaje` (carpeta
+  `Domain/Lending/Scoring`, que la lista de §2.2 no tiene).
+- Application: carpeta `Application/Lending/Configuration` (líneas; §2.2 no tiene carpeta para ellas) y subcarpeta
+  `Application/Lending/Origination/CreditLimits`; `MatrizVigenteDeAtribuciones`, `AsuntosDeActa`, `PuntoDeActaCerrado`,
+  `VinculadosVigentes`, `ReglasDeLineaDeCredito`, `VersionVigenteDeLinea`, `EquivalenciasDeComercio`,
+  `EfectoDeReplicacionUsuraEnLineas`, `ExposicionConsolidadaDelDeudor`, `CapacidadDePago`, `ValidacionDeConcentracion`,
+  `ValidacionesDeOriginacion`, `EnrutamientoDeSolicitud`, `AsuntoDeActaDeSolicitud`, `AsuntoDeActaDeCupo`,
+  `ConsultaDeListasDeCartera`, `ReEscaneoDeListas` (tarea `cartera.re-escaneo-de-listas` de C90), `DisponibleDeCupo`,
+  `BloqueosDelDeudor`, `SaldoDeAportesVigente`.
+- API y reportes: `LendingGroup` (grupo base de `/api/lending`), `AuditoriaDeIntentoDenegadoFilter`, `ActaDeSesionReport`,
+  `SimulacionDeCreditoReport` (la fase de documentos I5 puede plegarlo en `DocumentosDeCarteraReport`).
+- Cliente y pantallas: `GobiernoDeCarteraClient`, `ConfiguracionDeCarteraClient`, `LineasDeCreditoClient`,
+  `OriginacionClient`, `CuposClient`, `CarteraDtos.{Gobierno, Configuracion, Lineas, Originacion, Cupos}.cs`, `SesionDialog`,
+  `AlcanceDeCarteraDeUsuario`, `SimuladorDeCredito`; páginas `Atribuciones`, `Actas`, `Vinculados`, `Parametros`,
+  `Plantillas`, `Alertas`, `Autorizaciones`, `Lineas`, `LineaDetalle`, `Simulador`, `Solicitudes`, `SolicitudNueva`,
+  `SolicitudDetalle`, `Aprobaciones`, `Cupos` (rutas de DT §2.16).
+- Cola de mensajes (C108): `ColaDeMensajesAlDeudor`, `TareaDeMensajesAlDeudor`, `TareaDeEntregasAlDeudor`, `MensajesAlDeudorClient`,
+  `CarteraDtos.Mensajes.cs`, páginas `Mensajes` y `PlantillasDeMensaje`; pruebas `CasoDoradoDeVentanaLegal`,
+  `CasosDoradosDeVentanaLegalTests` (K4 la amplía), `ColaDeMensajesAlDeudorTests`, `TareasDeMensajesAlDeudorTests`,
+  `DebtorMessageCommandsTests`, `MessageTemplateQueriesTests`, `MensajesAlDeudorTests`, `CreateSuggestedLendingRolesCommandTests`.
+- Pruebas: `CasoDoradoDeVotacion`, `CasoDoradoDeAtribuciones`, `CasoDoradoDePuntaje`, `CasosDoradosDePuntajeTests`,
+  `UsuariosDeCartera`, `UsuraNuevaCierraLineasTests` («Valores nacionales e2e»; sumar a `F_VN`),
+  `SimulacionYCupoPerformanceTests`, `CentralDeRiesgoSimuladaConformidadTests`.
+- Manuales: `docs/manual/cartera-gobierno-y-seguridad.md`, `docs/manual/cartera-lineas-de-credito.md`,
+  `docs/manual/cartera-originacion.md`.
+
+**Contradicciones encontradas** (y cómo las resolví en las tareas):
+1. **Orden de las fases frente a la migración `CarteraNucleo`**: *resuelto por C104*: la fase 3 crea la forma de todas
+   las tablas de `CarteraNucleo` y aquí sólo se les da comportamiento; un cambio de esquema regenera el par hasta su
+   congelamiento al cierre de K1.
+2. **El plan y la usura van antes que US4**: *resuelto por C105*: US1 crea `ContadorDeDias`, `EquivalenciaDeTasas`,
+   `TasaDelDia`, `ControlDeUsura`, `FechasDeVencimiento`, `GeneradorDePlan` (generación inicial), `RedondeoDeCartera`,
+   `ExplicacionDeCartera`, `VersionesDeReglas`, `HuellaDeCartera` (US17), la fachada `MotorDeCartera`, el cargador
+   `CasoDoradoDeCartera`, `calcular.py` y los casos 01–09, 27 y 29; US4 los extiende y no los recrea.
+3. **Radicar exige Cartera activada**: *resuelto por C107*: las e2e de solicitudes y la prueba independiente de US17 con
+   créditos corren sobre una cooperativa activada con `ActivarCarteraAsync`, sin `Skip`.
+4. **Concentración sin indicadores hasta US7**: `ACC_RegulatoryIndicators` nace en `IntegracionContableDeCartera` (fase 11);
+   antes, T59 bloquea todo cupo y desembolso. Las e2e de US2 usan el doble contable; conviene que el dueño sepa que en DEV
+   no se otorgan cupos hasta K1 completa.
+5. **¿La simulación sobre la usura bloquea?** FR-021 y el caso 03 de quickstart §1.2 dicen que bloquea al simular;
+   api.md §4.1 dice que responde 200 con `usury.passes = false` y el aviso. Seguí api.md (simular no registra nada); radicar,
+   aprobar y desembolsar sí bloquean. El texto del caso 03 debe decir «marca la usura excedida».
+6. **Nivel de excepción**: data-model §3.2 lo fija en la matriz (`IsExceptionLevel`, uno por matriz); api.md §3.3 lo pone por
+   línea en el puntaje (`exceptionLevelCode`, con `Lending.Attribution.LevelUnknown`). Seguí data-model; el campo de api.md
+   sobra.
+7. **Nombres que difieren entre api.md / plantillas.md y data-model.md** (rige data-model para errores y enums, §7.6):
+   `allowsNonMembers`/`Lending.CreditLine.NonMembersNotAllowed` frente a `AllowsNonAssociates`/`.NonAssociatesNotAllowed`;
+   `Lending.CreditLine.ModalityNotAvailable` frente a `.HousingNotAvailable`; `Lending.CreditLine.VersionOverlaps` frente a
+   `.RetroactiveVersion`; `Lending.Application.ApplicantNotMember` frente a `.NotAssociate`; `Lending.CreditLine.RateBandOverlap`
+   (plantillas) frente a `.RateBandsOverlap`; `Lending.Office.WithoutAccountingBranch` (api §1.14) frente a
+   `Lending.Branch.AccountingBranchMissing`; resultados de validación `Blocked | NotRun` (api §4.2) frente a `CheckOutcome`;
+   propósito de centrales `CreditApplication | CreditLimit | Review` (api §4.4) frente a `BureauQueryPurpose` (`Application`,
+   `CreditLimit`); `position`/`votes` de los miembros (api §3.6) frente a `Role`/`HasVote`; y api §4.2 dice que `Returned`
+   «vuelve a `Draft`» mientras el diagrama de data-model §8.2 lo lleva a `Submitted`.
+8. **Capacidad de descuento en K1 con un parámetro de K2**: data-model §2.4 la exige en `OwnPayroll` desde K1, pero
+   `Libranza.CapacidadDeDescuento` es de K2 (`CadaParametroRespetaLaEntregaDeSuModulo` no la ofrece). En K1 leí el límite
+   nacional `LIBRANZA_CAPACIDAD_DESCUENTO` directamente.
+9. **Codeudor como garantía**: `CreditApplicationInput.collaterals` admite `kind: CoDebtor` (api §4.2), pero en data-model el
+   codeudor es parte (`LND_CreditApplicationParties`) y `CK_LND_Collaterals_Kind` lo excluye. Tomé el codeudor como parte;
+   las garantías reales y el pagaré quedan para US3.
+10. **Columnas de plantillas sin columna en la tabla**: `lending.related-parties` trae `porcentajeDeAportes` y `soporte` (texto)
+    pero `LND_RelatedParties` no tiene porcentaje y el soporte es `SupportAttachmentPublicId`; `lending.contribution-balances`
+    trae `fuente` y `LND_ContributionBalanceLoads` no tiene columna para ella. Falta decidir si se agregan columnas a
+    `CarteraNucleo` o se guardan en `Notes`.
+11. **Pruebas en una colección imposible**: quickstart pone US1-3, US1-4 y US1-5 en `LineasDeCreditoYUsuraTests` («Cartera
+    e2e»), pero US1-3 y US1-5 cambian la central (una por host, §7.6) y US1-4 necesita causación. Los llevé a
+    `UsuraNuevaCierraLineasTests` («Valores nacionales e2e») y a `CausacionYLiquidacionTests` (US4).
+12. **Piezas que ninguna fase del mapa nombra** y tomé aquí: el catálogo completo `ParametrosDeCartera` con su ruta y su
+    pantalla, `ReglasDeParametrosDeCartera`, el filtro `AuditarIntentoDenegado`, `IConOficina`, `LendingAuditEmitter`,
+    `/cartera/alertas`, `/cartera/autorizaciones`, `CatalogoDePlantillasDeCartera` y `/api/lending/templates`. La **cola de
+    mensajes al deudor** (`LND_DebtorMessages`, tareas `cartera.mensajes` y `cartera.entregas`, rutas y pantallas de
+    mensajes y plantillas de mensaje), que `SendScheduleSimulationCommand` necesita (T0384), quedó en US17 por C108
+    (T0264 a T0305).
+16. **Nombre del comando de versión de plantilla**: `adaptadores-y-archivos.md` §4.7 y la fase 2 lo llaman
+    `CreateMessageTemplateVersionCommand`; api.md §14.1, `AddMessageTemplateVersionCommand`. Se conservó el de la fase 2
+    (ya creado); api.md debe alinearse.
+13. **La tarea `cartera.re-escaneo-de-listas`** (C90) no está en la tabla de tareas de DT §2.13; T0397 la agrega.
+14. **Rutas de K1 sin pantalla**: `GET /api/lending/credit-report-claims` es de K1 (C88) pero §2.16 no tiene pantalla de
+    reclamos en K1; quedó sólo la ruta.
+15. **`ScreeningOutcome`**: adaptadores-y-archivos §3.2 lo declara con tres valores (`NoMatch`, `PossibleMatch`, `Match`) y
+    data-model §10 con cuatro (`Unavailable`); seguí data-model.
+
+### Notas de coordinación (PD)
+
+**Lo que estas fases esperan de las anteriores**
+
+- **Base de Cartera (fase 3)**:
+  - enums de DT §2.7;
+  - `PrecisionDeCartera`, `AritmeticaDecimal`, `CerrojoDeCartera`/`SqlDelCerrojoDeCartera` con el paso por deudor
+    y el **bloqueo con salto** (`SKIP LOCKED`/`READPAST`);
+  - `RegistroDeCartera` y `ProcesadorDeCartera` como esqueletos; `IContabilidadParaCartera`, `ModoDePasoDeCartera`,
+    `ValidacionPreviaContableDeCartera`, `FechaContable`, `EmisionDeCartera` y `TesoreriaDePrueba` con firma estable
+    (C106); `ActivarCarteraAsync` (C107); y `NumeradorDeCartera` con las clases `Loan`,
+    `Operation`, `DisbursementOrder` y `DisbursementFile`;
+  - entidades núcleo (`Loan`, `LoanOperation`, `LoanTransaction`, `LoanTermsVersion`, plan, `LoanControl`,
+    `DebtorControl`, `LendingSetup`), `LendingPermissionCatalogSeeder` entero y las claves de `ParametrosDeCartera`
+    que usan estas fases: `Originacion.DiasVigenciaDeAprobacion`, `Giros.DiasSinResultado`,
+    `Mora.ToleranciaDeSaldoVencido`, `Mora.SobreIntereses`, `Pagos.FirmezaDiasPorClaseDeMedio`,
+    `Bloqueos.DiasDeMoraParaBloquear`, `Contabilidad.*`, `Causacion.ContinuaTrasFallecimiento`.
+- **Plataforma (fase 2)**:
+  - `IValoresNacionales` (con `LeerSerieAsync` y `LeerUltimoPublicadoAsync`), `ICalendarioHabil` y el
+    `CalendarioHabil` puro de `Domain/Common/Calendar`, `VigenciaBitemporal`;
+  - la réplica con `IEfectoDeReplicacion`, `ResultadoExterno<T>`/`ContextoDeCanalExterno`, `GuardiaDeCanalesExternos`;
+  - el catálogo agregado de mensajes con `OriginModule`/`AdmiteProceso`, el destino `Treasury` y
+    `ResultadoDelGiroV1` en `CatalogoDeMensajesHaciaCarteraV1`, la colección «Valores nacionales e2e» y
+    `CarteraE2E.CooperativaAisladaAsync`.
+- **US1 y US17 (fases 4 y 5)**: el motor puro inicial (C105): `ContadorDeDias`, `EquivalenciaDeTasas`, `TasaDelDia`,
+  `ControlDeUsura`, `FechasDeVencimiento`, `GeneradorDePlan`, `RedondeoDeCartera`, `ExplicacionDeCartera`,
+  `VersionesDeReglas`, `HuellaDeCartera`, `MotorDeCartera`, `CasoDoradoDeCartera`, `calcular.py` y los casos 01–09, 27, 29.
+- **US2 (fase 6)**: solicitud `Approved` con `ApprovalValidUntil` y `PayoffRequest`, `LND_CreditApplicationParties`,
+  `RegistroDeIntervenciones`, `ReglasDeSegregacion`, listas, bloqueos (servicio de bloqueo automático para el
+  paso 6), concentración y la pantalla `/cartera/solicitudes/{id:guid}`.
+- **US1 (fase 5)**: versiones de línea con `AllowsTranches`, reglas de garantías, seguros, convención, redondeo y prelación.
+
+**Dependencias que el orden de fases del mapa no respeta (contradicciones del mapa)**
+
+- **El motor puro es de la fase 8, pero lo usan las fases 5, 6 y 7.** *Resuelto por C105*: días, tasas, usura,
+  vencimientos, plan inicial, `MotorDeCartera` y `CasoDoradoDeCartera` nacen en US1; el «Bloque A» (T0477 a T0482,
+  con sus pruebas T0457 a T0461) sólo los extiende (regeneración del plan, causación, reconstrucción, casos que
+  faltan). Los casos 01–09, 27 y 29 son de US1; esta fase escribe 10, 12–15, 22–24, 26, 28 y 30.
+- **La recogida (FR-046) y la anulación con recogidas (C11) pagan y reversan por `IContratoDeObligaciones`**, que
+  construye US5 (fase 9). Afecta a T0412, T0437 paso 4, T0441 y parte de T0422. Lo mismo `RecaudadorDePrueba`
+  y `ConcurrenciaPagoYCausacionTests`, que dejé a la fase 9.
+- **Las e2e de las fases 7 y 8 necesitan una cooperativa con Cartera activada.** *Resuelto por C107*: usan
+  `CarteraE2E.ActivarCarteraAsync` (camino mínimo de la fase 3). Sólo `CausacionDiariaPerformanceTests`, que carga
+  50.000 créditos por la migración, sigue dependiendo de US8 (fase 13) y se corre con `RUN_PERF_TESTS=1` después.
+- **Faltan en el mapa el lado de Cartera de la integración contable y el puerto `IContabilidadParaCartera`.**
+  *Resuelto por C106*: la fase 3 deja con firma estable el puerto (con su provisional), `ModoDePasoDeCartera`,
+  `ValidacionPreviaContableDeCartera`, `FechaContable`, `CategoriaContableDeCartera`, `EmisionDeCartera` y
+  `TesoreriaDePrueba`; aquí se completan `FechaContable` (T0433), `EmisionDeCartera` (T0432) y la tesorería de
+  prueba (T0449).
+- **`ReconstruccionDeCredito` necesita `AplicadorDePagos` (fase 9) para reproducir pagos.** T0481 deja un punto de
+  extensión por `LoanOperationKind`; US5 y US6 lo completan. Los casos dorados de pagos (11, 16–21, 31) y de
+  Comercial (25) son de las fases 9 y 10.
+- **Migración `CarteraNucleo`.** *Resuelto por C104*: la forma de esas tablas la deja la fase 3; estas fases sólo
+  verifican y completan comportamiento, y un cambio de esquema regenera el par hasta su congelamiento al cierre de K1.
+
+**Lo que dejan a fases posteriores**
+
+- **US5 (fase 9)**:
+  - pagos en `ReconstruccionDeCredito` y el paso (5) de anticipos;
+  - `RecaudadorDePrueba` sobre la guarda `DoblesDePruebaDeCartera`, y la sección del recaudador en `/cartera/dobles-de-prueba`;
+  - casos 11, 16–21 y 31; los reversos de pago en `ElReversoEnlazaCadaFilaConSuOriginalTests`;
+  - `ConcurrenciaPagoYCausacionTests` y sus casos de `IdempotenciaDeCarteraTests`.
+- **US6 (fase 10)**: familias de Comercial en `DestinoCartera`, desembolso en especie (`InKind`), caso 25.
+- **US7 (fase 11)**: matriz y consumidor de `CreditoDesembolsado`, `DesembolsoReversado`, `InteresCausado`,
+  `MoraCausada`, `SeguroCausado` y `AjusteDeCausacionPorFechaValor`; el resumido `CA` por día.
+- **US9 (fase 12)**: `DailyRating` de las posiciones, el `MonthlyClose`/`CloseReopen` en `ProcesadorDeCartera`,
+  `Cartera.CierreMensualPendiente` y los cierres en `FechaContable`.
+- **K4 (fase 18)**: paso (7) del ciclo.
+- **Polish**: la medición de SC-007 en QA.
+
+**Nombres fijados aquí que no estaban en DT** (marcados **(nuevo)** en sus tareas):
+- `RequisitosDelDesembolso`, `ReversoDeDesembolso` (la tesorería de prueba usa `EmitTestDisbursementResultCommand` de api.md §20);
+- `PartesDeHechosDeCartera`, `PuestaAlDiaDeCredito`, `CicloDiarioDeCartera`, `ReajusteDeTasa`;
+- el script `tests/…/Lending/Casos/calcular.py`;
+- documentos `docs/manual/cartera-desembolso-y-garantias.md`, `docs/manual/cartera-causacion-y-liquidacion.md` y
+  `docs/operaciones/cartera-proceso-diario.md`;
+- clientes `DesembolsosClient`, `GarantiasClient`, `ArchivosDeDesembolsoClient`, `DoblesDePruebaClient`,
+  `CreditosClient`, `CorridasDeCarteraClient`;
+- carpetas `Application/Lending/{Disbursements/Collaterals, Disbursements/PromissoryNotes, Disbursements/Files,
+  Disbursements/Tareas, TestDoubles, Loans, Processes}` (DT §2.2 no lista `Loans`, `Processes` ni `TestDoubles`).
+
+**Contradicciones entre artefactos** (rige data-model para errores y enums, §7.6; marco cuál usé):
+
+1. **Códigos del archivo y de la orden de giro.** Data-model §7.4–§7.6 (usado):
+   - `Lending.DisbursementFile.BankMismatch`; adaptadores §6.2 dice `.SourceAccountBankMismatch` y api §9.3
+     `.AccountNotOfFormatBank`;
+   - `Lending.DisbursementOrder.AlreadyInFile`; adaptadores y api dicen `Lending.DisbursementFile.OrderAlreadyInFile`;
+   - `Lending.DisbursementFile.HasResults`, igual en api; adaptadores dice `.HasTreasuryResults`.
+2. **Resultado del giro inválido.** Data-model §7.5 fija `Lending.DisbursementOrder.InvalidResult`; interfaces §4.3 y
+   mensajes §12.4 usan `.InvalidTransition` y `.AmountMismatch`. Usé los de interfaces, porque el contrato dueño del
+   giro es interfaces (C13). Hay que unificar.
+3. **Garantías sin perfeccionar.** Data-model: `Lending.Disbursement.GuaranteesPending` (usado). Api §9.1:
+   `Lending.Collateral.NotPerfected`.
+4. **Oficina sin sucursal contable.** Data-model: `Lending.Branch.AccountingBranchMissing` (usado). Api §1.14 y §9.1:
+   `Lending.Office.WithoutAccountingBranch`.
+5. **Estado del archivo.** Data-model §7.6 lo deriva (sin columna) y es H con anulación `[EscrituraUnica]`.
+   Adaptadores §6.2 le da `Status` `DisbursementFileStatus` (`Generated`, `Voided`) como columna. Usé data-model;
+   el DTO expone el estado calculado.
+6. **Garantías por tipo.** Api §6.1 registra codeudor y pagaré como `CollateralKind` en `/collaterals`. Data-model
+   §2.8 restringe `LND_Collaterals` a `Pledge`, `Mortgage`, `GuaranteeFund` y `Contributions`
+   (`CK_LND_Collaterals_Kind`): el pagaré vive en `LND_PromissoryNotes` y el codeudor en las partes. Usé
+   data-model; la ruta debe rechazar o redirigir esos dos tipos.
+7. **Reverso de un solo tramo.** Interfaces §4.3 y mensajes §10.2 espejan la causación siempre. C49 lo limita a
+   varios tramos y C101 confirma que con un tramo se espeja. Coherente; queda anotado porque research R41 lo dice
+   distinto según la sección.
+8. **Choque de nombres.** `GenerateDisbursementFileCommand` y `VoidDisbursementFileCommand`
+   (adaptadores §6.2, api §9.3) ya existen en `Application/Payroll/Dispersion/DisbursementCommands.cs` (feature 010).
+   En otro espacio de nombres compila, pero confunde en las pruebas de arquitectura que listan comandos por nombre y
+   en los endpoints. Propongo `GenerateLoanDisbursementFileCommand`/`VoidLoanDisbursementFileCommand`. No lo cambié
+   sin decisión: mantuve los nombres de los contratos.
+9. **Pantalla de corridas.** Api §16.4 y quickstart §3.8 piden ver las corridas (`/api/lending/process-runs`), pero
+   DT §2.16 no fija ninguna pantalla. T0503 las muestra en la bandeja; si se quiere `/cartera/corridas`, hay que
+   fijarla en DT.
+10. **Garantía constituida y A3.** Mensajes §3 dice que el uso del cupo no emite `CupoRotativoOtorgado` (C92), y
+    T0411/T0443 emiten la baja de `CreditoAprobadoSinDesembolsar` y `GarantiaConstituida` con A3. Si el dueño
+    rechaza A3 (C15), se quitan esas tareas.
+
+### Notas de coordinación (PE)
+
+**Lo que estas fases esperan de las anteriores**
+- Fase 1: los esqueletos de las pruebas de arquitectura de DT §2.25, la colección «Cartera e2e» y la fixture con
+  `Lending:TestDoubles:Enabled = true`, `Lending:Process:Enabled = false` y `RelojDeLaSuite`.
+- Fase 2: registro de participantes con `Destination`/`IsEnabled` y su escritor que rechaza dobles en producción;
+  `EmisorDeMensajes` con varios módulos, `AdmiteProceso`, `UsuarioDeOrigen` y `CadenaDeOrden`; el catálogo agregado con
+  los records de `Contracts/Lending` declarados; `IMensajesEntrantes.PendientesAsync`; `ResultadoDeConsumo.ValidationFailed`
+  y `DeliveryStatus.ValidationFailed` en `RegisterDeliveryResultCommand`; `ICalendarioHabil`; alertas con alcance y los
+  tipos `Cartera.CuotaNoDescontadaPorNomina`, `Cartera.ReservaVencida`, `Cartera.VentaNoIncorporada`,
+  `Cartera.CoincidenciaEnListas` sembrados; la mensajería al deudor con la plantilla `ABONOCAP`.
+- Fase 3: los stubs `ContratoDeObligacionesSinActivar`, `ConsultaDeObligacionesSinActivar`, `ReservasDeCarteraNoHabilitada`
+  y sus puertos; Nómina ya recaudando por el contrato contra el stub (E-03) y Comercial con reservas y v2 en «no
+  habilitada» (E-02); `ICerrojoDeCartera`, `RegistroDeCartera` (con `Conciliar`), `NumeradorDeCartera`, el catálogo
+  `Lending.*` y las plantillas de rol; **las entidades y configuraciones** de `LND_LoanOperations`,
+  `LND_LoanNumberReservations`, `LND_InboundMessages`, `LND_InboundMessageEvaluations`, `LND_PrepaymentPreferences`,
+  `LND_InstallmentNonDeductions`, `LND_ProvisionalCollections`, `LND_MigrationSaleReconciliations` y
+  `INV_LendingObligationResponses` dentro de los pares `CarteraNucleo` y `ComercioConCartera`.
+- Fase 4: alcance (`FiltroDeAlcanceDeCartera`), atribuciones operativas con monto, segregación y `LendingAuditEmitter`.
+- Fase 5: líneas con la prelación, `AllowsSpecificInstallmentOutOfOrder`, `NoteRecalculation` y
+  `LND_CommercialTermEquivalences`.
+- Fase 6: cupos (con `GetCreditLimitAvailabilityQuery`), bloqueos, listas guardadas en `LND_ScreeningResults`,
+  `CreditDecision` con el sujeto `ValidationFailureException`, la preferencia en el cupo rotativo.
+- Fase 7: desembolso, recogida que llama a `AplicacionDePagos` (T0535) con `OwnLoanPayoff`, `DestinoCartera` con
+  `ConsumeTreasuryResultCommand`, `EmisionDeCartera`, la tesorería de prueba completa; `ValidacionPreviaContableDeCartera`
+  con firma estable desde la fase 3 (C106).
+- Fase 3: además, `ActivarCarteraAsync` (C107) y la guarda `DoblesDePruebaDeCartera`.
+- Fase 8: `ReconstruccionDeCredito`, `CargadorDeReconstruccion`, `GeneradorDePlan`, `HuellaDeCartera`, la puesta al día y
+  sus partes (C04), `RunDailyAccrualCommand` con el paso (5) que aplica anticipos con `AplicadorDePagos`, la página
+  `/cartera/creditos/{id:guid}` y `LoansEndpoints.cs` con `GetLoanOperationQuery`.
+
+**Lo que dejan a las fases posteriores**
+- US7 (fase 11): la contabilización de `PagoAplicado`, `PagoReversado`, `CreditoDesembolsado` en especie,
+  `CreditoAjustadoDesdeComercial`, `CobroProvisionalIncorporado`; la regla `RecaudoPorAplicar` con
+  `CollectorClass = Payroll`; la pestaña de mensajes emitidos de `/cartera/bandeja-de-mensajes` (la página la crea T0595).
+- US9 parte K1 (fase 12): llenar `ratingNow`/`ratingAfter` de la vista previa del reverso (T0546).
+- US8 (fase 13): llamar `ConciliacionDeVentasDeLaCarga` (T0587) desde aplicar y activar, las marcas, diferencias y su
+  aceptación, el nacimiento de las obligaciones migradas y en cero y el guardado de `LND_ProvisionalCollections` que
+  el consumidor aplica (T0583).
+- US13 parte K1 (fase 14): conectar `VigenciaDeDocumentos` al enganche de `ReversionDePago` (T0536) y `FinalityDate`
+  al paz y salvo «sujeto a firmeza».
+- US10 (fase 15, K2): `DeductionFileLinePublicId`, `ExternalPaymasterDeduction` con referencia y los mensajes de
+  descuentos en `RecaudadorDePrueba`.
+
+**Nombres fijados aquí que no estaban en DT** (marcados **(nuevo)** en su tarea): `DistribucionDePago`,
+`SolicitudDeDistribucion`, `HuellaDeCartera.DeSimulacion`, `ReglasDeFechaValor`, `ClasesDeMedioDeRecaudo` (servicio),
+`FirmezaDelPago`, `PreferenciaDePrepagoVigente`, `AplicacionDePagos`, `ReversionDePago`, `ResolucionDeSaldoAFavor`,
+`AuditoriaDeEscriturasDeCartera`, `NoDescontadosDelLote`, la carpeta
+`Lending/Integration/DoblesDePrueba`, `Lending/Integration/Contrato` y `Lending/Integration/Reservas` (validadores),
+`SolicitudDeSimulacionValidator`, `PagosClient`, `DoblesDePruebaClient`, `MensajesRecibidosClient`, los componentes
+`SimuladorDePago`, `ReversoDePago`, `PreferenciaDePrepago`, `DisponibleDeCupo`, `PuntoDeGuardado`,
+`TareaDeReservasVencidas`, `ConversionDeVentaACredito`, `EvaluacionDeVentaACredito`, `NacimientoDeObligacionDeVenta`,
+`AjusteDesdeComercial`, `VentasAnterioresAlCorte`, `RespuestasAComercial`, `ConciliacionDeVentasDeLaCarga`; las pruebas
+`HuellaDeSimulacionTests`, `EmisionDePagosTests`, `ResolverSaldoAFavorTests`, `ObligacionesDeCarteraTests`,
+`NoDescontadosDeNominaTests`, `DoblesDePruebaTests`, `DoblesDePruebaDeCarteraTests`, `AjusteDesdeComercialTests`,
+`ConsultasDeCarteraTests`, `ReservasDeCarteraTests`, `ConsumoDeVentaACreditoTests`, `AjusteDeVentaACreditoTests`,
+`VentasAnterioresAlCorteTests`, `ConciliacionDeVentasDeLaCargaTests`, `TareaDeReservasVencidasTests`,
+`PuntoDeGuardadoTests`; los manuales `cartera-pagos-y-contrato-de-obligaciones.md`, `cartera-ventas-a-credito.md` y los
+runbooks `cartera-dobles-de-prueba.md`, `cartera-ventas-a-credito.md`.
+
+**Contradicciones encontradas en los artefactos**
+1. **Código del pago anterior al corte**: `interfaces.md` §3.7, §3.16 y §14 dicen `Lending.Payment.BeforeCutoff`;
+   `data-model.md` §7.8 y §10.1 dicen `Lending.Contract.BeforeCutoff` (y `api.md` §20 lo cuenta entre los
+   `Lending.Contract.*`). Rige `data-model.md` para errores (C71, §7.6): se usa `Lending.Contract.BeforeCutoff`;
+   `interfaces.md` debe corregirse.
+2. **Clase de medio desconocida**: `interfaces.md` §3.7 y §3.16 la rechazan con `Lending.Payment.MeansClassNotAllowed`;
+   `data-model.md` §7.8 y §10.1 tienen `Lending.Contract.UnknownMeansClass` para la desconocida y `MeansClassNotAllowed`
+   para las de crédito (C30). Se usa la de `data-model.md`.
+3. **Cuota específica con anteriores impagas**: `interfaces.md` §3.6 → `Lending.Payment.ModalityNotAllowed`; `api.md` §10
+   → `Lending.Payment.SpecificInstallmentBlocked` con `data.pendingBefore[]`; ninguno está en `data-model.md` §10.1. Se
+   usa `ModalityNotAllowed` en el contrato y `SpecificInstallmentBlocked` en la ruta de pantalla; los dos deben entrar a
+   `data-model.md` §10.1 (y `Lending.Payment.AdvanceDoesNotReduceInterest`, aviso de `api.md` §10, tampoco está).
+4. **`Lending.Payment.PreferenceMissing`**: `data-model.md` §10.1 lo define como rechazo 422 en la forma interactiva sin
+   elección; `interfaces.md` §3.7/§3.16 y `api.md` §10 lo usan como **aviso** del abono no interactivo sin preferencia
+   (queda saldo a favor). Se usan los dos sentidos (T0510); conviene separar el aviso en un código propio.
+5. **Clave del recaudador de prueba**: `api.md` §20 dice `TST:{guid:N}:{obligationPublicId:N}`; C35, `interfaces.md`
+   §3.10, `mensajes.md` §16 y `quickstart.md` §3.9 dicen `TST:{guid:N}`. Rige C35.
+6. **Formas de resolver un saldo**: `api.md` §20 (`credit-balances/resolve`) usa `Refund | ApplyToObligation |
+   ExtraordinaryPrincipal`; el puerto (`FormaDeResolucion`, `interfaces.md` §3.1) usa `RefundThroughCollector`,
+   `ApplyToOtherObligation`, `ApplyAsExtraordinaryPrincipal`. T0552 usa los del puerto; `api.md` debe alinearse.
+7. **Liberar una reserva usada**: `interfaces.md` §5.2 «una `Used` o `Expired` responde su estado sin cambiarlo»;
+   `data-model.md` §2.11 «liberar una usada: `Lending.Reservation.AlreadyUsed`». T0561 hace las dos cosas (estado `Used`,
+   `Code = Lending.Reservation.AlreadyUsed`, sin cambio); confirmar.
+8. **Mensaje de `Lending.Reversal.OwnedByCollector`** (`data-model.md` §10.1) habla sólo de Nómina, pero C37 lo extiende
+   a los pagos de Aportes: el texto debe decir «el recaudador que lo aplicó».
+9. **`TesoreriaDePrueba` está asignada a esta fase 9**, pero la e2e de US3 la usa. *Resuelto por C106*: el esqueleto y la
+   guarda nacen en la fase 3, US3 le suma la emisión del resultado del giro y aquí sólo se agrega el recaudador.
+10. **Activación y e2e**: *resuelto por C107*: la fase 3 construye el camino mínimo de `ActivateLendingCommand` por la
+    ruta real (carga vacía, acta, requisitos contra el registro con los dobles) y `CarteraE2E.ActivarCarteraAsync`; nada
+    se escribe por debajo.
+11. **`CarteraNucleo` en la fase 3**: *resuelto por C104*: la forma de todas sus tablas nace allí; una columna que falte
+    regenera el par hasta su congelamiento al cierre de K1 (fase 14), nunca con una migración correctiva.
+12. **Conciliación de ventas de FR-143** figura en el mapa en la fase 10 y en la 13. Se repartió: T0587 construye el
+    clasificador y T0585 el lado del consumidor; la fase 13 lo llama desde aplicar y activar y es dueña de marcas,
+    diferencias y aceptación.
+13. **Venta no convertible que deja de ser reprocesable**: C95, `mensajes.md` §11.2/§15.3 e `interfaces.md` §5.1 dicen
+    que también ocurre cuando «un reproceso falla de forma definitiva»; C102 (posterior) dice que **sólo** lo declara una
+    persona. Rige C102 (T0562, T0566, T0588).
+14. **`NominaRecaudaPorElContratoTests`** figura en quickstart §1.7 bajo US10 (K2) aunque es K1 (E-03); aquí va en la fase 9
+    (T0521).
+15. **Periodicidad sin equivalencia**: `data-model.md` §1.9 y §10.1 fijan `Lending.Sale.PeriodicityWithoutEquivalence`;
+    `mensajes.md` §11.2 y §19 usan `Lending.Sale.TermsWithoutEquivalence` (que cubre también el plazo). Se usa el de
+    `data-model.md` (C71); `Lending.Sale.PersonNotFound` y `Lending.Sale.CreditLineInvalid` (sólo en `mensajes.md`)
+    faltan en `data-model.md` §10.1.
+16. **C55 y el lado de Nómina**: el mapa pone «E-03 Nómina recauda por el contrato» en la fase 3 y C55 (la novedad por
+    obligación y período) en esta fase. T0517 y T0544 sólo completan lo que falte al correr contra obligaciones reales.
+17. **Permiso `Lending.PrepaymentPreferences.Manage`** (C85) no está en DT §2.14; `api.md` §2 ya cuenta 123 códigos.
+    T0548 verifica que la fase 3 lo sembró.
+
+### Notas de coordinación (PF)
+
+**Lo que estas fases esperan de las anteriores (por nombre)**
+
+- Del Setup: los esqueletos con lista vacía de `CarteraNoConoceContabilidad`, `LosHechosDeCarteraNoLlevanCuentas`,
+  `LoDeCarteraSeCorrigeConComprobanteNuevo`, `LaCarteraSoloSeTocaPorSusInterfaces`, `LosCierresDeCarteraNoSeReescriben`
+  y las demás de DT §2.25; la colección «Cartera e2e» con `CarteraE2E.CooperativaAisladaAsync`, el doble
+  `ContabilidadParaCarteraConDoble` y `fx.Despachador`.
+- De la plataforma (fase 2): catálogo agregado `CatalogoDeMensajes` con `OriginModule` por tipo y `AdmiteProceso`;
+  `OriginActorKind` en la bandeja; `IValidadorDeDocumentoNormativo`, `INormativaVigente`, `IValoresNacionales`,
+  `ReplicateNationalValuesCommand`, `IEfectoDeReplicacion`, el perfil regulatorio (`AddRegulatoryProfileVersionCommand`)
+  y la semilla `PlatformNationalValuesSeeder` donde T0684 pone el contenido de `SarcAnexo1` y `ReglaDePerdidaEsperada`;
+  `CatalogoDeParametros` con `ParametrosDeCartera` y las claves `Contabilidad.*` y `Riesgo.*` de DT §2.20 declaradas;
+  tipos de alerta de Cartera sembrados (los de §2.18, más `Cartera.HechoNoContabilizable`, C21).
+- De la base de Cartera (fase 3): `LND_FactTypes` con `ShortCode` y su semilla `LendingFactTypesSeeder` (Order 90) con
+  los 35 cortos de `contracts/contabilidad.md` §2.1 (C110); `LND_AccountingFactParts` (sin las FK a cierres, C66);
+  `LND_ProcessRuns` con `MonthlyClose`/`CloseReopen`; `ICerrojoDeCartera`, `RegistroDeCartera`, `NumeradorDeCartera`;
+  `EmisionDeCartera`; los records `Contracts/Lending/*V1.cs` y `CatalogoDeMensajesDeCarteraV1` declarados enteros en
+  K1 (los de cierre y contingentes incluidos); `LendingDecisionSubjects` con `RiskPolicyVersion` (C52); permisos
+  `Lending.*` completos; `RetiroDeLaCarteraHeredada` ya aplicada (la rama heredada de `AccountReferenceFinder` y
+  `CuentaDebitoDelDescuentoAsync` deberían haber salido con el retiro; T0644 y T0653 lo verifican).
+- De US17 (fase 4): `IAsuntoDeActa`, sesiones con puntos de acta, `RegistroDeIntervenciones`, `IAlcanceDeCartera`/
+  `FiltroDeAlcanceDeCartera`.
+- De US2, US3, US4 y US5 (fases 6–9): `RecordCreditDecisionCommand`, `CloseSessionCommand`, `AssignCreditLimitCommand`,
+  `EndCreditLimitCommand`, `RegisterCollateralCommand`, `ChangeCollateralStatusCommand`, `ReleaseCollateralCommand`,
+  `ExecuteLoanDisbursementCommand` (T0648, T0652, T0695 los tocan); el motor (`ReconstruccionDeCredito`,
+  `AlturaDeMora`, `CargadorDeReconstruccion`), `RunDailyAccrualCommand`, `ProcesadorDeCartera` con `DailyCycle`,
+  `LND_LoanDailyPositions` con `DailyRating` nulo, `ContratoDeObligacionesDeCartera`, la validación de concentración de
+  US2 (T0696 la cambia de fuente) y las pruebas `TareasDeCarteraTests`, `ProcesadorDeCarteraTests` y
+  `CausacionDiariaPerformanceTests` que T0626, T0678 y T0681 amplían.
+- De la base (fase 3), por C106: `IContabilidadParaCartera` con firma estable y `ContabilidadParaCarteraProvisional`,
+  y los esqueletos de `ModoDePasoDeCartera`, `ValidacionPreviaContableDeCartera`, `FechaContable` y
+  `CategoriaContableDeCartera`, que T0643, T0646, T0648, T0649, T0695 y T0704 completan sin cambiar firmas; y, por
+  C107, el camino mínimo de `ActivateLendingCommand` con `ActivarCarteraAsync`, al que T0701 cablea el cierre base.
+
+**Lo que estas fases dejan para las posteriores**
+
+- US8 (fase 13): `SaldosContablesDeCartera` para el cuadre de activación (`/migration/loads/{id}/balance-check`) y para
+  exigir la regla `RecaudoPorAplicar|Payroll` (combinación no resuelta); `CreateBaseCloseCommand` para llamarlo dentro
+  de `ActivateLendingCommand`; el informativo `CarteraActivada`/`CargaDeCarteraAplicada` ya lo consume Contabilidad
+  (T0640, T0645); la verificación de que toda oficina con créditos tenga sucursal contable (C9) es de US8.
+- K3 (fases 16–17): `ValidacionPreviaContableDeCartera` con origen pantalla para novedad, condonación y castigo; los
+  hechos `CreditoReestructurado`, `CreditoModificado`, `CreditoNovado`, `CondonacionAprobada`, `CreditoCastigado` ya
+  tienen constructor, mapeo y casos dorados (T0605); la evaluación de cartera entra como candidata del motor (T0686
+  la recibe vacía).
+- K4: `GastoDeCobranzaCausado` igual.
+- K5 (fase 20): la vista `concentration` usará `LectorDeIndicadoresDeLaEntidad` (T0696).
+- K6a (fase 22): `MotorDePerdidaEsperada`, adopción voluntaria y carga complementaria del historial sobre
+  `SelectorDeModeloDeDeterioro`, `HistorialDeMora` y las columnas nulas de `MonthlyCloseLoan`; reutiliza los mismos
+  hechos del cierre.
+- Polish: cifras de `CLAUDE.md` (+1 tipo de comprobante `CN`, +6 permisos contables) y el párrafo de Contabilidad.
+
+**Nombres fijados aquí que no estaban en DT** (marcados **(nuevo)** en su tarea): `MovimientoContingenteDeCartera`,
+`IntegracionContableDeCarteraClient`, `ConciliacionContableClient`, `RiesgoClient`, `CargadorDeRiesgo`,
+`AsuntoDeActaPoliticaSarc`, `GetLoanRatingQuery`, `CategoriaContableDeCartera`, `LectorDeIndicadoresDeLaEntidad`,
+`Components/Cartera/PoliticaSarc.razor`, `Components/Cartera/CalificacionDelCredito.razor`,
+`docs/manual/cartera-integracion-contable.md`, `docs/manual/cartera-riesgo-y-cierre-mensual.md`,
+`docs/operaciones/cartera-cierre-mensual.md`. Nombres de archivo sin nombre en los artefactos: `RiskEndpoints.cs` y
+`AccountingIntegrationEndpoints.cs` en `Endpoints/Lending`, `RiskConfigurations.cs`, `RiskEnums.cs`,
+`DestinoContabilidadConDosEmisoresTests`, `LotesDeCarteraTests`, `EscenarioContableDeCartera`,
+`MatrizDePruebaDeCartera`, `ClosePeriodConCarteraTests`.
+
+**Contradicciones encontradas en los artefactos** (con la lectura que aplican las tareas)
+
+1. **Orden de migraciones**: *resuelto por C103 y C104*: `CarteraRiesgo` va antes que `IntegracionContableDeCartera`;
+   T0632 genera la contable para las e2e de la fase 11 y T0691 la regenera detrás de `CarteraRiesgo`; la tarea final
+   de K1 (fase 14) congela los tres pares.
+2. **Prueba independiente de US7 depende de US9**: US7 pide «cerrar el mes y comprobar la reclasificación por
+   categoría», que necesita el cierre de la fase 12. Se partió: T0625 sin cierre y T0680 completa la misma clase.
+3. **Exigidas por rol**: `contracts/contabilidad.md` §2.2 y `data-model.md` parte 3 §5.5 difieren (p. ej.
+   `PagoPorCuentaDelAsociado` con o sin concepto; `CargoPorCobrar`, `DeterioroGeneral`, `IngresoPorRecuperacion`,
+   `ContraOrdenContingente`, `CastigadaEnOrden`, `Anticipo`, `SaldoAFavor`, `SeguroPorPagar`,
+   `CuentaPorCobrarComercial` con o sin modalidad, concepto o motivo). Por DT §7.6 gana `contabilidad.md` (roles y
+   matriz); T0633 usa su tabla.
+4. **Formato de `DimensionKey`**: `contabilidad.md` §3.1 es posicional (`*|Capital|*|CONSUMO|…`); `data-model.md` §5.1
+   usa letras (`L:`, `M:`, …). Se aplica el de `contabilidad.md` (matriz).
+5. **`ReasonCode` del deterioro**: `data-model.md` §5.1 dice `MismoEjercicio`/`EjerciciosAnteriores`; `contabilidad.md`
+   y `mensajes.md` (C93) usan `Individual`/`General`/`Additional` en la regla y el movimiento
+   (`Increase`, `DecreaseSameYear`, …) en el hecho. Rige C93.
+6. **Pesos con centro de costo**: T52 y `api.md` §23.1 todavía listan «Centro 8»; C77 lo saca (se asigna, no se
+   compara). Rige C77.
+7. **Desempate de reglas**: `data-model.md` §5.1 dice «mayor peso y luego `ValidFrom` más reciente»; `contabilidad.md`
+   §3.3 dice que no hay empate posible. Equivalentes en la práctica; T0606 prueba que no hay empate.
+8. **`ACC_RegulatoryIndicators`**: `contabilidad.md` usa `IndicatorCode` (texto) + `Unit`; `data-model.md` usa `Kind`
+   (`RegulatoryIndicatorKind`) sin `Unit` y con `RegisteredByName`. Además `api.md` §23.6 responde
+   `Accounting.RegulatoryIndicator.Duplicate` con mismo código y corte, mientras `contabilidad.md` §4.4 dice que otro
+   del mismo corte **reemplaza** al anterior (`SupersedesPublicId`). Por §7.6 las columnas son de `data-model.md`
+   (T0627 usa `Kind`); se adopta el reemplazo con `SupersedesPublicId` y `Duplicate` sólo cuando no se indica a quién
+   reemplaza — conviene que el dueño de los artefactos lo deje escrito.
+9. **`ACC_LendingVoucherMappings`**: `data-model.md` suma `IsSeeded`, `ValidatedAt`, `ValidatedBy` y `CollectorClass`
+   nulo; `contabilidad.md` usa `*` y `Notes`. T0627/T0629 siguen `data-model.md` (columnas) con `*` en `MappingKey`.
+10. **Motivo de recibo sin comprobante**: `api.md` §23.5 lista `Informational | ZeroValue | NotPosted`;
+    `contabilidad.md` §4.3 y C21 usan `SameAccounts`. Rige C21 (T0609).
+11. **Reglas sembradas**: `api.md` §23.1 dice «las reglas se siembran sin cuenta»; C70 y `contabilidad.md` §4.5: no
+    se siembra ninguna regla, sólo filas sugeridas en la plantilla. Rige C70 (T0608).
+12. **Errores del cierre sin catálogo** (C111: cada tarea que los usa los lleva a data-model §10): `data-model.md` §23 marca como nuevos `Lending.MonthlyClose.AlreadyClosed`,
+    `.BaseNotReopenable` y `Lending.AnalysisRating.NotWorse`, y `api.md` suma `Lending.AnalysisRating.NotActive`,
+    `Lending.MonthlyClose.NotFound`, `Lending.Accounting.NotStarted` y `Lending.AccountingFactPart.NotFound`; ninguno está
+    en `data-model.md` §10.1, que según C71 fija los códigos y mensajes. Las tareas los usan; falta su mensaje en §10.1.
+13. **Reapertura con atribución**: `api.md` §12.3 acepta `sessionItemPublicId?` y responde
+    `Lending.Attribution.LevelRequired`, pero `LND_MonthlyCloseReopenings` (`data-model.md` §23.4) no tiene columna de
+    punto de acta. T0699 lo trata como opcional según la atribución; si se exige acta, falta la columna.
+14. **Quién hace la reapertura en una sola transacción**: T47 dice «en una transacción inserta la reapertura y emite»;
+    C58 la vuelve corrida 202. Rige C58 (T0699, T0700).
+15. **Informativo del cierre**: DT §2.11 dice que el origen de cada mensaje del cierre es la parte; `data-model.md`
+    §23.1 y `mensajes.md` §10.23 dan como origen del `CierreDeCarteraRealizado` el cierre. No chocan (el informativo
+    no es parte); las tareas siguen `mensajes.md`.
+16. **Pantallas sin ruta en DT §2.16**: la política SARC, la calificación informativa y la calificación por análisis
+    no tienen pantalla propia en la lista de DT; se ubicaron como componentes en `/cartera/parametros`,
+    `/cartera/cierres` y `/cartera/creditos/{id:guid}` (T0707, T0708).
+17. **`IContabilidadParaCartera` antes de que exista**: *resuelto por C106*: la fase 3 deja la firma estable con un
+    provisional; esta fase pone la implementación real.
+
+### Notas de coordinación (PG)
+
+**Lo que estas fases esperan de las anteriores (por nombre)**
+
+- De la fase de **base de Cartera** (fundacional B): `LendingSetup` con `ActivationDate`/`ActivationId`/`ActivatedAt`,
+  `NumeradorDeCartera` con la clase `IssuedDocument`, `RegistroDeCartera`, `CerrojoDeCartera`, `PrecisionDeCartera`,
+  `LendingPermissionCatalogSeeder` con `Lending.Migration.*`, `Lending.Activation.Execute`, `Lending.Documents.*` y
+  `Lending.Templates.View`, `EstadoDeCartera`, el `CarteraClient` base y las implementaciones `ConsultaDeObligacionesSinActivar`
+  y `ContratoDeObligacionesSinActivar` (T0739 sólo les agrega `MigratedNotActivated` desde la carga); la clase
+  `CarteraDesplegadaSinActivarTests` (T0723 le suma los casos con carga aplicada).
+- De la **plataforma** (fundacional A): `IRegistroDeIntegracion`, `EscritorDelRegistroDeIntegracion`, el destino
+  `Lending` sembrado inactivo, `IMensajesEntrantes.PendientesAsync`, `IAutorizacionDeDatos.Agregar`, `ICalendarioHabil`,
+  `IValoresNacionales`, `INormativaVigente`, `EntregaDeModulo`, `IAlertas` con los tipos `Cartera.CupoPorRevalidar`,
+  `Cartera.VentaNoIncorporada` y `Cartera.CuotaNoDescontadaPorNomina` sembrados, la plantilla de mensaje `ENVIODOC`.
+- De **US17** (fase 4): sesiones, puntos y `IAsuntoDeActa`, `RegistroDeIntervenciones` con las acciones
+  `CargarMigracion` y `AceptarDiferencias`, `IAlcanceDeCartera`/`FiltroDeAlcanceDeCartera`, `LendingAuditEmitter`,
+  `CreateSuggestedLendingRolesCommand` (ruta `/activation/suggested-roles`, la crea US17); la cola de mensajes al deudor
+  (C108) para la entrega de documentos.
+- De la **base de Cartera** (fase 3), además: el camino mínimo de `ActivateLendingCommand`, `CreateMigrationLoadCommand`,
+  `ApplyMigrationLoadCommand` (carga vacía), `RequisitosDeActivacion`, `MigrationEndpoints.cs`, `ActivationEndpoints.cs` y
+  `ActivarCarteraAsync` (C107), que esta fase completa; la forma de todas las tablas de migración, activación y
+  documentos (C104).
+- De **US1** (fase 5): `CatalogoDePlantillasDeCartera`, la generalización de `RutasDePlantilla.MapPlantilla` y la
+  pantalla `/cartera/plantillas`; `CreditLineVersion.CommercialDefaultFor`.
+- De **US2/US3/US5/US6** (fases 6, 7, 9, 10): el evaluador de cupos (T0739 le agrega la exposición de la carga), el
+  reverso del desembolso, `ReverseLoanPaymentCommand` y `ContratoDeObligacionesDeCartera` (T0746, T0780), el
+  consumidor de ventas `DestinoCartera` (T0747 le agrega la rama de las ventas de la migración) y la aplicación de
+  cobros provisionales al nacer la obligación (C62, de la fase 10).
+- De **US7** (fase 11): `IContabilidadParaCartera.SaldosDeCuentasMapeadasAsync`, `.EstadoDelPeriodoAsync`,
+  `.EvaluarAsync`, y el consumo del informativo `CargaDeCarteraAplicada` para `Accounting.Period.LendingLoadWillExpire`.
+- De **US9** (fase 12): `MonthlyClose` con `Kind = Base` y su columna hacia la activación (C66), `LoanArrearsHistoryEntry`
+  con origen `Migration`, el selector de modelo de deterioro (obligada o no) y que el primer cierre mensual tome el
+  cierre base como «cierre anterior» (T49).
+- Del despachador de mensajes al deudor (`cartera.mensajes`, US17 parte K1, C108) para el evento `Delivered` (T0779).
+- De US9: `CreateBaseCloseCommand` ya cableado en la activación mínima (T0742 lo completa).
+
+**Lo que dejan para fases posteriores**
+
+- K4 (cobranza): registrar la `etapaDeCobranza` conservada en `LND_MigrationLoans.CollectionStageCode` al desplegar K4
+  (paso de despliegue, C64); avisos y reclamos migrados pasan a proceso.
+- K2 (libranza): asociar el convenio a los `LND_LoanPayrollLinks` migrados con pagaduría externa.
+- K5: `Statement` y `TaxCertificate` (prefijos `EX`, `CT` ya fijados), la vista `issued-documents` y la comparación del
+  SHA-256 de un PDF subido.
+- K6a: `lending.arrears-history` complementaria, la e2e de activación de una obligada (`PerdidaEsperadaTests`) y los
+  requisitos `ExpectedLossParameters`/`ArrearsHistoryComplete` en acción.
+- Polish: promover con el runbook `cartera-puesta-en-marcha.md` (los pares de K1 ya congelados por T0794); medir
+  `ActivacionDeCarteraPerformanceTests` en QA.
+- K5 (fase 20): completa US15 sobre la base del centro de informes de esta fase (vistas de K5, tablero y la parte K5 de
+  `InformesYTableroDeCarteraTests`); K2–K4 suman sus vistas en sus fases.
+- K2–K6b: toda tabla o columna nueva va en una migración nueva; los pares de K1 no se regeneran después de T0794.
+
+**Nombres fijados aquí que no estaban en DT (nuevo)**: `DefinicionesDeMigracion`, `CuadresDeMigracion`,
+`CuadreDeMigracion`, `ConciliacionDeVentasDeMigracion`, `AsuntoDeDiferenciasDeActivacion`, `CargaVigenteDeCartera`,
+`RevalidacionDeCupos`, `ValidacionDeCobrosProvisionales`, `NacimientoDeCreditosMigrados`,
+`NacimientoDeLoDelDeudorMigrado`, `MigrationErrors`, evento de auditoría `Lending.Activation.Registered`,
+`CarteraClient.{Migracion, Activacion, Documentos}.cs`,
+`CarteraDtos.{Migracion, Documentos}.cs`; `CodigoDeVerificacion`, `EstadoDeDocumentoEmitido`,
+`PrefijosDeDocumentosDeCartera` (prefijos `PP`, `CS`, `EX`, `CT`; `PS` y `PSG` vienen de los ejemplos de
+adaptadores-y-archivos.md §8.7/§8.9), `ModelosDeDocumentoDeCartera`, `ConstructorDeDocumentosDeCartera`,
+`AnulacionDeDocumentosPorReverso`, `DocumentErrors`, `DocumentoDeCarteraPdfRenderer`, `DocumentsEndpoints.cs`;
+pruebas `CatalogoDePlantillasDeMigracionTests`, `CuadresDeMigracionTests`, `ImportMigrationPartCommandHandlerTests`,
+`ConciliacionYAceptacionDeMigracionTests`, `ReviewProvisionalCollectionsCommandHandlerTests`,
+`RequisitosDeActivacionTests`, `VentasDeLaMigracionEnElConsumidorTests`, `CargaVigenteAntesDeActivarTests`,
+`ContratoAntesDelCorteTests`, `CodigoDeVerificacionTests`, `IssueLendingDocumentCommandHandlerTests`,
+`DocumentosEmitidosDeCarteraTests`, `DocumentosDeCarteraReportTests`; runbook `docs/operaciones/cartera-puesta-en-marcha.md`
+(el nombre lo dio quien encargó la fase) y manual `docs/manual/cartera-documentos-al-deudor.md`.
+
+**Contradicciones encontradas en los artefactos**
+
+1. **Entidades frente a la migración `CarteraNucleo`.** *Resuelto por C104*: la fase 3 crea la forma de todas las
+   tablas de migración, activación y documentos; T0725–T0729 y T0768, T0769, T0771 sólo verifican y completan
+   comportamiento, y T0794 congela los tres pares al cierre de K1.
+2. **Columnas de las 17 partes**: `data-model.md` §29.3 y `plantillas.md` §5.3 no coinciden en `installments` (la
+   tabla no tiene interés de mora ni proyectado), `risk-data` (la tabla tiene filas `GENERAL` por dimensión; la
+   plantilla, deterioro general por crédito que el cierre base suma; `MonthsInE` frente a `fechaDeIngresoAE`), `sales`
+   (la tabla sólo admite saldo 0; la plantilla también `Migrated` con saldo y número de crédito), `prior-notices` (una
+   fila por comunicación frente a una por episodio con dos comunicaciones), `bureau-reports` y `claims` (columnas y
+   llave distintas; `claims` en la plantilla no tiene persona), `balances` (`InstallmentNumber` sólo en la tabla) y
+   `collaterals` (llave). Por §7.6 rige `plantillas.md` para las columnas; T0727 lo aplica y `data-model.md` §29.3
+   debe corregirse.
+3. **Columnas de `LND_IssuedDocuments`**: `adaptadores-y-archivos.md` §8.2 y §12 fijan `HolderDocumentType`,
+   `HolderDocumentNumber`, `CutoffDate`, `Year`, `SettlementFingerprint`, `AttachmentPublicId`; `data-model.md` §27.1
+   usa `HolderTaxIdType`, `HolderTaxId`, `AsOfDate`, `TaxYear`, `SettlementSha256`, `PdfAttachmentPublicId`. Por §7.6
+   las tablas son de `data-model.md`; T0769 lo sigue.
+4. **Respuesta de la verificación**: `api.md` §15 devuelve `holder { fullName, documentNumberMasked }` y
+   `voidedReason`; `adaptadores-y-archivos.md` §8.9, `holder { name, documentType, documentNumber }` y
+   `voided { at, reason }`. T0759 deja la forma abierta en `holder`; hay que elegir una (propuesta: la enmascarada de
+   `api.md`, más prudente con un dato personal).
+5. **Permiso de la plantilla de una parte**: `plantillas.md` §0.7 y §5.1 dicen `Lending.Templates.View`; `api.md`
+   §19.1, `Lending.Migration.Load`. Rige `api.md` (rutas y permisos, §7.6); T0748 lo aplica.
+6. **Crear una carga con Cartera activada**: `api.md` §19.1 responde `Lending.Activation.AlreadyActivated`;
+   `data-model.md` §29.1 inventa `Lending.Migration.AlreadyActivated` (nuevo) sin llevarlo a §10.1. Se usa el de §10.1
+   (`Lending.Activation.AlreadyActivated`).
+7. **Errores de `api.md` que §10.1 no lista**: `Lending.MigrationLoad.NotFound`, `Lending.MigrationLoad.SaleNotPending`
+   (además con una familia `MigrationLoad` distinta de `Migration`), `Lending.Template.NotFound`,
+   `Lending.Accounting.NotStarted`, `Lending.Session.ItemMismatch`, `Lending.Document.NotFound`,
+   `Lending.Document.AlreadyVoided`. T0738 y T0781 los agregan; `data-model.md` §10.1 debe recogerlos.
+8. **Sujeto del acta de activación**: C61 hace obligatorio `LND_Activations.SessionItemId`, pero
+   `LendingDecisionSubjects` no tiene un sujeto «activación»; sólo `ActivationDifferences`. Las tareas usan
+   `ActivationDifferences` con la carga como sujeto para la aceptación **y** para el acta de activación (un mismo punto
+   puede servir a las dos). Si se prefiere un sujeto aparte, hay que sumarlo a `LendingDecisionSubjects` (C52/C100).
+9. **Recalcular dentro de la activación**: `data-model.md` §29.4 dice que si la huella cambió «nace `CheckVersion + 1`
+   con sus filas»; como la activación es todo o nada (C60) y se niega en ese caso, esas filas se perderían. T0745 las
+   guarda **antes** y fuera de la transacción de la activación.
+10. **Lecturas sensibles**: `adaptadores-y-archivos.md` §8.7 dice que la emisión «cuenta como lectura sensible» y
+    `api.md` §15 audita `Lending.Document.Verified`, pero la lista cerrada de `research.md` §13 (C89) sólo nombra
+    `Lending.Document.Reprinted`. T0761 suma la verificación y la emisión a `LasLecturasSensiblesDeCarteraSeAuditan`;
+    la lista de research debe ampliarse.
+11. **Cuándo se responde a las ventas conciliadas**: FR-142/FR-143 dicen «al activar, Cartera responde a cada venta
+    conciliada»; `data-model.md` §21.5 y §30.1 hacen que la respuesta salga cuando el consumidor recibe el mensaje
+    acumulado (después de activar, por el despachador) y que la activación sólo cree las obligaciones en cero y
+    `ResultingLoanId`. Las tareas siguen al modelo (T0745, T0747); el efecto observable es el mismo.
+12. **T84 frente a C62**: T84 dice que la activación «aplica la plantilla de cobros provisionales»; C62 (rige) la
+    valida y guarda, y la aplica el consumidor de Comercial. Las tareas siguen C62.
+13. **Requisito «roles de Cartera creados»**: ningún artefacto dice qué cuenta como creado. T0740 lo lee como «existe
+    el rol de cada plantilla `cartera.*` de `PerfilesSugeridos`»; si el dueño quiere un subconjunto, es parámetro.
+14. **Prueba de volumen y el verde que miente**: CLAUDE.md señala que las pruebas que hacen `return` según una
+    variable de entorno se cuentan como pasadas sin comprobar nada; T0724 pide `Skip` explícito en vez de ese patrón,
+    distinto de las pruebas de rendimiento existentes.
+
+### Notas de coordinación (PH)
+
+**Lo que estas fases esperan de las anteriores** (por nombre):
+- Fase 1: esqueletos de las pruebas de arquitectura de DT §2.25 (con lista vacía), proyecto `IngenIA365ERP.ExternalChannels`, colección «Cartera e2e» con `CarteraE2E.CooperativaAisladaAsync`.
+- Fase 2 (plataforma): `ICanalDeMensajeria`, `ICanalesDeMensajeria`, `MensajeriaSimulada`, `GuardiaDeCanalesExternos`, `CredencialesDeCanalExternoEnArchivo`, `CircuitoDeCanalExterno`, `ConformidadDeMensajeria`; plantillas versionadas con las semillas `NOAPLICPAG`, `PASOACAJA`, `RECORDPREV`, `MORAADMIN`, `PREJURID`, `GASTOCOBR`, `AVISOPREV`; `IAutorizacionDeDatos.VigenteAsync`; `PlazosDelTitular`, `ICalendarioHabil`; el perfil regulatorio con el registro de operador de libranza; `EntregaDeModulo` y `CatalogoDeCartera.EntregaVigente`; `AlertTypesSeeder` con todos los tipos de Cartera y su `DisponibleDesde` (K2, K4 incluidos); `ParametrosDeCartera` con las claves `Libranza.*`, `Cobranza.*`, `AvisoPrevio.*` declaradas con su entrega; `CatalogoDeMensajes` con `DescuentosPorPagaduria`, `EnvioDeDescuentosConfirmado`, `ResultadoDeDescuentos` y los hechos de K3/K4 declarados (R6).
+- Fase 3: `RegistroDeCartera`, `NumeradorDeCartera`, `CerrojoDeCartera`, `EmisionDeCartera`, `PrecisionDeCartera`, `LendingPermissionCatalogSeeder` con **todo** `Lending.*` (K2–K4 incluidos) y las plantillas de rol; las tablas de K1 que estas fases amplían (`LND_LoanOperations`, `LND_InboundMessages`, `LND_LoanPayrollLinks`, `LND_InstallmentNonDeductions`, `LND_CreditApplications`, `LND_LoanTermsVersions`, `LND_InsuranceClaims`, `LND_InsolvencyProceedings`, `LND_DebtorMessages`, `LND_PriorNotices`, `LND_CreditReportClaims`) en la migración `CarteraNucleo`.
+- Fase 4 (US17): `EnrutadorDeAtribuciones`, sesiones y actas con `IAsuntoDeActa`, `RegistroDeIntervenciones`, `ReglasDeSegregacion`, `FiltroDeAlcanceDeCartera`, `LendingAuditEmitter`.
+- Fases 6 y 7 (US2, US3): `RecordCreditDecisionCommand` y sus sujetos (`Novelty`, `Condonation`, `WriteOffBatch`), las verificaciones de la radicación (`LND_CreditApplicationChecks`), el desembolso que crea `LND_LoanPayrollLinks`, `Lending.Payoff.RequiresRestructuring`, `LoanDisbursementLines` como molde.
+- Fases 8 y 9 (US4, US5): `MotorDeCartera`, `GeneradorDePlan`, `AlturaDeMora`, `CargadorDeReconstruccion`, `RunDailyAccrualCommand` con el paso 7 reservado; `ContratoDeObligacionesDeCartera` (con `DeductionFileLinePublicId` declarado y rechazado en K1), `ObligacionesDeCartera.CuotasDeNominaAsync`, `RecaudadorDePrueba`; `RecuperacionDeCastigada` desde K1.
+- Fase 4 (US17 parte K1, C108): la cola de mensajes al deudor —`VentanaLegalDeContacto` con sus casos base, `ColaDeMensajesAlDeudor`, `RegisterDebtorMessageAttemptCommand`, tareas `cartera.mensajes` y `cartera.entregas` sobre `SIMULADO` y correo, rutas `/api/lending/debtor-messages` y `/api/lending/message-templates`, pantallas `/cartera/mensajes` y `/cartera/plantillas-de-mensaje`—; esta fase sólo suma lo de K4 (contactos directos, campañas, gasto de cobranza informado, aviso previo enviado y canales reales de SMS y WhatsApp).
+- Fase 11 (US7): `ConstructorDeLineasDeCartera` y la matriz con los roles `IngresoDiferido`, `GastoDeCastigoOCondonacion`, `CastigadaEnOrden`; los hechos de K3/K4 declarados (T0859 y T0892 sólo agregan lo que falte).
+- Fase 12 (US9): `MotorDeCalificacion` con la candidata `Evaluation` y la regla de reestructurados, el cierre mensual y su cargador.
+- Fase 13 (US8): `LND_MigrationLoans.CollectionStageCode` conservado como dato (C64).
+
+**Lo que dejan para fases posteriores**:
+- Para K5 (fases 19–21): `ProyeccionCentralDeRiesgo` lee el estado derivado del aviso previo (`AvisoPrevioPorEpisodio`), los reclamos en trámite y la exclusión por fallecimiento e insolvencia; el pendiente de giro dentro del umbral no es reporte negativo; las vistas de cobranza y libranza alimentan el tablero.
+- Para Polish (fase 24): QA por rol de libranza, novedades, castigo y cobranza; la promoción de `CarteraLibranza`, `CarteraNovedades` y `CarteraCobranza`; el paso de despliegue de K4 (T0953) en cada ambiente; CLAUDE.md.
+
+**Nombres fijados aquí que no estaban en DT** (marcados **(nuevo)** en sus tareas): `SeleccionPorReferenciaAttribute`;
+`CapacidadDeDescuento`; `CuotaPendienteDeGiro`; `PayrollDeductionLines`; `ConsumePayrollFileSentCommand`; las carpetas
+de dorados `Domain.Tests/Lending/Payroll/Casos`, `Domain.Tests/Lending/Casos/k2-*` y `k3-*`, `Domain.Tests/Lending/Risk/Casos/r-k3-*`,
+`Application.Tests/Lending/Payroll/Casos/*.esperado.txt` (misma variable `CARTERA_ESCRIBIR_ESPERADO`);
+`ClasificadorDeNovedad`; `NoveltyMechanism.BranchChange`; `AsuntoDeNovedad`; `RequisitosDeCastigo`;
+`AsuntoDeLoteDeCastigo`; `AsuntoDeEvaluacionDeCartera`; `RegisterWriteOffSupervisorReportCommand` y
+`POST /write-off-batches/{id}/supervisor-report`; parámetros `Castigo.ExigeDeterioroTotal`, `Castigo.DiasMinimosDeMora`,
+`Castigo.GestionesMinimas`; e2e `EvaluacionDeCarteraTests`; `CasosDoradosDeRepartoTests`; motores `EtapasDeCobranza`,
+`EstadoDePromesa`, `CumplimientoDeAcuerdo`, `AvisoPrevioPorEpisodio`; `CobranzaDelCicloDiario`; `CollectionStagesSeeder`
+(Order 91); `RegisterMigratedCollectionStagesCommand`; `CreateCollectorAssignmentRuleCommand`,
+`CloseCollectorAssignmentRuleCommand`; `CauseCollectionFeesCommand`, `ListPendingCollectionFeesQuery`,
+`CollectionFeesEndpoints.cs`; alerta `Cartera.PromesaIncumplida`; manuales `docs/manual/cartera-libranza-y-pagadurias.md`,
+`cartera-novedades-y-condonaciones.md`, `cartera-castigo-y-evaluacion.md`, `cartera-cobranza-y-aviso-previo.md` y runbook
+`docs/operaciones/cartera-despliegue-k4.md`; clases de prueba de Application nombradas en cada tarea.
+
+**Contradicciones encontradas** (y lo que rigió en las tareas):
+1. **Entrega de `cartera.giros-de-pagaduria`**: CH38 la pone en K1; §2.13 y §6 de DT, en K2. Rigió K2 (sin convenios ni resultados no hay qué vigilar).
+2. **Regla del no aplicado del convenio**: `api.md` §13.1 `notAppliedAction: Cashier | Collections`; `data-model.md` §24.2 y `plantillas.md` §8 usan `NonDeductionFollowUpAction` (`IncludedInNextFile`, `MovedToCashPayment`, `SentToCollection`). Rigió `data-model.md`.
+3. **Contactos de la pagaduría**: `api.md` §13.1 los recibe como texto (`name, position, email, phone`); `data-model.md` §24.3 los hace personas del maestro con `Role` e `IsPrimary` (Principio V); `plantillas.md` pide `persona`, `cargo`, `recibeArchivo`. Rigió persona del maestro; `cargo` y `recibeArchivo` no tienen columna.
+4. **Fechas del convenio**: `api.md` usa `sendDay`/`payDay`; `data-model.md` `SendLeadDays`/`PaymentDay` (sin día de envío); `plantillas.md` `diaDeEnvio` + `antelacionDias`. Falta decidir si el día de envío es columna. `topeDeDescuento` es obligatorio en la plantilla y nulo en el modelo; `notas` de la plantilla vs `NoveltyRulesJson`.
+5. **Resultado de una línea**: `mensajes.md` §12.6 dice `outcome: NotApplied`; `data-model.md` `PayrollResultOutcome.NotDeducted`.
+6. **Error del pago de pagaduría sin referencia**: `interfaces.md` §3.7 `Lending.Payment.PayrollReferenceRequired`; `data-model.md` §24.8 `Lending.Payment.PaymasterReferenceRequired` y `.PaymasterReferenceInvalid`. Rigió `data-model.md` (dueño de errores, §7.6).
+7. **Números de `ClaseDeMedioDeRecaudo`**: `interfaces.md` 101/102/103; `data-model.md` §9.4 20/21/22.
+8. **`data-model.md` §10 no trae la mayoría de los códigos de K2–K4** que usan `api.md` y la propia parte 2 (marcados «(nuevo)»); C71 dice que §10 los fija. Las tareas T0840, T0880, T0906 y T0946 los registran y los llevan a §10.
+9. **Cambio de pagaduría**: FR-109 lo llama «novedad del crédito»; C44 manda que sea operación de libranza con vínculo nuevo, no `LoanNovelty`. Rigió C44.
+10. **Cambio de oficina**: C51 y `data-model.md` §4.1 dicen que `BranchId` cambia «por novedad de K3», pero `NoveltyMechanism` no tiene ese mecanismo ni FR-090 lo nombra. T0875 agrega `BranchChange` (nuevo), sujeto a confirmación.
+11. **Castigo en K3 con requisitos de K4**: FR-095 exige «gestiones agotadas», pero las gestiones nacen en K4; tampoco hay parámetros para la política de castigo ni fuente del plazo del reporte al supervisor, y `data-model.md` §25.6 trae columnas del reporte que ninguna ruta escribe. T0888, T0898, T0901 y T0902 lo resuelven (informe motivado en K3, conteo desde K4, claves `Castigo.*` y comando nuevo).
+12. **Aplicar la evaluación de cartera**: `api.md` §12.6 la aplica con un comando que recibe los dos puntos de acta; `data-model.md` §23.7 dice que «el acta la aplica por `IAsuntoDeActa`» y tiene los estados `Recommended`/`Approved`. Rigió: el acta mueve el estado y el comando aplica verificando los puntos.
+13. **Aviso previo**: `data-model.md` §26.11 y `api.md` usan `PriorNoticeStatus` `Pending/InProgress/Valid/Closed` y derivan todo al leer; `adaptadores-y-archivos.md` §5.2 y §5.4 usan `AwaitingEvidence/Partial/Complete/EpisodeClosed` y columnas guardadas (`Origin`, `FirstEvidenceAt`, `LastEvidenceAt`, `EarliestReportDate`, `MigratedReference`). Rigió `data-model.md`.
+14. **Motivos del aplazamiento**: `adaptadores-y-archivos.md` §4.5 `DailyLimitReached`, `WeeklyChannelLocked`; `data-model.md` §26.2 `DailyCap`, `WeeklyChannelUsed`.
+15. **Resultado de la gestión**: `data-model.md` §26.7 enum `CollectionActionResult`; `adaptadores-y-archivos.md` §4.8 y `research.md` R146 «catálogo de la cooperativa»; `api.md` `resultCode`. Rigió el enum.
+16. **Gestión fuera de horario**: `api.md` §14.6 la rechaza con `Lending.DebtorMessage.OutsideLegalWindow`; `adaptadores-y-archivos.md` §4.8 dice que registrar una gestión no pasa por la ventana (ya ocurrió). Rigió el segundo; la agenda muestra antes `contact-window`.
+17. **Cobro jurídico**: `api.md` §14.8 abre un proceso con `loanPublicIds[]`, `court`, `fileNumber`; `data-model.md` §26.10 tiene un `LoanId`, `Authority`, `CaseNumber`. Igual en insolvencia (`fileNumber` vs `CaseNumber`).
+18. **Quién origina `GastoDeCobranzaCausado`**: `mensajes.md` §10.19 dice «la persona o el proceso de cobranza con usuario de origen (no admite proceso)», y FR-121 habla de un «momento» configurado. Rigió un comando de persona (`CauseCollectionFeesCommand`) sobre los gastos ya informados.
+19. **`Cobranza.ToleranciaDePromesa`** aparece «(nuevo)» en `data-model.md` §26.8 y no está en el catálogo §12.1; la alerta de la promesa incumplida que «el paso 7 levanta» no tiene tipo. T0954 y T0935 los agregan.
+20. **`LND_CollectorAssignmentRules`** existe en `data-model.md` §26.6 sin ruta ni comando en `api.md`. T0934 agrega los comandos.
+21. **Pantalla de reclamos sobre el reporte**: se escriben desde K4 (`api.md` §14.4) pero §2.16 no tiene pantalla para ellos. Van en una pestaña de `/cartera/avisos-previos`.
+22. **Columnas que agregan las migraciones de K2 y K3**: `data-model.md` §31 (parte 2) omite `LND_CreditApplications.PayrollAgreementId`, `LND_LoanTermsVersions.NoveltyId` y `LND_LoanOperations.NoveltyId`/`.WaiverId`/`.WriteOffBatchItemId`, que sí trae §14 de la parte 3. Rigió la parte 3.
+23. **Migración de K3 y dos historias**: `CarteraNovedades` lleva también castigo y evaluación (US14), pero el mapa de fases asigna la migración a la fase de US11. Las entidades y configuraciones de US14 se crean en la fase 16 (T0864, tarea marcada [US14]) y su comportamiento en la 17.
+24. **Recogida en mora desde K3**: `quickstart.md` §5 paso 5 dice que «ya se tramita como reestructuración» sin decir por dónde; el error `Lending.Payoff.RequiresRestructuring` es «hasta K3». Rigió: se tramita como novedad `Refinancing` y el desembolso común remite a ella (T0858, T0874).
+25. **Certificación en el traslado**: `adaptadores-y-archivos.md` §9 sólo admite subir `LendingPayrollCertification` con `Lending.Applications.Create`, pero `TransferLoanPayrollCommand` (`PayrollTransfers.Manage`) también la recibe. Hay que sumar ese permiso a la subida.
+
+### Notas de coordinación (PI)
+
+**Lo que estas fases esperan de las anteriores (por nombre)**
+
+- Fase 1: los esqueletos de las pruebas de arquitectura de DT §2.25 (`LasConsultasDeCarteraRespetanElAlcance`,
+  `LosCodigosViewDeCarteraNoTienenDatosPersonales`, `LaCarteraNoTieneValoresLegalesFijos`,
+  `CadaParametroRespetaLaEntregaDeSuModulo`, `TextosDeCarteraTests`, `LasPantallasDeCarteraEstanEnElMenu`),
+  `CarteraE2E.CooperativaAisladaAsync`, la colección «Cartera e2e» y «Valores nacionales e2e», `FactDeRendimiento`.
+- Fase 2: `IValoresNacionales` (con `LeerSerieAsync`), la réplica, `INormativaVigente`, `IValidadorDeDocumentoNormativo`,
+  el perfil regulatorio (`AddRegulatoryProfileVersionCommand`), `EfectoDeReplicacionObligacionSobrevenida`,
+  `PlatformNationalValuesSeeder`, `CatalogoDeLimitesLegales`, `IAutorizacionDeDatos` por finalidad, alertas con alcance.
+- Fase 3: `CatalogoDeCartera.EntregaVigente` y `EntregaDeCartera`, enums `IssuedDocumentKind`, `RegulatoryFileKind`,
+  `RegulatoryFileStatus`, `ImpairmentModel`, `ModelBasis`; `NumeradorDeCartera` con `Kind = RegulatoryFile`;
+  `PrecisionDeCartera` (con `ValorUvr`); `LendingPermissionCatalogSeeder` con todo `Lending.*`; el retiro de las rutas
+  heredadas de `/api/reports/lending` y la mudanza de `person-portfolio`/`savings-statement` a `/api/reports/savings`.
+- Fase 4: `IAlcanceDeCartera`, `FiltroDeAlcanceDeCartera`, `LendingAuditEmitter` (lecturas sensibles), `IAsuntoDeActa`.
+- Fase 6: el cálculo de concentración con grupo conectado (lo reusan `concentration` y el tablero).
+- Fase 12: `MotorDeCalificacion`, `SelectorDeModeloDeDeterioro`, `HomologacionDeCalificacion` (r14), `HistorialDeMora`,
+  `ExecuteMonthlyCloseCommand`, `GetMonthlyCloseChangesQuery`, `CasoDoradoDeRiesgo`, `LND_LoanArrearsHistory`,
+  las columnas PE de `LND_MonthlyCloseLoans` nacidas nulas.
+- Fase 13: `ActivateLendingCommand` y el cuadre de la carga; `LND_MigrationLoads`.
+- Fase 14: la infraestructura de documentos (`LND_IssuedDocument*` en `CarteraNucleo`, `IssueLendingDocumentCommand`,
+  `VerifyLendingDocumentQuery`, `IDocumentoDeCarteraRenderer`, `DocumentosDeCarteraReport`, `VigenciaDeDocumentos`,
+  `/cartera/documentos`, `/cartera/verificar`, `DocumentosDeCarteraTests`).
+- Fase 18 (K4): `LND_PriorNotices` con su proceso y `LND_CreditReportClaims` (la proyección de centrales los lee).
+
+**Lo que dejan a otras fases**
+
+- La base del centro de informes y las vistas de K1 se mudaron, por C109, al cierre de la fase 14 (subsección «Base
+  del centro de informes (K1)», con sus IDs temporales `PI-` dentro de ese fragmento). Las vistas de K2 a K4 (`payroll-agreements`,
+  `payroll-deduction-reconciliation`, `restructured`, `charge-offs`, `collection-stages`, `promises`,
+  `payment-agreements`, `prior-notices`) las publican las fases 15 a 18 sobre `MapVistaDeCartera`.
+- Las pruebas de volumen de quickstart §1.8 se crean en Polish (T1057 a T1060); si las fases 8, 13 o 15 ya las
+  crearon, Polish las completa y no las duplica.
+- Si E11 adelanta el SICSES a K1 (T0987), las tareas que nombra pasan a K1 y `CarteraInformes` se genera en K1.
+
+**Nombres fijados aquí (no estaban en DT)**
+
+`ExtractoDeCredito`, `CertificadoTributario`, `LineaDeExtracto`, `InteresesPagadosPorCredito`; errores
+`Lending.Document.PeriodInvalid`, `.TaxYearNotClosed`, `.NothingToCertify`; prefijos `EX-` y `CT-`; respuesta
+`pdfMatches` y el parámetro `sha256` de la verificación; `huella-de-archivo.js`; `docs/manual/cartera-documentos-al-deudor.md`;
+`LendingReportsRoutes.MapVistaDeCartera`; las consultas `AgingReportQuery`, `PlacementReportQuery`,
+`ReceiptsReportQuery`, `TransactionsReportQuery`, `UsuryReportQuery`, `DebtorMessagesReportQuery`,
+`MigrationReconciliationReportQuery`, `QualityReportQuery`, `VintagesReportQuery`, `ConcentrationReportQuery`,
+`IssuedDocumentsReportQuery`, `BureauExclusionsReportQuery`; `DashboardEndpoints.cs`; el parámetro
+`Informes.DiasCarteraVencida`; las definiciones de «vencida», cosecha y sector; `docs/manual/cartera-informes-y-tablero.md`;
+`RegulatoryEndpoints.cs`, `RegulatorioDeCarteraClient`, las centrales `DATACREDITO` y `TRANSUNION` (propuesta mientras
+I7), el nombre de archivo `sicses-cartera-1-2026-12-01.json`, `docs/operaciones/cartera-sicses-y-centrales.md`;
+`Riesgo.MesesFaltantesDiasFijos`; la sección «Modelo de deterioro» de `/cartera/cierres`;
+`docs/operaciones/cartera-perdida-esperada.md`; los casos `61-…` a `65-…` y `r21-…`; `ReglasDeViviendaTests`; los
+límites `VIVIENDA_*`; las columnas UVR propuestas; el hecho `CorreccionMonetariaUvrCausada`;
+`docs/manual/cartera-vivienda-y-uvr.md`; `InformesYRegulatoriosPerformanceTests`; `carga-cartera-sintetica.ps1`;
+`docs/manual/cartera.md`; `docs/operaciones/cartera-puesta-en-marcha.md`; el sufijo `-pre-f013-kN` de los respaldos.
+
+**Contradicciones y vacíos encontrados en los artefactos**
+
+1. **US15 en K5 frente a vistas de K1.** El mapa de fases pone US15 en K5, pero DT §2.15 y api.md §17 publican siete
+   vistas en K1 y `InformesYTableroDeCarteraTests` es «K1 / K5»; ninguna fase de K1 construye la base del centro de
+   informes. *Resuelto por C109*: la base y las siete vistas de K1 van al cierre de la fase 14 (marcadas US15); esta
+   fase sólo completa US15 con lo de K5.
+2. **Errores del modelo de deterioro.** data-model §23.8 fija `Lending.ImpairmentModel.IncompleteHistory`,
+   `.Obligated` y `.NotAvailable`; api.md §12.4 usa `.HistoryIncomplete` y `.ObligatoryNoWithdrawal` y no tiene
+   `NotAvailable` (la ruta no existe antes de K6a). Por §7.6 manda data-model (tablas, enums y errores); hay que
+   corregir api.md.
+3. **Tablas de PI propias en la adopción voluntaria.** api.md §12.4 acepta `probabilityTablesDocumentPublicId?` y
+   FR-105 habla de «las tablas de probabilidad propias de quien la adopta»; data-model §23.8 no tiene columna para
+   ellas y el `Anexo2` las trae con la clave `VOLUNTARIA`. Se siguió data-model (clave `VOLUNTARIA`); falta decidir si
+   una cooperativa puede traer tablas propias.
+4. **Motivos de exclusión de centrales.** api.md §18 usa `NoAuthorization | NoPriorNotice | ClaimInProcess`; data-model
+   §28.2 usa `NoReportAuthorization`, `NoPriorNoticeEvidence`, `DeceasedClaimInProcess`, `Insolvency`,
+   `PaymasterArrearsWithinThreshold`, y el reclamo en trámite **se incluye con marca**, no se excluye (adaptadores §7.4).
+   Se siguió data-model.
+5. **Columnas de documentos y archivos regulatorios.** adaptadores-y-archivos.md §8.2 y §7.5 usan `HolderDocumentType`,
+   `CutoffDate`, `Year`, `SettlementFingerprint`, `AttachmentPublicId`, `MonthlyClosePublicId`, `FilingReference`;
+   data-model §27.1 y §28.1 usan `HolderTaxIdType`, `AsOfDate`, `TaxYear`, `SettlementSha256`, `PdfAttachmentPublicId`,
+   `MonthlyCloseId`, `FilingNumber`. Se siguió data-model.
+6. **Código de «ya cargado».** adaptadores §7.5 fija `Lending.Regulatory.AlreadyUploaded` y api.md §18 no lo lista
+   (sí `Lending.RegulatoryFile.NotGenerated`, `.NoFile`, `.NotFound`, `.BureauUnknown`); data-model §10.1 no los tiene.
+   Se usan todos y hay que sumarlos a data-model §10.1.
+7. **Vivienda en el certificado tributario.** US13-3 (K5) pide los intereses de vivienda separados; adaptadores §8.1
+   dice «vivienda separada desde K6b». Se construye la sección en K5 (vacía hasta K6b, porque vivienda no existe antes).
+8. **`EntregaVigente` lineal frente a K6a adelantada.** `EntregaDeCartera` es ordinal (`K5 = 5 < K6a = 6`) y el plan
+   permite adelantar K6a antes de K5: subir a K6a habilitaría también lo de K5 (documentos, parámetros, rutas). Si K6a
+   se adelanta, o se entrega K5 antes o se cambia la guarda a un conjunto de entregas desplegadas.
+9. **`Riesgo.ReglaMesesFaltantes = Fija` sin valor.** La regla «la que fije la contadora» no tiene parámetro con el
+   número de días; se agregó `Riesgo.MesesFaltantesDiasFijos`.
+10. **Corrección monetaria UVR.** DT §6 dice que K6a no trae hechos nuevos, pero no dice nada de K6b; un crédito en UVR
+    mueve su capital en pesos cada día y Contabilidad necesita reconocerlo. No hay pregunta en DT §5: se propone una
+    nueva (T1041) con el hecho `CorreccionMonetariaUvrCausada`.
+11. **Límites de vivienda.** FR-024 pide plazo, porcentaje financiable, VIS y cuota-ingreso «como parámetros con
+    fuente», pero data-model §12.5 no tiene ningún límite `VIVIENDA_*`; se agregaron como nuevos.
+12. **Indicadores sin definición.** FR-134 nombra «cartera vencida», cosechas y sector sin definirlos y ningún
+    artefacto lo hace; se fijaron en T0969 y T0972 para que la contadora los valide.
+13. **Cotejo y dorados de layouts.** La PILA tiene sus dorados en `Domain.Tests` y su builder en `Application`; la 013
+    los pone en `Application.Tests/Lending/Regulatory/Casos/` (§7.6, quickstart §1.4) mientras los casos del motor
+    genérico van en `Domain.Tests/Common/Layouts/Casos/`. No es choque, pero difiere del molde.
+14. **Vencimiento del SICSES.** `Cartera.PlazoRegulatorioPorVencer` es de K1 en data-model §11, pero el día límite del
+    SICSES sólo tiene uso en K5; se levanta desde `cartera.vigilancia` (T0999) y, si E11 adelanta el SICSES, desde K1.

@@ -1331,7 +1331,7 @@ Sobre `COR_NotificationTemplates` (módulo `Lending`), versionadas; el mensaje s
 |---|---|---|---|---|---|
 | `GET /?purpose=&channel=&date=` | MessageTemplates.View | `ListMessageTemplatesQuery` | → arreglo `{ code, purpose, channel, version, validFrom, validTo?, subject?, body, variables[], providerTemplateId?, isSeeded, reviewPending }` | | K1 |
 | `GET /{code}/history` | MessageTemplates.View | `GetMessageTemplateHistoryQuery` | → versiones | `Lending.MessageTemplate.NotFound` | K1 |
-| `POST /{code}/versions` | MessageTemplates.Manage | `AddMessageTemplateVersionCommand` | `{ purpose, channel, subject?, body, variables[], providerTemplateId?, validFrom, reason }` → 201 | `Lending.MessageTemplate.VariableNotAllowed` (`data: { variable, allowed[] }`), `.SmsTooLong` (aviso, `data: { length, limit }`), `.Overlaps` | K1 |
+| `POST /{code}/versions` | MessageTemplates.Manage | `CreateMessageTemplateVersionCommand` | `{ purpose, channel, subject?, body, variables[], providerTemplateId?, validFrom, reason }` → 201 | `Lending.MessageTemplate.VariableNotAllowed` (`data: { variable, allowed[] }`), `.SmsTooLong` (aviso, `data: { length, limit }`), `.Overlaps` | K1 |
 | `POST /preview` | MessageTemplates.View | `RenderMessageTemplatePreviewQuery` | `{ code?, body?, channel, sampleLoanPublicId? }` → `{ subject?, body, length, warnings[] }` (sin clave) | | K1 |
 
 ### 14.2 Mensajes al deudor — `/debtor-messages` (FR-122, T74, T75)
@@ -2053,7 +2053,7 @@ cancel}`, `/migration/loads/{id}/{parts/{part}/…, reconciliation/marks, differ
 `GeneratePayrollDeductionFileCommand`, `IssuePayrollDeductionFileDownloadLinkCommand`,
 `VoidPayrollDeductionFileCommand`, `ListInstallmentNonDeductionsQuery`, `ResolveInstallmentNonDeductionCommand`,
 `TransferLoanPayrollCommand`, `ListMessageTemplatesQuery`, `GetMessageTemplateHistoryQuery`,
-`AddMessageTemplateVersionCommand`, `RenderMessageTemplatePreviewQuery`, `ListDebtorMessagesQuery`,
+`CreateMessageTemplateVersionCommand`, `RenderMessageTemplatePreviewQuery`, `ListDebtorMessagesQuery`,
 `GetDebtorMessageQuery`, `SendDebtorMessageCommand`, `CancelDebtorMessageCommand`, `ListPriorNoticesQuery`,
 `SendPriorNoticeCommand`, `RegisterPriorNoticeEvidenceCommand`, `ListCreditReportClaimsQuery`,
 `RegisterCreditReportClaimCommand`, `ExtendCreditReportClaimCommand`, `AnswerCreditReportClaimCommand`,

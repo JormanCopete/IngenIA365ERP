@@ -136,7 +136,7 @@ Enums de puerto (tipo en español, valores en inglés; §2.7 de las transversale
 | Enum | Valores | Equivale a |
 |---|---|---|
 | `ClaseDeRecaudador` | `Receipts`, `Payroll`, `Contributions`, `OwnLoanPayoff`, `Test` | Lista cerrada de FR-087 |
-| `ClaseDeMedioDeRecaudo` | los de `PaymentMeansClass` (`Cash = 1` … `Check = 9`, `Other = 99`) más `OwnPayrollDeduction = 101`, `ExternalPaymasterDeduction = 102`, `InternalOffset = 103` | FR-082 (§3.14) |
+| `ClaseDeMedioDeRecaudo` | los de `PaymentMeansClass` (`Cash = 1` … `Check = 9`, `Other = 99`) más `OwnPayrollDeduction = 20`, `ExternalPaymasterDeduction = 21`, `InternalOffset = 22` | FR-082 (§3.14) |
 | `ModalidadDePago` | `FullPayoff = 1`, `PastDue = 2`, `CycleInstallment = 3`, `Advance = 4`, `ExtraordinaryPrincipal = 5`, `SpecificInstallment = 6`, `FreeAmount = 7` | `PaymentModality` |
 | `EleccionDeAbono` | `ReduceTerm = 1`, `ReduceInstallment = 2` | `PrepaymentChoice` |
 | `FormaDeAplicacion` | `Interactive = 1`, `NonInteractive = 2` | FR-073 |
@@ -678,9 +678,9 @@ intento sin hecho pasado su plazo.
 |---|---|---|---|
 | `Cash = 1`, `CreditCard = 2`, `DebitCard = 3`, `BankDeposit = 6`, `Transfer = 7`, `Voucher = 8`, `Check = 9`, `Other = 99` | `PaymentMeansClass` (012) | 10 días hábiles | sí (`Receipts`, `Test`) |
 | `AssociateCredit = 4`, `CustomerCredit = 5` | `PaymentMeansClass` (012) | — | **no** (`Lending.Payment.MeansClassNotAllowed`): se declaran y se rechazan, pagar un crédito con crédito es recogida o novación (C30) |
-| `OwnPayrollDeduction = 101` | Cartera | 10 días hábiles | sólo `Payroll` |
-| `ExternalPaymasterDeduction = 102` | Cartera | 10 días hábiles | `Receipts`, `Test` |
-| `InternalOffset = 103` | Cartera (recogida, aportes, saldo a favor) | 0: en firme al aplicarse | `OwnLoanPayoff`, `Contributions`, resoluciones, `Test` |
+| `OwnPayrollDeduction = 20` | Cartera | 10 días hábiles | sólo `Payroll` |
+| `ExternalPaymasterDeduction = 21` | Cartera | 10 días hábiles | `Receipts`, `Test` |
+| `InternalOffset = 22` | Cartera (recogida, aportes, saldo a favor) | 0: en firme al aplicarse | `OwnLoanPayoff`, `Contributions`, resoluciones, `Test` |
 
 Una clase desconocida se rechaza. `FinalityUntil` del comprobante de una cancelación = fecha de aplicación + días
 hábiles de su clase (calendario nacional, `ICalendarioHabil`); hasta entonces el paz y salvo dice «sujeta a firmeza» y
@@ -1641,8 +1641,8 @@ entrada sin sufijo, salida con `Dto`).
   `NoDescontadoRegistradoDto`, `ComprobanteDeReversoDto`, `ComprobanteDeResolucionDto`.
 - Enums de puerto: `EleccionDeAbono`, `FormaDeAplicacion`, `EstadoDeObligacion`, `ConceptoDeObligacion`,
   `RolEnLaObligacion`, `ClaseDeObligacion` (`Standard`, `PayrollDeduction`), `FormaDeResolucion`.
-- Números de `ClaseDeMedioDeRecaudo`: los de `PaymentMeansClass` y `OwnPayrollDeduction = 101`,
-  `ExternalPaymasterDeduction = 102`, `InternalOffset = 103`.
+- Números de `ClaseDeMedioDeRecaudo`: los de `PaymentMeansClass` y `OwnPayrollDeduction = 20`,
+  `ExternalPaymasterDeduction = 21`, `InternalOffset = 22`.
 - Propiedades de los DTO que las transversales nombran sin detalle (`SolicitudDeAplicacion`, `PagoAAplicar`,
   `NoDescontado`, `ReferenciaDeRecibo`, `SolicitudDeReverso`, `RespuestaDelContratoDto<T>`,
   `ComprobanteDeAplicacionDto`), incluidas `DeductionFileLinePublicId`, `PaymentIdempotencyKeyToReverse` y

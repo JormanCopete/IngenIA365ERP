@@ -568,7 +568,7 @@ Catálogo sembrado de los tipos de hecho de §2.11 de las transversales. Da el `
 parámetro `LendingFactType` (`ParameterScopeKind.LendingFactType = 7`) para `Contabilidad.ModoDePaso`,
 `Granularidad`, `DisparadorDeLote`, `HoraDeLote` y `FaltaDeRegla`, y el código corto de la `ScheduleKey` (C06).
 Lo siembra `LendingFactTypesSeeder` (Order 90) desde el catálogo de mensajes de Cartera; nunca se edita a mano. El
-catálogo tiene **47 filas** (C15): las 44 de §2.11 más los tres tipos contingentes `CreditoAprobadoSinDesembolsar`
+tabla siembra **35 filas** (C110): los hechos que van a Contabilidad, con los tres tipos contingentes (C15) `CreditoAprobadoSinDesembolsar`
 (`ShortCode` `CAD`), `CupoRotativoOtorgado` (`CRO`) y `GarantiaConstituida` (`GCT`) (con signo, `Business`, modo
 `NoPasa`, comprobante `CN`, admiten proceso, K1; roles `ContingenteAcreedora` y `ContraContingenteAcreedora`, C91),
 que salen de la semilla si el dueño rechaza A3.
@@ -5558,10 +5558,10 @@ proyecto `IngenIA365ERP.Legacy` entero (T89). Los escritores heredados que conta
 
 Todas son pares PostgreSQL / SQL Server generadas con `tools/scripts/add-migration.ps1` y revisadas con
 `check-migration-parity.ps1`; las semillas que una migración inserta usan `INSERT … WHERE NOT EXISTS` (idempotentes).
-Sólo `RetiroDeLaCarteraHeredada` es destructiva. Orden en K1 (T88): `NominaRecaudaPorElContrato` y
-`ComercioConCartera` (con los consumidores ya en los puertos «sin activar») → `RetiroDeLaCarteraHeredada` (commit
-propio, modelo intermedio) → `ValoresNacionales` (Admin) → `PlataformaParaCartera` → `CarteraNucleo` → `CarteraRiesgo`
-→ `IntegracionContableDeCartera`.
+Sólo `RetiroDeLaCarteraHeredada` es destructiva. Orden en K1 (T88 enmendada por C103): `ValoresNacionales` (Admin) → `PlataformaParaCartera` (no tocan `LND_`) →
+`NominaRecaudaPorElContrato` y `ComercioConCartera` (con los consumidores ya en los puertos «sin activar») →
+`RetiroDeLaCarteraHeredada` (commit propio, modelo intermedio) → `CarteraNucleo` → `CarteraRiesgo` →
+`IntegracionContableDeCartera`. Los pares de K1 se regeneran hasta que la última tarea de K1 los congela (C104).
 
 | E | Migración | Tipo | Tablas que crea | Otros cambios |
 |---|---|---|---|---|

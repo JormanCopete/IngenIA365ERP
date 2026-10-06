@@ -38,16 +38,16 @@ pwsh tools/scripts/check-migration-parity.ps1
 ```
 
 `check-migration-parity.ps1` en verde en los contextos `Admin` y `Application`. Toda migración se genera en par
-con `tools/scripts/add-migration.ps1 -Name <Nombre> -Context Application|Admin` y entra en este orden (T88,
-DT §2.26):
+con `tools/scripts/add-migration.ps1 -Name <Nombre> -Context Application|Admin` y entra en este orden (T88 y DT §2.26,
+enmendados por C103; los pares de K1 se regeneran hasta que la última tarea de K1 los congela, C104):
 
 | E | Migración | Tipo | Qué comprobar |
 |---|---|---|---|
+| K1 | `ValoresNacionales` (Admin) | aditiva | `ADM_NationalValues`, `ADM_RegulatoryDocuments` |
+| K1 | `PlataformaParaCartera` | aditiva | tablas `COR_` de DT §2.5, columnas de DT §2.6, fila `lending.process` y semilla del registro de participantes |
 | K1 | `NominaRecaudaPorElContrato` | aditiva | `PAY_PayrollLoanDeductions`; `PAY_PayrollRuns.LendingActivationAck*`; `ObligationPublicId` y `ObligationNumber` en `PAY_SettlementDeductions` y `PAY_Novelties` con la copia idempotente desde `LND_LoanPortfolios` |
 | K1 | `ComercioConCartera` | aditiva | `INV_DocumentPayments.ReservedLoanNumber`, `CreditLineCode`, `CreditWithoutLending`; `COR_PaymentMeans.CreditWithoutLending` (sujetas a A6); `INV_LendingObligationResponses` |
 | K1 | `RetiroDeLaCarteraHeredada` | **destructiva con guarda** | commit propio, cabecera `MIGRACION-DESTRUCTIVA-APROBADA`, guarda con `THROW 50013` en SQL Server; `Down()` recrea vacío (T87) |
-| K1 | `ValoresNacionales` (Admin) | aditiva | `ADM_NationalValues`, `ADM_RegulatoryDocuments` |
-| K1 | `PlataformaParaCartera` | aditiva | tablas `COR_` de DT §2.5, columnas de DT §2.6, fila `lending.process` y semilla del registro de participantes |
 | K1 | `CarteraNucleo`, `CarteraRiesgo`, `IntegracionContableDeCartera` | aditivas | tablas `LND_` de K1 (con `LND_IssuedDocument*`, C88, y `LND_ProvisionalCollections`, C44) y `ACC_Lending*`, `ACC_RegulatoryIndicators` |
 | K2 | `CarteraLibranza` | aditiva | `LND_PayrollAgreement*`, `LND_PayrollDeductionFile*` |
 | K3 | `CarteraNovedades` | aditiva | `LND_LoanNovelties`, `LND_Waivers`, `LND_WriteOffBatch*`, `LND_PortfolioEvaluation*` |
