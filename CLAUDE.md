@@ -660,12 +660,12 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/012-inventario-comercial/plan.md](specs/012-inventario-comercial/plan.md)
+[specs/013-cartera-financiera/plan.md](specs/013-cartera-financiera/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/012-inventario-comercial/spec.md)
-- [research.md](specs/012-inventario-comercial/research.md)
-- [data-model.md](specs/012-inventario-comercial/data-model.md)
-- [quickstart.md](specs/012-inventario-comercial/quickstart.md)
-- [decisiones-transversales.md](specs/012-inventario-comercial/decisiones-transversales.md)
-- [contracts/](specs/012-inventario-comercial/contracts/)
+- [spec.md](specs/013-cartera-financiera/spec.md)
+- [research.md](specs/013-cartera-financiera/research.md)
+- [data-model.md](specs/013-cartera-financiera/data-model.md)
+- [quickstart.md](specs/013-cartera-financiera/quickstart.md)
+- [decisiones-transversales.md](specs/013-cartera-financiera/decisiones-transversales.md)
+- [contracts/](specs/013-cartera-financiera/contracts/)
 <!-- SPECKIT END -->
