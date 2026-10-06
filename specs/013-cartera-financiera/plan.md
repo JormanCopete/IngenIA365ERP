@@ -54,7 +54,7 @@ cambios al espacio de nombres `Savings`.
 
 Detalle de cada decisión en [research.md](research.md). Los nombres canónicos, las decisiones transversales
 T1–T102, los choques entre frentes CH1–CH50, las preguntas al dueño A1–I17 y la conciliación de los artefactos
-(C01–C102, §7) están en [decisiones-transversales.md](decisiones-transversales.md), que manda sobre cualquier otra
+(C01–C123, §7) están en [decisiones-transversales.md](decisiones-transversales.md), que manda sobre cualquier otra
 redacción de nombres.
 
 ## Technical Context
@@ -172,7 +172,7 @@ de fondo propio dentro de la API (`ProcesadorDeCartera`), con arrendamiento por 
 specs/013-cartera-financiera/
 ├── plan.md                        # este archivo
 ├── spec.md                        # especificación con las aclaraciones del dueño
-├── decisiones-transversales.md    # nombres canónicos (§2), T1–T102, choques CH1–CH50, preguntas A1–I17, conciliación C01–C102 (§7)
+├── decisiones-transversales.md    # nombres canónicos (§2), T1–T102, choques CH1–CH50, preguntas A1–I17, conciliación C01–C123 (§7)
 ├── research.md                    # Fase 0: hechos del código por frente, decisiones y riesgos
 ├── data-model.md                  # Fase 1: tablas, columnas, índices, estados, enums, errores, retiro
 ├── quickstart.md                  # Fase 1: pruebas automáticas y ensayo por entrega
@@ -256,6 +256,8 @@ tests/
 | Piezas de plataforma nuevas: valores nacionales con réplica, registro de participantes, bandeja con varios emisores, mensajería a personas, layouts | La spec las exige (FR-015, FR-142, FR-149) y hoy no existen. Se construyen reutilizables en `Common`. | Resolverlas dentro de Cartera: Nómina, Comercial y Recaudo tendrían que duplicarlas. |
 | El proceso automático origina mensajes (pregunta B1, T11) | La causación diaria, el cierre y el consumidor de Comercial corren como proceso; sin esto Cartera no puede emitir ningún hecho automático. Se limita a los tipos de Cartera marcados, con el usuario de origen como dato. | Mantener la regla de la 012 «sólo la persona emite»: deja sin hechos la causación y el cierre. |
 | Decisiones de crédito en un modelo propio de sesiones y actas, no en el motor `COR_Approval*` de la 012 (pregunta F1) | Quórum, votos, 4/5 de la composición para vinculados y exclusión de quien radicó no caben en el motor de aprobaciones. Se reutilizan sus primitivas: límites por permiso y segregación por persona. | Generalizar el motor de la 012: cambio de plataforma de alto riesgo para una sola necesidad. |
+| Migraciones aditivas con datos (C122) | `NominaRecaudaPorElContrato` copia `PublicId` y número desde `LND_LoanPortfolios` (C73); `PlataformaParaCartera` siembra participantes y la fila de arrendamiento; `CarteraNucleo`, la fila única de `LND_Setup`. Son filas sin las que el esquema no funciona y van con `WHERE NOT EXISTS`. | Una migración de datos aparte por cada una: tres pasos de despliegue para filas que el esquema necesita en el mismo instante. |
+| Rutas `/api/savings/*` con el permiso de hoy (C122) | Lo conservado de ahorros y aportes se muda sin cambiar su comportamiento: hoy sólo exige sesión. Darle permisos propios es trabajo de la feature de Ahorros. | Inventar permisos `Savings.*` ahora: cambia lo que ven los usuarios de una funcionalidad que esta feature no rediseña. |
 | Migración destructiva de 55 tablas | El dueño decidió crear Cartera desde cero; las tablas heredadas de crédito no tienen datos (a confirmar con el diagnóstico). | Convivir con ellas: dos fuentes de cartera y llaves cruzadas desde Nómina. |
 
 ## Decisiones
@@ -280,7 +282,7 @@ Se adoptan las decisiones T1–T102 de [decisiones-transversales.md](decisiones-
 | **Migración y activación** | Carga por partes con un cuadre y una conciliación de ventas; cobros provisionales por plantilla. Activación el día siguiente al corte, con requisitos verificables contra el registro de participantes. Antes de activar, las interfaces responden sin error: las consultas de Comercial con «Cartera no habilitada» y el contrato de obligaciones rechazando con «Cartera no activada». |
 | **Retiro de lo heredado** | Se retiran 55 tablas, sus rutas y pantallas de crédito, y el proyecto `IngenIA365ERP.Legacy`. Las 38 conservadas se mudan a `Savings`. Los consumidores pasan antes a los puertos «sin activar». |
 | **Enmiendas a otros módulos** | Comercial: consultas reales, reservas, v2 y consumidor de respuestas. Nómina: recauda por el contrato, la definitiva «todo o nada», la ordinaria como pagaduría interna, y el SMMLV y los festivos desde la réplica. Personas: consulta de obligaciones. |
-| **Conciliación de los artefactos** (§7, C01–C102) | Cada artefacto cerró con sus puntos abiertos y se decidieron en un solo sitio. Las que cambian el diseño: la unidad de emisión es la operación con su modo (C01); la orden pagada por archivo nace al desembolsar con `PaidByFile` (C10); `Answered` en el resultado del contrato (C28); cuatro tablas `LND_` nuevas, entre ellas `LND_LoanPayrollLinks` y `LND_ProvisionalCollections` (C44); reverso de un tramo sólo por su capital (C49); activación en una transacción con guardados por tandas (C60); `recordedAsOf` para el instante R (C83); el permiso `Lending.PrepaymentPreferences.Manage` (C85); la plantilla `cartera.administrador` sin decisiones de crédito (C86). |
+| **Conciliación de los artefactos** (§7, C01–C123) | Cada artefacto cerró con sus puntos abiertos y se decidieron en un solo sitio. Las que cambian el diseño: la unidad de emisión es la operación con su modo (C01); la orden pagada por archivo nace al desembolsar con `PaidByFile` (C10); `Answered` en el resultado del contrato (C28); cuatro tablas `LND_` nuevas, entre ellas `LND_LoanPayrollLinks` y `LND_ProvisionalCollections` (C44); reverso de un tramo sólo por su capital (C49); activación en una transacción con guardados por tandas (C60); `recordedAsOf` para el instante R (C83); el permiso `Lending.PrepaymentPreferences.Manage` (C85); la plantilla `cartera.administrador` sin decisiones de crédito (C86). |
 
 ## Entregas
 
@@ -298,18 +300,21 @@ de esta feature.
 | **K6a · Pérdida esperada** | Modelo de referencia completo y configurable, adopción y desistimiento voluntarios, carga complementaria del historial. Se adelanta antes de la primera cooperativa obligada. | `CarteraPerdidaEsperada` |
 | **K6b · Vivienda** | Ley 546, tope de vivienda y UVR. | `CarteraVivienda` (sólo si hace falta) |
 
-Orden de migraciones en K1:
-1. `NominaRecaudaPorElContrato` y `ComercioConCartera`, con los consumidores ya en los puertos «sin activar».
-2. `RetiroDeLaCarteraHeredada`, con modelo intermedio.
-3. `ValoresNacionales`.
-4. `PlataformaParaCartera`.
-5. `CarteraNucleo`.
-6. `CarteraRiesgo`.
-7. `IntegracionContableDeCartera`.
+Orden de migraciones en K1 (C103):
+1. `ValoresNacionales` (Admin) y `PlataformaParaCartera`, que no tocan tablas `LND_`.
+2. `NominaRecaudaPorElContrato` y `ComercioConCartera`, con los consumidores ya en los puertos «sin activar».
+3. `RetiroDeLaCarteraHeredada`, con modelo intermedio y commit propio.
+4. `CarteraNucleo`.
+5. `CarteraRiesgo`.
+6. `IntegracionContableDeCartera`.
+
+Los pares de K1 se regeneran mientras K1 se construye y una tarea al final de la fase 14 los congela (C104).
+
+**K6a va después de K5**: `EntregaVigente` es ordinal, y subirla a K6a habilitaría también lo de K5 (C109).
 
 ## Riesgos y lo que falta del dueño
 
-El detalle está en decisiones-transversales.md §5 y §7.7: 100 preguntas, cada una con su propuesta por defecto. Si
+El detalle está en decisiones-transversales.md §5 y §7.7: 103 preguntas, cada una con su propuesta por defecto. Si
 el dueño no responde, **rige la propuesta**. Las que más pesan:
 
 - **Enmiendas a la spec (A1–A11)** que el diseño necesita. Se plantean al dueño junto con este plan. Entre ellas:
@@ -348,12 +353,12 @@ Riesgos principales:
 
 ## Re-evaluación de la constitución tras el diseño
 
-Re-evaluada el 2026-10-05 sobre los artefactos de la fase 1 ya conciliados (§7 de las transversales, C01–C102).
+Re-evaluada el 2026-10-05 sobre los artefactos de la fase 1 ya conciliados (§7 de las transversales, C01–C123).
 **Resultado: PASS**, con las desviaciones del Complexity Tracking y ninguna violación nueva sin justificar.
 
 | #    | Principio | Estado tras el diseño | Qué lo sostiene en los artefactos |
 |------|-----------|-----------------------|-----------------------------------|
-| I    | Spec-First | PASS | Todo lo que el diseño agrega a la spec está como enmienda (A1–A11) o pregunta con propuesta por defecto (100 en total, §5 y §7.7). Ningún artefacto deja «puntos para conciliar» abiertos: los 186 se decidieron en la §7 (C01–C102). |
+| I    | Spec-First | PASS | Todo lo que el diseño agrega a la spec está como enmienda (A1–A13) o pregunta con propuesta por defecto (103 en total, §5 y §7.7). Ningún artefacto deja «puntos para conciliar» abiertos: los 186 se decidieron en la §7 (C01–C123). |
 | II   | Clean Architecture | PASS | Los cinco puertos ofrecidos viven en `Common.Integration.Lending` (C27). `LaCarteraSoloSeTocaPorSusInterfaces` vigila las dos direcciones (C34). Contabilidad elige las cuentas de pérdidas por clase y naturaleza, no por código (C78). |
 | III  | CQRS + MediatR | PASS con desviación | Se mantiene la desviación del contrato síncrono. El contrato verifica el permiso y el límite del usuario que actúa (C41). La reapertura del cierre se encola como corrida (C58). |
 | IV   | Multi-tenancy | PASS | La corrección de un valor nacional se dispara desde la réplica en cada base (C05). La alerta al maestro por valores faltantes no lee cooperativas (C69). `COR_Alerts` suma oficina y línea para el alcance (C68). |

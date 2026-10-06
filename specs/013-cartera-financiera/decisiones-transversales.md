@@ -1,6 +1,6 @@
 # Decisiones transversales — 013 Cartera financiera
 
-**Fecha**: 2026-10-05 · **Estado**: armonización de la fase 0 (ocho frentes investigados por separado) y conciliación de los artefactos del plan (§7, C01..C111).
+**Fecha**: 2026-10-05 · **Estado**: armonización de la fase 0 (ocho frentes investigados por separado) y conciliación de los artefactos del plan (§7, C01..C123).
 **Fuente de verdad** para `research.md`, `data-model.md`, `contracts/*`, `quickstart.md`, `plan.md` y
 `tasks.md` de la feature 013. Quien redacte esos artefactos **reutiliza literalmente** los nombres de la §2 y
 respeta las decisiones T1..T102 de la §3. Si un borrador contradice este documento, gana este documento; si
@@ -940,9 +940,10 @@ aquí: la réplica adopta el SMMLV, la UVT y los festivos que Nómina ya tenía,
 | K6a | `CarteraPerdidaEsperada` (fijado aquí) | aditiva | `LND_ImpairmentModelElections`, `LND_ArrearsHistoryLoads` |
 | K6b | `CarteraVivienda` (fijado aquí) | aditiva, sólo si hace falta | Columnas UVR (alias `ValorUvr` 18,4) |
 
-Orden en K1: `NominaRecaudaPorElContrato` y `ComercioConCartera` (con los consumidores ya en los puertos
-«sin activar») → `RetiroDeLaCarteraHeredada` (commit propio, modelo intermedio) → `ValoresNacionales` (Admin) →
-`PlataformaParaCartera` → `CarteraNucleo` → `CarteraRiesgo` → `IntegracionContableDeCartera` (T88).
+Orden en K1 (T88 enmendada por C103): `ValoresNacionales` (Admin) → `PlataformaParaCartera` (no tocan `LND_`) →
+`NominaRecaudaPorElContrato` y `ComercioConCartera` (con los consumidores ya en los puertos «sin activar») →
+`RetiroDeLaCarteraHeredada` (commit propio, modelo intermedio) → `CarteraNucleo` → `CarteraRiesgo` →
+`IntegracionContableDeCartera`. Los pares de K1 se regeneran hasta que la última tarea de K1 los congela (C104).
 
 ---
 
@@ -2508,7 +2509,7 @@ de asociado), seis se resolvieron aquí como choque o decisión técnica (la hor
 de la causación, el registro de Nómina como recaudador, una `ObligacionRechazada` por evaluación, los tipos de
 comprobante sembrados y la ruta `savings-statement`) y se agregó una (H7). La revisión crítica del 2026-10-05 agregó
 seis (A8, A9, A11, C11, E10, G11) y llevó tres al grupo A porque eran enmiendas de la spec (G1 → A7, G8 → A6,
-H5 → A10; sus filas quedan como remisión): son **97**, y la conciliación (§7.7) suma E11, I16 e I17: **100**. Cada una tiene
+H5 → A10; sus filas quedan como remisión): son **97**, y la conciliación (§7.7, §7.9) suma E11, E12, I16 e I17, y el análisis A12 y A13: **103**. Cada una tiene
 una propuesta por defecto coherente con la spec y la constitución; si el dueño no responde, **rige la propuesta**.
 «Bloquea» dice qué no puede cerrarse sin respuesta explícita.
 
@@ -2527,6 +2528,8 @@ una propuesta por defecto coherente con la spec y la constitución; si el dueño
 | A9 | ¿Se enmiendan FR-012 y D4 con una excepción para los pagos sin interacción cuya fecha valor fija la propia spec: Nómina (fin del período en la ordinaria, aprobación en la definitiva; FR-088, FR-112) y, desde K2, el pago de pagaduría con referencia (fecha del descuento, FR-114), sin límite de días ni atribución antes de un cierre? | Sí (T92); la alternativa es parametrizar el límite por clase de recaudador sin exención fija | Validación de fecha valor del contrato (K1, K2) |
 | A10 | ¿Se enmienda FR-144 («quedan intactos») para que lo conservado cambie de espacio de nombres (`Savings`) y de ruta API (`/api/savings/*`, `/api/reports/savings/*`), sin tocar tablas ni rutas de pantalla? (antes H5) | Sí (T3, T99); si no, conserva `/api/lending/*` hasta la feature de Ahorros, con exención por nombre | Estructura del plan y `ElEspacioLendingEsSoloCartera` |
 | A11 | ¿Se enmienda I-4 para que el desenlace «revertido junto con el recaudador» se derive de un intento sin hecho, en vez de escribirse? | Sí (T68); si no, `cartera.vigilancia` escribe un evento compensatorio por cada intento sin hecho pasado su plazo | Auditoría del contrato (K1) |
+| A12 | ¿Se enmienda FR-053 para que «obligación rechazada» por un mensaje no convertible se envíe sólo cuando una persona lo marca no reprocesable (C95, C102), y no apenas falla? | Sí | Consumidor de ventas (K1) |
+| A13 | ¿Se enmienda FR-140 (carga complementaria del historial de mora) para adelantarla a K1, ya que FR-105 la necesita al registrar una obligación sobrevenida? Si no, la obligación sobrevenida antes de K6a se registra sin historial completo y queda marcada | Adelantarla a K1 (plantilla `lending.arrears-history` y `LND_ArrearsHistoryLoads` en `CarteraNucleo`) | FR-105 (K1) |
 
 ### B. Plataforma, procesos y valores nacionales
 
@@ -2592,6 +2595,8 @@ una propuesta por defecto coherente con la spec y la constitución; si el dueño
 | E8 | Cortes del puntaje, PDI por días, homologación y comercial persona jurídica vienen como imágenes en los PDF: ¿quién los transcribe y coteja? | El equipo los transcribe con `verified = false`; el dueño y la contadora cotejan contra la circular consolidada vigente | Semilla de K6a; del Anexo 1 en K1 sólo la tabla de comercial persona jurídica |
 | E9 | ¿El deterioro de cada crédito se redondea al centavo o al peso? | Al centavo; en la pérdida esperada sólo el puntaje se redondea a la escala del documento | No |
 | E10 | ¿El microcrédito se divide en los sub-segmentos `Inmobiliario` y `Empresarial` del catálogo de modalidades, como el CUIF (1448, 1455)? | Sí, «pendiente de validar» por la contadora; sin ellos la matriz no puede elegir la cuenta de capital | Semilla del catálogo de modalidades (K1) |
+| E11 | Si el primer vencimiento del formato de cartera del SICSES de COOFLOPAL llega antes que K5, ¿se adelanta a K1? | Sí, sólo el formato de cartera (§7.7) | Alcance de K1; se decide en la fase 1 |
+| E12 | ¿La corrección monetaria UVR llega a Contabilidad como hecho propio (`CorreccionMonetariaUvrCausada`)? | Sí, en K6b (C111) | K6b |
 
 ### F. Seguridad, actas y habeas data
 
@@ -2688,7 +2693,7 @@ una propuesta por defecto coherente con la spec y la constitución; si el dueño
 
 ---
 
-## 7. Conciliación de los artefactos del plan (C01..C111, 2026-10-05)
+## 7. Conciliación de los artefactos del plan (C01..C123, 2026-10-05)
 
 Cada artefacto del plan cerró con una lista de «puntos para conciliar»: lecturas que hizo donde este documento no
 decía lo bastante, o choques con un artefacto hermano. Aquí se decide cada uno. **Esta sección enmienda las T, CH y
@@ -2886,3 +2891,22 @@ se distinguen por el contexto: en los artefactos, «decisión C10» o «pregunta
 | C109 | **Base del centro de informes y las vistas de K1** (DT §2.15) van en K1 (fase 14, marcadas US15); K2–K4 suman las suyas en sus fases; K5 completa US15. K5 se entrega antes que K6a, porque `EntregaVigente` es ordinal. | tareas, fases 14 y 20 |
 | C110 | **`LND_FactTypes` siembra 35 filas**: los hechos que van a Contabilidad (con `ShortCode`); los 12 tipos restantes del catálogo de 47 no son hechos contables. | fase 3 |
 | C111 | **Códigos de error que las tareas usan y `data-model.md` §10 no lista**: cada fase que los use los lleva a §10 en la misma tarea; ante dos nombres para lo mismo, gana el de `data-model.md`. Pregunta nueva **E12**: ¿la corrección monetaria UVR llega a Contabilidad como hecho propio (`CorreccionMonetariaUvrCausada`)? Propuesta: sí, en K6b. | tareas |
+
+### 7.10 Decisiones del análisis de consistencia (`/speckit-analyze`, 2026-10-05)
+
+| # | Decisión | Origen |
+|---|---|---|
+| C112 | **Grupo conectado (FR-041, SC-022)**: `LND_ConnectedGroups` y `LND_ConnectedGroupMembers` **(nuevas, K1, `CarteraNucleo`)**, registradas por el jefe de cartera con su fundamento (vinculación económica o jurídica, codeudor común, vinculado de `LND_RelatedParties`); la concentración se mide por deudor **y** por grupo, con el mismo límite de FR-041. | análisis X2 |
+| C113 | **Resultado de giro inválido**: un solo código, `Lending.DisbursementOrder.InvalidResult`, con el motivo (`InvalidTransition`, `AmountMismatch`) como dato. | X22 |
+| C114 | **Nombres que chocaban**: `GenerateLoanDisbursementFileCommand` y `VoidLoanDisbursementFileCommand` (los de Nómina conservan los suyos); el tipo de origen contable de los documentos de Cartera es `LendingIssuedDocument`, y `LendingDocument` queda sólo para la entidad conservada en `Savings`. | X23, nota PB7 |
+| C115 | **Un código por significado en pagos**: `Lending.Payment.SpecificInstallmentBlocked` (pantalla y contrato) para la cuota específica; `Lending.Payment.PreferenceMissing` es rechazo; el aviso de que se asumió la preferencia por defecto es `Lending.Payment.PreferenceAssumed`. | X24, nota PE4 |
+| C116 | **Alertas `Cartera.*` antes de activar** (nota PA15): llegan a los permisos de sus destinatarios por defecto (data-model §11); sin destinatario, a `CompanyAdmin` marcadas «sin destinatario», como toda alerta de la plataforma. | X26 |
+| C117 | **`ShortCode` de los tipos de hecho** (nota PB6): es una propiedad del catálogo de mensajes (`TipoDeMensaje.CodigoCorto`) de los tipos de Cartera; `LendingFactTypesSeeder` la copia a `LND_FactTypes`. | X26 |
+| C118 | **Columnas de plantillas sin tabla** (nota PC10): `LND_RelatedParties.ContributionPercentage` (fracción 9,6) y `.SupportAttachmentPublicId`; `LND_ContributionBalanceLoads.Source` (120). Entran en `CarteraNucleo` antes del congelamiento. | X26 |
+| C119 | **Corridas del proceso** (nota PD9): se ven en una pestaña «Corridas» de `/cartera/bandeja-de-mensajes`, con el permiso de la bandeja; no hay pantalla `/cartera/corridas`. | X26 |
+| C120 | **Liberar una reserva ya usada** (nota PE7): el puerto responde el estado actual (`Used`) sin error (idempotente para Comercial); la ruta de pantalla responde `Lending.Reservation.AlreadyUsed` (409). | X26 |
+| C121 | **Indicador regulatorio del mismo corte** (nota PF8): uno nuevo del mismo código y corte reemplaza al anterior con `SupersedesPublicId` (`contabilidad.md`); no hay error `Duplicate`. | X26 |
+| C122 | **Lo que no se registró en Complexity Tracking** (X31): migraciones aditivas con datos (copia de C73, filas de participantes, arrendamiento y `LND_Setup`) y rutas `/api/savings/*` con el permiso de hoy (sólo sesión) hasta la feature de Ahorros; quedan registradas en `plan.md`. | X31 |
+| C123 | **Vocabulario nuevo de las correcciones**: `LendingProcessKind.ScheduledTask = 5` (marca de última ejecución de cada tarea diaria de Cartera, SC-020) y `.MigratedCollectionStages = 6` (registro de la etapa de cobranza migrada al desplegar K4, por `IEjecutorEnCooperativa`); alerta `Cartera.TareaDiariaNoCorrio`; errores `Lending.Parameter.NotSupportedYet` (diferir comisiones en `true`, FR-017), `Lending.Collateral.CoDebtorsInsufficient` (FR-026); campo `WithinLegalPrepaymentCap` del pago (FR-075). Van a `data-model.md` §9–§11 al implementar (C111). | X14–X21 |
+
+Las notas de coordinación de `tasks.md` (PA15, PB6, PB7, PC10, PD2, PD8, PD9, PE3, PE4, PE7, PF8) remiten aquí.
