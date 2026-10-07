@@ -29,6 +29,7 @@ public class PaymentMeansConfiguration : IEntityTypeConfiguration<PaymentMeans>
         builder.Property(e => e.ExpectedCommissionFixed).Monto();
         builder.Property(e => e.DianPaymentMeansCode).HasMaxLength(3).IsRequired();
         builder.Property(e => e.SuggestedCreditLineCode).HasMaxLength(20);
+        builder.Property(e => e.CreditWithoutLending).HasDefaultValue(false);
         builder.Property(e => e.IsActive).HasDefaultValue(true);
         builder.Property(e => e.Notes).HasMaxLength(300);
 

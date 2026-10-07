@@ -291,6 +291,9 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Pos.DayClose> DayCloses { get; }
     DbSet<Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines { get; }
     DbSet<Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments { get; }
+
+    /// <summary>Feature 013 (T0174): recibo de las respuestas de Cartera a una venta a crédito (hecho; lo escribe sólo <c>DestinoInventario</c>).</summary>
+    DbSet<Domain.Entities.Inventory.Documents.LendingObligationResponse> LendingObligationResponses { get; }
     DbSet<Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions { get; }
     DbSet<Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts { get; }
     DbSet<Domain.Entities.Inventory.Pricing.PriceList> PriceLists { get; }

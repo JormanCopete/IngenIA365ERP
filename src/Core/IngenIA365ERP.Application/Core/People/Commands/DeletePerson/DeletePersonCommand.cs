@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -7,16 +8,24 @@ namespace IngenIA365ERP.Application.Core.People.Commands.DeletePerson;
 
 /// <summary>
 /// Soft-delete de una persona. Valida que no este referenciada como
-/// empleado activo, asociado activo o tenga cartera activa antes de eliminar.
+/// empleado activo ni tenga obligaciones vivas en Cartera antes de eliminar. Feature 013 (T0169, T94, E-04; interfaces.md §7):
+/// Cartera se consulta por <see cref="IConsultaDeObligaciones"/> con codeudas; bloquea si hay alguna obligación viva como deudor o
+/// codeudor, o si la persona está en una carga de Cartera aplicada y sin activar.
 /// </summary>
 public record DeletePersonCommand(Guid PublicId) : IRequest<Result>;
 
 public class DeletePersonCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    IConsultaDeObligaciones obligaciones)
     : IRequestHandler<DeletePersonCommand, Result>
 {
+    public const string HasActiveLoansCode = "Person.HasActiveLoans";
+
+    public const string HasActiveLoansMessage =
+        "No se puede eliminar: la persona tiene obligaciones vivas como deudor o codeudor, o está en una carga de Cartera por activar.";
+
     public async Task<Result> Handle(DeletePersonCommand request, CancellationToken ct)
     {
         var person = await context.People.FirstOrDefaultAsync(
@@ -32,12 +41,11 @@ public class DeletePersonCommandHandler(
             return Result.Failure(new Error("Person.HasActiveEmployee",
                 "No se puede eliminar: la persona esta registrada como empleado activo. Termine el contrato primero."));
 
-        // Validar que no tenga cartera activa.
-        var hasActiveLoans = await context.LoanPortfolios.AsNoTracking()
-            .AnyAsync(lp => lp.PersonId == person.Id && !lp.IsDeleted && lp.CurrentBalance > 0, ct);
-        if (hasActiveLoans)
-            return Result.Failure(new Error("Person.HasActiveLoans",
-                "No se puede eliminar: la persona tiene cartera activa."));
+        // Validar que no tenga obligaciones vivas en Cartera (deudor o codeudor) ni este en una carga por activar.
+        var deCartera = await obligaciones.ObligacionesAsync(
+            new ConsultaDeObligaciones([person.PublicId], dateTime.HoyLocal, IncludeAsCoDebtor: true), ct);
+        if (deCartera.People.Any(p => p.MigratedNotActivated || p.Obligations.Any(o => o.IsLive)))
+            return Result.Failure(new Error(HasActiveLoansCode, HasActiveLoansMessage));
 
         person.IsDeleted = true;
         person.DeletedAt = dateTime.UtcNow;

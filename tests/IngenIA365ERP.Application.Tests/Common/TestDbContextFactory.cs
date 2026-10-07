@@ -172,7 +172,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<Profession> IApplicationDbContext.Professions => throw new NotImplementedException();
     public DbSet<Position> Positions => Set<Position>();
     DbSet<Relationship> IApplicationDbContext.Relationships => throw new NotImplementedException();
-    DbSet<WithdrawalReason> IApplicationDbContext.WithdrawalReasons => throw new NotImplementedException();
+    // Feature 013 (T0115): el retiro de asociado se prueba con su motivo y su registro.
+    public DbSet<WithdrawalReason> WithdrawalReasons => Set<WithdrawalReason>();
     DbSet<Sport> IApplicationDbContext.Sports => throw new NotImplementedException();
     DbSet<CulturalActivity> IApplicationDbContext.CulturalActivities => throw new NotImplementedException();
     DbSet<Disease> IApplicationDbContext.Diseases => throw new NotImplementedException();
@@ -252,7 +253,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<TermRate> IApplicationDbContext.TermRates => throw new NotImplementedException();
     DbSet<PortfolioAccount> IApplicationDbContext.PortfolioAccounts => throw new NotImplementedException();
     DbSet<ContributionReduction> IApplicationDbContext.ContributionReductions => throw new NotImplementedException();
-    DbSet<AssociateWithdrawal> IApplicationDbContext.AssociateWithdrawals => throw new NotImplementedException();
+    public DbSet<AssociateWithdrawal> AssociateWithdrawals => Set<AssociateWithdrawal>();
     DbSet<CertificateEntry> IApplicationDbContext.CertificateEntries => throw new NotImplementedException();
     public DbSet<PayrollConcept> PayrollConcepts => Set<PayrollConcept>();
     public DbSet<WorkRiskProvider> WorkRiskProviders => Set<WorkRiskProvider>();
@@ -351,6 +352,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose> DayCloses => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.LendingObligationResponse> LendingObligationResponses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.LendingObligationResponse>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList> PriceLists => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList>();

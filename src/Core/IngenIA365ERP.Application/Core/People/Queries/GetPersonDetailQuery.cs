@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -35,13 +36,34 @@ public record FinancialDataDto(
     decimal ExternalDebtPayment,
     decimal ExternalDebtBalance);
 
+/// <summary>
+/// El resumen de cartera y ahorros de la persona. Feature 013 (T0169, T94, interfaces.md §7): los créditos salen de
+/// <see cref="IConsultaDeObligaciones"/> (como deudor) y <see cref="LendingStatus"/> dice el estado de Cartera; los ahorros siguen en
+/// <c>SavingsAccounts</c>.
+/// </summary>
 public record PortfolioSummaryDto(
     int ActiveLoans,
     decimal TotalLoanBalance,
     int SavingsAccounts,
     decimal TotalSavingsBalance,
     decimal TotalContributions,
-    decimal TotalOverdueAmount);
+    decimal TotalOverdueAmount)
+{
+    /// <summary>
+    /// <see cref="PortfolioLendingStatus.NotActivated"/>, <see cref="PortfolioLendingStatus.Active"/>,
+    /// <see cref="PortfolioLendingStatus.MigratedNotActivated"/> o <see cref="PortfolioLendingStatus.Unavailable"/> (Cartera no respondió).
+    /// </summary>
+    public string LendingStatus { get; init; } = PortfolioLendingStatus.NotActivated;
+}
+
+/// <summary>Valores de <see cref="PortfolioSummaryDto.LendingStatus"/> (feature 013, T0169). (nuevo)</summary>
+public static class PortfolioLendingStatus
+{
+    public const string NotActivated = "NotActivated";
+    public const string Active = "Active";
+    public const string MigratedNotActivated = "MigratedNotActivated";
+    public const string Unavailable = "Unavailable";
+}
 
 public record PersonDetailDto(
     Guid PublicId,
@@ -73,7 +95,7 @@ public record PersonDetailDto(
 
 public record GetPersonDetailQuery(Guid PublicId) : IRequest<Result<PersonDetailDto>>;
 
-public class GetPersonDetailQueryHandler(IApplicationDbContext context)
+public class GetPersonDetailQueryHandler(IApplicationDbContext context, IConsultaDeObligaciones obligaciones, IDateTimeService reloj)
     : IRequestHandler<GetPersonDetailQuery, Result<PersonDetailDto>>
 {
     public async Task<Result<PersonDetailDto>> Handle(GetPersonDetailQuery request, CancellationToken ct)
@@ -142,16 +164,10 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context)
                 f.ExternalDebtBalance);
         }
 
-        // Portfolio summary
-        var activeLoans = await context.LoanPortfolios
-            .AsNoTracking()
-            .Where(lp => lp.PersonId == person.Id && !lp.IsDeleted && lp.CurrentBalance > 0)
-            .CountAsync(ct);
-
-        var totalLoanBalance = await context.LoanPortfolios
-            .AsNoTracking()
-            .Where(lp => lp.PersonId == person.Id && !lp.IsDeleted && lp.CurrentBalance > 0)
-            .SumAsync(lp => lp.CurrentBalance, ct);
+        // Portfolio summary: los créditos, por la consulta de obligaciones de Cartera (feature 013, T0169).
+        var deCartera = await ResumenDeCarteraDePersona.ArmarAsync(obligaciones, person.PublicId, reloj.HoyLocal, ct);
+        var activeLoans = deCartera.ActiveLoans;
+        var totalLoanBalance = deCartera.TotalLoanBalance;
 
         var personCode = person.LegacyCode ?? person.TaxId;
         var savingsCount = await context.SavingsAccounts
@@ -162,10 +178,7 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context)
         // SavingsAccount doesn't store balance directly; set to 0 for now
         var totalSavings = 0m;
 
-        var totalOverdue = await context.LoanPortfolios
-            .AsNoTracking()
-            .Where(lp => lp.PersonId == person.Id && !lp.IsDeleted && lp.DaysOverdue > 0)
-            .SumAsync(lp => lp.DefaultBalanceCurrent + lp.InterestBalanceCurrent, ct);
+        var totalOverdue = deCartera.TotalOverdueAmount;
 
         var portfolioSummary = new PortfolioSummaryDto(
             activeLoans,
@@ -173,7 +186,10 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context)
             savingsCount,
             totalSavings,
             0m, // contributions - loaded separately if needed
-            totalOverdue);
+            totalOverdue)
+        {
+            LendingStatus = deCartera.LendingStatus,
+        };
 
         var dto = new PersonDetailDto(
             person.PublicId,
@@ -202,5 +218,33 @@ public class GetPersonDetailQueryHandler(IApplicationDbContext context)
             portfolioSummary);
 
         return Result.Success(dto);
+    }
+}
+
+/// <summary>
+/// La parte de Cartera del resumen de la persona (feature 013, T0169; interfaces.md §7): las obligaciones vivas como deudor y el estado de
+/// Cartera, de una sola llamada a <see cref="IConsultaDeObligaciones"/> con codeudas (la misma de <c>DeletePersonCommand</c>). Si Cartera
+/// no responde, sale sin créditos y con estado <see cref="PortfolioLendingStatus.Unavailable"/>. (nuevo)
+/// </summary>
+public static class ResumenDeCarteraDePersona
+{
+    public sealed record Resumen(int ActiveLoans, decimal TotalLoanBalance, decimal TotalOverdueAmount, string LendingStatus);
+
+    public static async Task<Resumen> ArmarAsync(IConsultaDeObligaciones obligaciones, Guid persona, DateOnly hoy, CancellationToken ct)
+    {
+        try
+        {
+            var r = await obligaciones.ObligacionesAsync(new ConsultaDeObligaciones([persona], hoy, IncludeAsCoDebtor: true), ct);
+            var propia = r.People.FirstOrDefault(p => p.PersonPublicId == persona);
+            var deudas = propia?.Obligations.Where(o => o.IsLive && o.Role == RolEnLaObligacion.Debtor).ToList() ?? [];
+            var estado = propia?.MigratedNotActivated == true
+                ? PortfolioLendingStatus.MigratedNotActivated
+                : r.LendingStatus == EstadoDeCartera.Active ? PortfolioLendingStatus.Active : PortfolioLendingStatus.NotActivated;
+            return new Resumen(deudas.Count, deudas.Sum(o => o.TotalBalance), deudas.Where(o => o.DaysPastDue > 0).Sum(o => o.DueAmount), estado);
+        }
+        catch (Exception e) when (!ct.IsCancellationRequested && e is not OutOfMemoryException)
+        {
+            return new Resumen(0, 0m, 0m, PortfolioLendingStatus.Unavailable);
+        }
     }
 }

@@ -99,6 +99,12 @@ public class PaymentMeans : AuditableEntity
     /// <summary>Código de línea de Cartera sugerida, como texto: sin llave a <c>LND_*</c> (T32).</summary>
     public string? SuggestedCreditLineCode { get; set; }
 
+    /// <summary>
+    /// Feature 013 (T0173, A6, D29; data-model parte 3 §8.2): crédito que no pasa a Cartera (cuotas de servicios a asociados). Sólo en
+    /// clases de crédito y, como la clase, no cambia una vez el medio tiene pagos. Se copia al pago al confirmar.
+    /// </summary>
+    public bool CreditWithoutLending { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public DateOnly ValidFrom { get; set; }

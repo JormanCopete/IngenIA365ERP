@@ -110,8 +110,32 @@ public class DocumentPayment : AuditableEntity
     /// <summary><c>COR_ApprovalRequests</c>: la aprobación del crédito provisional (sujeto <c>ProvisionalCredit</c>).</summary>
     public int? ApprovalRequestId { get; set; }
 
+    /// <summary>
+    /// Feature 013 (T0172, C67, data-model parte 3 §8.1): el número de la obligación reservado por <c>IReservasDeCartera</c> dentro de la
+    /// confirmación (T22). Va como referencia del pago en la factura (D3); sin reserva, la venta sale sin número (D26).
+    /// </summary>
+    public string? ReservedLoanNumber { get; set; }
+
+    /// <summary>Feature 013 (C67): la reserva; viaja en <c>VentaACreditoRegistradaV2</c> y la usa la liberación.</summary>
+    public Guid? ReservationPublicId { get; set; }
+
+    /// <summary>Feature 013: la línea de crédito de Cartera elegida (por defecto la sugerida del medio); llena sólo si Cartera respondió.</summary>
+    public string? CreditLineCode { get; set; }
+
+    /// <summary>Feature 013 (C67): el <c>EvidenceId</c> de la consulta de cupo, para emitirlo aunque la confirmación llegue tras una aprobación.</summary>
+    public string? ConsultationEvidence { get; set; }
+
+    /// <summary>
+    /// Feature 013 (A6, D29; data-model parte 3 §8.1): copia del medio. Con él no se consulta ni se reserva en Cartera, el sello es
+    /// <c>Contabilidad</c> y la cadena no emite a <c>Lending</c>.
+    /// </summary>
+    public bool CreditWithoutLending { get; set; }
+
     /// <summary>¿Un pago de clase crédito? (la venta es a crédito y lleva vencimiento).</summary>
     public bool EsCredito => ClasesDeMedio.EsCredito(MeansClass);
+
+    /// <summary>Feature 013 (A6): ¿un pago de crédito que pasa a Cartera? (de crédito y sin <see cref="CreditWithoutLending"/>).</summary>
+    public bool PasaACartera => EsCredito && !CreditWithoutLending;
 
     /// <summary>Copia del medio lo que el pago guarda de él al confirmar (la comisión esperada, sobre el valor aplicado).</summary>
     public void CopiarDelMedio(PaymentMeans medio)
@@ -127,6 +151,7 @@ public class DocumentPayment : AuditableEntity
         BankId = medio.BankId;
         DianPaymentMeansCode = medio.DianPaymentMeansCode;
         SuggestedCreditLineCode = ClasesDeMedio.EsCredito(medio.Class) ? medio.SuggestedCreditLineCode : null;
+        CreditWithoutLending = ClasesDeMedio.EsCredito(medio.Class) && medio.CreditWithoutLending;
         ExpectedCommissionAmount = medio.ComisionEsperada(Amount);
     }
 }

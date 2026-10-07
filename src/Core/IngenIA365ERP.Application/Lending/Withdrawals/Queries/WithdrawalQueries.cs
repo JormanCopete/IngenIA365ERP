@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -33,7 +34,12 @@ public record WithdrawalDto(
 
 public record GetWithdrawalPreviewQuery(Guid PersonPublicId) : IRequest<Result<WithdrawalPreviewDto>>;
 
-public class GetWithdrawalPreviewQueryHandler(IApplicationDbContext context)
+/// <summary>
+/// La vista previa del retiro de un asociado. Feature 013 (T0170, T94, A5; interfaces.md §8.2): las obligaciones vivas (como deudor o
+/// codeudor) y la carga de Cartera por activar se cuentan por <see cref="IConsultaDeObligaciones"/> —el consumidor «Aportes, en el retiro»
+/// de FR-061—, no por la cartera heredada.
+/// </summary>
+public class GetWithdrawalPreviewQueryHandler(IApplicationDbContext context, IConsultaDeObligaciones obligaciones, IDateTimeService reloj)
     : IRequestHandler<GetWithdrawalPreviewQuery, Result<WithdrawalPreviewDto>>
 {
     public async Task<Result<WithdrawalPreviewDto>> Handle(
@@ -64,12 +70,14 @@ public class GetWithdrawalPreviewQueryHandler(IApplicationDbContext context)
             blockingReasons.Add("El asociado ya se encuentra retirado.");
         }
 
-        // Active loans count
-        var activeLoansCount = await context.LoanPortfolios.AsNoTracking()
-            .CountAsync(lp => lp.PersonId == person.Id && lp.CurrentBalance > 0 && !lp.IsDeleted, ct);
+        // Obligaciones vivas en Cartera, como deudor o codeudor (feature 013, T0170).
+        var deCartera = await ObligacionesEnElRetiro.ContarAsync(obligaciones, person.PublicId, reloj.HoyLocal, ct);
+        var activeLoansCount = deCartera.Vivas;
 
         if (activeLoansCount > 0)
-            blockingReasons.Add($"Tiene {activeLoansCount} credito(s) vigente(s).");
+            blockingReasons.Add($"Tiene {activeLoansCount} obligación(es) viva(s) en Cartera como deudor o codeudor.");
+        if (deCartera.MigradaSinActivar)
+            blockingReasons.Add("Está en una carga de Cartera por activar.");
 
         // Savings balance
         var savingsBalance = await context.DepositEntries.AsNoTracking()
@@ -173,5 +181,24 @@ public class ListWithdrawalsQueryHandler(IApplicationDbContext context)
         )).ToList();
 
         return Result.Success(new PagedList<WithdrawalDto>(dtos, totalCount, request.PageNumber, request.PageSize));
+    }
+}
+
+/// <summary>
+/// Lo que el retiro de un asociado pregunta a Cartera (feature 013, T0170, A5; interfaces.md §8.2): cuántas obligaciones vivas tiene como
+/// deudor o codeudor y si está en una carga aplicada y sin activar. Lo usan la vista previa y el retiro. (nuevo)
+/// </summary>
+public static class ObligacionesEnElRetiro
+{
+    public sealed record Conteo(int Vivas, bool MigradaSinActivar)
+    {
+        public bool Bloquea => Vivas > 0 || MigradaSinActivar;
+    }
+
+    public static async Task<Conteo> ContarAsync(IConsultaDeObligaciones obligaciones, Guid persona, DateOnly hoy, CancellationToken ct)
+    {
+        var r = await obligaciones.ObligacionesAsync(new ConsultaDeObligaciones([persona], hoy, IncludeAsCoDebtor: true), ct);
+        var propia = r.People.FirstOrDefault(p => p.PersonPublicId == persona);
+        return new Conteo(propia?.Obligations.Count(o => o.IsLive) ?? 0, propia?.MigratedNotActivated ?? false);
     }
 }

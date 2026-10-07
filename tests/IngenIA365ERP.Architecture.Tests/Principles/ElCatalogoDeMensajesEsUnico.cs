@@ -84,7 +84,9 @@ public class ElCatalogoDeMensajesEsUnico
     public void El_catalogo_tiene_las_partes_de_la_013_y_los_hechos_de_Cartera_su_codigo_corto()
     {
         var todos = CatalogoDeMensajes.Todos;
-        Assert.Equal(20, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        // Los veinte de la 012 y la v2 de VentaACreditoRegistrada (T0175, T18), que también es de Comercial.
+        Assert.Equal(21, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        Assert.Equal(20, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         Assert.Equal(41, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         Assert.Equal(2, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));

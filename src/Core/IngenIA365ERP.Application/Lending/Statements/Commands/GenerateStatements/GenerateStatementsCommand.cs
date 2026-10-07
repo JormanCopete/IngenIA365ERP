@@ -32,14 +32,8 @@ public class GenerateStatementsCommandHandler(
         // Get all associates with active products (by PersonId)
         var associateIds = new HashSet<int>();
 
-        // From loan portfolios
-        var loanPersonIds = await context.LoanPortfolios
-            .AsNoTracking()
-            .Where(p => !p.IsDeleted && p.CurrentBalance > 0 && !p.IsDeleted)
-            .Select(p => p.PersonId)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-        foreach (var id in loanPersonIds) associateIds.Add(id);
+        // Feature 013 (T0170, R110, A5): el extracto pierde la parte de crédito; los documentos al deudor los emite Cartera con el
+        // estado del crédito (R149). Ya no lee la cartera heredada.
 
         // From CDTs
         var cdtPersonIds = await context.Certificates

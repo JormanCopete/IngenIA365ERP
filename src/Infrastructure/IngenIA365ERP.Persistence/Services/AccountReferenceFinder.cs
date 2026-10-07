@@ -7,7 +7,7 @@ namespace IngenIA365ERP.Persistence.Services;
 
 /// <summary>
 /// Dónde está parametrizada una cuenta (feature 009, FR-011, data-model.md §1): por FK en nómina,
-/// tesorería, la configuración y la matriz de Inventario (feature 012); por código en cartera, ahorros, CDT y bancos, que
+/// tesorería, la configuración y la matriz de Inventario (feature 012); por código en ahorros, CDT y bancos, que
 /// todavía guardan la cuenta como texto (E3 los pasa a FK). Vive en Persistence porque recorre
 /// tablas de siete módulos y el contexto de pruebas de Application no las materializa todas.
 /// </summary>
@@ -26,10 +26,7 @@ internal sealed class AccountReferenceFinder(ApplicationDbContext db) : IAccount
         foreach (var n in await db.TreasuryConcepts.AsNoTracking().Where(t => !t.IsDeleted && (t.DebitAccountId == accountId || t.CreditAccountId == accountId)).Select(t => t.Name).ToListAsync(ct))
             lista.Add(new(ModuloContable.Nombre(ModuloContable.Tesoreria), "Conceptos de tesorería", n));
 
-        foreach (var n in await db.CreditLineParameters.AsNoTracking().Where(l => !l.IsDeleted && (l.AccountCode == code || l.AccountInterestIncome == code || l.AccountInterestCxC == code ||
-                     l.AccountInterestDefault == code || l.AccountInterestAdvance == code || l.ProvisionExpenseAccountCode == code || l.ProvisionAccountCode == code || l.VatAccount == code))
-                     .Select(l => l.Description).ToListAsync(ct))
-            lista.Add(new(ModuloContable.Nombre(ModuloContable.Cartera), "Líneas de crédito", n));
+        // Feature 013 (T0171, T96, R121): la rama de LND_CreditLineParameters se retiró; las cuentas de Cartera entran con su matriz (US7).
 
         foreach (var n in await db.SavingsParameters.AsNoTracking().Where(s => !s.IsDeleted && (s.TreasuryAccount == code || s.InterestExpenseAccount == code)).Select(s => s.Id.ToString()).ToListAsync(ct))
             lista.Add(new(ModuloContable.Nombre(ModuloContable.Cdt), "Parámetros de ahorro", n));

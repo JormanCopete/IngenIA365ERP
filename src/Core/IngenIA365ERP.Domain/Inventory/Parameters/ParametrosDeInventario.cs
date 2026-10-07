@@ -148,8 +148,10 @@ public static class ParametrosDeInventario
         SiNo(Modulo, CajaUnaSesionPorCajero, "Un cajero sólo puede tener una sesión de caja abierta.", true, I3),
 
         // ---------------------------------------------------------------------------------- cartera --
+        // Feature 013 (T0177, D16): el defecto pasa a «Cartera»; CreditoEnLaVenta.SelloAsync lo fuerza a «Contabilidad» mientras
+        // Cartera.IntegracionHabilitadaDesde no rija.
         Eleccion(Modulo, CarteraCuentaPorCobrarRegistradaPor, "Quién registra la cuenta por cobrar de una venta a crédito.",
-            ["Contabilidad", "Cartera"], "Contabilidad", I3) with { SelladoAlConfirmar = true },
+            ["Contabilidad", "Cartera"], "Cartera", I3) with { SelladoAlConfirmar = true },
         new DefinicionDeParametro
         {
             Modulo = Modulo, Clave = CarteraIntegracionHabilitadaDesde,

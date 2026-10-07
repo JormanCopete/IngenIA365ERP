@@ -62,21 +62,9 @@ public class GetPersonStatementQueryHandler(IApplicationDbContext context)
         if (person is null)
             return Result.Failure<PersonStatementDto>(new Error("Statement.PersonNotFound", "Persona no encontrada."));
 
-        // Credits
-        var credits = await context.LoanPortfolios
-            .AsNoTracking()
-            .Where(p => p.PersonId == person.Id && !p.IsDeleted && p.CurrentBalance > 0)
-            .Include(p => p.CreditLine)
-            .Select(p => new CreditSummaryDto
-            {
-                PortfolioNumber = p.PortfolioNumber,
-                CreditLine = p.CreditLine != null ? p.CreditLine.Description : "",
-                CurrentBalance = p.CurrentBalance,
-                InterestBalance = p.InterestBalanceCurrent,
-                InstallmentAmount = p.InstallmentAmount,
-                PaidInstallments = p.PaidInstallments
-            })
-            .ToListAsync(cancellationToken);
+        // Feature 013 (T0170, R110, A5): el extracto pierde la parte de crédito (los documentos al deudor los emite Cartera, R149);
+        // Credits queda vacío y se conserva en el contrato.
+        var credits = new List<CreditSummaryDto>();
 
         // Savings
         var savings = await context.SavingsAccounts

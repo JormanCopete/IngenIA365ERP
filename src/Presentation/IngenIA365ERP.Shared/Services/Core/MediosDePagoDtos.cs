@@ -44,6 +44,9 @@ public sealed record MedioDePagoDto(
     string? Notes)
 {
     public int? PaymentsCount { get; init; }
+
+    /// <summary>Feature 013 (T0173, A6): crédito que no pasa a Cartera (cuotas de servicios a asociados).</summary>
+    public bool CreditWithoutLending { get; init; }
 }
 
 /// <summary>Los valores por defecto del crédito del medio (§22.1, FR-096).</summary>
@@ -80,6 +83,10 @@ public sealed class MedioDePagoRequest
     public decimal? ExpectedCommissionFixed { get; set; }
     public string DianPaymentMeansCode { get; set; } = string.Empty;
     public CreditoPorDefectoRequest? CreditDefaults { get; set; }
+
+    /// <summary>Feature 013 (T0173, A6): sólo en medios de crédito; no cambia una vez el medio tiene pagos.</summary>
+    public bool CreditWithoutLending { get; set; }
+
     public bool OfferedAtAllPoints { get; set; } = true;
     public bool OfferedOnAllChannels { get; set; } = true;
     public bool OfferedForAllDocumentTypes { get; set; } = true;

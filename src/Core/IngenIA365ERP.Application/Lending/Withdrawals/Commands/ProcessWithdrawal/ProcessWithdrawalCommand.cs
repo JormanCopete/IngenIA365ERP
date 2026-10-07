@@ -1,5 +1,7 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Lending.Withdrawals.Queries;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Lending;
 using MediatR;
@@ -17,7 +19,8 @@ public record ProcessWithdrawalCommand : IRequest<Result<Guid>>
 public class ProcessWithdrawalCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    IConsultaDeObligaciones obligaciones)
     : IRequestHandler<ProcessWithdrawalCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(
@@ -42,13 +45,12 @@ public class ProcessWithdrawalCommandHandler(
             return Result.Failure<Guid>(new Error("Associate.AlreadyWithdrawn",
                 "El asociado ya se encuentra retirado."));
 
-        // 2. Check no active loans
-        var activeLoansCount = await context.LoanPortfolios.AsNoTracking()
-            .CountAsync(lp => lp.PersonId == person.Id && lp.CurrentBalance > 0 && !lp.IsDeleted, cancellationToken);
-
-        if (activeLoansCount > 0)
-            return Result.Failure<Guid>(new Error("Withdrawal.ActiveLoans",
-                $"El asociado tiene {activeLoansCount} credito(s) vigente(s). Debe cancelarlos antes de retirarse."));
+        // 2. Sin obligaciones vivas en Cartera, como deudor o codeudor, ni carga por activar (feature 013, T0170, A5).
+        var deCartera = await ObligacionesEnElRetiro.ContarAsync(obligaciones, person.PublicId, dateTime.HoyLocal, cancellationToken);
+        if (deCartera.Bloquea)
+            return Result.Failure<Guid>(new Error("Withdrawal.ActiveLoans", deCartera.Vivas > 0
+                ? $"El asociado tiene {deCartera.Vivas} obligación(es) viva(s) en Cartera como deudor o codeudor. Debe cancelarlas antes de retirarse."
+                : "El asociado está en una carga de Cartera por activar: se retira después de activar Cartera y revisar sus obligaciones."));
 
         // 3. Resolve withdrawal reason
         var reason = await context.WithdrawalReasons.AsNoTracking()

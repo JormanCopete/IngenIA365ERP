@@ -218,10 +218,21 @@ según la regla legal:
 | `AUSENCIA_VACACIONES` | Informative | novedad generada | `ReducesWorkedDays`, `RequiresDates` | la novedad que la liquidación de vacaciones deja en cada período cubierto cuando la política `VacacionesPagoAnticipado = true`: la ordinaria descuenta los días del salario **sin pagarlos** (los pagó la liquidación). Con la política en `false` se genera la novedad `VACACIONES` existente (la ordinaria paga los días) y la liquidación sólo contabiliza la provisión |
 
 Se reutilizan sin cambio: `SALARIO`, `AUX_TRANSPORTE`, `SALUD_EMP`, `PENSION_EMP`, `FSP`,
-`RETEFTE`, `DESC_CARTERA` (con `AffectsAccounting = false`: Cartera contabiliza), `LIBRANZA`,
+`RETEFTE`, `DESC_CARTERA` (con `AffectsAccounting = false`: Cartera contabiliza; **enmendado por la 013**, ver la nota),
+`LIBRANZA`,
 `VACACIONES`, `PROV_*`. Los conceptos nuevos necesitan cuentas en `PAY_ConceptDefinitionAccounts`
 (vacía tras `ContabilidadNiif`): lo parametriza la contadora
 (`docs/operaciones/nomina-primer-periodo.md`).
+
+> **Enmienda D-08 (feature 013, T53, T0181, 2026-10-07).** `DESC_CARTERA` deja de ser «Cartera contabiliza, la nómina
+> muestra»: vuelve a `AffectsAccounting = true` y contabiliza en el `NM` y en la definitiva contra la cuenta del concepto, el
+> puente «recaudos por nómina para Cartera» (rol `RecaudoPorAplicar` por clase de recaudador, decisiones-transversales T53 de
+> la 013). Nómina ya no lee `LND_LoanPortfolios` ni llama `ProcessPaymentCommand`/`RecaudoDeCredito`: propone por
+> `IConsultaDeObligaciones` y recauda por `IContratoDeObligaciones` (`RecaudoPorNomina`, todo o nada en la definitiva); se
+> retiraron las excepciones de `ICalculationRule`, `ProposedDeductionsRule` y `AdjustSettlementDeductionCommand` y
+> `CuentaDebitoDelDescuentoAsync`. Sin cuentas en el concepto responden `Payroll.ConceptWithoutAccounts` y
+> `Payroll.Settlement.ConceptAccountsMissing`. Ver `specs/013-cartera-financiera/contracts/interfaces.md` §6.
+
 
 ### 1.8 Otras columnas que ganan tablas existentes
 

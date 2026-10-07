@@ -67,21 +67,9 @@ public class GetPersonPortfolioReportQueryHandler(IApplicationDbContext context)
         if (person is null)
             return Result.Failure<PersonPortfolioDto>(new Error("Person.NotFound", "Persona no encontrada"));
 
-        // Loans
-        var loans = await context.LoanPortfolios.AsNoTracking()
-            .Where(lp => lp.PersonId == person.Id && !lp.IsDeleted)
-            .ToListAsync(ct);
-
-        var loanDtos = loans.Select(l => new PersonLoanSummaryDto(
-            l.PublicId,
-            l.PortfolioNumber.ToString(),
-            "", // CreditLineName — would require join to CreditLineParameter
-            l.ApprovedAmount,
-            l.CurrentBalance,
-            l.InterestBalanceCurrent + l.DefaultBalanceCurrent,
-            l.PendingInstallmentCount,
-            l.DisbursementDate.ToDateTime(TimeOnly.MinValue),
-            l.IsWrittenOff == "S" ? "Castigado" : "Vigente")).ToList();
+        // Feature 013 (T0170, R110, A5): el portafolio pierde la parte de crédito (los documentos al deudor los emite Cartera, R149);
+        // Loans queda vacío y se conserva en el contrato.
+        var loanDtos = new List<PersonLoanSummaryDto>();
 
         // Savings — join on PersonCode (legacy string key)
         var personCode = person.LegacyCode ?? person.TaxId;

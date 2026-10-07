@@ -87,7 +87,10 @@ public static class VistaDeMediosDePago
                 red?.PublicId, red?.Code, adq?.PublicId, adq?.Code, banco, m.DestinationAccountNumber, m.DestinationAccountType,
                 m.RequiresReference, m.ReferenceKind, m.ReferenceMinLength, m.ReferenceMaxLength, m.AllowsChange, m.AllowsPartial, m.UniqueReference,
                 m.CountMethod, m.RequiresTerminalBatchAtClose, m.ToleranceAmount, m.ExpectedCommissionRate, m.ExpectedCommissionFixed, m.DianPaymentMeansCode,
-                credito, m.OfferedAtAllPointsOfSale, m.OfferedInAllChannels, m.OfferedForAllDocumentTypes, m.IsActive, m.ValidFrom, m.ValidTo, m.Notes);
+                credito, m.OfferedAtAllPointsOfSale, m.OfferedInAllChannels, m.OfferedForAllDocumentTypes, m.IsActive, m.ValidFrom, m.ValidTo, m.Notes)
+            {
+                CreditWithoutLending = m.CreditWithoutLending,
+            };
         }).ToList();
     }
 }

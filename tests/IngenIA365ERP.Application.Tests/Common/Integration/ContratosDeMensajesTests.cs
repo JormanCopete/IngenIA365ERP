@@ -187,10 +187,12 @@ public class ContratosDeMensajesTests
     [Fact]
     public void El_catalogo_tiene_los_veinte_tipos_de_1_en_su_orden_con_su_destino()
     {
-        CatalogoDeMensajesV1.Todos.Select(t => t.Type).Should().Equal(LosVeinte);
-        CatalogoDeMensajesV1.Todos.Should().OnlyContain(t => t.Version == 1);
+        // Feature 013 (T0118, T18): los veinte de la 012 en v1, más la v2 de VentaACreditoRegistrada al final.
+        var v1 = CatalogoDeMensajesV1.Todos.Where(t => t.Version == 1).ToList();
+        v1.Select(t => t.Type).Should().Equal(LosVeinte);
+        CatalogoDeMensajesV1.Todos.Where(t => t.Version != 1).Select(t => (t.Type, t.Version)).Should().Equal(("VentaACreditoRegistrada", 2));
 
-        CatalogoDeMensajesV1.Todos.Where(t => t.Destination == IntegrationDestinations.Lending).Select(t => t.Type)
+        v1.Where(t => t.Destination == IntegrationDestinations.Lending).Select(t => t.Type)
             .Should().Equal("VentaACreditoRegistrada", "AjusteDeVentaACredito");
         CatalogoDeMensajesV1.Todos.Where(t => t.Kind == IntegrationMessageKind.Informational).Select(t => t.Type)
             .Should().Equal("SaldoInicialCargado", "PeriodoInventarioCerrado", "PeriodoInventarioReabierto");
@@ -203,13 +205,50 @@ public class ContratosDeMensajesTests
         foreach (var tipo in CatalogoDeMensajesV1.Todos)
         {
             tipo.Record.Namespace.Should().Be("IngenIA365ERP.Application.Common.Integration.Contracts.Inventory");
-            tipo.Record.Name.Should().Be($"{tipo.Type}V1");
+            tipo.Record.Name.Should().Be($"{tipo.Type}V{tipo.Version}");
 
             var constante = tipo.Record.GetField("Type", BindingFlags.Public | BindingFlags.Static);
             constante.Should().NotBeNull($"{tipo.Record.Name} declara su constante Type");
             constante!.IsLiteral.Should().BeTrue();
             constante.GetRawConstantValue().Should().Be(tipo.Type);
         }
+    }
+
+    [Fact]
+    public void La_v2_de_VentaACreditoRegistrada_es_de_Comercial_hacia_Cartera_sin_proceso()
+    {
+        // Feature 013 (T0118, T18; mensajes.md §12.2): OriginModule INV, destino Lending, clave Confirmation:{pago:N}, sin proceso.
+        var v2 = CatalogoDeMensajesV1.Todos.Single(t => t.Record == typeof(VentaACreditoRegistradaV2));
+        (v2.Type, v2.Version, v2.OriginModule, v2.Destination, v2.Kind, v2.FormaDeClave, v2.AdmiteProceso).Should().Be(
+            ("VentaACreditoRegistrada", 2, "INV", IntegrationDestinations.Lending, IntegrationMessageKind.Business,
+                FormaDeClaveDeEvento.ConfirmacionPorPublicId, false));
+        IngenIA365ERP.Application.Common.Integration.CatalogoDeMensajes.Buscar("VentaACreditoRegistrada", 2)!.Record.Should().Be(typeof(VentaACreditoRegistradaV2));
+        IngenIA365ERP.Application.Common.Integration.CatalogoDeMensajes.Buscar("VentaACreditoRegistrada", 1)!.Record.Should().Be(typeof(VentaACreditoRegistradaV1),
+            "Cartera acepta v1 y v2 mientras quede alguna entrega v1");
+    }
+
+    [Fact]
+    public void La_v2_es_la_v1_con_el_numero_reservado_y_la_reserva_al_final()
+    {
+        // La forma fijada (T18, R113): los mismos campos de la v1, en su orden, y los dos nuevos al final.
+        var nombresV1 = typeof(VentaACreditoRegistradaV1).GetProperties().Select(p => p.Name).ToList();
+        typeof(VentaACreditoRegistradaV2).GetProperties().Select(p => p.Name).Should().Equal([.. nombresV1, "ReservedLoanNumber", "ReservationPublicId"]);
+
+        var v1 = CreditoDelPos();
+        var reserva = Guid.Parse("f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b");
+        var v2 = new VentaACreditoRegistradaV2
+        {
+            ThirdPartyKind = v1.ThirdPartyKind, Person = v1.Person, CreditPayment = v1.CreditPayment, DocumentTotal = v1.DocumentTotal,
+            AmountDue = v1.AmountDue, Terms = v1.Terms, CreditLineCode = v1.CreditLineCode, SuggestedCreditLineCode = v1.SuggestedCreditLineCode,
+            PendingValidation = v1.PendingValidation, Origin = v1.Origin, Approval = v1.Approval, ConsultationEvidence = v1.ConsultationEvidence,
+            AccountsReceivableRecordedBy = v1.AccountsReceivableRecordedBy, PointOfSaleCode = v1.PointOfSaleCode, SalesChannelCode = v1.SalesChannelCode,
+            ReservedLoanNumber = "CR-0002001", ReservationPublicId = reserva,
+        };
+
+        var textoV1 = Texto(v1);
+        Texto(v2).Should().Be(textoV1[..^1] + ",\"reservedLoanNumber\":\"CR-0002001\",\"reservationPublicId\":\"f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b\"}");
+        Texto(v2 with { ReservedLoanNumber = null, ReservationPublicId = null })
+            .Should().Be(textoV1[..^1] + ",\"reservedLoanNumber\":null,\"reservationPublicId\":null}", "sin reserva la venta sale sin número (D26)");
     }
 
     [Fact]

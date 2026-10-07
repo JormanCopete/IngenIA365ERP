@@ -454,6 +454,16 @@ Ley 51/1983 (festivos; calendario 2026-2027 **no descargado**, es determinista).
   recaudo, la nómina no lo duplica); la pantalla muestra el saldo que queda
   (`PaymentResultDto.Remaining`) tras el descuento (FR-018a). Todo va a auditoría
   (`Payroll.Settlement.DeductionAdjusted`).
+
+  > **Enmienda D-08 (feature 013, T53, T0181, 2026-10-07).** `DESC_CARTERA` deja de ser «Cartera contabiliza, la nómina
+  > muestra»: vuelve a `AffectsAccounting = true` y contabiliza en el `NM` y en la definitiva contra la cuenta del concepto, el
+  > puente «recaudos por nómina para Cartera» (rol `RecaudoPorAplicar` por clase de recaudador, decisiones-transversales T53 de
+  > la 013). Nómina ya no lee `LND_LoanPortfolios` ni llama `ProcessPaymentCommand`/`RecaudoDeCredito`: propone por
+  > `IConsultaDeObligaciones` y recauda por `IContratoDeObligaciones` (`RecaudoPorNomina`, todo o nada en la definitiva); se
+  > retiraron las excepciones de `ICalculationRule`, `ProposedDeductionsRule` y `AdjustSettlementDeductionCommand` y
+  > `CuentaDebitoDelDescuentoAsync`. Sin cuentas en el concepto responden `Payroll.ConceptWithoutAccounts` y
+  > `Payroll.Settlement.ConceptAccountsMissing`. Ver `specs/013-cartera-financiera/contracts/interfaces.md` §6.
+
 - **Libranzas con terceros**: no están en Cartera; son recurrentes `LIBRANZA`
   (`PayrollRecurringNovelty.InstallmentsIssued`); se descuentan sólo las **cuotas causadas y no
   descontadas** derivadas de la recurrente y los períodos aprobados; el resto lo cobra el tercero.
@@ -466,7 +476,8 @@ Ley 51/1983 (festivos; calendario 2026-2027 **no descargado**, es determinista).
   aplicado, neto, espacio de firmas), distinto del comprobante de nómina.
 
 **Razón**: FR-018a exige propuesta automática desde Cartera, validación, modificación hacia abajo
-con motivo y auditoría; el patrón D-08 (Cartera contabiliza, la nómina muestra) ya existe en la
+con motivo y auditoría; el patrón D-08 (Cartera contabiliza, la nómina muestra; **enmendado por la 013, T53**: hoy
+`DESC_CARTERA` contabiliza contra el puente) ya existe en la
 ordinaria (`CalculationInputLoader.cs:114-121, 178-185`) y evita el doble asiento. El
 `TerminationCause` de 120 caracteres no permite saber si el motivo genera indemnización; la spec
 pide catálogo con marca. `PayrollCalculationBatch`/`CalculatePayrollRunCommand` son la plantilla

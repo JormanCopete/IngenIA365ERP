@@ -133,10 +133,11 @@ public sealed class FuenteDeEmisionDeInventario(
                 t.TaxableUnits,
                 t.Base,
                 t.Amount)).ToList(),
-            // El número de la tarjeta nunca se guarda; la referencia es la autorización o la del medio.
+            // El número de la tarjeta nunca se guarda; la referencia es la autorización o la del medio. Feature 013 (T0175, D3): en un pago de
+            // crédito con número reservado en Cartera, la referencia es ese número (la factura lo lleva); sin reserva, sale sin número (D26).
             Pagos = pagos.Select(p => new PagoDeEntrada(p.MeansCode, p.MeansName, p.MeansClass,
                 string.IsNullOrWhiteSpace(p.DianPaymentMeansCode) ? null : p.DianPaymentMeansCode,
-                p.Amount, p.AuthorizationCode ?? p.Reference)).ToList(),
+                p.Amount, p.ReservedLoanNumber ?? p.AuthorizationCode ?? p.Reference)).ToList(),
             Totales = new TotalesDeEntrada(d.Subtotal, d.DiscountTotal, d.TaxTotal, d.WithholdingTotal, d.Total, d.AmountDue),
             Correccion = corregido is null
                 ? null

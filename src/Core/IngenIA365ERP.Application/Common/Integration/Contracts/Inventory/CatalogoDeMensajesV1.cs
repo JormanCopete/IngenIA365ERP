@@ -70,7 +70,7 @@ public enum FormaDeClaveDeEvento
 }
 
 /// <summary>
-/// Los veinte tipos de contracts/mensajes.md §1, en su orden (feature 012, T8, T075–T077). Es lo único que dice a
+/// Los veinte tipos de contracts/mensajes.md §1, en su orden, más la v2 de <c>VentaACreditoRegistrada</c> (feature 013, T0175) (feature 012, T8, T075–T077). Es lo único que dice a
 /// qué destino va un record y con qué <c>Kind</c>: <c>EmisorDeMensajes</c> no emite un record que no esté aquí.
 /// Un tipo nuevo o una V2 se agrega aquí junto con su record (§12). Desde la 013 es una de las tres partes del catálogo
 /// agregado (<c>CatalogoDeMensajes</c>): todos sus tipos son de <c>INV</c>, van a un solo destino y no admiten proceso (T11:
@@ -105,7 +105,14 @@ public static class CatalogoDeMensajesV1
         Inv(typeof(PeriodoInventarioReabiertoV1), PeriodoInventarioReabiertoV1.Type, A, I, FormaDeClaveDeEvento.Reapertura),
         Inv(typeof(VentaACreditoRegistradaV1), VentaACreditoRegistradaV1.Type, L, N, FormaDeClaveDeEvento.ConfirmacionPorPublicId),
         Inv(typeof(AjusteDeVentaACreditoV1), AjusteDeVentaACreditoV1.Type, L, N, FormaDeClaveDeEvento.ConfirmacionPorPublicId),
+
+        // Feature 013 (T0175, T18; mensajes.md §12.2): la v2 de la venta a crédito, la única que Comercial emite desde E-02.
+        Inv(typeof(VentaACreditoRegistradaV2), VentaACreditoRegistradaV2.Type, L, N, FormaDeClaveDeEvento.ConfirmacionPorPublicId, version: 2),
     ];
+
+    /// <summary>Una entrada de Inventario: módulo <c>INV</c>, un destino y sin proceso.</summary>
+    private static TipoDeMensaje Inv(Type record, string type, string destino, IntegrationMessageKind? kind, FormaDeClaveDeEvento forma, int version) =>
+        new(record, type, version, ModulosDeOrigen.Inventario, TipoDeMensaje.Un(destino), kind, forma, AdmiteProceso: false);
 
     /// <summary>Una entrada de Inventario: v1, módulo <c>INV</c>, un destino y sin proceso.</summary>
     private static TipoDeMensaje Inv(Type record, string type, string destino, IntegrationMessageKind? kind, FormaDeClaveDeEvento forma) =>

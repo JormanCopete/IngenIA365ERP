@@ -413,6 +413,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose> DayCloses => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayClose>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine> DayCloseLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.DayCloseLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment> DocumentPayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentPayment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.LendingObligationResponse> LendingObligationResponses => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.LendingObligationResponse>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption> VoucherRedemptions => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.VoucherRedemption>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList> PriceLists => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList>();

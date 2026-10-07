@@ -49,7 +49,11 @@ public sealed class CreditoDePrueba
     public Person InactivaY { get; private set; } = null!;
     public IMotorDeAprobaciones Motor { get; private set; } = null!;
     public CreditosAprobadosEnCurso EnCurso { get; private set; } = new();
-    public IConsultasDeCartera Cartera { get; } = new ConsultasDeCarteraNoHabilitada();
+    /// <summary>Feature 013 (T0117): por defecto Cartera no habilitada; una prueba pone un doble activado.</summary>
+    public IConsultasDeCartera Cartera { get; set; } = new ConsultasDeCarteraNoHabilitada();
+
+    /// <summary>Feature 013 (T0116): las reservas de número; por defecto responde «no habilitada», como la provisional.</summary>
+    public IngenIA365ERP.Application.Tests.Common.Integration.Lending.ReservasDeCarteraDePrueba Reservas { get; } = new();
 
     private CreditoDePrueba(VentasDePrueba v) => V = v;
 
@@ -127,7 +131,7 @@ public sealed class CreditoDePrueba
             Substitute.For<IAvisosDeAprobacion>(), new VistaDeSolicitudes(Db, fuentes), V.Compras.C.Reloj);
     }
 
-    public CreditoEnLaVenta Credito() => new(Db, V.K.Lector(), Cartera);
+    public CreditoEnLaVenta Credito() => new(Db, V.K.Lector(), Cartera, Reservas);
 
     public ReglasDeConfirmacionDeVenta Reglas() => new(Db, V.K.Actor, V.Compras.C.Reloj, V.K.Lector(), V.K.Permisos,
         new IngenIA365ERP.Application.ElectronicInvoicing.GuardiaDeEmisionFiscal(V.K.Lector(), V.Db), V.Calculo(), V.Aprobaciones(), V.Toque, Credito(),

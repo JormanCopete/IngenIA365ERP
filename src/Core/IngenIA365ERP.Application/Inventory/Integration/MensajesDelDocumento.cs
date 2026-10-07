@@ -91,8 +91,9 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
     {
         var solicitudes = new List<SolicitudDeEmision>();
         var ajustesDeCosto = contenidos.OfType<AjusteDeCostoReconocidoV1>().ToList();
-        var aCartera = contenidos.Where(c => c is VentaACreditoRegistradaV1 or AjusteDeVentaACreditoV1).ToList();
-        var delEvento = contenidos.Where(c => c is not AjusteDeCostoReconocidoV1 && c is not VentaACreditoRegistradaV1 && c is not AjusteDeVentaACreditoV1).ToList();
+        var aCartera = contenidos.Where(c => c is VentaACreditoRegistradaV1 or VentaACreditoRegistradaV2 or AjusteDeVentaACreditoV1).ToList();
+        var delEvento = contenidos.Where(c => c is not AjusteDeCostoReconocidoV1 && c is not VentaACreditoRegistradaV1 && c is not VentaACreditoRegistradaV2
+            && c is not AjusteDeVentaACreditoV1).ToList();
 
         if (delEvento.Count > 0)
         {
@@ -129,6 +130,10 @@ public sealed class MensajesDelDocumento(IApplicationDbContext db, ILectorDePara
             {
                 case VentaACreditoRegistradaV1 venta:
                     solicitudes.Add(new SolicitudDeEmision(origen, ClavesDeEvento.ConfirmacionPor(venta.CreditPayment.PaymentPublicId), [venta],
+                        new ModoDeEntrega.Sellado(DeliveryMode.Online), ValidacionPrevia: validacion));
+                    break;
+                case VentaACreditoRegistradaV2 ventaV2:
+                    solicitudes.Add(new SolicitudDeEmision(origen, ClavesDeEvento.ConfirmacionPor(ventaV2.CreditPayment.PaymentPublicId), [ventaV2],
                         new ModoDeEntrega.Sellado(DeliveryMode.Online), ValidacionPrevia: validacion));
                     break;
                 case AjusteDeVentaACreditoV1 ajuste:

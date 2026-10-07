@@ -20,8 +20,9 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// cartera heredada entran a <see cref="CarpetasDeOtrosModulos"/> al pasar a los puertos, y las carpetas de Cartera nueva a
 /// <see cref="CarpetasDeCartera"/> al nacer. T0120 (sección A.2, Nómina): entran <c>Application/Payroll</c> y
 /// <c>Domain/Entities/Payroll</c>, y se fijan los métodos exactos de los cuatro puertos, quién los implementa y que ninguna
-/// tabla <c>PAY_</c> tiene FK a <c>LND_</c>. Personas, Aportes y Comercial (T0169–T0177) y <c>Domain/Entities/Inventory</c>
-/// suman sus carpetas cuando sus secciones los pasen a los puertos.</para>
+/// tabla <c>PAY_</c> tiene FK a <c>LND_</c>. T0120 (secciones A.3 y A.4): entran Personas (<c>Application/Core/People</c>), Comercial
+/// (<c>Application/Inventory</c>, <c>Domain/Entities/Inventory</c>, <c>Domain/Inventory</c>) y <c>Application/Savings</c> (vacía hasta la
+/// mudanza de T0185; el retiro de asociado ya pasa por la consulta, T0170), y ninguna tabla <c>INV_</c> tiene FK a <c>LND_</c>.</para>
 /// </summary>
 public class LaCarteraSoloSeTocaPorSusInterfaces
 {
@@ -31,6 +32,11 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         "Core/IngenIA365ERP.Application/Payroll",
         "Core/IngenIA365ERP.Domain/Entities/Payroll",
         "Core/IngenIA365ERP.Domain/Payroll",
+        "Core/IngenIA365ERP.Application/Core/People",
+        "Core/IngenIA365ERP.Application/Inventory",
+        "Core/IngenIA365ERP.Application/Savings",
+        "Core/IngenIA365ERP.Domain/Entities/Inventory",
+        "Core/IngenIA365ERP.Domain/Inventory",
     ];
 
     /// <summary>Carpetas de Cartera (relativas a <c>src/</c>) que no pueden nombrar a otros módulos salvo por sus puertos.</summary>
@@ -42,6 +48,11 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         "IngenIA365ERP.Application.Payroll",
         "IngenIA365ERP.Domain.Entities.Payroll",
         "IngenIA365ERP.Domain.Payroll",
+        "IngenIA365ERP.Application.Core.People",
+        "IngenIA365ERP.Application.Inventory",
+        // IngenIA365ERP.Application.Savings entra con la mudanza (T0185): hoy no tiene tipos y ArchUnit exige que la regla evalúe alguno.
+        "IngenIA365ERP.Domain.Entities.Inventory",
+        "IngenIA365ERP.Domain.Inventory",
     ];
 
     private static readonly (Regex Patron, string Que)[] HaciaCartera =
@@ -77,12 +88,20 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         ReglaSobreFuente.SinInfracciones(infracciones, "Otro módulo toca Cartera fuera de Common.Integration.Lending (FR-008, C34)");
     }
 
+    /// <summary>
+    /// Las entidades de ahorros y aportes que hoy viven en <c>Domain.Entities.Lending</c> y se conservan (data-model §13.1): no son Cartera
+    /// y la mudanza a <c>Domain.Entities.Savings</c> (T0184, sección B.2) las saca del espacio. Hasta entonces se eximen por nombre; al
+    /// mudarlas esta lista se vacía y se borra.
+    /// </summary>
+    private const string ConservadasAunEnLending = @"^IngenIA365ERP\.Domain\.Entities\.Lending\.(SavingsAccount)$";
+
     [Fact]
     public void Los_tipos_de_otros_modulos_no_dependen_de_Cartera_salvo_por_sus_puertos()
     {
+        var cartera = Types().That().ResideInNamespaceMatching(LendingSalvoPuertos).And().DoNotHaveFullNameMatching(ConservadasAunEnLending);
         foreach (var ns in EspaciosDeOtrosModulos)
             Types().That().ResideInNamespaceMatching(ConHijos(ns))
-                .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(LendingSalvoPuertos)
+                .Should().NotDependOnAny(cartera)
                 .Because($"FR-008, T90: {ns} sólo conoce Cartera por Application.Common.Integration.Lending")
                 .Check(Arquitectura.Value);
     }
@@ -125,7 +144,7 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void Ninguna_entidad_PAY_tiene_FK_ni_navegacion_hacia_LND_salvo_las_heredadas_que_suelta_el_retiro(bool postgres)
+    public void Ninguna_entidad_PAY_ni_INV_tiene_FK_ni_navegacion_hacia_LND_salvo_las_heredadas_que_suelta_el_retiro(bool postgres)
     {
         // C34: las FK heredadas (PAY_SettlementDeductions.LoanPortfolioId) las suelta RetiroDeLaCarteraHeredada (CH37); ninguna nueva.
         var heredadas = new HashSet<string>(StringComparer.Ordinal) { "PAY_SettlementDeductions.LoanPortfolioId" };
@@ -136,14 +155,15 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         using var db = new ApplicationDbContext(builder.Options);
 
         var violaciones = db.Model.GetEntityTypes()
-            .Where(t => (t.GetTableName() ?? string.Empty).StartsWith("PAY_", StringComparison.Ordinal))
+            .Where(t => (t.GetTableName() ?? string.Empty).StartsWith("PAY_", StringComparison.Ordinal)
+                        || (t.GetTableName() ?? string.Empty).StartsWith("INV_", StringComparison.Ordinal))
             .SelectMany(t => t.GetForeignKeys()
                 .Where(fk => (fk.PrincipalEntityType.GetTableName() ?? string.Empty).StartsWith("LND_", StringComparison.Ordinal))
                 .Select(fk => $"{t.GetTableName()}.{string.Join("+", fk.Properties.Select(p => p.Name))}"))
             .Where(v => !heredadas.Contains(v))
             .ToList();
 
-        Assert.True(violaciones.Count == 0, "Tablas de Nómina con FK a Cartera (FR-008, C34): " + string.Join(", ", violaciones));
+        Assert.True(violaciones.Count == 0, "Tablas de Nómina o Comercial con FK a Cartera (FR-008, C34): " + string.Join(", ", violaciones));
     }
 
     private static List<string> MetodosDe(System.Type puerto) => puerto
