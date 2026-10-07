@@ -23,11 +23,15 @@ public class ElMotorDeCarteraEsDecimal
         (new Regex(@"\bMath\.(Pow|Exp|Log|Log10|Sqrt)\(", RegexOptions.Compiled), "usa Math en coma flotante"),
     ];
 
+    /// <summary>La regla bitemporal que leen las versiones de Cartera (T0143): también sin coma flotante.</summary>
+    private static readonly string[] Archivos = ["Core/IngenIA365ERP.Domain/Common/VigenciaBitemporal.cs"];
+
     [Fact]
     public void El_motor_no_usa_coma_flotante()
     {
         var infracciones = ReglaSobreFuente.Infracciones(
-            ReglaSobreFuente.ArchivosEn(Carpetas), Prohibidos, relativo => Exentos.Contains(relativo));
+            ReglaSobreFuente.ArchivosEn(Carpetas).Concat(ReglaSobreFuente.ArchivosNombrados(Archivos)), Prohibidos,
+            relativo => Exentos.Contains(relativo));
         ReglaSobreFuente.SinInfracciones(infracciones, "El motor de Cartera usa coma flotante (FR-010)");
     }
 }

@@ -17,8 +17,9 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <see cref="FestivosLey51"/> (que dejó la semilla de Nómina, T93 regla 2).
 ///
 /// <para>Idempotente por (<c>Code</c>, <c>Key</c>, <c>ValidFrom</c>) y por <c>Code</c> de documento, numerando con el contador
-/// común; <b>nunca actualiza</b> una fila (son hechos). Los documentos <c>SarcAnexo1</c> y <c>ReglaDePerdidaEsperada</c> los agrega
-/// a esta semilla la fase de US9 con sus validadores. No hace nada hasta que la base administrativa tenga la migración
+/// común; <b>nunca actualiza</b> una fila (son hechos). Los documentos <c>SarcAnexo1</c> (Anexo 1 del 2025-01-31) y
+/// <c>ReglaDePerdidaEsperada</c> (CE 100 del 2026-05-12) entran desde la fase 3 de Cartera (T0204) con sus validadores, sin verificar
+/// (pregunta E8: el dueño los coteja; mientras tanto la cooperativa ve la alerta <c>Cartera.NormativaPendienteDeValidar</c>). No hace nada hasta que la base administrativa tenga la migración
 /// <see cref="MigracionQueCreaLasTablas"/>. Cada cooperativa recibe su copia por <see cref="NationalValuesReplicaSeeder"/>
 /// (Order 88) y por la tarea <c>valores-nacionales.replicar</c>.</para>
 /// </summary>
@@ -36,7 +37,7 @@ public sealed class PlatformNationalValuesSeeder : IDataSeeder
     {
         var admin = context.Admin!;
         if (!await TieneLaMigracionAsync(admin, context.Logger, ct)) return 0;
-        return await AplicarAsync(admin, [new ValidadorDeCatalogoDeModalidades(), new ValidadorDeTiposDeOrganizacion()], DateTime.UtcNow, context.Logger, ct);
+        return await AplicarAsync(admin, [new ValidadorDeCatalogoDeModalidades(), new ValidadorDeTiposDeOrganizacion(), .. Application.Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Todos], DateTime.UtcNow, context.Logger, ct);
     }
 
     internal static async Task<bool> TieneLaMigracionAsync(AdminDbContext admin, ILogger logger, CancellationToken ct)

@@ -127,6 +127,9 @@ public static class DependencyInjection
         // contexto por parametro) y los tres lectores unicos de la copia de la cooperativa.
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo, Domain.Common.NationalValues.ValidadorDeCatalogoDeModalidades>();
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo, Domain.Common.NationalValues.ValidadorDeTiposDeOrganizacion>();
+        // Feature 013 (T0204): los documentos normativos de Cartera (Anexo 1 y regla de pérdida esperada); el Anexo 2 lo suma K6a.
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Anexo1);
+        services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.ReglaDePerdidaEsperada);
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Payroll.NationalValues.EfectoDeReplicacionEnNomina>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Common.NationalValues.EfectoDeReplicacionLimitesLegales>();
         services.AddScoped<Common.NationalValues.ReplicacionDeValoresNacionales>();
@@ -203,6 +206,11 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Salespeople.RolDeVendedor>();
         // Feature 012 (T16, T139): el unico que asigna numero a un documento de inventario no fiscal.
         services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
+        // Feature 013 (T0207, T0208): el numerador y el registro del libro de Cartera, únicos escritores de lo suyo.
+        services.AddScoped<Lending.Common.NumeradorDeCartera>();
+        services.AddScoped<Lending.Ledger.RegistroDeCartera>();
+        // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
+        services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
         // registra cada historia; los maestros del documento (bodegas, productos, unidades, corte) los reemplaza US1/US3
         // (TryAdd); la guardia fiscal y la validación previa se registran en I3/I4 e I2 (sin registro se omiten).

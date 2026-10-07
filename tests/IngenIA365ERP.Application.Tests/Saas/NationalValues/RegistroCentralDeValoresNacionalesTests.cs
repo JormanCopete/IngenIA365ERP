@@ -228,7 +228,11 @@ public class RegistroCentralDeValoresNacionalesTests
         (await e.RegistrarDocumentoAsync(new RegisterRegulatoryDocumentCommand(nameof(RegulatoryDocumentKind.SarcAnexo2), "ANEXO2", Enero2026, null, 1, "{}", false, "CBCF")))
             .Error.Code.Should().Be(ErroresDeValoresNacionales.DocumentKindNotAvailableCode);
         (await e.RegistrarDocumentoAsync(new RegisterRegulatoryDocumentCommand(nameof(RegulatoryDocumentKind.SarcAnexo1), "ANEXO1", Enero2026, null, 1, "{}", false, "CBCF")))
-            .Error.Code.Should().Be(ErroresDeValoresNacionales.DocumentKindNotAvailableCode, "su validador lo registra Cartera en la fase de US9");
+            .Error.Code.Should().Be(ErroresDeValoresNacionales.DocumentInvalidCode, "desde la fase 3 Cartera registra el validador del Anexo 1 (T0204)");
+        var sinCartera = new RegisterRegulatoryDocumentCommandHandler(e.Db, e.Maestro, e.Reloj,
+            [new ValidadorDeCatalogoDeModalidades(), new ValidadorDeTiposDeOrganizacion()]);
+        (await sinCartera.Handle(new RegisterRegulatoryDocumentCommand(nameof(RegulatoryDocumentKind.SarcAnexo1), "ANEXO1", Enero2026, null, 1, "{}", false, "CBCF"), CancellationToken.None))
+            .Error.Code.Should().Be(ErroresDeValoresNacionales.DocumentKindNotAvailableCode, "una clase sin validador registrado no se admite");
     }
 
     [Fact]
@@ -300,8 +304,10 @@ public class RegistroCentralDeValoresNacionalesTests
         var documentos = await e.Db.PlatformRegulatoryDocuments.ToListAsync();
         primera.Should().Be(valores.Count + documentos.Count);
 
-        documentos.Select(d => d.Kind).Should().BeEquivalentTo([nameof(RegulatoryDocumentKind.CatalogoDeModalidades), nameof(RegulatoryDocumentKind.TiposDeOrganizacion)]);
-        documentos.Should().OnlyContain(d => !d.Verified, "versión inicial pendiente de cotejo (E4, E10)");
+        documentos.Select(d => d.Kind).Should().BeEquivalentTo([nameof(RegulatoryDocumentKind.CatalogoDeModalidades), nameof(RegulatoryDocumentKind.TiposDeOrganizacion),
+            // Feature 013, fase 3 (T0204): el Anexo 1 y la regla de pérdida esperada, sin verificar (E8).
+            nameof(RegulatoryDocumentKind.SarcAnexo1), nameof(RegulatoryDocumentKind.ReglaDePerdidaEsperada)]);
+        documentos.Should().OnlyContain(d => !d.Verified, "versión inicial pendiente de cotejo (E4, E8, E10)");
         valores.Single(v => v.Code == CodigosDeValorNacional.Smmlv).Value.Should().Be(1_750_905m);
         valores.Single(v => v.Code == CodigosDeValorNacional.Uvt).Value.Should().Be(52_374m);
         valores.Where(v => v.Code == CodigosDeValorNacional.Limite).Select(v => v.Key).Should()

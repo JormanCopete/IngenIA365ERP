@@ -70,7 +70,9 @@ public class SetPermissionAmountLimitCommandTests
 
         r.Error.Code.Should().Be("Approvals.AmountLimit.NotLimitable");
         Datos(r.Error).GetProperty("limitable").EnumerateArray().Select(e => e.GetString()).Should().Equal(
-            "Inventory.Purchases.Confirm", "Inventory.Adjustments.Confirm", "Inventory.Sales.Confirm", "Inventory.Sales.SellOnCredit");
+            "Inventory.Purchases.Confirm", "Inventory.Adjustments.Confirm", "Inventory.Sales.Confirm", "Inventory.Sales.SellOnCredit",
+            // Feature 013 (T0220; data-model parte 3 §6): las cuatro atribuciones operativas de Cartera.
+            "Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose");
     }
 
     [Fact]

@@ -1,0 +1,110 @@
+using FluentAssertions;
+using IngenIA365ERP.Domain.Common.Parametros;
+using IngenIA365ERP.Domain.Enums.Parameters;
+using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Parameters;
+
+namespace IngenIA365ERP.Application.Tests.Lending.Common;
+
+/// <summary>
+/// Feature 013, T0139 (T43, R17, CH36; data-model parte 3 §12.1): el catálogo <see cref="ParametrosDeCartera"/> es del módulo
+/// <c>LND</c>, sus claves no llevan el prefijo «Cartera.», cada una tiene el defecto, los ámbitos y la entrega de §12.1, y con
+/// <see cref="CatalogoDeCartera.EntregaVigente"/> en K1 no se ofrece ninguna clave de K2 en adelante.
+/// </summary>
+public class ParametrosDeCarteraTests
+{
+    private const ParameterScopeKind N = ParameterScopeKind.None;
+    private const ParameterScopeKind L = ParameterScopeKind.CreditLine;
+    private const ParameterScopeKind F = ParameterScopeKind.LendingFactType;
+
+    /// <summary>Clave → (defecto, ámbitos, entrega), de data-model §12.1.</summary>
+    public static TheoryData<string, string, ParameterScopeKind[], EntregaDeCartera> Claves => new()
+    {
+        { "Pagos.DiasMaximosFechaValor", "5", [N], EntregaDeCartera.K1 },
+        { "Pagos.FirmezaDiasPorClaseDeMedio", "{\"*\": 10, \"InternalOffset\": 0}", [N], EntregaDeCartera.K1 },
+        { "Mora.ToleranciaDeSaldoVencido", "0", [N, L], EntregaDeCartera.K1 },
+        { "Mora.SobreIntereses", "false", [N], EntregaDeCartera.K1 },
+        { "Causacion.ContinuaTrasFallecimiento", "true", [N, L], EntregaDeCartera.K1 },
+        { "Riesgo.ReglaMesesFaltantes", "MayorObservada", [N], EntregaDeCartera.K1 },
+        { "Riesgo.DiaLimiteCierre", "10", [N], EntregaDeCartera.K1 },
+        { "Riesgo.CierreProgramado", "false", [N], EntregaDeCartera.K1 },
+        { "Riesgo.RedondeoDeterioro", "Centavo", [N], EntregaDeCartera.K1 },
+        { "Riesgo.CalificacionDiariaConArrastre", "true", [N], EntregaDeCartera.K1 },
+        { "Riesgo.ExcepcionAportesArrastre", "false", [N], EntregaDeCartera.K1 },
+        { "Concentracion.LimiteIndividual", "", [N], EntregaDeCartera.K1 },
+        { "Concentracion.LimiteIndividualConGarantia", "", [N], EntregaDeCartera.K1 },
+        { "Contabilidad.ModoDePaso", "EnLinea", [N, F], EntregaDeCartera.K1 },
+        { "Contabilidad.Granularidad", "PorDia", [N, F], EntregaDeCartera.K1 },
+        { "Contabilidad.DisparadorDeLote", "FinDeCausacion", [N, F], EntregaDeCartera.K1 },
+        { "Contabilidad.HoraDeLote", "", [N, F], EntregaDeCartera.K1 },
+        { "Contabilidad.PoliticaSinRespuesta", "ConfirmarConPendiente", [N], EntregaDeCartera.K1 },
+        { "Contabilidad.FaltaDeRegla", "Advertir", [N, F], EntregaDeCartera.K1 },
+        { "Contabilidad.ValidacionPreviaSegundos", "3", [N], EntregaDeCartera.K1 },
+        { "Contabilidad.DisminucionDeDeterioro", "MismoEjercicioPrimero", [N], EntregaDeCartera.K1 },
+        { "Contabilidad.IndicadoresVigenciaMeses", "6", [N], EntregaDeCartera.K1 },
+        { "Contabilidad.DiferirComisiones", "false", [N], EntregaDeCartera.K1 },
+        { "Originacion.DiasVigenciaDeAprobacion", "30", [N, L], EntregaDeCartera.K1 },
+        { "Reservas.DiasDeVigencia", "5", [N], EntregaDeCartera.K1 },
+        { "Giros.DiasSinResultado", "3", [N], EntregaDeCartera.K1 },
+        { "Cupo.MoraMaximaParaVender", "0", [N], EntregaDeCartera.K1 },
+        { "Bloqueos.DiasDeMoraParaBloquear", "30", [N], EntregaDeCartera.K1 },
+        { "Segregacion.Incompatibilidades", "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}]", [N], EntregaDeCartera.K1 },
+        { "Libranza.CapacidadDeDescuento", "", [N], EntregaDeCartera.K2 },
+        { "Libranza.VentanaDeGiroDias", "3", [N], EntregaDeCartera.K2 },
+        { "Libranza.UmbralDeMoraDePagaduria", "", [N], EntregaDeCartera.K2 },
+        { "Cobranza.HorarioLunesAViernes", "07:00-19:00", [N], EntregaDeCartera.K1 },
+        { "Cobranza.HorarioSabado", "08:00-15:00", [N], EntregaDeCartera.K1 },
+        { "Cobranza.ContactosPorDia", "1", [N], EntregaDeCartera.K1 },
+        { "AvisoPrevio.DiasMinimos", "20", [N], EntregaDeCartera.K4 },
+        { "AvisoPrevio.UmbralDosComunicaciones", "", [N], EntregaDeCartera.K4 },
+        { "Mensajes.Reintentos", "3", [N], EntregaDeCartera.K1 },
+        { "Canales.UmbralDeFallas", "5", [N], EntregaDeCartera.K1 },
+        { "Centrales.DiasDeVigenciaDeConsulta", "30", [N, L], EntregaDeCartera.K1 },
+        { "Listas.UmbralDeCoincidenciaDeNombre", "0.90", [N], EntregaDeCartera.K1 },
+        { "Documentos.Firmante.Nombre", "", [N], EntregaDeCartera.K1 },
+        { "Documentos.Firmante.Cargo", "", [N], EntregaDeCartera.K1 },
+        { "Documentos.PazYSalvoIncluyeCodeudas", "false", [N], EntregaDeCartera.K1 },
+        { "Informes.RangosDeEdad", "30,60,90,180,360", [N], EntregaDeCartera.K1 },
+        { "Informes.PuntosAlertaUsura", "2.0", [N], EntregaDeCartera.K1 },
+    };
+
+    [Fact]
+    public void El_modulo_es_LND_y_las_claves_no_llevan_el_prefijo_Cartera()
+    {
+        ParametrosDeCartera.Modulo.Should().Be("LND");
+        ParametrosDeCartera.Definiciones.Should().OnlyContain(d => d.Modulo == "LND");
+        ParametrosDeCartera.Definiciones.Should().NotContain(d => d.Clave.StartsWith("Cartera.", StringComparison.Ordinal), "CH36");
+        ParametrosDeCartera.Definiciones.Select(d => d.Clave).Should().OnlyHaveUniqueItems()
+            .And.BeEquivalentTo(Claves.Select(c => (string)c[0]));
+    }
+
+    [Theory]
+    [MemberData(nameof(Claves))]
+    public void Cada_clave_lleva_su_defecto_sus_ambitos_y_su_entrega(string clave, string defecto, ParameterScopeKind[] ambitos, EntregaDeCartera entrega)
+    {
+        var d = ParametrosDeCartera.Definiciones.Single(x => x.Clave == clave);
+
+        d.DefectoSeguro.Should().Be(defecto);
+        d.AmbitosAdmitidos.Should().BeEquivalentTo(ambitos);
+        d.DisponibleDesde.Should().Be((EntregaDeModulo)entrega);
+    }
+
+    [Fact]
+    public void Con_K1_vigente_no_se_ofrece_ninguna_clave_de_K2_en_adelante()
+    {
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K1);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K1).ToList();
+
+        posteriores.Select(d => d.Clave).Should().BeEquivalentTo(
+            ["Libranza.CapacidadDeDescuento", "Libranza.VentanaDeGiroDias", "Libranza.UmbralDeMoraDePagaduria",
+             "AvisoPrevio.DiasMinimos", "AvisoPrevio.UmbralDosComunicaciones"]);
+        posteriores.Should().OnlyContain(d => !d.DisponibleEnLaEntrega());
+        ParametrosDeCartera.Definiciones.Except(posteriores).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
+    }
+
+    [Fact]
+    public void El_catalogo_de_parametros_de_la_plataforma_incluye_el_de_Cartera()
+    {
+        CatalogoDeParametros.Todas.Where(d => d.Modulo == "LND").Should().HaveCount(ParametrosDeCartera.Definiciones.Count);
+    }
+}

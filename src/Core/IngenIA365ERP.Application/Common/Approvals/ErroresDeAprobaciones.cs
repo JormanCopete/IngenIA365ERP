@@ -116,6 +116,11 @@ public static class PermisosLimitables
         "Inventory.Adjustments.Confirm",
         "Inventory.Sales.Confirm",
         "Inventory.Sales.SellOnCredit",
+        // Feature 013 (T0220; data-model parte 3 §6; contracts/api.md §2.4): las atribuciones operativas de Cartera.
+        "Lending.Disbursements.Execute",
+        "Lending.CreditLimits.Assign",
+        "Lending.ValidationFailures.Confirm",
+        "Lending.Payments.BackdateBeforeClose",
     ];
 
     public static bool Admite(string permiso) => Todos.Contains(permiso, StringComparer.Ordinal);

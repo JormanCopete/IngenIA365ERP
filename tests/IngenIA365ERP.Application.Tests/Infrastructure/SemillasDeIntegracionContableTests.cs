@@ -29,7 +29,8 @@ public class SemillasDeIntegracionContableTests
     public void Los_tipos_de_comprobante_suman_los_cinco_de_inventario()
     {
         var tipos = VoucherTypesSeeder.Semillas();
-        tipos.Should().HaveCount(23);
+        tipos.Should().HaveCount(24, "23 hasta la 012 y el CN de Cartera (feature 013, T0224)");
+        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN"]);
         tipos.Where(t => t.Module == "INV").Select(t => t.Code).Should().BeEquivalentTo(["FV", "EI", "SI", "NV", "CP", "TR", "AC", "CJ"]);
         tipos.Where(t => t.Module == "INV").Should().OnlyContain(t => t.Usage == VoucherUsage.Module);
         tipos.Single(t => t.Code == "NV").Name.Should().Be("Notas de venta");

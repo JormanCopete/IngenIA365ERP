@@ -119,6 +119,13 @@ public static class ProviderModelConventions
                     continue;
                 var nombre = check.ModelName;
                 var sql = System.Text.RegularExpressions.Regex.Replace(check.Sql, @"\[(\w+)\]", "\"$1\"");
+                // Feature 013 (CK_LND_DisbursementOrders_PaidByFile): un bit comparado con 1/0 es boolean en PostgreSQL.
+                foreach (var col in boolColumns)
+                {
+                    sql = sql
+                        .Replace($"\"{col}\" = 1", $"\"{col}\" = TRUE", StringComparison.Ordinal)
+                        .Replace($"\"{col}\" = 0", $"\"{col}\" = FALSE", StringComparison.Ordinal);
+                }
                 entityType.RemoveCheckConstraint(nombre);
                 entityType.AddCheckConstraint(nombre, sql);
             }

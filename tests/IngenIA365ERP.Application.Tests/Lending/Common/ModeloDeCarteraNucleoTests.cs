@@ -1,0 +1,209 @@
+using FluentAssertions;
+using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Persistence.DbContext;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Metadata;
+
+namespace IngenIA365ERP.Application.Tests.Lending.Common;
+
+/// <summary>
+/// Feature 013, T0137 (data-model §0.1, §0.2, §0.13, §14; DT §7 C42, C43, C46, C112): el modelo real de las tablas de
+/// <c>CarteraNucleo</c> en los dos motores. Toda entidad de <c>Domain.Entities.Lending</c> mapea a una tabla de la lista, con su
+/// <c>UK_{Tabla}_PublicId</c>, filtro de borrado lógico y FK <c>Restrict</c>; ninguna FK sale hacia Contabilidad, Comercial, Nómina
+/// ni Ahorros; los hechos de alto volumen son <c>bigint</c>; ningún nombre de índice pasa de 63 caracteres; los únicos de hechos y
+/// controles no filtran por borrado; las marcas H y <c>[SinDiffDeAuditoria]</c> son exactamente las fijadas.
+/// </summary>
+public class ModeloDeCarteraNucleoTests
+{
+    /// <summary>Las 74 + 17 de data-model §14 más las dos del grupo conectado (C112): 93.</summary>
+    private static readonly string[] Tablas =
+    [
+        // Configuración (19)
+        "LND_Setup", "LND_CreditLines", "LND_CreditLineVersions", "LND_CommercialTermEquivalences", "LND_CreditLineRateBands",
+        "LND_CreditLineDocumentRequirements", "LND_CreditLineInsurances", "LND_CreditLineCollateralRules", "LND_FactTypes",
+        "LND_NumberSequences", "LND_UserCreditLineScopes", "LND_AttributionMatrices", "LND_AttributionLevels", "LND_AttributionRules",
+        "LND_GoverningBodies", "LND_GoverningBodyRuleVersions", "LND_GoverningBodyMembers", "LND_RelatedParties",
+        "LND_ContributionBalanceLoads",
+        // Originación (20)
+        "LND_CreditApplications", "LND_CreditApplicationParties", "LND_CreditApplicationDocuments", "LND_CreditApplicationChecks",
+        "LND_CreditScores", "LND_CreditDecisions", "LND_Sessions", "LND_SessionAttendances", "LND_SessionItems", "LND_SessionVotes",
+        "LND_CaseParticipations", "LND_ScreeningResults", "LND_BureauQueries", "LND_Collaterals", "LND_PromissoryNotes",
+        "LND_CreditLimits", "LND_DebtorBlocks", "LND_LoanNumberReservations", "LND_DebtorControls", "LND_PrepaymentPreferences",
+        // Crédito y libro (17)
+        "LND_Loans", "LND_LoanParties", "LND_LoanTermsVersions", "LND_LoanOperations", "LND_LoanTransactions",
+        "LND_RepaymentScheduleVersions", "LND_RepaymentInstallments", "LND_LoanControls", "LND_LoanDailyPositions",
+        "LND_InstallmentNonDeductions", "LND_InsuranceClaims", "LND_InsolvencyProceedings", "LND_DisbursementOrders",
+        "LND_DisbursementOrderResults", "LND_DisbursementFiles", "LND_DisbursementFileLines", "LND_LoanPayrollLinks",
+        // Integración y mensajes (7)
+        "LND_InboundMessages", "LND_InboundMessageEvaluations", "LND_AccountingFactParts", "LND_ProcessRuns", "LND_ProcessRunErrors",
+        "LND_DebtorMessages", "LND_DebtorMessageEvents",
+        // Datos de K4 (2) y documentos (3, I5)
+        "LND_PriorNotices", "LND_CreditReportClaims", "LND_IssuedDocuments", "LND_IssuedDocumentLoans", "LND_IssuedDocumentEvents",
+        // Migración y activación (6 + 17)
+        "LND_MigrationLoads", "LND_MigrationLoadParts", "LND_MigrationLoadDifferences", "LND_MigrationSaleReconciliations",
+        "LND_ProvisionalCollections", "LND_Activations",
+        "LND_MigrationLoans", "LND_MigrationInstallments", "LND_MigrationBalances", "LND_MigrationRiskData", "LND_MigrationRestructurings",
+        "LND_MigrationCollaterals", "LND_MigrationCoDebtors", "LND_MigrationCreditLimits", "LND_MigrationBlocks",
+        "LND_MigrationAuthorizations", "LND_MigrationPriorNotices", "LND_MigrationBureauReports", "LND_MigrationClaims",
+        "LND_MigrationRelatedParties", "LND_MigrationChargedOff", "LND_MigrationSales", "LND_MigrationArrearsHistory",
+        // Grupo conectado (C112)
+        "LND_ConnectedGroups", "LND_ConnectedGroupMembers",
+    ];
+
+    /// <summary>Las 17 de preparación (data-model §29.3).</summary>
+    private static readonly string[] Preparacion =
+    [
+        "MigrationLoanRow", "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationRiskDataRow", "MigrationRestructuringRow",
+        "MigrationCollateralRow", "MigrationCoDebtorRow", "MigrationCreditLimitRow", "MigrationBlockRow", "MigrationAuthorizationRow",
+        "MigrationPriorNoticeRow", "MigrationBureauReportRow", "MigrationClaimRow", "MigrationRelatedPartyRow", "MigrationChargedOffRow",
+        "MigrationSaleRow", "MigrationArrearsHistoryRow",
+    ];
+
+    /// <summary>Hechos (H): DT §2.3, C42, C44, C112 y data-model partes 1 y 2.</summary>
+    private static readonly string[] Hechos =
+    [
+        "CreditLineVersion", "CreditLineRateBand", "CreditLineDocumentRequirement", "CreditLineInsurance", "CreditLineCollateralRule",
+        "CommercialTermEquivalence", "ContributionBalanceLoad", "CreditApplicationCheck", "CreditScore", "ScreeningResult", "BureauQuery",
+        "CreditLimit", "DebtorBlock", "PrepaymentPreference", "AttributionMatrix", "AttributionLevel", "AttributionRule", "CreditDecision",
+        "GoverningBodyRuleVersion", "SessionVote", "CaseParticipation", "ConnectedGroup", "ConnectedGroupMember", "LoanTermsVersion",
+        "RepaymentScheduleVersion", "RepaymentInstallment", "LoanTransaction", "LoanDailyPosition", "LoanOperation",
+        "DisbursementOrderResult", "DisbursementFile", "DisbursementFileLine", "InstallmentNonDeduction",
+        "LendingInboundMessageEvaluation", "AccountingFactPart", "DebtorMessage", "DebtorMessageEvent", "PriorNotice",
+        "IssuedLendingDocument", "IssuedDocumentLoan", "IssuedDocumentEvent", "MigrationLoadDifference", "ProvisionalCollection",
+        "LendingActivation", .. Preparacion,
+    ];
+
+    /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
+    private static readonly string[] SinDiff =
+        ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", .. Preparacion];
+
+    /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
+    private static readonly string[] Largas =
+    [
+        "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent",
+        "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
+    ];
+
+    /// <summary>Controles y documentos con estado cuyos únicos tampoco filtran por borrado lógico (data-model §0.1).</summary>
+    private static readonly string[] SinBajaLogica = ["Loan", "LoanControl", "DebtorControl", "LendingSetup"];
+
+    public static TheoryData<bool> Motores => new() { true, false };
+
+    private static List<IEntityType> DeCartera(IModel modelo) => modelo.GetEntityTypes()
+        .Where(e => e.ClrType.Namespace?.StartsWith("IngenIA365ERP.Domain.Entities.Lending", StringComparison.Ordinal) == true)
+        .ToList();
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Cada_entidad_mapea_a_una_tabla_de_CarteraNucleo_y_estan_todas(bool postgres)
+    {
+        var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
+
+        tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
+        Tablas.Should().HaveCount(93, "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112)");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Cada_entidad_tiene_PublicId_unico_filtro_de_baja_y_FK_Restrict(bool postgres)
+    {
+        foreach (var e in DeCartera(Modelo(postgres)))
+        {
+            var tabla = e.GetTableName();
+            e.GetIndexes().Should().Contain(i => i.IsUnique && i.GetDatabaseName() == $"UK_{tabla}_PublicId"
+                && i.Properties.Count == 1 && i.Properties[0].Name == nameof(BaseEntity.PublicId), tabla);
+            e.GetDeclaredQueryFilters().Should().NotBeEmpty($"{tabla} filtra el borrado lógico (Principio VII)");
+            e.GetForeignKeys().Should().OnlyContain(fk => fk.DeleteBehavior == DeleteBehavior.Restrict, $"{tabla}: nada en cascada");
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Ninguna_FK_sale_hacia_Contabilidad_Comercial_Nomina_ni_Ahorros(bool postgres)
+    {
+        var prohibidas = DeCartera(Modelo(postgres))
+            .SelectMany(e => e.GetForeignKeys().Select(fk => (Tabla: e.GetTableName()!, Destino: fk.PrincipalEntityType)))
+            .Where(x => x.Destino.GetTableName() is { } t && (t.StartsWith("ACC_") || t.StartsWith("INV_") || t.StartsWith("PAY_"))
+                || x.Destino.ClrType.Namespace?.Contains(".Savings", StringComparison.Ordinal) == true)
+            .Select(x => $"{x.Tabla} → {x.Destino.GetTableName()}")
+            .ToList();
+
+        prohibidas.Should().BeEmpty("lo que llega de otros módulos se guarda como dato (data-model §0.1, FR-008)");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Los_hechos_de_alto_volumen_son_bigint(bool postgres)
+    {
+        var largas = DeCartera(Modelo(postgres)).Where(e => e.FindPrimaryKey()!.Properties[0].ClrType == typeof(long))
+            .Select(e => e.ClrType.Name).ToList();
+
+        largas.Should().BeEquivalentTo(Largas);
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Ningun_nombre_de_indice_pasa_de_63_caracteres(bool postgres)
+    {
+        var largos = DeCartera(Modelo(postgres)).SelectMany(e => e.GetIndexes())
+            .Select(i => i.GetDatabaseName()!)
+            .Where(n => n.Length > 63)
+            .ToList();
+
+        largos.Should().BeEmpty("PostgreSQL trunca los identificadores a 63 caracteres (data-model §0.13)");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Los_unicos_de_hechos_y_controles_no_filtran_por_baja_logica(bool postgres)
+    {
+        var sinFiltro = Hechos.Concat(SinBajaLogica).ToHashSet();
+        var filtrados = DeCartera(Modelo(postgres))
+            .Where(e => sinFiltro.Contains(e.ClrType.Name))
+            .SelectMany(e => e.GetIndexes().Where(i => i.IsUnique && (i.GetFilter() ?? string.Empty).Contains("IsDeleted"))
+                .Select(i => $"{e.GetTableName()}.{i.GetDatabaseName()}"))
+            .ToList();
+
+        filtrados.Should().BeEmpty("hechos, proyecciones, controles y créditos nunca se dan de baja (data-model §0.1)");
+    }
+
+    [Fact]
+    public void Las_marcas_de_hecho_y_de_auditoria_son_las_fijadas()
+    {
+        var tipos = typeof(Domain.Entities.Lending.Loans.Loan).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false }
+                && t.Namespace?.StartsWith("IngenIA365ERP.Domain.Entities.Lending", StringComparison.Ordinal) == true)
+            .ToList();
+
+        tipos.Where(t => typeof(IHechoInmutable).IsAssignableFrom(t)).Select(t => t.Name).Should().BeEquivalentTo(Hechos);
+        tipos.Where(t => t.IsDefined(typeof(SinDiffDeAuditoriaAttribute), inherit: false)).Select(t => t.Name).Should().BeEquivalentTo(SinDiff);
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void La_activacion_y_el_setup_no_forman_ciclo_y_el_cierre_no_tiene_FK_todavia(bool postgres)
+    {
+        var modelo = Modelo(postgres);
+        var setup = modelo.FindEntityType(typeof(Domain.Entities.Lending.Configuration.LendingSetup))!;
+        setup.GetForeignKeys().Should().ContainSingle(fk => fk.PrincipalEntityType.GetTableName() == "LND_Activations");
+        modelo.FindEntityType(typeof(Domain.Entities.Lending.Migration.LendingActivation))!.GetForeignKeys()
+            .Should().NotContain(fk => fk.PrincipalEntityType.GetTableName() == "LND_Setup");
+
+        var partes = modelo.FindEntityType(typeof(Domain.Entities.Lending.Integration.AccountingFactPart))!;
+        partes.FindProperty("MonthlyCloseId").Should().NotBeNull();
+        partes.GetForeignKeys().SelectMany(fk => fk.Properties).Select(p => p.Name)
+            .Should().NotContain(["MonthlyCloseId", "MonthlyCloseReopeningId"], "las FK hacia el riesgo las crea CarteraRiesgo (C66)");
+    }
+
+    private static IModel Modelo(bool postgres)
+    {
+        var builder = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning));
+        builder = postgres
+            ? builder.UseNpgsql("Host=localhost;Database=x;Username=y;Password=z")
+            : builder.UseSqlServer("Server=localhost;Database=x;User Id=y;Password=z;TrustServerCertificate=True");
+        using var db = new ApplicationDbContext(builder.Options);
+        return db.Model;
+    }
+}

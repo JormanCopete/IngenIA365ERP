@@ -1,0 +1,11 @@
+{
+  // Feature 013 (T0204; data-model parte 3 §12.4; R15): versión inicial de la regla de pérdida esperada (Supersolidaria, Circular
+  // Externa 100 del 2026-05-12) para la semilla central. Obliga al modelo de referencia a las cooperativas de ahorro y crédito, a las
+  // multiactivas e integrales con sección de ahorro y a los fondos de empleados de categoría plena; las demás aplican el Anexo 1 y
+  // pueden adoptarlo voluntariamente con aviso de 15 días. Pendiente de cotejo (verified = false, pregunta E8).
+  "obligatedOrganizationTypes": [ "COOP_AHORRO_CREDITO", "COOP_MULTIACTIVA_SECCION_AC", "COOP_INTEGRAL_SECCION_AC", "FONDO_EMPLEADOS" ],
+  "obligatedEmployeeFundCategories": [ "PLENA" ],
+  "coveredSegments": [ "CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA", "COMERCIAL_PN" ],
+  "historyMonths": 36,
+  "voluntaryNoticeDays": 15
+}

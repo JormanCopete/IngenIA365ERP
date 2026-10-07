@@ -137,6 +137,8 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         // Feature 012 (T15, T138): el cerrojo pesimista de la confirmacion, con el SQL de cada motor sobre el propio contexto.
         services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
+        // Feature 013 (T0206, T34): el cerrojo de Cartera (LND_Setup → deudores → créditos → numeración).
+        services.AddScoped<Application.Lending.Common.ICerrojoDeCartera, Lending.CerrojoDeCartera>();
         // Feature 012 (I3, T597): el candado por clave (ambito de una lista de precios, rol de un tope) dentro de la transaccion.
         services.AddScoped<Application.Inventory.Common.ICerrojoPorClave, Inventory.CerrojoPorClave>();
         // Feature 012 (I3, T606): el toque de la sesion de caja antes del cerrojo del cobro (UPDATE ... WHERE Status = Open).
@@ -218,6 +220,9 @@ public static class DependencyInjection
         // Feature 013 (T0085; T76): las nueve plantillas de mensaje de Cartera «pendiente de validar» (Tenant, Order 91). No hace nada
         // hasta que la base tenga PlataformaParaCartera, que agrega las columnas de versión a COR_NotificationTemplates.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingMessageTemplatesSeeder>();
+        // Feature 013 (T0223; C110, C117): los 35 tipos de hecho de Cartera con su código corto (Tenant, Order 90). No hace nada hasta
+        // que la base tenga CarteraNucleo, que crea LND_FactTypes.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingFactTypesSeeder>();
         // La lectura de la central que sólo usa el replicador (T0057).
         services.AddScoped<Application.Common.NationalValues.IRegistroCentralDeValoresNacionales, Services.RegistroCentralDeValoresNacionales>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();

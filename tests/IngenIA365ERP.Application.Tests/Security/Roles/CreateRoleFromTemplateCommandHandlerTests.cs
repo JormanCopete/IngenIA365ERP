@@ -151,6 +151,6 @@ public class CreateRoleFromTemplateCommandHandlerTests
         otro.Value.Should().BeEmpty();
 
         var sinFiltro = await handler.Handle(new ListRoleTemplatesQuery(null), CancellationToken.None);
-        sinFiltro.Value.Should().HaveCount(8);
+        sinFiltro.Value.Should().HaveCount(8 + 13, "las ocho del comercio y las trece de Cartera (feature 013, T0221)");
     }
 }

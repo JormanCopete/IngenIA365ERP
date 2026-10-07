@@ -33,6 +33,8 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         // Feature 012, I4 (T731, T672): el procesador de documentos electrónicos. Pasa por IEjecutorEnCooperativa, escribe sólo con
         // EmitElectronicDocumentCommand y lo arranca sólo API/Program.cs (Procesador_de_documentos_electronicos_arranca_solo_desde_Program).
         Path.Combine("src", "Infrastructure", "IngenIA365ERP.ElectronicInvoicing", "Processor", "ProcesadorDeDocumentosElectronicos.cs"),
+        // Feature 013 (T0226, T0144): el procesador de Cartera; su pasada (PasadaDeCartera) corre todo por IEjecutorEnCooperativa.
+        Path.Combine("src", "Presentation", "IngenIA365ERP.API", "Integration", "ProcesadorDeCartera.cs"),
     ];
 
     [Fact]

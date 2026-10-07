@@ -253,6 +253,19 @@ try
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
 
+    // Feature 013 (T0225, T0226; T5, PM-13, C59): el procesador de Cartera (ciclo diario, cierre, reapertura y correccion por valor
+    // nacional), con el arrendamiento lending.process por cooperativa. Queda registrado aunque este apagado (Lending:Process:Enabled),
+    // para que las pruebas conduzcan una pasada a mano.
+    builder.Services
+        .AddOptions<IngenIA365ERP.API.Integration.OpcionesDelProcesoDeCartera>()
+        .Bind(builder.Configuration.GetSection(IngenIA365ERP.API.Integration.OpcionesDelProcesoDeCartera.SectionName))
+        .Validate(o => o.Problemas().Count == 0, "La sección Lending:Process de la configuración no es válida; ver OpcionesDelProcesoDeCartera.Problemas.")
+        .ValidateOnStart();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Processes.PasadaDeCartera>();
+    builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProcesadorDeCartera>();
+    if (builder.Configuration.GetValue("Lending:Process:Enabled", true))
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProcesadorDeCartera>());
+
     // Feature 012, I2 (T527): el despachador de mensajes de integracion (en linea, lotes programados y ordenados) y la
     // politica de reintentos que aplica RegisterDeliveryResultCommand, desde Integration:Retries (T10).
     builder.Services.Configure<IngenIA365ERP.Application.Common.Integration.ReintentosDeIntegracion>(

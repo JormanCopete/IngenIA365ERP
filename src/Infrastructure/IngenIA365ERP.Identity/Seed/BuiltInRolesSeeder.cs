@@ -76,6 +76,19 @@ public static class BuiltInRolesSeeder
     internal static bool EsSaasGlobal(string codigo) =>
         PermisosSaasGlobales.Contains(codigo, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Lo que un rol integrado no recibe aunque su glob lo alcance (feature 013, T61, T0220; contracts/api.md §2.3): a
+    /// <c>CompanyAdmin</c> se le excluyen de su <c>*</c> las decisiones de crédito y el voto en sesiones, porque administrar no es
+    /// aprobar crédito (C86). Es la misma lista que excluye la plantilla <c>cartera.administrador</c>.
+    /// </summary>
+    internal static readonly Dictionary<string, string[]> Exclusiones = new()
+    {
+        ["CompanyAdmin"] = LendingPermissionCatalogSeeder.ExcluidosDelAdministrador,
+    };
+
+    internal static bool Excluido(string codigoRol, string codigo) =>
+        Exclusiones.TryGetValue(codigoRol, out var patrones) && patrones.Any(p => MatchesGlob(p, codigo));
+
     /// <summary>Patrón glob de permisos por rol.</summary>
     internal static readonly Dictionary<string, string[]> PermissionPatterns = new()
     {
@@ -327,6 +340,7 @@ public static class BuiltInRolesSeeder
         return codigosCatalogo
             .Where(c => patrones.Any(pat => MatchesGlob(pat, c)))
             .Where(c => !EsSaasGlobal(c))
+            .Where(c => !Excluido(codigoRol, c))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 

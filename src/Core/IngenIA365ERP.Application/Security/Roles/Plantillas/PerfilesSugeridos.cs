@@ -16,13 +16,18 @@ namespace IngenIA365ERP.Application.Security.Roles.Plantillas;
 /// <c>Inventory.Catalog.*</c>) que se expanden contra el catálogo.
 /// </param>
 /// <param name="Notes">Alcance y montos: lo que la plantilla no puede dar y hay que asignar aparte.</param>
+/// <param name="Excluidos">
+/// Feature 013 (C86): códigos o patrones que se quitan de lo que los <paramref name="Patrones"/> alcanzan
+/// (<c>cartera.administrador</c> = <c>Lending.*</c> salvo <c>Lending.Decisions.*</c> y <c>Lending.Sessions.Vote</c>).
+/// </param>
 public sealed record PerfilSugerido(
     string Key,
     string Module,
     string Actor,
     string Description,
     IReadOnlyList<string> Patrones,
-    string Notes);
+    string Notes,
+    IReadOnlyList<string>? Excluidos = null);
 
 /// <summary>
 /// Los perfiles sugeridos del inventario comercial (feature 012, T127; FR-093, T48; contracts/api.md §1.4). Viven en
@@ -39,6 +44,9 @@ public sealed record PerfilSugerido(
 public static class PerfilesSugeridos
 {
     public const string ModuloInventario = "Inventory";
+
+    /// <summary>El módulo de las trece plantillas de Cartera (feature 013, T0221; DT §2.14; contracts/api.md §2.5).</summary>
+    public const string ModuloCartera = "Lending";
 
     public static IReadOnlyList<PerfilSugerido> Todos { get; } =
     [
@@ -118,6 +126,124 @@ public static class PerfilesSugeridos
                 "AuditLog.View", "AuditLog.Export", "AuditLog.VerifyIntegrity",
             ],
             "Todo, sin escritura: verificar la integridad levanta alertas pero no cambia datos."),
+
+        // ----------------------------------------------------------------- Cartera (feature 013, T0221; api.md §2.5; C85, C86) --
+        new("cartera.administrador", ModuloCartera, "Administrador de Cartera",
+            "Parametriza y opera toda la Cartera, pero no decide créditos ni vota en sesiones: administrar no es aprobar crédito.",
+            ["Lending.*"],
+            "Todas las oficinas y líneas (trae Lending.Scope.AllOffices y AllLines); sin límite de monto.",
+            ["Lending.Decisions.*", "Lending.Sessions.Vote"]),
+
+        new("cartera.asesor", ModuloCartera, "Asesor de crédito",
+            "Simula, radica y envía solicitudes, consulta centrales, registra garantías y pagarés, emite documentos y escribe al deudor.",
+            [
+                "Lending.Simulations.Run", "Lending.Applications.Read", "Lending.Applications.Create", "Lending.Applications.Submit",
+                "Lending.PrepaymentPreferences.Manage", "Lending.CreditBureau.Query", "Lending.Guarantees.Read", "Lending.Guarantees.Manage",
+                "Lending.PromissoryNotes.Manage", "Lending.CreditLimits.Read", "Lending.Loans.Read", "Lending.Payoffs.Read",
+                "Lending.Documents.Read", "Lending.Documents.Issue", "Lending.DebtorMessages.Read", "Lending.DebtorMessages.Send",
+                "Core.People.Create", "Compliance.HabeasData.RecordConsent",
+            ],
+            "Sus oficinas y líneas: hay que asignárselas (alcance de Cartera); sin filas de alcance no ve ninguna."),
+
+        new("cartera.analista", ModuloCartera, "Analista de crédito",
+            "Analiza solicitudes, lee centrales y decide en el nivel de analista de la matriz.",
+            [
+                "Lending.Applications.Read", "Lending.Applications.Analyze", "Lending.Decisions.Analyst", "Lending.CreditBureau.Query",
+                "Lending.CreditBureau.ReadReports", "Lending.Guarantees.Read", "Lending.CreditLimits.Read", "Lending.Loans.Read",
+                "Lending.Payoffs.Read", "Lending.Ratings.Read",
+            ],
+            "Sus oficinas y líneas."),
+
+        new("cartera.jefe", ModuloCartera, "Jefe de cartera",
+            "Decide en el nivel de coordinación, asigna cupos, desembolsa, reversa pagos, ordena el cierre y opera procesos, bandeja y migración.",
+            [
+                "Lending.Decisions.Coordinator", "Lending.Applications.Read", "Lending.Applications.Cancel", "Lending.PrepaymentPreferences.Manage",
+                "Lending.CreditLimits.Read", "Lending.CreditLimits.Assign", "Lending.Blocks.Manage", "Lending.Disbursements.Execute",
+                "Lending.Disbursements.Void", "Lending.DisbursementOrders.Void", "Lending.DisbursementFiles.Generate", "Lending.Loans.Read",
+                "Lending.Payoffs.Read", "Lending.Payments.Simulate", "Lending.Payments.Reverse", "Lending.MonthlyClose.Execute",
+                "Lending.Ratings.Read", "Lending.Novelties.Read", "Lending.Novelties.Request", "Lending.WriteOffs.Prepare",
+                "Lending.Sessions.Read", "Lending.Sessions.Manage", "Lending.Messages.*", "Lending.Processes.*", "Lending.Reconciliation.View",
+                "Lending.Migration.Load", "Lending.PayrollNotApplied.Manage", "Lending.Collections.Read", "Lending.Collections.Assign",
+                "Lending.CollectionStages.Manage", "Lending.Alerts.*", "Lending.Reports.View", "Lending.Reports.Export",
+                "Lending.Parameters.View", "Lending.Templates.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas; límite de monto en Lending.Disbursements.Execute y Lending.CreditLimits.Assign si la cooperativa lo fija."),
+
+        new("cartera.comite-credito", ModuloCartera, "Secretaría del comité de crédito",
+            "Convoca las sesiones del comité, registra asistencia, puntos y votos y cierra el acta.",
+            [
+                "Lending.Sessions.Read", "Lending.Sessions.Manage", "Lending.Sessions.RecordVotes", "Lending.Sessions.Close",
+                "Lending.Applications.Read", "Lending.RelatedParties.Read", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas."),
+
+        new("cartera.comite-riesgos", ModuloCartera, "Comité de riesgos",
+            "Prepara la evaluación de cartera, lee calificaciones y lleva las sesiones del comité.",
+            [
+                "Lending.PortfolioEvaluations.Prepare", "Lending.Ratings.Read", "Lending.Sessions.Read", "Lending.Sessions.Manage",
+                "Lending.Sessions.RecordVotes", "Lending.Sessions.Close", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas."),
+
+        new("cartera.gerente", ModuloCartera, "Gerente",
+            "Decide en los niveles de gerencia y de excepción, confirma validaciones fallidas y autoriza pagos con fecha valor antes de un cierre.",
+            [
+                "Lending.Decisions.Management", "Lending.Decisions.Exceptions", "Lending.Condonations.Request", "Lending.ValidationFailures.Confirm",
+                "Lending.Payments.BackdateBeforeClose", "Lending.Applications.Read", "Lending.Loans.Read", "Lending.Payoffs.Read",
+                "Lending.Ratings.Read", "Lending.Reports.View", "Lending.Dashboard.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas; límites operativos si la cooperativa los fija."),
+
+        new("cartera.consejo", ModuloCartera, "Secretaría del consejo",
+            "Lleva las sesiones del consejo y aplica lo que decide: castigos, evaluación de cartera, modelo de deterioro, política SARC y diferencias de la migración.",
+            [
+                "Lending.Sessions.Read", "Lending.Sessions.Manage", "Lending.Sessions.RecordVotes", "Lending.Sessions.Close",
+                "Lending.RelatedParties.Read", "Lending.WriteOffs.Apply", "Lending.PortfolioEvaluations.Apply", "Lending.ImpairmentModel.Manage",
+                "Lending.RiskPolicy.Validate", "Lending.Migration.AcceptDifferences", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas."),
+
+        new("cartera.gestor-cobranza", ModuloCartera, "Gestor de cobranza",
+            "Gestiona la cobranza: registra gestiones, propone acuerdos y escribe al deudor.",
+            [
+                "Lending.Collections.Read", "Lending.Collections.RecordActivity", "Lending.PaymentAgreements.Create", "Lending.Loans.Read",
+                "Lending.Payoffs.Read", "Lending.DebtorMessages.Read", "Lending.DebtorMessages.Send", "Lending.PriorNotices.Read",
+            ],
+            "Sus oficinas: hay que asignárselas."),
+
+        new("cartera.oficial-cumplimiento", ModuloCartera, "Oficial de cumplimiento",
+            "Carga listas restrictivas y libera coincidencias, atiende al titular de los datos y tramita reclamos sobre el reporte.",
+            [
+                "Compliance.RestrictiveLists.View", "Compliance.RestrictiveLists.Load", "Compliance.RestrictiveLists.Release",
+                "Compliance.DataSubjectRequests.*", "Compliance.HabeasData.ViewHistory", "Lending.RelatedParties.Read",
+                "Lending.CreditReportClaims.*", "AuditLog.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas."),
+
+        new("cartera.contador", ModuloCartera, "Contador (consulta y regulatorios)",
+            "Consulta toda la Cartera, concilia con contabilidad y genera y marca los archivos regulatorios.",
+            [
+                "Lending.*.Read", "Lending.*.View", "Lending.Reports.*", "Lending.Reconciliation.View", "Lending.RegulatoryReports.Generate",
+                "Lending.CreditBureauFiles.Generate", "Lending.RegulatoryFiles.MarkUploaded", "Core.NationalValues.View",
+                "Core.NationalValues.Review", "Core.RegulatoryProfile.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas. La matriz, los lotes y los indicadores (Accounting.Lending*, Accounting.RegulatoryIndicators.*) van en su rol contable."),
+
+        new("cartera.auditor", ModuloCartera, "Auditor (sólo lectura)",
+            "Lee toda la Cartera, exporta informes y verifica la integridad del libro y de la auditoría; no escribe.",
+            [
+                "Lending.*.Read", "Lending.*.View", "Lending.Reports.View", "Lending.Reports.Export", "Lending.Integrity.Verify",
+                "AuditLog.View", "AuditLog.Export", "AuditLog.VerifyIntegrity", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas, sin escritura."),
+
+        new("cartera.revisor-fiscal", ModuloCartera, "Revisor fiscal (sólo lectura)",
+            "Igual que el auditor: lee toda la Cartera (las actas entran por Lending.Sessions.Read), exporta y verifica; no escribe.",
+            [
+                "Lending.*.Read", "Lending.*.View", "Lending.Reports.View", "Lending.Reports.Export", "Lending.Integrity.Verify",
+                "AuditLog.View", "AuditLog.Export", "AuditLog.VerifyIntegrity", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+            ],
+            "Todas las oficinas y líneas, sin escritura."),
     ];
 
     /// <summary>La plantilla por clave (sin distinguir mayúsculas), o <c>null</c>.</summary>
@@ -161,6 +287,14 @@ public static class PerfilesSugeridos
             var casan = codigosDelCatalogo.Where(c => expresion.IsMatch(c)).ToList();
             if (casan.Count == 0) omitidos.Add(patron);
             foreach (var c in casan) codigos.Add(c);
+        }
+
+        foreach (var excluido in plantilla.Excluidos ?? [])
+        {
+            var expresion = new Regex(
+                "^" + Regex.Escape(excluido).Replace("\\*", ".*") + "$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            codigos.RemoveWhere(expresion.IsMatch);
         }
 
         return ([.. codigos], [.. omitidos]);

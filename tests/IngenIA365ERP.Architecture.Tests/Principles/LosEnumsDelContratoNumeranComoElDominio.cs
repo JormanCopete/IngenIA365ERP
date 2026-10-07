@@ -78,9 +78,26 @@ public class LosEnumsDelContratoNumeranComoElDominio
     }
 
     /// <summary>
-    /// Los enums del contrato de obligaciones con los números de data-model §9.4. La comparación con los enums del dominio de Cartera
-    /// (<c>PaymentModality</c>, <c>NonDeductionReason</c>, <c>PrepaymentChoice</c>, <c>LoanConcept</c>, <c>LoanStatus</c>) la suma la
-    /// sección C de la fase Fundacional B, cuando nacen esos enums (T0132); mientras tanto se fijan aquí los números escritos.
+    /// Cada enum del contrato de obligaciones lleva los mismos nombres y números que su par del dominio de Cartera (data-model §9.4,
+    /// CH40; T0121): <c>ModalidadDePago</c> ↔ <c>PaymentModality</c>, <c>MotivoDeNoDescuento</c> ↔ <c>NonDeductionReason</c>,
+    /// <c>EleccionDeAbono</c> ↔ <c>PrepaymentChoice</c>, <c>ConceptoDeObligacion</c> ↔ <c>LoanConcept</c>, <c>EstadoDeObligacion</c>
+    /// ↔ <c>LoanStatus</c>. Si alguno diverge, el contrato traduciría mal el número que guarda el libro.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.ModalidadDePago), typeof(IngenIA365ERP.Domain.Enums.Lending.PaymentModality))]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.MotivoDeNoDescuento), typeof(IngenIA365ERP.Domain.Enums.Lending.NonDeductionReason))]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.EleccionDeAbono), typeof(IngenIA365ERP.Domain.Enums.Lending.PrepaymentChoice))]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.ConceptoDeObligacion), typeof(IngenIA365ERP.Domain.Enums.Lending.LoanConcept))]
+    [InlineData(typeof(IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeObligacion), typeof(IngenIA365ERP.Domain.Enums.Lending.LoanStatus))]
+    public void Cada_enum_del_contrato_numera_como_su_par_del_dominio(Type contrato, Type dominio)
+    {
+        static Dictionary<string, int> Valores(Type t) => Enum.GetNames(t).ToDictionary(n => n, n => Convert.ToInt32(Enum.Parse(t, n)));
+
+        Assert.Equal(Valores(dominio), Valores(contrato));
+    }
+
+    /// <summary>
+    /// Los enums del contrato de obligaciones con los números de data-model §9.4 (los que no tienen par en el dominio, escritos).
     /// </summary>
     [Fact]
     public void Los_enums_del_contrato_de_obligaciones_llevan_los_numeros_de_data_model()

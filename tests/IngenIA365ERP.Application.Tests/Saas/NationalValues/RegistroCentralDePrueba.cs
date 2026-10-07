@@ -23,7 +23,9 @@ public sealed class RegistroCentralDePrueba : IDisposable
     public TestAdminDbContext Db { get; }
     public ICurrentCentralUserContext Maestro { get; } = Substitute.For<ICurrentCentralUserContext>();
     public IDateTimeService Reloj { get; } = Substitute.For<IDateTimeService>();
-    public IReadOnlyList<IValidadorDeDocumentoNormativo> Validadores { get; } = [new ValidadorDeCatalogoDeModalidades(), new ValidadorDeTiposDeOrganizacion()];
+    /// <summary>Los de la plataforma y, desde la fase 3 de Cartera (T0204), los del Anexo 1 y la regla de pérdida esperada.</summary>
+    public IReadOnlyList<IValidadorDeDocumentoNormativo> Validadores { get; } =
+        [new ValidadorDeCatalogoDeModalidades(), new ValidadorDeTiposDeOrganizacion(), .. IngenIA365ERP.Application.Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Todos];
 
     public RegistroCentralDePrueba(string? nombreDeLaBase = null)
     {

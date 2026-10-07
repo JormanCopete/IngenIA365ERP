@@ -26,6 +26,22 @@ public interface IVersionBitemporal
 }
 
 /// <summary>
+/// Lo que la regla de las versiones propias de Cartera necesita de una versión (feature 013, T38, R3, T0203; data-model §0.6): sin
+/// <c>ValidTo</c> guardado, con un ordinal por dueño y el instante en que se registró. (nuevo)
+/// </summary>
+public interface IVersionDeCartera
+{
+    /// <summary>Desde cuándo rige (D).</summary>
+    DateOnly ValidFrom { get; }
+
+    /// <summary>Ordinal por dueño (1..n): desempata dos versiones con el mismo <see cref="ValidFrom"/>.</summary>
+    int VersionNumber { get; }
+
+    /// <summary>Instante UTC en que se registró (R).</summary>
+    DateTime RegisteredAt { get; }
+}
+
+/// <summary>
 /// Regla única de lectura de lo que rige a la fecha D con la información conocida hasta R (feature 013, T38, R48;
 /// data-model parte 3 §3). Pura: sin IO, sin reloj, sin EF.
 ///
@@ -61,6 +77,29 @@ public static class VigenciaBitemporal
             .Where(v => v.ValidFrom <= D && D <= (v.ValidTo ?? FinImplicito(v, vigentes)))
             .OrderByDescending(v => v.ValidFrom)
             .ThenByDescending(v => v.Sequence)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// La regla de las <b>versiones propias de Cartera</b> (feature 013, T38, R3, T0203; data-model §0.6): líneas y sus hijas,
+    /// equivalencias, matrices de atribución, reglas de órganos, cupos, preferencias, saldos de aportes, condiciones y planes. No
+    /// guardan <c>ValidTo</c> ni se corrigen con <c>SupersedesPublicId</c>: la vigencia termina la víspera del <c>ValidFrom</c> de la
+    /// versión siguiente conocida en R, y un fin de vigencia es una versión que lo dice.
+    /// <list type="number">
+    /// <item>Entran las versiones con <c>RegisteredAt ≤ R</c> y <c>ValidFrom ≤ D</c>.</item>
+    /// <item>Gana el <c>ValidFrom</c> más reciente y, si empatan, el <c>VersionNumber</c> mayor.</item>
+    /// </list>
+    /// Sin versión que cumpla devuelve nulo. Lleva otro nombre que <see cref="Vigente{T}"/> porque C# no distingue dos métodos por
+    /// la restricción del genérico; la regla de los valores nacionales queda intacta. (nuevo)
+    /// </summary>
+    public static T? VigenteDeCartera<T>(IEnumerable<T> versiones, DateOnly D, DateTime R) where T : class, IVersionDeCartera
+    {
+        ArgumentNullException.ThrowIfNull(versiones);
+
+        return versiones
+            .Where(v => v.RegisteredAt <= R && v.ValidFrom <= D)
+            .OrderByDescending(v => v.ValidFrom)
+            .ThenByDescending(v => v.VersionNumber)
             .FirstOrDefault();
     }
 

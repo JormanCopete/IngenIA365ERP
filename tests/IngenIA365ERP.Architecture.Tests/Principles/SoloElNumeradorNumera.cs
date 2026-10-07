@@ -29,7 +29,27 @@ public class SoloElNumeradorNumera
     ];
 
     /// <summary>Nombres de archivo (sin ruta) que pueden escribirlas.</summary>
-    private static readonly string[] NumeradoresAutorizados = ["Numerador.cs", "NumeradorFiscal.cs"];
+    private static readonly string[] NumeradoresAutorizados = ["Numerador.cs", "NumeradorFiscal.cs", "NumeradorDeCartera.cs"];
+
+    /// <summary>
+    /// Feature 013 (T0144, C48): en Cartera el <c>Number</c> de toda tabla y el <c>NextValue</c> de <c>LND_NumberSequences</c> los
+    /// escribe sólo <c>NumeradorDeCartera</c> (el de un hecho nace en su inicializador con el número que el numerador devolvió).
+    /// </summary>
+    [Fact]
+    public void En_Cartera_solo_el_numerador_asigna_numeros()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var escritura = new Regex(@"\.Number\s*(=(?!=)|\+=|-=|\+\+|--)", RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => f.Replace(Path.DirectorySeparatorChar, '/').Contains("/Lending/", StringComparison.Ordinal))
+            .Where(f => Path.GetFileName(f) != "NumeradorDeCartera.cs")
+            .Where(f => escritura.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+
+        Assert.True(infractores.Count == 0, "Número de Cartera asignado fuera de NumeradorDeCartera (C48):\n  " + string.Join("\n  ", infractores));
+        Assert.True(File.Exists(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Common", "NumeradorDeCartera.cs")));
+    }
 
     /// <summary>
     /// Carpetas (fragmentos de ruta) del comercio donde <c>Number</c> es el número de un documento de inventario y sólo lo

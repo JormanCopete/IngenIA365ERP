@@ -1,0 +1,138 @@
+{
+  // Feature 013 (T0204; data-model parte 3 §12.4; R54): versión inicial del Anexo 1 del SARC (Supersolidaria, Circular Básica
+  // Contable y Financiera, Capítulo II del Título IV, versión del 2025-01-31) para la semilla central (PlatformNationalValuesSeeder,
+  // Admin, Order 6). TODO pendiente de cotejo con el texto oficial (verified = false, pregunta E8): mientras tanto la cooperativa ve
+  // la alerta Cartera.NormativaPendienteDeValidar. Los porcentajes van como fracción (0,01 = 1 %). Un cambio de la norma es una
+  // versión nueva del documento, nunca un cambio de programa.
+  "segments": [
+    {
+      "code": "COMERCIAL_PN",
+      "name": "Comercial persona natural",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 90 },
+        { "category": "C", "minDaysPastDue": 91, "maxDaysPastDue": 180 },
+        { "category": "D", "minDaysPastDue": 181, "maxDaysPastDue": 360 },
+        { "category": "E", "minDaysPastDue": 361, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.20 },
+        { "category": "D", "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "COMERCIAL_PJ",
+      "name": "Comercial persona jurídica",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 90 },
+        { "category": "C", "minDaysPastDue": 91, "maxDaysPastDue": 180 },
+        { "category": "D", "minDaysPastDue": 181, "maxDaysPastDue": 360 },
+        { "category": "E", "minDaysPastDue": 361, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.20 },
+        { "category": "D", "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "subcategory": "E1", "condition": { "kind": "DaysPastDue", "from": 361, "to": 540 }, "base": "Uncovered", "rate": 0.75 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "DaysPastDue", "from": 541, "to": null }, "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "CONSUMO",
+      "name": "Consumo",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 60 },
+        { "category": "C", "minDaysPastDue": 61, "maxDaysPastDue": 90 },
+        { "category": "D", "minDaysPastDue": 91, "maxDaysPastDue": 180 },
+        { "category": "E", "minDaysPastDue": 181, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.10 },
+        { "category": "D", "base": "Uncovered", "rate": 0.20 },
+        { "category": "E", "subcategory": "E1", "condition": { "kind": "DaysPastDue", "from": 181, "to": 360 }, "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "DaysPastDue", "from": 361, "to": null }, "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "MICROCREDITO",
+      "name": "Microcrédito",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 30 },
+        { "category": "B", "minDaysPastDue": 31, "maxDaysPastDue": 60 },
+        { "category": "C", "minDaysPastDue": 61, "maxDaysPastDue": 90 },
+        { "category": "D", "minDaysPastDue": 91, "maxDaysPastDue": 120 },
+        { "category": "E", "minDaysPastDue": 121, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.20 },
+        { "category": "D", "base": "Uncovered", "rate": 0.50 },
+        { "category": "E", "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    },
+    {
+      "code": "VIVIENDA",
+      "name": "Vivienda",
+      "categories": [
+        { "category": "A", "minDaysPastDue": 0, "maxDaysPastDue": 60 },
+        { "category": "B", "minDaysPastDue": 61, "maxDaysPastDue": 150 },
+        { "category": "C", "minDaysPastDue": 151, "maxDaysPastDue": 360 },
+        { "category": "D", "minDaysPastDue": 361, "maxDaysPastDue": 540 },
+        { "category": "E", "minDaysPastDue": 541, "maxDaysPastDue": null }
+      ],
+      "impairmentRates": [
+        { "category": "A", "base": "Uncovered", "rate": 0 },
+        { "category": "B", "base": "Uncovered", "rate": 0.01 },
+        { "category": "C", "base": "Uncovered", "rate": 0.10 },
+        { "category": "D", "base": "Uncovered", "rate": 0.20 },
+        { "category": "E", "subcategory": "E1", "condition": { "kind": "MonthsInE", "from": 0, "to": 6 }, "base": "Uncovered", "rate": 0.30 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "MonthsInE", "from": 7, "to": 18 }, "base": "Uncovered", "rate": 0.60 },
+        { "category": "E", "subcategory": "E2", "condition": { "kind": "MonthsInE", "from": 19, "to": null }, "base": "Uncovered", "rate": 1 }
+      ],
+      "accrualSuspensionCategory": "C"
+    }
+  ],
+  "singleInstallment": [
+    { "category": "D", "minDaysPastDue": 8 },
+    { "category": "E", "minDaysPastDue": 91 }
+  ],
+  "drag": { "fromCategory": "B", "withinSegment": true, "includesCoDebts": false },
+  "contributions": { "deductible": true, "requiresNoLosses": true, "requiresMinimumSolvency": true },
+  "collateral": [
+    {
+      "nature": "NonMortgage",
+      "brackets": [
+        { "fromMonths": 0, "toMonths": 12, "admissibleFraction": 0.70 },
+        { "fromMonths": 12, "toMonths": 24, "admissibleFraction": 0.50 },
+        { "fromMonths": 24, "toMonths": null, "admissibleFraction": 0 }
+      ]
+    },
+    {
+      "nature": "Mortgage",
+      "brackets": [
+        { "fromMonths": 0, "toMonths": 18, "admissibleFraction": 0.70 },
+        { "fromMonths": 18, "toMonths": 24, "admissibleFraction": 0.50 },
+        { "fromMonths": 24, "toMonths": 30, "admissibleFraction": 0.30 },
+        { "fromMonths": 30, "toMonths": 36, "admissibleFraction": 0.15 },
+        { "fromMonths": 36, "toMonths": null, "admissibleFraction": 0 }
+      ]
+    }
+  ],
+  "restructured": { "minimumCategory": "B", "consecutivePaidInstallmentsToImprove": 3 },
+  "generalImpairment": [
+    { "profile": "GENERAL", "minimumRate": 0.01 }
+  ]
+}

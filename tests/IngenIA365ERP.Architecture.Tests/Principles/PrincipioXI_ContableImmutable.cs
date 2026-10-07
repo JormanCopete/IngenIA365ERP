@@ -49,6 +49,26 @@ public class PrincipioXI_ContableImmutable
         Assert.True(offenders.Count == 0, "Consumos de capa borrados (Principio XI, T825):\n  " + string.Join("\n  ", offenders));
     }
 
+    /// <summary>
+    /// Feature 013, T0144: la regla se activa sola con <c>Entities/Lending/Transactions</c>, donde vive <c>LoanTransaction</c> (el libro de
+    /// Cartera), y nadie borra ni actualiza sus filas (se corrigen con un espejo, FR-002).
+    /// </summary>
+    [Fact]
+    public void El_libro_de_Cartera_esta_en_el_espacio_protegido_y_nadie_lo_borra_ni_lo_actualiza()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var carpeta = Path.Combine(root, "src", "Core", "IngenIA365ERP.Domain", "Entities", "Lending", "Transactions");
+        Assert.True(File.Exists(Path.Combine(carpeta, "LoanTransaction.cs")), "LoanTransaction vive en Entities/Lending/Transactions (data-model §0.1).");
+        Assert.Equal("IngenIA365ERP.Domain.Entities.Lending.Transactions", typeof(IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction).Namespace);
+
+        var escritura = new Regex(@"\.LoanTransactions\s*\.\s*(Remove|RemoveRange|Update|UpdateRange|ExecuteDelete|ExecuteDeleteAsync|ExecuteUpdate|ExecuteUpdateAsync)\b", RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => escritura.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Filas del libro de Cartera borradas o actualizadas (Principio XI):\n  " + string.Join("\n  ", infractores));
+    }
+
     private static readonly Regex RemoveCall = new(
         @"\.(Remove|RemoveRange)\s*\(",
         RegexOptions.Compiled);

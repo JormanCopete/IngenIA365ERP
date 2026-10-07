@@ -141,4 +141,54 @@ public class VigenciaBitemporalTests
         VigenciaBitemporal.Vigente([v], new DateOnly(2026, 6, 1), Marzo).Should().NotBeNull("conocida exactamente en R cuenta");
         VigenciaBitemporal.Vigente([v], new DateOnly(2026, 6, 1), Marzo.AddTicks(-1)).Should().BeNull();
     }
+
+    // ------------------------------------------------- versiones propias de Cartera (feature 013, T0131; data-model §0.6) --
+
+    private sealed record VersionDeCartera(string Nombre, DateOnly ValidFrom, int VersionNumber, DateTime RegisteredAt) : IVersionDeCartera;
+
+    private static VersionDeCartera C(string nombre, string desde, int numero, DateTime registrada) =>
+        new(nombre, DateOnly.Parse(desde), numero, registrada);
+
+    [Fact]
+    public void Cartera_toma_el_ValidFrom_mas_reciente_registrado_hasta_R()
+    {
+        var v1 = C("v1", "2026-01-01", 1, Enero);
+        var v2 = C("v2", "2026-04-01", 2, Marzo);
+
+        VigenciaBitemporal.VigenteDeCartera([v1, v2], new DateOnly(2026, 3, 31), Hoy)!.Nombre.Should().Be("v1",
+            "sin ValidTo guardado, v1 rige hasta la víspera del ValidFrom de v2");
+        VigenciaBitemporal.VigenteDeCartera([v1, v2], new DateOnly(2026, 4, 1), Hoy)!.Nombre.Should().Be("v2");
+    }
+
+    [Fact]
+    public void Cartera_desempata_el_mismo_ValidFrom_por_el_VersionNumber_mayor()
+    {
+        var primera = C("primera", "2026-05-01", 3, Marzo);
+        var segunda = C("segunda", "2026-05-01", 4, Mayo);
+
+        VigenciaBitemporal.VigenteDeCartera([segunda, primera], new DateOnly(2026, 6, 1), Hoy)!.Nombre.Should().Be("segunda");
+        VigenciaBitemporal.VigenteDeCartera([segunda, primera], new DateOnly(2026, 6, 1), Marzo)!.Nombre.Should().Be("primera",
+            "en marzo todavía no se había registrado la versión 4");
+    }
+
+    [Fact]
+    public void Cartera_no_cuenta_una_version_registrada_despues_de_R_aunque_su_ValidFrom_sea_anterior()
+    {
+        var vieja = C("vieja", "2026-01-01", 1, Enero);
+        var retroactiva = C("retroactiva", "2026-02-01", 2, Mayo);
+
+        VigenciaBitemporal.VigenteDeCartera([vieja, retroactiva], new DateOnly(2026, 3, 1), Marzo)!.Nombre.Should().Be("vieja");
+        VigenciaBitemporal.VigenteDeCartera([vieja, retroactiva], new DateOnly(2026, 3, 1), Hoy)!.Nombre.Should().Be("retroactiva");
+    }
+
+    [Fact]
+    public void Cartera_sin_version_que_cumpla_devuelve_nulo_y_R_es_inclusivo()
+    {
+        var v = C("v", "2026-07-01", 1, Marzo);
+
+        VigenciaBitemporal.VigenteDeCartera([v], new DateOnly(2026, 6, 30), Hoy).Should().BeNull("todavía no rige");
+        VigenciaBitemporal.VigenteDeCartera([v], new DateOnly(2026, 7, 1), Marzo).Should().NotBeNull("registrada exactamente en R cuenta");
+        VigenciaBitemporal.VigenteDeCartera([v], new DateOnly(2026, 7, 1), Marzo.AddTicks(-1)).Should().BeNull();
+        VigenciaBitemporal.VigenteDeCartera(Array.Empty<VersionDeCartera>(), new DateOnly(2026, 7, 1), Hoy).Should().BeNull();
+    }
 }

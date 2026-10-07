@@ -27,7 +27,9 @@ public class RepartoDePermisosTests
         [.. DomainPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. CorePermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. PayrollPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
-         .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         // Feature 013 (T0138): la Cartera nueva, con sus exclusiones de CompanyAdmin.
+         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     public static TheoryData<string> RolesBuiltIn =>
         [.. BuiltInRolesSeeder.PermissionPatterns.Keys];

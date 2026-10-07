@@ -208,6 +208,78 @@ public class LosHechosInmutablesNoSeModifican
         Assert.Contains("GuardaDeInmutabilidad.VerificarAsync", admin, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Feature 013, T0144 (T0136; DT §2.3, C42, C44, C75, C112): los hechos de Cartera y las únicas propiedades que admiten escribirse una
+    /// vez (nulo → valor). La guarda los cubre por el marcador; esta lista fija cuáles son, para que una entidad que deje de ser hecho
+    /// o un <c>set</c> nuevo no pasen sin decidirlo.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> HechosDeCartera = new(StringComparer.Ordinal)
+    {
+        ["LoanTransaction"] = [], ["LoanOperation"] = ["ReversedByOperationId"], ["LoanTermsVersion"] = [], ["RepaymentScheduleVersion"] = [],
+        ["RepaymentInstallment"] = [], ["LoanDailyPosition"] = [], ["CreditDecision"] = [], ["SessionVote"] = ["ReplacedAt"],
+        ["CreditScore"] = [], ["CreditApplicationCheck"] = [], ["CreditLineVersion"] = [], ["CreditLineRateBand"] = [],
+        ["CreditLineDocumentRequirement"] = [], ["CreditLineInsurance"] = [], ["CreditLineCollateralRule"] = [],
+        ["CommercialTermEquivalence"] = [], ["ContributionBalanceLoad"] = [], ["AttributionMatrix"] = [], ["AttributionLevel"] = [],
+        ["AttributionRule"] = [], ["GoverningBodyRuleVersion"] = [], ["CaseParticipation"] = [], ["PrepaymentPreference"] = [],
+        ["CreditLimit"] = [], ["BureauQuery"] = [], ["ScreeningResult"] = ["ReleasedAt", "ReleasedByUserId", "ReleaseReason"],
+        ["DebtorBlock"] = ["LiftedOn", "LiftedAt", "LiftedByUserId", "LiftReason"], ["DisbursementOrderResult"] = [],
+        ["DisbursementFile"] = ["VoidedAt", "VoidedByUserId", "VoidReason"], ["DisbursementFileLine"] = [], ["InstallmentNonDeduction"] = [],
+        ["LendingInboundMessageEvaluation"] = [], ["AccountingFactPart"] = [], ["DebtorMessage"] = [], ["DebtorMessageEvent"] = [],
+        ["PriorNotice"] = [], ["IssuedLendingDocument"] = [], ["IssuedDocumentLoan"] = [], ["IssuedDocumentEvent"] = [],
+        ["MigrationLoadDifference"] = ["AcceptedAt", "AcceptedByUserId", "AcceptanceReason", "SessionItemId"],
+        ["ProvisionalCollection"] = ["LoanId", "OperationId", "AppliedAt", "MessagePublicId"], ["LendingActivation"] = [],
+        ["ConnectedGroup"] = ["EndedAt", "EndReason"], ["ConnectedGroupMember"] = ["EndedAt"],
+    };
+
+    [Fact]
+    public void Los_hechos_de_Cartera_llevan_el_marcador_y_solo_sus_columnas_de_escritura_unica_tienen_set()
+    {
+        var hecho = typeof(IngenIA365ERP.Domain.Common.IHechoInmutable);
+        var tipos = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false }
+                && t.Namespace?.StartsWith("IngenIA365ERP.Domain.Entities.Lending", StringComparison.Ordinal) == true)
+            .ToList();
+        var infractores = new List<string>();
+
+        foreach (var (nombre, unicas) in HechosDeCartera)
+        {
+            var tipo = tipos.SingleOrDefault(t => t.Name == nombre);
+            if (tipo is null) { infractores.Add($"{nombre}: no está en Entities/Lending"); continue; }
+            if (!hecho.IsAssignableFrom(tipo)) infractores.Add($"{nombre}: no es IHechoInmutable");
+
+            var conSet = tipo.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+                .Where(p => p.SetMethod is { IsPublic: true }
+                    && !p.SetMethod.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.FullName == "System.Runtime.CompilerServices.IsExternalInit"))
+                .Select(p => p.Name).ToList();
+            var marcadas = tipo.GetProperties().Where(p => p.IsDefined(typeof(IngenIA365ERP.Domain.Common.EscrituraUnicaAttribute), true))
+                .Select(p => p.Name).ToList();
+            if (!conSet.OrderBy(n => n).SequenceEqual(unicas.OrderBy(n => n)) || !marcadas.OrderBy(n => n).SequenceEqual(unicas.OrderBy(n => n)))
+                infractores.Add($"{nombre}: set público [{string.Join(", ", conSet)}], [EscrituraUnica] [{string.Join(", ", marcadas)}]; se esperaba [{string.Join(", ", unicas)}]");
+        }
+
+        var otrosHechos = tipos.Where(t => hecho.IsAssignableFrom(t) && !HechosDeCartera.ContainsKey(t.Name) && !t.Name.StartsWith("Migration", StringComparison.Ordinal))
+            .Select(t => t.Name).ToList();
+        Assert.True(otrosHechos.Count == 0, "Hechos de Cartera que no están en la lista (decidir su escritura única): " + string.Join(", ", otrosHechos));
+        Assert.True(infractores.Count == 0, "Hechos de Cartera que se pueden modificar (Principio XI, C42):\n  " + string.Join("\n  ", infractores));
+    }
+
+    [Fact]
+    public void Application_no_borra_ni_actualiza_en_bloque_los_hechos_de_Cartera()
+    {
+        var conjuntos = typeof(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext).GetProperties()
+            .Where(p => p.PropertyType.IsGenericType
+                && typeof(IngenIA365ERP.Domain.Common.IHechoInmutable).IsAssignableFrom(p.PropertyType.GetGenericArguments()[0]))
+            .Select(p => p.Name)
+            .ToList();
+
+        // La regla genérica de arriba recorre todo DbSet de un hecho: con éstos, cubre también el libro y los demás hechos de Cartera.
+        Assert.Contains("LoanTransactions", conjuntos);
+        Assert.Contains("LoanOperations", conjuntos);
+        Assert.Contains("CreditDecisions", conjuntos);
+        Assert.Contains("SessionVotes", conjuntos);
+        Assert.Contains("LendingActivations", conjuntos);
+    }
+
     private static readonly Regex SetPublico =new(@"public\s+[^;{=]+\{\s*get;\s*set;", RegexOptions.Compiled);
 
     [Fact]

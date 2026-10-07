@@ -14,10 +14,16 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class LaCarteraNoTieneValoresLegalesFijos
 {
     /// <summary>Carpetas recorridas (relativas a <c>src/</c>).</summary>
-    private static readonly string[] Carpetas = ["Core/IngenIA365ERP.Domain/Lending"];
+    /// <remarks>Desde la fase Fundacional B (T0143) también <c>Application/Lending</c>: lo heredado ya se retiró.</remarks>
+    private static readonly string[] Carpetas = ["Core/IngenIA365ERP.Domain/Lending", "Core/IngenIA365ERP.Application/Lending"];
 
     /// <summary>Archivos exentos (rutas relativas a la raíz). Nace vacía.</summary>
-    private static readonly string[] Exentos = [];
+    private static readonly string[] Exentos =
+    [
+        // Fase Fundacional B (T0143): los largos de un segmento SMS (153 y 67 caracteres concatenados, GSM-7 y UCS-2) son del
+        // protocolo GSM 03.38, no una norma de crédito.
+        "src/Core/IngenIA365ERP.Application/Lending/Collections/RenderizadorDePlantillasDeMensaje.cs",
+    ];
 
     private static readonly Regex LiteralDecimal = new(@"(?<![\w.])\d+(?:\.\d+)?[mM]\b", RegexOptions.Compiled);
 

@@ -25,6 +25,24 @@
       "verified": false,
       "source": "Propuesta de la pregunta E4, pendiente de cotejo con la Circular Básica Contable y Financiera de la Supersolidaria",
       "file": "tipos-de-organizacion.json"
+    },
+    {
+      "kind": "SarcAnexo1",
+      "code": "ANEXO1-2025-01-31",
+      "validFrom": "2025-01-31",
+      "schemaVersion": 1,
+      "verified": false,
+      "source": "Anexo 1 del Capítulo II del Título IV de la Circular Básica Contable y Financiera (Supersolidaria, versión del 2025-01-31), transcripción pendiente de cotejo (pregunta E8)",
+      "file": "sarc-anexo-1.json"
+    },
+    {
+      "kind": "ReglaDePerdidaEsperada",
+      "code": "CE100-2026-05-12",
+      "validFrom": "2026-05-12",
+      "schemaVersion": 1,
+      "verified": false,
+      "source": "Circular Externa 100 del 2026-05-12 (Supersolidaria), pendiente de cotejo (pregunta E8)",
+      "file": "regla-de-perdida-esperada.json"
     }
   ],
   "values": [
