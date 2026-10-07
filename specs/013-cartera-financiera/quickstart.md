@@ -386,8 +386,10 @@ Cartera nueva):
 | Architecture.Tests | 394 | 0 | incluye los 32 esqueletos de la fase 1 (listas vacías) y la prueba de `catch` vacío en `.razor` (T0008) |
 | Shared.Tests | 340 | 0 | |
 | Load.Tests | 2 | 0 | |
-| API.IntegrationTests (PostgreSQL) | ver abajo | | se anota al correrla con Docker |
-| API.IntegrationTests (SQL Server) | ver abajo | | se anota al correrla con Docker |
+| API.IntegrationTests (PostgreSQL) | 457 | 9 | 2026-10-06, tras las fases 1 y 2; 1 falla previa a la 013 (abajo) |
+| API.IntegrationTests (SQL Server) | 457 | 9 | ídem |
+
+Falla previa a la 013, no se cuenta como regresión: `ContabilidadNiifTests.La_digitacion_valida_campo_a_campo_guarda_descuadrado_numera_sin_repetir_y_reversa_a_cero` (falla igual en `e15249fa`; tarea aparte).
 
 Siguen contando como «pasadas» sin comprobar nada las siete de CLAUDE.md que hacen `return` según una variable de
 entorno (`AuditPerformanceTests`, `LoginThroughputFact`, cuatro de multi-tenancy y `PrincipioVI_PublicIdOnly`).

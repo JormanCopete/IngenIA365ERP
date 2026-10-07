@@ -88,7 +88,7 @@ public class ArrendamientosYTransaccionTests(CentralIdentityApiFixture fx)
             .AsNoTracking().SingleAsync(l => l.Name == nombre));
 
     [Fact]
-    public async Task La_migracion_deja_las_cinco_filas_libres()
+    public async Task Las_migraciones_dejan_todas_las_filas_libres()
     {
         var entrada = await CooperativaAsync();
 

@@ -42,7 +42,9 @@ public sealed class ValoresNacionalesYReplicaTests(CentralIdentityApiFixture fx)
         {
             code = "IBR", key = "OVERNIGHT", validFrom = hoy, value = 0.091m, unit = "NominalMV", source = "Banco de la República",
         });
-        ((int)intruso.StatusCode).Should().BeOneOf([401, 403, 404], $"sólo el maestro registra: «{await intruso.Content.ReadAsStringAsync()}»");
+        // La puerta del maestro de /api/saas responde 422 Saas.NotMasterAdmin (RequireMasterAdminAttribute), como el resto de la consola SaaS.
+        ((int)intruso.StatusCode).Should().Be(422, $"sólo el maestro registra: «{await intruso.Content.ReadAsStringAsync()}»");
+        (await InventarioE2E.CodigoDeErrorAsync(intruso)).Should().Be("Saas.NotMasterAdmin");
 
         // (2) El maestro registra la usura del mes, un IBR y un límite.
         var usura = await RegistrarAsync(http, maestro, new
