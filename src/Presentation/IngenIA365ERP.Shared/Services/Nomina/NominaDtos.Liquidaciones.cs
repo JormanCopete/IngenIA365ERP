@@ -71,7 +71,8 @@ public sealed record AprobarLiquidacionRequest(
     bool ConfirmEmpty = false,
     bool ConfirmWithoutSegregation = false,
     DateOnly? PayDate = null,
-    bool AcceptRetroactive = false);
+    bool AcceptRetroactive = false,
+    bool AcknowledgeLendingPendingActivation = false);
 
 /// <summary>Cuerpo de reversar y descartar: el motivo, obligatorio.</summary>
 public sealed record MotivoDeLiquidacionRequest(string Reason);

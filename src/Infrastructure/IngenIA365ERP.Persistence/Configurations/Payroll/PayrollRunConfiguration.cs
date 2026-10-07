@@ -40,6 +40,8 @@ public class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
         builder.Property(e => e.ReversalReason).HasMaxLength(300);
         builder.Property(e => e.DiscardedBy).HasMaxLength(100);
         builder.Property(e => e.DiscardReason).HasMaxLength(300);
+        // Feature 013 (DE-10): quién reconoció «Cartera por activar» al aprobar.
+        builder.Property(e => e.LendingActivationAckBy).HasMaxLength(150);
         builder.Property(e => e.InputsHash).HasMaxLength(64).IsRequired();
 
         builder.Property(e => e.TotalEarnings).HasPrecision(18, 2);

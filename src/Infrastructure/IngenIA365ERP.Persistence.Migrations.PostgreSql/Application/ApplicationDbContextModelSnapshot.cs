@@ -39917,6 +39917,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("ObligationNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("ObligationPublicId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Origin")
                         .HasColumnType("integer");
 
@@ -39972,6 +39979,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("ImportBatchId")
                         .HasDatabaseName("IX_PAY_Novelties_ImportBatch");
+
+                    b.HasIndex("ObligationPublicId")
+                        .HasDatabaseName("IX_PAY_Novelties_ObligationPublicId")
+                        .HasFilter("\"ObligationPublicId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
 
                     b.HasIndex("PublicId")
                         .IsUnique();
@@ -41320,6 +41331,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<Guid?>("CarteraReversalPublicId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("CarteraTransactionPublicId")
                         .HasColumnType("uuid");
 
@@ -41348,6 +41362,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<int?>("LoanPortfolioId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("ObligationNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("ObligationPublicId")
+                        .HasColumnType("uuid");
 
                     b.Property<decimal>("ProposedAmount")
                         .HasPrecision(18, 2)
@@ -41397,6 +41418,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsUnique()
                         .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Loan")
                         .HasFilter("\"LoanPortfolioId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
+
+                    b.HasIndex("TerminationId", "ObligationPublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Obligation")
+                        .HasFilter("\"ObligationPublicId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
 
                     b.HasIndex("TerminationId", "RecurringNoveltyId")
                         .IsUnique()
@@ -42421,6 +42447,115 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("PAY_ElectronicPayrollTransmissions", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("AppliedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("CarteraReceiptPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CarteraReversalPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("DeductedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("ExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("NotDeductedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("NotDeductedReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ObligationNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("ObligationPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PayrollRunEmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PayrollRunId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PayrollRunLineId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<string>("ResultMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollRunEmployeeId");
+
+                    b.HasIndex("PayrollRunLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PayrollRunId", "PayrollRunEmployeeId", "ObligationPublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_PayrollLoanDeductions_Run_Employee_Obligation")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.ToTable("PAY_PayrollLoanDeductions", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>
                 {
                     b.Property<int>("Id")
@@ -42497,6 +42632,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("LendingActivationAckAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LendingActivationAckBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
 
                     b.Property<DateOnly?>("PayDate")
                         .HasColumnType("date");
@@ -49965,6 +50107,32 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsRequired();
 
                     b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", "PayrollRunEmployee")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", "PayrollRun")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine", "PayrollRunLine")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PayrollRun");
+
+                    b.Navigation("PayrollRunEmployee");
+
+                    b.Navigation("PayrollRunLine");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>

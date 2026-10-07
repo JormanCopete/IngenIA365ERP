@@ -54,4 +54,55 @@ public class LosEnumsDelContratoNumeranComoElDominio
             "contracts/api.md numera enums distinto del Domain (D-39; los enums salen como número y un cliente que siga el contrato manda un valor inválido):\n  "
             + string.Join("\n  ", errados));
     }
+
+    // ----------------------------------------------------------------- feature 013 (T0121, data-model §9.4) --
+
+    /// <summary>
+    /// <c>ClaseDeMedioDeRecaudo</c> son los valores de <c>PaymentMeansClass</c> de la 012 (mismo nombre y número) más los tres de
+    /// Cartera con números fijados: <c>OwnPayrollDeduction = 20</c>, <c>ExternalPaymasterDeduction = 21</c>, <c>InternalOffset = 22</c>
+    /// (data-model §9.4 rige sobre interfaces.md §3.1).
+    /// </summary>
+    [Fact]
+    public void La_clase_de_medio_de_recaudo_es_la_de_la_012_mas_las_tres_de_Cartera()
+    {
+        var puerto = Enum.GetValues<IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeMedioDeRecaudo>()
+            .ToDictionary(v => v.ToString(), v => (int)v);
+        var comercio = Enum.GetValues<IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass>().ToDictionary(v => v.ToString(), v => (int)v);
+
+        foreach (var (nombre, numero) in comercio)
+            Assert.True(puerto.TryGetValue(nombre, out var n) && n == numero, $"ClaseDeMedioDeRecaudo.{nombre} debe valer {numero}, como PaymentMeansClass.");
+        Assert.Equal(20, puerto["OwnPayrollDeduction"]);
+        Assert.Equal(21, puerto["ExternalPaymasterDeduction"]);
+        Assert.Equal(22, puerto["InternalOffset"]);
+        Assert.Equal(comercio.Count + 3, puerto.Count);
+    }
+
+    /// <summary>
+    /// Los enums del contrato de obligaciones con los números de data-model §9.4. La comparación con los enums del dominio de Cartera
+    /// (<c>PaymentModality</c>, <c>NonDeductionReason</c>, <c>PrepaymentChoice</c>, <c>LoanConcept</c>, <c>LoanStatus</c>) la suma la
+    /// sección C de la fase Fundacional B, cuando nacen esos enums (T0132); mientras tanto se fijan aquí los números escritos.
+    /// </summary>
+    [Fact]
+    public void Los_enums_del_contrato_de_obligaciones_llevan_los_numeros_de_data_model()
+    {
+        static Dictionary<string, int> Valores<T>() where T : struct, Enum => Enum.GetValues<T>().ToDictionary(v => v.ToString(), v => Convert.ToInt32(v));
+        Assert.Equal(new Dictionary<string, int> { ["FullPayoff"] = 1, ["PastDue"] = 2, ["CycleInstallment"] = 3, ["Advance"] = 4, ["ExtraordinaryPrincipal"] = 5, ["SpecificInstallment"] = 6, ["FreeAmount"] = 7 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.ModalidadDePago>());
+        Assert.Equal(new Dictionary<string, int> { ["DeductionCap"] = 1, ["InsufficientNet"] = 2, ["Termination"] = 3, ["Leave"] = 4, ["Disability"] = 5, ["DeductionPriority"] = 6, ["Other"] = 99 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.MotivoDeNoDescuento>());
+        Assert.Equal(new Dictionary<string, int> { ["ReduceTerm"] = 1, ["ReduceInstallment"] = 2 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.EleccionDeAbono>());
+        Assert.Equal(new Dictionary<string, int> { ["Applied"] = 1, ["AlreadyApplied"] = 2, ["Rejected"] = 3, ["Answered"] = 4 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.ResultadoDelContrato>());
+        Assert.Equal(new Dictionary<string, int> { ["NotActivated"] = 1, ["Active"] = 2 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeCartera>());
+        Assert.Equal(new Dictionary<string, int> { ["Receipts"] = 1, ["Payroll"] = 2, ["Contributions"] = 3, ["OwnLoanPayoff"] = 4, ["Test"] = 5 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeRecaudador>());
+        Assert.Equal(new Dictionary<string, int> { ["PendingDisbursement"] = 1, ["Active"] = 2, ["PaidOff"] = 3, ["WrittenOff"] = 4, ["Voided"] = 5, ["Novated"] = 6 },
+            Valores<IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeObligacion>());
+        Assert.Equal(10, Enum.GetValues<IngenIA365ERP.Application.Common.Integration.Lending.ConceptoDeObligacion>().Length);
+        // El motivo que decide el motor de Nómina es texto del mismo enum.
+        Assert.True(Enum.IsDefined(Enum.Parse<IngenIA365ERP.Application.Common.Integration.Lending.MotivoDeNoDescuento>(IngenIA365ERP.Domain.Payroll.Calculation.LoanNonDeductionReasons.DeductionCap)));
+        Assert.True(Enum.IsDefined(Enum.Parse<IngenIA365ERP.Application.Common.Integration.Lending.MotivoDeNoDescuento>(IngenIA365ERP.Domain.Payroll.Calculation.LoanNonDeductionReasons.InsufficientNet)));
+    }
 }

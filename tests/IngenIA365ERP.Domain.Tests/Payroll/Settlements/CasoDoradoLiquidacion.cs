@@ -276,7 +276,12 @@ public sealed class CasoDoradoLiquidacion
         public string Descripcion { get; set; } = string.Empty;
         public decimal Propuesto { get; set; }
         public decimal? Aplicado { get; set; }
-        public bool ContabilizadaPorOtroModulo { get; set; } = true;
+        /// <summary>
+        /// Feature 013 (enmienda D-08 de la 010, T53, C1): falso por defecto. <c>DESC_CARTERA</c> contabiliza en la definitiva contra la
+        /// cuenta del concepto (el puente «recaudos por nómina para Cartera»); hasta la 013 Cartera contabilizaba el recaudo y la
+        /// línea no generaba asiento.
+        /// </summary>
+        public bool ContabilizadaPorOtroModulo { get; set; }
     }
 
     public sealed class PrimaPagadaJson

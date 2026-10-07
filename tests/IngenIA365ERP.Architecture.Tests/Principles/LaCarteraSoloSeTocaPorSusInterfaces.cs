@@ -1,5 +1,13 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
+using ArchUnitNET.Loader;
+using ArchUnitNET.xUnit;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Architecture.Tests.Helpers;
+using IngenIA365ERP.Persistence.DbContext;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using static ArchUnitNET.Fluent.ArchRuleDefinition;
 
 namespace IngenIA365ERP.Architecture.Tests.Principles;
 
@@ -8,20 +16,39 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// suyos, salvo por la lista cerrada de interfaces (los cinco puertos de <c>Application.Common.Integration.Lending</c>
 /// y los que Cartera consume). Vigila las dos direcciones.
 ///
-/// <para>La lista nace vacía en el Setup (feature 013, T0001) y la llena la fase Fundacional B: los módulos que hoy tocan la cartera heredada (Nómina, Personas, Comercial, Contabilidad) entran a <see cref="CarpetasDeOtrosModulos"/> al pasar a los puertos, y las carpetas de Cartera nueva a <see cref="CarpetasDeCartera"/> al nacer; con la lista vacía la prueba pasa porque no hay nada que violar.</para>
+/// <para>La lista nace vacía en el Setup (feature 013, T0001) y la llena la fase Fundacional B: los módulos que hoy tocan la
+/// cartera heredada entran a <see cref="CarpetasDeOtrosModulos"/> al pasar a los puertos, y las carpetas de Cartera nueva a
+/// <see cref="CarpetasDeCartera"/> al nacer. T0120 (sección A.2, Nómina): entran <c>Application/Payroll</c> y
+/// <c>Domain/Entities/Payroll</c>, y se fijan los métodos exactos de los cuatro puertos, quién los implementa y que ninguna
+/// tabla <c>PAY_</c> tiene FK a <c>LND_</c>. Personas, Aportes y Comercial (T0169–T0177) y <c>Domain/Entities/Inventory</c>
+/// suman sus carpetas cuando sus secciones los pasen a los puertos.</para>
 /// </summary>
 public class LaCarteraSoloSeTocaPorSusInterfaces
 {
     /// <summary>Carpetas de otros módulos (relativas a <c>src/</c>) que no pueden nombrar a Cartera salvo por sus puertos.</summary>
-    private static readonly string[] CarpetasDeOtrosModulos = [];
+    private static readonly string[] CarpetasDeOtrosModulos =
+    [
+        "Core/IngenIA365ERP.Application/Payroll",
+        "Core/IngenIA365ERP.Domain/Entities/Payroll",
+        "Core/IngenIA365ERP.Domain/Payroll",
+    ];
 
     /// <summary>Carpetas de Cartera (relativas a <c>src/</c>) que no pueden nombrar a otros módulos salvo por sus puertos.</summary>
     private static readonly string[] CarpetasDeCartera = [];
+
+    /// <summary>Espacios de otros módulos que el ArchUnit revisa (los de <see cref="CarpetasDeOtrosModulos"/>).</summary>
+    private static readonly string[] EspaciosDeOtrosModulos =
+    [
+        "IngenIA365ERP.Application.Payroll",
+        "IngenIA365ERP.Domain.Entities.Payroll",
+        "IngenIA365ERP.Domain.Payroll",
+    ];
 
     private static readonly (Regex Patron, string Que)[] HaciaCartera =
     [
         (new Regex(@"IngenIA365ERP\.(Domain\.Entities|Application)\.Lending\b", RegexOptions.Compiled), "depende de Cartera fuera de Common.Integration.Lending"),
         (new Regex("\"LND_", RegexOptions.Compiled), "nombra una tabla LND_"),
+        (new Regex(@"\b(LoanPortfolios|PayrollDeductionEntries|RecaudoDeCredito)\b", RegexOptions.Compiled), "usa la cartera heredada"),
     ];
 
     private static readonly (Regex Patron, string Que)[] DesdeCartera =
@@ -31,6 +58,18 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         (new Regex("\"(INV|PAY|ACC)_", RegexOptions.Compiled), "nombra una tabla de otro módulo"),
     ];
 
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
+        .LoadAssemblies(
+            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
+            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
+        .Build());
+
+    private static string ConHijos(string ns) => $"^{Regex.Escape(ns)}(\\..+)?$";
+
+    /// <summary>Todo espacio <c>*.Lending*</c> salvo los puertos de <c>Application.Common.Integration.Lending</c> y los contratos de mensajes.</summary>
+    private const string LendingSalvoPuertos =
+        @"^IngenIA365ERP\.(?!Application\.Common\.Integration(\.|$))([\w.]+\.)?Lending(\..+)?$";
+
     [Fact]
     public void Ningun_otro_modulo_toca_Cartera_salvo_por_sus_puertos()
     {
@@ -39,9 +78,78 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     }
 
     [Fact]
+    public void Los_tipos_de_otros_modulos_no_dependen_de_Cartera_salvo_por_sus_puertos()
+    {
+        foreach (var ns in EspaciosDeOtrosModulos)
+            Types().That().ResideInNamespaceMatching(ConHijos(ns))
+                .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(LendingSalvoPuertos)
+                .Because($"FR-008, T90: {ns} sólo conoce Cartera por Application.Common.Integration.Lending")
+                .Check(Arquitectura.Value);
+    }
+
+    [Fact]
     public void Cartera_no_toca_otros_modulos_salvo_por_los_puertos_que_consume()
     {
         var infracciones = ReglaSobreFuente.Infracciones(ReglaSobreFuente.ArchivosEn(CarpetasDeCartera), DesdeCartera);
         ReglaSobreFuente.SinInfracciones(infracciones, "Cartera toca otro módulo fuera de sus puertos (FR-008, C34)");
     }
+
+    [Fact]
+    public void Los_puertos_que_Cartera_ofrece_declaran_exactamente_sus_metodos()
+    {
+        // T90, R117: IDimensionesDeCartera lo suma US7.
+        Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync"], MetodosDe(typeof(IConsultasDeCartera)));
+        Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(typeof(IReservasDeCartera)));
+        Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
+        Assert.Equal(["AplicarAsync", "ListarAsync", "ResolverSaldoAFavorAsync", "ReversarAsync", "SimularAsync"], MetodosDe(typeof(IContratoDeObligaciones)));
+        Assert.Equal(1, IContratoDeObligaciones.VersionDelContrato);
+        foreach (var puerto in new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones) })
+            Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
+    }
+
+    [Fact]
+    public void Fuera_de_Cartera_solo_los_provisionales_del_mismo_espacio_implementan_los_puertos()
+    {
+        // Los dobles viven en tests/ (otro ensamblado). Las implementaciones reales vivirán en Application.Lending.Integration (US5, US6).
+        var puertos = new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones) };
+        var ensamblados = new[] { typeof(IngenIA365ERP.Application.DependencyInjection).Assembly, typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly, typeof(ApplicationDbContext).Assembly };
+        var ajenos = ensamblados.SelectMany(a => a.GetTypes())
+            .Where(t => t is { IsClass: true, IsAbstract: false } && puertos.Any(p => p.IsAssignableFrom(t)))
+            .Where(t => t.Namespace != "IngenIA365ERP.Application.Common.Integration.Lending"
+                        && !(t.Namespace ?? string.Empty).StartsWith("IngenIA365ERP.Application.Lending.Integration", StringComparison.Ordinal))
+            .Select(t => t.FullName)
+            .ToList();
+        Assert.True(ajenos.Count == 0, "Implementan un puerto de Cartera fuera de su espacio: " + string.Join(", ", ajenos));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Ninguna_entidad_PAY_tiene_FK_ni_navegacion_hacia_LND_salvo_las_heredadas_que_suelta_el_retiro(bool postgres)
+    {
+        // C34: las FK heredadas (PAY_SettlementDeductions.LoanPortfolioId) las suelta RetiroDeLaCarteraHeredada (CH37); ninguna nueva.
+        var heredadas = new HashSet<string>(StringComparer.Ordinal) { "PAY_SettlementDeductions.LoanPortfolioId" };
+        var builder = new DbContextOptionsBuilder<ApplicationDbContext>().ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning));
+        builder = postgres
+            ? builder.UseNpgsql("Host=localhost;Database=x;Username=y;Password=z")
+            : builder.UseSqlServer("Server=localhost;Database=x;User Id=y;Password=z;TrustServerCertificate=True");
+        using var db = new ApplicationDbContext(builder.Options);
+
+        var violaciones = db.Model.GetEntityTypes()
+            .Where(t => (t.GetTableName() ?? string.Empty).StartsWith("PAY_", StringComparison.Ordinal))
+            .SelectMany(t => t.GetForeignKeys()
+                .Where(fk => (fk.PrincipalEntityType.GetTableName() ?? string.Empty).StartsWith("LND_", StringComparison.Ordinal))
+                .Select(fk => $"{t.GetTableName()}.{string.Join("+", fk.Properties.Select(p => p.Name))}"))
+            .Where(v => !heredadas.Contains(v))
+            .ToList();
+
+        Assert.True(violaciones.Count == 0, "Tablas de Nómina con FK a Cartera (FR-008, C34): " + string.Join(", ", violaciones));
+    }
+
+    private static List<string> MetodosDe(System.Type puerto) => puerto
+        .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+        .Where(m => !m.IsSpecialName)
+        .Select(m => m.Name)
+        .Order(StringComparer.Ordinal)
+        .ToList();
 }

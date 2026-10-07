@@ -180,6 +180,9 @@ public interface IApplicationDbContext
     DbSet<TerminationReason> TerminationReasons { get; }
     DbSet<EmploymentTermination> EmploymentTerminations { get; }
     DbSet<SettlementDeduction> SettlementDeductions { get; }
+
+    /// <summary>Feature 013 (T0155): descuentos de Cartera de la nómina ordinaria por empleado y obligación.</summary>
+    DbSet<Domain.Entities.Payroll.Transactions.PayrollLoanDeduction> PayrollLoanDeductions { get; }
     DbSet<WithholdingRateCalculation> WithholdingRateCalculations { get; }
     DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths { get; }
     DbSet<SeveranceFundDeposit> SeveranceFundDeposits { get; }

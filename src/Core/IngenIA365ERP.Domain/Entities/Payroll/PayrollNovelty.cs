@@ -48,7 +48,18 @@ public class PayrollNovelty : AuditableEntity
     public int? RecurringNoveltyId { get; set; }
     public Guid? ImportBatchId { get; set; }
     public int? RetroactiveOfPeriodId { get; set; }
+    /// <summary>Heredado (sin FK): se conserva hasta <c>RetiroDeLaCarteraHeredada</c> y ningún código nuevo lo lee (feature 013, CH37).</summary>
     public int? LoanPortfolioId { get; set; }
+
+    /// <summary>
+    /// Feature 013 (T0156, C55): la obligación de Cartera de una novedad <see cref="NoveltyOrigin.LoanDeduction"/>, una por empleado,
+    /// obligación y período, alimentada por <c>IConsultaDeObligaciones.CuotasDeNominaAsync</c>. Sin FK (FR-008).
+    /// </summary>
+    public Guid? ObligationPublicId { get; set; }
+
+    /// <summary>Feature 013: copia del número visible de la obligación.</summary>
+    [MaxLength(30)]
+    public string? ObligationNumber { get; set; }
     public int? CarriedFromNoveltyId { get; set; }
 
     /// <summary>Feature 010 (R6): el movimiento de vacaciones que generó esta novedad (<see cref="NoveltyOrigin.VacationLeave"/>).</summary>

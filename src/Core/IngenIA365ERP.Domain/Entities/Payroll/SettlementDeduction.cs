@@ -9,11 +9,11 @@ namespace IngenIA365ERP.Domain.Entities.Payroll;
 /// 010, FR-018a): el saldo de un préstamo de la cooperativa leído de Cartera, las cuotas
 /// causadas y no descontadas de una libranza, u otro. La responsable sólo puede <b>bajarlo</b>
 /// sobre lo propuesto, nunca subirlo, y bajarlo exige motivo; cada cambio queda en auditoría
-/// (<c>Payroll.Settlement.DeductionAdjusted</c>). Al aprobar se aplica en Cartera por
-/// <c>ProcessPaymentCommand</c> y aquí queda el recaudo; al reversar, <c>Reverted</c>.
+/// (<c>Payroll.Settlement.DeductionAdjusted</c>). Al aprobar se aplica en Cartera por el contrato de
+/// obligaciones (feature 013, T92) y aquí queda el comprobante; al reversar se reversa por el contrato y queda <c>Reverted</c>.
 ///
 /// <para>
-/// Las referencias a Cartera (<see cref="LoanPortfolioId"/>) y a la libranza
+/// Las referencias a Cartera (<see cref="ObligationPublicId"/>; el heredado <see cref="LoanPortfolioId"/>) y a la libranza
 /// (<see cref="RecurringNoveltyId"/>) son claves sin navegación: la FK se declara en la
 /// configuración para que el modelo de pruebas en memoria no arrastre el módulo de Cartera.
 /// </para>
@@ -24,8 +24,24 @@ public class SettlementDeduction : AuditableEntity
 
     public SettlementDeductionKind Kind { get; set; }
 
-    /// <summary><c>CooperativeLoan</c>: FK <c>LND_LoanPortfolios</c>.</summary>
+    /// <summary>
+    /// <c>CooperativeLoan</c> heredado: FK <c>LND_LoanPortfolios</c>. Feature 013 (T0156, CH37): se conserva hasta
+    /// <c>RetiroDeLaCarteraHeredada</c>, pero ningún código nuevo la lee; la obligación es <see cref="ObligationPublicId"/>.
+    /// </summary>
     public int? LoanPortfolioId { get; set; }
+
+    /// <summary>
+    /// Feature 013 (T0156, data-model parte 3 §7.2): la obligación de Cartera que el descuento paga, sin FK (FR-008). Única por
+    /// terminación entre las filas vivas (<c>UK_PAY_SettlementDeductions_Termination_Obligation</c>).
+    /// </summary>
+    public Guid? ObligationPublicId { get; set; }
+
+    /// <summary>Feature 013: copia del número visible de la obligación.</summary>
+    [MaxLength(30)]
+    public string? ObligationNumber { get; set; }
+
+    /// <summary>Feature 013 (R105): la operación de reverso que devolvió el contrato al reversar la definitiva.</summary>
+    public Guid? CarteraReversalPublicId { get; set; }
 
     /// <summary><c>ThirdPartyLibranza</c>: FK <c>PAY_RecurringNovelties</c>.</summary>
     public int? RecurringNoveltyId { get; set; }
@@ -53,10 +69,10 @@ public class SettlementDeduction : AuditableEntity
 
     public SettlementDeductionStatus Status { get; set; } = SettlementDeductionStatus.Proposed;
 
-    /// <summary>El recaudo que dejó <c>ProcessPaymentCommand</c> al aprobar.</summary>
+    /// <summary>El comprobante de aplicación que devolvió el contrato de obligaciones al aprobar (feature 013, T92).</summary>
     public Guid? CarteraTransactionPublicId { get; set; }
 
-    /// <summary><c>PaymentResultDto.Remaining</c> tras aplicar.</summary>
+    /// <summary>El saldo para cancelar que queda en Cartera tras aplicar (<c>BalancesAfter.PayoffAmount</c>), o el que quedaría según la simulación del ajuste.</summary>
     public decimal? RemainingBalanceAfter { get; set; }
 
     public EmploymentTermination? Termination { get; set; }

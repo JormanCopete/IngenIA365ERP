@@ -207,22 +207,49 @@ public sealed class PayrollCalculationEngine
             }
         }
 
-        // 9. Deducciones autorizadas (novedades) con tope y saldo diferido.
+        // 9. Deducciones autorizadas (novedades) con tope y saldo diferido. Feature 013 (T0163, G5, FR-112): la cuota de Cartera
+        // va primera entre las autorizadas, después de las de ley, y ya no salta el tope; lo que no cabe no se difiere: queda no
+        // descontado con su motivo (DeductionCap o InsufficientNet) y Nómina lo informa al contrato de obligaciones.
         var devengos = ctx.Lines.Where(l => l.Nature == ConceptNature.Earning).Sum(l => l.Amount);
         var deduccionesLey = ctx.Lines.Where(l => l.Nature == ConceptNature.Deduction).Sum(l => l.Amount);
         var pctMaximo = parameters.Fraction(LegalParameterCodes.MaxDeductionOfSalaryPct);
         var pMax = parameters.Describe(LegalParameterCodes.MaxDeductionOfSalaryPct);
         var disponible = Math.Max(0m, (devengos - deduccionesLey) * pctMaximo);
-        foreach (var (nov, def) in novedades.Where(x => x.Def.Nature == ConceptNature.Deduction
-                                                         && x.Def.CalculationKind != CalculationKind.CompositeOfConcepts))
+        var netoDisponible = Math.Max(0m, devengos - deduccionesLey);
+        var autorizadas = novedades
+            .Where(x => x.Def.Nature == ConceptNature.Deduction && x.Def.CalculationKind != CalculationKind.CompositeOfConcepts)
+            .Select((x, i) => (x.Nov, x.Def, Posicion: i))
+            .OrderBy(x => x.Nov.Origin == NoveltyOrigin.LoanDeduction ? 0 : 1).ThenBy(x => x.Posicion)
+            .ToList();
+        foreach (var (nov, def, _) in autorizadas)
         {
             var line = Evaluate(def, nov, ctx);
             if (line is null) continue;
 
             if (nov.Origin == NoveltyOrigin.LoanDeduction)
             {
-                line.Explanation.Note("Origen", "Descuento ya aplicado y contabilizado por Cartera: se muestra para el neto y el comprobante, no genera asiento ni se difiere.");
+                var esperado = line.RawAmount;
+                var cabe = Math.Min(disponible, netoDisponible);
+                line.Explanation.Note("Origen", "Cuota de Cartera del período: va primera entre las deducciones autorizadas, después de las de ley, y Cartera la recibe al aprobar la nómina.");
+                if (esperado > cabe)
+                {
+                    var motivo = netoDisponible <= disponible ? LoanNonDeductionReasons.InsufficientNet : LoanNonDeductionReasons.DeductionCap;
+                    line.Explanation.Step("Cuota esperada por Cartera", esperado);
+                    if (motivo == LoanNonDeductionReasons.DeductionCap)
+                        line.Explanation.Step($"Tope de deducciones autorizadas: {Fmt.Pct(pctMaximo)} de (devengos − deducciones de ley) ({pMax.Code}), menos lo ya descontado", disponible);
+                    else
+                        line.Explanation.Step("Neto disponible (devengos − deducciones de ley − lo ya descontado)", netoDisponible);
+                    line.Explanation.Step("No descontado: no se difiere, la cuota sigue exigible en Cartera", esperado - cabe);
+                    line.Explanation.Note("Motivo de no descuento", motivo);
+                    line.RawAmount = cabe;
+                    line.NotDeductedReason = motivo;
+                }
+                disponible = Math.Max(0m, disponible - line.RawAmount);
+                netoDisponible = Math.Max(0m, netoDisponible - line.RawAmount);
                 Add(line);
+                line.NotDeductedAmount = Math.Max(0m, Round(esperado, rounding) - line.Amount);
+                if (line.NotDeductedAmount == 0m) line.NotDeductedReason = null;
+                else line.Explanation.Summary = $"{line.Explanation.Summary} · no descontado {Fmt.Money(line.NotDeductedAmount)} ({line.NotDeductedReason})";
                 continue;
             }
 
@@ -236,6 +263,7 @@ public sealed class PayrollCalculationEngine
                 flags |= RunEmployeeFlag.DeductionsOverMax;
             }
             disponible = Math.Max(0m, disponible - line.RawAmount);
+            netoDisponible = Math.Max(0m, netoDisponible - line.RawAmount);
             Add(line);
         }
         Composites(ctx, novedades, refusals, d => d.Nature == ConceptNature.Deduction, Add);

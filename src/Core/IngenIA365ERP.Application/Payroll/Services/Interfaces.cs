@@ -127,8 +127,11 @@ public interface IPayslipEmailDispatcher
 /// <summary>Un rubro del documento: código, nombre, base y días con los que se calculó, y el valor.</summary>
 public sealed record SettlementDocumentLineModel(string Code, string Name, ConceptNature Nature, decimal? BaseAmount, decimal? Days, decimal Amount, string Summary);
 
-/// <summary>Un descuento del documento: obligación, propuesto, aplicado y motivo si se bajó.</summary>
-public sealed record SettlementDocumentDeductionModel(string Description, decimal Proposed, decimal Applied, string? Reason, decimal? RemainingAfter);
+/// <summary>
+/// Un descuento del documento: obligación, propuesto, aplicado y motivo si se bajó. Feature 013 (T0168): <c>ObligationNumber</c>
+/// es el número de la obligación de Cartera (nulo en libranzas).
+/// </summary>
+public sealed record SettlementDocumentDeductionModel(string Description, decimal Proposed, decimal Applied, string? Reason, decimal? RemainingAfter, string? ObligationNumber = null);
 
 /// <summary>
 /// Todo lo que el documento de liquidación definitiva para firma imprime (feature 010, FR-020).

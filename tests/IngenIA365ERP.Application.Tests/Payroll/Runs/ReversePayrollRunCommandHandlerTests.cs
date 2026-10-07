@@ -37,12 +37,12 @@ public class ReversePayrollRunCommandHandlerTests
             .Handle(new RegisterNoveltyCommand { PeriodPublicId = d.Marzo.PublicId, EmployeePublicId = d.Ana.PublicId, ConceptCode = "HEX_NOCTURNA", Quantity = 4m }, CancellationToken.None);
         horas.IsSuccess.Should().BeTrue(horas.Error.Message);
 
-        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
         var poster = d.Contabilizador(Contadora);
         var audit = new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual);
-        var apr = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker)
+        var apr = await new ApprovePayrollRunCommandHandler(d.Db, poster, d.Policies, d.Permissions, d.Clock, Contadora, audit, d.StaleMarker, d.Recaudo, d.Obligaciones)
             .Handle(new ApprovePayrollRunCommand(calc.Value.RunPublicId, Confirm: true), CancellationToken.None);
         apr.IsSuccess.Should().BeTrue(apr.Error.Message);
         return calc.Value.RunPublicId;
@@ -50,7 +50,7 @@ public class ReversePayrollRunCommandHandlerTests
 
     private static ReversePayrollRunCommandHandler Reversor(NominaTestData d) =>
         new(d.Db, d.Contabilizador(Gerente), d.Clock, Gerente,
-            new PayrollAuditEmitter(d.Audit, Gerente, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker);
+            new PayrollAuditEmitter(d.Audit, Gerente, d.Clock, NullLogger<PayrollAuditEmitter>.Instance, CooperativaDePrueba.Actual), d.StaleMarker, d.Recaudo);
 
     [Fact]
     public async Task Reversar_deja_asiento_espejo_corrida_reversada_periodo_abierto_y_novedades_intactas()
@@ -91,7 +91,7 @@ public class ReversePayrollRunCommandHandlerTests
         await d.Audit.Received(1).AppendAsync(Arg.Is<AuditEventDocument>(a => a.Action == AuditEventTypes.PayrollRunReversed), Arg.Any<CancellationToken>());
 
         // Y el período se puede volver a calcular: versión nueva, la reversada queda en el historial.
-        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var calc = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         calc.IsSuccess.Should().BeTrue(calc.Error.Message);
         calc.Value.Version.Should().Be(2);

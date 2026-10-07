@@ -45,7 +45,7 @@ public class BorradoresEspecialesDesactualizadosTests
 
     private static async Task<Guid> CalcularMarzoAsync(NominaTestData d)
     {
-        var r = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
+        var r = await new CalculatePayrollRunCommandHandler(d.Db, d.Loader, d.Recurrentes, d.CuotasDeCartera, d.Lock, d.Clock, d.User, NullLogger<CalculatePayrollRunCommandHandler>.Instance)
             .Handle(new CalculatePayrollRunCommand(d.Marzo.PublicId), CancellationToken.None);
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         return r.Value.RunPublicId;
@@ -53,7 +53,7 @@ public class BorradoresEspecialesDesactualizadosTests
 
     private static Task<Application.Common.Models.Result<ApproveRunResultDto>> AprobarOrdinariaAsync(NominaTestData d, Guid runId) =>
         new ApprovePayrollRunCommandHandler(d.Db, d.Contabilizador(Contadora), d.Policies, d.Permissions, d.Clock, Contadora,
-                new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker)
+                new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker, d.Recaudo, d.Obligaciones)
             .Handle(new ApprovePayrollRunCommand(runId, Confirm: true), CancellationToken.None);
 
     [Fact]
@@ -77,7 +77,7 @@ public class BorradoresEspecialesDesactualizadosTests
         var primaNueva = await LiquidacionDePrueba.PrimaAsync(d, recalculo: true);
         (await EstadoAsync(d, primaNueva)).Should().Be(PayrollRunStatus.Draft);
         var reversada = await new ReversePayrollRunCommandHandler(d.Db, d.Contabilizador(Contadora), d.Clock, Contadora,
-                new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker)
+                new PayrollAuditEmitter(d.Audit, Contadora, d.Clock, NullLogger<PayrollAuditEmitter>.Instance), d.StaleMarker, d.Recaudo)
             .Handle(new ReversePayrollRunCommand(marzo, "Se digitó mal una novedad"), CancellationToken.None);
         reversada.IsSuccess.Should().BeTrue(reversada.Error.Message);
         (await EstadoAsync(d, primaNueva)).Should().Be(PayrollRunStatus.Stale);

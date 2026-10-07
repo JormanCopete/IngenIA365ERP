@@ -133,6 +133,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<TerminationReason> TerminationReasons => Set<TerminationReason>();
     public DbSet<EmploymentTermination> EmploymentTerminations => Set<EmploymentTermination>();
     public DbSet<SettlementDeduction> SettlementDeductions => Set<SettlementDeduction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction> PayrollLoanDeductions => Set<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction>();
     public DbSet<WithholdingRateCalculation> WithholdingRateCalculations => Set<WithholdingRateCalculation>();
     public DbSet<WithholdingRateCalculationMonth> WithholdingRateCalculationMonths => Set<WithholdingRateCalculationMonth>();
     public DbSet<SeveranceFundDeposit> SeveranceFundDeposits => Set<SeveranceFundDeposit>();
@@ -671,6 +672,14 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<TerminationReason>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<EmploymentTermination>(b => { b.Ignore(x => x.EstaViva); b.Ignore("RowVersion"); });
         modelBuilder.Entity<SettlementDeduction>(b => { b.Ignore(x => x.FueAjustado); b.Ignore("RowVersion"); });
+        // Feature 013 (T0155): descuentos de Cartera de la ordinaria, sin FK a Cartera.
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction>(b =>
+        {
+            b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted);
+            b.HasOne(x => x.PayrollRun).WithMany().HasForeignKey(x => x.PayrollRunId);
+            b.HasOne(x => x.PayrollRunEmployee).WithMany().HasForeignKey(x => x.PayrollRunEmployeeId);
+            b.HasOne(x => x.PayrollRunLine).WithMany().HasForeignKey(x => x.PayrollRunLineId);
+        });
         modelBuilder.Entity<WithholdingRateCalculation>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<WithholdingRateCalculationMonth>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<SeveranceFundDeposit>(b => b.Ignore("RowVersion"));

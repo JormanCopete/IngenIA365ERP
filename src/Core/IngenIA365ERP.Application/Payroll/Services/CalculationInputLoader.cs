@@ -47,7 +47,8 @@ public sealed class PayrollCalculationBatch
 /// <summary>
 /// Carga los insumos del cálculo de un período en pocas consultas (T044): el plan, los
 /// empleados del plan vigentes en el período, su historial de salario, sus novedades
-/// activas, los descuentos que Cartera ya generó para el período (D-08), las versiones
+/// activas —entre ellas las cuotas de Cartera, que <see cref="CuotasDeCarteraEnNomina"/> dejó como
+/// novedades <c>LoanDeduction</c> antes de cargar (feature 013, T0162)—, las versiones
 /// de concepto y parámetro vigentes a la fecha de fin, la retención y las deducciones
 /// declaradas por empleado, y las políticas de la cooperativa. No calcula nada.
 ///
@@ -109,7 +110,6 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             .ToList();
 
         var ids = empleados.Select(x => x.Employee.Id).ToList();
-        var documentos = empleados.Select(x => x.TaxId).ToList();
 
         // --- clase de riesgo ARL de cada empleado ---
         // La ficha guarda la FILA de PAY_WorkRiskRates (WorkRiskRateId), no la clase; la
@@ -139,15 +139,6 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
             .ToListAsync(ct);
         var novedadesPorEmpleado = novedades.ToLookup(x => x.Novelty.EmployeeId);
         var noveltyIds = novedades.ToDictionary(x => x.Novelty.PublicId, x => x.Novelty.Id);
-
-        // --- descuentos por nómina que Cartera ya aplicó y contabilizó (D-08) ---
-        var desdeTexto = start.ToString("yyyyMMdd");
-        var hastaTexto = end.ToString("yyyyMMdd");
-        var cartera = await db.PayrollDeductionEntries.AsNoTracking()
-            .Where(d => d.StartDate == desdeTexto && d.EndDate == hastaTexto && d.EntryType == "DN"
-                        && documentos.Contains(d.PersonCode) && d.Amount > 0)
-            .ToListAsync(ct);
-        var carteraPorDocumento = cartera.ToLookup(d => d.PersonCode);
 
         // --- versiones vigentes a la fecha de fin ---
         var conceptos = await db.PayrollConceptDefinitions.AsNoTracking()
@@ -205,14 +196,6 @@ public sealed class CalculationInputLoader(IApplicationDbContext db, PayrollPoli
                     Description = string.IsNullOrWhiteSpace(n.Novelty.Notes) ? n.ConceptName : $"{n.ConceptName}: {n.Novelty.Notes}",
                 })
                 .ToList();
-            novs.AddRange(carteraPorDocumento[x.TaxId].Select(d => new NoveltyInput
-            {
-                PublicId = d.PublicId,
-                ConceptCode = WellKnownConceptCodes.LoanDeduction,
-                Amount = d.Amount,
-                Origin = NoveltyOrigin.LoanDeduction,
-                Description = $"Cuota de crédito {d.ConceptCode} (Cartera)",
-            }));
 
             var input = new EmployeeInput
             {

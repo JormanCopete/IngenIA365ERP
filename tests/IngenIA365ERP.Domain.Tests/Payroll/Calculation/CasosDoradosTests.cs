@@ -52,6 +52,19 @@ public class CasosDoradosTests
         (t.Earnings - t.Deductions).Should().Be(t.Net, "la suma de líneas redondeadas debe coincidir con el neto (FR-017)");
 
         resultado.Flags.Should().Be(caso.Esperado.Banderas);
+
+        // Feature 013 (T0103, FR-112): lo no descontado de la cuota de Cartera y su motivo, por línea.
+        if (caso.Esperado.NoDescontados is { } noDescontados)
+        {
+            var reales = resultado.Lines.Where(l => l.NotDeductedAmount != 0m)
+                .Select(l => (l.Code, l.NotDeductedAmount, l.NotDeductedReason)).ToList();
+            reales.Should().BeEquivalentTo(noDescontados.Select(n => (n.Concepto, n.Valor, (string?)n.Motivo)), o => o.WithStrictOrdering(),
+                "lo no descontado de cada línea y su motivo");
+            resultado.Lines.Should().OnlyContain(l => l.DeferredAmount == 0m || l.NotDeductedAmount == 0m, "lo no descontado de Cartera no se difiere");
+        }
+        if (caso.Esperado.OrdenDeAutorizadas is { } orden)
+            resultado.Lines.Where(l => orden.Contains(l.Code, StringComparer.OrdinalIgnoreCase)).OrderBy(l => l.Order).Select(l => l.Code)
+                .Should().Equal(orden, "orden de las deducciones autorizadas: la cuota de Cartera va primera");
         if (caso.Esperado.DiasPagados is { } dias)
             resultado.Tranches.Sum(x => x.PaidDays).Should().Be(dias, "días pagados");
         if (caso.Esperado.DiasAusencia is { } ausencia)

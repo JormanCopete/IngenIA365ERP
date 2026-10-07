@@ -1,6 +1,7 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -19,8 +20,10 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// común: asiento espejo y, en la misma transacción, la ficha vuelve a estar vigente (<c>Status</c>,
 /// <c>TerminationDate = MaxValue</c>, <c>Person.IsEmployee = true</c>), la terminación queda
 /// <c>Reinstated</c> con el motivo, los descuentos <c>Reverted</c> y el movimiento de vacaciones de la
-/// definitiva anulado. Los recaudos de Cartera <b>no</b> se reversan solos: la respuesta los lista para
-/// que Cartera los reverse por su propio flujo (FR-020, R7). Si la persona ya tiene ficha nueva por
+/// definitiva anulado. Feature 013 (T0160, R105, FR-088): en la misma transacción reversa en Cartera, por el contrato
+/// de obligaciones (<see cref="RecaudoPorNomina.ReversarAsync"/>, con la clave del pago y el motivo), cada descuento que la
+/// aprobación aplicó, y guarda <c>CarteraReversalPublicId</c>; si Cartera rechaza uno, se revierte la reversión entera con
+/// su motivo. Un usuario de Cartera no reversa esos pagos (<c>Lending.Reversal.OwnedByCollector</c>). Si la persona ya tiene ficha nueva por
 /// reingreso, no se reversa: <c>Payroll.Settlement.EmployeeRehired</c> con la ficha nueva (sólo hay una
 /// ficha viva por persona). Auditoría <c>Payroll.Employee.Reinstated</c>.
 /// </summary>
@@ -38,6 +41,7 @@ public sealed class ReverseSettlementCommandValidator : AbstractValidator<Revers
 public sealed class ReverseSettlementCommandHandler(
     IApplicationDbContext db,
     SettlementRunWorkflow workflow,
+    RecaudoPorNomina recaudo,
     IDateTimeService clock,
     ICurrentUserService user,
     PayrollAuditEmitter audit)
@@ -72,11 +76,26 @@ public sealed class ReverseSettlementCommandHandler(
             {
                 var ahora = clock.UtcNow;
                 var quien = user.UserName ?? string.Empty;
+                var motivo = request.Reason.Trim();
+                pagos.Clear();
+
+                // --- los recaudos de Cartera se reversan por el contrato, todo o nada (R105) ---
+                var recibo = new ReferenciaDeRecibo($"Reversión de la liquidación definitiva v{corrida.Version}", clock.HoyLocal, null, null, "Liquidacion");
+                foreach (var d in terminacion.Deductions.Where(d => !d.IsDeleted && d.Status == SettlementDeductionStatus.Applied
+                                                                    && d.Kind == SettlementDeductionKind.CooperativeLoan && d.AppliedAmount > 0m
+                                                                    && d.ObligationPublicId is not null && d.CarteraTransactionPublicId is not null)
+                                                         .OrderBy(d => d.ObligationPublicId))
+                {
+                    var reverso = await recaudo.ReversarAsync(corrida.PublicId, d.ObligationPublicId!.Value, motivo, recibo, token);
+                    if (reverso.Result is not (ResultadoDelContrato.Applied or ResultadoDelContrato.AlreadyApplied) || reverso.Value is null)
+                        return Result.Failure(SettlementErrors.LoanReversalRejected(d.ObligationNumber ?? d.Description, reverso.Code, reverso.Message));
+                    d.CarteraReversalPublicId = reverso.Value.OperationPublicId;
+                }
 
                 foreach (var d in terminacion.Deductions.Where(d => !d.IsDeleted && d.Status == SettlementDeductionStatus.Applied))
                 {
                     if (d.AppliedAmount > 0m && d.Kind == SettlementDeductionKind.CooperativeLoan)
-                        pagos.Add(new PortfolioPaymentDto(d.PublicId, d.CarteraTransactionPublicId, d.AppliedAmount, d.RemainingBalanceAfter, d.Description));
+                        pagos.Add(new PortfolioPaymentDto(d.PublicId, d.CarteraTransactionPublicId, d.AppliedAmount, d.RemainingBalanceAfter, d.Description, d.CarteraReversalPublicId));
                     d.Status = SettlementDeductionStatus.Reverted;
                     d.UpdatedAt = ahora;
                     d.UpdatedBy = quien;
@@ -122,7 +141,7 @@ public sealed class ReverseSettlementCommandHandler(
 
         var mensaje = pagos.Count == 0
             ? "La ficha volvió a estar vigente. No había recaudos de Cartera que reversar."
-            : $"La ficha volvió a estar vigente. Los {pagos.Count} recaudo(s) que la definitiva dejó en Cartera no se reversan desde aquí: revérselos en Cartera con su propio flujo.";
+            : $"La ficha volvió a estar vigente y los {pagos.Count} recaudo(s) que la definitiva dejó en Cartera se reversaron en Cartera: cada crédito quedó como antes del descuento.";
         return Result.Success(new SettlementReversedWithPortfolioDto(run.PublicId, terminacion.PublicId, reversado.Value.ReversalDocumentPublicId, reversado.Value.ReversalNumber, pagos, mensaje));
     }
 }

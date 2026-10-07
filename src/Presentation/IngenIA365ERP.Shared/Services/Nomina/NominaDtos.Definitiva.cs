@@ -93,6 +93,15 @@ public sealed record DescuentoDefinitivaDto(
     int Status,
     Guid? CarteraTransactionPublicId)
 {
+    /// <summary>Feature 013: número de la obligación de Cartera (nulo en libranzas).</summary>
+    public string? ObligationNumber { get; init; }
+
+    /// <summary>Feature 013: comprobante de reverso de Cartera, si la definitiva se reversó.</summary>
+    public Guid? CarteraReversalPublicId { get; init; }
+
+    /// <summary>Feature 013 (R105): el saldo que queda lo dio Cartera (exacto); si no, es una aproximación.</summary>
+    public bool RemainingIsExact { get; init; }
+
     public string TipoTexto => Kind switch { 1 => "Crédito de la cooperativa", 2 => "Libranza con tercero", _ => "Otro" };
     public string EstadoTexto => Status switch { 0 => "Propuesto", 1 => "Ajustado", 2 => "Aplicado", 3 => "Reversado", _ => Status.ToString() };
     public bool FueAjustado => Applied < Proposed;
@@ -123,7 +132,7 @@ public sealed record TerminacionRegistradaDto(
     IReadOnlyList<string> Refusals,
     TotalesCorridaDto Totals);
 
-public sealed record PagoCarteraDto(Guid ObligationPublicId, Guid? PaymentPublicId, decimal Applied, decimal? Remaining, string Description);
+public sealed record PagoCarteraDto(Guid ObligationPublicId, Guid? PaymentPublicId, decimal Applied, decimal? Remaining, string Description, Guid? ReversalPublicId = null);
 
 public sealed record DefinitivaAprobadaDto(
     Guid RunPublicId,

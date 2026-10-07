@@ -172,6 +172,22 @@ public sealed class CasoDorado
 
         /// <summary>Fragmentos que deben aparecer en las negativas del motor; vacío = no debe negarse a nada.</summary>
         public List<string> Rechazos { get; set; } = [];
+
+        /// <summary>
+        /// Feature 013 (T0103): lo no descontado de la cuota de Cartera por línea, con su motivo. Nulo = el caso no lo revisa;
+        /// vacío = ninguna línea deja nada sin descontar.
+        /// </summary>
+        public List<NoDescontadoJson>? NoDescontados { get; set; }
+
+        /// <summary>Feature 013 (T0103): el orden en que deben quedar las deducciones autorizadas (códigos); nulo = no se revisa.</summary>
+        public List<string>? OrdenDeAutorizadas { get; set; }
+    }
+
+    public sealed class NoDescontadoJson
+    {
+        public string Concepto { get; set; } = string.Empty;
+        public decimal Valor { get; set; }
+        public string Motivo { get; set; } = string.Empty;
     }
 
     public sealed class TotalesJson

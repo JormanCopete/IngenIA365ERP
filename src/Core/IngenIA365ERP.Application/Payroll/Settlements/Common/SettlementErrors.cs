@@ -98,6 +98,48 @@ public static class SettlementErrors
     public static readonly Error HasBlockers = new("Payroll.Settlement.ApprovalBlocked",
         "La liquidación tiene bloqueos (neto negativo, descuentos sobre el neto, negativas del motor). Corrija la causa y recalcule antes de aprobar.");
 
+    // ---------------------------------------- Cartera por el contrato (feature 013, T92, data-model §10.2) --
+
+    /// <summary>Al aprobar la definitiva, las obligaciones vivas del empleado en Cartera ya no son las que se propusieron.</summary>
+    public static Error LoanProposalOutdated(IReadOnlyList<string> propuestas, IReadOnlyList<string> vivas) =>
+        new ErrorConDatos("Payroll.Settlement.LoanProposalOutdated",
+            "Las obligaciones del empleado en Cartera cambiaron desde el cálculo. Recalcule la liquidación.",
+            new { proposed = propuestas, current = vivas });
+
+    /// <summary>Un descuento de la definitiva salió rechazado o con excedente: todo o nada, no se guardó nada.</summary>
+    public static Error LoanAmountsChanged(string detalle, object items) =>
+        new ErrorConDatos("Payroll.Settlement.LoanAmountsChanged",
+            $"Cartera no pudo aplicar los descuentos tal como se calcularon ({detalle}). Recalcule o ajuste los descuentos.",
+            new { items });
+
+    /// <summary>Al reversar la definitiva, Cartera no reversó un descuento: se revierte la reversión entera (R105).</summary>
+    public static Error LoanReversalRejected(string obligacion, string codigo, string mensaje) =>
+        new ErrorConDatos("Payroll.Settlement.LoanReversalRejected",
+            $"Cartera no reversó el descuento de {obligacion}: {mensaje} La liquidación sigue aprobada; resuelva lo que dice Cartera y vuelva a reversar.",
+            new { obligation = obligacion, lendingCode = codigo });
+
+    /// <summary>Aprobar sin reconocer que hay empleados en una carga de Cartera aplicada y sin activar (DE-10).</summary>
+    public static Error LendingPendingActivationAckRequired(IReadOnlyList<string> nombres) =>
+        new ErrorConDatos(LendingPendingActivationAckRequiredCode,
+            $"Confirme que sabe que Cartera está por activar para {nombres.Count} empleados ({string.Join(", ", nombres)}).",
+            new { count = nombres.Count, names = nombres });
+
+    public const string LendingPendingActivationAckRequiredCode = "Payroll.LendingPendingActivationAckRequired";
+    public const string LendingPendingActivationCode = "Payroll.LendingPendingActivation";
+    public const string LoanDeductionNotAppliedCode = "Payroll.LoanDeductionNotApplied";
+
+    /// <summary>Aviso: hay empleados en una carga de Cartera sin activar; esta nómina no les descuenta cuotas.</summary>
+    public static WarningDto LendingPendingActivation(IReadOnlyList<Guid> personPublicIds) =>
+        new(LendingPendingActivationCode,
+            "Hay empleados con créditos en una carga de Cartera sin activar: esta nómina no les descuenta cuotas.",
+            new { personPublicIds });
+
+    /// <summary>Aviso de la ordinaria: descuentos de Cartera que el contrato no aplicó (no bloquean: la línea bajó a lo aplicado).</summary>
+    public static WarningDto LoanDeductionNotApplied(IReadOnlyList<string> motivos) =>
+        new(LoanDeductionNotAppliedCode,
+            $"{motivos.Count} descuentos de Cartera no se aplicaron: {string.Join("; ", motivos)}.",
+            new { count = motivos.Count, reasons = motivos });
+
     // -------------------------------------------------------- avisos (no bloquean) --
 
     public const string OpeningBalanceMissingCode = "Payroll.Settlement.OpeningBalanceMissing";

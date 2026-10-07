@@ -40232,6 +40232,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("ObligationNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("ObligationPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("Origin")
                         .HasColumnType("int");
 
@@ -40287,6 +40294,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("ImportBatchId")
                         .HasDatabaseName("IX_PAY_Novelties_ImportBatch");
+
+                    b.HasIndex("ObligationPublicId")
+                        .HasDatabaseName("IX_PAY_Novelties_ObligationPublicId")
+                        .HasFilter("[ObligationPublicId] IS NOT NULL AND [IsDeleted] = 0");
 
                     b.HasIndex("PublicId")
                         .IsUnique();
@@ -41648,6 +41659,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<Guid?>("CarteraReversalPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("CarteraTransactionPublicId")
                         .HasColumnType("uniqueidentifier");
 
@@ -41676,6 +41690,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<int?>("LoanPortfolioId")
                         .HasColumnType("int");
+
+                    b.Property<string>("ObligationNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid?>("ObligationPublicId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("ProposedAmount")
                         .HasPrecision(18, 2)
@@ -41725,6 +41746,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique()
                         .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Loan")
                         .HasFilter("[LoanPortfolioId] IS NOT NULL AND [IsDeleted] = 0");
+
+                    b.HasIndex("TerminationId", "ObligationPublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Obligation")
+                        .HasFilter("[ObligationPublicId] IS NOT NULL AND [IsDeleted] = 0");
 
                     b.HasIndex("TerminationId", "RecurringNoveltyId")
                         .IsUnique()
@@ -42758,6 +42784,116 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("PAY_ElectronicPayrollTransmissions", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("AppliedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("CarteraReceiptPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CarteraReversalPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("DeductedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("ExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("NotDeductedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("NotDeductedReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ObligationNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<Guid>("ObligationPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PayrollRunEmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PayrollRunId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PayrollRunLineId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<string>("ResultMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollRunEmployeeId");
+
+                    b.HasIndex("PayrollRunLineId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("PayrollRunId", "PayrollRunEmployeeId", "ObligationPublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_PAY_PayrollLoanDeductions_Run_Employee_Obligation")
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("PAY_PayrollLoanDeductions", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>
                 {
                     b.Property<int>("Id")
@@ -42835,6 +42971,13 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("LendingActivationAckAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LendingActivationAckBy")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<DateOnly?>("PayDate")
                         .HasColumnType("date");
@@ -50338,6 +50481,32 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired();
 
                     b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollLoanDeduction", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunEmployee", "PayrollRunEmployee")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", "PayrollRun")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRunLine", "PayrollRunLine")
+                        .WithMany()
+                        .HasForeignKey("PayrollRunLineId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PayrollRun");
+
+                    b.Navigation("PayrollRunEmployee");
+
+                    b.Navigation("PayrollRunLine");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.Transactions.PayrollRun", b =>

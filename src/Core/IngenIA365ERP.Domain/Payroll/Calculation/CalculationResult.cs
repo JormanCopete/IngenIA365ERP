@@ -24,12 +24,21 @@ public sealed class CalculationLine
     /// <summary>Parte de una deducción autorizada que no cupo en el tope y se difiere al período siguiente.</summary>
     public decimal DeferredAmount { get; set; }
 
+    /// <summary>
+    /// Feature 013 (T0163, FR-112): la parte de la cuota de Cartera que no cupo. No se difiere: queda no descontada, Nómina la
+    /// informa al contrato de obligaciones como <c>NoDescontado</c> y la cuota sigue exigible en Cartera.
+    /// </summary>
+    public decimal NotDeductedAmount { get; set; }
+
+    /// <summary>Feature 013: el motivo de <see cref="NotDeductedAmount"/> (<see cref="LoanNonDeductionReasons"/>); nulo si se descontó entera.</summary>
+    public string? NotDeductedReason { get; set; }
+
     public int? LegalParameterId { get; init; }
     public string? ParameterCode { get; init; }
     public Guid? NoveltyPublicId { get; init; }
     public required Explanation Explanation { get; init; }
 
-    /// <summary>Falso para lo que ya contabilizó otro módulo (Cartera, D-08) y para lo informativo.</summary>
+    /// <summary>Falso para lo informativo. Desde la feature 013 (enmienda D-08, T53) la cuota de Cartera sí contabiliza.</summary>
     public bool AffectsAccounting { get; init; } = true;
 
     public int Order { get; set; }

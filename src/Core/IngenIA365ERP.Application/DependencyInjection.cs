@@ -92,6 +92,10 @@ public static class DependencyInjection
         // sobre el de nómina, persistencia y ciclo de vida comunes a las cuatro (T026-T028).
         services.AddScoped<Payroll.Services.ProvisionBalanceReader>();
         services.AddScoped<Payroll.Services.SettlementInputLoader>();
+        // Feature 013 (T0157, T0158, T0162): Nómina recauda por el contrato de obligaciones de Cartera.
+        services.AddScoped<Payroll.Settlements.PropuestaDeDescuentosDeCartera>();
+        services.AddScoped<Payroll.Services.RecaudoPorNomina>();
+        services.AddScoped<Payroll.Services.CuotasDeCarteraEnNomina>();
         // Feature 010 (US8): dispersión bancaria sobre el motor genérico de archivos planos (Common/BankFiles).
         services.AddScoped<Payroll.Dispersion.PayrollDisbursementLines>();
         services.AddScoped<Payroll.Dispersion.PreparacionDeDispersion>();
@@ -380,6 +384,11 @@ public static class DependencyInjection
         // las consultas a Cartera responden CarteraNoHabilitada (la entrega IC, T661, registra la real). El crédito dentro del pago, su
         // aprobación (SourceType DocumentPayment, Subject ProvisionalCredit) y la marca de lo que se está aprobando en la petición.
         services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Common.Integration.Lending.ConsultasDeCarteraNoHabilitada>();
+        // Feature 013 (T0152, T85): los puertos que Cartera ofrece, en su modo provisional («sin activar», «no habilitada»). Las
+        // implementaciones reales (Application/Lending/Integration) los reemplazan cuando nace CarteraNucleo (US5, US6).
+        services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Common.Integration.Lending.ConsultaDeObligacionesSinActivar>();
+        services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Common.Integration.Lending.ContratoDeObligacionesSinActivar>();
+        services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Common.Integration.Lending.ReservasDeCarteraNoHabilitada>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
@@ -483,7 +492,7 @@ public static class DependencyInjection
         // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
         services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();
         // Feature 013 (T0088): el deber de conservar del titular; hasta la fase 3 responde «sin obligaciones registradas».
-        services.TryAddScoped<Compliance.DataSubjectRequests.IDeberDeConservacionDelTitular, Compliance.DataSubjectRequests.SinObligacionesRegistradas>();
+        services.TryAddScoped<Compliance.DataSubjectRequests.IDeberDeConservacionDelTitular, Compliance.DataSubjectRequests.DeberDeConservacionPorObligaciones>();
         services.AddScoped<Common.Compliance.IProveedoresDeListas, Common.Compliance.ProveedoresDeListas>();
         services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Common.Compliance.IProveedoresDeListas>());
     }

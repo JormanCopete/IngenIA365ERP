@@ -16,6 +16,8 @@
     <PackageReference Include="NSubstitute" Version="5.*" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.*" />
+    <!-- Feature 013 (T0102): un motor relacional en memoria para ver una transacción real (TransaccionExplicita.HayEnCurso). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.*" />
     <PackageReference Include="BCrypt.Net-Next" Version="4.*" />
   </ItemGroup>
   <ItemGroup>

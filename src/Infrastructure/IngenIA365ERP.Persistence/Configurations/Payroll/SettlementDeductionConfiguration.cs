@@ -36,6 +36,12 @@ public class SettlementDeductionConfiguration : IEntityTypeConfiguration<Settlem
         builder.HasIndex(e => new { e.TerminationId, e.LoanPortfolioId }).IsUnique()
             .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Loan")
             .HasFilter("[LoanPortfolioId] IS NOT NULL AND [IsDeleted] = 0");
+        // Feature 013 (T0156, data-model parte 3 §7.2): la obligación de Cartera, sin FK (FR-008). El único heredado de arriba lo
+        // suelta RetiroDeLaCarteraHeredada (CH37).
+        builder.Property(e => e.ObligationNumber).HasMaxLength(30);
+        builder.HasIndex(e => new { e.TerminationId, e.ObligationPublicId }).IsUnique()
+            .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Obligation")
+            .HasFilter("[ObligationPublicId] IS NOT NULL AND [IsDeleted] = 0");
         builder.HasIndex(e => new { e.TerminationId, e.RecurringNoveltyId }).IsUnique()
             .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Libranza")
             .HasFilter("[RecurringNoveltyId] IS NOT NULL AND [IsDeleted] = 0");

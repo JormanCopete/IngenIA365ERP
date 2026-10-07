@@ -67,6 +67,13 @@ public sealed class PayrollRunsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Runs.View");
 
+        // Feature 013 (T0166, api.md §24): los recaudos y no descontados de Cartera de la corrida.
+        group.MapGet("/runs/{runId:guid}/loan-deductions", async (Guid runId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new Application.Payroll.Runs.ListPayrollLoanDeductionsQuery(runId), ct))
+            .WithName("Payroll_Runs_LoanDeductions")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Runs.View");
+
         group.MapGet("/runs/{runId:guid}/export", async (Guid runId, ISender sender, CancellationToken ct) =>
             {
                 var result = await sender.Send(new ExportRunQuery(runId), ct);
@@ -79,7 +86,7 @@ public sealed class PayrollRunsEndpoints : ICarterModule
             .RequirePermission("Payroll.Runs.Export");
 
         group.MapPost("/runs/{runId:guid}/approve", async (Guid runId, ApproveBody body, ISender sender, CancellationToken ct) =>
-                await sender.Send(new ApprovePayrollRunCommand(runId, body.Confirm, body.Exceptions, body.ConfirmEmpty, body.ConfirmWithoutSegregation), ct))
+                await sender.Send(new ApprovePayrollRunCommand(runId, body.Confirm, body.Exceptions, body.ConfirmEmpty, body.ConfirmWithoutSegregation, body.AcknowledgeLendingPendingActivation), ct))
             .WithName("Payroll_Runs_Approve")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Runs.Approve");
@@ -105,5 +112,6 @@ public sealed class PayrollRunsEndpoints : ICarterModule
         bool Confirm,
         IReadOnlyList<Application.Payroll.Runs.ApprovalExceptionDto>? Exceptions,
         bool ConfirmEmpty = false,
-        bool ConfirmWithoutSegregation = false);
+        bool ConfirmWithoutSegregation = false,
+        bool AcknowledgeLendingPendingActivation = false);
 }

@@ -19,7 +19,8 @@ public sealed record DiscardRunResultDto(Guid RunPublicId, Guid PeriodPublicId, 
 /// Abierto aprobando y reversando, que deja un asiento contable espejo por un error de
 /// captura. Descartar deja la corrida <c>Superseded</c> con quién, cuándo y por qué (nada se
 /// borra: Principio XI), devuelve el período a <c>Open</c>, anula las novedades que las
-/// recurrentes generaron para ese período —su cuota nunca se contó; se cuenta al aprobar— y
+/// recurrentes generaron para ese período —su cuota nunca se contó; se cuenta al aprobar—, las
+/// cuotas de Cartera de ese período (feature 013, C55: el próximo cálculo las vuelve a pedir) y
 /// conserva las manuales. No toca contabilidad porque un borrador no tiene.
 /// </summary>
 public sealed record DiscardPayrollRunCommand(Guid RunPublicId, string Reason) : IRequest<Result<DiscardRunResultDto>>;
@@ -85,7 +86,9 @@ public sealed class DiscardPayrollRunCommandHandler(
         // Las recurrentes se regeneran en el próximo cálculo: el materializador reconoce este motivo y sólo
         // por él vuelve a generar una anulada (una anulada por una persona no vuelve).
         var generadas = await db.PayrollNovelties
-            .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active && n.Origin == NoveltyOrigin.Recurring)
+            // Feature 013 (C55): también las cuotas de Cartera; el próximo cálculo las vuelve a pedir a Cartera.
+            .Where(n => n.PayPeriodId == period.Id && n.Status == NoveltyStatus.Active
+                        && (n.Origin == NoveltyOrigin.Recurring || n.Origin == NoveltyOrigin.LoanDeduction))
             .ToListAsync(ct);
         foreach (var n in generadas)
         {

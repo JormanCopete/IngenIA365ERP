@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Payroll.Novelties;
 using IngenIA365ERP.Application.Payroll.Novelties.RecurringNovelties;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Tests.Common;
+using IngenIA365ERP.Application.Tests.Common.Integration.Lending;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Payroll;
@@ -48,6 +49,13 @@ public sealed class NominaTestData
     public ProvisionBalanceReader SaldosDeProvision { get; }
     public SettlementInputLoader SettlementLoader { get; }
 
+    // Feature 013: Cartera por sus puertos, con dobles (sin configurar, Cartera sin activar y sin obligaciones).
+    public ConsultaDeObligacionesDePrueba Obligaciones { get; } = new();
+    public ContratoDeObligacionesDePrueba Contrato { get; } = new();
+    public RecaudoPorNomina Recaudo { get; }
+    public CuotasDeCarteraEnNomina CuotasDeCartera { get; }
+    public IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera PropuestaDeCartera { get; }
+
     public PayrollPlan Plan { get; }
     public PayPeriod Marzo { get; }
     public Employee Ana { get; }
@@ -60,6 +68,8 @@ public sealed class NominaTestData
         Clock = Substitute.For<IDateTimeService>();
         Clock.UtcNow.Returns(Ahora);
         Clock.TodayUtc.Returns(DateOnly.FromDateTime(Ahora));
+        // Feature 013: la fecha local (los puertos de Cartera y la fecha valor de la definitiva la usan); el sustituto no ejecuta la implementación por defecto.
+        Clock.HoyLocal.Returns(DateOnly.FromDateTime(Ahora));
         User = UsuarioDePrueba("ana@demo", 7);
         Audit = Substitute.For<IAuditAppendOnlyWriter>();
         Lock = Substitute.For<IDistributedLock>();
@@ -74,7 +84,11 @@ public sealed class NominaTestData
         Policies = new PayrollPolicyReader(Db, Clock);
         Loader = new CalculationInputLoader(Db, Policies);
         SaldosDeProvision = new ProvisionBalanceReader(Db);
-        SettlementLoader = new SettlementInputLoader(Db, Policies, SaldosDeProvision, NullLogger<SettlementInputLoader>.Instance);
+        Recaudo = new RecaudoPorNomina(Contrato);
+        CuotasDeCartera = new CuotasDeCarteraEnNomina(Db, Obligaciones, Clock, User, NullLogger<CuotasDeCarteraEnNomina>.Instance);
+        PropuestaDeCartera = new IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera(Obligaciones, Clock,
+            NullLogger<IngenIA365ERP.Application.Payroll.Settlements.PropuestaDeDescuentosDeCartera>.Instance);
+        SettlementLoader = new SettlementInputLoader(Db, Policies, SaldosDeProvision, PropuestaDeCartera, NullLogger<SettlementInputLoader>.Instance);
         Alcance = Substitute.For<IUserBranchScope>();
         Alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(AlcanceDeSucursales.SinRestriccion));
         Poster = Contabilizador(User);
@@ -285,6 +299,7 @@ public sealed class NominaTestData
         var utc = DateTime.SpecifyKind(fecha, DateTimeKind.Utc);
         Clock.UtcNow.Returns(utc);
         Clock.TodayUtc.Returns(DateOnly.FromDateTime(utc));
+        Clock.HoyLocal.Returns(DateOnly.FromDateTime(utc));
     }
 
     /// <summary>Una política por empresa con vigencia (<c>PAY_CompanyPolicies</c>).</summary>

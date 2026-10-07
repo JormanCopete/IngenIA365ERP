@@ -52,4 +52,36 @@ public class TransaccionExplicitaTests
 
         await acto.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    // ---------------------------------------------------------------- feature 013 (T0102, DE-02, T91) --
+
+    [Fact]
+    public void HayEnCurso_es_falso_sin_DbContext_detras()
+    {
+        TransaccionExplicita.HayEnCurso(Substitute.For<IApplicationDbContext>()).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task HayEnCurso_es_falso_en_InMemory_dentro_y_fuera_de_EjecutarAsync()
+    {
+        using var db = TestDbContextFactory.Create();
+        TransaccionExplicita.HayEnCurso(db).Should().BeFalse("fuera no hay transacción");
+
+        var adentro = await TransaccionExplicita.EjecutarAsync(db, () => Task.FromResult(Result.Success(TransaccionExplicita.HayEnCurso(db))), CancellationToken.None);
+
+        adentro.Value.Should().BeFalse("InMemory no tiene transacciones: las pruebas que necesitan una sustituyen el puerto de Cartera");
+    }
+
+    [Fact]
+    public async Task HayEnCurso_es_verdadero_dentro_de_EjecutarAsync_con_un_motor_relacional_y_falso_al_salir()
+    {
+        var opciones = new DbContextOptionsBuilder<TestApplicationDbContext>().UseSqlite("Data Source=:memory:").Options;
+        await using var db = new TestApplicationDbContext(opciones);
+
+        TransaccionExplicita.HayEnCurso(db).Should().BeFalse();
+        var adentro = await TransaccionExplicita.EjecutarAsync(db, () => Task.FromResult(Result.Success(TransaccionExplicita.HayEnCurso(db))), CancellationToken.None);
+
+        adentro.Value.Should().BeTrue("dentro de EjecutarAsync la transacción está en curso: el contrato de obligaciones puede escribir");
+        TransaccionExplicita.HayEnCurso(db).Should().BeFalse("al confirmar se cierra");
+    }
 }

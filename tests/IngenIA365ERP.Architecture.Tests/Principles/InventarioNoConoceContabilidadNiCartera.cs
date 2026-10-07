@@ -124,6 +124,11 @@ public class InventarioNoConoceContabilidadNiCartera
         Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
         Assert.Single(typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes(), t => t.IsInterface && t.Name == "IConsultasDeCartera");
         Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync"], MetodosDe(puerto));
+
+        // Feature 013 (T0120, T22, T90): reservar y liberar el número viven en su propio puerto; una consulta no cambia estado.
+        var reservas = typeof(IngenIA365ERP.Application.Common.Integration.Lending.IReservasDeCartera);
+        Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", reservas.Namespace);
+        Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(reservas));
     }
 
     [Fact]

@@ -24,7 +24,9 @@ namespace IngenIA365ERP.Application.Payroll.Settlements.Settlement;
 /// de la responsable sobre el borrador vigente, no un insumo del motor. Si la suma aplicada supera
 /// el neto antes de descuentos queda la bandera <c>DeductionOverNet</c>, que bloquea la aprobación.
 /// Todo queda en auditoría (<c>Payroll.Settlement.DeductionAdjusted</c>: propuesto, aplicado, motivo,
-/// quién y cuándo).
+/// quién y cuándo). Feature 013 (T0160, R105, DE-06): en un crédito de Cartera pide <c>SimularAsync</c> con valor libre
+/// (no escribe) y guarda el saldo <b>exacto</b> que quedaría; si Cartera no simula (sin activar), queda la aproximación del
+/// desglose. La línea contabiliza (enmienda D-08).
 /// </summary>
 public sealed record AdjustSettlementDeductionCommand(Guid RunPublicId, Guid ObligationPublicId, decimal Applied, string? Reason)
     : IRequest<Result<SettlementDeductionItemDto>>;
@@ -40,7 +42,7 @@ public sealed class AdjustSettlementDeductionCommandValidator : AbstractValidato
     }
 }
 
-public sealed class AdjustSettlementDeductionCommandHandler(IApplicationDbContext db, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit)
+public sealed class AdjustSettlementDeductionCommandHandler(IApplicationDbContext db, RecaudoPorNomina recaudo, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit)
     : IRequestHandler<AdjustSettlementDeductionCommand, Result<SettlementDeductionItemDto>>
 {
     public async Task<Result<SettlementDeductionItemDto>> Handle(AdjustSettlementDeductionCommand request, CancellationToken ct)
@@ -71,6 +73,13 @@ public sealed class AdjustSettlementDeductionCommandHandler(IApplicationDbContex
         descuento.UpdatedAt = ahora;
         descuento.UpdatedBy = quien;
 
+        // --- feature 013: el saldo exacto que quedaría en Cartera, por la simulación del contrato (no escribe) ---
+        if (descuento.Kind == SettlementDeductionKind.CooperativeLoan && descuento.ObligationPublicId is { } obligacion)
+        {
+            var simulacion = request.Applied > 0m ? await recaudo.SimularValorLibreAsync(obligacion, request.Applied, clock.HoyLocal, ct) : null;
+            descuento.RemainingBalanceAfter = simulacion?.BalancesAfter.PayoffAmount;
+        }
+
         // --- la línea enlazada toma el valor aplicado; si no había (aplicado en cero), se crea ---
         var linea = fila.Lines.FirstOrDefault(l => l.SettlementDeductionId == descuento.Id);
         if (linea is null)
@@ -89,7 +98,8 @@ public sealed class AdjustSettlementDeductionCommandHandler(IApplicationDbContex
                 ConceptName = concepto.Name,
                 Nature = ConceptNature.Deduction,
                 SettlementDeductionId = descuento.Id,
-                AffectsAccounting = descuento.Kind != SettlementDeductionKind.CooperativeLoan,
+                // Feature 013 (enmienda D-08 de la 010, T53): DESC_CARTERA contabiliza contra la cuenta del concepto.
+                AffectsAccounting = true,
                 Order = (fila.Lines.Count == 0 ? 0 : fila.Lines.Max(l => l.Order)) + 1,
                 CreatedAt = ahora,
                 CreatedBy = quien,
@@ -124,6 +134,7 @@ public sealed class AdjustSettlementDeductionCommandHandler(IApplicationDbContex
             {
                 runPublicId = run.PublicId, obligation = descuento.Description, proposed = descuento.ProposedAmount, applied = descuento.AppliedAmount,
                 reason = descuento.AdjustmentReason, adjustedBy = quien, adjustedAt = ahora, status = descuento.Status.ToString(),
+                remainingAfter = descuento.RemainingBalanceAfter,
                 netAfterDeductions = fila.NetPay, deductionOverNet = fila.Flags.HasFlag(RunEmployeeFlag.DeductionOverNet),
             }, ct);
 
@@ -147,7 +158,10 @@ public sealed class AdjustSettlementDeductionCommandHandler(IApplicationDbContex
             exp.Step("Aplicado", d.AppliedAmount);
         }
         if (d.Kind == SettlementDeductionKind.CooperativeLoan)
-            exp.Note("Origen", "Descuento aplicado y contabilizado por Cartera: se muestra para el neto y el comprobante, no genera asiento.");
+        {
+            exp.Note("Origen", "Descuento de un crédito de Cartera: se aplica en Cartera al aprobar la liquidación y contabiliza contra la cuenta de DESC_CARTERA.");
+            if (d.RemainingBalanceAfter is { } saldo) exp.Note("Saldo que quedaría en Cartera (simulado)", Fmt.Money(saldo));
+        }
         exp.Summary = $"{d.Description}: {Fmt.Money(d.AppliedAmount)}";
         return exp;
     }

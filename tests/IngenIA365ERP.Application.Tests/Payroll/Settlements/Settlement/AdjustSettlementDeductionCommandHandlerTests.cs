@@ -13,7 +13,8 @@ namespace IngenIA365ERP.Application.Tests.Payroll.Settlements.Settlement;
 /// <summary>
 /// Feature 010, US3 (FR-018a, T065): el descuento propuesto sólo se baja, con motivo; la línea y los
 /// totales del borrador cambian sin versión nueva; subir o bajar sin motivo se rechaza; si la suma
-/// aplicada supera el neto queda <c>DeductionOverNet</c>; todo va a la auditoría.
+/// aplicada supera el neto queda <c>DeductionOverNet</c>; todo va a la auditoría. Feature 013 (T0108, R105): el saldo que
+/// quedaría en Cartera es el que da <c>SimularAsync</c> con valor libre (sin escribir); sin simulación, la aproximación.
 /// </summary>
 public class AdjustSettlementDeductionCommandHandlerTests
 {
@@ -22,7 +23,7 @@ public class AdjustSettlementDeductionCommandHandlerTests
     {
         var p = new DefinitivaDePrueba();
         var t = await p.RegistrarAnaAsync();
-        var credito = p.Descuento(t, 1001);
+        var credito = p.Descuento(t, "1001");
 
         var r = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, credito.ObligationPublicId, 1_000_000m, "El asociado refinancia el resto con la cooperativa"), CancellationToken.None);
 
@@ -32,7 +33,8 @@ public class AdjustSettlementDeductionCommandHandlerTests
         r.Value.Reason.Should().Be("El asociado refinancia el resto con la cooperativa");
         r.Value.AdjustedBy.Should().Be("ana@demo");
         r.Value.Status.Should().Be(SettlementDeductionStatus.Adjusted);
-        r.Value.RemainingAfter.Should().Be(500_000m, "lo que quedará en Cartera");
+        r.Value.RemainingAfter.Should().Be(500_000m, "sin simulación de Cartera, la aproximación: saldo total menos lo aplicado");
+        r.Value.RemainingIsExact.Should().BeFalse();
 
         var run = await p.D.Db.PayrollRuns.Include(x => x.Employees).ThenInclude(e => e.Lines).SingleAsync(x => x.PublicId == t.RunPublicId);
         run.Version.Should().Be(1, "el ajuste no crea versión");
@@ -59,12 +61,32 @@ public class AdjustSettlementDeductionCommandHandlerTests
     }
 
     [Fact]
+    public async Task Con_Cartera_activa_el_ajuste_simula_valor_libre_sin_escribir_y_guarda_el_saldo_exacto()
+    {
+        var p = new DefinitivaDePrueba();
+        var t = await p.RegistrarAnaAsync();
+        p.Contrato.SaldoSimulado = 512_345m;
+
+        var r = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, "1001").ObligationPublicId, 1_000_000m, "Refinancia"), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.RemainingAfter.Should().Be(512_345m, "el saldo exacto que dio la simulación de Cartera");
+        r.Value.RemainingIsExact.Should().BeTrue();
+        var sim = p.Contrato.Simulaciones.Should().ContainSingle().Subject;
+        sim.Modality.Should().Be(Application.Common.Integration.Lending.ModalidadDePago.FreeAmount);
+        sim.Amount.Should().Be(1_000_000m);
+        sim.ObligationPublicId.Should().Be(p.Credito1001.ObligationPublicId);
+        p.Contrato.Aplicaciones.Should().BeEmpty("ajustar no escribe en Cartera");
+        (await p.D.Db.SettlementDeductions.SingleAsync(d => d.ObligationPublicId == p.Credito1001.ObligationPublicId)).RemainingBalanceAfter.Should().Be(512_345m);
+    }
+
+    [Fact]
     public async Task Subir_sobre_lo_propuesto_se_rechaza_con_el_propuesto_en_data()
     {
         var p = new DefinitivaDePrueba();
         var t = await p.RegistrarAnaAsync();
 
-        var r = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, 1002).ObligationPublicId, 300_001m, "más"), CancellationToken.None);
+        var r = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, "1002").ObligationPublicId, 300_001m, "más"), CancellationToken.None);
 
         r.Error.Code.Should().Be("Payroll.Settlement.DeductionAboveProposed");
         r.Error.Should().BeOfType<ErrorConDatos>().Which.Data.Should().BeEquivalentTo(new { proposed = 300_000m });
@@ -96,7 +118,7 @@ public class AdjustSettlementDeductionCommandHandlerTests
         var run = await p.D.Db.PayrollRuns.Include(x => x.Employees).SingleAsync(x => x.PublicId == t.RunPublicId);
         run.Employees.Single().Flags.Should().HaveFlag(RunEmployeeFlag.DeductionOverNet);
 
-        var r = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, 1001).ObligationPublicId, 1_000_000m, "Hasta donde alcanza el neto; el resto sigue en Cartera"), CancellationToken.None);
+        var r = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, "1001").ObligationPublicId, 1_000_000m, "Hasta donde alcanza el neto; el resto sigue en Cartera"), CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue(r.Error.Message);
         var despues = await p.D.Db.PayrollRunEmployees.SingleAsync(e => e.PayrollRunId == run.Id);
@@ -118,7 +140,7 @@ public class AdjustSettlementDeductionCommandHandlerTests
         var run = await p.D.Db.PayrollRuns.SingleAsync(x => x.PublicId == t.RunPublicId);
         run.Status = PayrollRunStatus.Superseded;
         await p.D.Db.SaveChangesAsync();
-        var cerrado = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, 1001).ObligationPublicId, 1m, "x"), CancellationToken.None);
+        var cerrado = await p.Ajustar().Handle(new AdjustSettlementDeductionCommand(t.RunPublicId, p.Descuento(t, "1001").ObligationPublicId, 1m, "x"), CancellationToken.None);
         cerrado.Error.Code.Should().Be("Payroll.Settlement.NotDraft");
     }
 }

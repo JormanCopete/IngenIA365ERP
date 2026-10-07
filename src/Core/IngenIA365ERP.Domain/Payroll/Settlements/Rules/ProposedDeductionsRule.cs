@@ -8,8 +8,9 @@ namespace IngenIA365ERP.Domain.Payroll.Settlements.Rules;
 /// Descuentos de la definitiva ya propuestos desde Cartera y libranzas y validados por la
 /// responsable (FR-018a): el motor sólo los vuelve líneas con el valor aplicado, dice cuánto
 /// se propuso y por qué bajó, y marca <see cref="SettlementFlags.DeductionOverNet"/> cuando
-/// la suma supera el neto antes de descuentos. Los que contabiliza otro módulo (Cartera,
-/// D-08) no generan asiento.
+/// la suma supera el neto antes de descuentos. Feature 013 (enmienda D-08 de la 010, T53): la
+/// cuota de Cartera contabiliza contra la cuenta de <c>DESC_CARTERA</c> como cualquier descuento;
+/// sólo un descuento que el llamador declare contabilizado por otro módulo queda sin asiento.
 /// </summary>
 public static class ProposedDeductionsRule
 {
@@ -33,7 +34,7 @@ public static class ProposedDeductionsRule
             if (d.AppliedAmount < d.ProposedAmount) exp.Step("Aplicado tras la validación de la responsable (bajado con motivo, auditado)", d.AppliedAmount);
             else exp.Step("Aplicado", d.AppliedAmount);
             if (d.AccountedByOtherModule)
-                exp.Note("Origen", "Descuento aplicado y contabilizado por Cartera: se muestra para el neto y el comprobante, no genera asiento.");
+                exp.Note("Origen", "Descuento contabilizado por otro módulo: se muestra para el neto y el comprobante, no genera asiento.");
             exp.Summary = $"{d.Description}: {Fmt.Money(d.AppliedAmount)}";
             ctx.Add(LineFactory.Create(def, d.AppliedAmount, exp, affectsAccounting: !d.AccountedByOtherModule));
             aplicado += d.AppliedAmount;

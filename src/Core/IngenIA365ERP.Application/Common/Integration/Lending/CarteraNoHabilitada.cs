@@ -6,7 +6,7 @@ namespace IngenIA365ERP.Application.Common.Integration.Lending;
 /// <c>Cartera.IntegracionHabilitadaDesde</c>. Quien la recibe aplica el crédito provisional: persona identificada y activa,
 /// aprobación por monto y pago «pendiente de validar».
 /// </summary>
-public sealed record CarteraNoHabilitada() : EstadoCrediticioDto("NotEnabled", null, [], null)
+public sealed record CarteraNoHabilitada() : EstadoCrediticioDto(EstadosCrediticios.NotEnabled, null, [], null)
 {
     /// <summary>La única instancia (no lleva datos).</summary>
     public static CarteraNoHabilitada Instancia { get; } = new();

@@ -23,7 +23,9 @@ public class LosCodigosDeNominaEstanEnElContrato
         var root = RepoPath.FindRepoRoot();
         var contratos = Directory.EnumerateFiles(Path.Combine(root, "specs"), "*.md", SearchOption.AllDirectories)
             .Where(f => f.Replace('\\', '/').Contains("/contracts/", StringComparison.Ordinal)
-                        && (f.Contains("010-nomina", StringComparison.Ordinal) || f.Contains("005-", StringComparison.Ordinal) || f.Contains("006-", StringComparison.Ordinal)))
+                        && (f.Contains("010-nomina", StringComparison.Ordinal) || f.Contains("005-", StringComparison.Ordinal) || f.Contains("006-", StringComparison.Ordinal)
+                            // Feature 013 (E-03): la enmienda de Cartera a Nómina registra sus códigos en contracts/api.md §24.
+                            || f.Contains("013-cartera", StringComparison.Ordinal)))
             .Select(File.ReadAllText)
             .ToList();
         Assert.True(contratos.Count > 0, "No se encontraron los contratos de nómina bajo specs/*/contracts/.");

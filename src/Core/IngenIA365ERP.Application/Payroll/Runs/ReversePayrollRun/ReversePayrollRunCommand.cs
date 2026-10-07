@@ -2,7 +2,9 @@ using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -44,7 +46,8 @@ public sealed class ReversePayrollRunCommandHandler(
     IDateTimeService clock,
     ICurrentUserService user,
     PayrollAuditEmitter audit,
-    IPayrollRunStaleMarker staleMarker)
+    IPayrollRunStaleMarker staleMarker,
+    RecaudoPorNomina recaudo)
     : IRequestHandler<ReversePayrollRunCommand, Result<ReverseRunResultDto>>
 {
     public async Task<Result<ReverseRunResultDto>> Handle(ReversePayrollRunCommand request, CancellationToken ct)
@@ -52,13 +55,37 @@ public sealed class ReversePayrollRunCommandHandler(
         if (string.IsNullOrWhiteSpace(request.Reason))
             return Fallo("Payroll.ReasonRequired", "La reversión exige un motivo.");
 
+        // Feature 013 (T0165, G3): una transacción explícita, porque reversar en Cartera escribe en la misma unidad de trabajo
+        // y todo queda o nada queda. Reintentable: cada repetición relee todo.
+        (string Original, int Reversados)? auditoria = null;
+        var r = await TransaccionExplicita.EjecutarAsync(db, async () =>
+        {
+            auditoria = null;
+            var intento = await ReversarAsync(request, ct);
+            if (intento.IsFailure) return Result.Failure<ReverseRunResultDto>(intento.Error);
+            auditoria = (intento.Value.Original, intento.Value.Reversados);
+            return Result.Success(intento.Value.Dto);
+        }, ct);
+        if (r.IsFailure || auditoria is not { } a) return r;
+
+        await audit.EmitAsync(AuditEventTypes.PayrollRunReversed, nameof(PayrollRun), r.Value.RunPublicId,
+            new { status = "Approved", accountingDocument = a.Original },
+            new { status = "Reversed", reason = request.Reason.Trim(), reversalDocument = r.Value.ReversalAccountingDocumentNumber, period = r.Value.PeriodPublicId, periodStatus = "Open", loanDeductionsReversed = a.Reversados }, ct);
+        return r;
+    }
+
+    private sealed record Reversion(ReverseRunResultDto Dto, string Original, int Reversados);
+
+    private async Task<Result<Reversion>> ReversarAsync(ReversePayrollRunCommand request, CancellationToken ct)
+    {
+
         var run = await db.PayrollRuns.Include(r => r.PayPeriod).Include(r => r.AccountingDocument)
             .FirstOrDefaultAsync(r => r.PublicId == request.RunPublicId, ct);
-        if (run is null) return Fallo("Payroll.RunNotFound", "No existe la corrida indicada.");
+        if (run is null) return FalloR("Payroll.RunNotFound", "No existe la corrida indicada.");
         // Feature 010: las liquidaciones especiales se reversan por su ruta con su permiso.
-        if (run.EsEspecial) return Result.Failure<ReverseRunResultDto>(Settlements.Common.SettlementErrors.UseSettlementRoute(run.Kind));
+        if (run.EsEspecial) return Result.Failure<Reversion>(Settlements.Common.SettlementErrors.UseSettlementRoute(run.Kind));
         if (run.Status != PayrollRunStatus.Approved)
-            return Fallo("Payroll.RunNotApproved", $"La corrida está {run.Status}: sólo se reversa una liquidación aprobada.");
+            return FalloR("Payroll.RunNotApproved", $"La corrida está {run.Status}: sólo se reversa una liquidación aprobada.");
         var period = run.PayPeriod!;
 
         // --- pagos vigentes bloquean (FR-032): la constancia de pago manda ---
@@ -73,20 +100,40 @@ public sealed class ReversePayrollRunCommandHandler(
             .Select(x => NombreDePersona.Completo(x.FirstName, x.OtherNames, x.LastName, x.SecondLastName))
             .ToList();
         if (pagados.Count > 0)
-            return Fallo("Payroll.PaymentBlocksReversal",
+            return FalloR("Payroll.PaymentBlocksReversal",
                 $"{pagados.Count} empleado(s) tienen marca de pago vigente: {string.Join(", ", pagados)}. Retire las marcas (con motivo) antes de reversar.");
 
         var original = run.AccountingDocument
                        ?? (run.AccountingDocumentId is { } docId ? await db.AccountingDocuments.FirstOrDefaultAsync(d => d.Id == docId, ct) : null);
         if (original is null)
-            return Fallo("Payroll.NothingToPost", "La corrida aprobada no tiene comprobante contable asociado: no hay asiento que reversar.");
-
-        var hoy = clock.TodayUtc;
-        var posting = await poster.ReverseAsync(original, hoy, request.Reason.Trim(), ct);
-        if (posting.IsFailure) return Result.Failure<ReverseRunResultDto>(posting.Error);
+            return FalloR("Payroll.NothingToPost", "La corrida aprobada no tiene comprobante contable asociado: no hay asiento que reversar.");
 
         var ahora = clock.UtcNow;
         var yo = user.UserName ?? string.Empty;
+
+        // --- feature 013 (G3): los recaudos de Cartera se reversan por el contrato, todo o nada ---
+        var recaudos = await db.PayrollLoanDeductions
+            .Where(d => d.PayrollRunId == run.Id && d.CarteraReceiptPublicId != null
+                        && (d.Status == PayrollLoanDeductionStatus.Applied || d.Status == PayrollLoanDeductionStatus.PartiallyApplied))
+            .OrderBy(d => d.ObligationPublicId)
+            .ToListAsync(ct);
+        var recibo = new ReferenciaDeRecibo($"Reversión de la nómina v{run.Version}", clock.HoyLocal, null, null, "NM");
+        foreach (var d in recaudos)
+        {
+            var reverso = await recaudo.ReversarAsync(run.PublicId, d.ObligationPublicId, request.Reason.Trim(), recibo, ct);
+            if (reverso.Result is not (ResultadoDelContrato.Applied or ResultadoDelContrato.AlreadyApplied) || reverso.Value is null)
+                return Result.Failure<Reversion>(new ErrorConDatos("Payroll.LoanReversalRejected",
+                    $"Cartera no reversó el descuento del crédito {d.ObligationNumber}: {reverso.Message} La nómina sigue aprobada; resuelva lo que dice Cartera y vuelva a reversar.",
+                    new { obligationNumber = d.ObligationNumber, lendingCode = reverso.Code }));
+            d.CarteraReversalPublicId = reverso.Value.OperationPublicId;
+            d.Status = PayrollLoanDeductionStatus.Reversed;
+            d.UpdatedAt = ahora;
+            d.UpdatedBy = yo;
+        }
+
+        var hoy = clock.TodayUtc;
+        var posting = await poster.ReverseAsync(original, hoy, request.Reason.Trim(), ct);
+        if (posting.IsFailure) return Result.Failure<Reversion>(posting.Error);
 
         run.Status = PayrollRunStatus.Reversed;
         run.ReversedAt = ahora;
@@ -127,12 +174,9 @@ public sealed class ReversePayrollRunCommandHandler(
         await db.SaveChangesAsync(ct);
 
         var numero = posting.Value.Referencia();
-        await audit.EmitAsync(AuditEventTypes.PayrollRunReversed, nameof(PayrollRun), run.PublicId,
-            new { status = "Approved", accountingDocument = original.Referencia() },
-            new { status = "Reversed", reason = request.Reason.Trim(), reversalDocument = numero, period = period.PublicId, periodStatus = "Open" }, ct);
-
-        return Result.Success(new ReverseRunResultDto(run.PublicId, period.PublicId, posting.Value.PublicId, numero));
+        return Result.Success(new Reversion(new ReverseRunResultDto(run.PublicId, period.PublicId, posting.Value.PublicId, numero), original.Referencia(), recaudos.Count));
     }
 
     private static Result<ReverseRunResultDto> Fallo(string code, string message) => Result.Failure<ReverseRunResultDto>(new Error(code, message));
+    private static Result<Reversion> FalloR(string code, string message) => Result.Failure<Reversion>(new Error(code, message));
 }
