@@ -349,9 +349,13 @@ public static class ContabilidadE2E
         return borrador;
     }
 
-    public static async Task<Guid> ReversarAsync(HttpClient http, string token, Guid comprobante, string motivo)
+    /// <summary>
+    /// Reversa un comprobante. Sin <paramref name="fecha"/> el servidor fecha el espejo hoy; una prueba que luego
+    /// lee un rango fijo de fechas tiene que pasarla, o deja de valer el día en que el calendario sale del rango.
+    /// </summary>
+    public static async Task<Guid> ReversarAsync(HttpClient http, string token, Guid comprobante, string motivo, DateOnly? fecha = null)
     {
-        var resp = await EnviarAsync(http, token, HttpMethod.Post, $"/api/accounting/documents/{comprobante}/reverse", new { reason = motivo, date = (DateOnly?)null });
+        var resp = await EnviarAsync(http, token, HttpMethod.Post, $"/api/accounting/documents/{comprobante}/reverse", new { reason = motivo, date = fecha });
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"reversar: «{await resp.Content.ReadAsStringAsync()}»");
         return (await LeerAsync(resp)).GetProperty("reversalPublicId").GetGuid();
     }
