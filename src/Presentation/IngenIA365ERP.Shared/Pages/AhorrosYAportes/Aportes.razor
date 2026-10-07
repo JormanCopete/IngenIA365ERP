@@ -1,0 +1,233 @@
+@page "/cartera/aportes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Aportes - IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <h3>Aportes Sociales</h3>
+    </div>
+
+    <!-- Person search -->
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+    <div class="panel">
+        <div class="toolbar">
+            <div class="campo-busqueda">
+                <label>Documento del Asociado</label>
+                <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
+            </div>
+            <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
+        </div>
+
+        @if (_balance is not null)
+        {
+            <div class="resultado">
+                <p class="asociado">Asociado: <strong>@_balance.PersonName</strong></p>
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total Aportes</span>
+                        <span class="kpi-value valor-exito">@_balance.TotalContributions.ToString("N0")</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total Retiros</span>
+                        <span class="kpi-value valor-peligro">@_balance.TotalReductions.ToString("N0")</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Saldo Actual</span>
+                        <span class="kpi-value valor-info">@_balance.CurrentBalance.ToString("N0")</span>
+                    </div>
+                </div>
+
+                <div class="acciones">
+                    <SfButton CssClass="e-success" IconCss="e-icons e-plus" OnClick="ShowContributeDialog">Registrar Aporte</SfButton>
+                    <SfButton CssClass="e-warning" IconCss="e-icons e-minus" OnClick="ShowReductionDialog">Retiro Parcial</SfButton>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- History grid -->
+    @if (_entries.Count > 0)
+    {
+        <h4>Historial de Movimientos</h4>
+        <SfGrid TValue="ContributionEntryRow" DataSource="_entries" AllowPaging="true" AllowSorting="true"
+                GridLines="GridLine.Both">
+            <GridPageSettings PageSize="15" />
+            <GridColumns>
+                <GridColumn Field="@nameof(ContributionEntryRow.Period)" HeaderText="Periodo" Width="110" TextAlign="TextAlign.Center" />
+                <GridColumn Field="@nameof(ContributionEntryRow.TypeText)" HeaderText="Tipo" Width="120" TextAlign="TextAlign.Center">
+                    <Template>
+                        @{
+                            var row = context as ContributionEntryRow;
+                            var css = row?.Type == "A" ? "badge-aporte" : "badge-retiro-aporte";
+                        }
+                        <span class="badge @css">@row?.TypeText</span>
+                    </Template>
+                </GridColumn>
+                <GridColumn Field="@nameof(ContributionEntryRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+                <GridColumn Field="@nameof(ContributionEntryRow.CreatedAt)" HeaderText="Fecha Registro" Width="160" Format="g" />
+            </GridColumns>
+        </SfGrid>
+    }
+    </IndicadorDeCarga>
+</div>
+
+<!-- Dialog: Aporte -->
+<SfDialog @bind-Visible="_showContributeDialog" Header="Registrar Aporte" Width="380px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <div class="campos-dialogo">
+                <label>Asociado: <strong>@_balance?.PersonName</strong></label>
+                <label>Monto del Aporte</label>
+                <SfNumericTextBox TValue="decimal" @bind-Value="_operationAmount" Min="1" Format="N0" />
+                <label>Referencia (opcional)</label>
+                <SfTextBox @bind-Value="_reference" />
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showContributeDialog = false)" />
+        <DialogButton Content="Registrar Aporte" IsPrimary="true" OnClick="ExecuteContribution" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<!-- Dialog: Retiro Parcial -->
+<SfDialog @bind-Visible="_showReductionDialog" Header="Retiro Parcial de Aportes" Width="380px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+            <div class="campos-dialogo">
+                <label>Asociado: <strong>@_balance?.PersonName</strong></label>
+                <label>Saldo actual: <strong class="saldo-actual">@(_balance?.CurrentBalance.ToString("N0") ?? "0")</strong></label>
+                <label>Monto a Retirar</label>
+                <SfNumericTextBox TValue="decimal" @bind-Value="_operationAmount" Min="1" Format="N0" />
+                <label>Referencia (opcional)</label>
+                <SfTextBox @bind-Value="_reference" />
+            </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showReductionDialog = false)" />
+        <DialogButton Content="Retirar" CssClass="e-danger" OnClick="ExecuteReduction" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+
+    private string _personCode = "";
+    private ContributionBalanceRow? _balance;
+    private List<ContributionEntryRow> _entries = [];
+    private bool _showContributeDialog;
+    private bool _showReductionDialog;
+    private decimal _operationAmount;
+    private string _reference = "";
+
+    private async Task SearchPerson()
+    {
+        using var carga = _carga.Iniciar();
+        _balance = null;
+        _entries = [];
+
+        if (string.IsNullOrWhiteSpace(_personCode)) return;
+
+        try
+        {
+            // Resolve person
+            var person = await Http.GetFromJsonAsync<PersonLookup>($"api/core/people/by-code/{_personCode}");
+            if (person is null)
+            {
+                await Notification.ErrorAsync("Persona no encontrada.");
+                return;
+            }
+
+            // Get balance
+            _balance = await Http.GetFromJsonAsync<ContributionBalanceRow>($"api/savings/contributions/{person.PublicId}");
+
+            // Get history
+            var history = await Http.GetListAsync<ContributionEntryRow>($"api/savings/contributions/{person.PublicId}/history");
+            _entries = history ?? [];
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private void ShowContributeDialog()
+    {
+        _operationAmount = 0;
+        _reference = "";
+        _showContributeDialog = true;
+    }
+
+    private void ShowReductionDialog()
+    {
+        _operationAmount = 0;
+        _reference = "";
+        _showReductionDialog = true;
+    }
+
+    private async Task ExecuteContribution()
+    {
+        await ProcessContribution("A", _showContributeDialog);
+        _showContributeDialog = false;
+    }
+
+    private async Task ExecuteReduction()
+    {
+        if (_operationAmount > (_balance?.CurrentBalance ?? 0))
+        {
+            await Notification.ErrorAsync("El monto excede el saldo disponible.");
+            return;
+        }
+        await ProcessContribution("R", _showReductionDialog);
+        _showReductionDialog = false;
+    }
+
+    private async Task ProcessContribution(string type, bool dialogRef)
+    {
+        if (_operationAmount <= 0) { await Notification.ErrorAsync("Ingrese un monto valido."); return; }
+        if (_balance is null) return;
+
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var payload = new
+            {
+                PersonPublicId = _balance.PersonPublicId,
+                Amount = _operationAmount,
+                ContributionType = type,
+                Reference = _reference
+            };
+
+            var response = await Http.PostAsJsonAsync("api/savings/contributions", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                var msg = type == "A" ? "Aporte registrado exitosamente." : "Retiro registrado exitosamente.";
+                await Notification.SuccessAsync(msg);
+                await SearchPerson(); // Refresh
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // --- Local types ---
+    record PersonLookup(Guid PublicId, string FirstName, string LastName);
+    record ContributionBalanceRow(Guid PersonPublicId, string PersonName, string PersonCode,
+        decimal TotalContributions, decimal TotalReductions, decimal CurrentBalance);
+    record ContributionEntryRow(Guid PublicId, int Period, decimal Amount, string Type, string TypeText, DateTime CreatedAt);
+}

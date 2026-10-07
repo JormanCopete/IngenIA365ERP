@@ -1,0 +1,190 @@
+@page "/cartera/depositos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Depositos - IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+<div class="page-header">
+    <h3>Depositos</h3>
+</div>
+
+<!-- Quick deposit form -->
+<IndicadorDeCarga Cargando="@(_busqueda.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+    <div class="panel">
+        <h4>Registro Rapido de Deposito</h4>
+        <div class="toolbar">
+            <div class="campo-busqueda">
+                <label>Documento del Asociado</label>
+                <SfTextBox @bind-Value="_personCode" Placeholder="Ingrese documento..." />
+            </div>
+            <div>
+                <SfButton CssClass="e-info e-small" OnClick="SearchPerson">Buscar</SfButton>
+            </div>
+        </div>
+
+        @if (_personName is not null)
+        {
+            <p class="asociado">Asociado: <strong>@_personName</strong></p>
+
+            @if (_personAccounts.Count > 0)
+            {
+                <div class="toolbar">
+                    <div class="campo-cuenta">
+                        <label>Cuenta de Ahorro</label>
+                        <SfDropDownList TValue="string" TItem="AccountItem" @bind-Value="_selectedAccountId"
+                                        DataSource="_personAccounts" CssClass="e-small">
+                            <DropDownListFieldSettings Text="Text" Value="Value" />
+                        </SfDropDownList>
+                    </div>
+                    <div class="campo-monto">
+                        <label>Monto</label>
+                        <SfNumericTextBox TValue="decimal" @bind-Value="_depositAmount" Min="1" Format="N0" />
+                    </div>
+                    <div class="campo-referencia">
+                        <label>Referencia (opcional)</label>
+                        <SfTextBox @bind-Value="_reference" />
+                    </div>
+                    <SfButton CssClass="e-success" IconCss="e-icons e-check" OnClick="ExecuteDeposit" Disabled="@_guardado.Activa">Depositar</SfButton>
+                </div>
+            }
+            else
+            {
+                <p class="sin-cuentas">El asociado no tiene cuentas de ahorro activas.</p>
+            }
+        }
+    </div>
+</IndicadorDeCarga>
+
+<!-- Recent deposits today -->
+<h4>Depositos Recientes</h4>
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    <SfGrid TValue="RecentDepositRow" DataSource="_recentDeposits" AllowPaging="true" AllowSorting="true"
+            GridLines="GridLine.Both">
+        <GridPageSettings PageSize="15" />
+        <GridColumns>
+            <GridColumn Field="@nameof(RecentDepositRow.EntryDate)" HeaderText="Fecha" Width="110" Format="d" />
+            <GridColumn Field="@nameof(RecentDepositRow.PersonName)" HeaderText="Asociado" Width="200" />
+            <GridColumn Field="@nameof(RecentDepositRow.AccountNumber)" HeaderText="Cuenta" Width="130" TextAlign="TextAlign.Center" />
+            <GridColumn Field="@nameof(RecentDepositRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+            <GridColumn Field="@nameof(RecentDepositRow.EntryTypeText)" HeaderText="Tipo" Width="100" TextAlign="TextAlign.Center">
+                <Template>
+                    @{
+                        var row = context as RecentDepositRow;
+                    }
+                    <span class="badge badge-deposito">@row?.EntryTypeText</span>
+                </Template>
+            </GridColumn>
+        </GridColumns>
+    </SfGrid>
+</IndicadorDeCarga>
+</div>
+
+@code {
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _busqueda = new(), _guardado = new();
+
+    private string _personCode = "";
+    private string? _personName;
+    private Guid? _personPublicId;
+    private List<AccountItem> _personAccounts = [];
+    private string _selectedAccountId = "";
+    private decimal _depositAmount;
+    private string _reference = "";
+    private List<RecentDepositRow> _recentDeposits = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRecentDeposits();
+    }
+
+    private async Task SearchPerson()
+    {
+        _personName = null;
+        _personAccounts = [];
+
+        if (string.IsNullOrWhiteSpace(_personCode)) return;
+
+        using var busqueda = _busqueda.Iniciar();
+        try
+        {
+            var person = await Http.GetFromJsonAsync<PersonLookup>($"api/core/people/by-code/{_personCode}");
+            if (person is null)
+            {
+                await Notification.ErrorAsync("Persona no encontrada.");
+                return;
+            }
+
+            _personName = NombreDePersona.Completo(person.FirstName, person.OtherNames, person.LastName, person.SecondLastName);
+            _personPublicId = person.PublicId;
+
+            // Load accounts
+            var response = await Http.GetFromJsonAsync<PagedResponse<AccountItem>>(
+                $"api/savings/savings-accounts?PersonPublicId={person.PublicId}&Status=A&PageSize=50");
+            _personAccounts = response?.Items ?? [];
+            _selectedAccountId = _personAccounts.FirstOrDefault()?.Value ?? "";
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private async Task ExecuteDeposit()
+    {
+        if (_depositAmount <= 0) { await Notification.ErrorAsync("Ingrese un monto valido."); return; }
+        if (string.IsNullOrEmpty(_selectedAccountId)) { await Notification.ErrorAsync("Seleccione una cuenta."); return; }
+
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/savings/savings-accounts/{_selectedAccountId}/deposit",
+                new { Amount = _depositAmount, Reference = _reference });
+
+            if (response.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync($"Deposito de {_depositAmount:N0} registrado exitosamente.");
+                _depositAmount = 0;
+                _reference = "";
+                await LoadRecentDeposits();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    private async Task LoadRecentDeposits()
+    {
+        using var carga = _carga.Iniciar();
+        try
+        {
+            // Load recent deposits (all accounts, last entries)
+            var response = await Http.GetFromJsonAsync<PagedResponse<SavingsAccountRow>>(
+                "api/savings/savings-accounts?PageSize=10&Status=A");
+            // Since we don't have a global deposit endpoint, show recent accounts
+            _recentDeposits = []; // Will be populated when statement endpoints are called per-account
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"No se pudieron cargar las cuentas recientes: {ex.Message}"); }
+    }
+
+    // --- Local types ---
+    record PersonLookup(Guid PublicId, string FirstName, string LastName, string? OtherNames = null, string? SecondLastName = null);
+    record AccountItem(Guid PublicId, string PersonCode, string PersonName, long AccountNumber,
+        string SavingsLineName, DateOnly CreationDate, decimal Balance, string Status)
+    {
+        public string Value => PublicId.ToString();
+        public string Text => $"Cuenta {AccountNumber} - {SavingsLineName} (Saldo: {Balance:N0})";
+    }
+    record SavingsAccountRow(Guid PublicId, string PersonCode, string PersonName, long AccountNumber,
+        string SavingsLineName, DateOnly CreationDate, decimal Balance, string Status);
+    record RecentDepositRow(DateOnly EntryDate, string PersonName, long AccountNumber, decimal Amount,
+        string EntryType, string EntryTypeText);
+    record PagedResponse<T>(List<T> Items, int TotalCount, int PageNumber, int PageSize);
+}

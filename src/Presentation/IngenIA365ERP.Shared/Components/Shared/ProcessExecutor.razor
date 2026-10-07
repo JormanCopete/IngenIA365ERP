@@ -1,20 +1,17 @@
 @typeparam TPreview
 @typeparam TResult
 
+@* Feature 013 (T0188): la vista previa y la ejecución dicen que están esperando con el indicador por zona
+   (docs/manual/indicador-de-carga.md), enlazado al estado del proceso. *@
 <div class="process-executor">
+<IndicadorDeCarga Cargando="@(_state is ProcessState.LoadingPreview or ProcessState.Processing)"
+                  Texto="@(_state == ProcessState.Processing ? "Procesando…" : "Cargando vista previa…")">
     @if (_state == ProcessState.Ready)
     {
         <div class="actions">
             @ParameterContent
             <SfButton CssClass="e-info" IconCss="e-icons e-preview" OnClick="LoadPreview">Vista Previa</SfButton>
         </div>
-    }
-
-    @if (_state == ProcessState.LoadingPreview)
-    {
-        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                       TrackColor="var(--borde)" ProgressColor="var(--acento)" />
-        <p>Cargando vista previa...</p>
     }
 
     @if (_state == ProcessState.Preview)
@@ -27,13 +24,6 @@
             <SfButton CssClass="e-primary" IconCss="e-icons e-play" OnClick="ShowConfirm">Ejecutar Proceso</SfButton>
             <SfButton CssClass="e-flat" OnClick="Reset">Cancelar</SfButton>
         </div>
-    }
-
-    @if (_state == ProcessState.Processing)
-    {
-        <SfProgressBar Type="ProgressType.Linear" IsIndeterminate="true" Height="4"
-                       TrackColor="var(--borde)" ProgressColor="var(--exito)" />
-        <p>Procesando... Por favor espere.</p>
     }
 
     @if (_state == ProcessState.Done && _result is not null)
@@ -56,6 +46,7 @@
             <SfButton CssClass="e-flat" OnClick="Reset">Reintentar</SfButton>
         </div>
     }
+</IndicadorDeCarga>
 </div>
 
 <ConfirmDialog @bind-Visible="_showConfirm"

@@ -65,11 +65,10 @@
             </PermissionGate>
         </NavMenuGroup>
 
-        <NavMenuGroup Icon="e-money" Title="Cartera Financiera" Expanded="SidebarOpen">
-            <NavLink href="/cartera/solicitudes" class="nav-subitem">Solicitudes Credito</NavLink>
-            <NavLink href="/cartera/creditos" class="nav-subitem">Cartera Creditos</NavLink>
-            <NavLink href="/cartera/recaudos" class="nav-subitem">Recaudos/Pagos</NavLink>
-            <NavLink href="/cartera/mora" class="nav-subitem">Mora y Cobro</NavLink>
+        @* Feature 013 (T0187, enmienda A10): lo conservado de la cartera heredada —ahorros, depósitos, CDT, aportes,
+           retiros, zonas y SIPLA— con sus mismas rutas /cartera/... reservadas (DT §2.16). Los enlaces de crédito
+           heredado se retiraron con la migración RetiroDeLaCarteraHeredada; la Cartera nueva trae su propio grupo. *@
+        <NavMenuGroup Icon="e-money" Title="Ahorros y aportes" Expanded="SidebarOpen">
             <NavLink href="/cartera/ahorros" class="nav-subitem">Cuentas de Ahorro</NavLink>
             <NavLink href="/cartera/depositos" class="nav-subitem">Depositos</NavLink>
             <NavLink href="/cartera/retiros" class="nav-subitem">Retiros</NavLink>
@@ -77,30 +76,15 @@
             <NavLink href="/cartera/cdt/nuevo" class="nav-subitem">Nuevo CDT</NavLink>
             <NavLink href="/cartera/aportes" class="nav-subitem">Aportes</NavLink>
             <NavLink href="/cartera/retiros-asociado" class="nav-subitem">Retiro Asociado</NavLink>
-            <NavLink href="/cartera/lineas-credito" class="nav-subitem">Lineas de Credito</NavLink>
             <NavLink href="/cartera/codigos-movimiento" class="nav-subitem">Codigos Movimiento</NavLink>
             <NavLink href="/cartera/parametros-ahorro" class="nav-subitem">Parametros Ahorro</NavLink>
-            <NavLink href="/cartera/tasas-interes" class="nav-subitem">Tasas de Interes</NavLink>
-            <NavLink href="/cartera/parametros-provision" class="nav-subitem">Parametros Provision</NavLink>
             <NavLink href="/cartera/zonas" class="nav-subitem">Zonas</NavLink>
             <NavLink href="/cartera/tipos-zona" class="nav-subitem">Tipos de Zona</NavLink>
-            <NavLink href="/cartera/scoring" class="nav-subitem">Scoring</NavLink>
-            <NavLink href="/cartera/conceptos-descuento" class="nav-subitem">Conceptos Descuento</NavLink>
             <NavLink href="/cartera/estados-retiro" class="nav-subitem">Estados Retiro</NavLink>
-            <NavLink href="/cartera/parametros-vivienda" class="nav-subitem">Param. Vivienda</NavLink>
             <NavLink href="/cartera/parametros-sipla" class="nav-subitem">Param. SIPLA</NavLink>
-            <NavLink href="/cartera/parametros-periodicidad" class="nav-subitem">Periodicidad</NavLink>
-            <NavLink href="/cartera/tasas-plazo" class="nav-subitem">Tasas por Plazo</NavLink>
-            <NavLink href="/cartera/cuentas-cartera" class="nav-subitem">Cuentas Cartera</NavLink>
-            <NavLink href="/cartera/causacion" class="nav-subitem">Causacion Intereses</NavLink>
-            <NavLink href="/cartera/calificacion" class="nav-subitem">Calificacion Cartera</NavLink>
-            <NavLink href="/cartera/descuento-nomina" class="nav-subitem">Descuento Nomina</NavLink>
             <NavLink href="/cartera/extractos" class="nav-subitem">Extractos</NavLink>
             <NavLink href="/cartera/ahorros/liquidacion" class="nav-subitem">Liq. Int. Ahorros</NavLink>
             <NavLink href="/cartera/cdt/liquidacion" class="nav-subitem">Liq. Int. CDTs</NavLink>
-            <span class="nav-subgroup-title">Reportes</span>
-            <NavLink href="/reportes/extracto-credito" class="nav-subitem">Extracto Credito</NavLink>
-            <NavLink href="/reportes/cartera-edades" class="nav-subitem">Cartera por Edades</NavLink>
         </NavMenuGroup>
 
         @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@

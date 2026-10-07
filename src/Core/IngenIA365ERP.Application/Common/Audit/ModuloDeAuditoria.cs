@@ -19,6 +19,12 @@ public static class ModuloDeAuditoria
     public const string Navigation = "Navigation";
     public const string Accounting = "Accounting";
     public const string Lending = "Lending";
+
+    /// <summary>
+    /// Feature 013 (T0189, C89, enmienda A10): lo conservado de la cartera heredada —ahorros, aportes, retiros, zonas,
+    /// SIPLA—, mudado a <c>Savings</c>. No es encadenado ni de diez años: lo decide la feature de Ahorros.
+    /// </summary>
+    public const string Savings = "Savings";
     public const string Payroll = "Payroll";
     public const string Inventory = "Inventory";
     public const string Cdt = "CDT";
@@ -51,6 +57,8 @@ public static class ModuloDeAuditoria
         // Feature 009 (FR-051): el ingreso a una opción del ERP es navegación, no una escritura del módulo.
         (".Audit.RegisterOptionAccess", Navigation),
         (".Accounting", Accounting),
+        // Feature 013 (T0189, C89): lo mudado a Savings antes que «.Lending» y que «.Core».
+        (".Savings", Savings),
         (".Lending", Lending),
         (".Payroll", Payroll),
         (".Inventory", Inventory),

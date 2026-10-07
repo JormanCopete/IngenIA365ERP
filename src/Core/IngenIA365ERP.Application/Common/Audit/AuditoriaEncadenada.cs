@@ -49,6 +49,8 @@ public static class AuditoriaEncadenada
         // Feature 013 (T67, T0092).
         ModuloDeAuditoria.Compliance,
         ModuloDeAuditoria.NationalValues,
+        // Feature 013 (T0189, C89; FR-003, SC-014): todo evento Lending.* sale por COR_AuditOutbox, sellado.
+        ModuloDeAuditoria.Lending,
     ];
 
     /// <summary>Sufijo de la clase de retención de diez años.</summary>

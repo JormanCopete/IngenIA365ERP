@@ -1,0 +1,307 @@
+@page "/cartera/ahorros/{AccountId:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject INotificationService Notification
+
+<PageTitle>Cuenta #@(_detail?.AccountNumber) - IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuenta #@(_detail?.AccountNumber ?? 0) - @(_detail?.PersonName ?? "Cargando...")</h3>
+        <div>
+            <SfButton CssClass="e-flat" IconCss="e-icons e-arrow-left"
+                      OnClick='@(() => Nav.NavigateTo("/cartera/ahorros"))'>Volver</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_detail is not null)
+    {
+        <!-- Summary cards -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <span class="kpi-label">No. Cuenta</span>
+                <span class="kpi-value">@_detail.AccountNumber</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Saldo</span>
+                <span class="kpi-value" style="color:@(_detail.Balance > 0 ? "var(--exito-texto)" : "var(--texto-tenue)")">@_detail.Balance.ToString("N0")</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Linea de Ahorro</span>
+                <span class="kpi-value valor-texto">@_detail.SavingsLineName</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Fecha Apertura</span>
+                <span class="kpi-value valor-texto">@_detail.CreationDate</span>
+            </div>
+            <div class="kpi-card">
+                <span class="kpi-label">Estado</span>
+                <span class="kpi-value" style="color:@(_detail.Status == "Activa" ? "var(--exito-texto)" : "var(--peligro-texto)")">@_detail.Status</span>
+            </div>
+        </div>
+
+        <SfTab>
+            <TabItems>
+                <!-- Tab 1: Datos -->
+                <TabItem>
+                    <ChildContent><TabHeader Text="Datos" IconCss="e-icons e-description" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="contenido-tab">
+                            <div class="lista-datos">
+                                <span class="texto-tenue">Asociado:</span><span>@_detail.PersonName</span>
+                                <span class="texto-tenue">Codigo:</span><span>@_detail.PersonCode</span>
+                                <span class="texto-tenue">No. Cuenta:</span><span>@_detail.AccountNumber</span>
+                                <span class="texto-tenue">Linea:</span><span>@_detail.SavingsLineName</span>
+                                <span class="texto-tenue">Periodicidad:</span><span>@_detail.Periodicity</span>
+                                <span class="texto-tenue">Ciclo de Pago:</span><span>@_detail.PaymentCycle</span>
+                                <span class="texto-tenue">Vencimiento:</span><span>@(_detail.MaturityDate?.ToString() ?? "Sin vencimiento")</span>
+                            </div>
+                        </div>
+                    </ContentTemplate>
+                </TabItem>
+                <!-- Tab 2: Movimientos -->
+                <TabItem>
+                    <ChildContent><TabHeader Text="Movimientos" IconCss="e-icons e-list-unordered" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="contenido-tab">
+                            <SfGrid TValue="DepositEntryRow" DataSource="_detail.Entries" AllowPaging="true" AllowSorting="true"
+                                    GridLines="GridLine.Both">
+                                <GridPageSettings PageSize="15" />
+                                <GridColumns>
+                                    <GridColumn Field="@nameof(DepositEntryRow.EntryDate)" HeaderText="Fecha" Width="120" Format="d" />
+                                    <GridColumn Field="@nameof(DepositEntryRow.EntryTypeText)" HeaderText="Tipo" Width="100" TextAlign="TextAlign.Center">
+                                        <Template>
+                                            @{
+                                                var entry = context as DepositEntryRow;
+                                                var css = entry?.EntryType == "D" ? "badge-deposito" : "badge-retiro";
+                                            }
+                                            <span class="badge @css">@entry?.EntryTypeText</span>
+                                        </Template>
+                                    </GridColumn>
+                                    <GridColumn Field="@nameof(DepositEntryRow.Amount)" HeaderText="Monto" Width="140" TextAlign="TextAlign.Right" Format="N0" />
+                                    <GridColumn Field="@nameof(DepositEntryRow.UserId)" HeaderText="Usuario" Width="120" />
+                                </GridColumns>
+                            </SfGrid>
+                        </div>
+                    </ContentTemplate>
+                </TabItem>
+                <!-- Tab 3: Operaciones -->
+                <TabItem>
+                    <ChildContent><TabHeader Text="Operaciones" IconCss="e-icons e-settings" /></ChildContent>
+                    <ContentTemplate>
+                        <div class="contenido-tab acciones">
+                            @if (_detail.Status == "Activa")
+                            {
+                                <SfButton CssClass="e-success" IconCss="e-icons e-plus" OnClick="ShowDepositDialog">Depositar</SfButton>
+                                <SfButton CssClass="e-warning" IconCss="e-icons e-minus" OnClick="ShowWithdrawDialog">Retirar</SfButton>
+                                <SfButton CssClass="e-danger" IconCss="e-icons e-close" OnClick="ShowCloseDialog">Cerrar Cuenta</SfButton>
+                            }
+                            else
+                            {
+                                <p class="texto-tenue">La cuenta esta cerrada. No se permiten operaciones.</p>
+                            }
+                        </div>
+                    </ContentTemplate>
+                </TabItem>
+            </TabItems>
+        </SfTab>
+    }
+    </IndicadorDeCarga>
+</div>
+
+<!-- Dialog: Depositar -->
+<SfDialog @bind-Visible="_showDepositDialog" Header="Depositar" Width="380px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="campos-dialogo">
+                    <label>Monto</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_operationAmount" Min="1" Format="N0" />
+                    <label>Referencia (opcional)</label>
+                    <SfTextBox @bind-Value="_operationReference" />
+                </div>
+
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showDepositDialog = false)" />
+        <DialogButton Content="Depositar" IsPrimary="true" OnClick="ExecuteDeposit" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<!-- Dialog: Retirar -->
+<SfDialog @bind-Visible="_showWithdrawDialog" Header="Retirar" Width="380px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="campos-dialogo">
+                    <label>Saldo disponible: <strong>@(_detail?.Balance.ToString("N0") ?? "0")</strong></label>
+                    <label>Monto</label>
+                    <SfNumericTextBox TValue="decimal" @bind-Value="_operationAmount" Min="1" Format="N0" />
+                    <label>Referencia (opcional)</label>
+                    <SfTextBox @bind-Value="_operationReference" />
+                </div>
+
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showWithdrawDialog = false)" />
+        <DialogButton Content="Retirar" IsPrimary="true" OnClick="ExecuteWithdraw" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<!-- Dialog: Cerrar cuenta -->
+<SfDialog @bind-Visible="_showCloseDialog" Header="Cerrar Cuenta" Width="400px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="campos-dialogo">
+                    <p>Esta seguro de cerrar esta cuenta?</p>
+                    @if (_detail?.Balance > 0)
+                    {
+                        <p class="texto-alerta">Se realizara un retiro automatico del saldo restante de <strong>@_detail.Balance.ToString("N0")</strong>.</p>
+                    }
+                </div>
+
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _showCloseDialog = false)" />
+        <DialogButton Content="Cerrar Cuenta" CssClass="e-danger" OnClick="ExecuteClose" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    [Parameter] public Guid AccountId { get; set; }
+
+    private SavingsAccountDetail? _detail;
+
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+
+    // Operation dialogs
+    private bool _showDepositDialog;
+    private bool _showWithdrawDialog;
+    private bool _showCloseDialog;
+    private decimal _operationAmount;
+    private string _operationReference = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDetail();
+    }
+
+    private async Task LoadDetail()
+    {
+        using var carga = _carga.Iniciar();
+        try
+        {
+            _detail = await Http.GetFromJsonAsync<SavingsAccountDetail>($"api/savings/savings-accounts/{AccountId}");
+        }
+        catch (Exception ex)
+        {
+            await Notification.ErrorAsync($"Error: {ex.Message}");
+        }
+    }
+
+    private void ShowDepositDialog()
+    {
+        _operationAmount = 0;
+        _operationReference = "";
+        _showDepositDialog = true;
+    }
+
+    private void ShowWithdrawDialog()
+    {
+        _operationAmount = 0;
+        _operationReference = "";
+        _showWithdrawDialog = true;
+    }
+
+    private void ShowCloseDialog()
+    {
+        _showCloseDialog = true;
+    }
+
+    private async Task ExecuteDeposit()
+    {
+        if (_operationAmount <= 0) { await Notification.ErrorAsync("Ingrese un monto valido."); return; }
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/savings/savings-accounts/{AccountId}/deposit",
+                new { Amount = _operationAmount, Reference = _operationReference });
+            if (response.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Deposito registrado.");
+                _showDepositDialog = false;
+                await LoadDetail();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    private async Task ExecuteWithdraw()
+    {
+        if (_operationAmount <= 0) { await Notification.ErrorAsync("Ingrese un monto valido."); return; }
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"api/savings/savings-accounts/{AccountId}/withdraw",
+                new { Amount = _operationAmount, Reference = _operationReference });
+            if (response.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Retiro registrado.");
+                _showWithdrawDialog = false;
+                await LoadDetail();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    private async Task ExecuteClose()
+    {
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var response = await Http.PostAsync($"api/savings/savings-accounts/{AccountId}/close", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await Notification.SuccessAsync("Cuenta cerrada.");
+                _showCloseDialog = false;
+                Nav.NavigateTo("/cartera/ahorros");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await Notification.ErrorAsync($"Error: {error}");
+            }
+        }
+        catch (Exception ex) { await Notification.ErrorAsync($"Error: {ex.Message}"); }
+    }
+
+    // --- Local types ---
+    record SavingsAccountDetail(Guid PublicId, string PersonCode, string PersonName, long AccountNumber,
+        int SavingsLineId, string SavingsLineName, DateOnly CreationDate, DateOnly? MaturityDate,
+        string Periodicity, string PaymentCycle, decimal Balance, string Status,
+        List<DepositEntryRow> Entries);
+
+    record DepositEntryRow(Guid PublicId, DateOnly EntryDate, string EntryType, string EntryTypeText,
+        decimal Amount, string UserId);
+}

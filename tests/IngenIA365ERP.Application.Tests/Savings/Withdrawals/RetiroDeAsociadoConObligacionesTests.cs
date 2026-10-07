@@ -1,7 +1,7 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Integration.Lending;
-using IngenIA365ERP.Application.Lending.Withdrawals.Commands.ProcessWithdrawal;
-using IngenIA365ERP.Application.Lending.Withdrawals.Queries;
+using IngenIA365ERP.Application.Savings.Withdrawals.Commands.ProcessWithdrawal;
+using IngenIA365ERP.Application.Savings.Withdrawals.Queries;
 using IngenIA365ERP.Application.Tests.Common.Integration.Lending;
 using IngenIA365ERP.Application.Tests.Core.People;
 using IngenIA365ERP.Domain.Entities.Core;

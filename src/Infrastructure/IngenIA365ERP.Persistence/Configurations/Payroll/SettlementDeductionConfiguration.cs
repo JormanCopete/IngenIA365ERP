@@ -1,4 +1,3 @@
-using IngenIA365ERP.Domain.Entities.Lending;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -33,11 +32,8 @@ public class SettlementDeductionConfiguration : IEntityTypeConfiguration<Settlem
         // Únicos sólo entre filas vivas: el recálculo retira en blando la deuda que Cartera ya no trae y, si la misma
         // obligación vuelve (un pago reversado en Cartera), crea otra fila con la misma llave. Hasta la revisión N1
         // (2026-09-21) el filtro no excluía las eliminadas y ese INSERT respondía 500 (migración SettlementDeductionsUnicosEntreVivas).
-        builder.HasIndex(e => new { e.TerminationId, e.LoanPortfolioId }).IsUnique()
-            .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Loan")
-            .HasFilter("[LoanPortfolioId] IS NOT NULL AND [IsDeleted] = 0");
-        // Feature 013 (T0156, data-model parte 3 §7.2): la obligación de Cartera, sin FK (FR-008). El único heredado de arriba lo
-        // suelta RetiroDeLaCarteraHeredada (CH37).
+        // Feature 013 (T0156, data-model parte 3 §7.2): la obligación de Cartera, sin FK (FR-008). El único, la FK y la columna
+        // heredados del crédito anterior los soltó RetiroDeLaCarteraHeredada (T0190, CH37).
         builder.Property(e => e.ObligationNumber).HasMaxLength(30);
         builder.HasIndex(e => new { e.TerminationId, e.ObligationPublicId }).IsUnique()
             .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Obligation")
@@ -46,7 +42,6 @@ public class SettlementDeductionConfiguration : IEntityTypeConfiguration<Settlem
             .HasDatabaseName("UK_PAY_SettlementDeductions_Termination_Libranza")
             .HasFilter("[RecurringNoveltyId] IS NOT NULL AND [IsDeleted] = 0");
 
-        builder.HasOne<LoanPortfolio>().WithMany().HasForeignKey(e => e.LoanPortfolioId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PayrollRecurringNovelty>().WithMany().HasForeignKey(e => e.RecurringNoveltyId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Ignore(e => e.FueAjustado);

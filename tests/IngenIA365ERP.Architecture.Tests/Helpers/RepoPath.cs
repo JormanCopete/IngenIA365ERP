@@ -30,9 +30,6 @@ internal static class RepoPath
                 continue;
             if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
                 continue;
-            // Excluir el proyecto Legacy — código importado del VB.NET original con sus propias heurísticas.
-            if (file.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Legacy{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-                continue;
             yield return file;
         }
     }
@@ -52,8 +49,6 @@ internal static class RepoPath
             if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
                 continue;
             if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (file.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Legacy{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
                 continue;
             yield return file;
         }

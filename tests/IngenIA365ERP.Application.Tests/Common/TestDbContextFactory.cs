@@ -15,7 +15,7 @@ using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Accounting.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
-using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Savings;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -220,38 +220,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<Budget> Budgets => Set<Budget>();
     // Feature 010: la definitiva lee Cartera por persona (FR-018a) y, al aprobar, recauda de verdad
     // (RecaudoDeCredito: cuotas pendientes, transacción RC y comprobante por el contrato).
-    public DbSet<LoanPortfolio> LoanPortfolios => Set<LoanPortfolio>();
-    public DbSet<LendingTransaction> LendingTransactions => Set<LendingTransaction>();
-    public DbSet<PendingInstallment> PendingInstallments => Set<PendingInstallment>();
-    public DbSet<CreditLineParameter> CreditLineParameters => Set<CreditLineParameter>();
     DbSet<TransactionCode> IApplicationDbContext.TransactionCodes => throw new NotImplementedException();
     DbSet<SavingsParameter> IApplicationDbContext.SavingsParameters => throw new NotImplementedException();
-    DbSet<InterestRate> IApplicationDbContext.InterestRates => throw new NotImplementedException();
-    DbSet<ProvisionParameter> IApplicationDbContext.ProvisionParameters => throw new NotImplementedException();
     DbSet<Zone> IApplicationDbContext.Zones => throw new NotImplementedException();
     DbSet<SubZone> IApplicationDbContext.SubZones => throw new NotImplementedException();
     DbSet<ZoneType> IApplicationDbContext.ZoneTypes => throw new NotImplementedException();
-    DbSet<ApplicationStatus> IApplicationDbContext.ApplicationStatuses => throw new NotImplementedException();
-    DbSet<ScoringParameter> IApplicationDbContext.ScoringParameters => throw new NotImplementedException();
-    DbSet<ScoringRange> IApplicationDbContext.ScoringRanges => throw new NotImplementedException();
-    DbSet<PayrollDeductionConcept> IApplicationDbContext.PayrollDeductionConcepts => throw new NotImplementedException();
-    DbSet<LoanApplication> IApplicationDbContext.LoanApplications => throw new NotImplementedException();
-    DbSet<DefaultRecord> IApplicationDbContext.DefaultRecords => throw new NotImplementedException();
-    DbSet<CollectionCase> IApplicationDbContext.CollectionCases => throw new NotImplementedException();
-    DbSet<Guarantee> IApplicationDbContext.Guarantees => throw new NotImplementedException();
-    DbSet<ExtraPayment> IApplicationDbContext.ExtraPayments => throw new NotImplementedException();
     DbSet<SavingsAccount> IApplicationDbContext.SavingsAccounts => throw new NotImplementedException();
     DbSet<DepositEntry> IApplicationDbContext.DepositEntries => throw new NotImplementedException();
-    DbSet<AccrualEntry> IApplicationDbContext.AccrualEntries => throw new NotImplementedException();
-    DbSet<PortfolioClassification> IApplicationDbContext.PortfolioClassifications => throw new NotImplementedException();
-    DbSet<RiskAssessment> IApplicationDbContext.RiskAssessments => throw new NotImplementedException();
-    public DbSet<PayrollDeductionEntry> PayrollDeductionEntries => Set<PayrollDeductionEntry>();
     DbSet<WithdrawalStatus> IApplicationDbContext.WithdrawalStatuses => throw new NotImplementedException();
-    DbSet<HousingParameter> IApplicationDbContext.HousingParameters => throw new NotImplementedException();
     DbSet<SiplaParameter> IApplicationDbContext.SiplaParameters => throw new NotImplementedException();
-    DbSet<PeriodicityParameter> IApplicationDbContext.PeriodicityParameters => throw new NotImplementedException();
-    DbSet<TermRate> IApplicationDbContext.TermRates => throw new NotImplementedException();
-    DbSet<PortfolioAccount> IApplicationDbContext.PortfolioAccounts => throw new NotImplementedException();
     DbSet<ContributionReduction> IApplicationDbContext.ContributionReductions => throw new NotImplementedException();
     public DbSet<AssociateWithdrawal> AssociateWithdrawals => Set<AssociateWithdrawal>();
     DbSet<CertificateEntry> IApplicationDbContext.CertificateEntries => throw new NotImplementedException();
@@ -629,7 +606,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<BudgetLine>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<CrossDocumentType>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<FiscalYear>(b => b.Ignore("RowVersion"));
-        modelBuilder.Entity<PayrollDeductionEntry>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayPeriod>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<SalaryChange>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PayrollPlan>(b => b.Ignore("RowVersion"));
@@ -685,17 +661,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<WithholdingRateCalculation>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<WithholdingRateCalculationMonth>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<SeveranceFundDeposit>(b => b.Ignore("RowVersion"));
-        modelBuilder.Entity<LoanPortfolio>(b =>
-        {
-            b.Ignore(l => l.Transactions); b.Ignore(l => l.PendingInstallments);
-            b.Ignore(l => l.ExtraPayments); b.Ignore(l => l.Guarantees); b.Ignore(l => l.DefaultRecords); b.Ignore("RowVersion");
-            // El recaudo real incluye la persona y la línea del crédito (ProcessPayment / RecaudoDeCredito).
-            b.HasOne(l => l.Person).WithMany().HasForeignKey(l => l.PersonId);
-            b.HasOne(l => l.CreditLine).WithMany(c => c.LoanPortfolios).HasForeignKey(l => l.CreditLineId);
-        });
-        modelBuilder.Entity<CreditLineParameter>(b => b.Ignore("RowVersion"));
-        modelBuilder.Entity<LendingTransaction>(b => { b.Ignore("RowVersion"); b.HasOne(t => t.CreditLine).WithMany().HasForeignKey(t => t.CreditLineId); });
-        modelBuilder.Entity<PendingInstallment>(b => { b.Ignore("RowVersion"); b.HasOne(i => i.CreditLine).WithMany().HasForeignKey(i => i.CreditLineId); });
 
         // Feature 012, I4 (T698): facturación electrónica. Como en ElectronicDocumentConfiguration: las dos
         // autorreferencias del documento son relaciones distintas (sin esto la convención las empareja como uno a

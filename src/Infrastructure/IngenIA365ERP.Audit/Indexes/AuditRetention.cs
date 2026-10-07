@@ -30,6 +30,8 @@ public static class AuditRetention
         "Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans",
         // Feature 013 (T67, T0092).
         "Compliance", "NationalValues",
+        // Feature 013 (T0189, C89): Cartera, sellada y con retención de diez años.
+        "Lending",
     ];
 
     public static TimeSpan Para(string? modulo) =>

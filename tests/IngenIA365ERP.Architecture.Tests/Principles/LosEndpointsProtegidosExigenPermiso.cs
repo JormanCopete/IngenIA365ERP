@@ -54,7 +54,37 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Core", "IntegrationParticipantsEndpoints.cs"),
         Path.Combine("Endpoints", "Compliance", "*.cs"),
         Path.Combine("Endpoints", "HabeasDataModule.cs"),
+        // Feature 013, fase 3 (T0126, R9.1): toda ruta de Cartera, sin excepciones (hoy la carpeta no existe: las 63 rutas del
+        // crédito heredado se retiraron con T0192 y las de la Cartera nueva entran solas al aparecer). Lo conservado de ahorros
+        // y aportes entra por glob pero queda exento por nombre hasta su feature (api.md §25).
+        Path.Combine("Endpoints", "Lending", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Lending*.cs"),
+        Path.Combine("Endpoints", "Savings", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Savings*.cs"),
     ];
+
+    /// <summary>
+    /// Feature 013 (T0126; contracts/api.md §25, enmienda A10): las 12 familias de rutas de ahorros y aportes mudadas de
+    /// <c>/api/lending</c> a <c>/api/savings</c> y sus dos informes de <c>/api/reports/savings</c> conservan su permiso de hoy —sólo
+    /// sesión— hasta la feature de Ahorros. Quedan fuera <b>por nombre</b>: un archivo nuevo de esas carpetas sí entra al
+    /// recorrido. Al ponerles permiso se borran de aquí.
+    /// </summary>
+    private static readonly HashSet<string> AhorrosConservadosSinPermiso = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ContributionsEndpoints.cs",
+        "SavingsAccountsEndpoints.cs",
+        "SavingsInterestEndpoints.cs",
+        "SavingsParametersEndpoints.cs",
+        "SiplaParametersEndpoints.cs",
+        "StatementsEndpoints.cs",
+        "SubZonesEndpoints.cs",
+        "TransactionCodesEndpoints.cs",
+        "WithdrawalStatusesEndpoints.cs",
+        "WithdrawalsEndpoints.cs",
+        "ZoneTypesEndpoints.cs",
+        "ZonesEndpoints.cs",
+        "SavingsReportsEndpoints.cs",
+    };
 
     /// <summary>
     /// Catálogos de nómina heredados del sistema anterior (EPS, ARL, fondos, cajas, causas y parámetros de
@@ -114,6 +144,7 @@ public class LosEndpointsProtegidosExigenPermiso
             foreach (var f in Directory.EnumerateFiles(carpeta, nombre).OrderBy(f => f, StringComparer.Ordinal))
             {
                 if (CatalogosHeredadosSinPermiso.Contains(Path.GetFileName(f))) continue;
+                if (AhorrosConservadosSinPermiso.Contains(Path.GetFileName(f))) continue;
                 yield return Path.GetRelativePath(Api, f);
             }
         }
@@ -173,6 +204,24 @@ public class LosEndpointsProtegidosExigenPermiso
             Assert.True(File.Exists(ruta), $"{nombre} ya no existe: quitálo de CatalogosHeredadosSinPermiso.");
             Assert.DoesNotContain(".RequirePermission(", File.ReadAllText(ruta), StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Lo_conservado_de_ahorros_es_lo_que_dice_la_lista_y_no_queda_en_Lending()
+    {
+        // Feature 013 (T0126): si una familia de ahorros recibe permiso o desaparece, la lista se corrige; ninguna de las
+        // dos cosas debe pasar en silencio. Y ninguna ruta de lo conservado vuelve a /api/lending ni a /api/reports/lending.
+        var carpetas = new[] { Path.Combine(Api, "Endpoints", "Savings"), Path.Combine(Api, "Endpoints", "Reports") };
+        foreach (var nombre in AhorrosConservadosSinPermiso)
+        {
+            var ruta = carpetas.Select(c => Path.Combine(c, nombre)).FirstOrDefault(File.Exists);
+            Assert.True(ruta is not null, $"{nombre} ya no existe: quitálo de AhorrosConservadosSinPermiso.");
+            var fuente = File.ReadAllText(ruta!);
+            Assert.DoesNotContain(".RequirePermission(", fuente, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"/api/lending", fuente, StringComparison.Ordinal);
+            Assert.DoesNotContain("\"/api/reports/lending", fuente, StringComparison.Ordinal);
+        }
+        Assert.Equal(12, Directory.EnumerateFiles(Path.Combine(Api, "Endpoints", "Savings"), "*.cs").Count());
     }
 
     [Fact]

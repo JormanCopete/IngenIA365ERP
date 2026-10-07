@@ -99,6 +99,57 @@ public class PrincipioXII_MigracionesDestructivas
     }
 
     /// <summary>
+    /// Feature 013 (T0125; T87, data-model parte 3 §13.3): <c>RetiroDeLaCarteraHeredada</c> es la única migración destructiva de la
+    /// feature (las de la 013 nacen desde el 2026-10-06: <c>ValoresNacionales</c>, <c>PlataformaParaCartera</c>,
+    /// <c>NominaRecaudaPorElContrato</c>, <c>ComercioConCartera</c>, el retiro y las que vengan). Su <c>Up()</c> lleva la cabecera de
+    /// aprobación con el diagnóstico, el respaldo y el segundo revisor —que dicen «pendiente» hasta la fase 24 (T1083, T1084)— y su
+    /// guarda se niega con <c>THROW 50013</c> en SQL Server y <c>RAISE EXCEPTION</c> en PostgreSQL salvo la fila
+    /// <c>LND.RetiroHeredado.Aprobado</c>.
+    /// </summary>
+    [Fact]
+    public void El_retiro_de_la_cartera_heredada_es_la_unica_destructiva_de_la_013_y_lleva_su_guarda()
+    {
+        const string Inicio013 = "20261006000000";
+        var destructivas = ArchivosDeMigracion()
+            .Where(f => string.CompareOrdinal(Path.GetFileName(f)[..Math.Min(14, Path.GetFileName(f).Length)], Inicio013) >= 0)
+            .Where(f => OperacionesDestructivasEnUp(File.ReadAllText(f)).Count > 0)
+            .Select(Path.GetFileName)
+            .Select(n => n![15..])
+            .Distinct()
+            .ToList();
+        Assert.Equal(["RetiroDeLaCarteraHeredada.cs"], destructivas);
+
+        var retiros = ArchivosDeMigracion().Where(f => f.EndsWith("_RetiroDeLaCarteraHeredada.cs", StringComparison.Ordinal)).ToList();
+        Assert.Equal(2, retiros.Count);
+        foreach (var archivo in retiros)
+        {
+            var texto = File.ReadAllText(archivo);
+            var inicio = texto.IndexOf("void Up(", StringComparison.Ordinal);
+            var fin = texto.IndexOf("void Down(", inicio, StringComparison.Ordinal);
+            var up = texto[inicio..fin];
+            Assert.Contains(MarcadorDeAprobacion, up, StringComparison.Ordinal);
+            Assert.Matches(@"//\s+Diagnóstico: ", up);
+            Assert.Matches(@"//\s+Respaldo: ", up);
+            Assert.Matches(@"//\s+Segundo revisor: ", up);
+            Assert.Contains("LND.RetiroHeredado.Aprobado", up, StringComparison.Ordinal);
+            if (archivo.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Persistence.Migrations.SqlServer{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                Assert.Contains("THROW 50013", up, StringComparison.Ordinal);
+                Assert.DoesNotContain("RAISE EXCEPTION", up, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Contains("RAISE EXCEPTION", up, StringComparison.Ordinal);
+                Assert.DoesNotContain("THROW 50013", up, StringComparison.Ordinal);
+            }
+            // La guarda va antes que cualquier operación destructiva.
+            var guarda = up.IndexOf("LND.RetiroHeredado.Aprobado", StringComparison.Ordinal);
+            var primera = OperacionDestructiva.Match(up);
+            Assert.True(primera.Success && guarda < primera.Index, "La guarda tiene que ir antes del primer Drop*.");
+        }
+    }
+
+    /// <summary>
     /// Recorta el cuerpo de <c>Up()</c> —desde su firma hasta la de
     /// <c>Down()</c>— y devuelve las operaciones destructivas que encuentra.
     /// Si la migración no declara <c>Down()</c>, se mira desde <c>Up()</c>

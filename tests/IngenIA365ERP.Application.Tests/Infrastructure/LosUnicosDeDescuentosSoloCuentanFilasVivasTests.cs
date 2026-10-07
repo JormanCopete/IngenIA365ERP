@@ -10,14 +10,14 @@ namespace IngenIA365ERP.Application.Tests.Infrastructure;
 /// <summary>
 /// Feature 010, revisión N1 (2026-09-21). El recálculo de la definitiva retira en blando la deuda que Cartera
 /// ya no trae (<c>IsDeleted = true</c>) y, si la misma obligación vuelve, crea otra fila con la misma llave
-/// <c>(TerminationId, LoanPortfolioId)</c> o <c>(TerminationId, RecurringNoveltyId)</c>. Los dos únicos de
+/// <c>(TerminationId, ObligationPublicId)</c> o <c>(TerminationId, RecurringNoveltyId)</c>. Los dos únicos de
 /// <c>PAY_SettlementDeductions</c> filtraban sólo «no nulo» y ese INSERT violaba el índice (500 sin sobre).
 /// Aquí se fija que, en el modelo de <b>cada</b> proveedor, los dos únicos cuentan sólo filas vivas, como el
 /// resto de los únicos del módulo (data-model §2.6), y que el filtro va traducido a la sintaxis del motor.
 /// <para>
 /// Feature 013 (T0113; data-model parte 3 §7.1, §7.2): el único vivo de los créditos pasa a la obligación de Cartera,
 /// <c>UK_PAY_SettlementDeductions_Termination_Obligation (TerminationId, ObligationPublicId)</c>; el heredado
-/// <c>…_Termination_Loan</c> sigue hasta <c>RetiroDeLaCarteraHeredada</c>. Y <c>PAY_PayrollLoanDeductions</c> tiene su único
+/// <c>…_Termination_Loan</c> se fue con su columna en <c>RetiroDeLaCarteraHeredada</c> (T0190). Y <c>PAY_PayrollLoanDeductions</c> tiene su único
 /// por corrida, empleado y obligación entre las filas vivas.
 /// </para>
 /// </summary>
@@ -39,11 +39,20 @@ public class LosUnicosDeDescuentosSoloCuentanFilasVivasTests
     {
         { true, "UK_PAY_SettlementDeductions_Termination_Obligation" },
         { false, "UK_PAY_SettlementDeductions_Termination_Obligation" },
-        { true, "UK_PAY_SettlementDeductions_Termination_Loan" },
         { true, "UK_PAY_SettlementDeductions_Termination_Libranza" },
-        { false, "UK_PAY_SettlementDeductions_Termination_Loan" },
         { false, "UK_PAY_SettlementDeductions_Termination_Libranza" },
     };
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void El_unico_heredado_del_credito_ya_no_existe(bool postgres)
+    {
+        // Feature 013 (T0190): RetiroDeLaCarteraHeredada suelta la columna LoanPortfolioId, su FK, su IX y este único.
+        var descuentos = Descuentos(postgres);
+        descuentos.GetIndexes().Select(i => i.GetDatabaseName()).Should().NotContain("UK_PAY_SettlementDeductions_Termination_Loan");
+        descuentos.FindProperty("LoanPortfolioId").Should().BeNull();
+    }
 
     [Theory]
     [MemberData(nameof(Casos))]

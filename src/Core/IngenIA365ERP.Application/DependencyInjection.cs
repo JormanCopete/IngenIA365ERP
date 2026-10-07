@@ -423,9 +423,6 @@ public static class DependencyInjection
         // Feature 012 (T49, T156): el motor común de las plantillas de importación (revisión y aplicación).
         services.AddScoped<Common.Imports.EjecutorDeImportacion>();
         services.AddScoped<Accounting.Accounts.AccountEligibility>();
-        // El recaudo de Cartera como servicio: ProcessPaymentCommand lo llama por el pipeline y la
-        // definitiva (feature 010, D-08) directo, dentro de su transacción y sin reintento anidado.
-        services.AddScoped<Lending.Payments.Services.RecaudoDeCredito>();
         services.AddScoped<Payroll.Novelties.CarryOverNoveltiesService>();
         services.AddScoped<Payroll.Novelties.RecurringNovelties.RecurringNoveltiesMaterializer>();
         services.AddScoped<Payroll.Runs.Queries.RunSummaryBuilder>();

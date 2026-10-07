@@ -13,7 +13,7 @@ namespace IngenIA365ERP.Domain.Entities.Payroll;
 /// obligaciones (feature 013, T92) y aquí queda el comprobante; al reversar se reversa por el contrato y queda <c>Reverted</c>.
 ///
 /// <para>
-/// Las referencias a Cartera (<see cref="ObligationPublicId"/>; el heredado <see cref="LoanPortfolioId"/>) y a la libranza
+/// Las referencias a Cartera (<see cref="ObligationPublicId"/>) y a la libranza
 /// (<see cref="RecurringNoveltyId"/>) son claves sin navegación: la FK se declara en la
 /// configuración para que el modelo de pruebas en memoria no arrastre el módulo de Cartera.
 /// </para>
@@ -25,13 +25,8 @@ public class SettlementDeduction : AuditableEntity
     public SettlementDeductionKind Kind { get; set; }
 
     /// <summary>
-    /// <c>CooperativeLoan</c> heredado: FK <c>LND_LoanPortfolios</c>. Feature 013 (T0156, CH37): se conserva hasta
-    /// <c>RetiroDeLaCarteraHeredada</c>, pero ningún código nuevo la lee; la obligación es <see cref="ObligationPublicId"/>.
-    /// </summary>
-    public int? LoanPortfolioId { get; set; }
-
-    /// <summary>
-    /// Feature 013 (T0156, data-model parte 3 §7.2): la obligación de Cartera que el descuento paga, sin FK (FR-008). Única por
+    /// Feature 013 (T0156, data-model parte 3 §7.2): la obligación de Cartera que el descuento paga, sin FK (FR-008). La
+    /// columna heredada que apuntaba al crédito anterior la retiró <c>RetiroDeLaCarteraHeredada</c> (T0190). Única por
     /// terminación entre las filas vivas (<c>UK_PAY_SettlementDeductions_Termination_Obligation</c>).
     /// </summary>
     public Guid? ObligationPublicId { get; set; }

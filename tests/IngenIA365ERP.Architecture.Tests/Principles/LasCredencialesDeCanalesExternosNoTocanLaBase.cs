@@ -37,14 +37,14 @@ public class LasCredencialesDeCanalesExternosNoTocanLaBase
     ];
 
     /// <summary>
-    /// Archivos exentos (rutas relativas a la raíz, con barras normales). <c>Cashier</c> es de la cartera heredada: su
-    /// <c>PasswordTimeout</c> es un tiempo de espera de la caja, no un secreto, y la tabla se retira con
-    /// <c>RetiroDeLaCarteraHeredada</c>; al borrarse la entidad, sale de aquí.
+    /// Archivos exentos (rutas relativas a la raíz, con barras normales). Estaba <c>Cashier</c> (su <c>PasswordTimeout</c> es un
+    /// tiempo de espera de la caja, no un secreto): <c>LND_Cashiers</c> se conserva y la entidad se mudó a
+    /// <c>Domain.Entities.Savings</c> (feature 013, T0184), fuera de Cartera, así que salió de aquí.
     /// </summary>
-    private static readonly string[] Exentos = ["src/Core/IngenIA365ERP.Domain/Entities/Lending/Cashier.cs"];
+    private static readonly string[] Exentos = [];
 
     /// <summary>Los tipos de esos archivos, para la prueba por reflexión.</summary>
-    private static readonly string[] TiposExentos = ["Cashier"];
+    private static readonly string[] TiposExentos = [];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
         (new Regex(@"\bpublic\s+\w+\??\s+\w*(Password|Token|Secret|ApiKey|Pin)\w*\s*\{", RegexOptions.Compiled), "una propiedad de secreto"),

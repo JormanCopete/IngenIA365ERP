@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Lending.Reports;
+using IngenIA365ERP.Application.Savings.Reports;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;

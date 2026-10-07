@@ -14,7 +14,7 @@ using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
-using IngenIA365ERP.Domain.Entities.Lending;
+using IngenIA365ERP.Domain.Entities.Savings;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -99,39 +99,16 @@ public interface IApplicationDbContext
     DbSet<FixedAssetInstallment> FixedAssetInstallments { get; }
     DbSet<AssetRun> AssetRuns { get; }
 
-    // Lending
-    DbSet<LoanPortfolio> LoanPortfolios { get; }
-    DbSet<LendingTransaction> LendingTransactions { get; }
-    DbSet<PendingInstallment> PendingInstallments { get; }
-    DbSet<CreditLineParameter> CreditLineParameters { get; }
+    // Ahorros y aportes (conservadas de la cartera heredada; feature 013, T0184)
     DbSet<TransactionCode> TransactionCodes { get; }
     DbSet<SavingsParameter> SavingsParameters { get; }
-    DbSet<InterestRate> InterestRates { get; }
-    DbSet<ProvisionParameter> ProvisionParameters { get; }
     DbSet<Zone> Zones { get; }
     DbSet<SubZone> SubZones { get; }
     DbSet<ZoneType> ZoneTypes { get; }
-    DbSet<ApplicationStatus> ApplicationStatuses { get; }
-    DbSet<ScoringParameter> ScoringParameters { get; }
-    DbSet<ScoringRange> ScoringRanges { get; }
-    DbSet<PayrollDeductionConcept> PayrollDeductionConcepts { get; }
-    DbSet<LoanApplication> LoanApplications { get; }
-    DbSet<DefaultRecord> DefaultRecords { get; }
-    DbSet<CollectionCase> CollectionCases { get; }
-    DbSet<Guarantee> Guarantees { get; }
-    DbSet<ExtraPayment> ExtraPayments { get; }
     DbSet<SavingsAccount> SavingsAccounts { get; }
     DbSet<DepositEntry> DepositEntries { get; }
-    DbSet<AccrualEntry> AccrualEntries { get; }
-    DbSet<PortfolioClassification> PortfolioClassifications { get; }
-    DbSet<RiskAssessment> RiskAssessments { get; }
-    DbSet<PayrollDeductionEntry> PayrollDeductionEntries { get; }
     DbSet<WithdrawalStatus> WithdrawalStatuses { get; }
-    DbSet<HousingParameter> HousingParameters { get; }
     DbSet<SiplaParameter> SiplaParameters { get; }
-    DbSet<PeriodicityParameter> PeriodicityParameters { get; }
-    DbSet<TermRate> TermRates { get; }
-    DbSet<PortfolioAccount> PortfolioAccounts { get; }
     DbSet<ContributionReduction> ContributionReductions { get; }
     DbSet<AssociateWithdrawal> AssociateWithdrawals { get; }
     DbSet<CertificateEntry> CertificateEntries { get; }
