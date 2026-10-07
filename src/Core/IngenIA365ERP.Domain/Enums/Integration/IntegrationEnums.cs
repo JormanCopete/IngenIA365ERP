@@ -31,7 +31,12 @@ public enum ActorKind { Person = 1, Process = 2 }
 /// </summary>
 public enum ExecutionChannel { Web = 1, App = 2, Pos = 3, Process = 4 }
 
-public enum PrevalidationOutcome { Postable = 1, NoResponse = 2, NotApplicable = 3 }
+/// <summary>
+/// El sello de la validación previa contable. Feature 013 (C21; contracts/contabilidad.md §13.2): <c>NotPostable</c>, «evaluado no
+/// contabilizable, confirmado con advertencia» (la validación previa de Cartera nunca bloquea fuera de las pantallas); lo adelanta la
+/// fase 3 (T0228) porque <c>ValidacionPreviaContableDeCartera</c> ya lo sella.
+/// </summary>
+public enum PrevalidationOutcome { Postable = 1, NoResponse = 2, NotApplicable = 3, NotPostable = 4 }
 
 /// <summary>El <c>Origin.Kind</c> del sobre: un documento, o una operación (cierre, reapertura, reclasificación).</summary>
 public enum MessageOriginKind { Document = 1, Operation = 2 }

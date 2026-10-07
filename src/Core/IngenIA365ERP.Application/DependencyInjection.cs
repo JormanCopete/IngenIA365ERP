@@ -397,6 +397,16 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Common.Integration.Lending.ConsultaDeObligacionesSinActivar>();
         services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Common.Integration.Lending.ContratoDeObligacionesSinActivar>();
         services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Common.Integration.Lending.ReservasDeCarteraNoHabilitada>();
+        // Feature 013 (T0227-T0229, T0233; C106, C107): el puerto de Contabilidad para Cartera en su forma provisional (US7 registra el
+        // adaptador real ContabilidadParaCartera con la misma firma), las piezas tempranas de la integración contable de Cartera, su
+        // único emisor y los requisitos de la activación. Los dobles de prueba (TesoreriaDePrueba) los registra la API, nunca aquí.
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Common.Integration.Accounting.ContabilidadParaCarteraProvisional>();
+        services.AddScoped<Lending.Integration.FechaContable>();
+        services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
+        services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
+        services.AddScoped<Lending.Integration.CategoriaContableDeCartera>();
+        services.AddScoped<Lending.Integration.EmisionDeCartera>();
+        services.AddScoped<Lending.Activation.RequisitosDeActivacion>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();

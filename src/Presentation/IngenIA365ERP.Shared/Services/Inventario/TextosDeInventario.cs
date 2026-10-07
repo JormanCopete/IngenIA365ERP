@@ -328,12 +328,16 @@ public static class TextosDeInventario
         [4] = "Empty",
     };
 
-    /// <summary><c>PrevalidationOutcome</c> (1..3): lo que dijo la validación previa al confirmar (SC-021).</summary>
+    /// <summary>
+    /// <c>PrevalidationOutcome</c> (1..4): lo que dijo la validación previa al confirmar (SC-021). El 4 lo sella sólo Cartera (feature 013,
+    /// C21): evaluado no contabilizable y confirmado con advertencia.
+    /// </summary>
     public static IReadOnlyDictionary<int, string> ValidacionesPrevias { get; } = new Dictionary<int, string>
     {
         [1] = "Contabilizable",
         [2] = "Sin respuesta",
         [3] = "No aplica",
+        [4] = "No contabilizable (con advertencia)",
     };
 
     public static IReadOnlyDictionary<int, string> NombresDeValidacionPrevia { get; } = new Dictionary<int, string>
@@ -341,6 +345,7 @@ public static class TextosDeInventario
         [1] = "Postable",
         [2] = "NoResponse",
         [3] = "NotApplicable",
+        [4] = "NotPostable",
     };
 
     /// <summary><c>PostingGranularity</c> (1..2).</summary>

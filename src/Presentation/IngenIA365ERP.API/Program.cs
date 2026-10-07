@@ -274,6 +274,9 @@ try
     // Feature 013 (T0076, T0078; T20, CH20): el carácter de producción del despliegue, un solo criterio (IsProduction).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IAmbienteDeDespliegue>(
         new IngenIA365ERP.API.Integration.AmbienteDeDespliegue(builder.Environment.IsProduction()));
+    // Feature 013 (T0230; T20, FR-089): los dobles de prueba de Cartera (TesoreriaDePrueba; US5 suma el recaudador), sólo con
+    // Lending:TestDoubles:Enabled = true fuera de producción; pedidos en producción, la API no arranca.
+    IngenIA365ERP.API.Integration.DoblesDePruebaDeCartera.Registrar(builder.Services, builder.Configuration, builder.Environment);
     if (integracion.Dispatcher.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.DespachadorDeMensajes>());
 

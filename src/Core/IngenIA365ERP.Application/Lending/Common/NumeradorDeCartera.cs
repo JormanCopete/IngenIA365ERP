@@ -2,6 +2,7 @@ using System.Globalization;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Governance;
+using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.EntityFrameworkCore;
@@ -94,6 +95,21 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         if (sesion.Number is not null)
             throw new InvalidOperationException($"La sesión {sesion.PublicId} ya tiene número.");
         sesion.Number = await AsignarAsync(LendingNumberKind.SessionMinutes, AmbitoDeOrgano(organo), organo.MinutesPrefix, ct);
+    }
+
+    /// <summary>
+    /// El consecutivo de una carga de migración (feature 013, T0232; data-model §29.1: <c>Number</c> entero, único). No tiene fila en
+    /// <c>LND_NumberSequences</c> (<c>LendingNumberKind</c> no la nombra): es el mayor de <c>LND_MigrationLoads</c>, borradas incluidas, más
+    /// uno; el índice único es la defensa ante dos cargas a la vez.
+    /// </summary>
+    public async Task NumerarCargaAsync(MigrationLoad carga, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(carga);
+        if (carga.Number != 0)
+            throw new InvalidOperationException($"La carga {carga.PublicId} ya tiene número.");
+        var ultimo = await db.MigrationLoads.IgnoreQueryFilters().MaxAsync(l => (int?)l.Number, ct) ?? 0;
+        var enEsteAmbito = db.MigrationLoads.Local.Select(l => l.Number).DefaultIfEmpty(0).Max();
+        carga.Number = Math.Max(ultimo, enEsteAmbito) + 1;
     }
 
     /// <summary>El ámbito del consecutivo de actas de un órgano.</summary>

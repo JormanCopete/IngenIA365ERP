@@ -166,7 +166,9 @@ public class EnumeracionesDelComercioTests
              (BatchStatus.CompletedWithRejections, 3), (BatchStatus.Empty, 4));
         Fija((ActorKind.Person, 1), (ActorKind.Process, 2));
         Fija((ExecutionChannel.Web, 1), (ExecutionChannel.App, 2), (ExecutionChannel.Pos, 3), (ExecutionChannel.Process, 4));
-        Fija((PrevalidationOutcome.Postable, 1), (PrevalidationOutcome.NoResponse, 2), (PrevalidationOutcome.NotApplicable, 3));
+        // Feature 013 (C21; contabilidad.md §13.2): NotPostable, que sólo sella Cartera (adelantado de US7 por T0228).
+        Fija((PrevalidationOutcome.Postable, 1), (PrevalidationOutcome.NoResponse, 2), (PrevalidationOutcome.NotApplicable, 3),
+             (PrevalidationOutcome.NotPostable, 4));
         Fija((MessageOriginKind.Document, 1), (MessageOriginKind.Operation, 2));
         Fija((DeliveryAttemptOutcome.Processed, 1), (DeliveryAttemptOutcome.AlreadyProcessed, 2),
              (DeliveryAttemptOutcome.Rejected, 3), (DeliveryAttemptOutcome.Retry, 4),

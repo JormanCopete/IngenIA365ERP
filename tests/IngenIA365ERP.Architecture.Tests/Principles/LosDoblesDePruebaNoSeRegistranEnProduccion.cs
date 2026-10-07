@@ -12,7 +12,11 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class LosDoblesDePruebaNoSeRegistranEnProduccion
 {
     /// <summary>Archivos donde se registra cada doble de prueba (relativos a <c>src/</c>).</summary>
-    private static readonly string[] Archivos = [];
+    private static readonly string[] Archivos =
+    [
+        // Fase 3 (T0146, T0230): TesoreriaDePrueba; US5 suma RecaudadorDePrueba sobre la misma guarda.
+        "Presentation/IngenIA365ERP.API/Integration/DoblesDePruebaDeCartera.cs",
+    ];
 
     private static readonly Regex Requerido = new(@"IsProduction\(\)", RegexOptions.Compiled);
 

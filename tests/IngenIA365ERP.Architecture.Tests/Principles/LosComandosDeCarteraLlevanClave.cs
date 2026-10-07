@@ -12,7 +12,12 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class LosComandosDeCarteraLlevanClave
 {
     /// <summary>Archivos de rutas de escritura de Cartera (relativos a <c>src/</c>).</summary>
-    private static readonly string[] Archivos = [];
+    private static readonly string[] Archivos =
+    [
+        // Fase 3 (T0234, C107): la migración y la activación en su forma mínima; US8 suma sus demás rutas.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/MigrationEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ActivationEndpoints.cs",
+    ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);
 
