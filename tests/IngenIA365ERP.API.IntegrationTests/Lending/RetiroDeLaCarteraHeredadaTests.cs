@@ -148,7 +148,7 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task Por_HTTP_el_credito_heredado_responde_404_y_los_ahorros_responden()
     {
-        var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "retiro-http");
+        var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "retiro_http");
         using var http = fx.CreateClient();
 
         foreach (var ruta in new[] { "/api/lending/portfolios", "/api/lending/loan-applications", "/api/lending/payments",

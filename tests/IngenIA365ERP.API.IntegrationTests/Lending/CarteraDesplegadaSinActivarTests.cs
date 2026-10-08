@@ -84,15 +84,20 @@ public sealed class CarteraDesplegadaSinActivarTests(CentralIdentityApiFixture f
         });
         empleado.StatusCode.Should().Be(HttpStatusCode.Created, await empleado.Content.ReadAsStringAsync());
         var empleadoId = (await NominaE2E.LeerAsync(empleado)).GetGuid();
+        // La quincena que contiene hoy y el retiro hoy: la regla de Nómina no admite un retiro con fecha futura
+        // (Payroll.Termination.DateInFuture), así que la prueba no puede fijar fechas del calendario.
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        var inicioQuincena = new DateOnly(hoy.Year, hoy.Month, hoy.Day <= 15 ? 1 : 16);
+        var finQuincena = hoy.Day <= 15 ? new DateOnly(hoy.Year, hoy.Month, 15) : new DateOnly(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month));
         var periodo = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/pay-periods", new
         {
-            planPublicId = planId, startDate = new DateTime(2026, 10, 1), endDate = new DateTime(2026, 10, 15), description = "Quincena sin activar", statusMessage = string.Empty,
+            planPublicId = planId, startDate = inicioQuincena.ToDateTime(TimeOnly.MinValue), endDate = finQuincena.ToDateTime(TimeOnly.MinValue), description = "Quincena sin activar", statusMessage = string.Empty,
         });
         periodo.StatusCode.Should().Be(HttpStatusCode.Created, await periodo.Content.ReadAsStringAsync());
 
         var registro = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/settlements/terminations", new
         {
-            employeePublicId = empleadoId, terminationDate = new DateOnly(2026, 10, 15), reasonCode = "RENUNCIA", contractType = "Indefinite",
+            employeePublicId = empleadoId, terminationDate = hoy, reasonCode = "RENUNCIA", contractType = "Indefinite",
         });
         registro.StatusCode.Should().Be(HttpStatusCode.Created, await registro.Content.ReadAsStringAsync());
         var runId = (await NominaE2E.LeerAsync(registro)).GetProperty("runPublicId").GetGuid();

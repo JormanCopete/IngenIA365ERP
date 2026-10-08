@@ -58,8 +58,12 @@ public static class SavingsAccountStatusHelper
 
 public record ListSavingsAccountsQuery : IRequest<Result<PagedList<SavingsAccountDto>>>
 {
-    public int PageNumber { get; init; } = 1;
-    public int PageSize { get; init; } = 20;
+    // Anulables: con [AsParameters] un int no anulable queda obligatorio en la consulta HTTP aunque tenga valor por
+    // defecto, y las pantallas de ahorros llaman sin PageNumber (respondía 400; encontrado el 2026-10-08).
+    public int? PageNumber { get; init; }
+    public int? PageSize { get; init; }
+    public int Pagina => PageNumber is > 0 ? PageNumber.Value : 1;
+    public int TamanoDePagina => PageSize is > 0 ? PageSize.Value : 20;
     public Guid? PersonPublicId { get; init; }
     public Guid? SavingsLinePublicId { get; init; }
     public string? Status { get; init; } // "A"=active, "C"=closed
@@ -105,8 +109,8 @@ public class ListSavingsAccountsQueryHandler(IApplicationDbContext context)
         var items = await query
             .OrderByDescending(sa => sa.CreationDate)
             .ThenByDescending(sa => sa.AccountNumber)
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
+            .Skip((request.Pagina - 1) * request.TamanoDePagina)
+            .Take(request.TamanoDePagina)
             .Select(sa => new
             {
                 sa.PublicId,
@@ -156,7 +160,7 @@ public class ListSavingsAccountsQueryHandler(IApplicationDbContext context)
             SavingsAccountStatusHelper.GetStatus(sa.IsDeleted)
         )).ToList();
 
-        return Result.Success(new PagedList<SavingsAccountDto>(dtos, totalCount, request.PageNumber, request.PageSize));
+        return Result.Success(new PagedList<SavingsAccountDto>(dtos, totalCount, request.Pagina, request.TamanoDePagina));
     }
 }
 

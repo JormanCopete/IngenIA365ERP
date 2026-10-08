@@ -115,8 +115,11 @@ public class GetWithdrawalPreviewQueryHandler(IApplicationDbContext context, ICo
 
 public record ListWithdrawalsQuery : IRequest<Result<PagedList<WithdrawalDto>>>
 {
-    public int PageNumber { get; init; } = 1;
-    public int PageSize { get; init; } = 20;
+    // Anulables: con [AsParameters] un int no anulable queda obligatorio en la consulta HTTP (respondía 400 sin PageNumber).
+    public int? PageNumber { get; init; }
+    public int? PageSize { get; init; }
+    public int Pagina => PageNumber is > 0 ? PageNumber.Value : 1;
+    public int TamanoDePagina => PageSize is > 0 ? PageSize.Value : 20;
     public DateOnly? DateFrom { get; init; }
     public DateOnly? DateTo { get; init; }
 }
@@ -140,8 +143,8 @@ public class ListWithdrawalsQueryHandler(IApplicationDbContext context)
         var items = await query
             .OrderByDescending(w => w.EntryDate)
             .ThenByDescending(w => w.Id)
-            .Skip((request.PageNumber - 1) * request.PageSize)
-            .Take(request.PageSize)
+            .Skip((request.Pagina - 1) * request.TamanoDePagina)
+            .Take(request.TamanoDePagina)
             .Select(w => new
             {
                 w.PublicId,
@@ -180,7 +183,7 @@ public class ListWithdrawalsQueryHandler(IApplicationDbContext context)
             w.Period
         )).ToList();
 
-        return Result.Success(new PagedList<WithdrawalDto>(dtos, totalCount, request.PageNumber, request.PageSize));
+        return Result.Success(new PagedList<WithdrawalDto>(dtos, totalCount, request.Pagina, request.TamanoDePagina));
     }
 }
 
