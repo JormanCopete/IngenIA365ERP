@@ -625,6 +625,28 @@ no se ven en la consola salvo que se migren; `RendimientoDeInformesTests` (SC-00
 líneas) sin escribir; MAUI no registra los clientes contables (pantallas contables inertes en la app
 de escritorio, desde E1). E3 (cartera, inventario, tesorería y CDT por el contrato) y E4
 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
+
+**Impuestos y retención en la fuente (E4, pendiente; revisado el 2026-10-08).** Documento para la
+contadora: [docs/implementacion/retencion-en-la-fuente-contadora.pdf](../implementacion/retencion-en-la-fuente-contadora.pdf).
+
+- **Lo que existe**:
+  - el **catálogo tributario** de Core (`/maestros/impuestos`: `COR_TaxDefinitions`, `COR_WithholdingConcepts`, `COR_TaxRates`), con tarifas por concepto, vigencia, base mínima en UVT y condiciones según el perfil del tercero y de la cooperativa. Sembrado `impuestos-co.json`: compras 2,5/3,5 %, servicios 4/6 %, honorarios 10/11 %, arriendos 3,5 %, transporte 1 % y ReteIVA 15 %, todo «pendiente de validar»;
+  - el **perfil tributario** en la ficha de la persona;
+  - el **cálculo automático sólo en las compras de Inventario** (`MotorTributario`; el concepto sale del producto, `Product.WithholdingConceptId`), que pasa a Contabilidad por mensaje y por la matriz (rol `Retencion`).
+- **En Contabilidad la cuenta valida, no calcula.** La auxiliar de impuesto tiene clase, una tarifa con vigencia (`ACC_AccountTaxRates`) y la exigencia de base. `AccountLineRules` exige base y valor = base × tarifa ± `TaxTolerance`. Por eso hace falta **una auxiliar por tarifa**, y la matriz rechaza la contabilización si la tarifa de la cuenta no coincide con la del catálogo. En un comprobante manual (egreso de honorarios, por ejemplo) la persona digita base y valor, y no intervienen ni el catálogo ni el perfil del tercero. `ChartOfAccount.TaxConceptCode` es texto libre sin uso.
+- **Lo que falta, en este orden** (tareas T142–T146 y US11 T148–T153 de `specs/009-contabilidad-niif/tasks.md`; las entidades `ACC_TaxForms`, `ACC_WithholdingCertificates*` y `ACC_Exogenous*` ya existen, pero sin handlers, rutas ni pantallas, y `WithholdingCertificateReport` no lo llama nadie):
+  1. informe de retenciones practicadas, por período, concepto, tarifa y tercero, cuadrado contra las auxiliares;
+  2. certificados de retención (ReteFuente, ReteIVA, ReteICA), en PDF, con reexpedición y envío;
+  3. borradores de los formularios 350, IVA, ICA y GMF, guardados por período;
+  4. **retención automática en egresos y pagos** que no son compras (honorarios, arriendos, servicios pagados desde tesorería o comprobante), con el mismo catálogo y el perfil del tercero. Se cruza con la feature 014 (Tesorería);
+  5. concepto de retención por línea del documento y base mínima acumulada en el mes por tercero;
+  6. información exógena por formatos parametrizables por año.
+- **Datos por completar**:
+  - base mínima de ReteIVA y tarifas de ReteICA por municipio y CIIU, que carga la cooperativa por plantilla;
+  - validación del catálogo y de las auxiliares por tarifa por la contadora;
+  - perfil tributario de los proveedores frecuentes;
+  - formatos de exógena y certificados que usa hoy la cooperativa.
+- **Fuera de la 013**: Cartera no practica retención; su «certificado tributario» es de intereses pagados por el deudor (T0973).
 #### P16 — Feature 010 (nómina completa): N1, N2 y N4 en `develop` y en **producción** (`release c388a17`, 2026-09-22); N3 pendiente
 
 La **entrega N1** —prima de servicios, cesantías e intereses del año, vacaciones y liquidación
