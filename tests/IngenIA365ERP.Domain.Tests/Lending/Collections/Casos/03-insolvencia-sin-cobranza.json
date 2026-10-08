@@ -1,0 +1,27 @@
+// Regla 3 (FR-098, FR-124): con la insolvencia en negociación o el cobro suspendido no sale nada de cobranza (Collection,
+// PriorNotice, CollectionFeeNotice); el informativo sí. La regla 3 va antes que la 4: aunque el canal tampoco esté
+// autorizado, el motivo es la insolvencia.
+{
+  "caso": "03-insolvencia-sin-cobranza",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "insolvencia": true },
+  "escenarios": [
+    { "nombre": "cobranza en insolvencia",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Excluido", "motivo": "Insolvency" } },
+    { "nombre": "aviso previo en insolvencia",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "Insolvency" } },
+    { "nombre": "informativo en insolvencia",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "gasto de cobranza con el cobro suspendido",
+      "titular": { "cobroSuspendido": true },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "CollectionFeeNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "CollectionSuspended" } },
+    { "nombre": "la insolvencia gana al canal no autorizado",
+      "titular": { "insolvencia": true, "canalesAutorizados": ["Email"] },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection" },
+      "esperado": { "decision": "Excluido", "motivo": "Insolvency" } }
+  ]
+}

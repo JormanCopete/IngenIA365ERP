@@ -166,6 +166,11 @@ public class EnumeracionesDeCarteraTests
             ("Simulated", 7), ("Cancelled", 8)],
         [typeof(DebtorMessagePurpose)] = [("Collection", 1), ("PriorNotice", 2), ("Informative", 3), ("DocumentDelivery", 4), ("CollectionFeeNotice", 5)],
         [typeof(MessageChannel)] = [("Email", 1), ("Sms", 2), ("WhatsApp", 3), ("Letter", 4)],
+        // T0304: fijados en adaptadores-y-archivos.md §4.2 y §4.5 (data-model §9 no los numera: van en el orden del contrato desde 1).
+        [typeof(DebtorMessageOrigin)] = [("Operation", 1), ("Process", 2), ("PriorNotice", 3), ("Campaign", 4), ("Manual", 5), ("IssuedDocument", 6)],
+        [typeof(ContactWindowReason)] = [("RecipientNotObligated", 1), ("DebtorDeceased", 2), ("Insolvency", 3), ("CollectionSuspended", 4),
+            ("ChannelNotAuthorized", 5), ("AuthorizationWithoutEvidence", 6), ("NoDestination", 7), ("Sunday", 8), ("Holiday", 9),
+            ("OutsideHours", 10), ("DailyLimitReached", 11), ("WeeklyChannelLocked", 12), ("NoWindow", 13), ("ChannelUnavailable", 14)],
         [typeof(CollectionActionChannel)] = [("Phone", 1), ("InPerson", 2), ("Email", 3), ("Sms", 4), ("WhatsApp", 5), ("Letter", 6), ("Visit", 7)],
         [typeof(CollectionActionResult)] = [("NoAnswer", 1), ("WrongNumber", 2), ("ContactedNoCommitment", 3), ("PromiseToPay", 4), ("Refused", 5),
             ("RequestsAgreement", 6), ("ReportsDeceased", 7), ("Other", 8)],

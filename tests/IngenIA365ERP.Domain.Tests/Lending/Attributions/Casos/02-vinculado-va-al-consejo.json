@@ -1,0 +1,24 @@
+// FR-040: con una persona vinculada el sujeto va al consejo, forzado, sin importar el monto. La razón «RelatedParty»
+// se suma a la del techo; gana el consejo porque es el de mayor rango.
+{
+  "nombre": "02-vinculado-va-al-consejo",
+  "descripcion": "Un vinculado lleva al consejo cualquier monto y cualquier sujeto.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": []
+  },
+  "escenarios": [
+    { "nombre": "vinculado con 1.000.000", "sujeto": { "montoConsolidado": 1000000, "hayVinculado": true },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "RelatedParty", "nivel": "CONSEJO" } ] } },
+    { "nombre": "vinculado con 150.000.000", "sujeto": { "montoConsolidado": 150000000, "hayVinculado": true },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "CONSEJO" }, { "clase": "RelatedParty", "nivel": "CONSEJO" } ] } },
+    { "nombre": "cupo de un vinculado", "sujeto": { "sujeto": "CreditLimit", "montoConsolidado": 500000, "hayVinculado": true },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "RelatedParty", "nivel": "CONSEJO" } ] } }
+  ]
+}

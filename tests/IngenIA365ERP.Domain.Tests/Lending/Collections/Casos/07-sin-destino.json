@@ -1,0 +1,17 @@
+// Regla 6: el titular autorizó SMS y WhatsApp, pero en el maestro sólo tiene correo. Sin celular no hay a dónde mandar.
+{
+  "caso": "07-sin-destino",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "canalesAutorizados": ["Sms", "WhatsApp", "Email"], "destinos": ["Email"] },
+  "escenarios": [
+    { "nombre": "informativo por SMS sin celular",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Excluido", "motivo": "NoDestination" } },
+    { "nombre": "cobranza por WhatsApp sin celular",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "WhatsApp", "proposito": "Collection" },
+      "esperado": { "decision": "Excluido", "motivo": "NoDestination" } },
+    { "nombre": "por correo sí",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } }
+  ]
+}

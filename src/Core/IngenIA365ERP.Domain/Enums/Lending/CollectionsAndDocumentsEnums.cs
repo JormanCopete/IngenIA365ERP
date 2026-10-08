@@ -24,6 +24,43 @@ public enum DebtorMessageEventKind
     Cancelled = 8,
 }
 
+/// <summary>
+/// Qué originó un mensaje al deudor (<c>adaptadores-y-archivos.md</c> §4.2, fijado ahí; T0304). Se guarda como <b>texto</b> en
+/// <c>LND_DebtorMessages.OriginKind</c>; los números siguen el orden del contrato.
+/// </summary>
+public enum DebtorMessageOrigin
+{
+    Operation = 1,
+    Process = 2,
+    PriorNotice = 3,
+    Campaign = 4,
+    Manual = 5,
+    IssuedDocument = 6,
+}
+
+/// <summary>
+/// Por qué la ventana legal de contacto (Ley 2300) excluye o difiere un mensaje (<c>adaptadores-y-archivos.md</c> §4.5, fijado
+/// ahí; T0304). Va en los eventos <c>Deferred</c> y <c>Excluded</c> de <c>LND_DebtorMessageEvents</c>. <see cref="ChannelUnavailable"/>
+/// es técnico: lo pone el despachador cuando el canal no responde, nunca el motor <c>VentanaLegalDeContacto</c>.
+/// </summary>
+public enum ContactWindowReason
+{
+    RecipientNotObligated = 1,
+    DebtorDeceased = 2,
+    Insolvency = 3,
+    CollectionSuspended = 4,
+    ChannelNotAuthorized = 5,
+    AuthorizationWithoutEvidence = 6,
+    NoDestination = 7,
+    Sunday = 8,
+    Holiday = 9,
+    OutsideHours = 10,
+    DailyLimitReached = 11,
+    WeeklyChannelLocked = 12,
+    NoWindow = 13,
+    ChannelUnavailable = 14,
+}
+
 /// <summary>Canal de una gestión de cobranza (K4).</summary>
 public enum CollectionActionChannel
 {

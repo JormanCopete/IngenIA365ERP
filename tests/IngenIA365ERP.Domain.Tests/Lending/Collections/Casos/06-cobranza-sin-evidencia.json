@@ -1,0 +1,22 @@
+// Regla 5 (FR-006): una autorización migrada sin evidencia deja cobrable el crédito pero bloquea los mensajes de cobranza
+// (Collection, PriorNotice, CollectionFeeNotice) hasta obtenerla. El informativo pasa: le basta la autorización.
+{
+  "caso": "06-cobranza-sin-evidencia",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "canalesAutorizados": ["Sms", "Email"], "conEvidencia": false },
+  "escenarios": [
+    { "nombre": "cobranza por SMS sin evidencia",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Excluido", "motivo": "AuthorizationWithoutEvidence" } },
+    { "nombre": "aviso previo por correo sin evidencia",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Email", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "AuthorizationWithoutEvidence" } },
+    { "nombre": "informativo por SMS sin evidencia",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "Informative" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "aviso previo por carta con el tratamiento general sin evidencia",
+      "titular": { "canalesAutorizados": [], "autorizacionGeneralConEvidencia": false },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Letter", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "AuthorizationWithoutEvidence" } }
+  ]
+}

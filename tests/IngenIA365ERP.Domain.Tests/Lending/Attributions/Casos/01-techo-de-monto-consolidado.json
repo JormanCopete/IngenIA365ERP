@@ -1,0 +1,36 @@
+// Matriz del ensayo (quickstart §2.7): analista hasta 5.000.000, gerencia hasta 20.000.000, Comité de crédito hasta
+// 100.000.000 y Consejo sin techo; el jefe de cartera es el nivel de excepción (rango 15, techo 5.000.000: por monto nunca
+// gana, porque el analista tiene el mismo techo y un rango menor). Sin reglas: manda sólo el techo.
+// El nivel por techo es el de menor rango cuyo techo cubre el monto CONSOLIDADO (los techos son «hasta», incluidos).
+{
+  "nombre": "01-techo-de-monto-consolidado",
+  "descripcion": "Cada monto consolidado va al primer nivel cuyo techo lo cubre.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": []
+  },
+  "escenarios": [
+    { "nombre": "3.000.000 al analista", "sujeto": { "montoConsolidado": 3000000 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } },
+    { "nombre": "5.000.000 exactos siguen en el analista", "sujeto": { "montoConsolidado": 5000000 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ] } },
+    { "nombre": "15.000.000 a gerencia", "sujeto": { "montoConsolidado": 15000000 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "GERENCIA" } ] } },
+    { "nombre": "20.000.001 pasa al comité", "sujeto": { "montoConsolidado": 20000001 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "COMITE" } ] } },
+    { "nombre": "60.000.000 al comité", "sujeto": { "montoConsolidado": 60000000 },
+      "esperado": { "nivel": "COMITE", "razones": [ { "clase": "AmountCeiling", "nivel": "COMITE" } ] } },
+    { "nombre": "150.000.000 al consejo", "sujeto": { "montoConsolidado": 150000000 },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "CONSEJO" } ] } },
+    // Lo que manda es el consolidado, no lo pedido: 3.000.000 de la solicitud + 4.000.000 vivos del deudor + 2.000.000
+    // en que es codeudor = 9.000.000 → gerencia (la suma la arma US2; el motor recibe el consolidado).
+    { "nombre": "solicitud de 3.000.000 con exposición: consolidado 9.000.000", "sujeto": { "montoConsolidado": 9000000 },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "GERENCIA" } ] } }
+  ]
+}

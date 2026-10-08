@@ -1,0 +1,14 @@
+// Regla 8: el domingo 8 de noviembre de 2026 no se contacta; la apertura siguiente es el lunes 9 a las 7:00.
+{
+  "caso": "09-domingo-difiere-al-lunes",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": {},
+  "escenarios": [
+    { "nombre": "cobranza programada para el domingo",
+      "solicitud": { "pedido": "2026-11-08T10:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-09T07:00", "motivos": ["Sunday"] } },
+    { "nombre": "el informativo también respeta el domingo",
+      "solicitud": { "pedido": "2026-11-08T10:00", "canal": "Email", "proposito": "Informative" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-09T07:00", "motivos": ["Sunday"] } }
+  ]
+}

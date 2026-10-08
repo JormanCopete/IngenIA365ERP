@@ -1,0 +1,63 @@
+// US2-7, FR-040: el solicitante es cónyuge del consejero 105, que queda excluido. La regla calificada de vinculados
+// (piso nacional 4/5) se mide sobre la COMPOSICIÓN (5), no sobre los elegibles (4): 5 × favorables ≥ 4 × 5 = 20, así
+// que hacen falta ceil(20 / 5) = 4 a favor. Cuatro pasan; tres no.
+{
+  "nombre": "04-vinculado-cuatro-quintos",
+  "descripcion": "Vinculado con el interesado excluido: 4 de 5 a favor pasa, 3 no; la base sigue siendo la composición.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan", "base": "PresentEligible" },
+    "vinculados": { "numerador": 4, "denominador": 5 }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "cuatro a favor",
+      "presentes": [101, 102, 103, 104, 105],
+      "punto": {
+        "regla": "RelatedPartyQualified",
+        "excluidos": [ { "persona": 105, "motivo": "Cónyuge del solicitante" } ],
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" },
+          { "voto": 4, "persona": 104, "valor": "For" },
+          { "voto": 5, "persona": 105, "valor": "For" }
+        ]
+      },
+      // 4 × 5 = 20 ≥ 4 × 5 = 20 → aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 5 },
+        "elegibles": 4, "base": 5, "requeridos": 4,
+        "aFavor": 4, "enContra": 0, "abstenciones": 0,
+        "resultado": "Aprobado",
+        "rechazados": [ { "persona": 105, "motivo": "Excluido" } ],
+        "explicacionContiene": ["4 × 5 = 20 ≥ 4 × 5 = 20", "composición"]
+      }
+    },
+    {
+      "nombre": "tres a favor",
+      "presentes": [101, 102, 103, 104, 105],
+      "punto": {
+        "regla": "RelatedPartyQualified",
+        "excluidos": [ { "persona": 105, "motivo": "Cónyuge del solicitante" } ],
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" },
+          { "voto": 4, "persona": 104, "valor": "Against" }
+        ]
+      },
+      // 3 × 5 = 15 < 4 × 5 = 20 → no aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 5 },
+        "elegibles": 4, "base": 5, "requeridos": 4,
+        "aFavor": 3, "enContra": 1, "abstenciones": 0,
+        "resultado": "NoAprobado",
+        "explicacionContiene": ["3 × 5 = 15 < 4 × 5 = 20"]
+      }
+    }
+  ]
+}

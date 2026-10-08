@@ -1,0 +1,23 @@
+// Regla 4, excepción de la carta (C90): Letter no exige autorización de canal, sólo dirección registrada (regla 6) y la
+// autorización de tratamiento general. El titular no autorizó ningún canal de mensaje.
+{
+  "caso": "05-carta-sin-autorizacion-de-canal",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "canalesAutorizados": [], "destinos": ["Letter"] },
+  "escenarios": [
+    { "nombre": "aviso previo por carta con dirección",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Letter", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "carta sin dirección registrada",
+      "titular": { "canalesAutorizados": [], "destinos": ["Email"] },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Letter", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "NoDestination" } },
+    { "nombre": "carta sin autorización de tratamiento general",
+      "titular": { "canalesAutorizados": [], "destinos": ["Letter"], "autorizacionGeneral": false },
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Letter", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "ChannelNotAuthorized" } },
+    { "nombre": "el SMS sí exige autorización de canal",
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Sms", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Excluido", "motivo": "ChannelNotAuthorized" } }
+  ]
+}

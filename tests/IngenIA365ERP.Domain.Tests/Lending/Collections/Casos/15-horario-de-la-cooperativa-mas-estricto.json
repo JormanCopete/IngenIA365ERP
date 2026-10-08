@@ -1,0 +1,34 @@
+// El horario efectivo es el techo nacional ∩ la restricción de la cooperativa. Esta cooperativa contacta de lunes a
+// viernes de 8:00 a 18:00 y nunca los sábados. Si una cooperativa pusiera algo más amplio que el techo (el escritor de
+// parámetros lo rechaza, T42), el motor igual se queda con lo más estricto: el último escenario pide a las 6:30 con un
+// informativo ya enviado a las 7:00 y un tope de 3 que no vale (el techo es 1).
+{
+  "caso": "15-horario-de-la-cooperativa-mas-estricto",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "cooperativa": { "horario": { "lunesAViernes": ["08:00", "18:00"] }, "contactosPorDia": 1 },
+  "titular": {},
+  "escenarios": [
+    { "nombre": "martes 7:30 espera a las 8:00 de la cooperativa",
+      "solicitud": { "pedido": "2026-11-10T07:30", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-10T08:00", "motivos": ["OutsideHours"] } },
+    { "nombre": "viernes 18:30: sin sábado, domingo y lunes festivo, pasa al martes 8:00",
+      "solicitud": { "pedido": "2026-11-13T18:30", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T08:00", "motivos": ["OutsideHours"] } },
+    { "nombre": "martes 11:00 sale",
+      "solicitud": { "pedido": "2026-11-10T11:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-10T11:00" } },
+    { "nombre": "un horario más amplio que el techo no amplía el horario",
+      "cooperativa": { "horario": { "lunesAViernes": ["06:00", "20:00"], "sabado": ["06:00", "20:00"] }, "contactosPorDia": 3 },
+      "solicitud": { "pedido": "2026-11-10T06:30", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-10T07:00", "motivos": ["OutsideHours"] } },
+    { "nombre": "un tope más amplio que el techo no amplía el tope",
+      "cooperativa": { "horario": { "lunesAViernes": ["06:00", "20:00"], "sabado": ["06:00", "20:00"] }, "contactosPorDia": 3 },
+      "historial": [ { "en": "2026-11-10T08:00", "canal": "Sms", "proposito": "Informative" } ],
+      "solicitud": { "pedido": "2026-11-10T10:00", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-11T07:00", "motivos": ["DailyLimitReached"] } },
+    { "nombre": "fuera de horario y con el tope cumplido a la vez",
+      "historial": [ { "en": "2026-11-10T08:00", "canal": "Sms", "proposito": "Informative" } ],
+      "solicitud": { "pedido": "2026-11-10T18:30", "canal": "Sms", "proposito": "Collection" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-11T08:00", "motivos": ["OutsideHours", "DailyLimitReached"] } }
+  ]
+}

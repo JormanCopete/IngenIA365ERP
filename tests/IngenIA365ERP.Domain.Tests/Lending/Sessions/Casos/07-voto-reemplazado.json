@@ -1,0 +1,37 @@
+// C75: la secretaría registró «en contra» para 101 por error (voto 1) y lo corrigió con el voto 2, que lo reemplaza.
+// Cuenta el vigente (a favor); el reemplazado no se cuenta ni se rechaza: queda en la historia.
+// Sentados 101, 102, 103: mayoría 3 / 2 + 1 = 2; a favor 101 y 102 → aprobado.
+{
+  "nombre": "07-voto-reemplazado",
+  "descripcion": "Un voto de reemplazo deja sin efecto al anterior; cuenta el vigente.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan", "base": "PresentEligible" },
+    "vinculados": { "numerador": 4, "denominador": 5 }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "voto corregido antes del cierre",
+      "presentes": [101, 102, 103],
+      "punto": {
+        "votos": [
+          { "voto": 1, "persona": 101, "valor": "Against" },
+          { "voto": 2, "persona": 101, "valor": "For", "reemplaza": 1 },
+          { "voto": 3, "persona": 102, "valor": "For" },
+          { "voto": 4, "persona": 103, "valor": "Against" }
+        ]
+      },
+      // 2 × 2 = 4 > 1 × 3 = 3 → aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 3 },
+        "elegibles": 3, "base": 3, "requeridos": 2,
+        "aFavor": 2, "enContra": 1, "abstenciones": 0,
+        "resultado": "Aprobado",
+        "explicacionContiene": ["reemplazado"]
+      }
+    }
+  ]
+}

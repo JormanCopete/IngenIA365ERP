@@ -1,0 +1,44 @@
+// F7: el suplente 201 vota por su principal 101, que se excusó. Cuenta para el quórum y para la mayoría en el puesto del
+// principal. El suplente 202 no vino. Sentados: 102, 103, 104 y 201 = 4; 4 × 2 = 8 > 5 → quórum. Mayoría: 4 / 2 + 1 = 3.
+{
+  "nombre": "05-suplente-por-principal-ausente",
+  "descripcion": "El suplente vota por un principal ausente.",
+  "regla": {
+    "quorum": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan" },
+    "mayoria": { "numerador": 1, "denominador": 2, "comparacion": "MoreThan", "base": "PresentEligible" },
+    "vinculados": { "numerador": 4, "denominador": 5 }
+  },
+  "miembros": [
+    { "persona": 101 }, { "persona": 102 }, { "persona": 103 }, { "persona": 104 }, { "persona": 105 },
+    { "persona": 201, "principal": false, "suplenteDe": 101 },
+    { "persona": 202, "principal": false, "suplenteDe": 102 }
+  ],
+  "escenarios": [
+    {
+      "nombre": "el suplente de 101 vota",
+      "asistencia": [
+        { "persona": 101, "estado": "Excused" },
+        { "persona": 102, "estado": "Present" },
+        { "persona": 103, "estado": "Present" },
+        { "persona": 104, "estado": "Present" },
+        { "persona": 105, "estado": "Absent" },
+        { "persona": 201, "estado": "Present" }
+      ],
+      "punto": {
+        "votos": [
+          { "voto": 1, "persona": 201, "valor": "For" },
+          { "voto": 2, "persona": 102, "valor": "For" },
+          { "voto": 3, "persona": 103, "valor": "For" },
+          { "voto": 4, "persona": 104, "valor": "Against" }
+        ]
+      },
+      // 3 × 2 = 6 > 1 × 4 = 4 → aprobado.
+      "esperado": {
+        "quorum": { "cumple": true, "composicion": 5, "requerido": 3, "presentesElegibles": 4 },
+        "elegibles": 4, "base": 4, "requeridos": 3,
+        "aFavor": 3, "enContra": 1, "abstenciones": 0,
+        "resultado": "Aprobado"
+      }
+    }
+  ]
+}

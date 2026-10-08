@@ -1,0 +1,30 @@
+// R132: falta de capacidad de pago, falta de autorización del titular, coincidencia en listas restrictivas y usura nunca
+// se exceptúan, en ningún nivel. El enrutamiento sigue diciendo a qué nivel iría (la vista previa lo muestra), pero la
+// lista de no exceptuables viene llena y decidir responde Lending.Attribution.NotExceptionable con los motivos, en el
+// orden fijo del enum.
+{
+  "nombre": "06-no-exceptuables",
+  "descripcion": "Los cuatro motivos no exceptuables salen en la lista sin importar el nivel.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": []
+  },
+  "escenarios": [
+    { "nombre": "los cuatro a la vez", "sujeto": { "montoConsolidado": 3000000, "hallazgos": ["Usury", "RestrictiveListMatch", "HolderAuthorization", "PaymentCapacity"] },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ],
+                    "noExceptuables": ["PaymentCapacity", "HolderAuthorization", "RestrictiveListMatch", "Usury"] } },
+    { "nombre": "la excepción por puntaje no cubre la usura", "sujeto": { "montoConsolidado": 3000000, "puntajeBajoElMinimo": true, "hallazgos": ["Usury"] },
+      "esperado": { "nivel": "EXCEP", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Exception", "nivel": "EXCEP" } ],
+                    "noExceptuables": ["Usury"] } },
+    { "nombre": "ni el consejo exceptúa las listas", "sujeto": { "montoConsolidado": 150000000, "hallazgos": ["RestrictiveListMatch"] },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "CONSEJO" } ], "noExceptuables": ["RestrictiveListMatch"] } },
+    { "nombre": "sin hallazgos", "sujeto": { "montoConsolidado": 3000000 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ], "noExceptuables": [] } }
+  ]
+}
