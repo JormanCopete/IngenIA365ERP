@@ -5122,6 +5122,22 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.Session.Closed` | 422 | «El acta está cerrada. Para corregirla, registre otra sesión.» | | T64 |
 | `Lending.Attribution.NotExceptionable` | 422 | «Esto no admite excepción: {motivo}.» | capacidad de pago, autorización, listas, usura | T63 |
 | `Lending.Attribution.LevelRequired` | 422 | «Esta solicitud corresponde al nivel {nivel}: su atribución no alcanza.» | | T63 |
+| `Lending.GoverningBody.BoardAlreadyActive` **(nuevo, US17, C111)** | 422 | «Ya hay un consejo de administración activo ({nombre}). Desactívelo antes de crear otro.» (`data.existingName`) | crear o activar un segundo `BoardOfDirectors`: el nivel del consejo de la matriz tiene que saber cuál es (FR-040) | T64 |
+| `Lending.GoverningBody.AlternateInvalid` **(nuevo, US17, C111)** | 422 | «Un suplente tiene el papel de suplente y lo es de un miembro principal vigente del mismo órgano.» | nombrar un suplente sin principal, de otro órgano, de otro suplente o fuera de la vigencia del principal (F7) | T64 |
+| `Lending.Session.ItemNotFound` **(nuevo, US17)** | 404 | «El punto no existe en esta sesión.» | corregir, retirar o votar un punto de otra sesión o inexistente | T64 |
+| `Lending.Session.SubjectNotSupported` **(nuevo, US17)** | 422 | «Este asunto todavía no se puede llevar a un acta: llega con su entrega de Cartera.» (`data.subject`) | llevar a una sesión un sujeto cuyo `IAsuntoDeActa` ninguna historia registró todavía | T64 |
+| `Lending.RelatedParty.KinshipDegreeExceeded` **(nuevo, US17)** | 422 | «El grado de parentesco {grado} está fuera de los grados que la ley considera vinculados (hasta {limite}, {fuente}). No lo registre como vinculado.» (`data: { degree, limitCode, limitValue, source }`) | registrar o importar un pariente con grado mayor que el límite nacional `VINCULADOS_GRADO_PARENTESCO` (§12.5) | FR-040 |
+
+Los demás códigos del gobierno que emite `Application/Lending` (US17, bloque D) están fijados en `api.md` §3.5–§3.8 y §5 y se usan
+con estos mensajes: `Lending.Attribution.MatrixInvalid` («La matriz de atribuciones no es válida…», `data.reason`), `.LevelUnknown`,
+`Lending.AttributionMatrix.NotFound` (404; también «no hay matriz vigente» en la vista previa), `Lending.GoverningBody.NotFound`,
+`.MemberNotFound` (404), `.RulesInvalid` (`data.reason`, que suma `ValidFromInPast`, `RelatedPartyFractionRequired` —con actividad
+financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFractionMissing` y `NoRulesForDate`), `.InUse` (`data.matrixVersion`),
+`.MemberOverlaps`; `Lending.Session.NotFound` (404), `.SubjectNotPending` (`data.subjectStatus`), `.SubjectNotForBody`, `.ItemHasVotes`,
+`.VoteDuplicate`, `.SubstituteInvalid`, `.MemberNotUser`, `.VoterExcluded` (`data.reason`: `Applicant`, `Filer`, `Interested`,
+`NotMember`, `Absent`), `.ItemMismatch`, `.QuorumNotMet`, `.NotOpen`, `.Closed`; `Lending.Decision.ContentChanged`
+(`data.currentContentSha256`); `Lending.Permission.Required`; `Lending.RelatedParty.LinkRequired`, `.Duplicate`, `.NotFound` (404);
+`Lending.Scope.DefaultDuplicate`; `Lending.Template.NotFound` y `Lending.CreditLine.NotFound` (404, también fuera del alcance).
 | `Lending.Authorization.Missing` | 422 | «Falta la autorización de {persona} para {finalidad}. Regístrela con su evidencia.» | FR-006 | T69 |
 | `Lending.Authorization.WithoutEvidence` | 422 | «La autorización de {persona} para {finalidad} no tiene evidencia. Adjúntela para continuar.» | consulta o reporte a centrales, mensajes de cobranza | T69 |
 | `Lending.DebtorMessage.ChannelNotAuthorized` | 422 | «{persona} no autorizó el canal {canal}.» | FR-122 | T75 |
@@ -5409,6 +5425,7 @@ Un límite nuevo más estricto que lo configurado alerta `Cartera.LimiteLegalMas
 | `LIBRANZA_VENTANA_GIRO_DIAS` | `Dias` | `Menor` | 3 | `Libranza.VentanaDeGiroDias` | Ley 1527, art. 6 |
 | `LIBRANZA_UMBRAL_MORA_PAGADURIA` | `Dias` | `Menor` | a cotejar en la CBCF antes de K2 | `Libranza.UmbralDeMoraDePagaduria` | CBCF |
 | `VINCULADOS_FRACCION_CALIFICADA` | `Fraccion` | `Mayor` | 0,8 (4/5 de la composición) | la mayoría calificada de cada órgano (`LND_GoverningBodies`) | Ley 454, art. 61 |
+| `VINCULADOS_GRADO_PARENTESCO` **(nuevo, US17)** | `Veces` | `Menor` | 2 (PV; segundo grado de consanguinidad o afinidad) | el grado de un vinculado pariente (`LND_RelatedParties.KinshipDegree`): mayor → `Lending.RelatedParty.KinshipDegreeExceeded` | Ley 454, art. 61 |
 | `TITULAR_CONSULTA_DIAS` · `TITULAR_CONSULTA_PRORROGA_DIAS` | `Dias` (hábiles) | `Menor` | 10 · 5 | `PlazosDelTitular` | Ley 1581, Ley 1266 |
 | `TITULAR_RECLAMO_DIAS` · `TITULAR_RECLAMO_PRORROGA_DIAS` | `Dias` (hábiles) | `Menor` | 15 · 8 | `PlazosDelTitular`, `LND_CreditReportClaims` | Ley 1581, Ley 1266 |
 | `TITULAR_LEYENDA_RECLAMO_DIAS` | `Dias` (hábiles) | `Menor` | 2 | marca «reclamo en trámite» | Ley 1266 |

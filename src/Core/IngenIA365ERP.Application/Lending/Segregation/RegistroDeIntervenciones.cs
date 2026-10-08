@@ -54,6 +54,22 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
         if (actor.UserId is not { } usuarioId || persona is not { } personaId)
             return Result.Failure<IntervencionVerificada>(SinPersona());
 
+        return await VerificarDeAsync(expediente, accion, fecha, usuarioId, personaId, ct);
+    }
+
+    /// <summary>
+    /// La misma verificación para una persona que no es quien hace la petición (feature 013, T0296): el voto que registra la secretaría es
+    /// del miembro que vota, no de la secretaria. <paramref name="usuarioId"/> es el <c>SEC_Users.Id</c> del miembro o 0 si no tiene
+    /// usuario (los miembros son personas, no necesariamente usuarios, I-1): entonces se compara sólo por persona y la intervención no se
+    /// puede registrar (<c>LND_CaseParticipations.UserId</c> es obligatorio).
+    /// </summary>
+    public async Task<Result<IntervencionVerificada>> VerificarDeAsync(
+        ExpedienteDeCartera expediente, string accion, DateOnly fecha, int usuarioId, int personaId, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(expediente);
+        if (!AccionesDeSegregacion.Existe(accion))
+            throw new ArgumentException($"«{accion}» no es una acción de segregación de Cartera.", nameof(accion));
+
         var pares = await ParesAsync(fecha, ct);
         var previas = await db.CaseParticipations.AsNoTracking()
             .Where(c => c.CaseRootPublicId == expediente.PublicId)

@@ -110,6 +110,27 @@ public class SessionItem : AuditableEntity
     }
 
     /// <summary>
+    /// La propuesta que se vota, mientras la sesión no esté cerrada (feature 013, T0296; api.md §5, <c>PUT /items/{itemId}</c>): aprobar
+    /// o aprobar con condiciones (JSON). Nula, vuelve a «aprobar» sin condiciones. El cierre la toma como lo que se aprueba si el punto
+    /// alcanza la mayoría (<see cref="SellarResultado"/>), y la reemplaza por el resultado.
+    /// </summary>
+    public void Proponer(Session sesion, CreditDecisionOutcome? propuesta, string? condiciones)
+    {
+        ExigirDeLaSesion(sesion);
+        ReglaDeCarteraException.SiHay(sesion.ExigirEditable());
+        if (propuesta is not (null or CreditDecisionOutcome.Approve or CreditDecisionOutcome.ApproveWithConditions))
+            throw new ArgumentException("Lo que se propone en un punto es «aprobar» o «aprobar con condiciones».", nameof(propuesta));
+        if (propuesta == CreditDecisionOutcome.ApproveWithConditions && string.IsNullOrWhiteSpace(condiciones))
+            throw new ArgumentException("Aprobar con condiciones lleva las condiciones.", nameof(condiciones));
+        Outcome = propuesta;
+        Conditions = propuesta == CreditDecisionOutcome.ApproveWithConditions ? condiciones : null;
+    }
+
+    /// <summary>Lo que se aprueba si el punto alcanza la mayoría: la propuesta, o «aprobar» si no la hay.</summary>
+    public CreditDecisionOutcome PropuestaSiAprueba =>
+        Outcome == CreditDecisionOutcome.ApproveWithConditions ? CreditDecisionOutcome.ApproveWithConditions : CreditDecisionOutcome.Approve;
+
+    /// <summary>
     /// Sella, al cerrar y con la sesión todavía abierta, lo que calculó <see cref="EvaluadorDeVotacion"/>: los conteos, la explicación
     /// y el resultado. Aprobado → <paramref name="resultadoSiAprueba"/> (con o sin condiciones); no aprobado → <c>Deny</c>. Un punto sin
     /// quórum no se sella: la sesión no se cierra sin quórum.

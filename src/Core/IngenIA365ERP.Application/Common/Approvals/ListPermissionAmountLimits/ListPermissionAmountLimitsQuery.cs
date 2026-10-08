@@ -9,12 +9,14 @@ namespace IngenIA365ERP.Application.Common.Approvals.ListPermissionAmountLimits;
 /// <summary>
 /// Los montos máximos por permiso (feature 012, T084; contracts/api.md §15.3,
 /// <c>GET /api/inventory/amount-limits?rolePublicId=&amp;permissionCode=&amp;asOf=</c>). Con <see cref="AsOf"/>, sólo los
-/// vigentes a esa fecha; sin él, toda la historia. Por rol, permiso y fecha; sin paginar. (nuevo)
+/// vigentes a esa fecha; sin él, toda la historia. Por rol, permiso y fecha; sin paginar. Con <see cref="Module"/>, sólo los del
+/// módulo de la ruta (feature 013, T0292: <c>GET /api/lending/amount-limits</c> manda <c>Lending</c>). (nuevo)
 /// </summary>
 public sealed record ListPermissionAmountLimitsQuery(
     Guid? RolePublicId = null,
     string? PermissionCode = null,
-    DateOnly? AsOf = null) : IRequest<Result<IReadOnlyList<PermissionAmountLimitDto>>>;
+    DateOnly? AsOf = null,
+    string? Module = null) : IRequest<Result<IReadOnlyList<PermissionAmountLimitDto>>>;
 
 public sealed class ListPermissionAmountLimitsQueryHandler(IApplicationDbContext db)
     : IRequestHandler<ListPermissionAmountLimitsQuery, Result<IReadOnlyList<PermissionAmountLimitDto>>>
@@ -24,6 +26,12 @@ public sealed class ListPermissionAmountLimitsQueryHandler(IApplicationDbContext
         var consulta = db.PermissionAmountLimits.AsNoTracking().Include(l => l.Role).AsQueryable();
         if (request.RolePublicId is { } rol) consulta = consulta.Where(l => l.Role!.PublicId == rol);
         if (!string.IsNullOrWhiteSpace(request.PermissionCode)) consulta = consulta.Where(l => l.PermissionCode == request.PermissionCode);
+        // Feature 013 (T0292; contracts/api.md §3.5.2): cada ruta lista sólo los montos de su módulo.
+        if (!string.IsNullOrWhiteSpace(request.Module))
+        {
+            var prefijo = request.Module.Trim() + ".";
+            consulta = consulta.Where(l => l.PermissionCode.StartsWith(prefijo));
+        }
 
         var filas = await consulta.ToListAsync(ct);
         if (request.AsOf is { } fecha) filas = filas.Where(l => l.VigenteEn(fecha)).ToList();

@@ -56,6 +56,13 @@ public static class CatalogoDeLimitesLegales
     public const string PermanenciaNegativoVecesMora = "PERMANENCIA_NEGATIVO_VECES_MORA";
     public const string PermanenciaNegativoMesesMaximos = "PERMANENCIA_NEGATIVO_MESES_MAXIMOS";
 
+    /// <summary>
+    /// El grado máximo de parentesco (consanguinidad o afinidad) con el que un pariente es persona vinculada (feature 013, US17, bloque D;
+    /// Ley 454 de 1998, art. 61; data-model §3.12, §12.5): un vínculo <c>Relative</c> con un grado mayor no se registra. No acota un
+    /// parámetro de la cooperativa. (nuevo)
+    /// </summary>
+    public const string VinculadosGradoParentesco = "VINCULADOS_GRADO_PARENTESCO";
+
     private static readonly IReadOnlyList<LimiteLegal> Lista =
     [
         new(AvisoPrevioDias, UnidadDeValorNacional.Dias, DireccionDeLoEstricto.Mayor, "AvisoPrevio.DiasMinimos", "AvisoPrevio.DiasMinimos", "Ley 1266 de 2008; Ley 2157 de 2021"),
@@ -81,6 +88,7 @@ public static class CatalogoDeLimitesLegales
         new(TitularLeyendaReclamoDias, UnidadDeValorNacional.Dias, DireccionDeLoEstricto.Menor, "Marca «reclamo en trámite»", null, "Ley 1266 de 2008"),
         new(PermanenciaNegativoVecesMora, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "ProyeccionCentralDeRiesgo; ReglaDeRevocacion", null, "Ley 2157 de 2021"),
         new(PermanenciaNegativoMesesMaximos, UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Menor, "ProyeccionCentralDeRiesgo; ReglaDeRevocacion", null, "Ley 2157 de 2021"),
+        new(VinculadosGradoParentesco, UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "Grado de parentesco de un vinculado pariente (LND_RelatedParties)", null, "Ley 454 de 1998, art. 61"),
     ];
 
     private static readonly Dictionary<string, LimiteLegal> PorCodigo = Lista.ToDictionary(l => l.Codigo, StringComparer.Ordinal);

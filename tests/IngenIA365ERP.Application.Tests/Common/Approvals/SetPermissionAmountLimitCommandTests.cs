@@ -11,7 +11,10 @@ namespace IngenIA365ERP.Application.Tests.Common.Approvals;
 
 /// <summary>
 /// T015 (feature 012; T34; contracts/api.md §1.3, §15.3, §15.4; data-model §21): el monto máximo de un permiso para un
-/// rol. Sólo los permisos limitables, el rol debe conceder el permiso, vigencias sin cruces y moneda COP.
+/// rol. Sólo los permisos limitables, el rol debe conceder el permiso, vigencias sin cruces y moneda COP. Feature 013
+/// (T0253, T63, T65; contracts/api.md §2.4, §3.5.2): <c>PermisosLimitables</c> admite códigos por módulo —los cuatro de
+/// Inventario y los cuatro operativos de Cartera—, la ruta de Cartera rechaza cualquier otro <c>Lending.*</c> con su lista y la
+/// consulta filtra por módulo.
 /// </summary>
 public class SetPermissionAmountLimitCommandTests
 {
@@ -60,19 +63,84 @@ public class SetPermissionAmountLimitCommandTests
         (await _db.PermissionAmountLimits.SingleAsync()).RoleId.Should().Be(_bodeguero.Id);
     }
 
+    private static readonly string[] LosDeInventario =
+        ["Inventory.Purchases.Confirm", "Inventory.Adjustments.Confirm", "Inventory.Sales.Confirm", "Inventory.Sales.SellOnCredit"];
+
+    // Feature 013 (T0220, T0253; data-model parte 3 §6; contracts/api.md §2.4, §3.5.2): las cuatro atribuciones operativas de Cartera.
+    private static readonly string[] LosDeCartera =
+        ["Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose"];
+
+    private static IEnumerable<string?> Limitables(Error error) =>
+        Datos(error).GetProperty("limitable").EnumerateArray().Select(e => e.GetString());
+
     [Theory]
     [InlineData("Inventory.Adjustments.View")]
     [InlineData("Inventory.Catalog.Manage")]
-    [InlineData("Payroll.Runs.Approve")]
-    public async Task Un_permiso_sin_valor_es_NotLimitable_con_la_lista(string permiso)
+    public async Task Un_permiso_de_Inventario_sin_valor_es_NotLimitable_con_la_lista_de_su_modulo(string permiso)
     {
         var r = await Enviar(Alta(_bodeguero.PublicId, permiso, 10m, Octubre));
 
         r.Error.Code.Should().Be("Approvals.AmountLimit.NotLimitable");
-        Datos(r.Error).GetProperty("limitable").EnumerateArray().Select(e => e.GetString()).Should().Equal(
-            "Inventory.Purchases.Confirm", "Inventory.Adjustments.Confirm", "Inventory.Sales.Confirm", "Inventory.Sales.SellOnCredit",
-            // Feature 013 (T0220; data-model parte 3 §6): las cuatro atribuciones operativas de Cartera.
-            "Lending.Disbursements.Execute", "Lending.CreditLimits.Assign", "Lending.ValidationFailures.Confirm", "Lending.Payments.BackdateBeforeClose");
+        Limitables(r.Error).Should().Equal(LosDeInventario);
+    }
+
+    [Fact]
+    public async Task Un_permiso_de_un_modulo_sin_limitables_es_NotLimitable_con_la_lista_completa()
+    {
+        var r = await Enviar(Alta(_bodeguero.PublicId, "Payroll.Runs.Approve", 10m, Octubre));
+
+        r.Error.Code.Should().Be("Approvals.AmountLimit.NotLimitable");
+        Limitables(r.Error).Should().Equal(LosDeInventario.Concat(LosDeCartera));
+    }
+
+    [Theory]
+    [InlineData("Lending.Loans.Read")]
+    [InlineData("Lending.Decisions.Analyst")]
+    [InlineData("Lending.Disbursements.Void")]
+    public async Task Cualquier_otro_permiso_de_Cartera_es_NotLimitable_con_los_cuatro_de_Cartera(string permiso)
+    {
+        var r = await Enviar(Alta(_bodeguero.PublicId, permiso, 10m, Octubre) with { Module = "Lending" });
+
+        r.Error.Code.Should().Be("Approvals.AmountLimit.NotLimitable");
+        Limitables(r.Error).Should().Equal(LosDeCartera);
+    }
+
+    [Fact]
+    public void PermisosLimitables_admite_por_modulo_los_cuatro_de_Inventario_y_los_cuatro_de_Cartera()
+    {
+        PermisosLimitables.DelModulo("Inventory").Should().Equal(LosDeInventario);
+        PermisosLimitables.DelModulo("Lending").Should().Equal(LosDeCartera);
+        PermisosLimitables.Todos.Should().Equal(LosDeInventario.Concat(LosDeCartera));
+        foreach (var p in LosDeCartera)
+        {
+            PermisosLimitables.Admite(p, "Lending").Should().BeTrue();
+            PermisosLimitables.Admite(p, "Inventory").Should().BeFalse("la ruta de Inventario no fija montos de Cartera");
+        }
+        foreach (var p in LosDeInventario) PermisosLimitables.Admite(p).Should().BeTrue("los cuatro de Inventario siguen igual");
+    }
+
+    [Fact]
+    public async Task Por_la_ruta_de_Cartera_registra_una_atribucion_operativa_de_Cartera()
+    {
+        var desembolsar = new Permission { Resource = "Lending.Disbursements", Action = "Execute" };
+        _db.Add(desembolsar);
+        _db.SaveChanges();
+        _db.RolePermissions.Add(new RolePermission { RoleId = _bodeguero.Id, PermissionId = desembolsar.Id });
+        _db.SaveChanges();
+
+        var r = await Enviar(Alta(_bodeguero.PublicId, "Lending.Disbursements.Execute", 30_000_000m, Octubre) with { Module = "Lending" });
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.PermissionCode.Should().Be("Lending.Disbursements.Execute");
+    }
+
+    [Fact]
+    public async Task Por_la_ruta_de_Cartera_un_permiso_de_Inventario_es_NotLimitable_con_los_de_Cartera()
+    {
+        var r = await Enviar(Alta(_bodeguero.PublicId, ConfirmarAjuste, 10m, Octubre) with { Module = "Lending" });
+
+        r.Error.Code.Should().Be("Approvals.AmountLimit.NotLimitable");
+        Limitables(r.Error).Should().Equal(LosDeCartera);
     }
 
     [Fact]
@@ -146,5 +214,26 @@ public class SetPermissionAmountLimitCommandTests
         todo.Value.Select(l => l.MaxAmount).Should().Equal(1_000m, 5_000m);
         octubre.Value.Should().ContainSingle().Which.MaxAmount.Should().Be(1_000m);
         otroRol.Value.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task La_consulta_filtra_por_modulo()
+    {
+        var desembolsar = new Permission { Resource = "Lending.Disbursements", Action = "Execute" };
+        _db.Add(desembolsar);
+        _db.SaveChanges();
+        _db.RolePermissions.Add(new RolePermission { RoleId = _bodeguero.Id, PermissionId = desembolsar.Id });
+        _db.SaveChanges();
+        await Enviar(Alta(_bodeguero.PublicId, ConfirmarAjuste, 1_000m, Octubre));
+        await Enviar(Alta(_bodeguero.PublicId, "Lending.Disbursements.Execute", 9_000m, Octubre) with { Module = "Lending" });
+        var consulta = new ListPermissionAmountLimitsQueryHandler(_db);
+
+        var cartera = await consulta.Handle(new ListPermissionAmountLimitsQuery(Module: "Lending"), CancellationToken.None);
+        var inventario = await consulta.Handle(new ListPermissionAmountLimitsQuery(Module: "Inventory"), CancellationToken.None);
+        var todo = await consulta.Handle(new ListPermissionAmountLimitsQuery(), CancellationToken.None);
+
+        cartera.Value.Should().ContainSingle().Which.PermissionCode.Should().Be("Lending.Disbursements.Execute");
+        inventario.Value.Should().ContainSingle().Which.PermissionCode.Should().Be(ConfirmarAjuste);
+        todo.Value.Should().HaveCount(2);
     }
 }

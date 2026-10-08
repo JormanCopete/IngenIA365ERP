@@ -74,9 +74,13 @@ public static class ErroresDeAprobaciones
         $"El permiso «{permiso}» no existe en el catálogo.",
         new { permissionCode = permiso });
 
-    public static Error NoLimitable(string permiso) => new ErrorConDatos(CodigoNoLimitable,
+    /// <summary>
+    /// El permiso no admite monto máximo. <c>data.limitable</c> es la lista del módulo de la ruta (<paramref name="modulo"/>) o, sin
+    /// ella, la del módulo del permiso; si ninguno de los dos tiene permisos limitables, la lista completa (feature 013, T0292).
+    /// </summary>
+    public static Error NoLimitable(string permiso, string? modulo = null) => new ErrorConDatos(CodigoNoLimitable,
         $"El permiso «{permiso}» no admite monto máximo: sólo los de acciones con valor.",
-        new { limitable = PermisosLimitables.Todos });
+        new { limitable = PermisosLimitables.ParaElError(permiso, modulo) });
 
     public static Error RolSinPermiso(string rol, string permiso) => new ErrorConDatos(CodigoRolSinPermiso,
         $"El rol «{rol}» no concede «{permiso}»: primero asignale el permiso.",
@@ -106,22 +110,60 @@ public static class ErroresDeAprobaciones
 }
 
 /// <summary>
-/// Los permisos que admiten monto máximo (FR-009; contracts/api.md §1.3): los de acciones con valor. (nuevo)
+/// Los permisos que admiten monto máximo (FR-009; contracts/api.md §1.3): los de acciones con valor, <b>por módulo</b> (feature 013,
+/// T0292, T63, T65; contracts/api.md §2.4): los cuatro de Inventario y las cuatro atribuciones operativas de Cartera. Las decisiones de
+/// crédito no están aquí: las enruta la matriz de atribuciones. Cada ruta de montos dice su módulo (<c>/api/inventory/amount-limits</c>,
+/// <c>/api/lending/amount-limits</c>) y sólo admite los suyos. (nuevo)
 /// </summary>
 public static class PermisosLimitables
 {
-    public static readonly IReadOnlyList<string> Todos =
-    [
-        "Inventory.Purchases.Confirm",
-        "Inventory.Adjustments.Confirm",
-        "Inventory.Sales.Confirm",
-        "Inventory.Sales.SellOnCredit",
+    public const string ModuloInventario = "Inventory";
+    public const string ModuloCartera = "Lending";
+
+    /// <summary>Los permisos limitables de cada módulo, en su orden.</summary>
+    public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> PorModulo = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+    {
+        [ModuloInventario] =
+        [
+            "Inventory.Purchases.Confirm",
+            "Inventory.Adjustments.Confirm",
+            "Inventory.Sales.Confirm",
+            "Inventory.Sales.SellOnCredit",
+        ],
         // Feature 013 (T0220; data-model parte 3 §6; contracts/api.md §2.4): las atribuciones operativas de Cartera.
-        "Lending.Disbursements.Execute",
-        "Lending.CreditLimits.Assign",
-        "Lending.ValidationFailures.Confirm",
-        "Lending.Payments.BackdateBeforeClose",
-    ];
+        [ModuloCartera] =
+        [
+            "Lending.Disbursements.Execute",
+            "Lending.CreditLimits.Assign",
+            "Lending.ValidationFailures.Confirm",
+            "Lending.Payments.BackdateBeforeClose",
+        ],
+    };
+
+    /// <summary>Todos, Inventario primero y Cartera después.</summary>
+    public static readonly IReadOnlyList<string> Todos = [.. PorModulo[ModuloInventario], .. PorModulo[ModuloCartera]];
+
+    /// <summary>Los limitables de <paramref name="modulo"/>; sin módulo, todos; un módulo sin limitables, ninguno.</summary>
+    public static IReadOnlyList<string> DelModulo(string? modulo) =>
+        string.IsNullOrWhiteSpace(modulo) ? Todos : PorModulo.TryGetValue(modulo.Trim(), out var lista) ? lista : [];
+
+    /// <summary>El módulo de un código (<c>Lending.Loans.Read</c> → <c>Lending</c>), o nulo si su módulo no tiene limitables.</summary>
+    public static string? ModuloDe(string permiso)
+    {
+        var punto = permiso.IndexOf('.', StringComparison.Ordinal);
+        var modulo = punto > 0 ? permiso[..punto] : permiso;
+        return PorModulo.ContainsKey(modulo) ? modulo : null;
+    }
 
     public static bool Admite(string permiso) => Todos.Contains(permiso, StringComparer.Ordinal);
+
+    /// <summary>Si <paramref name="permiso"/> admite monto por la ruta de <paramref name="modulo"/> (nulo = cualquier módulo).</summary>
+    public static bool Admite(string permiso, string? modulo) => DelModulo(modulo).Contains(permiso, StringComparer.Ordinal);
+
+    /// <summary>La lista que acompaña a <c>Approvals.AmountLimit.NotLimitable</c>: la del módulo de la ruta o la del permiso.</summary>
+    internal static IReadOnlyList<string> ParaElError(string permiso, string? modulo)
+    {
+        var lista = DelModulo(string.IsNullOrWhiteSpace(modulo) ? ModuloDe(permiso) : modulo);
+        return lista.Count > 0 ? lista : Todos;
+    }
 }

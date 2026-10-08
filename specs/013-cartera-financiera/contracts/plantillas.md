@@ -335,7 +335,8 @@ Escribe `LND_RelatedParties`. Llave: `persona` + `fundamento` + `personaRelacion
 | `persona` | persona | sí | La vinculada |
 | `fundamento` | `RelatedPartyBasis`: `BoardMember` 1, `OversightBoardMember` 2, `LegalRepresentative` 3, `SignificantContributor` 4, `Spouse` 5, `Relative` 6 | sí | |
 | `personaRelacionada` | persona | con `Spouse` y `Relative` | El miembro, representante o asociado del que se deriva el vínculo; debe estar en el archivo o ya registrado con otro fundamento |
-| `grado` | entero | con `Relative` | Dentro de los grados legales (límite nacional) |
+| `claseDeParentesco` **(nuevo, US17)** | `KinshipKind`: `Consanguinity` 1, `Affinity` 2, `Civil` 3 | con `Relative` | La clase del parentesco, que `LND_RelatedParties.KinshipKind` exige al pariente |
+| `grado` | entero | con `Relative` | Dentro de los grados legales (límite nacional `VINCULADOS_GRADO_PARENTESCO`; fuera, `Lending.RelatedParty.KinshipDegreeExceeded`) |
 | `porcentajeDeAportes` | porcentaje | con `SignificantContributor` | Igual o mayor que el porcentaje que fija la norma |
 | `vigenteDesde` · `vigenteHasta` | fecha | sí · no | |
 | `soporte` | texto 200 | sí | Acta de elección, certificado, registro civil |

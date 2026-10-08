@@ -70,7 +70,8 @@
     { "code": "LIMITE", "key": "TITULAR_RECLAMO_PRORROGA_DIAS", "validFrom": "2026-01-01", "value": 8, "unit": "Dias", "source": "Ley 1581 de 2012; Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "TITULAR_LEYENDA_RECLAMO_DIAS", "validFrom": "2026-01-01", "value": 2, "unit": "Dias", "source": "Ley 1266 de 2008, días hábiles (valor semilla, pendiente de validar)" },
     { "code": "LIMITE", "key": "PERMANENCIA_NEGATIVO_VECES_MORA", "validFrom": "2026-01-01", "value": 2, "unit": "Veces", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
-    { "code": "LIMITE", "key": "PERMANENCIA_NEGATIVO_MESES_MAXIMOS", "validFrom": "2026-01-01", "value": 48, "unit": "Meses", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" }
+    { "code": "LIMITE", "key": "PERMANENCIA_NEGATIVO_MESES_MAXIMOS", "validFrom": "2026-01-01", "value": 48, "unit": "Meses", "source": "Ley 2157 de 2021 (valor semilla, pendiente de validar)" },
+    { "code": "LIMITE", "key": "VINCULADOS_GRADO_PARENTESCO", "validFrom": "2026-01-01", "value": 2, "unit": "Veces", "source": "Ley 454 de 1998, art. 61: segundo grado de consanguinidad o afinidad (valor semilla, pendiente de validar)" }
   ],
   "holidays": {
     "years": [ 2026, 2027, 2028 ],

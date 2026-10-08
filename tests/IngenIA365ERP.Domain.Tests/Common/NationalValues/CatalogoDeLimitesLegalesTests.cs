@@ -36,12 +36,14 @@ public class CatalogoDeLimitesLegalesTests
         { "TITULAR_LEYENDA_RECLAMO_DIAS", UnidadDeValorNacional.Dias, DireccionDeLoEstricto.Menor, "" },
         { "PERMANENCIA_NEGATIVO_VECES_MORA", UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "" },
         { "PERMANENCIA_NEGATIVO_MESES_MAXIMOS", UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Menor, "" },
+        // Feature 013, US17 bloque D (data-model §3.12, §12.5): el grado de parentesco de un vinculado.
+        { "VINCULADOS_GRADO_PARENTESCO", UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "" },
     };
 
     [Fact]
-    public void Son_los_veintitres_codigos_fijados_sin_repetir()
+    public void Son_los_veinticuatro_codigos_fijados_sin_repetir()
     {
-        CatalogoDeLimitesLegales.Todos.Should().HaveCount(23);
+        CatalogoDeLimitesLegales.Todos.Should().HaveCount(24);
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().OnlyHaveUniqueItems();
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().BeEquivalentTo(Fijados.Select(f => (string)f[0]));
     }

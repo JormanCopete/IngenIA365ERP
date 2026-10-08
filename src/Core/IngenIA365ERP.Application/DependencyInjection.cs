@@ -218,6 +218,19 @@ public static class DependencyInjection
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();
+        // Feature 013 (T0293–T0303, US17 bloque D): el gobierno de Cartera —la matriz vigente, los vinculados vigentes y su alta única, lo
+        // que la ley fija sobre los vinculados, los asuntos de acta por sujeto (cada historia registra el suyo; dos con el mismo sujeto no
+        // arman el registro), la validación única del punto de acta cerrado, el voto presencial y el PDF del acta (la API registra el de
+        // QuestPDF, T0297; sin él el acta se cierra sin adjunto)—.
+        services.AddScoped<Lending.Attributions.MatrizVigenteDeAtribuciones>();
+        services.AddScoped<Lending.Attributions.VinculadosVigentes>();
+        services.AddScoped<Lending.Attributions.AltaDeVinculados>();
+        services.AddScoped<Lending.Sessions.ReglasDeVinculados>();
+        services.AddScoped<Lending.Sessions.AsuntosDeActa>();
+        services.AddScoped<Lending.Sessions.PuntoDeActaCerrado>();
+        services.AddScoped<Lending.Sessions.PresenciaEnSesion>();
+        services.TryAddScoped<Lending.Sessions.IActaDeSesionEnPdf, Lending.Sessions.SinActaEnPdf>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Activation.AsuntoDeDiferenciasDeActivacion>();
         // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
         services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
