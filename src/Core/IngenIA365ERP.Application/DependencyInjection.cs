@@ -209,6 +209,15 @@ public static class DependencyInjection
         // Feature 013 (T0207, T0208): el numerador y el registro del libro de Cartera, únicos escritores de lo suyo.
         services.AddScoped<Lending.Common.NumeradorDeCartera>();
         services.AddScoped<Lending.Ledger.RegistroDeCartera>();
+        // Feature 013 (T0284–T0289, US17): el alcance por oficina y línea (la API registra el de la petición; aquí, el que falla
+        // cerrado), el salto común de oficinas que también usa UserBranchScope, el único escritor de LND_CaseParticipations, las
+        // lecturas sensibles de Cartera y el último rechazo de forma de la petición (para Lending.Request.Rejected).
+        services.AddScoped<Common.Security.OficinasDelUsuario>();
+        services.AddScoped<Lending.Common.AlcanceDeCarteraDelActor>();
+        services.TryAddScoped<Common.Interfaces.Security.IAlcanceDeCartera, Common.Interfaces.Security.AlcanceDeCarteraCerrado>();
+        services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
+        services.AddScoped<Lending.Common.LendingAuditEmitter>();
+        services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();
         // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
         services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las

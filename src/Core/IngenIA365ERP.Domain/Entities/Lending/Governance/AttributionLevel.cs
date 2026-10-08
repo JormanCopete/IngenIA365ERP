@@ -1,11 +1,13 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Governance;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Governance;
 
 /// <summary>
 /// <c>LND_AttributionLevels</c> (feature 013, T0213; data-model §3.2; FR-037, FR-038, FR-040): un nivel de la matriz, individual
-/// (usuario con <see cref="PermissionCode"/>) o colegiado (<see cref="GoverningBodyId"/>). Hecho, hijo de la matriz (C42).
+/// (usuario con <see cref="PermissionCode"/>) o colegiado (<see cref="GoverningBodyId"/>). Hecho, hijo de la matriz (C42); nace sólo
+/// con la matriz publicada (<see cref="MatrizPublicada.Niveles"/>, T0280).
 /// </summary>
 public class AttributionLevel : AuditableEntity, IHechoInmutable
 {
@@ -34,4 +36,22 @@ public class AttributionLevel : AuditableEntity, IHechoInmutable
 
     /// <summary>El consejo, forzado con vinculados (FR-040); exactamente uno, de un órgano <c>BoardOfDirectors</c>.</summary>
     public bool IsBoardLevel { get; init; }
+
+    /// <summary>El nivel de una matriz ya validada por <see cref="AttributionMatrix.Validar"/>.</summary>
+    internal static AttributionLevel Nuevo(int matrixId, BorradorDeNivel n) => new()
+    {
+        MatrixId = matrixId,
+        Code = n.Code.Trim().ToUpperInvariant(),
+        Name = n.Name.Trim(),
+        Rank = n.Rank,
+        Kind = n.Kind,
+        PermissionCode = n.PermissionCode,
+        GoverningBodyId = n.GoverningBodyId,
+        MaxConsolidatedAmount = n.MaxConsolidatedAmount,
+        IsExceptionLevel = n.IsExceptionLevel,
+        IsBoardLevel = n.IsBoardLevel,
+    };
+
+    /// <summary>El techo cubre el monto consolidado (sin techo, cubre cualquiera).</summary>
+    public bool Cubre(decimal montoConsolidado) => MaxConsolidatedAmount is not { } techo || montoConsolidado <= techo;
 }

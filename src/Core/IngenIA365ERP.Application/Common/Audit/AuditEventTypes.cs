@@ -216,6 +216,25 @@ public static class AuditEventTypes
     // procede y queda la constancia «sin politica vigente» (la alerta Personas.SinPoliticaDeDatos es de I3, T616).
     public const string PersonDataAuthorizationNoCurrentPolicy = "Person.DataAuthorization.NoCurrentPolicy";
 
+    // -------------------- Cartera (feature 013, T67, C89; research §13 y R136) --------------------
+    // Lecturas sensibles: la lista fija que emite LendingAuditEmitter (LasLecturasSensiblesDeCarteraSeAuditan). La consulta de
+    // cupo de Comercial usa el EventId de Lending.CreditStatus.Queried como EvidenceId.
+    public const string LendingPayoffViewed = "Lending.Payoff.Viewed";
+    public const string LendingCreditBureauReportViewed = "Lending.CreditBureauReport.Viewed";
+    public const string LendingDocumentReprinted = "Lending.Document.Reprinted";
+    public const string LendingDocumentVerified = "Lending.Document.Verified";
+    public const string LendingReportExported = "Lending.Report.Exported";
+    public const string LendingSessionViewed = "Lending.Session.Viewed";
+    public const string LendingRelatedPartyViewed = "Lending.RelatedParty.Viewed";
+    public const string LendingCreditStatusQueried = "Lending.CreditStatus.Queried";
+    public const string LendingAccessOutOfScope = "Lending.Access.OutOfScope";
+    public const string LendingScreeningMatchReleased = "Lending.ScreeningMatch.Released";
+
+    // Intentos del grupo /api/lending (T67, F9): el 404 por falta de permiso y el 400 del validador, que corre antes que
+    // AuditBehavior. Los registra el metadato AuditarIntentoDenegado de la API por AuditoriaDeIntentos.
+    public const string LendingAccessDenied = "Lending.Access.Denied";
+    public const string LendingRequestRejected = "Lending.Request.Rejected";
+
     // -------------------- Database (feature 004 multi-motor) --------------------
     public const string DatabaseSeedExecuted = "Database.Seed.Executed";
     public const string DatabaseSeedTestSeedEnabledInProduction = "Database.Seed.TestSeedEnabledInProduction";

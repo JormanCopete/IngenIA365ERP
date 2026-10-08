@@ -38,11 +38,12 @@ public class ProcesadorDeCarteraTests
     private sealed class EjecutorDePrueba(LendingProcessKind clase, Func<LendingProcessRun, AvanceDeCorrida> tanda) : IEjecutorDeCorridaDeCartera
     {
         public LendingProcessKind Clase => clase;
-        public List<Guid> Conducidas { get; } = [];
+        // Concurrente: las cooperativas corren en paralelo (MaxParallelCooperatives) y un List perdía una de las dos.
+        public ConcurrentQueue<Guid> Conducidas { get; } = new();
 
         public Task<AvanceDeCorrida> EjecutarTandaAsync(LendingProcessRun corrida, TimeSpan presupuesto, CancellationToken ct)
         {
-            Conducidas.Add(corrida.PublicId);
+            Conducidas.Enqueue(corrida.PublicId);
             return Task.FromResult(tanda(corrida));
         }
     }

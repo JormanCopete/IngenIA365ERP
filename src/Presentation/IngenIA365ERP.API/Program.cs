@@ -207,6 +207,9 @@ try
         IngenIA365ERP.Application.Common.Interfaces.Security.IAsignacionesDePuntoDeVenta,
         IngenIA365ERP.Application.Common.Interfaces.Security.SinAsignacionesDePuntoDeVenta>(builder.Services);
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeInventario, IngenIA365ERP.API.Services.AlcanceDeInventarioDeLaPeticion>();
+    // Feature 013 (T62, R131, T0285): el alcance de Cartera por oficina y línea de la petición, que falla cerrado y es total en
+    // segundo plano. Antes de AddApplicationServices, cuyo TryAdd deja el cerrado sólo para los anfitriones sin petición.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeCartera, IngenIA365ERP.API.Services.AlcanceDeCarteraDeLaPeticion>();
     // Feature 012 (T39, T092): a quien le llega una alerta (permiso y alcance; sin nadie, CompanyAdmin). Adelanto de T096.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Alerts.IDestinatariosPorPermiso, IngenIA365ERP.API.Services.DestinatariosPorPermiso>();
 

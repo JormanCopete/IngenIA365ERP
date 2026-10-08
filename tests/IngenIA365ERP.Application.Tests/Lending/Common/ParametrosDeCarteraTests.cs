@@ -48,7 +48,7 @@ public class ParametrosDeCarteraTests
         { "Giros.DiasSinResultado", "3", [N], EntregaDeCartera.K1 },
         { "Cupo.MoraMaximaParaVender", "0", [N], EntregaDeCartera.K1 },
         { "Bloqueos.DiasDeMoraParaBloquear", "30", [N], EntregaDeCartera.K1 },
-        { "Segregacion.Incompatibilidades", "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}]", [N], EntregaDeCartera.K1 },
+        { "Segregacion.Incompatibilidades", "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", [N], EntregaDeCartera.K1 },
         { "Libranza.CapacidadDeDescuento", "", [N], EntregaDeCartera.K2 },
         { "Libranza.VentanaDeGiroDias", "3", [N], EntregaDeCartera.K2 },
         { "Libranza.UmbralDeMoraDePagaduria", "", [N], EntregaDeCartera.K2 },

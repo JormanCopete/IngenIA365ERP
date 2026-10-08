@@ -4,9 +4,12 @@ using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
+using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Enums.Integration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace IngenIA365ERP.Application.Common.Audit;
 
@@ -146,8 +149,12 @@ public static class AuditoriaEncadenada
     /// <param name="servicios">Los del ámbito; nulo en las pruebas que sólo tienen <paramref name="usuario"/>.</param>
     /// <param name="usuario">El usuario del token, para <c>userId</c>/<c>userName</c> (como <c>MongoAuditService</c>).</param>
     /// <param name="operacion">El comando, si lo hay.</param>
+    /// <param name="modulo">
+    /// El módulo del evento. Feature 013 (T67, F10): en <c>Lending</c>, sin <see cref="IConOficina"/>, la oficina es la por defecto de
+    /// quien opera (<see cref="IAlcanceDeCartera"/>); la oficina y el dispositivo van a los metadatos <c>Office</c> y <c>Device</c>.
+    /// </param>
     public static async Task<ContextoDeAuditoria> ContextoAsync(
-        IServiceProvider? servicios, ICurrentUserService? usuario, object? operacion, CancellationToken ct)
+        IServiceProvider? servicios, ICurrentUserService? usuario, object? operacion, CancellationToken ct, string? modulo = null)
     {
         var cooperativa = servicios?.GetService<ICurrentTenantService>()?.TenantId;
         var origen = servicios?.GetService<IOrigenDeLaPeticion>();
@@ -187,6 +194,8 @@ public static class AuditoriaEncadenada
             metadata["OperationKey"] = clave.ToString();
         if (operacion is IConMotivo { Reason: var motivo } && !string.IsNullOrWhiteSpace(motivo))
             metadata["Reason"] = motivo;
+        if (Dispositivo(origen) is { } dispositivo) metadata["Device"] = dispositivo;
+        if (await OficinaAsync(servicios, operacion, modulo, cooperativa, ct) is { } oficina) metadata["Office"] = oficina.ToString();
 
         return new ContextoDeAuditoria(
             cooperativa,
@@ -198,6 +207,49 @@ public static class AuditoriaEncadenada
             endpoint,
             metodo,
             metadata);
+    }
+
+    /// <summary>
+    /// Feature 013 (F10): el dispositivo es el User-Agent más la cabecera <c>X-Dispositivo</c> de MAUI (<c>{dispositivo} | {User-Agent}</c>);
+    /// sin cabecera, el User-Agent; en segundo plano, nada.
+    /// </summary>
+    public static string? Dispositivo(IOrigenDeLaPeticion? origen)
+    {
+        var declarado = string.IsNullOrWhiteSpace(origen?.Dispositivo) ? null : origen!.Dispositivo!.Trim();
+        var agente = string.IsNullOrWhiteSpace(origen?.UserAgent) ? null : origen!.UserAgent!.Trim();
+        return (declarado, agente) switch
+        {
+            (null, null) => null,
+            (null, _) => agente,
+            (_, null) => declarado,
+            _ => $"{declarado} | {agente}",
+        };
+    }
+
+    /// <summary>
+    /// Feature 013 (T67, F10): la oficina del evento por su <c>PublicId</c>. La de <see cref="IConOficina"/> si el comando la trae; si no,
+    /// en <c>Lending</c> y con cooperativa, la oficina por defecto de quien opera (<see cref="IAlcanceDeCartera.ObtenerAsync"/>) traducida a
+    /// su <c>COR_Branches.PublicId</c>. Nunca lanza: lo que no se resuelve queda fuera.
+    /// </summary>
+    private static async Task<Guid?> OficinaAsync(IServiceProvider? servicios, object? operacion, string? modulo, string? cooperativa, CancellationToken ct)
+    {
+        if (operacion is IConOficina { BranchPublicId: { } propia }) return propia;
+        if (servicios is null || cooperativa is null || modulo != ModuloDeAuditoria.Lending) return null;
+
+        try
+        {
+            var alcance = servicios.GetService<IAlcanceDeCartera>();
+            var db = servicios.GetService<IApplicationDbContext>();
+            if (alcance is null || db is null) return null;
+            if ((await alcance.ObtenerAsync(ct)).OficinaPorDefecto is not { } porDefecto) return null;
+            return await db.Branches.AsNoTracking().Where(b => b.Id == porDefecto).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            servicios.GetService<ILoggerFactory>()?.CreateLogger(typeof(AuditoriaEncadenada))
+                .LogDebug(ex, "[Auditoria.SinOficina] No se resolvió la oficina por defecto para el evento; queda sin el metadato Office.");
+            return null;
+        }
     }
 
     /// <summary>El evento completo, listo para <see cref="Entrada"/>.</summary>
@@ -260,22 +312,40 @@ public static class AuditoriaEncadenada
     /// (<c>Navigation</c>), exportar e imprimir (T37). Si el módulo es encadenado y hay cooperativa, inserta
     /// y guarda su propia fila de <c>COR_AuditOutbox</c>; si no, va por <see cref="IAuditService"/> como
     /// antes. Guarda sólo esa fila: se llama donde el contexto no tiene otros cambios pendientes.
+    ///
+    /// <para>
+    /// Feature 013 (T67): devuelve el <c>EventId</c> de la fila de la bandeja (la consulta de cupo de Comercial lo usa como
+    /// <c>EvidenceId</c>), o nulo si el evento fue por Mongo. Con <paramref name="aparte"/> y una transacción en curso, la fila va por un
+    /// contexto propio (<see cref="ITenantDbContextFactory.AbrirLaDelAmbito"/>) que sobrevive al rollback del comando: lo usa el evento
+    /// de «fuera de alcance», que se registra aunque el comando termine en 404.
+    /// </para>
     /// </summary>
-    public static async Task RegistrarAsync(IServiceProvider servicios, AuditLogCommand evento, CancellationToken ct)
+    public static async Task<Guid?> RegistrarAsync(IServiceProvider servicios, AuditLogCommand evento, CancellationToken ct, bool aparte = false)
     {
         ArgumentNullException.ThrowIfNull(servicios);
-        var contexto = await ContextoAsync(servicios, servicios.GetService<ICurrentUserService>(), null, ct);
+        var contexto = await ContextoAsync(servicios, servicios.GetService<ICurrentUserService>(), null, ct, evento.Module);
         var flujo = EsEncadenado(evento.Module) ? Flujo(contexto.TenantId) : null;
         var db = flujo is null ? null : servicios.GetService<IApplicationDbContext>();
 
         if (db is null)
         {
             await servicios.GetRequiredService<IAuditService>().LogAsync(ParaMongo(contexto, evento), ct);
-            return;
+            return null;
         }
 
-        db.AuditOutbox.Add(Entrada(flujo!, Evento(contexto, evento)));
+        var entrada = Entrada(flujo!, Evento(contexto, evento));
+        var fabrica = aparte && TransaccionExplicita.HayEnCurso(db) ? servicios.GetService<ITenantDbContextFactory>() : null;
+        if (fabrica is not null)
+        {
+            await using var propio = fabrica.AbrirLaDelAmbito();
+            propio.Db.AuditOutbox.Add(entrada);
+            await propio.Db.SaveChangesAsync(CancellationToken.None);
+            return entrada.EventId;
+        }
+
+        db.AuditOutbox.Add(entrada);
         await db.SaveChangesAsync(ct);
+        return entrada.EventId;
     }
 
     private static string Recortar(string texto, int largo) => texto.Length > largo ? texto[..largo] : texto;

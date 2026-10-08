@@ -2,6 +2,8 @@ using System.Globalization;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common.NationalValues;
+using IngenIA365ERP.Domain.Common.Parametros;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Entities.Core.NationalValues;
 using IngenIA365ERP.Application.Common.Parameters;
 
@@ -48,8 +50,7 @@ public sealed class EfectoDeReplicacionLimitesLegales : IEfectoDeReplicacion
             var vigentes = parametros.Where(p => p.Key == limite!.ClaveDeParametro && p.VigenteEn(fecha)).ToList();
             foreach (var parametro in vigentes)
             {
-                if (!decimal.TryParse(parametro.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var valor)) continue;
-                if (!CatalogoDeLimitesLegales.EsMenosEstricto(limite!.Codigo, valor, copia.Value!.Value)) continue;
+                if (!EsMenosEstricto(parametro.Key, parametro.Value, limite!.Codigo, copia.Value!.Value)) continue;
 
                 var nota = $"{limite.Codigo} = {copia.Value.Value.ToString(CultureInfo.InvariantCulture)} desde {copia.ValidFrom:yyyy-MM-dd} "
                     + $"es más estricto que {parametro.Key} = {parametro.Value} de la cooperativa.";
@@ -67,5 +68,18 @@ public sealed class EfectoDeReplicacionLimitesLegales : IEfectoDeReplicacion
         }
 
         return new EfectoAplicado(new Dictionary<string, int> { ["masEstrictos"] = alertas.Count }, notas, alertas);
+    }
+
+    /// <summary>
+    /// Feature 013 (T0291): la vigencia se compara con el límite en la unidad del límite y según el tipo de la clave
+    /// (<see cref="LimitesDeParametro"/>: un horario por la punta que el límite acota, un sí/no como 1 o 0, un número tal cual); una
+    /// vigencia vacía no tiene valor propio (rige el límite) y no alerta. Si la clave no está en el catálogo, como número.
+    /// </summary>
+    private static bool EsMenosEstricto(string clave, string? valor, string codigoDeLimite, decimal limite)
+    {
+        var definicion = CatalogoDeParametros.Buscar(ModuloDeParametros, clave);
+        if (definicion is not null) return LimitesDeParametro.EsMenosEstricto(definicion, valor, codigoDeLimite, limite);
+        return decimal.TryParse(valor, NumberStyles.Number, CultureInfo.InvariantCulture, out var numero)
+            && CatalogoDeLimitesLegales.EsMenosEstricto(codigoDeLimite, numero, limite);
     }
 }
