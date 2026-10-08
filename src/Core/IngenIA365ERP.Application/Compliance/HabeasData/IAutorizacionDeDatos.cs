@@ -58,6 +58,12 @@ public sealed record AutorizacionVigente(
 
     /// <summary>Feature 013: de dónde salió.</summary>
     public DataAuthorizationOrigin Origin { get; init; } = DataAuthorizationOrigin.PersonRegistration;
+
+    /// <summary>
+    /// Feature 013 (T0306): el <c>PublicId</c> de la decisión (<c>CMP_HabeasDataConsents</c>), que el mensaje al deudor sella como la
+    /// autorización de canal usada (<c>AuthorizationConsentPublicId</c>). Nulo si quien la construye no lo sabe.
+    /// </summary>
+    public Guid? ConsentPublicId { get; init; }
 }
 
 /// <summary>

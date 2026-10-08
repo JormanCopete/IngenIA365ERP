@@ -526,6 +526,10 @@ public static class DependencyInjection
         services.AddScoped<Common.Messaging.ICanalesDeMensajeria, Common.Messaging.CanalesDeMensajeria>();
         services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Common.Messaging.ICanalesDeMensajeria>());
 
+        // Feature 013 (T0306, C108): la cola de mensajes al deudor, único escritor de LND_DebtorMessages y LND_DebtorMessageEvents. Nunca
+        // guarda: encola en la unidad de trabajo de quien lo motiva. Sus tareas (cartera.mensajes, cartera.entregas) las registra Program.cs.
+        services.AddScoped<Lending.Collections.ColaDeMensajesAlDeudor>();
+
         // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
         services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();
         // Feature 013 (T0088): el deber de conservar del titular; hasta la fase 3 responde «sin obligaciones registradas».

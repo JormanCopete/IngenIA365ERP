@@ -141,7 +141,7 @@ public sealed class AutorizacionDeDatos(
             .OrderByDescending(c => c.ActionAt).ThenByDescending(c => c.Id)
             .Select(c => new
             {
-                c.Action, c.ActionAt, c.Channel, c.Purpose, c.ContactChannel, c.Origin, c.EvidenceAttachmentPublicId,
+                c.PublicId, c.Action, c.ActionAt, c.Channel, c.Purpose, c.ContactChannel, c.Origin, c.EvidenceAttachmentPublicId,
                 Version = c.PolicyVersion!.PublicId, Numero = c.PolicyVersion.VersionNumber,
             })
             .FirstOrDefaultAsync(ct);
@@ -152,6 +152,7 @@ public sealed class AutorizacionDeDatos(
                 Purpose = ultima.Purpose,
                 ContactChannel = ultima.ContactChannel,
                 Origin = ultima.Origin,
+                ConsentPublicId = ultima.PublicId,
                 HasEvidence = ultima.EvidenceAttachmentPublicId is not null || ultima.Origin != DataAuthorizationOrigin.Migration,
             };
     }

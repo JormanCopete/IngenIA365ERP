@@ -27,7 +27,7 @@ public class DebtorMessageEventConfiguration : IEntityTypeConfiguration<DebtorMe
         builder.Property(e => e.ExternalOutcome).HasConversion<int?>();
         builder.Property(e => e.ActorKind).HasConversion<int>().IsRequired();
 
-        builder.HasOne<DebtorMessage>().WithMany().HasForeignKey(e => e.DebtorMessageId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.DebtorMessage).WithMany().HasForeignKey(e => e.DebtorMessageId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.ActorUserId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.DebtorMessageId, e.Sequence }).IsUnique()

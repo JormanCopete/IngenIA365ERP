@@ -51296,11 +51296,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage", null)
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage", "DebtorMessage")
                         .WithMany()
                         .HasForeignKey("DebtorMessageId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("DebtorMessage");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Collections.PriorNotice", b =>

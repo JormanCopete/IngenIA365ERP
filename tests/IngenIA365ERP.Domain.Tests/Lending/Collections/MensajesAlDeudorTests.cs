@@ -131,4 +131,20 @@ public class MensajesAlDeudorTests
         codigo.Should().StartWith("1,2,3");
         new DebtorMessageEvent { ReasonCode = codigo }.Motivos().Should().Equal(todos);
     }
+
+    [Fact]
+    public void El_primer_evento_de_un_mensaje_sin_guardar_se_enlaza_por_la_navegacion()
+    {
+        // T0306: la cola nunca guarda; el evento nace con su mensaje todavía sin Id y el guardado de quien lo motivó pone la FK.
+        var m = DebtorMessage.Nacer(Mensaje());
+        var encolado = DebtorMessageEvent.Registrar(m, null, new EventoDeMensaje(DebtorMessageEventKind.Queued, Ahora, ActorKind.Process) { DueAt = Ahora }, true);
+        var cancelado = DebtorMessageEvent.Registrar(m, encolado, new EventoDeMensaje(DebtorMessageEventKind.Cancelled, Ahora, ActorKind.Person, 7), true);
+
+        encolado.DebtorMessage.Should().BeSameAs(m);
+        encolado.DebtorMessageId.Should().Be(0);
+        cancelado.Sequence.Should().Be(2);
+        var deOtro = () => DebtorMessageEvent.Registrar(DebtorMessage.Nacer(Mensaje()), encolado,
+            new EventoDeMensaje(DebtorMessageEventKind.Cancelled, Ahora, ActorKind.Person, 7), true);
+        deOtro.Should().Throw<ArgumentException>("el evento anterior es de otro mensaje");
+    }
 }

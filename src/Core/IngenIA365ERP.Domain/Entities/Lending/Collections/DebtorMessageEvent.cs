@@ -27,6 +27,12 @@ public class DebtorMessageEvent : AuditableEntityLong, IHechoInmutable
 
     public int DebtorMessageId { get; init; }
 
+    /// <summary>
+    /// Navegación para que la cola enlace en el mismo guardado el primer evento con su mensaje todavía sin Id (T0306: la cola nunca
+    /// guarda por su cuenta). Misma FK; no agrega columnas.
+    /// </summary>
+    public DebtorMessage? DebtorMessage { get; init; }
+
     public int Sequence { get; init; }
 
     public DebtorMessageEventKind Kind { get; init; }
@@ -84,10 +90,29 @@ public class DebtorMessageEvent : AuditableEntityLong, IHechoInmutable
     /// </summary>
     public static DebtorMessageEvent Registrar(int debtorMessageId, DebtorMessageEvent? anterior, EventoDeMensaje e, bool enProduccion)
     {
-        ArgumentNullException.ThrowIfNull(e);
         ArgumentOutOfRangeException.ThrowIfLessThan(debtorMessageId, 1);
         if (anterior is not null && anterior.DebtorMessageId != debtorMessageId)
             throw new ArgumentException("El evento anterior es de otro mensaje.", nameof(anterior));
+        return Construir(debtorMessageId, null, anterior, e, enProduccion);
+    }
+
+    /// <summary>
+    /// Lo mismo sobre el mensaje (T0306): si todavía no tiene Id —nació en esta unidad de trabajo—, el evento lo enlaza por la navegación y
+    /// el guardado de quien lo motivó pone la FK; si ya lo tiene, por su Id.
+    /// </summary>
+    public static DebtorMessageEvent Registrar(DebtorMessage mensaje, DebtorMessageEvent? anterior, EventoDeMensaje e, bool enProduccion)
+    {
+        ArgumentNullException.ThrowIfNull(mensaje);
+        if (mensaje.Id > 0) return Registrar(mensaje.Id, anterior, e, enProduccion);
+        if (anterior is not null && !ReferenceEquals(anterior.DebtorMessage, mensaje))
+            throw new ArgumentException("El evento anterior es de otro mensaje.", nameof(anterior));
+        return Construir(0, mensaje, anterior, e, enProduccion);
+    }
+
+    private static DebtorMessageEvent Construir(int debtorMessageId, DebtorMessage? mensaje, DebtorMessageEvent? anterior, EventoDeMensaje e,
+        bool enProduccion)
+    {
+        ArgumentNullException.ThrowIfNull(e);
         if (!PuedeSeguir(anterior?.Kind, e.Kind, enProduccion))
             throw new InvalidOperationException($"Un mensaje al deudor no pasa de {anterior?.Kind.ToString() ?? "(nuevo)"} a {e.Kind}.");
         ValidarForma(e);
@@ -95,6 +120,7 @@ public class DebtorMessageEvent : AuditableEntityLong, IHechoInmutable
         return new DebtorMessageEvent
         {
             DebtorMessageId = debtorMessageId,
+            DebtorMessage = mensaje,
             Sequence = (anterior?.Sequence ?? 0) + 1,
             Kind = e.Kind,
             OccurredAt = e.OccurredAt,

@@ -252,6 +252,12 @@ try
     // Feature 013 (T0088, T69 b): la revisión diaria de los plazos de las solicitudes del titular (cumplimiento.plazos-del-titular).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular>();
+    // Feature 013 (T0307, T75; DT §2.13): la cola de mensajes al deudor. cartera.mensajes reevalua y despacha cada minuto;
+    // cartera.entregas consulta la entrega al proveedor cada cuarto de hora. Las dos salen si Cartera no esta activada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Collections.Tareas.TareaDeMensajesAlDeudor>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Collections.Tareas.TareaDeEntregasAlDeudor>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());
