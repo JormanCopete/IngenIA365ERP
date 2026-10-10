@@ -51,7 +51,9 @@ public sealed record ParameterDto(
     string AvailableFrom,
     ParameterCurrentValueDto Current,
     IReadOnlyList<ParameterOverrideDto> Overrides,
-    IReadOnlyList<ParameterScheduledDto> Scheduled);
+    IReadOnlyList<ParameterScheduledDto> Scheduled,
+    IReadOnlyList<string>? LegalLimits = null,
+    string? PendingValidation = null);
 
 public sealed class ListParametersQueryHandler(
     ILectorDeParametros lector,
@@ -114,7 +116,10 @@ public sealed class ListParametersQueryHandler(
                 d.Modulo, d.Clave, d.Descripcion, d.Tipo.ToString(),
                 d.Tipo == TipoDeParametro.Choice ? d.Admitidos() : null,
                 d.DefectoSeguro, d.AmbitosAdmitidos, d.SelladoAlConfirmar, d.PermisoAdicional, d.ExigeFuenteLegal,
-                d.DisponibleDesde.ToString(), actual, excepciones, programadas));
+                d.DisponibleDesde.ToString(), actual, excepciones, programadas,
+                // Feature 013 (T0319): la pantalla de Cartera muestra los límites legales que acotan la clave y si su defecto sigue
+                // «pendiente de validar»; las demás claves los traen vacíos.
+                d.LimitesLegales.Count == 0 ? null : d.LimitesLegales, d.PendienteDeValidar));
         }
 
         return Result.Success<IReadOnlyList<ParameterDto>>(lista);

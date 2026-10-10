@@ -1,0 +1,286 @@
+using System.Globalization;
+
+namespace IngenIA365ERP.Shared.Services.Cartera;
+
+/// <summary>
+/// Los textos en español de lo que la API de Cartera devuelve como número o código (feature 013, fase 4, T0315; US17): los enums de gobierno,
+/// de sesiones, de vinculados y de mensajes al deudor, con la numeración de <c>Domain/Enums/Lending</c>. Las listas
+/// (<see cref="ClasesDeOrgano"/>, <see cref="Canales"/>…) alimentan los desplegables con su valor numérico, que la API acepta igual que el
+/// nombre. (nuevo)
+/// </summary>
+public static class TextosDeCartera
+{
+    private static string Numero(int n) => n.ToString(CultureInfo.InvariantCulture);
+
+    private static string De(IReadOnlyList<(int Valor, string Texto)> lista, int valor) =>
+        lista.FirstOrDefault(p => p.Valor == valor).Texto ?? Numero(valor);
+
+    // ---------------------------------------------------------------------------------------------- gobierno --
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeNivel { get; } = [(1, "Individual"), (2, "Colegiado")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeOrgano { get; } =
+        [(1, "Consejo de administración"), (2, "Junta de vigilancia"), (3, "Comité de crédito"), (4, "Comité de riesgos"), (5, "Gerencia"), (99, "Otro")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> PapelesDeMiembro { get; } = [(1, "Presidente"), (2, "Secretario"), (3, "Miembro"), (4, "Suplente")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Comparaciones { get; } = [(1, "al menos"), (2, "más de")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> BasesDeMayoria { get; } = [(1, "presentes con voto"), (2, "composición del órgano")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Garantias { get; } =
+        [(1, "Pagaré"), (2, "Codeudor"), (3, "Prenda"), (4, "Hipoteca"), (5, "Fondo de garantías"), (6, "Aportes")];
+
+    /// <summary>Los sujetos de una decisión de Cartera (<c>LendingDecisionSubjects</c>): viajan como texto.</summary>
+    public static IReadOnlyList<(string Codigo, string Texto)> Sujetos { get; } =
+    [
+        ("CreditApplication", "Solicitud de crédito"), ("CreditLimit", "Cupo"), ("Novelty", "Novedad"), ("Condonation", "Condonación"),
+        ("WriteOffBatch", "Lote de castigo"), ("PortfolioEvaluation", "Evaluación de cartera"), ("ImpairmentModelChange", "Cambio del modelo de deterioro"),
+        ("ActivationDifferences", "Diferencias de la activación"), ("ValidationFailureException", "Excepción a una validación"),
+        ("RiskPolicyVersion", "Versión de la política de riesgo"),
+    ];
+
+    public static string Sujeto(string codigo) => Sujetos.FirstOrDefault(s => s.Codigo == codigo).Texto ?? codigo;
+
+    public static string ClaseDeNivel(int v) => De(ClasesDeNivel, v);
+
+    public static string ClaseDeOrgano(int v) => De(ClasesDeOrgano, v);
+
+    public static string Papel(int v) => De(PapelesDeMiembro, v);
+
+    public static string Garantia(int v) => De(Garantias, v);
+
+    /// <summary>«más de 1/2», «al menos 2/3».</summary>
+    public static string Fraccion(FraccionDto? f) => f is null ? "—" : $"{De(Comparaciones, f.Comparison)} {f.Numerator}/{f.Denominator}";
+
+    public static string BaseDeMayoria(int v) => De(BasesDeMayoria, v);
+
+    public static string RazonDeEnrutamiento(int v) => v switch
+    {
+        1 => "Tope de monto",
+        2 => "Regla de la matriz",
+        3 => "Persona vinculada",
+        4 => "Excepción a la política",
+        _ => Numero(v),
+    };
+
+    public static string NoExceptuable(int v) => v switch
+    {
+        1 => "Capacidad de pago",
+        2 => "Autorización del titular",
+        3 => "Coincidencia en listas restrictivas",
+        4 => "Usura",
+        _ => Numero(v),
+    };
+
+    // ---------------------------------------------------------------------------------------------- sesiones --
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeSesion { get; } = [(1, "Ordinaria"), (2, "Extraordinaria")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Modalidades { get; } = [(1, "Presencial"), (2, "Virtual"), (3, "Mixta")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> EstadosDeSesion { get; } = [(1, "Borrador"), (2, "Abierta"), (3, "Cerrada")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDePunto { get; } = [(1, "Decisión"), (2, "Recomendación")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Votos { get; } = [(1, "A favor"), (2, "En contra"), (3, "Abstención")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> MetodosDeVoto { get; } =
+        [(1, "Registrado por secretaría"), (2, "En su propia sesión"), (3, "Presente con su llave"), (4, "Presente con código")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Decisiones { get; } =
+        [(1, "Aprobar"), (2, "Aprobar con condiciones"), (3, "Negar"), (4, "Devolver")];
+
+    public static string ClaseDeSesion(int v) => De(ClasesDeSesion, v);
+
+    public static string Modalidad(int v) => De(Modalidades, v);
+
+    public static string EstadoDeSesion(int v) => De(EstadosDeSesion, v);
+
+    public static string ClaseDePunto(int v) => De(ClasesDePunto, v);
+
+    public static string Voto(int v) => De(Votos, v);
+
+    public static string MetodoDeVoto(int v) => De(MetodosDeVoto, v);
+
+    public static string Decision(int? v) => v is { } d ? De(Decisiones, d) : "Sin decidir";
+
+    public static string Asistencia(int v) => v switch
+    {
+        1 => "Presente",
+        2 => "Ausente",
+        3 => "Excusado",
+        _ => Numero(v),
+    };
+
+    public static string ReglaDeVotacion(int v) => v switch
+    {
+        1 => "Mayoría",
+        2 => "Mayoría calificada de vinculados",
+        _ => Numero(v),
+    };
+
+    /// <summary>Por qué una persona no vota un punto.</summary>
+    public static string Exclusion(string motivo) => motivo switch
+    {
+        "Applicant" => "Es el solicitante",
+        "Filer" => "Radicó la solicitud",
+        "Interested" => "Tiene interés en el asunto",
+        "NotMember" => "No es miembro del órgano",
+        "Absent" => "No asistió",
+        _ => motivo,
+    };
+
+    // -------------------------------------------------------------------------------------------- vinculados --
+
+    public static IReadOnlyList<(int Valor, string Texto)> Fundamentos { get; } =
+    [
+        (1, "Miembro del consejo de administración"), (2, "Miembro de la junta de vigilancia"), (3, "Representante legal"),
+        (4, "Aportante significativo"), (5, "Cónyuge o compañero permanente"), (6, "Pariente"),
+    ];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeParentesco { get; } = [(1, "Consanguinidad"), (2, "Afinidad"), (3, "Civil")];
+
+    public static string Fundamento(int v) => De(Fundamentos, v);
+
+    public static string Parentesco(int? clase, byte? grado) => clase is { } c ? $"{De(ClasesDeParentesco, c)}{(grado is { } g ? $", grado {g}" : "")}" : "—";
+
+    public static string OrigenDelVinculo(int v) => v switch
+    {
+        1 => "Manual",
+        2 => "Plantilla",
+        3 => "Migración",
+        _ => Numero(v),
+    };
+
+    // ---------------------------------------------------------------------------------------------- mensajes --
+
+    public static IReadOnlyList<(int Valor, string Texto)> Canales { get; } = [(1, "Correo"), (2, "SMS"), (3, "WhatsApp"), (4, "Carta")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Propositos { get; } =
+        [(1, "Cobranza"), (2, "Aviso previo"), (3, "Informativo"), (4, "Entrega de documentos"), (5, "Aviso de gastos de cobranza")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> EstadosDeMensaje { get; } =
+        [(1, "En cola"), (2, "Diferido"), (3, "Excluido"), (4, "Enviado"), (5, "Entregado"), (6, "Fallido"), (7, "Simulado"), (8, "Cancelado")];
+
+    public static string Canal(int v) => De(Canales, v);
+
+    public static string Proposito(int v) => De(Propositos, v);
+
+    public static string EstadoDeMensaje(int v) => De(EstadosDeMensaje, v);
+
+    /// <summary>Un mensaje se puede cancelar mientras no haya salido: en cola o diferido.</summary>
+    public static bool SePuedeCancelar(int estado) => estado is 1 or 2;
+
+    public static string RolDelDestinatario(int v) => v switch
+    {
+        1 => "Deudor",
+        2 => "Codeudor",
+        3 => "Pagador",
+        _ => Numero(v),
+    };
+
+    public static string DecisionDeContacto(string decision) => decision switch
+    {
+        "Permitido" or "Allowed" => "Permitido",
+        "Diferido" or "Deferred" => "Diferido",
+        "Excluido" or "Excluded" => "Excluido",
+        _ => decision,
+    };
+
+    /// <summary>Las razones de la ventana legal de contacto (Ley 2300, <c>ContactWindowReason</c>).</summary>
+    public static string RazonDeContacto(string razon) => razon switch
+    {
+        "RecipientNotObligated" => "El destinatario no está obligado en el crédito",
+        "DebtorDeceased" => "El deudor falleció",
+        "Insolvency" => "El deudor está en insolvencia",
+        "CollectionSuspended" => "La cobranza está suspendida",
+        "ChannelNotAuthorized" => "El titular no autorizó ese canal",
+        "AuthorizationWithoutEvidence" => "La autorización no tiene evidencia",
+        "NoDestination" => "No hay dirección o número de contacto",
+        "Sunday" => "Es domingo",
+        "Holiday" => "Es festivo",
+        "OutsideHours" => "Fuera del horario permitido",
+        "DailyLimitReached" => "Ya se alcanzó el límite de contactos del día",
+        "WeeklyChannelLocked" => "El canal ya se usó esta semana",
+        "NoWindow" => "No hay ventana disponible en los próximos días",
+        "ChannelUnavailable" => "El canal no está disponible",
+        _ => razon,
+    };
+
+    /// <summary>
+    /// La lista blanca de variables de cada propósito (las comunes más las suyas), espejo de <c>RenderizadorDePlantillasDeMensaje</c>; la
+    /// API la vuelve a revisar al guardar y en la vista previa.
+    /// </summary>
+    public static IReadOnlyList<string> VariablesPermitidas(int proposito)
+    {
+        string[] comunes = ["NombreDelTitular", "NombreDeLaCooperativa", "TelefonoDeLaCooperativa", "NumeroDelCredito", "FechaDeCorte"];
+        string[] propias = proposito switch
+        {
+            1 => ["ValorVencido", "DiasDeMora", "CuotasVencidas", "ValorParaPonerseAlDia"],
+            2 => ["ValorDeLaObligacion", "ValorVencido", "FechaMasTempranaDeReporte", "Centrales"],
+            3 => ["ValorAplicado", "ModalidadAplicada", "NuevaCuota", "NuevoPlazo", "MotivoDeNoDescuento", "FormaDePagoNueva"],
+            4 => ["ClaseDeDocumento", "NumeroDelDocumento", "CodigoDeVerificacion"],
+            5 => ["ValorDelGasto", "Etapa", "FechaDeCausacion"],
+            _ => [],
+        };
+        return [.. comunes, .. propias];
+    }
+
+    // --------------------------------------------------------------------------------------- autorizaciones --
+
+    public static IReadOnlyList<(int Valor, string Texto)> Finalidades { get; } =
+    [
+        (1, "Tratamiento general"), (2, "Trámite de crédito"), (3, "Consulta en centrales"), (4, "Reporte a centrales"), (5, "Canal de contacto"),
+    ];
+
+    public static IReadOnlyList<(int Valor, string Texto)> CanalesDeAutorizacion { get; } =
+        [(1, "SMS"), (2, "WhatsApp"), (3, "Correo"), (4, "Llamada"), (5, "Visita")];
+
+    public static string Finalidad(int v) => De(Finalidades, v);
+
+    public static string CanalDeAutorizacion(int? v) => v is { } c ? De(CanalesDeAutorizacion, c) : "—";
+
+    public static string OrigenDeAutorizacion(int v) => v switch
+    {
+        1 => "Registro de la persona",
+        2 => "Solicitud de crédito",
+        3 => "Migración",
+        4 => "Solicitud del titular",
+        5 => "Plantilla",
+        _ => Numero(v),
+    };
+
+    public static string EstadoDeAutorizacion(string estado) => estado switch
+    {
+        "Active" => "Vigente",
+        "Declined" => "Rechazada",
+        "Revoked" => "Revocada",
+        "Replaced" => "Reemplazada",
+        _ => estado,
+    };
+
+    /// <summary>Una autorización migrada (o de cualquier origen) sin evidencia no habilita centrales ni cobranza (FR-006).</summary>
+    public static bool BloqueaPorFaltaDeEvidencia(AutorizacionDeDatosDto a) => a.Evidence is null && a.Status == "Active";
+
+    // ---------------------------------------------------------------------------------------------- reclamos --
+
+    public static string ClaseDeReclamo(int v) => v == 2 ? "Suplantación" : "Reclamo";
+
+    public static string EstadoDeReclamo(int v) => v switch
+    {
+        1 => "En trámite",
+        2 => "Respondido",
+        3 => "Aceptado tácitamente",
+        4 => "Desistido",
+        _ => Numero(v),
+    };
+
+    /// <summary>«K2», «K6a»: la entrega de Cartera de una plantilla (1 = K1 … 6 = K6a, 7 = K6b).</summary>
+    public static string Entrega(int v) => v switch
+    {
+        6 => "K6a",
+        7 => "K6b",
+        _ => $"K{Numero(v)}",
+    };
+}

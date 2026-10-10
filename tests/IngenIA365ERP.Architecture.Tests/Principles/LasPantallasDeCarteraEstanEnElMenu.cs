@@ -14,7 +14,20 @@ public class LasPantallasDeCarteraEstanEnElMenu
     private static readonly string Shared = Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared");
 
     /// <summary>Pantallas: archivo (relativo a Shared), ruta y permiso.</summary>
-    private static readonly (string Archivo, string Ruta, string Permiso)[] Pantallas = [];
+    /// <para>Fase 4, US17 (T0324, T0310 y el pendiente de T0273): las diez pantallas de gobierno, configuración y mensajes al deudor.</para>
+    private static readonly (string Archivo, string Ruta, string Permiso)[] Pantallas =
+    [
+        ("Pages/Cartera/Atribuciones.razor", "/cartera/atribuciones", "Lending.Attributions.View"),
+        ("Pages/Cartera/Actas.razor", "/cartera/actas", "Lending.Sessions.Read"),
+        ("Pages/Cartera/Vinculados.razor", "/cartera/vinculados", "Lending.RelatedParties.Read"),
+        ("Pages/Cartera/Parametros.razor", "/cartera/parametros", "Lending.Parameters.View"),
+        ("Pages/Cartera/Plantillas.razor", "/cartera/plantillas", "Lending.Templates.View"),
+        ("Pages/Cartera/Alertas.razor", "/cartera/alertas", "Lending.Alerts.View"),
+        ("Pages/Cartera/Autorizaciones.razor", "/cartera/autorizaciones", "Compliance.HabeasData.ViewHistory"),
+        ("Pages/Cartera/Alcances.razor", "/cartera/alcances", "Lending.Scopes.Manage"),
+        ("Pages/Cartera/Mensajes.razor", "/cartera/mensajes", "Lending.DebtorMessages.Read"),
+        ("Pages/Cartera/PlantillasDeMensaje.razor", "/cartera/plantillas-de-mensaje", "Lending.MessageTemplates.View"),
+    ];
 
     [Fact]
     public void Cada_pantalla_existe_protegida_con_indicador_y_en_el_menu()

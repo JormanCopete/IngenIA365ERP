@@ -1,0 +1,164 @@
+@page "/cartera/autorizaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject ConfiguracionDeCarteraClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Autorizaciones del titular - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 4 (T0321; US17, T69, FR-006, C85; contracts/api.md §22.2): las autorizaciones de una persona por finalidad —tratamiento
+   general, trámite de crédito, consulta y reporte a centrales, canal de contacto— con su evidencia, la versión de la política que aceptó y su
+   origen. Una autorización sin evidencia (las migradas, por ejemplo) NO habilita la consulta ni el reporte a centrales ni la cobranza: se
+   marca. Registrar una decisión exige Compliance.HabeasData.RecordConsent; revocar es una solicitud del titular, no un botón de aquí. *@
+<PermissionGate Required="Compliance.HabeasData.ViewHistory" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Autorizaciones del titular</h3>
+    </div>
+
+    <div class="toolbar">
+        <div class="campo campo-ancho">Titular
+            <PersonSearchPicker Selected="@_persona" SelectedChanged="@CambiarPersonaAsync" ShowHelpText="false" Compacto="true" />
+        </div>
+        @if (_persona is not null)
+        {
+            <PermissionGate Required="Compliance.HabeasData.RecordConsent">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirRegistro">Registrar decisión</SfButton>
+            </PermissionGate>
+        }
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_persona is null)
+        {
+            <p class="texto-tenue">Busque al titular para ver sus autorizaciones.</p>
+        }
+        else
+        {
+            @if (_autorizaciones.Any(TextosDeCartera.BloqueaPorFaltaDeEvidencia))
+            {
+                <p class="aviso aviso-alerta">Hay autorizaciones vigentes sin evidencia: bloquean la consulta y el reporte a centrales y la cobranza hasta que se registre una con su soporte.</p>
+            }
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Finalidad</th><th>Canal</th><th>Estado</th><th>Otorgada</th><th>Política</th><th>Origen</th><th>Evidencia</th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _autorizaciones.OrderBy(a => a.Purpose).ThenByDescending(a => a.GrantedAt))
+                        {
+                            <tr class="@(a.Status == "Active" || a.Status == "Declined" ? "" : "texto-tenue")">
+                                <td>@TextosDeCartera.Finalidad(a.Purpose)</td>
+                                <td>@TextosDeCartera.CanalDeAutorizacion(a.ContactChannel)</td>
+                                <td>
+                                    @TextosDeCartera.EstadoDeAutorizacion(a.Status)
+                                    @if (a.RevokedAt is { } revocada) { <br /><span class="texto-tenue">revocada el @revocada.ToLocalTime().ToString("dd/MM/yyyy")</span> }
+                                </td>
+                                <td>@a.GrantedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                <td>Versión @a.PolicyVersion.Version</td>
+                                <td>@TextosDeCartera.OrigenDeAutorizacion(a.Origin)</td>
+                                <td>
+                                    @if (a.Evidence is not null) { <span>Con evidencia</span> }
+                                    else { <span class="aviso aviso-alerta">Sin evidencia: bloquea centrales y cobranza</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_autorizaciones.Count == 0) { <p class="texto-tenue">La persona no tiene autorizaciones registradas.</p> }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarRegistro" Header="Registrar la decisión del titular" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">@(_persona?.FullName) — se registra contra la versión vigente de la política de datos de esa finalidad.</p>
+                <div class="form-grid">
+                    <label class="campo">Finalidad *
+                        <select class="e-input" @bind="_finalidad">
+                            @foreach (var f in TextosDeCartera.Finalidades) { <option value="@f.Valor">@f.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_finalidad == 5)
+                    {
+                        <label class="campo">Canal *
+                            <select class="e-input" @bind="_canal">
+                                @foreach (var c in TextosDeCartera.CanalesDeAutorizacion) { <option value="@c.Valor">@c.Texto</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Decisión
+                        <select class="e-input" @bind="_decision"><option value="1">Acepta</option><option value="2">No acepta</option></select>
+                    </label>
+                    <label class="campo">Fecha * <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="500" /></label>
+                </div>
+                <p class="texto-tenue">El soporte firmado se adjunta a la persona; sin él la autorización queda marcada «sin evidencia».</p>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRegistro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private List<AutorizacionDeDatosDto> _autorizaciones = [];
+    private bool _mostrarRegistro;
+    private int _finalidad = 2, _canal = 1, _decision = 1;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private string? _notas, _error;
+
+    private async Task CambiarPersonaAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _persona = persona;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _autorizaciones = [];
+        if (_persona is not { } persona) return;
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.AutorizacionesAsync(persona.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las autorizaciones."); return; }
+        _autorizaciones = [.. r.Value ?? []];
+    }
+
+    private void AbrirRegistro()
+    {
+        _finalidad = 2;
+        _canal = 1;
+        _decision = 1;
+        _fecha = DateOnly.FromDateTime(DateTime.Today);
+        _notas = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarRegistro = true;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_persona is not { } persona) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Configuracion.RegistrarAutorizacionAsync(new RegistrarAutorizacionRequest(persona.PublicId, _finalidad, _finalidad == 5 ? _canal : null,
+            null, null, null, _fecha.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), _decision,
+            string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar la decisión."; return; }
+        _mostrarRegistro = false;
+        await Notification.SuccessAsync("Decisión del titular registrada.");
+        await CargarAsync();
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

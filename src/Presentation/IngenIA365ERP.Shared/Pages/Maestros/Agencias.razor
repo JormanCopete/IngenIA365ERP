@@ -21,6 +21,14 @@
         <GridColumn Field="@nameof(BranchItem.Name)" HeaderText="Nombre" Width="320" />
         <GridColumn Field="@nameof(BranchItem.ShortName)" HeaderText="Nombre Corto" Width="200" />
         <GridColumn Field="@nameof(BranchItem.MunicipalityDaneCode)" HeaderText="Municipio (DIVIPOLA)" Width="160" />
+        <GridColumn HeaderText="Oficina" Width="220" AllowFiltering="false">
+            <Template>
+                @{
+                    var fila = context as BranchItem;
+                    @(_oficinas.FirstOrDefault(o => o.PublicId == fila?.TenantBranchPublicId)?.Etiqueta ?? (fila?.TenantBranchPublicId is null ? "Sin vincular" : "Vinculada"))
+                }
+            </Template>
+        </GridColumn>
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
@@ -70,6 +78,18 @@
                         </SfDropDownList>
                         <small class="hint">Si el municipio no aparece, cárguelo con su código DANE en Maestros › Ciudades.</small>
                     </div>
+                    <div>
+                        @* Feature 013, fase 4 (T0323; T62, F4): el vínculo agencia → oficina. Una oficina corresponde a una sola sucursal
+                           contable (Branch.OfficeAlreadyLinked); del vínculo depende el alcance de Cartera por oficina y que un crédito
+                           de esa oficina se pueda contabilizar. *@
+                        <label>Oficina</label>
+                        <SfDropDownList TValue="Guid?" TItem="OficinaItem" @bind-Value="_model.TenantBranchPublicId"
+                                        DataSource="@_oficinas" AllowFiltering="true" ShowClearButton="true"
+                                        Placeholder="Seleccione la oficina que corresponde">
+                            <DropDownListFieldSettings Text="@nameof(OficinaItem.Etiqueta)" Value="@nameof(OficinaItem.PublicId)" />
+                        </SfDropDownList>
+                        <small class="hint">Cada oficina se vincula a una sola agencia. Las oficinas se crean en Administración › Oficinas.</small>
+                    </div>
                 </div>
                 @* Submit oculto: permite ENTER y dispara OnValidSubmit con validacion *@
                 <button type="submit" id="agencias-submit" style="display:none"></button>
@@ -92,6 +112,7 @@
     private SfGrid<BranchItem>? _grid;
     private List<BranchItem> _items = new();
     private List<MunicipioItem> _municipios = new();
+    private List<OficinaItem> _oficinas = new();
     private BranchModel _model = new();
     private Guid? _editId;
     private bool _codigoRepetido;
@@ -115,6 +136,11 @@
                 .Where(c => !string.IsNullOrWhiteSpace(c.DaneCode))
                 .Select(c => new MunicipioItem(c.DaneCode!, $"{c.Name} ({c.DepartmentName}) — {c.DaneCode}"))
                 .OrderBy(m => m.Etiqueta)
+                .ToList();
+            // Las oficinas de la cooperativa (Admin.Branches.View); sin ese permiso el selector queda vacío y se conserva el vínculo.
+            _oficinas = (await Http.TryGetListAsync<OficinaDeLaCooperativa>("/api/admin/branches?includeInactive=false&page=1&pageSize=200"))
+                .Select(o => new OficinaItem(o.PublicId, $"{o.Code} · {o.Name}"))
+                .OrderBy(o => o.Etiqueta)
                 .ToList();
         }
         catch (Exception ex)
@@ -285,6 +311,12 @@
 
     /// <summary>Una ciudad de <c>/api/core/cities</c> (CityDto).</summary>
     private sealed record CiudadItem(string Name, string DepartmentName, string? DaneCode);
+
+    /// <summary>Una oficina de <c>/api/admin/branches</c>.</summary>
+    private sealed record OficinaDeLaCooperativa(Guid PublicId, string Code, string Name);
+
+    /// <summary>Opción del desplegable de oficina.</summary>
+    private sealed record OficinaItem(Guid PublicId, string Etiqueta);
 
     /// <summary>Opción del desplegable de municipio.</summary>
     private sealed record MunicipioItem(string DaneCode, string Etiqueta);

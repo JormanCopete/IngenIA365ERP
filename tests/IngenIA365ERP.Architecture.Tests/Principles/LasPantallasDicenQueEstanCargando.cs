@@ -27,9 +27,10 @@ public class LasPantallasDicenQueEstanCargando
     /// Feature 013, fase 2 (T0038, T0095): «Administracion» y «Compliance» entran con las seis pantallas de la plataforma de Cartera
     /// (valores nacionales, perfil regulatorio, canales externos, participantes, listas restrictivas, solicitudes del titular).
     /// Feature 013, fase 3 (T0188): «AhorrosYAportes» entra con las 18 pantallas conservadas de la cartera heredada.
+    /// Feature 013, fase 4 (T0324): «Cartera» entra con las pantallas de gobierno, configuración y mensajes al deudor.
     private static readonly string[] ModulosMigrados =
         ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance",
-            "AhorrosYAportes"];
+            "AhorrosYAportes", "Cartera"];
 
     /// <summary>Feature 013 (T0038): las pantallas de la fase 2 llevan su indicador aunque no usen <c>SfGrid</c>.</summary>
     private static readonly string[] PantallasDeLaPlataformaDeCartera =

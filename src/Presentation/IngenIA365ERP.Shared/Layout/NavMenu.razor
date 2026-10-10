@@ -87,6 +87,43 @@
             <NavLink href="/cartera/cdt/liquidacion" class="nav-subitem">Liq. Int. CDTs</NavLink>
         </NavMenuGroup>
 
+        @* Feature 013, fase 4 (T0324, T0310; US17): la Cartera nueva —gobierno, configuración y mensajes al deudor—, cada enlace con el
+           permiso de consulta de su página. El detalle de una sesión se abre desde Actas, sin enlace propio. *@
+        <NavMenuGroup Icon="e-money" Title="Cartera" Expanded="SidebarOpen">
+            <PermissionGate Required="Lending.DebtorMessages.Read">
+                <NavLink href="/cartera/mensajes" class="nav-subitem">Mensajes al deudor</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Alerts.View">
+                <NavLink href="/cartera/alertas" class="nav-subitem">Alertas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Compliance.HabeasData.ViewHistory">
+                <NavLink href="/cartera/autorizaciones" class="nav-subitem">Autorizaciones del titular</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Gobierno</span>
+            <PermissionGate Required="Lending.Sessions.Read">
+                <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Attributions.View">
+                <NavLink href="/cartera/atribuciones" class="nav-subitem">Atribuciones</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.RelatedParties.Read">
+                <NavLink href="/cartera/vinculados" class="nav-subitem">Personas vinculadas</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Configuración</span>
+            <PermissionGate Required="Lending.Parameters.View">
+                <NavLink href="/cartera/parametros" class="nav-subitem">Parámetros</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.MessageTemplates.View">
+                <NavLink href="/cartera/plantillas-de-mensaje" class="nav-subitem">Plantillas de mensaje</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Templates.View">
+                <NavLink href="/cartera/plantillas" class="nav-subitem">Plantillas de carga</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Scopes.Manage">
+                <NavLink href="/cartera/alcances" class="nav-subitem">Alcance de usuarios</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+
         @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@
         <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
             @* I6, US17 (T969): el tablero de inventario (§28), primero del grupo. *@

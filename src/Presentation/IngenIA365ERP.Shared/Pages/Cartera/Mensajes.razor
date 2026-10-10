@@ -1,0 +1,312 @@
+@page "/cartera/mensajes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject MensajesAlDeudorClient Cola
+@inject INotificationService Notification
+
+<PageTitle>Mensajes al deudor - IngenIA365ERP</PageTitle>
+
+@* Feature 013, fase 4 (T0310; US17, C108, T74, T75, FR-122; contracts/api.md §14.2): el registro de envíos al deudor con su historia
+   (en cola, diferido, excluido, enviado, entregado, fallido, simulado, cancelado), el envío manual o programado y la cancelación con motivo
+   de uno que todavía no salió. Antes de enviar se ve la ventana que permite la Ley 2300 —horario, domingos y festivos, contactos por día y
+   por semana, autorización del canal con evidencia— tal como la calcula la API: lo que cae fuera se difiere o se excluye, nunca sale. Las
+   referencias personales nunca se contactan. *@
+<PermissionGate Required="Lending.DebtorMessages.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Mensajes al deudor</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.DebtorMessages.Send">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirEnvioAsync">Enviar mensaje</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <div class="campo">Destinatario
+            <PersonSearchPicker @bind-Selected="_filtroPersona" ShowHelpText="false" Compacto="true" />
+        </div>
+        <label class="campo">Propósito
+            <select class="e-input" @bind="_filtroProposito">
+                <option value="0">Todos</option>
+                @foreach (var p in TextosDeCartera.Propositos) { <option value="@p.Valor">@p.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Canal
+            <select class="e-input" @bind="_filtroCanal">
+                <option value="0">Todos</option>
+                @foreach (var c in TextosDeCartera.Canales) { <option value="@c.Valor">@c.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Estado
+            <select class="e-input" @bind="_filtroEstado">
+                <option value="0">Todos</option>
+                @foreach (var e in TextosDeCartera.EstadosDeMensaje) { <option value="@e.Valor">@e.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Desde <input type="date" class="e-input" @onchange="@(e => _desde = LeerFecha(e.Value))" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" @onchange="@(e => _hasta = LeerFecha(e.Value))" /></label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <p class="texto-apoyo">@_total mensaje(s).</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Pedido</th><th>Destinatario</th><th>Crédito</th><th>Canal</th><th>Propósito</th><th>Plantilla</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _mensajes)
+                    {
+                        var mensaje = m;
+                        <tr class="@(_detalle?.Message.PublicId == mensaje.PublicId ? "resaltada" : "")">
+                            <td>
+                                @mensaje.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                @if (mensaje.ScheduledFor is { } programado) { <br /><span class="texto-tenue">programado @programado.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span> }
+                            </td>
+                            <td>@mensaje.Recipient.FullName<br /><span class="texto-tenue">@TextosDeCartera.RolDelDestinatario(mensaje.RecipientRole)</span></td>
+                            <td>@(mensaje.Loan?.Number)</td>
+                            <td>@TextosDeCartera.Canal(mensaje.Channel)</td>
+                            <td>@TextosDeCartera.Proposito(mensaje.Purpose)</td>
+                            <td>@(mensaje.Template is { } t ? $"{t.Code} v{t.Version}" : "")</td>
+                            <td>
+                                @TextosDeCartera.EstadoDeMensaje(mensaje.Status)@(mensaje.Simulated ? " (simulado)" : "")
+                                @if (mensaje.LastEvent.NextAttemptAt is { } siguiente) { <br /><span class="texto-tenue">próximo intento @siguiente.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span> }
+                                @if (mensaje.LastEvent.Reasons.Count > 0) { <br /><span class="texto-tenue">@string.Join("; ", mensaje.LastEvent.Reasons.Select(TextosDeCartera.RazonDeContacto))</span> }
+                            </td>
+                            <td>
+                                <SfButton CssClass="e-flat e-small" OnClick="@(() => VerDetalleAsync(mensaje.PublicId))">Historia</SfButton>
+                                @if (TextosDeCartera.SePuedeCancelar(mensaje.Status))
+                                {
+                                    <PermissionGate Required="Lending.DebtorMessages.Cancel">
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirCancelacion(mensaje))">Cancelar…</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_mensajes.Count == 0) { <p class="texto-tenue">Sin mensajes con esos filtros.</p> }
+    </IndicadorDeCarga>
+
+    @if (_verDetalle)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                @if (_detalle is { } d)
+                {
+                    <h4>@TextosDeCartera.Proposito(d.Message.Purpose) a @d.Message.Recipient.FullName por @TextosDeCartera.Canal(d.Message.Channel)</h4>
+                    <p class="texto-tenue">Canal @d.ChannelCode@(d.DestinationAddress is null ? "" : $" · {d.DestinationAddress}")@(d.AuthorizationPublicId is null ? " · sin autorización vinculada" : "")</p>
+                    @if (d.Subject is not null) { <p><strong>@d.Subject</strong></p> }
+                    <p class="texto-apoyo">@d.Body</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">#</th><th>Evento</th><th>Cuándo</th><th>Detalle</th><th>Destino</th><th class="numero">Intento</th></tr></thead>
+                            <tbody>
+                                @foreach (var ev in d.Events.OrderBy(e => e.Sequence))
+                                {
+                                    <tr>
+                                        <td class="numero">@ev.Sequence</td>
+                                        <td>@TextosDeCartera.EstadoDeMensaje(ev.Kind)</td>
+                                        <td>@ev.OccurredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")@(ev.NextAttemptAt is { } s ? $" → {s.ToLocalTime():dd/MM/yyyy HH:mm}" : "")</td>
+                                        <td>@(ev.ReasonText ?? string.Join("; ", ev.Reasons.Select(TextosDeCartera.RazonDeContacto)))@(ev.ProviderReference is null ? "" : $" · ref. {ev.ProviderReference}")</td>
+                                        <td>@ev.DestinationAddress</td>
+                                        <td class="numero">@ev.Attempt</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarEnvio" Header="Enviar un mensaje al deudor" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Encolando…">
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Destinatario *
+                        <PersonSearchPicker @bind-Selected="_destinatario" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo">Canal *
+                        <select class="e-input" value="@_canal" @onchange="@(e => { _canal = int.TryParse(e.Value?.ToString(), out var c) ? c : 1; _ventana = null; })">
+                            @foreach (var c in TextosDeCartera.Canales) { <option value="@c.Valor">@c.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Propósito *
+                        <select class="e-input" value="@_proposito" @onchange="@(e => { _proposito = int.TryParse(e.Value?.ToString(), out var p) ? p : 1; _ventana = null; })">
+                            @foreach (var p in TextosDeCartera.Propositos) { <option value="@p.Valor">@p.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Plantilla *
+                        <select class="e-input" @bind="_plantilla">
+                            <option value="">Elija…</option>
+                            @foreach (var t in _plantillas.Where(t => t.Channel == _canal && t.Purpose == _proposito)) { <option value="@t.Code">@t.Code v@(t.Version)</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Programar para (vacío = ahora) <input type="datetime-local" class="e-input" @onchange="@(e => { _programado = LeerFechaHora(e.Value); _ventana = null; })" /></label>
+                    <label class="campo campo-ancho">Variables (Nombre=valor, una por línea; las del crédito las pone el sistema)
+                        <textarea class="e-input" rows="3" @bind="_variables"></textarea>
+                    </label>
+                </div>
+                <p class="texto-tenue">Variables admitidas para este propósito: @string.Join(", ", TextosDeCartera.VariablesPermitidas(_proposito)).</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_destinatario is null)" OnClick="@VerVentanaAsync">Ver la ventana permitida</SfButton>
+                </div>
+                @if (_ventana is { } v)
+                {
+                    <p class="@(v.Decision is "Permitido" or "Allowed" ? "aviso aviso-ok" : "aviso aviso-alerta")">
+                        @TextosDeCartera.DecisionDeContacto(v.Decision)
+                        @if (v.AllowedAt is { } en) { <span>: sale el @en.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span> }
+                        @if (v.NextAllowedAt is { } siguiente) { <span> (siguiente ventana: @siguiente.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</span> }
+                        @if (v.Reasons.Count > 0) { <br /><span>@string.Join("; ", v.Reasons.Select(TextosDeCartera.RazonDeContacto))</span> }
+                    </p>
+                }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _destinatario is null || string.IsNullOrWhiteSpace(_plantilla))" OnClick="@EnviarAsync">Enviar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarEnvio = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCancelacion" Header="Cancelar el mensaje" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Cancelando…">
+                <p class="texto-apoyo">@(_aCancelar?.Recipient.FullName) — @(_aCancelar is { } c ? TextosDeCartera.Proposito(c.Purpose) : "")</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CancelarAsync">Cancelar el mensaje</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCancelacion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<MensajeAlDeudorDto> _mensajes = [];
+    private List<VersionDePlantillaDeMensajeDto> _plantillas = [];
+    private long _total;
+    private PersonSearchPicker.PersonSearchItem? _filtroPersona, _destinatario;
+    private int _filtroProposito, _filtroCanal, _filtroEstado, _canal = 1, _proposito = 3;
+    private DateOnly? _desde, _hasta;
+    private DateTimeOffset? _programado;
+    private string? _plantilla, _variables, _motivo, _error;
+    private bool _verDetalle, _mostrarEnvio, _mostrarCancelacion;
+    private DetalleDelMensajeDto? _detalle;
+    private VentanaDeContactoDto? _ventana;
+    private MensajeAlDeudorDto? _aCancelar;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cola.MensajesAsync(new FiltrosDeMensajes(null, _filtroPersona?.PublicId, Nulo(_filtroProposito), Nulo(_filtroCanal), Nulo(_filtroEstado),
+            _desde, _hasta, 1, 100));
+        if (!r.IsSuccess) { _mensajes = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el registro de mensajes."); return; }
+        _mensajes = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+    }
+
+    private async Task VerDetalleAsync(Guid mensaje)
+    {
+        _verDetalle = true;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Cola.MensajeAsync(mensaje);
+        if (!r.IsSuccess) { _detalle = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el mensaje."); return; }
+        _detalle = r.Value;
+    }
+
+    private async Task AbrirEnvioAsync()
+    {
+        _destinatario = null;
+        _canal = 1;
+        _proposito = 3;
+        _plantilla = _variables = _error = null;
+        _programado = null;
+        _ventana = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarEnvio = true;
+        using var carga = _guardado.Iniciar();
+        var r = await Cola.PlantillasAsync();
+        _plantillas = r.IsSuccess ? [.. r.Value ?? []] : [];
+        if (!r.IsSuccess) _error = "No se pudieron leer las plantillas (exige ver plantillas de mensaje).";
+    }
+
+    private async Task VerVentanaAsync()
+    {
+        if (_destinatario is not { } persona) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Cola.VentanaDeContactoAsync(persona.PublicId, _canal, _proposito, _programado);
+        if (!r.IsSuccess) { _ventana = null; _error = r.ErrorMessage ?? "No se pudo calcular la ventana de contacto."; return; }
+        _ventana = r.Value;
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_destinatario is not { } persona || string.IsNullOrWhiteSpace(_plantilla)) return;
+        Dictionary<string, string?>? variables = null;
+        if (!string.IsNullOrWhiteSpace(_variables))
+        {
+            variables = [];
+            foreach (var linea in _variables.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var partes = linea.Split('=', 2, StringSplitOptions.TrimEntries);
+                if (partes.Length != 2 || partes[0].Length == 0) { _error = $"La línea «{linea}» no es Nombre=valor."; return; }
+                variables[partes[0]] = partes[1];
+            }
+        }
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Cola.EnviarMensajeAsync(new EnviarMensajeRequest(null, persona.PublicId, _canal, _proposito, _plantilla, _programado, variables), _clave);
+        if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo encolar el mensaje."; return; }
+        _mostrarEnvio = false;
+        await Notification.SuccessAsync($"Mensaje {TextosDeCartera.EstadoDeMensaje(r.Value.Status).ToLowerInvariant()}.");
+        await CargarAsync();
+    }
+
+    private void AbrirCancelacion(MensajeAlDeudorDto mensaje)
+    {
+        _aCancelar = mensaje;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarCancelacion = true;
+    }
+
+    private async Task CancelarAsync()
+    {
+        if (_aCancelar is not { } m || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Cola.CancelarMensajeAsync(m.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo cancelar el mensaje."; return; }
+        _mostrarCancelacion = false;
+        await Notification.SuccessAsync("Mensaje cancelado.");
+        await CargarAsync();
+    }
+
+    private static int? Nulo(int valor) => valor == 0 ? null : valor;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    /// <summary>La hora local que eligió la persona, con su desfase, para que la API la lea en hora de Colombia.</summary>
+    private static DateTimeOffset? LeerFechaHora(object? valor) =>
+        DateTime.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var f) ? new DateTimeOffset(f) : null;
+}

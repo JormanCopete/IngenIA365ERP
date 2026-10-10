@@ -1,0 +1,572 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject GobiernoDeCarteraClient Gobierno
+@inject PermisosDelUsuario Permisos
+@inject WebAuthnInterop Passkeys
+@inject DescargaDeArchivos Descargas
+@inject INotificationService Notification
+
+@* Feature 013, fase 4 (T0317; US17, T64, FR-039, FR-040; contracts/api.md §5): el detalle de una sesión y su acta. Asistencia con el quórum
+   que devuelve la API en cada guardado (los invitados no cuentan), puntos con su regla y los excluidos que calcula el sistema, el voto de
+   secretaría o el propio y el del miembro PRESENTE con su passkey (webauthn.js, base64url) o un código TOTP de un solo uso, el cierre con la
+   huella del acta que se revisó (si cambió algo desde que se leyó, la API lo rechaza y nada queda) y la descarga del PDF. Un acta cerrada se
+   ve de sólo lectura. Una presencia fallida o un permiso que falta son errores de negocio, no de sesión: la de quien opera no se toca. (nuevo) *@
+<SfDialog Visible="@Visible" VisibleChanged="@VisibleChanged" Header="@Titulo" Width="1100px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo el acta…">
+                @if (_sesion is { } s)
+                {
+                    <p class="texto-apoyo">
+                        @s.Body.Code · @s.Body.Name — @TextosDeCartera.ClaseDeSesion(s.Kind), @TextosDeCartera.Modalidad(s.Mode), @s.HeldOn.ToString("dd/MM/yyyy")
+                        @(s.Location is null ? "" : $" · {s.Location}") · <strong>@TextosDeCartera.EstadoDeSesion(s.Status)</strong>
+                    </p>
+                    @if (s.Quorum is { } q)
+                    {
+                        <p class="@(q.Met ? "aviso aviso-ok" : "aviso aviso-alerta")">
+                            Quórum: @q.Present de @q.Required requeridos (composición @q.Composition) — @(q.Met ? "hay quórum" : "no hay quórum")
+                        </p>
+                    }
+                    @if (Cerrada)
+                    {
+                        <p class="aviso aviso-ok">Acta cerrada por @(s.ClosedBy?.Name) el @(s.ClosedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")). Huella sellada: @s.ContentSha256</p>
+                    }
+                    <div class="toolbar">
+                        <IndicadorDeCarga Cargando="@_descarga.Activa" Compacto="true" Texto="Preparando el PDF…">
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_descarga.Activa" OnClick="@DescargarPdfAsync">@(Cerrada ? "Acta en PDF" : "Borrador del acta en PDF")</SfButton>
+                        </IndicadorDeCarga>
+                    </div>
+
+                    <h4>Asistencia</h4>
+                    <IndicadorDeCarga Cargando="@_asistencia.Activa" Texto="Guardando la asistencia…">
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Persona</th><th>Papel</th><th>Asiste</th><th>Reemplaza a</th></tr></thead>
+                                <tbody>
+                                    @foreach (var fila in _filasDeAsistencia)
+                                    {
+                                        var f = fila;
+                                        <tr>
+                                            <td>@f.Nombre</td>
+                                            <td>@(f.Papel is { } p ? TextosDeCartera.Papel(p) : "")</td>
+                                            <td><input type="checkbox" checked="@f.Presente" disabled="@(!_puedeAdministrar || Cerrada)" @onchange="@(e => f.Presente = e.Value is true)" /></td>
+                                            <td>
+                                                @if (f.Papel == 4 && !Cerrada && _puedeAdministrar)
+                                                {
+                                                    <select class="e-input" value="@(f.Reemplaza?.ToString() ?? "")" @onchange="@(e => f.Reemplaza = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                                        <option value="">—</option>
+                                                        @foreach (var principal in _filasDeAsistencia.Where(x => x.Papel != 4)) { <option value="@principal.Miembro">@principal.Nombre</option> }
+                                                    </select>
+                                                }
+                                                else
+                                                {
+                                                    @(_filasDeAsistencia.FirstOrDefault(x => x.Miembro == f.Reemplaza)?.Nombre)
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                    @foreach (var invitado in s.Attendees.Where(a => a.MemberPublicId is null))
+                                    {
+                                        <tr><td>@invitado.Person.FullName</td><td>Invitado</td><td>@TextosDeCartera.Asistencia(invitado.Status)</td><td></td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (!Cerrada && _puedeAdministrar)
+                        {
+                            <div class="form-grid">
+                                <div class="campo campo-ancho">Agregar invitado (no cuenta para el quórum)
+                                    <PersonSearchPicker Selected="null" SelectedChanged="@AgregarInvitado" ShowHelpText="false" Compacto="true" />
+                                </div>
+                                @foreach (var i in _invitadosNuevos)
+                                {
+                                    var invitado = i;
+                                    <span class="e-badge e-badge-info">@invitado.FullName <a href="javascript:void(0)" @onclick="@(() => _invitadosNuevos.Remove(invitado))">quitar</a></span>
+                                }
+                            </div>
+                            <div class="toolbar">
+                                <SfButton CssClass="e-primary" Disabled="@_asistencia.Activa" OnClick="@GuardarAsistenciaAsync">Guardar asistencia</SfButton>
+                            </div>
+                        }
+                    </IndicadorDeCarga>
+
+                    <h4>Puntos</h4>
+                    @foreach (var p in s.Items.OrderBy(i => i.Order))
+                    {
+                        var punto = p;
+                        <div class="info-card">
+                            <h4>@punto.Order. @punto.Title</h4>
+                            <p class="texto-tenue">
+                                @TextosDeCartera.Sujeto(punto.Subject) · @TextosDeCartera.ClaseDePunto(punto.Kind) · Regla: @TextosDeCartera.ReglaDeVotacion(punto.Rule)
+                                @(punto.Summary is null ? "" : $" · {punto.Summary}")
+                            </p>
+                            @if (punto.Excluded.Count > 0)
+                            {
+                                <p class="aviso aviso-alerta">No votan: @string.Join("; ", punto.Excluded.Select(x => $"{x.Person.FullName} ({TextosDeCartera.Exclusion(x.Reason)})"))</p>
+                            }
+                            @if (punto.Tally is { } t)
+                            {
+                                <p>A favor @t.For · en contra @t.Against · abstenciones @t.Abstain · elegibles @t.Eligible de @t.Composition · se requieren @t.Required a favor</p>
+                            }
+                            <p><strong>@TextosDeCartera.Decision(punto.Outcome)</strong>@(punto.Conditions is null ? "" : $" — condiciones: {punto.Conditions}")@(punto.Explanation is null ? "" : $" — {punto.Explanation}")</p>
+                            @if (punto.Votes.Count > 0)
+                            {
+                                <div class="tabla-desplazable">
+                                    <table class="data-grid">
+                                        <thead><tr><th>Persona</th><th>Voto</th><th>Forma</th><th>Registró</th><th>Cuándo</th><th></th></tr></thead>
+                                        <tbody>
+                                            @foreach (var v in punto.Votes.OrderBy(v => v.At))
+                                            {
+                                                <tr class="@(v.ReplacedAt is null ? "" : "texto-tenue")">
+                                                    <td>@v.Person.FullName</td>
+                                                    <td>@TextosDeCartera.Voto(v.Vote)</td>
+                                                    <td>@TextosDeCartera.MetodoDeVoto(v.Method)</td>
+                                                    <td>@(v.RecordedBy?.Name)</td>
+                                                    <td>@v.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                                    <td>@(v.ReplacedAt is null ? (v.ReplacementReason is null ? "" : $"Reemplaza: {v.ReplacementReason}") : "Reemplazado")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            @if (!Cerrada)
+                            {
+                                <div class="toolbar">
+                                    <SfButton CssClass="e-primary e-small" OnClick="@(() => AbrirVoto(punto))">Votar…</SfButton>
+                                    @if (_puedeAdministrar)
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirCorreccion(punto))">Corregir…</SfButton>
+                                        @if (punto.Votes.Count == 0)
+                                        {
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirRetiro(punto))">Retirar…</SfButton>
+                                        }
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (s.Items.Count == 0) { <p class="texto-tenue">Sin puntos en el orden del día.</p> }
+
+                    @if (!Cerrada && _puedeAdministrar)
+                    {
+                        <IndicadorDeCarga Cargando="@_punto.Activa" Texto="Agregando el punto…">
+                            <div class="form-grid">
+                                <label class="campo">Sujeto
+                                    <select class="e-input" @bind="_sujeto">
+                                        @foreach (var x in TextosDeCartera.Sujetos) { <option value="@x.Codigo">@x.Texto</option> }
+                                    </select>
+                                </label>
+                                <label class="campo">Identificador del sujeto * <input class="e-input" @bind="_sujetoId" placeholder="El del expediente que se decide" /></label>
+                                <label class="campo">Clase
+                                    <select class="e-input" @bind="_clasePunto">
+                                        @foreach (var x in TextosDeCartera.ClasesDePunto) { <option value="@x.Valor">@x.Texto</option> }
+                                    </select>
+                                </label>
+                                <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notasPunto" maxlength="1000" /></label>
+                            </div>
+                            <div class="toolbar">
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_punto.Activa || string.IsNullOrWhiteSpace(_sujetoId))" OnClick="@AgregarPuntoAsync">Agregar punto</SfButton>
+                            </div>
+                        </IndicadorDeCarga>
+                    }
+
+                    @if (!Cerrada)
+                    {
+                        <PermissionGate Required="Lending.Sessions.Close">
+                            <IndicadorDeCarga Cargando="@_cierre.Activa" Texto="Cerrando el acta…">
+                                <div class="info-card">
+                                    <h4>Cerrar el acta</h4>
+                                    <p class="texto-apoyo">Se cierra el acta tal como la está viendo (huella @s.CurrentContentSha256). Si algo cambió desde que la abrió, la API lo rechaza: vuelva a leerla.</p>
+                                    <SfCheckBox @bind-Checked="_confirmaCierre" TChecked="bool" Label="Revisé el acta y quiero cerrarla: no se edita después" />
+                                    <div class="toolbar">
+                                        <SfButton CssClass="e-primary" Disabled="@(_cierre.Activa || !_confirmaCierre || s.CurrentContentSha256 is null)" OnClick="@CerrarAsync">Cerrar el acta</SfButton>
+                                        <SfButton CssClass="e-outline" OnClick="@CargarAsync">Volver a leer</SfButton>
+                                    </div>
+                                </div>
+                            </IndicadorDeCarga>
+                        </PermissionGate>
+                    }
+                    @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarVoto" Header="Registrar un voto" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_voto.Activa" Texto="Registrando el voto…">
+                <p class="texto-apoyo">@(_puntoDelVoto?.Title)</p>
+                <div class="form-grid">
+                    <label class="campo">Miembro *
+                        <select class="e-input" value="@(_votante?.ToString() ?? "")" @onchange="@(e => { _votante = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null; _desafio = null; })">
+                            <option value="">Elija…</option>
+                            @foreach (var a in Votantes) { <option value="@a.Person.PersonPublicId">@a.Person.FullName</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Voto *
+                        <select class="e-input" @bind="_valorVoto">
+                            @foreach (var x in TextosDeCartera.Votos) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Forma *
+                        <select class="e-input" value="@_metodo" @onchange="@(e => { _metodo = int.TryParse(e.Value?.ToString(), out var m) ? m : 1; _desafio = null; })">
+                            @foreach (var x in TextosDeCartera.MetodosDeVoto) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    @if (YaVoto)
+                    {
+                        <label class="campo campo-ancho">Motivo del reemplazo * <input class="e-input" @bind="_motivoReemplazo" maxlength="500" /></label>
+                    }
+                    @if (_metodo is 3 or 4)
+                    {
+                        @if (_desafio is null)
+                        {
+                            <SfButton CssClass="e-outline" Disabled="@(_votante is null)" OnClick="@PedirDesafioAsync">Pedir la verificación de presencia</SfButton>
+                        }
+                        else if (_metodo == 4)
+                        {
+                            <label class="campo">Código del autenticador del miembro * <input class="e-input" inputmode="numeric" autocomplete="one-time-code" maxlength="8" @bind="_totp" /></label>
+                        }
+                        else
+                        {
+                            <p class="texto-tenue">Al registrar, el navegador le pedirá al miembro su llave.</p>
+                        }
+                    }
+                </div>
+                @if (_errorVoto is not null) { <p class="aviso aviso-error" role="alert">@_errorVoto</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeVotar)" OnClick="@VotarAsync">Registrar voto</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVoto = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCorreccion" Header="Corregir el punto" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_punto.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Decisión propuesta
+                        <select class="e-input" @bind="_propuesta">
+                            <option value="0">Sin propuesta</option>
+                            @foreach (var x in TextosDeCartera.Decisiones) { <option value="@x.Valor">@x.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-ancho">Condiciones <input class="e-input" @bind="_condiciones" maxlength="1000" /></label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notasCorreccion" maxlength="1000" /></label>
+                </div>
+                @if (_errorVoto is not null) { <p class="aviso aviso-error" role="alert">@_errorVoto</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_punto.Activa" OnClick="@CorregirAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCorreccion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarRetiro" Header="Retirar el punto" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_punto.Activa" Texto="Retirando…">
+                <p class="texto-apoyo">@(_puntoEditado?.Title) — sólo se retira un punto sin votos.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoRetiro" maxlength="500" /></label>
+                @if (_errorVoto is not null) { <p class="aviso aviso-error" role="alert">@_errorVoto</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_punto.Activa || string.IsNullOrWhiteSpace(_motivoRetiro))" OnClick="@RetirarAsync">Retirar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRetiro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>La sesión que se abre.</summary>
+    [Parameter] public Guid? SesionId { get; set; }
+
+    /// <summary>La sesión cambió (asistencia, puntos, votos o cierre): la lista se vuelve a leer.</summary>
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _descarga = new(), _asistencia = new(), _punto = new(), _voto = new(), _cierre = new();
+    private ClaveDeOperacion _claveAsistencia = new(), _clavePunto = new(), _claveDesafio = new(), _claveVoto = new(), _claveCierre = new();
+    private SesionDto? _sesion;
+    private Guid? _cargada;
+    private bool _puedeAdministrar, _confirmaCierre;
+    private List<FilaDeAsistencia> _filasDeAsistencia = [];
+    private List<PersonSearchPicker.PersonSearchItem> _invitadosNuevos = [];
+    private string? _error;
+
+    // Punto nuevo y correcciones.
+    private string _sujeto = "ActivationDifferences";
+    private string? _sujetoId, _notasPunto, _condiciones, _notasCorreccion, _motivoRetiro;
+    private int _clasePunto = 1, _propuesta;
+    private PuntoDeSesionDto? _puntoEditado;
+    private bool _mostrarCorreccion, _mostrarRetiro;
+
+    // Voto.
+    private bool _mostrarVoto;
+    private PuntoDeSesionDto? _puntoDelVoto;
+    private Guid? _votante;
+    private int _valorVoto = 1, _metodo = 1;
+    private string? _totp, _motivoReemplazo, _errorVoto;
+    private DesafioDeVotoDto? _desafio;
+
+    private bool Cerrada => _sesion?.Status == 3;
+
+    private string Titulo => _sesion is { } s ? $"Acta {s.Number ?? "(sin número)"}" : "Sesión";
+
+    /// <summary>Los asistentes miembros presentes, los únicos que votan.</summary>
+    private IEnumerable<AsistenteDto> Votantes => _sesion?.Attendees.Where(a => a.MemberPublicId is not null && a.Status == 1) ?? [];
+
+    private bool YaVoto => _puntoDelVoto is { } p && _votante is { } v && p.Votes.Any(x => x.ReplacedAt is null && x.Person.PersonPublicId == v);
+
+    private bool PuedeVotar => !_voto.Activa && _votante is not null
+                               && (!YaVoto || !string.IsNullOrWhiteSpace(_motivoReemplazo))
+                               && (_metodo is 1 or 2 || (_desafio is not null && (_metodo == 3 || !string.IsNullOrWhiteSpace(_totp))));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || SesionId is null || SesionId == _cargada) return;
+        _cargada = SesionId;
+        _puedeAdministrar = await Permisos.TieneAsync("Lending.Sessions.Manage");
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        if (SesionId is not { } id) return;
+        using var carga = _carga.Iniciar();
+        _error = null;
+        _confirmaCierre = false;
+        var r = await Gobierno.SesionAsync(id);
+        if (!r.IsSuccess || r.Value is null) { _sesion = null; _error = r.ErrorMessage ?? "No se pudo leer la sesión."; return; }
+        _sesion = r.Value;
+        await ArmarAsistenciaAsync();
+    }
+
+    /// <summary>Los miembros vigentes del órgano con lo ya registrado; sin permiso de ver órganos, sólo lo registrado.</summary>
+    private async Task ArmarAsistenciaAsync()
+    {
+        if (_sesion is not { } s) return;
+        var registrados = s.Attendees.Where(a => a.MemberPublicId is not null).ToDictionary(a => a.MemberPublicId!.Value);
+        var filas = registrados.Values.Select(a => new FilaDeAsistencia(a.MemberPublicId!.Value, a.Person.FullName, a.Role)
+        {
+            Presente = a.Status == 1,
+            Reemplaza = a.SubstitutesForMemberPublicId,
+        }).ToList();
+        if (!Cerrada && _puedeAdministrar)
+        {
+            var organo = await Gobierno.OrganoAsync(s.Body.PublicId, s.HeldOn);
+            if (organo.IsSuccess && organo.Value is { } o)
+            {
+                foreach (var m in o.MemberList.Where(m => m.ValidTo is null || m.ValidTo >= s.HeldOn))
+                {
+                    if (registrados.ContainsKey(m.MemberPublicId)) continue;
+                    filas.Add(new FilaDeAsistencia(m.MemberPublicId, m.Person.FullName, m.Role) { Reemplaza = null });
+                }
+            }
+        }
+        _filasDeAsistencia = [.. filas.OrderBy(f => f.Papel ?? 9).ThenBy(f => f.Nombre)];
+        _invitadosNuevos = [];
+    }
+
+    private void AgregarInvitado(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        if (persona is null || _invitadosNuevos.Any(i => i.PublicId == persona.PublicId)) return;
+        _invitadosNuevos.Add(persona);
+    }
+
+    private async Task GuardarAsistenciaAsync()
+    {
+        if (_sesion is not { } s) return;
+        using var carga = _asistencia.Iniciar();
+        _error = null;
+        var invitados = s.Attendees.Where(a => a.MemberPublicId is null).Select(a => a.Person.PersonPublicId)
+            .Concat(_invitadosNuevos.Select(i => i.PublicId)).Distinct().ToList();
+        var r = await Gobierno.RegistrarAsistenciaAsync(s.PublicId, new AsistenciaRequest(
+            _filasDeAsistencia.Select(f => new AsistenteRequest(f.Miembro, f.Presente, f.Papel == 4 ? f.Reemplaza : null)).ToList(),
+            invitados.Count == 0 ? null : invitados), _claveAsistencia);
+        if (!r.IsSuccess || r.Value is null) { _error = r.ErrorMessage ?? "No se pudo guardar la asistencia."; return; }
+        _sesion = r.Value;
+        await ArmarAsistenciaAsync();
+        await Notification.SuccessAsync("Asistencia guardada.");
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task AgregarPuntoAsync()
+    {
+        if (_sesion is not { } s) return;
+        if (!Guid.TryParse(_sujetoId, out var sujeto)) { _error = "El identificador del sujeto no es válido."; return; }
+        using var carga = _punto.Iniciar();
+        _error = null;
+        var r = await Gobierno.AgregarPuntoAsync(s.PublicId, new PuntoDeSesionRequest(_sujeto, sujeto, _clasePunto,
+            string.IsNullOrWhiteSpace(_notasPunto) ? null : _notasPunto.Trim(), null), _clavePunto);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo agregar el punto."; return; }
+        _sujetoId = _notasPunto = null;
+        await CargarAsync();
+        await Cambio.InvokeAsync();
+    }
+
+    private void AbrirCorreccion(PuntoDeSesionDto punto)
+    {
+        _puntoEditado = punto;
+        _propuesta = punto.Outcome ?? 0;
+        _condiciones = punto.Conditions;
+        _notasCorreccion = null;
+        _errorVoto = null;
+        _clavePunto = new ClaveDeOperacion();
+        _mostrarCorreccion = true;
+    }
+
+    private async Task CorregirAsync()
+    {
+        if (_sesion is not { } s || _puntoEditado is not { } p) return;
+        using var carga = _punto.Iniciar();
+        _errorVoto = null;
+        var r = await Gobierno.CorregirPuntoAsync(s.PublicId, p.ItemPublicId, new CorreccionDePuntoRequest(_propuesta == 0 ? null : _propuesta,
+            string.IsNullOrWhiteSpace(_condiciones) ? null : _condiciones.Trim(), string.IsNullOrWhiteSpace(_notasCorreccion) ? null : _notasCorreccion.Trim()), _clavePunto);
+        if (!r.IsSuccess) { _errorVoto = r.ErrorMessage ?? "No se pudo corregir el punto."; return; }
+        _mostrarCorreccion = false;
+        await CargarAsync();
+    }
+
+    private void AbrirRetiro(PuntoDeSesionDto punto)
+    {
+        _puntoEditado = punto;
+        _motivoRetiro = _errorVoto = null;
+        _clavePunto = new ClaveDeOperacion();
+        _mostrarRetiro = true;
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_sesion is not { } s || _puntoEditado is not { } p || string.IsNullOrWhiteSpace(_motivoRetiro)) return;
+        using var carga = _punto.Iniciar();
+        _errorVoto = null;
+        var r = await Gobierno.RetirarPuntoAsync(s.PublicId, p.ItemPublicId, _motivoRetiro.Trim(), _clavePunto);
+        if (!r.IsSuccess) { _errorVoto = r.ErrorMessage ?? "No se pudo retirar el punto."; return; }
+        _mostrarRetiro = false;
+        await CargarAsync();
+        await Cambio.InvokeAsync();
+    }
+
+    private void AbrirVoto(PuntoDeSesionDto punto)
+    {
+        _puntoDelVoto = punto;
+        _votante = null;
+        _valorVoto = 1;
+        _metodo = 1;
+        _totp = _motivoReemplazo = _errorVoto = null;
+        _desafio = null;
+        _claveDesafio = new ClaveDeOperacion();
+        _claveVoto = new ClaveDeOperacion();
+        _mostrarVoto = true;
+    }
+
+    private async Task PedirDesafioAsync()
+    {
+        if (_sesion is not { } s || _votante is not { } persona) return;
+        using var carga = _voto.Iniciar();
+        _errorVoto = null;
+        var r = await Gobierno.DesafioDePresenciaAsync(s.PublicId, persona, _claveDesafio);
+        if (!r.IsSuccess || r.Value is null) { _errorVoto = r.ErrorMessage ?? "No se pudo preparar la verificación de presencia."; return; }
+        if (_metodo == 3 && (!r.Value.Methods.Contains("Passkey") || r.Value.PublicKeyOptions is null))
+        {
+            _errorVoto = "El miembro no tiene una llave inscrita: use su código de autenticador.";
+            return;
+        }
+        if (_metodo == 4 && !r.Value.Methods.Contains("Totp"))
+        {
+            _errorVoto = "El miembro no tiene un autenticador inscrito: use su llave.";
+            return;
+        }
+        _desafio = r.Value;
+    }
+
+    private async Task VotarAsync()
+    {
+        if (_sesion is not { } s || _puntoDelVoto is not { } p || _votante is not { } persona) return;
+        using var carga = _voto.Iniciar();
+        _errorVoto = null;
+        PresenciaDeVotoRequest? presencia = null;
+        if (_metodo == 3 && _desafio is { PublicKeyOptions: { } opciones })
+        {
+            var firma = await Passkeys.FirmarAsync(opciones);
+            if (!firma.Ok)
+            {
+                if (firma.Motivo != MotivosWebAuthn.Cancelado) _errorVoto = firma.Mensaje ?? "No se pudo usar la llave del miembro.";
+                return;
+            }
+            presencia = new PresenciaDeVotoRequest(_desafio.ChallengePublicId, firma.RespuestaJson, null);
+        }
+        else if (_metodo == 4 && _desafio is not null)
+        {
+            presencia = new PresenciaDeVotoRequest(_desafio.ChallengePublicId, null, _totp?.Trim());
+        }
+        var r = await Gobierno.VotarAsync(s.PublicId, p.ItemPublicId, new VotoRequest(persona, _valorVoto, _metodo, presencia,
+            YaVoto ? _motivoReemplazo?.Trim() : null), _claveVoto);
+        if (!r.IsSuccess)
+        {
+            var faltan = GobiernoDeCarteraClient.PermisosQueFaltan(r);
+            _errorVoto = faltan.Count > 0
+                ? $"Le falta uno de estos permisos para registrar ese voto: {string.Join(", ", faltan)}."
+                : r.ErrorCode == "Lending.Session.VoterExcluded"
+                    ? $"Esa persona no vota este punto: {TextosDeCartera.Exclusion(r.Dato<string>("reason") ?? "")}."
+                    : r.ErrorMessage ?? "No se pudo registrar el voto.";
+            if (r.ErrorCode is "Approvals.Presence.Expired" or "Approvals.Presence.TotpReused" or "Approvals.Presence.Invalid") _desafio = null;
+            return;
+        }
+        _mostrarVoto = false;
+        await Notification.SuccessAsync("Voto registrado.");
+        await CargarAsync();
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (_sesion is not { CurrentContentSha256: { } huella } s) return;
+        using var carga = _cierre.Iniciar();
+        _error = null;
+        var r = await Gobierno.CerrarAsync(s.PublicId, huella, _claveCierre);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _error = r.ErrorCode == "Lending.Session.QuorumNotMet"
+                ? $"No hay quórum: se requieren {r.Entero("required")} y asisten {r.Entero("present")}."
+                : r.ErrorMessage ?? "No se pudo cerrar el acta.";
+            return;
+        }
+        _sesion = r.Value;
+        await ArmarAsistenciaAsync();
+        await Notification.SuccessAsync($"Acta {r.Value.Number} cerrada.");
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task DescargarPdfAsync()
+    {
+        if (_sesion is not { } s) return;
+        using var carga = _descarga.Iniciar();
+        var r = await Gobierno.ActaEnPdfAsync(s.PublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el PDF del acta."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    /// <summary>Un miembro en la planilla de asistencia.</summary>
+    private sealed class FilaDeAsistencia(Guid miembro, string nombre, int? papel)
+    {
+        public Guid Miembro { get; } = miembro;
+        public string Nombre { get; } = nombre;
+        public int? Papel { get; } = papel;
+        public bool Presente { get; set; }
+        public Guid? Reemplaza { get; set; }
+    }
+}
