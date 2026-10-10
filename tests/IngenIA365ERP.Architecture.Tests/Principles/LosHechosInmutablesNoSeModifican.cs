@@ -263,6 +263,28 @@ public class LosHechosInmutablesNoSeModifican
         Assert.True(infractores.Count == 0, "Hechos de Cartera que se pueden modificar (Principio XI, C42):\n  " + string.Join("\n  ", infractores));
     }
 
+    /// <summary>
+    /// US17 (T0263, T0273; C42, C75, C108): los hechos de gobierno y de la cola de mensajes al deudor están en <see cref="HechosDeCartera"/>
+    /// con su escritura única: la matriz con sus niveles y reglas, la decisión, la versión de reglas del órgano, la intervención en un
+    /// expediente, el mensaje y su historia sin ninguna; el voto, sólo <c>ReplacedAt</c> (un voto mal registrado se reemplaza, nunca se edita).
+    /// Si alguno sale de la lista o cambia su escritura única, la prueba de arriba deja de mirarlo: ésta lo impide.
+    /// </summary>
+    [Fact]
+    public void Los_hechos_de_gobierno_y_de_la_cola_de_mensajes_estan_en_la_lista()
+    {
+        var esperados = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["AttributionMatrix"] = [], ["AttributionLevel"] = [], ["AttributionRule"] = [], ["CreditDecision"] = [],
+            ["GoverningBodyRuleVersion"] = [], ["SessionVote"] = ["ReplacedAt"], ["CaseParticipation"] = [],
+            ["DebtorMessage"] = [], ["DebtorMessageEvent"] = [],
+        };
+        foreach (var (nombre, unicas) in esperados)
+        {
+            Assert.True(HechosDeCartera.TryGetValue(nombre, out var declaradas), $"{nombre} no está en HechosDeCartera (T0263).");
+            Assert.Equal(unicas, declaradas);
+        }
+    }
+
     [Fact]
     public void Application_no_borra_ni_actualiza_en_bloque_los_hechos_de_Cartera()
     {

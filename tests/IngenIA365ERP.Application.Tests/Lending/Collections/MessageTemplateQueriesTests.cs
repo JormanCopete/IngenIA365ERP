@@ -96,7 +96,7 @@ public sealed class MessageTemplateQueriesTests : IDisposable
     [Fact]
     public async Task La_vista_previa_no_lleva_clave_ni_escribe_y_mide_el_SMS()
     {
-        var handler = new RenderMessageTemplatePreviewQueryHandler(_e.Db, _e.G.Reloj);
+        var handler = new RenderMessageTemplatePreviewQueryHandler(_e.Db, _e.G.Alcance, _e.G.Reloj);
         var cambios = _e.Db.ChangeTracker.Entries().Count();
 
         var deCodigo = await handler.Handle(new RenderMessageTemplatePreviewQuery(MessageChannel.Sms, Code: "MORAADMIN",
@@ -112,5 +112,18 @@ public sealed class MessageTemplateQueriesTests : IDisposable
         libre.Value.Warnings.Should().Contain(w => w.Codigo == "Lending.MessageTemplate.SmsTooLong");
         invalida.Error.Code.Should().Be("Lending.MessageTemplate.VariableNotAllowed");
         _e.Db.ChangeTracker.Entries().Count().Should().Be(cambios);
+    }
+
+    [Fact]
+    public async Task La_vista_previa_ignora_el_credito_de_ejemplo_fuera_del_alcance()
+    {
+        // Bloque F (T0259): el crédito de ejemplo es de Norte; quien sólo tiene Sur ve los valores de muestra, no el número ni el titular.
+        _e.G.AlcanceActual = AlcanceDeCartera.Vacio with { Oficinas = new HashSet<int> { MensajesDePrueba.Sur }, TodasLasLineas = true };
+        var handler = new RenderMessageTemplatePreviewQueryHandler(_e.Db, _e.G.Alcance, _e.G.Reloj);
+
+        var vista = await handler.Handle(new RenderMessageTemplatePreviewQuery(MessageChannel.Sms, Code: "MORAADMIN",
+            SampleLoanPublicId: _e.Credito.PublicId), default);
+
+        vista.Value.Body.Should().NotContain("CR-0001").And.NotContain("Ana Deudora").And.Contain("[NumeroDelCredito]");
     }
 }

@@ -8,8 +8,8 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// <summary>
 /// Las cargas de migración de Cartera (feature 013, T0234, C107; contracts/api.md §19.1), en su forma mínima: listar, ver, crear el
 /// borrador con su corte y aplicar una carga sin partes, todo con <c>Lending.Migration.Load</c>. Las escrituras exigen
-/// <c>Idempotency-Key</c>; una carga que no existe responde el 404 genérico (<c>Lending.MigrationLoad.NotFound</c>). US17 pasa el grupo a
-/// <c>LendingGroup</c> (alcance y auditoría de Cartera); US8 suma las partes, plantillas, cuadre, conciliación y diferencias de §19.1–§19.2.
+/// <c>Idempotency-Key</c>; una carga que no existe responde el 404 genérico (<c>Lending.MigrationLoad.NotFound</c>). Desde US17 (T0312) va sobre
+/// <see cref="LendingGroup"/> (auditoría de Cartera); US8 suma las partes, plantillas, cuadre, conciliación y diferencias de §19.1–§19.2.
 /// Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class MigrationEndpoints : ICarterModule
@@ -18,10 +18,8 @@ public class MigrationEndpoints : ICarterModule
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        var cargas = app.MapGroup("/api/lending/migration/loads")
-            .WithTags("Cartera Migración")
-            .RequireAuthorization()
-            .AddEndpointFilter<ErrorEnvelopeFilter>();
+        // US17 (T0312): sobre el grupo base de Cartera, que suma la auditoría del intento denegado y del rechazo de forma.
+        var cargas = LendingGroup.Grupo(app, "/migration/loads", "Cartera Migración");
 
         cargas.MapGet("/", async (ISender sender, CancellationToken ct) => await sender.Send(new ListMigrationLoadsQuery(), ct))
             .WithName("Lending_MigrationLoads_List")

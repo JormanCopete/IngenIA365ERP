@@ -178,8 +178,10 @@ public class LosEndpointsProtegidosExigenPermiso
         // RutasDePlantilla.MapPlantilla, que exige su permiso adentro (Endpoints/Common entra al recorrido). Feature 012, T262:
         // lo mismo un grupo de documentos que publica sólo el ciclo común por CicloDeDocumentoRutas.MapCicloDeDocumento
         // (ajustes), que pone el permiso de cada ruta adentro (CicloDeDocumentoRutas.cs también entra al recorrido).
+        // Feature 013, T0312: LendingGroup.cs sólo arma el grupo base de Cartera; no publica rutas (lo fija Cartera_usa_el_grupo_base).
         Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal)
-                || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal),
+                || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal)
+                || string.Equals(Path.GetFileName(relativo), GrupoBaseDeCartera, StringComparison.Ordinal),
             $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 
         var sinPermiso = tramos
@@ -190,6 +192,35 @@ public class LosEndpointsProtegidosExigenPermiso
 
         Assert.True(sinPermiso.Count == 0,
             $"Rutas de {relativo} sin .RequirePermission( (features 008 y 009):\n  " + string.Join("\n  ", sinPermiso));
+    }
+
+    /// <summary>El archivo del grupo base de Cartera (feature 013, T0312).</summary>
+    private const string GrupoBaseDeCartera = "LendingGroup.cs";
+
+    [Fact]
+    public void Cartera_usa_el_grupo_base_con_la_auditoria_del_intento_denegado()
+    {
+        // Feature 013, US17 (T0264, T0312; api.md §1.1, T67): el grupo base lleva RequireAuthorization, el sobre de error y el metadato
+        // .AuditarIntentoDenegado(ModuloDeAuditoria.Lending) —un 404 por falta de permiso deja Lending.Access.Denied y un 400 del validador
+        // Lending.Request.Rejected—, y todo archivo de Endpoints/Lending arma sus grupos con LendingGroup.Grupo, nunca con un MapGroup propio
+        // (que se saltaría la auditoría). El permiso de cada ruta lo sigue exigiendo Cada_ruta_lleva_RequirePermission.
+        var carpeta = Path.Combine(Api, "Endpoints", "Lending");
+        var grupo = FuenteSinComentarios.Leer(Path.Combine(carpeta, GrupoBaseDeCartera));
+        Assert.Contains(".RequireAuthorization()", grupo, StringComparison.Ordinal);
+        Assert.Contains(".AuditarIntentoDenegado(ModuloDeAuditoria.Lending)", grupo, StringComparison.Ordinal);
+        Assert.Contains("AddEndpointFilter<ErrorEnvelopeFilter>()", grupo, StringComparison.Ordinal);
+        Assert.Contains("\"/api/lending\"", grupo, StringComparison.Ordinal);
+        Assert.Empty(Tramos(grupo));
+
+        var infractores = new List<string>();
+        foreach (var archivo in Directory.EnumerateFiles(carpeta, "*.cs").Where(a => Path.GetFileName(a) != GrupoBaseDeCartera))
+        {
+            var fuente = FuenteSinComentarios.Leer(archivo);
+            if (Regex.IsMatch(fuente, @"\.MapGroup\(")) infractores.Add($"{Path.GetFileName(archivo)}: arma un grupo propio con MapGroup");
+            if (!fuente.Contains("LendingGroup.Grupo(", StringComparison.Ordinal)) infractores.Add($"{Path.GetFileName(archivo)}: no usa LendingGroup.Grupo");
+            if (Regex.IsMatch(fuente, @"\bapp\.Map(Get|Post|Put|Delete|Patch)\(")) infractores.Add($"{Path.GetFileName(archivo)}: publica rutas fuera del grupo");
+        }
+        Assert.True(infractores.Count == 0, "Rutas de Cartera fuera del grupo base (T67):\n  " + string.Join("\n  ", infractores));
     }
 
     [Fact]

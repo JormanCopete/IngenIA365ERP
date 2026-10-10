@@ -462,6 +462,10 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.
     builder.Services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.IRepresentacionGraficaRenderer, IngenIA365ERP.API.Reports.RepresentacionGraficaRenderer>();
+    // Feature 013 (T0297): el acta de una sesión de Cartera en PDF. Al cerrar la sesión queda como adjunto de módulo no borrable;
+    // reemplaza el SinActaEnPdf que deja Application (por TryAdd) para los anfitriones sin QuestPDF.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Sessions.IRenderizadorDeActaDeSesion, IngenIA365ERP.API.Reports.ActaDeSesionPdfRenderer>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Lending.Sessions.IActaDeSesionEnPdf, IngenIA365ERP.Application.Lending.Sessions.ActaDeSesionGuardada>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 

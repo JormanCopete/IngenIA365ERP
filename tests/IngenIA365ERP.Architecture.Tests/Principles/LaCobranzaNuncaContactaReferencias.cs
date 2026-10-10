@@ -12,14 +12,28 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class LaCobranzaNuncaContactaReferencias
 {
     /// <summary>Carpetas de mensajería y cobranza (relativas a <c>src/</c>).</summary>
-    private static readonly string[] Carpetas = [];
+    private static readonly string[] Carpetas =
+    [
+        // US17 (T0273, C108): la cola de mensajes al deudor, sus tareas, comandos y consultas. US12 (K4) suma la cobranza.
+        "Core/IngenIA365ERP.Application/Lending/Collections",
+    ];
 
     /// <summary>Archivos exentos (rutas relativas a la raíz, con barras normales).</summary>
     private static readonly string[] Exentos = [];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
         (new Regex(@"\b(PersonalReferences?|FamilyReferences?|Referencias(Personales|Familiares))\b", RegexOptions.Compiled), "usa referencias personales o familiares"),
+        // T0273: las referencias de la persona viven en COR_References (DbSet References): la cola no las lee.
+        (new Regex(@"\.References\b|\bCOR_References\b|\bReference\b", RegexOptions.Compiled), "lee COR_References"),
     ];
+
+    [Fact]
+    public void La_regla_mira_la_cola_de_mensajes()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(Path.GetFileName).ToList();
+        Assert.Contains("ColaDeMensajesAlDeudor.cs", archivos);
+        Assert.Contains("TareaDeMensajesAlDeudor.cs", archivos);
+    }
 
     [Fact]
     public void La_cobranza_no_lee_referencias()

@@ -27,6 +27,13 @@ public class ElMotorDeCarteraEsDecimal
     private static readonly string[] Archivos = ["Core/IngenIA365ERP.Domain/Common/VigenciaBitemporal.cs"];
 
     [Fact]
+    public void La_regla_mira_la_ventana_legal_de_contacto()
+    {
+        // US17 (T0273): Domain/Lending/Collections entra por la carpeta del motor (recursiva).
+        Assert.Contains(ReglaSobreFuente.ArchivosEn(Carpetas), a => a.EndsWith(Path.Combine("Collections", "VentanaLegalDeContacto.cs"), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void El_motor_no_usa_coma_flotante()
     {
         var infracciones = ReglaSobreFuente.Infracciones(

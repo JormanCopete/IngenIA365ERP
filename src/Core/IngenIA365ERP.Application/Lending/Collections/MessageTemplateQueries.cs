@@ -2,6 +2,7 @@ using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -112,7 +113,8 @@ public sealed record MessageTemplatePreviewDto(string? Subject, string Body, int
 /// La vista previa de una plantilla (feature 013, T0308; api.md §14.1, <c>POST /api/lending/message-templates/preview</c>,
 /// <c>Lending.MessageTemplates.View</c>): la vigente de un código o un texto en edición (con su propósito), renderizado con los datos de un
 /// crédito de ejemplo o con valores de muestra. <b>Sin clave</b>: no escribe nada. Una variable fuera de la lista blanca responde
-/// <c>Lending.MessageTemplate.VariableNotAllowed</c>; el SMS largo, el aviso <c>.SmsTooLong</c>. (nuevo)
+/// <c>Lending.MessageTemplate.VariableNotAllowed</c>; el SMS largo, el aviso <c>.SmsTooLong</c>. El crédito de ejemplo sólo cuenta si está en el
+/// alcance de Cartera de quien pregunta (T0259); fuera de él se usan los valores de muestra, como si no se hubiera indicado. (nuevo)
 /// </summary>
 public sealed record RenderMessageTemplatePreviewQuery(
     MessageChannel Channel,
@@ -135,7 +137,7 @@ public sealed class RenderMessageTemplatePreviewQueryValidator : AbstractValidat
     }
 }
 
-public sealed class RenderMessageTemplatePreviewQueryHandler(IApplicationDbContext db, IDateTimeService reloj)
+public sealed class RenderMessageTemplatePreviewQueryHandler(IApplicationDbContext db, IAlcanceDeCartera alcanceDeLaPeticion, IDateTimeService reloj)
     : IRequestHandler<RenderMessageTemplatePreviewQuery, Result<MessageTemplatePreviewDto>>
 {
     public async Task<Result<MessageTemplatePreviewDto>> Handle(RenderMessageTemplatePreviewQuery request, CancellationToken ct)
@@ -166,7 +168,8 @@ public sealed class RenderMessageTemplatePreviewQueryHandler(IApplicationDbConte
             .ToDictionary(v => v, v => (string?)$"[{v}]", StringComparer.Ordinal);
         if (request.SampleLoanPublicId is { } loanPublicId)
         {
-            var credito = await (from l in db.Loans.AsNoTracking()
+            var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
+            var credito = await (from l in db.Loans.AsNoTracking().PorOficinaYLinea(alcance, l => l.BranchId, l => l.CreditLineId)
                                  join p in db.People.AsNoTracking() on l.DebtorPersonId equals p.Id
                                  where l.PublicId == loanPublicId
                                  select new { l.Number, Persona = p }).FirstOrDefaultAsync(ct);

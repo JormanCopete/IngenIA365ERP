@@ -9,7 +9,7 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// <summary>
 /// La activación de Cartera (feature 013, T0234, C107; contracts/api.md §19.3): el estado con sus requisitos y la activación, con
 /// <c>Lending.Activation.Execute</c>. La activación exige <c>Idempotency-Key</c> y el punto del acta (<c>sessionItemPublicId</c>, C61).
-/// US17 pasa el grupo a <c>LendingGroup</c>; US8 suma la plantilla y la revisión de cobros provisionales (§19.3). Los roles sugeridos
+/// Desde US17 (T0312) va sobre <see cref="LendingGroup"/>; US8 suma la plantilla y la revisión de cobros provisionales (§19.3). Los roles sugeridos
 /// (§19.4, T0300) van con <c>Security.Roles.Create</c>. Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class ActivationEndpoints : ICarterModule
@@ -18,10 +18,8 @@ public class ActivationEndpoints : ICarterModule
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        var activacion = app.MapGroup("/api/lending/activation")
-            .WithTags("Cartera Activación")
-            .RequireAuthorization()
-            .AddEndpointFilter<ErrorEnvelopeFilter>();
+        // US17 (T0312): sobre el grupo base de Cartera, que suma la auditoría del intento denegado y del rechazo de forma.
+        var activacion = LendingGroup.Grupo(app, "/activation", "Cartera Activación");
 
         activacion.MapGet("/", async (ISender sender, CancellationToken ct) => await sender.Send(new GetLendingActivationStatusQuery(), ct))
             .WithName("Lending_Activation_Status")

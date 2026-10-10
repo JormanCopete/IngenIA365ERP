@@ -20,6 +20,40 @@ public class TextosDeCarteraTests
         (new Regex("\"Lending\\.[A-Z]\\w*\\.[A-Z]\\w*\"", RegexOptions.Compiled), "muestra un código de error como texto"),
     ];
 
+    /// <summary>
+    /// US17 (T0265): los archivos de errores de esta fase. Ahí los códigos son el contrato (<c>Lending.Session.QuorumNotMet</c>), así que la
+    /// regla mira los demás textos —los mensajes que lee la persona—: ninguno lleva un código ni el nombre del sistema anterior.
+    /// </summary>
+    private static readonly string[] ArchivosDeErrores =
+    [
+        "Core/IngenIA365ERP.Application/Lending/Common/ErroresDeGobierno.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/ErroresDeMensajesAlDeudor.cs",
+    ];
+
+    private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);
+
+    private static readonly Regex SoloCodigo = new(@"^[A-Za-z]+(\.[A-Za-z0-9]+)+$", RegexOptions.Compiled);
+
+    private static readonly Regex CodigoEnTexto = new(@"\b(Lending|Approvals|Generic|Catalogo|Core)\.[A-Z]\w*\.[A-Z]\w*", RegexOptions.Compiled);
+
+    [Fact]
+    public void Los_mensajes_de_error_de_Cartera_no_muestran_codigos_ni_el_sistema_anterior()
+    {
+        var infracciones = new List<string>();
+        foreach (var archivo in ReglaSobreFuente.ArchivosNombrados(ArchivosDeErrores))
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            foreach (Match m in Literal.Matches(texto))
+            {
+                var valor = m.Groups[1].Value;
+                if (SoloCodigo.IsMatch(valor)) continue;
+                if (valor.Contains("SOLIDO", StringComparison.OrdinalIgnoreCase)) infracciones.Add($"{Path.GetFileName(archivo)}: «{valor}» nombra el sistema anterior");
+                if (CodigoEnTexto.IsMatch(valor)) infracciones.Add($"{Path.GetFileName(archivo)}: «{valor}» muestra un código");
+            }
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Mensajes de error de Cartera con códigos o el nombre del sistema anterior (§7.6)");
+    }
+
     [Fact]
     public void Los_textos_de_Cartera_no_muestran_codigos_ni_el_sistema_anterior()
     {

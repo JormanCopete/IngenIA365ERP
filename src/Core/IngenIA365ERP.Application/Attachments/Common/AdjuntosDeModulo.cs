@@ -108,6 +108,13 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SolicitudDelTitular = "DataSubjectRequest";
 
+    /// <summary>
+    /// Feature 013 (T0297, T64; data-model §3.8): el PDF sellado del acta de una sesión de un órgano de Cartera. Lo genera el cierre de la
+    /// sesión (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> de la sesión): se lee con <c>Lending.Sessions.Read</c>, no recibe subidas y no se
+    /// borra (un acta cerrada se corrige con otra sesión).
+    /// </summary>
+    public const string ActaDeSesionDeCartera = "LendingSessionMinutes";
+
     private const string VerHabeasData = "Compliance.HabeasData.ViewHistory";
     private const string RegistrarAutorizacion = "Compliance.HabeasData.RecordConsent";
     private const string LeerSolicitudes = "Compliance.DataSubjectRequests.Read";
@@ -125,6 +132,7 @@ public static class AdjuntosDeModulo
         ["PilaGeneration"] = new("Payroll.Pila.View", Borrable: false, "la planilla PILA tal como se generó y se cargó en el operador"),
         [DocumentoElectronicoDeVenta] = new("Inventory.Sales.View", Borrable: false, "un archivo de un documento electrónico de venta ante la DIAN"),
         [DocumentoElectronicoDeCompra] = new("Inventory.Purchases.View", Borrable: false, "un archivo de un documento electrónico de compra ante la DIAN"),
+        [ActaDeSesionDeCartera] = new("Lending.Sessions.Read", Borrable: false, "el acta sellada de una sesión de un órgano de Cartera"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>

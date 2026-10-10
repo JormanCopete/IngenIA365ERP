@@ -17,9 +17,84 @@ public class LosComandosDeCarteraLlevanClave
         // Fase 3 (T0234, C107): la migración y la activación en su forma mínima; US8 suma sus demás rutas.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/MigrationEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/ActivationEndpoints.cs",
+        // US17 (T0265, T0273): gobierno, configuración y la cola de mensajes al deudor.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/AttributionsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/GoverningBodiesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/SessionsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/RelatedPartiesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ScopesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/AlertsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ParametersEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DebtorMessagesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/MessageTemplatesEndpoints.cs",
+    ];
+
+    /// <summary>
+    /// Las escrituras que van sin clave (api.md §1.5): las consultas por POST por el tamaño del cuerpo. Se nombran por el final de la ruta.
+    /// </summary>
+    private static readonly string[] ConsultasPorPost = ["\"/preview\""];
+
+    /// <summary>
+    /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
+    /// <c>IdempotencyBehavior</c> exige la clave aunque alguien olvide el filtro de la ruta.
+    /// </summary>
+    private static readonly Type[] ComandosDeLaFase =
+    [
+        typeof(IngenIA365ERP.Application.Lending.Attributions.AddAttributionMatrixVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Attributions.RegisterRelatedPartyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Attributions.EndRelatedPartyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Imports.ImportRelatedPartiesCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.CreateGoverningBodyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.AddGoverningBodyRulesVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.AddGoverningBodyMemberCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.EndGoverningBodyMemberCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.DeactivateGoverningBodyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.CreateSessionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.RecordSessionAttendanceCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.AddSessionItemCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.UpdateSessionItemCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.RemoveSessionItemCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.CreateSessionPresenceChallengeCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.RecordSessionVoteCommand),
+        typeof(IngenIA365ERP.Application.Lending.Sessions.CloseSessionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Common.SetUserCreditLineScopesCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.SendDebtorMessageCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.CancelDebtorMessageCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.CreateMessageTemplateVersionCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);
+
+    [Fact]
+    public void Cada_escritura_de_Cartera_exige_la_clave_salvo_las_consultas_por_POST()
+    {
+        // US17 (T0265): ruta por ruta, no sólo por archivo. Un tramo de Map(Post|Put|Delete|Patch) sin ConClaveDeOperacion sólo se admite
+        // para las consultas por POST de api.md §1.5.
+        var carpeta = Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.API", "Endpoints", "Lending");
+        var infracciones = new List<string>();
+        foreach (var archivo in Directory.EnumerateFiles(carpeta, "*.cs"))
+        {
+            foreach (var tramo in LosEndpointsProtegidosExigenPermiso.Tramos(File.ReadAllText(archivo)))
+            {
+                if (!Regex.IsMatch(tramo, @"^\.Map(Post|Put|Delete|Patch)\(")) continue;
+                if (tramo.Contains(".ConClaveDeOperacion()", StringComparison.Ordinal)) continue;
+                if (ConsultasPorPost.Any(c => tramo.Contains(c, StringComparison.Ordinal))) continue;
+                var plano = Regex.Replace(tramo, @"\s+", " ");
+                infracciones.Add($"{Path.GetFileName(archivo)}: {plano[..Math.Min(90, plano.Length)]}");
+            }
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una escritura de Cartera sin Idempotency-Key (FR-009)");
+    }
+
+    [Fact]
+    public void Los_comandos_de_la_fase_son_idempotentes()
+    {
+        var sinClave = ComandosDeLaFase
+            .Where(t => !typeof(IngenIA365ERP.Application.Common.Behaviors.IOperacionIdempotente).IsAssignableFrom(t))
+            .Select(t => t.Name)
+            .ToList();
+        ReglaSobreFuente.SinInfracciones(sinClave, "Un comando de Cartera sin IOperacionIdempotente (FR-009)");
+    }
 
     [Fact]
     public void Cada_archivo_de_rutas_de_escritura_exige_la_clave()

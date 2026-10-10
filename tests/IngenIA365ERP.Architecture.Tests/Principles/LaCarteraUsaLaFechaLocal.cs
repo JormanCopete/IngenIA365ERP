@@ -33,6 +33,15 @@ public class LaCarteraUsaLaFechaLocal
     ];
 
     [Fact]
+    public void La_regla_mira_la_ventana_legal_y_la_cola_de_mensajes()
+    {
+        // US17 (T0273): Domain/Lending/Collections y Application/Lending/Collections entran por sus carpetas (recursivas).
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Collections", "VentanaLegalDeContacto.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Collections", "ColaDeMensajesAlDeudor.cs"), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Cartera_no_lee_el_reloj_por_su_cuenta()
     {
         var infracciones = ReglaSobreFuente.Infracciones(
