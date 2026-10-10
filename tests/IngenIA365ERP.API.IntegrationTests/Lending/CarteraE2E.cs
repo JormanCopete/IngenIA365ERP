@@ -5,10 +5,8 @@ using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.API.IntegrationTests.Payroll;
-using IngenIA365ERP.Domain.Entities.Lending.Governance;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Attributions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IngenIA365ERP.API.IntegrationTests.Lending;
@@ -27,7 +25,7 @@ public sealed class CarteraCollection : ICollectionFixture<CentralIdentityApiFix
 /// <summary>
 /// Ayudantes de las e2e de Cartera (feature 013, T0014): la clave de idempotencia, la cooperativa aislada (mismo camino
 /// HTTP que <c>ContabilidadE2E</c> e <c>InventarioE2E</c>) y las pasadas a mano de los trabajos de fondo, que la fixture deja
-/// apagados. El ayudante del <c>ProcesadorDeCartera</c> y <c>ActivarCarteraAsync</c> los agrega la fase Fundacional B.
+/// apagados, la activación de prueba con su acta por HTTP y las personas y usuarios que piden las e2e de gobierno.
 /// </summary>
 public static class CarteraE2E
 {
@@ -49,6 +47,9 @@ public static class CarteraE2E
         public required Guid TenantPublicId { get; init; }
         public required Guid SucursalPrincipal { get; init; }
         public int? PrimerEjercicioContable { get; init; }
+
+        /// <summary>El correo del administrador (<c>CompanyAdmin</c>): con él se busca su usuario para asociarle su persona (T0311).</summary>
+        public string? CorreoAdmin { get; init; }
     }
 
     private static readonly Dictionary<(CentralIdentityApiFixture, string), Task<CooperativaAislada>> Aisladas = [];
@@ -86,7 +87,8 @@ public static class CarteraE2E
             legalName = $"Cooperativa Cartera {nombre} E2E",
             contactEmail = $"contacto.{nombre}@coop.cartera.test",
             planType = "Basic",
-            maxUsers = 20,
+            // Los usuarios del ensayo de Cartera (quickstart §2.7, UsuariosDeCartera) son diecinueve más el administrador.
+            maxUsers = 40,
             storageLimitMb = 1024,
             firstAdminEmail = correoAdmin,
         });
@@ -111,10 +113,12 @@ public static class CarteraE2E
         return new CooperativaAislada
         {
             TokenAdmin = admin, TenantPublicId = tenantPublicId, SucursalPrincipal = principal, PrimerEjercicioContable = primerEjercicioContable,
+            CorreoAdmin = correoAdmin,
         };
     }
 
-    private static async Task<string> AceptarInvitacionAsync(CentralIdentityApiFixture fx, HttpClient http, string correo, string clave)
+    /// <summary>Acepta la invitación que salió por correo para <paramref name="correo"/> y devuelve el access de la sesión.</summary>
+    public static async Task<string> AceptarInvitacionAsync(CentralIdentityApiFixture fx, HttpClient http, string correo, string clave)
     {
         var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == correo);
         mensaje.Should().NotBeNull($"la invitación de {correo} tiene que haber salido por correo");
@@ -144,13 +148,13 @@ public static class CarteraE2E
     /// <c>/api/core/integration-participants</c> los dobles <c>TST</c> (Recaudo, recaudador del contrato) y <c>TES</c> (destino
     /// <c>Treasury</c>, que consume <c>TesoreriaDePrueba</c>), los dos con <c>Class = Test</c>; inicia la contabilidad con el ejercicio de hoy
     /// si la cooperativa no la tenía (como <c>CooperativaAisladaAsync(…, primerEjercicioContable)</c>); crea la carga con corte = hoy − 1, la
-    /// aplica vacía, siembra el acta de activación y activa con fecha = hoy por <c>POST /api/lending/activation</c>.
+    /// aplica vacía, levanta el acta de activación y activa con fecha = hoy por <c>POST /api/lending/activation</c>.
     ///
     /// <para>
-    /// <b>El acta se siembra</b> con el <c>ApplicationDbContext</c> de la cooperativa —un órgano, una sesión cerrada y un punto <c>Decision</c>
-    /// aprobado de sujeto <c>ActivationDifferences</c> sobre la carga— mientras no existan las rutas de órganos y sesiones; US17 (T0311) la
-    /// pasa a HTTP. «Hoy» es el del reloj de la suite (<c>IDateTimeService</c> del host). La segunda llamada con la misma cooperativa devuelve
-    /// la misma activación.
+    /// <b>El acta se levanta por HTTP</b> desde US17 (T0311; <see cref="ActaDeActivacionAsync"/>): órgano, sesión, asistencia, punto
+    /// <c>Decision</c> de sujeto <c>ActivationDifferences</c> sobre la carga, votos y cierre por las rutas de órganos y sesiones; hasta la fase 3
+    /// se sembraba con el <c>ApplicationDbContext</c>. «Hoy» es el del reloj de la suite (<c>IDateTimeService</c> del host). La segunda llamada
+    /// con la misma cooperativa devuelve la misma activación.
     /// </para>
     /// </summary>
     public static Task<CarteraActivadaE2E> ActivarCarteraAsync(CentralIdentityApiFixture fx, CooperativaAislada coop, OpcionesDeActivacion? opciones = null)
@@ -210,7 +214,7 @@ public static class CarteraE2E
         var aplicar = await ConClaveAsync(http, admin, HttpMethod.Post, $"/api/lending/migration/loads/{carga}/apply", new { reason = "Carga vacía (e2e)" });
         aplicar.IsSuccessStatusCode.Should().BeTrue($"aplicar la carga: «{await aplicar.Content.ReadAsStringAsync()}»");
 
-        var punto = await SembrarActaDeActivacionAsync(fx, coop.TenantPublicId, carga, corte);
+        var punto = await ActaDeActivacionAsync(http, coop, carga, hoy);
 
         var activar = await ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/activation", new
         {
@@ -234,53 +238,140 @@ public static class CarteraE2E
     }
 
     /// <summary>
-    /// El acta de activación sembrada en la base de la cooperativa (hasta US17, T0311): órgano, sesión cerrada y punto <c>Decision</c>
-    /// aprobado de sujeto <c>ActivationDifferences</c> sobre la carga. Devuelve el <c>PublicId</c> del punto.
+    /// El acta de activación por las rutas de US17 (T0311, C61, C107): la persona del administrador (la secretaría que registra los votos
+    /// y cierra, que debe tenerla por la segregación), tres miembros del maestro, el órgano con sus reglas desde hoy —el consejo, o un órgano
+    /// «Otro» si la cooperativa ya tiene un consejo activo—, la sesión de hoy con los tres presentes, el punto <c>Decision</c> de sujeto
+    /// <c>ActivationDifferences</c> sobre la carga, tres votos a favor registrados por la secretaría y el cierre con la huella que se revisó.
+    /// Devuelve el <c>PublicId</c> del punto, que <c>ActivateLendingCommand</c> valida con <c>PuntoDeActaCerrado</c>.
     /// </summary>
-    public static async Task<Guid> SembrarActaDeActivacionAsync(CentralIdentityApiFixture fx, Guid tenantPublicId, Guid cargaPublicId, DateOnly fecha)
+    public static async Task<Guid> ActaDeActivacionAsync(HttpClient http, CooperativaAislada coop, Guid cargaPublicId, DateOnly hoy)
     {
-        using var alcance = fx.Factory.Services.CreateScope();
-        var servicios = alcance.ServiceProvider;
-        var entrada = (await servicios.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.ITenantDirectory>().ListActiveAsync(CancellationToken.None))
-            .Single(t => t.PublicId == tenantPublicId);
-        await using var ambito = servicios.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.ITenantDbContextFactory>()
-            .Abrir(entrada.DatabaseName!, entrada.ConnectionString);
-        var db = (IngenIA365ERP.Persistence.DbContext.ApplicationDbContext)ambito.Db;
+        var admin = coop.TokenAdmin;
+        await PersonaDelAdministradorAsync(http, coop);
 
-        var usuario = await db.Users.Select(u => (int?)u.Id).FirstOrDefaultAsync();
-        var organo = await db.GoverningBodies.FirstOrDefaultAsync(o => o.Code == "CONSEJOE2E");
-        if (organo is null)
+        var miembros = new List<Guid>();
+        for (var i = 1; i <= 3; i++) miembros.Add(await PersonaAsync(http, admin, $"Consejero{i}", "Activacion"));
+
+        var organos = (await GetAsync(http, admin, "/api/lending/governing-bodies")).EnumerateArray().ToList();
+        var hayConsejo = organos.Any(o => o.GetProperty("kind").GetInt32() == (int)GoverningBodyKind.BoardOfDirectors && o.GetProperty("isActive").GetBoolean());
+        var codigo = $"ACT{cargaPublicId.ToString("N")[..6].ToUpperInvariant()}";
+        var organo = await ExitoAsync(http, admin, HttpMethod.Post, "/api/lending/governing-bodies", new
         {
-            organo = new GoverningBody
+            code = codigo, name = $"Órgano de activación {codigo} (e2e)", kind = hayConsejo ? "Other" : "BoardOfDirectors", decidesCredit = true,
+            minutesPrefix = "ACT-",
+            rules = new
             {
-                Code = "CONSEJOE2E", Name = "Consejo de administración (e2e)", Kind = GoverningBodyKind.BoardOfDirectors, DecidesCredit = true,
-                MinutesPrefix = "CAE2E-", CreatedBy = "e2e",
-            };
-            db.GoverningBodies.Add(organo);
-            await db.SaveChangesAsync();
+                quorum = new { numerator = 1, denominator = 2, comparison = "MoreThan" },
+                ordinaryMajority = new { numerator = 1, denominator = 2, comparison = "MoreThan" },
+                relatedPartyFraction = hayConsejo ? null : new { numerator = 4, denominator = 5, comparison = "AtLeast" },
+                validFrom = hoy, reason = "Reglas del órgano de activación (e2e)", source = "Estatutos de la cooperativa de prueba",
+            },
+        });
+        var organoId = organo.GetProperty("publicId").GetGuid();
+
+        var miembrosDelOrgano = new List<Guid>();
+        foreach (var persona in miembros)
+        {
+            var conMiembro = await ExitoAsync(http, admin, HttpMethod.Post, $"/api/lending/governing-bodies/{organoId}/members", new
+            {
+                personPublicId = persona, position = "Member", votes = true, validFrom = hoy, appointmentNotes = "Nombramiento de prueba (e2e)",
+            });
+            miembrosDelOrgano.Add(MiembroDe(conMiembro));
         }
 
-        var sesion = new Session
+        var sesion = (await ExitoAsync(http, admin, HttpMethod.Post, "/api/lending/sessions", new
         {
-            GoverningBodyId = organo.Id, Number = $"CAE2E-{cargaPublicId.ToString("N")[..8]}", Kind = SessionKind.Extraordinary,
-            Mode = SessionMode.InPerson, HeldOn = fecha, Status = SessionStatus.Closed, ClosedAt = DateTime.UtcNow, ClosedByUserId = usuario,
-            QuorumMet = true, Notes = "Acta sembrada por CarteraE2E.ActivarCarteraAsync (C107) hasta que US17 publique las rutas de sesiones.",
-            CreatedBy = "e2e",
-        };
-        db.LendingSessions.Add(sesion);
-        await db.SaveChangesAsync();
+            governingBodyPublicId = organoId, kind = "Extraordinary", mode = "InPerson", heldOn = hoy, notes = "Acta de activación (e2e)",
+        })).GetProperty("publicId").GetGuid();
+        await ExitoAsync(http, admin, HttpMethod.Post, $"/api/lending/sessions/{sesion}/attendance", new
+        {
+            attendees = miembrosDelOrgano.Select(m => new { memberPublicId = m, present = true }).ToList(),
+        });
+        var punto = (await ExitoAsync(http, admin, HttpMethod.Post, $"/api/lending/sessions/{sesion}/items", new
+        {
+            subject = LendingDecisionSubjects.ActivationDifferences, subjectPublicId = cargaPublicId, kind = "Decision",
+        })).GetProperty("itemPublicId").GetGuid();
+        foreach (var persona in miembros)
+            await ExitoAsync(http, admin, HttpMethod.Post, $"/api/lending/sessions/{sesion}/items/{punto}/votes", new
+            {
+                personPublicId = persona, vote = "For", method = "RecordedBySecretary",
+            });
 
-        var punto = new SessionItem
-        {
-            SessionId = sesion.Id, Order = 1, Kind = SessionItemKind.Decision, Rule = VotingRule.Majority,
-            SubjectType = LendingDecisionSubjects.ActivationDifferences, SubjectPublicId = cargaPublicId,
-            Title = "Activación de Cartera sin cartera previa", Outcome = CreditDecisionOutcome.Approve, VotesFor = 1, VotesAgainst = 0, Abstentions = 0,
-            CreatedBy = "e2e",
-        };
-        db.SessionItems.Add(punto);
-        await db.SaveChangesAsync();
-        return punto.PublicId;
+        var huella = (await GetAsync(http, admin, $"/api/lending/sessions/{sesion}")).GetProperty("currentContentSha256").GetString();
+        var cerrada = await ExitoAsync(http, admin, HttpMethod.Post, $"/api/lending/sessions/{sesion}/close", new { expectedContentSha256 = huella });
+        cerrada.GetProperty("status").GetInt32().Should().Be((int)SessionStatus.Closed, $"el acta de activación se cierra: {cerrada}");
+        return punto;
     }
+
+    /// <summary>El <c>memberPublicId</c> del <c>GoverningBodyMemberDto</c> que devuelve el nombramiento (<c>POST /{id}/members</c>).</summary>
+    public static Guid MiembroDe(JsonElement nombramiento) => nombramiento.GetProperty("memberPublicId").GetGuid();
+
+    // ------------------------------------------------------------------ personas y usuarios --
+
+    private static int _siguienteDocumento;
+
+    /// <summary>
+    /// Una persona del maestro por <c>POST /api/core/people</c>. El documento termina en 0 a propósito: el canal <c>SIMULADO</c> responde por
+    /// el último dígito del documento (1 dato inválido, 5 canal no disponible) y aquí se quiere el envío normal.
+    /// </summary>
+    public static async Task<Guid> PersonaAsync(HttpClient http, string token, string nombre, string apellido = "Cartera", string? movil = null)
+    {
+        var documento = (8_800_000_000L + Interlocked.Increment(ref _siguienteDocumento) * 10L).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var resp = await EnviarAsync(http, token, HttpMethod.Post, "/api/core/people", new
+        {
+            idType = "C", taxId = documento, firstName = nombre, lastName = apellido, mobile = movil,
+            email = $"{nombre.ToLowerInvariant()}.{documento}@persona.cartera.test",
+        });
+        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"persona {nombre}: «{await resp.Content.ReadAsStringAsync()}»");
+        return (await LeerAsync(resp)).GetGuid();
+    }
+
+    /// <summary>El <c>PublicId</c> del usuario con ese correo en la cooperativa.</summary>
+    public static async Task<Guid> UsuarioPorCorreoAsync(HttpClient http, string tokenAdmin, string correo)
+    {
+        var usuarios = await GetAsync(http, tokenAdmin, $"/api/admin/users?search={Uri.EscapeDataString(correo)}&pageSize=50");
+        return usuarios.GetProperty("items").EnumerateArray()
+            .Single(u => string.Equals(u.GetProperty("email").GetString(), correo, StringComparison.OrdinalIgnoreCase)).GetProperty("publicId").GetGuid();
+    }
+
+    /// <summary>Asocia el usuario a su persona del maestro (<c>SEC_Users.PersonId</c>) por <c>PUT /api/admin/users/{id}</c> con <c>personPublicId</c>.</summary>
+    public static async Task AsociarPersonaAsync(HttpClient http, string tokenAdmin, Guid usuario, string correo, Guid persona)
+    {
+        var resp = await EnviarAsync(http, tokenAdmin, HttpMethod.Put, $"/api/admin/users/{usuario}", new { email = correo, personPublicId = persona });
+        resp.IsSuccessStatusCode.Should().BeTrue($"asociar la persona de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
+    }
+
+    private static readonly Dictionary<Guid, Task<Guid>> PersonasDelAdministrador = [];
+
+    /// <summary>La persona del administrador de la cooperativa (una por cooperativa): sin ella no puede cerrar un acta (segregación por persona).</summary>
+    public static Task<Guid> PersonaDelAdministradorAsync(HttpClient http, CooperativaAislada coop)
+    {
+        lock (Cerrojo)
+        {
+            if (!PersonasDelAdministrador.TryGetValue(coop.TenantPublicId, out var tarea))
+            {
+                tarea = AsociarAlAdministradorAsync(http, coop);
+                PersonasDelAdministrador[coop.TenantPublicId] = tarea;
+            }
+            return tarea;
+        }
+    }
+
+    private static async Task<Guid> AsociarAlAdministradorAsync(HttpClient http, CooperativaAislada coop)
+    {
+        var correo = coop.CorreoAdmin ?? throw new InvalidOperationException("La cooperativa aislada no trae el correo de su administrador.");
+        var persona = await PersonaAsync(http, coop.TokenAdmin, "Administrador", "Cooperativa");
+        await AsociarPersonaAsync(http, coop.TokenAdmin, await UsuarioPorCorreoAsync(http, coop.TokenAdmin, correo), correo, persona);
+        return persona;
+    }
+
+    /// <summary>Un <c>GET</c> con el token, sin juzgar la respuesta (el PDF, los 200 que no son JSON).</summary>
+    public static Task<HttpResponseMessage> MandarGetAsync(HttpClient http, string token, string url) =>
+        InventarioE2E.MandarAsync(http, token, HttpMethod.Get, url);
+
+    /// <summary>Manda y exige un éxito; devuelve el cuerpo.</summary>
+    public static Task<JsonElement> ExitoAsync(HttpClient http, string token, HttpMethod metodo, string url, object? cuerpo = null) =>
+        InventarioE2E.ExitoAsync(http, token, metodo, url, cuerpo);
 
     /// <summary>Una petición con el token y una <c>Idempotency-Key</c> nueva (o la dada).</summary>
     public static Task<HttpResponseMessage> ConClaveAsync(HttpClient http, string token, HttpMethod metodo, string url, object? cuerpo, Guid? clave = null) =>

@@ -40,8 +40,19 @@ public sealed class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand
             user.Email = request.Email;
             user.IsEmailVerified = false;
         }
+        var personId = request.PersonId;
+        if (request.PersonPublicId is { } personPublicId && personPublicId != Guid.Empty)
+        {
+            personId = await _db.People.AsNoTracking()
+                .Where(p => p.PublicId == personPublicId && !p.IsDeleted)
+                .Select(p => (int?)p.Id)
+                .FirstOrDefaultAsync(ct);
+            if (personId is null)
+                return Result.Failure("Core.Person.NotFound", "La persona no existe en esta cooperativa.");
+        }
+
         user.IdentificationNumber = request.IdentificationNumber;
-        user.PersonId = request.PersonId;
+        user.PersonId = personId;
         user.UpdatedBy = _currentUser.UserName ?? "SYSTEM";
 
         await _db.SaveChangesAsync(ct);

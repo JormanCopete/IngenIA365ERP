@@ -12,7 +12,6 @@ public static class ErroresDeActivacion
     public const string CodigoYaActivada = "Lending.Activation.AlreadyActivated";
     public const string CodigoCorteInvalido = "Lending.Activation.CutoffInvalid";
     public const string CodigoFaltanRequisitos = "Lending.Activation.RequirementsMissing";
-    public const string CodigoPuntoNoCorresponde = "Lending.Session.ItemMismatch";
     public const string CodigoCargaNoEncontrada = "Lending.MigrationLoad.NotFound";
     public const string CodigoCargaNoBorrador = "Lending.Migration.LoadNotDraft";
     public const string CodigoPartesNoSoportadas = "Lending.Migration.PartsNotSupported";
@@ -33,11 +32,6 @@ public static class ErroresDeActivacion
         new ErrorConDatos(CodigoFaltanRequisitos,
             $"No se puede activar Cartera todavía. Falta: {string.Join("; ", faltantes.Select(f => f.Detail))}. Complete lo que falta y vuelva a intentarlo.",
             new { missing = faltantes.Select(f => new { code = f.Code, detail = f.Detail, whoFixes = f.WhoFixes }).ToList() });
-
-    public static Error PuntoNoCorresponde(string esperado, string? sujetoDelPunto, string? resultadoDelPunto) =>
-        new ErrorConDatos(CodigoPuntoNoCorresponde,
-            "El punto del acta no corresponde: tiene que ser un punto de decisión aprobado, de una sesión cerrada, sobre las diferencias de esta carga.",
-            new { expectedSubject = esperado, itemSubject = sujetoDelPunto, itemOutcome = resultadoDelPunto });
 
     public static Error CargaNoEncontrada(Guid publicId) =>
         new ErrorConDatos(CodigoCargaNoEncontrada, "La carga de migración no existe.", new { migrationLoadPublicId = publicId });

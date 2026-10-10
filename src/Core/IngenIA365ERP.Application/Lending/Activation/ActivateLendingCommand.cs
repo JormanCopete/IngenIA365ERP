@@ -9,6 +9,7 @@ using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Migration;
+using IngenIA365ERP.Application.Lending.Sessions;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -42,13 +43,13 @@ public sealed record MensajeEmitidoDto(string Type, Guid MessagePublicId);
 /// <item>Cartera no activada (<c>Lending.Activation.AlreadyActivated</c>) y la carga existe;</item>
 /// <item>fecha de activación = corte + 1 (<c>Lending.Activation.CutoffInvalid</c>, <c>data.expected</c>);</item>
 /// <item>acta obligatoria (C61): <see cref="SessionItemPublicId"/> es un punto <c>Decision</c> aprobado de una sesión cerrada cuyo sujeto
-/// es <c>ActivationDifferences</c> de esa carga (<c>Lending.Session.ItemMismatch</c>);</item>
+/// es <c>ActivationDifferences</c> de esa carga, validado por <see cref="PuntoDeActaCerrado"/> (<c>Lending.Session.ItemMismatch</c>; T0311);</item>
 /// <item>requisitos de <see cref="RequisitosDeActivacion"/> (<c>Lending.Activation.RequirementsMissing</c>, <c>data.missing[]</c>);</item>
 /// <item>en una <see cref="TransaccionExplicita"/>, con <c>LND_Setup</c> exclusivo: <c>LND_Activations</c>, <c>LND_Setup.ActivationDate</c>,
 /// <c>ActivationId</c> y <c>ActivatedAt</c> (una sola vez), la carga <c>Activated</c>, el destino <c>Lending</c> habilitado en el registro
 /// por <see cref="EscritorDelRegistroDeIntegracion"/> en la misma transacción (C60) y <c>CarteraActivada</c> por <see cref="EmisionDeCartera"/>.</item>
 /// </list>
-/// US17 cambia la validación del punto por <c>PuntoDeActaCerrado</c> (T0311); US9 cablea el cierre base (T0708); US8 completa los
+/// US9 cablea el cierre base (T0708); US8 completa los
 /// requisitos, el nacimiento de créditos por tandas de 1.000 con <c>ChangeTracker.Clear()</c> y los cobros provisionales (C60, C62). (nuevo)
 /// </summary>
 public sealed record ActivateLendingCommand(
@@ -77,6 +78,7 @@ public sealed class ActivateLendingCommandHandler(
     RequisitosDeActivacion requisitos,
     EscritorDelRegistroDeIntegracion escritorDelRegistro,
     EmisionDeCartera emision,
+    PuntoDeActaCerrado puntoDeActa,
     IActorActual actorActual,
     IDateTimeService reloj) : IRequestHandler<ActivateLendingCommand, Result<LendingActivationDto>>
 {
@@ -168,27 +170,15 @@ public sealed class ActivateLendingCommandHandler(
 
         if (request.ActivationDate != carga.CutoffDate.AddDays(1)) return Falla(ErroresDeActivacion.CorteInvalido(carga.CutoffDate));
 
-        var punto = await db.SessionItems.AsNoTracking()
-            .Where(i => i.PublicId == request.SessionItemPublicId && !i.IsDeleted)
-            .Join(db.LendingSessions.AsNoTracking(), i => i.SessionId, s => s.Id, (i, s) => new
-            {
-                i.Id, i.Kind, i.Outcome, i.SubjectType, i.SubjectPublicId, SessionStatus = s.Status,
-            })
-            .FirstOrDefaultAsync(ct);
-        var corresponde = punto is not null
-            && punto.SessionStatus == SessionStatus.Closed
-            && punto.Kind == SessionItemKind.Decision
-            && punto.Outcome is CreditDecisionOutcome.Approve or CreditDecisionOutcome.ApproveWithConditions
-            && punto.SubjectType == LendingDecisionSubjects.ActivationDifferences
-            && punto.SubjectPublicId == carga.PublicId;
-        if (!corresponde)
-            return Falla(ErroresDeActivacion.PuntoNoCorresponde(LendingDecisionSubjects.ActivationDifferences, punto?.SubjectType, punto?.Outcome?.ToString()));
+        // El acta (C61) por la validación única de las historias (T0311): punto Decision aprobado de una sesión cerrada sobre esta carga.
+        var punto = await puntoDeActa.ValidarAsync(request.SessionItemPublicId, LendingDecisionSubjects.ActivationDifferences, carga.PublicId, ct);
+        if (punto.IsFailure) return Falla(punto.Error);
 
         var lista = await requisitos.EvaluarAsync(carga, request.ActivationDate, reloj.HoyLocal, ct);
         var faltantes = lista.Where(r => !r.Met).ToList();
         if (faltantes.Count > 0) return Falla(ErroresDeActivacion.FaltanRequisitos(faltantes));
 
-        return Result.Success<(MigrationLoad, int, IReadOnlyList<RequisitoDeActivacionDto>)>((carga, punto!.Id, lista));
+        return Result.Success<(MigrationLoad, int, IReadOnlyList<RequisitoDeActivacionDto>)>((carga, punto.Value.ItemId, lista));
     }
 
     private static Result<(MigrationLoad, int, IReadOnlyList<RequisitoDeActivacionDto>)> Falla(Error error) =>

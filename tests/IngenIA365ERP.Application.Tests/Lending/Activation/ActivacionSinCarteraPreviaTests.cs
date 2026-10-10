@@ -14,6 +14,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 using IngenIA365ERP.Application.Lending.Migration;
+using IngenIA365ERP.Application.Lending.Sessions;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -126,7 +127,7 @@ public class ActivacionSinCarteraPreviaTests
     private ApplyMigrationLoadCommandHandler Aplicar() => new(_db, Emision(), new LectorDeParametros(_db), _actor, _reloj);
 
     private ActivateLendingCommandHandler Activar() =>
-        new(_db, _cerrojo, Requisitos(), new EscritorDelRegistroDeIntegracion(_db, _ambiente, _actor, _reloj), Emision(), _actor, _reloj);
+        new(_db, _cerrojo, Requisitos(), new EscritorDelRegistroDeIntegracion(_db, _ambiente, _actor, _reloj), Emision(), new PuntoDeActaCerrado(_db), _actor, _reloj);
 
     private async Task<MigrationLoadDto> CargaAplicadaAsync()
     {
