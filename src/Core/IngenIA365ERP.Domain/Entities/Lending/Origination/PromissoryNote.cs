@@ -57,4 +57,26 @@ public class PromissoryNote : AuditableEntity
 
     /// <summary>Última sincronización de la tarea <c>cartera.pagares</c>.</summary>
     public DateTime? LastSyncedAt { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0432) --
+
+    /// <summary>
+    /// Firmado o en custodia (FR-044; data-model §2.9): el físico firmado o en custodia, el desmaterializado en custodia del depósito. Si un
+    /// simulado tiene efecto legal lo decide aparte <c>GuardiaDeCanalesExternos</c> (T73).
+    /// </summary>
+    public bool Perfeccionado => !IsDeleted && Kind switch
+    {
+        PromissoryNoteKind.Physical => Status is PromissoryNoteStatus.Signed or PromissoryNoteStatus.InCustody,
+        PromissoryNoteKind.Dematerialized => Status == PromissoryNoteStatus.InCustody,
+        _ => false,
+    };
+
+    /// <summary>Pasa el pagaré de la solicitud al crédito que nació (nulo → valor, una vez).</summary>
+    public void AsignarCredito(int loanId)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(loanId, 1);
+        if (LoanId is { } actual && actual != loanId)
+            throw new InvalidOperationException($"El pagaré {PublicId} ya respalda otro crédito.");
+        LoanId = loanId;
+    }
 }

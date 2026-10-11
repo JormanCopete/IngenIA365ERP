@@ -97,6 +97,31 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         sesion.Number = await AsignarAsync(LendingNumberKind.SessionMinutes, AmbitoDeOrgano(organo), organo.MinutesPrefix, ct);
     }
 
+    /// <summary>El número del crédito que nace con su primer tramo (feature 013, US3, T0444): clase <c>Loan</c>, ámbito único.</summary>
+    public async Task NumerarCreditoAsync(Domain.Entities.Lending.Loans.Loan credito, string prefijo, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        if (!string.IsNullOrEmpty(credito.Number))
+            throw new InvalidOperationException($"El crédito {credito.PublicId} ya tiene número.");
+        credito.Number = await AsignarAsync(LendingNumberKind.Loan, string.Empty, prefijo, ct);
+    }
+
+    /// <summary>El número de una orden de giro (feature 013, US3, T0444, T0446): clase <c>DisbursementOrder</c>, ámbito único.</summary>
+    public async Task NumerarOrdenAsync(Domain.Entities.Lending.Operations.DisbursementOrder orden, string prefijo, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(orden);
+        if (!string.IsNullOrEmpty(orden.Number))
+            throw new InvalidOperationException($"La orden {orden.PublicId} ya tiene número.");
+        orden.Number = await AsignarAsync(LendingNumberKind.DisbursementOrder, string.Empty, prefijo, ct);
+    }
+
+    /// <summary>
+    /// El comprobante de una operación (feature 013, US3): clase <c>Operation</c> con ámbito = la clase de la operación. La operación es un
+    /// hecho de sólo inserción: el número se pide antes de armarla y nace en su inicializador.
+    /// </summary>
+    public Task<string> NumeroDeOperacionAsync(LoanOperationKind clase, string prefijo, CancellationToken ct = default) =>
+        AsignarAsync(LendingNumberKind.Operation, clase.ToString(), prefijo, ct);
+
     /// <summary>
     /// El consecutivo de una carga de migración (feature 013, T0232; data-model §29.1: <c>Number</c> entero, único). No tiene fila en
     /// <c>LND_NumberSequences</c> (<c>LendingNumberKind</c> no la nombra): es el mayor de <c>LND_MigrationLoads</c>, borradas incluidas, más

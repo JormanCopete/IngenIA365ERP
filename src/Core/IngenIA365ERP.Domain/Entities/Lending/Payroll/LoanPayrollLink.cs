@@ -49,4 +49,27 @@ public class LoanPayrollLink : AuditableEntity
     public DateOnly? ValidTo { get; set; }
 
     public string? EndReason { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0434) --
+
+    /// <summary>
+    /// El vínculo con que nace un crédito al desembolsar (C44; data-model §24.5): la forma de pago aprobada, <c>Origin = Origination</c> y la
+    /// operación del primer tramo. La nómina propia y la libranza llevan pagaduría (<c>CK_LND_LoanPayrollLinks_Paymaster</c>); caja y débito no.
+    /// </summary>
+    public static LoanPayrollLink AlOriginar(int loanId, RepaymentChannel forma, int? pagaduriaId, long operacionId, DateOnly desde)
+    {
+        var conPagaduria = forma is RepaymentChannel.OwnPayroll or RepaymentChannel.PaymasterDeduction;
+        if (conPagaduria && pagaduriaId is null)
+            throw new ArgumentException("La nómina propia y la libranza llevan pagaduría.", nameof(pagaduriaId));
+        return new LoanPayrollLink
+        {
+            LoanId = loanId,
+            RepaymentChannel = forma,
+            PaymasterPersonId = conPagaduria ? pagaduriaId : null,
+            IsOwnPayroll = forma == RepaymentChannel.OwnPayroll,
+            Origin = LoanPayrollLinkOrigin.Origination,
+            OperationId = operacionId,
+            ValidFrom = desde,
+        };
+    }
 }

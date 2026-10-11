@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Origination;
 
@@ -69,4 +70,40 @@ public class Collateral : AuditableEntity
     public string? ExtinguishReason { get; set; }
 
     public DateOnly? ExecutedOn { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0432) --
+
+    public const string CodigoTransicionInvalida = "Lending.Collateral.TransitionInvalid";
+
+    /// <summary>Las transiciones de api.md §6.1: <c>Constituted → Valid → Extinguished | Executed</c>; liberar va aparte (tras la firmeza).</summary>
+    private static readonly IReadOnlyDictionary<CollateralStatus, CollateralStatus[]> Transiciones = new Dictionary<CollateralStatus, CollateralStatus[]>
+    {
+        [CollateralStatus.Constituted] = [CollateralStatus.Valid, CollateralStatus.Extinguished],
+        [CollateralStatus.Valid] = [CollateralStatus.Extinguished, CollateralStatus.Executed, CollateralStatus.Released],
+    };
+
+    /// <summary>
+    /// Cuenta para desembolsar (FR-043): constituida o vigente —no liberada, extinguida ni ejecutada— y sin vencer a <paramref name="fecha"/>.
+    /// </summary>
+    public bool PerfeccionadaA(DateOnly fecha) =>
+        !IsDeleted && Status is CollateralStatus.Constituted or CollateralStatus.Valid && (ValidUntil is not { } hasta || hasta >= fecha);
+
+    /// <summary>¿Se puede pasar de <paramref name="desde"/> a <paramref name="hacia"/>?</summary>
+    public static bool PuedePasar(CollateralStatus desde, CollateralStatus hacia) =>
+        Transiciones.TryGetValue(desde, out var destinos) && destinos.Contains(hacia);
+
+    /// <summary>Nulo si puede ir a <paramref name="hacia"/>; si no, <c>Lending.Collateral.TransitionInvalid</c> con <c>from</c> y <c>to</c>.</summary>
+    public ProblemaDeCartera? PuedeIrA(CollateralStatus hacia) => PuedePasar(Status, hacia)
+        ? null
+        : new ProblemaDeCartera(CodigoTransicionInvalida, $"La garantía está en «{Status}» y no puede pasar a «{hacia}».",
+            new Dictionary<string, object?> { ["from"] = Status.ToString(), ["to"] = hacia.ToString() });
+
+    /// <summary>Pasa la garantía de la solicitud al crédito que nació (nulo → valor, una vez).</summary>
+    public void AsignarCredito(int loanId)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(loanId, 1);
+        if (LoanId is { } actual && actual != loanId)
+            throw new InvalidOperationException($"La garantía {PublicId} ya respalda otro crédito.");
+        LoanId = loanId;
+    }
 }

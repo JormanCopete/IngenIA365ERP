@@ -28,4 +28,18 @@ public class DisbursementOrderResult : AuditableEntity, IHechoInmutable
     public long? ReversalOperationId { get; init; }
 
     public DateTime RegisteredAt { get; init; }
+
+    /// <summary>El resultado de Tesorería que se registra (sólo las transiciones de interfaces.md §4.3; T0433).</summary>
+    public static DisbursementOrderResult Registrar(int ordenId, int recibo, DisbursementOrderStatus resultado, DateOnly fecha, string? referencia,
+        string? motivo, long? reverso, DateTime instante) => new()
+        {
+            OrderId = ordenId,
+            InboundMessageId = recibo,
+            Result = resultado,
+            ResultDate = fecha,
+            TreasuryReference = string.IsNullOrWhiteSpace(referencia) ? null : referencia.Trim(),
+            Reason = string.IsNullOrWhiteSpace(motivo) ? null : motivo.Trim(),
+            ReversalOperationId = reverso,
+            RegisteredAt = instante,
+        };
 }

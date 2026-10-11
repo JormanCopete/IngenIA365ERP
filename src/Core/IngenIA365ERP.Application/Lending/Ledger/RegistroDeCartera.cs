@@ -5,6 +5,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Entities.Lending.Projections;
 using IngenIA365ERP.Domain.Entities.Lending.Schedules;
 using IngenIA365ERP.Domain.Entities.Lending.Transactions;
+using IngenIA365ERP.Domain.Enums.Lending;
 
 namespace IngenIA365ERP.Application.Lending.Ledger;
 
@@ -174,6 +175,46 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             throw new InvalidOperationException(
                 $"La causación del {fecha:yyyy-MM-dd} exige la marca en la víspera; el crédito {control.LoanId} está causado hasta el {control.LastAccruedDate:yyyy-MM-dd}.");
         control.LastAccruedDate = fecha;
+    }
+
+    /// <summary>Las transiciones del crédito de data-model §8.1 (feature 013, US3, T0444, T0447, T0448).</summary>
+    private static readonly IReadOnlyDictionary<LoanStatus, LoanStatus[]> TransicionesDelCredito = new Dictionary<LoanStatus, LoanStatus[]>
+    {
+        [LoanStatus.Active] = [LoanStatus.PaidOff, LoanStatus.PendingDisbursement, LoanStatus.Voided, LoanStatus.WrittenOff, LoanStatus.Novated],
+        [LoanStatus.PaidOff] = [LoanStatus.Active],
+        [LoanStatus.PendingDisbursement] = [LoanStatus.Active, LoanStatus.Voided],
+        [LoanStatus.WrittenOff] = [LoanStatus.PaidOff],
+    };
+
+    /// <summary>¿Puede el crédito pasar de <paramref name="desde"/> a <paramref name="hacia"/>? (data-model §8.1).</summary>
+    public static bool PuedePasar(LoanStatus desde, LoanStatus hacia) =>
+        TransicionesDelCredito.TryGetValue(desde, out var destinos) && destinos.Contains(hacia);
+
+    /// <summary>
+    /// Mueve el estado del crédito en la transacción de la operación que lo causa (data-model §8.1: todas las transiciones las hace el
+    /// registro): <c>PendingDisbursement</c> tras el reverso del único tramo vivo, <c>Active</c> con un giro nuevo, <c>Voided</c> con fecha y
+    /// motivo. Una transición fuera del diagrama es un defecto (excepción).
+    /// </summary>
+    public static void CambiarEstado(Loan credito, LoanStatus hacia, DateOnly fecha, string? motivo = null)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        if (!PuedePasar(credito.Status, hacia))
+            throw new InvalidOperationException($"El crédito {credito.Number} está en «{credito.Status}» y no puede pasar a «{hacia}» (data-model §8.1).");
+        credito.Status = hacia;
+        switch (hacia)
+        {
+            case LoanStatus.Voided:
+                ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+                credito.VoidedOn = fecha;
+                credito.VoidReason = motivo.Trim();
+                break;
+            case LoanStatus.PaidOff:
+                credito.PaidOffOn = fecha;
+                break;
+            case LoanStatus.Active:
+                credito.PaidOffOn = null;
+                break;
+        }
     }
 
     private static DateTime Utc(DateTime instante) => instante.Kind switch

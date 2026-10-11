@@ -230,6 +230,9 @@ public static class AuditEventTypes
     public const string LendingAccessOutOfScope = "Lending.Access.OutOfScope";
     public const string LendingScreeningMatchReleased = "Lending.ScreeningMatch.Released";
 
+    // US3 (T0444, T23): la distribución completa por cuota y concepto de una operación del libro (desembolso, reverso); no es lectura.
+    public const string LendingOperationRegistered = "Lending.Operation.Registered";
+
     // Intentos del grupo /api/lending (T67, F9): el 404 por falta de permiso y el 400 del validador, que corre antes que
     // AuditBehavior. Los registra el metadato AuditarIntentoDenegado de la API por AuditoriaDeIntentos.
     public const string LendingAccessDenied = "Lending.Access.Denied";

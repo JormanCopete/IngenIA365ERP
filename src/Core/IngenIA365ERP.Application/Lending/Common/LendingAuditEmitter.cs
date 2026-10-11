@@ -80,6 +80,13 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirCoincidenciaLiberadaAsync(Guid screeningResultPublicId, string motivo, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingScreeningMatchReleased, "ScreeningResult", screeningResultPublicId, new { reason = motivo }, ct);
 
+    /// <summary>
+    /// US3 (T0444, T23): la distribución completa por cuota y concepto de una operación del libro, en la transacción de la operación (se llama
+    /// después de su guardado). No es una lectura sensible: no va en <see cref="LecturasSensibles"/>.
+    /// </summary>
+    public Task<Guid?> EmitirOperacionRegistradaAsync(Guid operationPublicId, string numero, string clase, object distribucion, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingOperationRegistered, "LoanOperation", operationPublicId, new { number = numero, kind = clase, distribution = distribucion }, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try

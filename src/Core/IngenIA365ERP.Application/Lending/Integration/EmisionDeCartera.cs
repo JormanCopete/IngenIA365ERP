@@ -21,11 +21,12 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 ///
 /// <para>
 /// Por ahora emite sólo los dos informativos de la activación (<c>Always</c>, clave <c>Confirmation</c>, <c>origin.kind = Operation</c>,
-/// sin tercero, sucursal principal): <see cref="CargaAplicadaAsync"/> y <see cref="ActivacionAsync"/>. US3 en adelante le suman sus
-/// familias (desembolso, causación, pagos, cierres…), y US9 la categoría contable de cada hecho de un crédito. (nuevo)
+/// sin tercero, sucursal principal): <see cref="CargaAplicadaAsync"/> y <see cref="ActivacionAsync"/>. US3 (T0439) le suma el desembolso,
+/// la orden de giro y su anulación, el reverso del desembolso y, con A3, la baja del aprobado sin desembolsar (EmisionDeCartera.Desembolso.cs). Las demás historias le suman sus
+/// familias (causación, pagos, cierres…), y US9 la categoría contable de cada hecho de un crédito. (nuevo)
 /// </para>
 /// </summary>
-public sealed class EmisionDeCartera(
+public sealed partial class EmisionDeCartera(
     IApplicationDbContext db,
     EmisorDeMensajes emisor,
     FechaContable fechaContable,

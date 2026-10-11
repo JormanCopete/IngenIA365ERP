@@ -6,7 +6,7 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Loans;
 /// <summary>
 /// <c>LND_LoanParties</c> (feature 013; data-model §4.2; FR-036, FR-043, FR-061, FR-092): codeudores y avalistas del crédito (el
 /// deudor está en <see cref="Loan"/>). Cuenta en el endeudamiento consolidado como codeudor y en la consulta «como codeudor». No es
-/// hecho. Forma sin comportamiento.
+/// hecho. US3 (T0434) le suma la fábrica desde la solicitud.
 /// </summary>
 public class LoanParty : AuditableEntity
 {
@@ -33,4 +33,18 @@ public class LoanParty : AuditableEntity
     public string? ExtinguishReason { get; set; }
 
     public int? ExtinguishDecisionId { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0434) --
+
+    /// <summary>Un codeudor o avalista de la solicitud que pasa al crédito al desembolsar (data-model §4.2).</summary>
+    public static LoanParty DeLaSolicitud(int loanId, int personId, CreditPartyRole papel, DateOnly desde, int? parteDeLaSolicitud)
+    {
+        if (papel is not (CreditPartyRole.CoDebtor or CreditPartyRole.Guarantor))
+            throw new ArgumentException("Al crédito pasan sólo codeudores y avalistas: el deudor está en el crédito.", nameof(papel));
+        ArgumentOutOfRangeException.ThrowIfLessThan(loanId, 1);
+        return new LoanParty { LoanId = loanId, PersonId = personId, Role = papel, JoinedOn = desde, SourceApplicationPartyId = parteDeLaSolicitud };
+    }
+
+    /// <summary>Vigente a <paramref name="fecha"/>: unido, sin liberar ni extinguir.</summary>
+    public bool VigenteA(DateOnly fecha) => !IsDeleted && JoinedOn <= fecha && ReleasedOn is null && ExtinguishedOn is null;
 }

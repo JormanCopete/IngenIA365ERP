@@ -55,4 +55,19 @@ public class DisbursementFile : AuditableEntity, IHechoInmutable
 
     [EscrituraUnica]
     public string? VoidReason { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0433) --
+
+    /// <summary>El estado derivado (data-model §7.6, sin columna): anulado si tiene la anulación escrita.</summary>
+    public bool Anulado => VoidedAt is not null;
+
+    /// <summary>Anula el archivo una sola vez (escritura única); liberar sus órdenes lo hace quien anula.</summary>
+    public void Anular(int usuarioId, DateTime instante, string motivo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        if (Anulado) throw new InvalidOperationException($"El archivo {Number} ya está anulado.");
+        VoidedAt = instante;
+        VoidedByUserId = usuarioId;
+        VoidReason = motivo.Trim();
+    }
 }

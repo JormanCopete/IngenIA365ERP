@@ -474,6 +474,13 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.CategoriaContableDeCartera>();
         services.AddScoped<Lending.Integration.EmisionDeCartera>();
         services.AddScoped<Lending.Activation.RequisitosDeActivacion>();
+        // Feature 013, US3 (bloque 7A): el desembolso, el giro y su reverso. IMotorDeCreditoEnDesembolso es el punto de extensión que la fase 8
+        // reemplaza (ReconstruccionDeCredito, PuestaAlDiaDeCredito, Conciliar). DestinoCartera se registra con las rutas y las e2e (bloque 7C).
+        services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolsoProvisional>();
+        services.AddScoped<Lending.Disbursements.RequisitosDelDesembolso>();
+        services.AddScoped<Lending.Disbursements.TramoDeDesembolso>();
+        services.AddScoped<Lending.Disbursements.RecogidaEnElDesembolso>();
+        services.AddScoped<Lending.Disbursements.ReversoDeDesembolso>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();

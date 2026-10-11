@@ -43,6 +43,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Attributions/ListPendingLendingDecisionsQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/CreditLimitQueries.cs",
+        // US3 (bloque 7A, parte de T0428): los tramos y las órdenes de giro por la oficina y la línea de su crédito (la lista filtra en silencio;
+        // el detalle responde el 404 de la orden).
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/ListLoanDisbursementsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/ListDisbursementOrdersQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/GetDisbursementOrderQuery.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -81,6 +86,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["GetScreeningResultQuery"] = "el oficial de cumplimiento no lleva el alcance de Cartera: exige Compliance.RestrictiveLists.Release (C84)",
         ["ListDebtorBlocksQuery"] = "los bloqueos y embargos son de la persona, no de una oficina",
         ["ListContributionBalancesQuery"] = "el saldo de aportes es de la persona, no de una oficina (D19)",
+        // US3 (bloque 7A): la vista previa evalúa por RequisitosDelDesembolso, que asegura el alcance de la solicitud (el 404 fuera de él).
+        ["PreviewDisbursementQuery"] = "la asegura RequisitosDelDesembolso con el alcance de la solicitud (AsegurarAsync, el 404 de la solicitud)",
+        ["ListTestTreasuryOrdersQuery"] = "doble de prueba de Tesorería fuera de producción (T20): ve lo que recibe la tesorería, no una oficina",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);
