@@ -37,6 +37,12 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // oficina y línea (la lista con PorOficinaYLinea; el detalle y el enrutamiento con SolicitudEnAlcance, el 404 de la solicitud).
         "Core/IngenIA365ERP.Application/Lending/Origination/SimulationQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Origination/CreditApplicationQueries.cs",
+        // US2 (bloque 6B): las consultas a centrales (las de una solicitud fuera del alcance no aparecen y su detalle es el 404), «Mis pendientes»
+        // (solicitudes por oficina y línea, cupos por línea) y los cupos (por la línea del alcance; el consolidado y el rotativo sin línea son de
+        // la persona).
+        "Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Attributions/ListPendingLendingDecisionsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/CreditLimitQueries.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -69,6 +75,12 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US2 (T0393): los grupos conectados son personas por su vínculo económico o jurídico, sin oficina; las dos lecturas quedan auditadas.
         ["ListConnectedGroupsQuery"] = "los grupos conectados son personas por su vínculo, sin oficina (lectura auditada)",
         ["GetConnectedGroupQuery"] = "los grupos conectados son personas por su vínculo, sin oficina (lectura auditada)",
+        // US2 (bloque 6B): el oficial de cumplimiento no es un rol de Cartera (C84): ve los resultados de listas con su permiso, sin el alcance de
+        // oficina y línea; los bloqueos y los saldos de aportes son de la persona, sin oficina.
+        ["ListScreeningResultsQuery"] = "el oficial de cumplimiento no lleva el alcance de Cartera: exige Compliance.RestrictiveLists.Release (C84)",
+        ["GetScreeningResultQuery"] = "el oficial de cumplimiento no lleva el alcance de Cartera: exige Compliance.RestrictiveLists.Release (C84)",
+        ["ListDebtorBlocksQuery"] = "los bloqueos y embargos son de la persona, no de una oficina",
+        ["ListContributionBalancesQuery"] = "el saldo de aportes es de la persona, no de una oficina (D19)",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

@@ -120,7 +120,8 @@ public sealed class RegisterRelatedPartyCommandValidator : AbstractValidator<Reg
     }
 }
 
-public sealed class RegisterRelatedPartyCommandHandler(IApplicationDbContext db, AltaDeVinculados alta)
+public sealed class RegisterRelatedPartyCommandHandler(IApplicationDbContext db, AltaDeVinculados alta,
+    Origination.CreditLimits.RevalidacionDeCupos? cupos = null)
     : IRequestHandler<RegisterRelatedPartyCommand, Result<RelatedPartyDto>>
 {
     public async Task<Result<RelatedPartyDto>> Handle(RegisterRelatedPartyCommand request, CancellationToken ct)
@@ -147,6 +148,8 @@ public sealed class RegisterRelatedPartyCommandHandler(IApplicationDbContext db,
         if (registro.IsFailure) return Result.Failure<RelatedPartyDto>(registro.Error);
 
         await db.SaveChangesAsync(ct);
+        // US2 (bloque 6B, api.md §3.7): un cupo vigente del nuevo vinculado que no otorgó el consejo queda «por revalidar».
+        if (cupos is not null && await cupos.RevisarAsync(persona.Value, ct) > 0) await db.SaveChangesAsync(ct);
         return Result.Success((await ConsultasDeVinculados.DtosAsync(db, [registro.Value], ct))[0]);
     }
 
@@ -170,7 +173,8 @@ public sealed class EndRelatedPartyCommandValidator : ValidadorConMotivo<EndRela
     }
 }
 
-public sealed class EndRelatedPartyCommandHandler(IApplicationDbContext db, IActorActual actorActual) : IRequestHandler<EndRelatedPartyCommand, Result>
+public sealed class EndRelatedPartyCommandHandler(IApplicationDbContext db, IActorActual actorActual,
+    Origination.CreditLimits.RevalidacionDeCupos? cupos = null) : IRequestHandler<EndRelatedPartyCommand, Result>
 {
     public async Task<Result> Handle(EndRelatedPartyCommand request, CancellationToken ct)
     {
@@ -181,6 +185,8 @@ public sealed class EndRelatedPartyCommandHandler(IApplicationDbContext db, IAct
 
         if (vinculo.Terminar(request.ValidTo, usuario, request.Reason) is { } problema) return Result.Failure(ErroresDeGobierno.De(problema));
         await db.SaveChangesAsync(ct);
+        // US2 (bloque 6B, api.md §3.7): si la persona sigue vinculada por otro vínculo, sus cupos sin decisión del consejo quedan «por revalidar».
+        if (cupos is not null && await cupos.RevisarAsync(vinculo.PersonId, ct) > 0) await db.SaveChangesAsync(ct);
         return Result.Success();
     }
 }

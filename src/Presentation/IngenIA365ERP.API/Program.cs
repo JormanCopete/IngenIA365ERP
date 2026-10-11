@@ -258,6 +258,9 @@ try
         IngenIA365ERP.Application.Lending.Collections.Tareas.TareaDeMensajesAlDeudor>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Collections.Tareas.TareaDeEntregasAlDeudor>();
+    // Feature 013, US2 (T0404, C90): el re-escaneo de deudores y codeudores vivos al aplicarse una carga nueva de listas restrictivas.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Origination.ReEscaneoDeListas>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

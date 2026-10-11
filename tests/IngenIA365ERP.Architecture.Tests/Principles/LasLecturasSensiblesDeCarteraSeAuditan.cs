@@ -27,6 +27,9 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
         "Core/IngenIA365ERP.Application/Lending/Attributions/RelatedPartyCommands.cs",
         // US2 (T0393): los grupos conectados, como los vinculados.
         "Core/IngenIA365ERP.Application/Lending/Origination/ConnectedGroups/ConnectedGroupCommands.cs",
+        // US2 (bloque 6B): el informe de centrales (detalle y enlace) y la liberación de una coincidencia en listas.
+        "Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/ScreeningResultCommands.cs",
     ];
 
     /// <summary>Cada lectura sensible: su archivo, su consulta y el método de <see cref="LendingAuditEmitter"/> que la audita.</summary>
@@ -39,6 +42,12 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
             nameof(LendingAuditEmitter.EmitirVinculadosVistosAsync)),
         ("Core/IngenIA365ERP.Application/Lending/Origination/ConnectedGroups/ConnectedGroupCommands.cs", "GetConnectedGroupQuery",
             nameof(LendingAuditEmitter.EmitirVinculadosVistosAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs", "GetBureauQueryQuery",
+            nameof(LendingAuditEmitter.EmitirInformeDeCentralesVistoAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs", "IssueBureauReportDownloadLinkCommand",
+            nameof(LendingAuditEmitter.EmitirInformeDeCentralesVistoAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Origination/ScreeningResultCommands.cs", "ReleaseScreeningMatchCommand",
+            nameof(LendingAuditEmitter.EmitirCoincidenciaLiberadaAsync)),
     ];
 
     /// <summary>La lista cerrada de research §13 y C89 (los diez eventos de T0256).</summary>

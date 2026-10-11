@@ -73,6 +73,36 @@ public static class CatalogoDePlantillasDeCartera
         ]),
     ]);
 
+    public const string SaldosDeAportesClave = "lending.contribution-balances";
+
+    /// <summary>Las columnas de la plantilla 3 (plantillas.md §3). (nuevo, US2)</summary>
+    public static class ColumnasDeSaldosDeAportes
+    {
+        public const string Persona = "persona";
+        public const string FechaDeCorte = "fechaDeCorte";
+        public const string SaldoDeAportes = "saldoDeAportes";
+        public const string SaldoDeAhorroPermanente = "saldoDeAhorroPermanente";
+        public const string Fuente = "fuente";
+    }
+
+    /// <summary>
+    /// Plantilla 3 — saldos de aportes y ahorro permanente (feature 013, US2, T0407; plantillas.md §3; D19). Llave: persona + fecha de corte.
+    /// Provisional mientras Aportes y Ahorros no ofrezca su consulta. (nuevo)
+    /// </summary>
+    public static DefinicionDePlantilla SaldosDeAportes { get; } = new(SaldosDeAportesClave, "Saldos de aportes y ahorro permanente", ModuloDeAuditoria.Lending,
+    [
+        new HojaDePlantilla("Datos",
+        [
+            new(ColumnasDeSaldosDeAportes.Persona, TipoDeValor.Persona, Obligatoria: true, Largo: 20,
+                Reglas: "llave; documento sin puntos ni dígito de verificación; debe existir y estar viva en Maestros › Personas (esta plantilla no crea personas)"),
+            new(ColumnasDeSaldosDeAportes.FechaDeCorte, TipoDeValor.Fecha, Obligatoria: true, Reglas: "llave; yyyy-MM-dd; no futura", Ejemplo: "2026-11-30"),
+            new(ColumnasDeSaldosDeAportes.SaldoDeAportes, TipoDeValor.Monto, Obligatoria: true, Reglas: "mayor o igual a cero", Ejemplo: "2500000,00"),
+            new(ColumnasDeSaldosDeAportes.SaldoDeAhorroPermanente, TipoDeValor.Monto, Reglas: "mayor o igual a cero; vacío = 0", Ejemplo: ""),
+            new(ColumnasDeSaldosDeAportes.Fuente, TipoDeValor.Texto, Obligatoria: true, Largo: 120, Reglas: "sistema o reporte de donde salió el saldo",
+                Ejemplo: "Reporte de aportes de noviembre"),
+        ]),
+    ]);
+
     public const string LineasClave = "lending.credit-lines";
 
     /// <summary>Las hojas de la plantilla 1 (plantillas.md §1).</summary>
@@ -305,8 +335,9 @@ public static class CatalogoDePlantillasDeCartera
         new(VinculadosClave, "Personas vinculadas", "Consejeros, junta de vigilancia, representantes, aportantes significativos, cónyuges y parientes (Ley 454, art. 61).",
             ["Datos"], "/api/lending/related-parties", "Lending.Templates.View", "Lending.RelatedParties.Manage", EntregaDeCartera.K1, PersonalData: true,
             Vinculados),
-        new("lending.contribution-balances", "Saldos de aportes y ahorro permanente", "Los saldos que alimentan el cupo por múltiplo de aportes.",
-            ["Datos"], "/api/lending/contribution-balances", "Lending.Templates.View", "Lending.CreditLimits.Assign", EntregaDeCartera.K1, PersonalData: true),
+        new(SaldosDeAportesClave, "Saldos de aportes y ahorro permanente", "Los saldos que alimentan el cupo por múltiplo de aportes.",
+            ["Datos"], "/api/lending/contribution-balances", "Lending.Templates.View", "Lending.CreditLimits.Assign", EntregaDeCartera.K1, PersonalData: true,
+            SaldosDeAportes),
         new("lending.migration", "Migración por partes", "La cartera vigente al corte, parte por parte, para revisar, aplicar y activar.",
             ["Datos"], "/api/lending/migration/loads", "Lending.Templates.View", "Lending.Migration.Load", EntregaDeCartera.K1, PersonalData: true),
         new("lending.provisional-collections", "Cobros provisionales", "Lo cobrado por fuera de Cartera entre el corte y la activación, por factura.",

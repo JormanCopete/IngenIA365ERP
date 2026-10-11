@@ -9,7 +9,13 @@ namespace IngenIA365ERP.Application.Lending.Origination;
 // tasks.md y la registra en DependencyInjection. Hasta entonces, sin registro, la radicación no se resuelve en la API. (nuevo)
 
 /// <summary>A quién y en qué contexto se consultan las listas restrictivas desde Cartera (data-model §2.6). (nuevo)</summary>
-public sealed record PedidoDeConsultaDeListas(int PersonId, ScreeningContext Contexto, int? ApplicationId = null, int? CreditLimitId = null);
+public sealed record PedidoDeConsultaDeListas(int PersonId, ScreeningContext Contexto, int? ApplicationId = null, int? CreditLimitId = null)
+{
+    /// <summary>
+    /// Falso en el re-escaneo (C90): sólo los hallazgos quedan como <c>ScreeningResult</c>; una consulta sin coincidencia no deja fila. (bloque 6B)
+    /// </summary>
+    public bool RegistrarSinHallazgo { get; init; } = true;
+}
 
 /// <summary>
 /// Lo que dejó la consulta: la fila de <c>LND_ScreeningResults</c> que quedó en la unidad de trabajo (sin guardar), si bloquea (coincidencia

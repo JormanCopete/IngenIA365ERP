@@ -86,6 +86,17 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Origination.ConnectedGroups.AddConnectedGroupMemberCommand),
         typeof(IngenIA365ERP.Application.Lending.Origination.ConnectedGroups.EndConnectedGroupMemberCommand),
         typeof(IngenIA365ERP.Application.Lending.Origination.ConnectedGroups.EndConnectedGroupCommand),
+        // US2 (bloque 6B): la decisión, las centrales, la liberación de listas, los cupos, los bloqueos y los saldos de aportes.
+        typeof(IngenIA365ERP.Application.Lending.Attributions.RecordCreditDecisionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Adapters.QueryCreditBureauCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.ReleaseScreeningMatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.AssignCreditLimitCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.EndCreditLimitCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.RevalidateCreditLimitCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.ChangePrepaymentPreferenceCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.RegisterDebtorBlockCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.LiftDebtorBlockCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.ImportContributionBalancesCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

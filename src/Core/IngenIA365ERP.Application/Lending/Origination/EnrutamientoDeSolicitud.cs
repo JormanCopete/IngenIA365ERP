@@ -95,7 +95,9 @@ public sealed class EnrutamientoDeSolicitud(
         var validaciones = CreditApplicationCheck.Vigentes(await db.CreditApplicationChecks.AsNoTracking()
             .Where(c => c.ApplicationId == s.Id && !c.IsDeleted).ToListAsync(ct));
         // De cada (clase, parte) cuenta la etapa más reciente.
-        var ultimas = validaciones.GroupBy(c => (c.Kind, c.PartyId)).Select(g => g.OrderByDescending(c => c.EvaluatedAt).First()).ToList();
+        // Con el mismo instante (una decisión en el mismo segundo que la radicación) manda la etapa posterior (bloque 6B).
+        var ultimas = validaciones.GroupBy(c => (c.Kind, c.PartyId))
+            .Select(g => g.OrderByDescending(c => c.EvaluatedAt).ThenByDescending(c => c.Stage).ThenByDescending(c => c.Id).First()).ToList();
         var puntaje = await db.CreditScores.AsNoTracking().Where(x => x.ApplicationId == s.Id && !x.IsDeleted)
             .OrderByDescending(x => x.CalculatedAt).ThenByDescending(x => x.Id).FirstOrDefaultAsync(ct);
         var personas = await db.CreditApplicationParties.AsNoTracking().Where(p => p.ApplicationId == s.Id && !p.IsDeleted)

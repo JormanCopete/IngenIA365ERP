@@ -254,7 +254,9 @@ internal sealed class OriginacionDePrueba : IDisposable
     public CapacidadDePago Capacidad() => new(Db, G.Valores);
     public ValidacionesDeOriginacion Validaciones() =>
         new(Db, Listas, new GuardiaDeCanalesExternos(Options.Create(Opciones)), Capacidad(), Exposicion(), Cupos, Concentracion(),
-            new VinculadosVigentes(Db), Bloqueos, Autorizaciones);
+            new VinculadosVigentes(Db), Bloqueos, Autorizaciones, SaldosDeAportes());
+    public Application.Lending.Origination.CreditLimits.SaldoDeAportesVigente SaldosDeAportes() =>
+        new(Db, new Application.Common.Integration.Savings.ConsultaDeAportesNoDisponible());
     public EnrutamientoDeSolicitud Enrutamiento() => new(Db, new MatrizVigenteDeAtribuciones(Db), Exposicion(), new VinculadosVigentes(Db), G.Reloj);
     public EvaluacionDeSolicitud Evaluacion() => new(Db, Simulador(), Validaciones(), Enrutamiento(), G.Reloj);
     public ArmadoDeSolicitud Armado() => new(Db, Simulador(), G.Perfil, G.Alcance, G.Auditoria);
@@ -269,6 +271,53 @@ internal sealed class OriginacionDePrueba : IDisposable
     public RecordCreditApplicationAnalysisCommandHandler Analizar() =>
         new(Db, Evaluacion(), Enrutamiento(), G.Intervenciones(), G.Alcance, G.Auditoria, G.Reloj);
     public GetCreditApplicationRoutingQueryHandler Enrutado() => new(Db, Enrutamiento(), G.Alcance, G.Auditoria, G.Reloj);
+
+    // --------------------------------------------------------------------------------------- piezas del bloque 6B --
+
+    public Application.Lending.Attributions.AtribucionDelDecisor Atribucion() => new(Db, G.Permisos);
+    public GuardiaDeCanalesExternos Guardia() => new(Options.Create(Opciones));
+    public Application.Lending.Origination.CreditLimits.BloqueosDelDeudor BloqueosReales() => new(Db);
+    public Application.Lending.Origination.CreditLimits.DisponibleDeCupo Disponible() => new(Db, new VersionVigenteDeLinea(Db));
+    public Application.Lending.Origination.CreditLimits.EnrutamientoDeCupo EnrutamientoDeCupo() =>
+        new(Db, new MatrizVigenteDeAtribuciones(Db), Exposicion(), new VinculadosVigentes(Db), new VersionVigenteDeLinea(Db), G.Reloj);
+    public DecisionSobreSolicitud DecisionDeSolicitud() =>
+        new(Db, Evaluacion(), Enrutamiento(), Concentracion(), G.Intervenciones(), Atribucion(), Parametros(), Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
+    public Application.Lending.Origination.CreditLimits.DecisionSobreCupo DecisionDeCupo() =>
+        new(Db, EnrutamientoDeCupo(), Concentracion(), BloqueosReales(), G.Intervenciones(), Atribucion(), Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
+    public Application.Lending.Attributions.RecordCreditDecisionCommandHandler Decidir() => new([DecisionDeSolicitud(), DecisionDeCupo()]);
+    public Application.Lending.Origination.CreditLimits.AssignCreditLimitCommandHandler Asignar(IConsultaDeListasDeCartera? listas = null,
+        Application.Lending.Origination.CreditLimits.SaldoDeAportesVigente? saldos = null) =>
+        new(Db, EnrutamientoDeCupo(), Concentracion(), listas ?? Listas, BloqueosReales(), saldos ?? SaldosDeAportes(), new VersionVigenteDeLinea(Db),
+            Autorizaciones, G.Perfil, Guardia(), G.Intervenciones(), Cerrojo, G.Alcance, G.Auditoria, G.Actor, G.Reloj);
+    public Application.Lending.Origination.CreditLimits.RevalidacionDeCupos Revalidacion() =>
+        new(Db, new VinculadosVigentes(Db), Concentracion(), Disponible(), L.Alertas, G.Actor, G.Reloj);
+
+    /// <summary>Un rol con <c>Lending.CreditLimits.Assign</c> para el usuario, con el monto operativo dado (nulo = sin fila: sin límite).</summary>
+    public void MontoOperativo(User usuario, decimal? maximo)
+    {
+        var permiso = Db.Permissions.FirstOrDefault(p => p.Resource == "Lending.CreditLimits" && p.Action == "Assign");
+        if (permiso is null)
+        {
+            permiso = new Permission { Resource = "Lending.CreditLimits", Action = "Assign" };
+            Db.Permissions.Add(permiso);
+            Db.SaveChanges();
+        }
+        var rol = new Role { Code = "CUPOS" + usuario.Id, Name = "Cupos " + usuario.Id, IsActive = true };
+        Db.Roles.Add(rol);
+        Db.SaveChanges();
+        Db.RolePermissions.Add(new RolePermission { RoleId = rol.Id, PermissionId = permiso.Id });
+        Db.UserRoles.Add(new UserRole { UserId = usuario.Id, RoleId = rol.Id });
+        if (maximo is { } m)
+            Db.PermissionAmountLimits.Add(new PermissionAmountLimit
+            {
+                RoleId = rol.Id, PermissionCode = "Lending.CreditLimits.Assign", MaxAmount = m, ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+            });
+        Db.SaveChanges();
+        Db.ChangeTracker.Clear();
+    }
+
+    /// <summary>Un usuario con persona (para decidir, votar o liberar).</summary>
+    public User UsuarioConPersona(string nombre, string documento) => G.Usuario(G.Persona(nombre, "Prueba", documento), $"{nombre.ToLowerInvariant()}@coop.test");
 
     // ------------------------------------------------------------------------------------------------------ solicitudes --
 

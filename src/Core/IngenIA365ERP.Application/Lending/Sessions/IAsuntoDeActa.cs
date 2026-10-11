@@ -68,6 +68,13 @@ public interface IAsuntoDeActa
     Task<Result<AsuntoDeActa>> DescribirAsync(Guid subjectPublicId, DateOnly fecha, CancellationToken ct);
 
     Task<Result> AlDecidirAsync(DecisionDeActa decision, CancellationToken ct);
+
+    /// <summary>
+    /// Lo que necesita el Id de la decisión ya guardada (feature 013, US2 bloque 6B): la solicitud aprobada guarda la decisión que la aprobó y el
+    /// cupo aprobado nace como versión con su decisión. El cierre lo llama después del primer guardado, dentro de la misma transacción y sin
+    /// guardar; si falla, el cierre no deja nada. Por defecto no hace nada. (nuevo)
+    /// </summary>
+    Task<Result> TrasGuardarAsync(DecisionDeActa decision, CancellationToken ct) => Task.FromResult(Result.Success());
 }
 
 /// <summary>

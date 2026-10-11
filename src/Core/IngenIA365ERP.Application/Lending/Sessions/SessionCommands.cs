@@ -626,6 +626,16 @@ public sealed class CloseSessionCommandHandler(
 
             await db.SaveChangesAsync(ct);
             foreach (var (punto, decision, _) in decididos) punto.AsignarDecision(sesion, decision.Id);
+            // Lo que necesita el Id de la decisión (bloque 6B: la solicitud o el cupo aprobados); si falla, no queda nada.
+            foreach (var (punto, decision, asunto) in decididos)
+            {
+                var completado = await asunto.TrasGuardarAsync(new DecisionDeActa(sesion, punto, decision, punto.Outcome!.Value, punto.Conditions, sesion.HeldOn), ct);
+                if (completado.IsFailure)
+                {
+                    db.DescartarCambios();
+                    return Result.Failure<SessionDto>(completado.Error);
+                }
+            }
 
             await numerador.NumerarActaAsync(sesion, estado.Organo, ct);
             sesion.Cerrar(quorum, sesion.Number!, ahora, usuario, HuellaDelActaCerrada(actual, sesion, estado), null);

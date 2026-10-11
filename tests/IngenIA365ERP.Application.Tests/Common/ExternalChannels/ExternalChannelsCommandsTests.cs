@@ -241,8 +241,10 @@ public sealed class ExternalChannelsCommandsTests
         var ex = Assert.Throws<InvalidOperationException>(() =>
             IngenIA365ERP.ExternalChannels.DependencyInjection.AgregarCanal(services, PuertosExternos.Mensajeria, "simulado", typeof(SmsDelProveedor)));
         Assert.Contains("SIMULADO", ex.Message, StringComparison.OrdinalIgnoreCase);
-        // El mismo código en otro puerto no choca.
-        IngenIA365ERP.ExternalChannels.DependencyInjection.AgregarCanal(services, PuertosExternos.CentralesDeRiesgo, "SIMULADO", typeof(SmsDelProveedor));
+        // El mismo código en otro puerto no choca (US2 registró el SIMULADO de centrales: el depósito de valores lo suma US3).
+        IngenIA365ERP.ExternalChannels.DependencyInjection.AgregarCanal(services, PuertosExternos.DepositoDeValores, "SIMULADO", typeof(SmsDelProveedor));
+        Assert.Throws<InvalidOperationException>(() =>
+            IngenIA365ERP.ExternalChannels.DependencyInjection.AgregarCanal(services, PuertosExternos.CentralesDeRiesgo, "SIMULADO", typeof(SmsDelProveedor)));
     }
 
     [Fact]

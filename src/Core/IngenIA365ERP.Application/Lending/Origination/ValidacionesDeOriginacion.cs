@@ -112,7 +112,8 @@ public sealed class ValidacionesDeOriginacion(
     ValidacionDeConcentracion concentracion,
     VinculadosVigentes vinculados,
     IBloqueosDelDeudor bloqueos,
-    IAutorizacionDeDatos autorizaciones)
+    IAutorizacionDeDatos autorizaciones,
+    CreditLimits.SaldoDeAportesVigente saldosDeAportes)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -400,13 +401,13 @@ public sealed class ValidacionesDeOriginacion(
         if (v.RequiresEmployment && !persona.IsEmployee) faltas.Add(new { requirement = "RequiresEmployment", required = true, actual = false });
         if (v.MinContributionsBalance is { } aportesMinimos)
         {
-            var cargas = await db.ContributionBalanceLoads.AsNoTracking().Where(x => x.PersonId == persona.Id && !x.IsDeleted).ToListAsync(ct);
-            var carga = ContributionBalanceLoad.Vigente(cargas, c.Fecha, DateTime.MaxValue);
-            if (carga is null || carga.ContributionsBalance < aportesMinimos)
+            // D19 (bloque 6B): el saldo lo da el lector único, que pregunta a Aportes y, mientras responda «no disponible», toma la última carga.
+            var saldo = await saldosDeAportes.DeAsync(persona.Id, c.Fecha, ct: ct);
+            if (saldo is null || saldo.Aportes < aportesMinimos)
                 faltas.Add(new
                 {
-                    requirement = "MinContributionsBalance", required = aportesMinimos, actual = carga?.ContributionsBalance,
-                    asOfDate = carga is null ? null : ErroresDeOriginacion.Fecha(carga.AsOfDate),
+                    requirement = "MinContributionsBalance", required = aportesMinimos, actual = saldo?.Aportes,
+                    asOfDate = saldo is null ? null : ErroresDeOriginacion.Fecha(saldo.Corte), source = saldo?.Fuente,
                 });
         }
 
@@ -439,8 +440,7 @@ public sealed class ValidacionesDeOriginacion(
         var solicitante = c.Solicitante;
         var persona = c.Personas[solicitante.PersonId];
         var afiliacion = await PersonaDeOriginacion.AfiliacionAsync(db, persona, c.Fecha, ct);
-        var cargas = await db.ContributionBalanceLoads.AsNoTracking().Where(x => x.PersonId == persona.Id && !x.IsDeleted).ToListAsync(ct);
-        var carga = ContributionBalanceLoad.Vigente(cargas, c.Fecha, DateTime.MaxValue);
+        var saldo = await saldosDeAportes.DeAsync(persona.Id, c.Fecha, ct: ct);
         var desde = c.Fecha.AddMonths(-12);
         var creditos = await db.Loans.AsNoTracking().Where(l => l.DebtorPersonId == persona.Id && !l.IsDeleted)
             .Select(l => new { l.Id, l.Status }).ToListAsync(ct);
@@ -456,7 +456,7 @@ public sealed class ValidacionesDeOriginacion(
             [FuentesDePuntaje.AntiguedadComoAsociado] = afiliacion.Activo ? PersonaDeOriginacion.MesesCumplidos(afiliacion.Desde, c.Fecha) : null,
             [FuentesDePuntaje.AntiguedadLaboral] = null,
             [FuentesDePuntaje.IngresoMensual] = solicitante.MonthlyIncome,
-            [FuentesDePuntaje.SaldoDeAportes] = carga?.ContributionsBalance,
+            [FuentesDePuntaje.SaldoDeAportes] = saldo?.Aportes,
             [FuentesDePuntaje.CapacidadDePago] = v.Capacidades.GetValueOrDefault(solicitante.Id)?.Relacion,
             [FuentesDePuntaje.MontoSolicitado] = c.Solicitud.RequestedAmount,
             [FuentesDePuntaje.PlazoEnMeses] = c.Solicitud.TermMonths,

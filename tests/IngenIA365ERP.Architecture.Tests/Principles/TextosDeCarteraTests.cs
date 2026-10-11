@@ -38,6 +38,21 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Origination/SimulationQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Origination/ConnectedGroups/ConnectedGroupCommands.cs",
         "Core/IngenIA365ERP.Domain/Lending/Scoring/MotorDePuntaje.cs",
+        // US2 (bloque 6B): decisiones, cupos, bloqueos, saldos de aportes, listas, re-escaneo y centrales.
+        "Core/IngenIA365ERP.Application/Lending/Origination/ErroresDeDecisionesYCupos.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/DecisionSobreSolicitud.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/AsuntoDeActaDeSolicitud.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/AsuntoDeActaDeCupo.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/ConsultaDeListasDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/ScreeningResultCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/ReEscaneoDeListas.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/CreditLimitCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/DecisionSobreCupo.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/RevalidacionDeCupos.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/DebtorBlockCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/ContributionBalanceCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Attributions/RecordCreditDecisionCommand.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

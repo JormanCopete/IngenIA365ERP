@@ -1,7 +1,9 @@
 using IngenIA365ERP.Application.Common.Compliance;
 using IngenIA365ERP.Application.Common.ExternalChannels;
 using IngenIA365ERP.Application.Common.Messaging;
+using IngenIA365ERP.Application.Lending.Adapters;
 using IngenIA365ERP.ExternalChannels.Circuit;
+using IngenIA365ERP.ExternalChannels.CreditBureaus;
 using IngenIA365ERP.ExternalChannels.Credentials;
 using IngenIA365ERP.ExternalChannels.Messaging;
 using IngenIA365ERP.ExternalChannels.RestrictiveLists;
@@ -21,7 +23,7 @@ namespace IngenIA365ERP.ExternalChannels;
 /// <item>las credenciales en archivo (<see cref="CredencialesDeCanalExternoEnArchivo"/>, con su caché);</item>
 /// <item>el circuito por cooperativa y canal (<see cref="CircuitoDeCanalExterno"/>, con su estado en memoria);</item>
 /// <item>los adaptadores: <see cref="MensajeriaSimulada"/>, <see cref="ListasSimuladas"/> y <see cref="CanalDeListasCargadas"/>
-/// (<c>CARGA-PROPIA</c>). Los de <c>Securities/</c> y <c>CreditBureaus/</c> los suman las fases de US3 y US2, y cada proveedor real su
+/// (<c>CARGA-PROPIA</c>). <c>CentralDeRiesgoSimulada</c> (US2). Los de <c>Securities/</c> los suma US3, y cada proveedor real su
 /// adaptador con sus clientes HTTP (<see cref="AgregarClientesDelCanal"/>).</item>
 /// </list>
 /// Dos adaptadores del mismo puerto con el mismo código hacen <b>fallar la composición</b> —el arranque— (§3.1 regla 6): cada uno se anota
@@ -59,6 +61,12 @@ public static class DependencyInjection
         services.AddSingleton<IListasRestrictivas>(sp => sp.GetRequiredService<ListasSimuladas>());
         AgregarCanal(services, PuertosExternos.ListasRestrictivas, CanalDeListasCargadas.Codigo, typeof(CanalDeListasCargadas));
         services.AddScoped<IListasRestrictivas, CanalDeListasCargadas>();
+
+        // Centrales de riesgo (§3.7, US2 bloque 6B): el simulado, que recuerda por cooperativa lo que respondió.
+        AgregarCanal(services, PuertosExternos.CentralesDeRiesgo, CentralDeRiesgoSimulada.Codigo, typeof(CentralDeRiesgoSimulada));
+        services.TryAddSingleton<MemoriaDeCentralSimulada>();
+        services.TryAddSingleton<CentralDeRiesgoSimulada>();
+        services.AddSingleton<ICentralDeRiesgo>(sp => sp.GetRequiredService<CentralDeRiesgoSimulada>());
 
         // Los clientes HTTP de los proveedores reales que tengan sección (los simulados no hacen HTTP).
         var leidas = seccion.Get<ExternalChannelsOptions>() ?? new ExternalChannelsOptions();

@@ -48,21 +48,32 @@ public sealed class EvaluacionDeSolicitud(
         var partes = await db.CreditApplicationParties.Where(p => p.ApplicationId == s.Id && !p.IsDeleted).OrderBy(p => p.Order).ToListAsync(ct);
         var ids = partes.Select(p => p.PersonId).Distinct().ToList();
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => ids.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
-        var hoy = reloj.HoyLocal;
-        var solicitante = personas[s.ApplicantPersonId];
-        var perfil = await PersonaDeOriginacion.PerfilAsync(db, solicitante, s.ExpectedDisbursementDate ?? hoy, ct);
+        var simulada = await SimularAsync(s, linea, personas[s.ApplicantPersonId], s.RequestedAmount, s.Installments ?? 1, ct);
+        return simulada.IsFailure
+            ? Result.Failure<SolicitudCargada>(simulada.Error)
+            : Result.Success(new SolicitudCargada(s, linea, partes, personas, simulada.Value));
+    }
 
+    /// <summary>
+    /// La simulación de la solicitud con otro monto y otro número de cuotas (bloque 6B): las condiciones menores con que se aprueba se revalidan
+    /// contra la usura del día con el mismo plan, la misma línea y los mismos seguros (FR-038, T0372).
+    /// </summary>
+    public Task<Result<SimulacionCalculada>> SimularConAsync(SolicitudCargada c, decimal monto, int cuotas, CancellationToken ct) =>
+        SimularAsync(c.Solicitud, c.Linea, c.Personas[c.Solicitud.ApplicantPersonId], monto, cuotas, ct);
+
+    private async Task<Result<SimulacionCalculada>> SimularAsync(CreditApplication s, CreditLine linea, Person solicitante, decimal monto, int cuotas,
+        CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var perfil = await PersonaDeOriginacion.PerfilAsync(db, solicitante, s.ExpectedDisbursementDate ?? hoy, ct);
         var gracia = s.GraceKind is { } g ? new ScheduleGraceInput(g, s.GraceInstallments ?? 0) : null;
         var extraordinarias = s.ExtraordinaryInstallments is { } x
             ? System.Text.Json.JsonSerializer.Deserialize<List<ScheduleExtraordinaryInput>>(x, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
             : null;
         var seguros = s.SelectedInsurances is { } y ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(y) : null;
-        var entrada = new ScheduleSimulationInput(linea.PublicId, s.RequestedAmount, s.Installments ?? 1, s.Periodicity, s.ExpectedDisbursementDate,
+        var entrada = new ScheduleSimulationInput(linea.PublicId, monto, cuotas, s.Periodicity, s.ExpectedDisbursementDate,
             s.FirstDueDate, s.AmortizationSystem, extraordinarias, gracia, seguros, solicitante.PublicId);
-        var simulada = await simulador.SimularAsync(linea, entrada, perfil, hoy, ct);
-        return simulada.IsFailure
-            ? Result.Failure<SolicitudCargada>(simulada.Error)
-            : Result.Success(new SolicitudCargada(s, linea, partes, personas, simulada.Value));
+        return await simulador.SimularAsync(linea, entrada, perfil, hoy, ct);
     }
 
     /// <summary>

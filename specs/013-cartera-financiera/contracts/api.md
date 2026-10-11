@@ -804,6 +804,11 @@ Toda decisión es un hecho `LND_CreditDecisions` con huella. Las **individuales*
   consolidado o el contenido cambió, 422 `Lending.Decision.ContentChanged` y la solicitud se reenruta.
 - **Vigencia** (FR-042): la aprobación vale `Originacion.DiasVigenciaDeAprobacion`; vencida, el desembolso
   exige decidir de nuevo.
+- **Atribución** (US2, bloque 6B): decide el nivel efectivo quien tiene su permiso **o el de un nivel individual de mayor rango**
+  (una atribución mayor cubre una menor; los niveles no se acumulan); con sólo un permiso de un nivel menor,
+  `Lending.Attribution.LevelRequired` con `governingBody` nulo; sin ningún permiso de decisión, el 404 del sujeto. El maestro global no
+  decide (C86). La respuesta suma `approvedAmount` y, en un cupo, `resultingSubjectPublicId`: aprobar un cupo **otorga** una versión nueva y
+  firme (§7.1). `Lending.Decision.ContentChanged` lleva `data.currentSha256` (no `currentContentSha256`, que es la del acta).
 
 ### 4.4 Consultas a centrales — `/bureau-queries` (FR-036, F-19)
 
@@ -815,7 +820,9 @@ Toda decisión es un hecho `LND_CreditDecisions` con huella. Las **individuales*
 | `POST /{id}/download-link` | CreditBureau.ReadReports | `IssueBureauReportDownloadLinkCommand` | → `{ url, expiresAt }` del adjunto `LendingBureauReport`; auditado | | K1 |
 
 El canal se sella en la consulta (T71). En producción un resultado `SIMULADO` queda registrado pero nunca
-sirve de evidencia para aprobar (T73).
+sirve de evidencia para aprobar (T73). El canal es el de `COR_ExternalChannelSettings` (clase `CreditBureau`, la central por
+`BureauCode`) vigente al consultar; `purpose: Review` se guarda como `CreditLimit` (`BureauQueryPurpose` sólo tiene `Application` y
+`CreditLimit`) y la respuesta suma `reused` cuando devuelve la consulta vigente (US2, bloque 6B).
 
 ### 4.5 Listas restrictivas: resultado y liberación — `/screening-results` (T70)
 
@@ -934,7 +941,15 @@ vivos − reservas vigentes − aprobadas sin desembolsar (FR-058).
 - **Concentración** (FR-041, T59): exceder el límite individual **bloquea**. Sin patrimonio técnico vigente,
   responde `Lending.Concentration.TechnicalCapitalUnavailable` y alerta `Cartera.PatrimonioTecnicoNoDisponible`.
 - **Listas**: si la consulta de listas da coincidencia, el cupo queda bloqueado y la respuesta lo dice
-  (`Lending.Screening.Blocked`, `data: { screeningResultPublicId }`) hasta que el oficial libere (§4.5).
+  (`Lending.Screening.Blocked`, `data: { screeningResultPublicId }`) hasta que el oficial libere (§4.5). En K1 la
+  respuesta es el **201** con el cupo en `Blocked` y el aviso `Lending.Screening.Blocked` en `warnings[]` (con
+  `screeningResultPublicId`): un 422 revertiría el resultado que el oficial tiene que liberar (US2, bloque 6B).
+- **Estado y versiones** (US2, bloque 6B; sin columnas nuevas): cada cambio es una versión de sólo inserción. Una asignación que
+  supera la atribución operativa o que la matriz lleva a otro nivel (regla, vinculado, excepción) es una versión que **espera
+  decisión** (su enrutamiento va sellado en `CalculationDetail`) y no rige hasta que se decida; aprobarla (individual o en acta) crea
+  la versión firme con `DecisionId`; negarla o devolverla la deja `Ended`. `validTo` se aplica como una versión en cero desde el día
+  siguiente. `GET /availability` suma `applicable { available, creditLimitPublicId }` cuando trae `creditLinePublicId` (el de la línea,
+  el consolidado o el rotativo, C54).
 
 ### 7.2 Bloqueos y embargos — `/blocks` (FR-060)
 

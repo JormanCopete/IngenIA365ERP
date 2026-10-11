@@ -243,8 +243,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Activation.AsuntoDeDiferenciasDeActivacion>();
         // Feature 013, US2 (bloque 6A; T0389–T0396): el simulador, la exposición consolidada, la capacidad de pago y de descuento, el grupo
         // conectado, la concentración, las validaciones de la originación, el enrutamiento y la evaluación de la solicitud. Los puertos que
-        // las validaciones consumen —IConsultaDeListasDeCartera, IDisponibleDeCupo, IBloqueosDelDeudor— los registra el bloque 6B con sus
-        // clases (T0403, T0405, T0406); el renderizador del PDF de la simulación lo registra la API (QuestPDF).
+        // las validaciones consumen —IConsultaDeListasDeCartera, IDisponibleDeCupo, IBloqueosDelDeudor— los registra el bloque 6B (abajo); el
+        // renderizador del PDF de la simulación lo registra la API (QuestPDF).
         services.AddScoped<Lending.Origination.SimuladorDeCredito>();
         services.AddScoped<Lending.Origination.SimulacionEnAlcance>();
         services.AddScoped<Lending.Origination.ExposicionConsolidadaDelDeudor>();
@@ -255,6 +255,27 @@ public static class DependencyInjection
         services.AddScoped<Lending.Origination.EnrutamientoDeSolicitud>();
         services.AddScoped<Lending.Origination.EvaluacionDeSolicitud>();
         services.AddScoped<Lending.Origination.ArmadoDeSolicitud>();
+        // Feature 013, US2 (bloque 6B; T0398–T0407): la consulta de listas de Cartera, el disponible de cupo y los bloqueos (los puertos que
+        // consumen las validaciones), el saldo de aportes (D19: Aportes primero, la plantilla si responde «no disponible»), los cupos y su
+        // enrutamiento y revalidación, la atribución de quien decide, la decisión individual por sujeto y los asuntos de acta de la solicitud y del
+        // cupo. La tarea cartera.re-escaneo-de-listas la registra Program.cs.
+        services.TryAddScoped<Common.Integration.Savings.IConsultaDeAportes, Common.Integration.Savings.ConsultaDeAportesNoDisponible>();
+        services.AddScoped<Lending.Origination.CreditLimits.SaldoDeAportesVigente>();
+        services.AddScoped<Lending.Origination.ConsultaDeListasDeCartera>();
+        services.AddScoped<Lending.Origination.IConsultaDeListasDeCartera>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());
+        services.AddScoped<Lending.Origination.CreditLimits.DisponibleDeCupo>();
+        services.AddScoped<Lending.Origination.IDisponibleDeCupo>(sp => sp.GetRequiredService<Lending.Origination.CreditLimits.DisponibleDeCupo>());
+        services.AddScoped<Lending.Origination.CreditLimits.BloqueosDelDeudor>();
+        services.AddScoped<Lending.Origination.IBloqueosDelDeudor>(sp => sp.GetRequiredService<Lending.Origination.CreditLimits.BloqueosDelDeudor>());
+        services.AddScoped<Lending.Origination.CreditLimits.EnrutamientoDeCupo>();
+        services.AddScoped<Lending.Origination.CreditLimits.RevalidacionDeCupos>();
+        services.AddScoped<Lending.Attributions.AtribucionDelDecisor>();
+        services.AddScoped<Lending.Origination.DecisionSobreSolicitud>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Origination.DecisionSobreSolicitud>());
+        services.AddScoped<Lending.Origination.CreditLimits.DecisionSobreCupo>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Origination.CreditLimits.DecisionSobreCupo>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Origination.AsuntoDeActaDeSolicitud>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Origination.AsuntoDeActaDeCupo>();
         // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
         services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
@@ -560,5 +581,8 @@ public static class DependencyInjection
         services.TryAddScoped<Compliance.DataSubjectRequests.IDeberDeConservacionDelTitular, Compliance.DataSubjectRequests.DeberDeConservacionPorObligaciones>();
         services.AddScoped<Common.Compliance.IProveedoresDeListas, Common.Compliance.ProveedoresDeListas>();
         services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Common.Compliance.IProveedoresDeListas>());
+        // Feature 013, US2 (T0400): el registro de centrales de riesgo; sin AddExternalChannels no tiene adaptadores (el defecto «sin canal»).
+        services.AddScoped<Lending.Adapters.ICentralesDeRiesgo, Lending.Adapters.CentralesDeRiesgo>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Lending.Adapters.ICentralesDeRiesgo>());
     }
 }
