@@ -1,0 +1,30 @@
+// R132, FR-038: la solicitud pide una excepción a la política (la regla 1 la sube a la gerencia), pero la capacidad de pago no
+// alcanza. El enrutamiento dice a qué nivel iría y trae PaymentCapacity en los no exceptuables: decidir responde
+// Lending.Attribution.NotExceptionable en cualquier nivel. Una excepción pedida no levanta lo que no se exceptúa.
+{
+  "nombre": "us2-no-exceptuables",
+  "descripcion": "Excepción a la política con capacidad de pago insuficiente: no exceptuable.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": [
+      { "orden": 1, "excepcionALaPolitica": true, "nivelMinimo": "GERENCIA" }
+    ]
+  },
+  "escenarios": [
+    { "nombre": "excepción pedida con capacidad insuficiente", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "excepcionALaPolitica": true, "hallazgos": ["PaymentCapacity"] },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" } ],
+                    "noExceptuables": ["PaymentCapacity"] } },
+    { "nombre": "la misma excepción con capacidad suficiente sí es exceptuable", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "excepcionALaPolitica": true },
+      "esperado": { "nivel": "GERENCIA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "GERENCIA" } ],
+                    "noExceptuables": [] } },
+    { "nombre": "capacidad, usura y listas juntas", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "hallazgos": ["Usury", "PaymentCapacity", "RestrictiveListMatch"] },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" } ],
+                    "noExceptuables": ["PaymentCapacity", "RestrictiveListMatch", "Usury"] } }
+  ]
+}

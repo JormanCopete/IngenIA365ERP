@@ -32,6 +32,12 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Configuration/ErroresDeLineasDeCredito.cs",
         "Core/IngenIA365ERP.Application/Lending/Configuration/EfectoDeReplicacionUsuraEnLineas.cs",
         "Core/IngenIA365ERP.Domain/Lending/Scoring/ModeloDePuntaje.cs",
+        // US2 (bloque 6A): la originación, la concentración, el simulador y los grupos conectados; y la explicación del puntaje.
+        "Core/IngenIA365ERP.Application/Lending/Origination/ErroresDeOriginacion.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/ValidacionDeConcentracion.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/SimulationQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/ConnectedGroups/ConnectedGroupCommands.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Scoring/MotorDePuntaje.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

@@ -1,0 +1,26 @@
+// US2-7 (FR-040): la solicitud de un vinculado va al consejo, forzada, sea cual sea el monto, aunque una regla o el techo la dejen
+// más abajo. En la sesión, el punto lleva la regla RelatedPartyQualified (4/5 de la composición, sin el voto del interesado): eso lo
+// decide el acta (EvaluadorDeVotacion); aquí se fija sólo el nivel.
+{
+  "nombre": "us2-7-vinculado",
+  "descripcion": "Vinculado al consejo; la regla del punto es la calificada.",
+  "matriz": {
+    "niveles": [
+      { "codigo": "ANALISTA", "nombre": "Analista de crédito", "rango": 10, "clase": "Individual", "permiso": "Lending.Decisions.Analyst", "techo": 5000000 },
+      { "codigo": "EXCEP", "nombre": "Jefe de cartera (excepciones)", "rango": 15, "clase": "Individual", "permiso": "Lending.Decisions.Exceptions", "techo": 5000000, "excepcion": true },
+      { "codigo": "GERENCIA", "nombre": "Gerencia", "rango": 20, "clase": "Individual", "permiso": "Lending.Decisions.Management", "techo": 20000000 },
+      { "codigo": "COMITE", "nombre": "Comité de crédito", "rango": 30, "clase": "Collegiate", "organo": "COMCRED", "techo": 100000000 },
+      { "codigo": "CONSEJO", "nombre": "Consejo de administración", "rango": 40, "clase": "Collegiate", "organo": "CONSEJO", "consejo": true }
+    ],
+    "reglas": [
+      { "orden": 1, "linea": "CONLIB", "montoMaximo": 5000000, "nivelMinimo": "ANALISTA" }
+    ]
+  },
+  "escenarios": [
+    { "nombre": "vinculado con 3.000.000 de libre inversión", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "plazoMeses": 24, "hayVinculado": true },
+      "esperado": { "nivel": "CONSEJO", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "ANALISTA" },
+                                                     { "clase": "RelatedParty", "nivel": "CONSEJO" } ] } },
+    { "nombre": "el mismo monto sin vinculado se queda en el analista", "sujeto": { "linea": "CONLIB", "montoConsolidado": 3000000, "plazoMeses": 24 },
+      "esperado": { "nivel": "ANALISTA", "razones": [ { "clase": "AmountCeiling", "nivel": "ANALISTA" }, { "clase": "Rule", "nivel": "ANALISTA" } ] } }
+  ]
+}

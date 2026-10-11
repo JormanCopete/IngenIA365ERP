@@ -263,8 +263,9 @@ public sealed record AttributionRoutingPreviewDto(
 /// La vista previa «¿a qué nivel iría?» (api.md §3.5.1, <c>POST /api/lending/attribution-matrices/preview</c>, consulta sin clave,
 /// <c>Lending.Attributions.View</c>): enruta con la matriz vigente en <see cref="Date"/> (hoy local si no viene). El monto recibido es el
 /// <b>consolidado</b>: US2 le suma la exposición del deudor. Con línea, la modalidad y el puntaje mínimo salen de su versión vigente
-/// (puntaje bajo el mínimo = excepción, FR-037); con persona, un vínculo vigente la lleva al consejo (FR-040). El plazo en cuotas se toma
-/// en meses. No escribe nada. (nuevo)
+/// (puntaje bajo el mínimo = excepción, FR-037); con persona, un vínculo vigente la lleva al consejo (FR-040) y, desde US2 (T0395), al monto se le
+/// suma su exposición consolidada (<c>ExposicionConsolidadaDelDeudor</c>: como deudor y codeudor, reservas y aprobadas), como en la solicitud.
+/// El plazo en cuotas se toma en meses. No escribe nada. (nuevo)
 /// </summary>
 public sealed record PreviewAttributionRoutingQuery(
     string Subject,
@@ -297,7 +298,8 @@ public sealed class PreviewAttributionRoutingQueryHandler(
     VinculadosVigentes vinculados,
     IAlcanceDeCartera alcanceDeLaPeticion,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<PreviewAttributionRoutingQuery, Result<AttributionRoutingPreviewDto>>
+    IDateTimeService reloj,
+    Origination.ExposicionConsolidadaDelDeudor? exposicion = null) : IRequestHandler<PreviewAttributionRoutingQuery, Result<AttributionRoutingPreviewDto>>
 {
     public async Task<Result<AttributionRoutingPreviewDto>> Handle(PreviewAttributionRoutingQuery request, CancellationToken ct)
     {
@@ -325,14 +327,16 @@ public sealed class PreviewAttributionRoutingQueryHandler(
         }
 
         var hayVinculado = false;
+        var consolidado = request.Amount;
         if (request.PersonPublicId is { } personaPublica)
         {
             var persona = await db.People.AsNoTracking().Where(p => p.PublicId == personaPublica && !p.IsDeleted).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
             if (persona is null) return Result.Failure<AttributionRoutingPreviewDto>(ErroresDeGobierno.PersonaInexistente());
             hayVinculado = (await vinculados.DeAsync([persona.Value], fecha, ct)).Count > 0;
+            consolidado += (await (exposicion ?? new Origination.ExposicionConsolidadaDelDeudor(db)).DeAsync(persona.Value, fecha, null, ct)).Total;
         }
 
-        var enrutado = EnrutadorDeAtribuciones.Enrutar(new SujetoAEnrutar(request.Subject, request.Amount)
+        var enrutado = EnrutadorDeAtribuciones.Enrutar(new SujetoAEnrutar(request.Subject, consolidado)
         {
             Linea = linea,
             Modalidad = modalidad,
@@ -350,7 +354,7 @@ public sealed class PreviewAttributionRoutingQueryHandler(
         return Result.Success(new AttributionRoutingPreviewDto(
             niveles.Single(n => n.Code == enrutado.NivelEfectivo.Codigo),
             enrutado.Razones.Select(r => new RoutingReasonDto(r.Clase, r.Nivel.Codigo, r.Detalle)).ToList(),
-            request.Amount,
+            consolidado,
             enrutado.NoExceptuables,
             matriz.Matriz.VersionNumber));
     }

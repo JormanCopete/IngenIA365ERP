@@ -4,6 +4,7 @@
 // blanca de su propósito (RenderizadorDePlantillasDeMensaje). Los SMS van sin tildes en a, i, o, u para quedarse en GSM-7 (160 por
 // mensaje en lugar de 70). Los de WhatsApp no salen hasta que la cooperativa registre el identificador de la plantilla aprobada ante
 // su proveedor (pregunta I15). Los valores de cobranza se escriben «a la fecha de corte», porque el envío puede diferirse.
+// US2 (T0390, C87) suma SIMULACION, sólo por correo: el envío de una simulación a la persona simulada, con el PDF adjunto.
 [
   {
     "code": "AVISOPREV",
@@ -173,6 +174,17 @@
       {
         "channel": "WhatsApp",
         "body": "{{NombreDeLaCooperativa}} le envió el documento {{ClaseDeDocumento}} {{NumeroDelDocumento}}. Código de verificación: {{CodigoDeVerificacion}}."
+      }
+    ]
+  },
+  {
+    "code": "SIMULACION",
+    "purpose": "Informative",
+    "templates": [
+      {
+        "channel": "Email",
+        "subject": "Simulación de su crédito – {{NombreDeLaCooperativa}}",
+        "body": "<p>Señor(a) {{NombreDelTitular}}:</p><p>Adjuntamos la simulación del crédito que nos pidió. Es informativa: no constituye aprobación ni compromete a {{NombreDeLaCooperativa}}.</p><p>Si quiere radicar la solicitud o tiene dudas, comuníquese al {{TelefonoDeLaCooperativa}}.</p>"
       }
     ]
   }

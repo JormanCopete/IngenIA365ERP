@@ -241,6 +241,20 @@ public static class DependencyInjection
         services.AddScoped<Lending.Sessions.PresenciaEnSesion>();
         services.TryAddScoped<Lending.Sessions.IActaDeSesionEnPdf, Lending.Sessions.SinActaEnPdf>();
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Activation.AsuntoDeDiferenciasDeActivacion>();
+        // Feature 013, US2 (bloque 6A; T0389–T0396): el simulador, la exposición consolidada, la capacidad de pago y de descuento, el grupo
+        // conectado, la concentración, las validaciones de la originación, el enrutamiento y la evaluación de la solicitud. Los puertos que
+        // las validaciones consumen —IConsultaDeListasDeCartera, IDisponibleDeCupo, IBloqueosDelDeudor— los registra el bloque 6B con sus
+        // clases (T0403, T0405, T0406); el renderizador del PDF de la simulación lo registra la API (QuestPDF).
+        services.AddScoped<Lending.Origination.SimuladorDeCredito>();
+        services.AddScoped<Lending.Origination.SimulacionEnAlcance>();
+        services.AddScoped<Lending.Origination.ExposicionConsolidadaDelDeudor>();
+        services.AddScoped<Lending.Origination.CapacidadDePago>();
+        services.AddScoped<Lending.Origination.ConnectedGroups.GrupoConectadoDelDeudor>();
+        services.AddScoped<Lending.Origination.ValidacionDeConcentracion>();
+        services.AddScoped<Lending.Origination.ValidacionesDeOriginacion>();
+        services.AddScoped<Lending.Origination.EnrutamientoDeSolicitud>();
+        services.AddScoped<Lending.Origination.EvaluacionDeSolicitud>();
+        services.AddScoped<Lending.Origination.ArmadoDeSolicitud>();
         // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
         services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las

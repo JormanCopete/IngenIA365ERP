@@ -53,6 +53,8 @@
     <!-- Feature 013, US1 (T0330, T0331): casos dorados del motor financiero (plan, tasas y usura), calculados con la hoja
          Lending\Casos\calcular.py (decimal de 40 digitos), que se versiona junto a ellos. -->
     <None Include="Lending\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, US2 (T0364): casos dorados del puntaje, calculados a mano con la hoja Lending\Scoring\Casos\puntaje.py. -->
+    <None Include="Lending\Scoring\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

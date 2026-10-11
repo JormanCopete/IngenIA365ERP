@@ -60,6 +60,12 @@ public sealed record ConsultaDeVentana(int PersonId, int? LoanId, MessageChannel
 {
     /// <summary>El mensaje que se está despachando: no cuenta en su propio historial.</summary>
     public int? SinElMensaje { get; init; }
+
+    /// <summary>
+    /// Feature 013, US2 (T0390, C87): la persona a la que se le simuló un crédito y se le envía la simulación (informativo, sin crédito). Todavía
+    /// no es deudora: cuenta como obligada sólo para ese mensaje, que respeta igual la ventana, la autorización de canal y el tope diario.
+    /// </summary>
+    public bool PersonaSimulada { get; init; }
 }
 
 /// <summary>
@@ -123,6 +129,15 @@ public sealed class ColaDeMensajesAlDeudor(
     private const int LargoDelTexto = 500;
     private const int DiasDeHistorialHaciaAtras = 7;
 
+    /// <summary>
+    /// El origen del envío de una simulación (US2, T0390, C87): un informativo sin crédito a la persona simulada, que todavía no es deudora.
+    /// </summary>
+    public const string OrigenSimulacion = DebtorMessage.OrigenSimulacion;
+
+    /// <summary>¿Es el envío de una simulación? Sólo un informativo de ese origen y sin crédito.</summary>
+    public static bool EsDeSimulacion(string? origen, int? loanId, DebtorMessagePurpose proposito) =>
+        loanId is null && proposito == DebtorMessagePurpose.Informative && string.Equals(origen, OrigenSimulacion, StringComparison.Ordinal);
+
     /// <summary>¿El despliegue es producción? (la guardia del efecto legal y el estado final del simulado lo usan).</summary>
     public bool EnProduccion => !opciones.Value.AmbienteDePruebas;
 
@@ -167,7 +182,7 @@ public sealed class ColaDeMensajesAlDeudor(
         }
 
         var evaluada = await EvaluarAsync(new ConsultaDeVentana(pedido.PersonId, pedido.LoanId, pedido.Channel, pedido.Purpose, pedidoUtc,
-            pedido.Inmediato), ct);
+            pedido.Inmediato) { PersonaSimulada = EsDeSimulacion(pedido.OriginKind, pedido.LoanId, pedido.Purpose) }, ct);
         if (evaluada.IsFailure) return Result.Failure<MensajeEncolado>(evaluada.Error);
         var ventana = evaluada.Value;
         if (!ventana.Obligado) return Result.Failure<MensajeEncolado>(ErroresDeMensajesAlDeudor.DestinatarioNoObligado());
@@ -296,7 +311,9 @@ public sealed class ColaDeMensajesAlDeudor(
                 string.Empty, null, null, lunes, desfase));
         var nombre = ReferenciasDeGobierno.Nombre(persona);
 
-        var (obligado, rol, deudorId) = await ObligacionAsync(consulta.PersonId, consulta.LoanId, consulta.Purpose, reloj.HoyLocal, ct);
+        var (obligado, rol, deudorId) = consulta.PersonaSimulada && consulta.LoanId is null
+            ? (true, ContactRole.Debtor, (int?)consulta.PersonId)
+            : await ObligacionAsync(consulta.PersonId, consulta.LoanId, consulta.Purpose, reloj.HoyLocal, ct);
         var deudor = deudorId is { } idDelDeudor && idDelDeudor != persona.Id
             ? await db.People.AsNoTracking().FirstOrDefaultAsync(p => p.Id == idDelDeudor, ct)
             : persona;
@@ -337,6 +354,7 @@ public sealed class ColaDeMensajesAlDeudor(
         EvaluarAsync(new ConsultaDeVentana(mensaje.PersonId, mensaje.LoanId, mensaje.Channel, mensaje.Purpose, reloj.UtcNow, false)
         {
             SinElMensaje = mensaje.Id,
+            PersonaSimulada = EsDeSimulacion(mensaje.OriginKind, mensaje.LoanId, mensaje.Purpose),
         }, ct);
 
     /// <summary>El primer instante permitido (UTC) desde <paramref name="desdeUtc"/>, o nulo si no hay ventana o el mensaje quedó excluido.</summary>
@@ -345,6 +363,7 @@ public sealed class ColaDeMensajesAlDeudor(
         var r = await EvaluarAsync(new ConsultaDeVentana(mensaje.PersonId, mensaje.LoanId, mensaje.Channel, mensaje.Purpose, desdeUtc, false)
         {
             SinElMensaje = mensaje.Id,
+            PersonaSimulada = EsDeSimulacion(mensaje.OriginKind, mensaje.LoanId, mensaje.Purpose),
         }, ct);
         return r.IsSuccess && r.Value.PermitidoDesde is { } desde ? desde.UtcDateTime : null;
     }
@@ -428,7 +447,11 @@ public sealed class ColaDeMensajesAlDeudor(
 
     // ---------------------------------------------------------------------------------------------------------- privados --
 
-    private static Error? RechazoDelInmediato(VentanaDeContacto ventana, MessageChannel canal) => ventana.Decision switch
+    /// <summary>
+    /// Por qué un envío manual inmediato no puede salir ahora, o nulo (lo que <see cref="EncolarAsync"/> rechaza). Feature 013, US2 (T0390): el
+    /// envío de una simulación lo pregunta antes de pintar y subir el PDF, para no dejar un adjunto sin mensaje.
+    /// </summary>
+    public static Error? RechazoDelInmediato(VentanaDeContacto ventana, MessageChannel canal) => ventana.Decision switch
     {
         Excluido { Motivo: ContactWindowReason.ChannelNotAuthorized } => ErroresDeMensajesAlDeudor.CanalNoAutorizado(ventana.NombreDelTitular, canal),
         Excluido { Motivo: ContactWindowReason.AuthorizationWithoutEvidence } =>

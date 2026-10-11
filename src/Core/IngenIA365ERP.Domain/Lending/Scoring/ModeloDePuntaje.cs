@@ -37,8 +37,21 @@ public static class FuentesDePuntaje
     public static bool Existe(string? fuente) => fuente is not null && Todas.Contains(fuente, StringComparer.Ordinal);
 }
 
-/// <summary>Un rango de una variable: desde y hasta (nulos = sin límite, cerrado en los dos extremos) y los puntos que da. (nuevo)</summary>
-public sealed record RangoDePuntaje(decimal? From, decimal? To, decimal Points);
+/// <summary>
+/// Un rango de una variable: desde (incluido) y hasta (excluido) —nulo = sin límite de ese lado— y los puntos que da (US2, T0387: un
+/// valor igual al «hasta» cae en el rango siguiente). <see cref="NoData"/> marca el rango «sin dato», sin límites: los puntos que toma la
+/// variable cuando la solicitud no trae su valor; sin ese rango, cero. No se escribe en el JSON cuando es falso, así los modelos que no lo
+/// usan conservan su forma. (nuevo)
+/// </summary>
+public sealed record RangoDePuntaje(
+    decimal? From,
+    decimal? To,
+    decimal Points,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NoData = false)
+{
+    /// <summary>¿El valor cae en este rango? (desde incluido, hasta excluido; el rango «sin dato» no recibe valores.)</summary>
+    public bool Contiene(decimal valor) => !NoData && (From is not { } desde || valor >= desde) && (To is not { } hasta || valor < hasta);
+}
 
 /// <summary>Una variable del modelo: código propio de la línea, nombre, fuente de <see cref="FuentesDePuntaje"/>, peso (fracción) y rangos. (nuevo)</summary>
 public sealed record VariableDePuntaje(string Code, string Name, string Source, decimal Weight, IReadOnlyList<RangoDePuntaje> Ranges);
@@ -106,6 +119,10 @@ public sealed record ModeloDePuntaje(string? ExceptionLevelCode, IReadOnlyList<V
                 return ProblemaDeCartera.Con(CodigoInvalido, $"Un rango de «{v.Code}» empieza después de terminar.", "field", "variables");
             if (v.Ranges.Any(r => decimal.Round(r.Points, DecimalesDelPuntaje) != r.Points))
                 return ProblemaDeCartera.Con(CodigoInvalido, $"Los puntos de «{v.Code}» admiten hasta cuatro decimales.", "field", "variables");
+            if (v.Ranges.Any(r => r.NoData && (r.From is not null || r.To is not null)))
+                return ProblemaDeCartera.Con(CodigoInvalido, $"El rango «sin dato» de «{v.Code}» no lleva desde ni hasta.", "field", "variables");
+            if (v.Ranges.Count(r => r.NoData) > 1)
+                return ProblemaDeCartera.Con(CodigoInvalido, $"«{v.Code}» lleva a lo sumo un rango «sin dato».", "field", "variables");
         }
         return null;
     }

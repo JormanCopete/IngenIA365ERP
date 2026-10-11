@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Origination;
 
@@ -51,4 +52,35 @@ public class ScreeningResult : AuditableEntity, IHechoInmutable
 
     [EscrituraUnica]
     public string? ReleaseReason { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0388) --
+
+    public const string CodigoNoPendiente = "Lending.Screening.NotPending";
+
+    /// <summary>Una coincidencia (exacta o posible) que el oficial no ha liberado: bloquea originar y vender (T70).</summary>
+    public bool Bloquea => Outcome is ScreeningOutcome.Match or ScreeningOutcome.PossibleMatch && ReleasedAt is null;
+
+    /// <summary>
+    /// ¿Cuenta como consulta hecha? (data-model §2.6): <c>Unavailable</c> nunca, y un resultado simulado sólo fuera de producción (T73). Lo
+    /// que no cuenta deja la validación <c>Blocking</c> hasta repetirla.
+    /// </summary>
+    public bool CuentaComoConsulta(bool enProduccion) => Outcome != ScreeningOutcome.Unavailable && !(IsSimulated && enProduccion);
+
+    /// <summary>Nulo si se puede liberar; si no, <c>Lending.Screening.NotPending</c> (no es coincidencia o ya se liberó).</summary>
+    public ProblemaDeCartera? PuedeLiberar() => Bloquea
+        ? null
+        : ProblemaDeCartera.Con(CodigoNoPendiente, "Este resultado no tiene una coincidencia pendiente de liberar.", "outcome", Outcome.ToString());
+
+    /// <summary>
+    /// La liberación del oficial de cumplimiento, con motivo y una sola vez (<see cref="EscrituraUnicaAttribute"/>, C42). La segregación (no
+    /// libera quien radicó) la decide el comando.
+    /// </summary>
+    public void Liberar(int usuarioId, DateTime instante, string motivo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        ReglaDeCarteraException.SiHay(PuedeLiberar());
+        ReleasedAt = instante;
+        ReleasedByUserId = usuarioId;
+        ReleaseReason = motivo.Trim();
+    }
 }

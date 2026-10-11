@@ -755,6 +755,14 @@ listas» (hasta que el oficial libere) **se calculan** y la respuesta los muestr
   después (§8.3).
 - **Libranza** (K2): en K1 sólo existe la forma `OwnPayroll` (nómina propia, sin convenio); `payrollAgreementPublicId`
   responde `Lending.PayrollAgreement.NotAvailable` (`data: { availableFrom: "K2" }`) hasta K2.
+- **Capacidad declarada** (US2, bloque 6A; extensión aditiva): `applicantCapacity { monthlyIncome, monthlyExpenses,
+  externalInstallments }` y los mismos campos en cada `coDebtors[]` (que suma `role`: `CoDebtor` o `Guarantor`). Sin ingreso
+  declarado, la validación de capacidad queda `Unavailable` hasta el análisis (`POST /{id}/analysis`). La certificación de la
+  nómina propia (`payroll.certificationAttachmentPublicId`, `certificationDate`) queda como documento adicional; el `employeeId`
+  no tiene columna en K1 (`PayrollEmployeeIdentifier` nace con K2).
+- **Preferencia** (US2, bloque 6A): se sella en la solicitud (`PrepaymentChoice`) al radicar; su fila de
+  `LND_PrepaymentPreferences` (`Origin = Application`) nace con el crédito o el cupo, porque
+  `CK_LND_PrepaymentPreferences_Scope` exige uno de los dos.
 
 `CreditApplicationDto` = el input más `{ publicId, number, status, rowVersion, applicant, office, line {
 publicId, code, name, versionPublicId }, documents: [{ requirementCode, name, mandatory, attachment? }],

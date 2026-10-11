@@ -16,4 +16,18 @@ public class ConnectedGroupMember : AuditableEntity, IHechoInmutable
 
     [EscrituraUnica]
     public DateTime? EndedAt { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0393) --
+
+    /// <summary>Vigente el <paramref name="fecha"/>: entró y no salió antes de que acabe ese día (C112: <c>EndedAt</c> ≤ D no cuenta).</summary>
+    public bool VigenteEn(DateOnly fecha) => !IsDeleted && ValidFrom <= fecha && (EndedAt is not { } fin || DateOnly.FromDateTime(fin) > fecha);
+
+    public static ConnectedGroupMember Nuevo(int groupId, int personId, DateOnly desde) => new() { GroupId = groupId, PersonId = personId, ValidFrom = desde };
+
+    /// <summary>Retira a la persona del grupo, una sola vez (<see cref="EscrituraUnicaAttribute"/>); el motivo queda en la auditoría del comando.</summary>
+    public void Retirar(DateTime instante)
+    {
+        if (EndedAt is not null) throw new InvalidOperationException("La persona ya salió del grupo.");
+        EndedAt = instante;
+    }
 }

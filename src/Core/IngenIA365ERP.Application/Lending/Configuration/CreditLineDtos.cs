@@ -425,16 +425,19 @@ public sealed record CreditLineUsuryCheckDto(
     IReadOnlyList<string> Explanation,
     bool Passes);
 
-/// <summary>Una variable del bloque de puntaje (api.md §3.3).</summary>
-public sealed record ScoringRangeDto(decimal? From, decimal? To, decimal Points);
+/// <summary>
+/// Un rango de una variable del bloque de puntaje (api.md §3.3): desde incluido, hasta excluido. <see cref="NoData"/> (US2, T0387) marca
+/// el rango «sin dato»: los puntos que toma la variable cuando la solicitud no trae su valor (sin él, cero).
+/// </summary>
+public sealed record ScoringRangeDto(decimal? From, decimal? To, decimal Points, bool NoData = false);
 
 public sealed record ScoringVariableDto(string Code, string Name, string Source, decimal Weight, IReadOnlyList<ScoringRangeDto> Ranges)
 {
     public VariableDePuntaje Modelo() => new(Code ?? string.Empty, Name ?? string.Empty, Source ?? string.Empty, Weight,
-        (Ranges ?? []).Select(r => new RangoDePuntaje(r.From, r.To, r.Points)).ToList());
+        (Ranges ?? []).Select(r => new RangoDePuntaje(r.From, r.To, r.Points, r.NoData)).ToList());
 
     public static ScoringVariableDto De(VariableDePuntaje v) =>
-        new(v.Code, v.Name, v.Source, v.Weight, v.Ranges.Select(r => new ScoringRangeDto(r.From, r.To, r.Points)).ToList());
+        new(v.Code, v.Name, v.Source, v.Weight, v.Ranges.Select(r => new ScoringRangeDto(r.From, r.To, r.Points, r.NoData)).ToList());
 }
 
 /// <summary>El bloque de puntaje de la versión vigente (api.md §3.3 <c>GET</c>).</summary>

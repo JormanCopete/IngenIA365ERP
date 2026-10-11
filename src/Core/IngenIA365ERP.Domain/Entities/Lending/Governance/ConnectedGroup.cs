@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Governance;
 
@@ -28,4 +29,42 @@ public class ConnectedGroup : AuditableEntity, IHechoInmutable
 
     [EscrituraUnica]
     public string? EndReason { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0393) --
+
+    public const string CodigoInexistente = "Lending.ConnectedGroup.NotFound";
+    public const string CodigoTerminado = "Lending.ConnectedGroup.Ended";
+
+    /// <summary>Vigente el <paramref name="fecha"/>: empezó y no terminó antes de que acabe ese día.</summary>
+    public bool VigenteEn(DateOnly fecha) => !IsDeleted && ValidFrom <= fecha && (EndedAt is not { } fin || DateOnly.FromDateTime(fin) > fecha);
+
+    /// <summary>
+    /// Un grupo registrado por el jefe de cartera (C112): nombre, fundamento (la clase y el texto, obligatorio), soporte opcional y desde cuándo
+    /// rige. Los miembros los agrega el comando.
+    /// </summary>
+    public static ConnectedGroup Registrar(string nombre, ConnectedGroupBasis fundamento, string texto, Guid? soporte, DateOnly desde, int registradoPor)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(nombre);
+        ArgumentException.ThrowIfNullOrWhiteSpace(texto);
+        if (!Enum.IsDefined(fundamento)) throw new ArgumentException("Fundamento de grupo desconocido.", nameof(fundamento));
+        return new ConnectedGroup
+        {
+            Name = nombre.Trim(),
+            Basis = fundamento,
+            Grounds = texto.Trim(),
+            SupportAttachmentPublicId = soporte,
+            ValidFrom = desde,
+            RegisteredByUserId = registradoPor,
+        };
+    }
+
+    /// <summary>Termina el grupo con motivo, una sola vez (<see cref="EscrituraUnicaAttribute"/>).</summary>
+    public void Terminar(DateTime instante, string motivo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        if (EndedAt is not null)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoTerminado, "El grupo ya está terminado.", "endedAt", EndedAt));
+        EndedAt = instante;
+        EndReason = motivo.Trim();
+    }
 }

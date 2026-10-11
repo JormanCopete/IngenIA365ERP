@@ -1,0 +1,35 @@
+// FR-037: tres variables —antigüedad como asociado, relación cuota/ingreso y puntaje de central— con pesos 0,4 / 0,4 / 0,2 y
+// mínimo 600. Cada variable cae en el rango que contiene su valor (desde incluido, hasta excluido) y aporta peso × puntos.
+// Calculado con puntaje.py (decimal de 40 dígitos).
+{
+  "nombre": "01-tres-variables",
+  "descripcion": "Antigüedad, relación cuota/ingreso y central con pesos 0,4/0,4/0,2.",
+  "modelo": {
+    "nivelDeExcepcion": "EXCEP",
+    "minimo": 600,
+    "variables": [
+      { "codigo": "ANTIG", "nombre": "Antigüedad como asociado", "fuente": "Applicant.AssociateSeniorityMonths", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 12, "puntos": 300 }, { "desde": 12, "hasta": 36, "puntos": 600 }, { "desde": 36, "puntos": 900 } ] },
+      { "codigo": "RELCI", "nombre": "Relación cuota/ingreso", "fuente": "Application.PaymentCapacityRatio", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 0.3, "puntos": 900 }, { "desde": 0.3, "hasta": 0.5, "puntos": 600 }, { "desde": 0.5, "puntos": 200 } ] },
+      { "codigo": "CENTRAL", "nombre": "Puntaje de central", "fuente": "Bureau.Score", "peso": 0.2,
+        "rangos": [ { "desde": 0, "hasta": 500, "puntos": 200 }, { "desde": 500, "hasta": 700, "puntos": 500 }, { "desde": 700, "puntos": 800 } ] }
+    ]
+  },
+  "escenarios": [
+    // 0,4 × 600 + 0,4 × 900 + 0,2 × 800 = 240 + 360 + 160 = 760.
+    { "nombre": "30 meses, 25 %, central 720",
+      "valores": { "Applicant.AssociateSeniorityMonths": 30, "Application.PaymentCapacityRatio": 0.25, "Bureau.Score": 720 },
+      "esperado": { "puntaje": 760, "bajoElMinimo": false,
+        "variables": [ { "codigo": "ANTIG", "puntos": 600, "aporte": 240 }, { "codigo": "RELCI", "puntos": 900, "aporte": 360 },
+                       { "codigo": "CENTRAL", "puntos": 800, "aporte": 160 } ],
+        "explicacionContiene": [ "Puntaje 760 de un máximo de 880", "valor 30 en el rango [12, 36): 600 puntos", "aporta 360" ] } },
+    // 0,4 × 900 + 0,4 × 600 + 0,2 × 500 = 360 + 240 + 100 = 700.
+    { "nombre": "40 meses, 45 %, central 650",
+      "valores": { "Applicant.AssociateSeniorityMonths": 40, "Application.PaymentCapacityRatio": 0.45, "Bureau.Score": 650 },
+      "esperado": { "puntaje": 700, "bajoElMinimo": false,
+        "variables": [ { "codigo": "ANTIG", "puntos": 900, "aporte": 360 }, { "codigo": "RELCI", "puntos": 600, "aporte": 240 },
+                       { "codigo": "CENTRAL", "puntos": 500, "aporte": 100 } ],
+        "explicacionContiene": [ "no está por debajo del mínimo 600" ] } }
+  ]
+}

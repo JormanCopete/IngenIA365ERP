@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Origination;
 
@@ -124,4 +125,154 @@ public class CreditApplication : AuditableEntity
     public int? CancelledByUserId { get; set; }
 
     public string? CancelReason { get; set; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0388) --
+    // US2 (T0388; data-model §2.1 y §8.2): los estados y sus transiciones. Las propiedades conservan su setter (la forma la dejó la fase 3 y
+    // la migración la llena), pero la originación sólo las mueve por estos métodos, que dicen si se puede antes de mover.
+
+    public const string CodigoNoEditable = "Lending.Application.NotEditable";
+    public const string CodigoEstadoInvalido = "Lending.Application.InvalidStatus";
+    public const string CodigoAprobacionVencida = "Lending.Application.ApprovalExpired";
+
+    /// <summary>Las transiciones de data-model §8.2. «Vencida» y «bloqueada por listas» no son estados (C53).</summary>
+    private static readonly IReadOnlyDictionary<CreditApplicationStatus, CreditApplicationStatus[]> Transiciones =
+        new Dictionary<CreditApplicationStatus, CreditApplicationStatus[]>
+        {
+            [CreditApplicationStatus.Draft] = [CreditApplicationStatus.Submitted, CreditApplicationStatus.Cancelled],
+            [CreditApplicationStatus.Submitted] = [CreditApplicationStatus.PendingDecision, CreditApplicationStatus.Cancelled],
+            [CreditApplicationStatus.PendingDecision] =
+            [
+                CreditApplicationStatus.PendingDecision, CreditApplicationStatus.Approved, CreditApplicationStatus.Denied,
+                CreditApplicationStatus.Returned, CreditApplicationStatus.Cancelled,
+            ],
+            [CreditApplicationStatus.Returned] = [CreditApplicationStatus.Submitted, CreditApplicationStatus.Cancelled],
+            [CreditApplicationStatus.Approved] =
+            [
+                CreditApplicationStatus.PendingDecision, CreditApplicationStatus.Disbursed, CreditApplicationStatus.Granted,
+                CreditApplicationStatus.Cancelled,
+            ],
+        };
+
+    /// <summary>¿Se puede pasar de <paramref name="desde"/> a <paramref name="hacia"/>? (data-model §8.2).</summary>
+    public static bool PuedePasar(CreditApplicationStatus desde, CreditApplicationStatus hacia) =>
+        Transiciones.TryGetValue(desde, out var destinos) && destinos.Contains(hacia);
+
+    /// <summary>Se edita (datos, partes y documentos propios del borrador) sólo en <c>Draft</c> y <c>Returned</c>.</summary>
+    public bool Editable => Status is CreditApplicationStatus.Draft or CreditApplicationStatus.Returned;
+
+    /// <summary>
+    /// Ya decidida (o terminada): aprobada, negada, desembolsada, otorgada o anulada. Desde ahí los documentos quedan bloqueados (T81,
+    /// <c>Attachments.OwnerLocked</c>).
+    /// </summary>
+    public bool Decidida => Status is CreditApplicationStatus.Approved or CreditApplicationStatus.Denied or CreditApplicationStatus.Disbursed
+        or CreditApplicationStatus.Granted or CreditApplicationStatus.Cancelled;
+
+    /// <summary>«Aprobación vencida» (FR-042, C53): aprobada con <see cref="ApprovalValidUntil"/> antes de <paramref name="hoy"/>.</summary>
+    public bool AprobacionVencida(DateOnly hoy) => Status == CreditApplicationStatus.Approved && ApprovalValidUntil is { } hasta && hasta < hoy;
+
+    /// <summary>Nulo si se puede editar; si no, <c>Lending.Application.NotEditable</c> con el estado.</summary>
+    public ProblemaDeCartera? ExigirEditable() => Editable
+        ? null
+        : ProblemaDeCartera.Con(CodigoNoEditable,
+            "La solicitud ya no se puede modificar: sólo se edita en borrador o cuando se devolvió para corregir.", "status", Status.ToString());
+
+    /// <summary>Nulo si la solicitud puede ir a <paramref name="hacia"/>; si no, <c>Lending.Application.InvalidStatus</c>.</summary>
+    public ProblemaDeCartera? PuedeIrA(CreditApplicationStatus hacia) => PuedePasar(Status, hacia)
+        ? null
+        : new ProblemaDeCartera(CodigoEstadoInvalido,
+            $"La solicitud está en «{Status}» y no puede pasar a «{hacia}».",
+            new Dictionary<string, object?> { ["status"] = Status.ToString(), ["requested"] = hacia.ToString() });
+
+    /// <summary><c>Draft</c>/<c>Returned</c> → <c>Submitted</c>: quien radica y cuándo (FR-005: no decide ni vota).</summary>
+    public void Radicar(int usuarioId, DateTime instante)
+    {
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Submitted));
+        Status = CreditApplicationStatus.Submitted;
+        SubmittedByUserId = usuarioId;
+        SubmittedAt = instante;
+    }
+
+    /// <summary>
+    /// <c>Submitted</c> → <c>PendingDecision</c>, o el reenrutamiento de una pendiente o de una aprobada (cambió el consolidado o venció):
+    /// sella la matriz, el nivel efectivo, la huella del enrutamiento, el consolidado y si hay un vinculado (T63, FR-040). Una aprobada que
+    /// se reenruta pierde su aprobación: hay que decidir otra vez.
+    /// </summary>
+    public void Enrutar(int matrizId, int nivelId, string huella, decimal consolidado, bool vinculado, DateTime instante)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(huella);
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.PendingDecision));
+        if (Status == CreditApplicationStatus.Approved)
+        {
+            ApprovalDecisionId = null;
+            ApprovalValidUntil = null;
+            ApprovedAmount = null;
+            ApprovedTerms = null;
+        }
+        Status = CreditApplicationStatus.PendingDecision;
+        AttributionMatrixId = matrizId;
+        RequiredLevelId = nivelId;
+        RoutingSha256 = huella;
+        ConsolidatedExposure = consolidado;
+        IsRelatedParty = vinculado;
+        RoutedAt = instante;
+    }
+
+    /// <summary><c>PendingDecision</c> → <c>Approved</c> con las condiciones aprobadas (pueden ser menores, FR-038) y su vigencia (FR-042).</summary>
+    public void Aprobar(int decisionId, decimal montoAprobado, string? condiciones, DateOnly vigenteHasta)
+    {
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Approved));
+        if (montoAprobado <= 0m || montoAprobado > RequestedAmount)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoEstadoInvalido,
+                "El monto aprobado es mayor que cero y no pasa del pedido.", "approvedAmount", montoAprobado));
+        Status = CreditApplicationStatus.Approved;
+        ApprovalDecisionId = decisionId;
+        ApprovedAmount = montoAprobado;
+        ApprovedTerms = condiciones;
+        ApprovalValidUntil = vigenteHasta;
+    }
+
+    /// <summary><c>PendingDecision</c> → <c>Denied</c>.</summary>
+    public void Negar()
+    {
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Denied));
+        Status = CreditApplicationStatus.Denied;
+    }
+
+    /// <summary><c>PendingDecision</c> → <c>Returned</c>: vuelve a quien la armó para corregirla; al reenviarla se radica otra vez.</summary>
+    public void Devolver()
+    {
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Returned));
+        Status = CreditApplicationStatus.Returned;
+    }
+
+    /// <summary>Anular o desistir con motivo, antes de desembolsar u otorgar (FR-047): no genera cartera.</summary>
+    public void Cancelar(int usuarioId, DateTime instante, string motivo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Cancelled));
+        Status = CreditApplicationStatus.Cancelled;
+        CancelledByUserId = usuarioId;
+        CancelledAt = instante;
+        CancelReason = motivo.Trim();
+    }
+
+    /// <summary><c>Approved</c> → <c>Disbursed</c>: el primer tramo creó el crédito (US3).</summary>
+    public void Desembolsar(int creditoId)
+    {
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Disbursed));
+        if (Kind != ApplicationKind.Loan)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoEstadoInvalido, "Una solicitud de cupo no se desembolsa: se otorga.", "kind", Kind.ToString()));
+        Status = CreditApplicationStatus.Disbursed;
+        LoanId = creditoId;
+    }
+
+    /// <summary><c>Approved</c> → <c>Granted</c>: el cupo rotativo quedó otorgado (FR-049).</summary>
+    public void Otorgar(int cupoId)
+    {
+        ReglaDeCarteraException.SiHay(PuedeIrA(CreditApplicationStatus.Granted));
+        if (Kind != ApplicationKind.RevolvingLimit)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoEstadoInvalido, "Una solicitud de crédito no se otorga: se desembolsa.", "kind", Kind.ToString()));
+        Status = CreditApplicationStatus.Granted;
+        CreditLimitId = cupoId;
+    }
 }

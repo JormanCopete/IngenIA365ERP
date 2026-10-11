@@ -29,10 +29,11 @@ public class LaSegregacionNoUsaUserIdDelToken
         Path.Combine("Core", "IngenIA365ERP.Application", "Inventory", "Salespeople"),
         Path.Combine("Core", "IngenIA365ERP.Application", "Inventory", "Replenishment"),
         // Feature 013, US17 (T0262, R135): donde Cartera decide quién puede votar, decidir o cerrar —sesiones, atribuciones, el registro de
-        // intervenciones— y sus motores puros. Application/Lending/Origination no existe todavía: la suma US2 al crearla.
+        // intervenciones— y sus motores puros. US2 (bloque 6A) suma Application/Lending/Origination: quien arma, radica, analiza y anula.
         Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Sessions"),
         Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Attributions"),
         Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Segregation"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Origination"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Attributions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Sessions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Segregation"),

@@ -35,7 +35,8 @@ namespace IngenIA365ERP.Application.Attachments.Common;
 /// inventario (<see cref="SoporteDeAjuste"/>, feature 012, T255: actas de destrucción, denuncias; subir con
 /// <c>Inventory.Adjustments.Create</c> mientras el ajuste está en borrador o en aprobación, leer con
 /// <c>Inventory.Adjustments.View</c>, y confirmado no se borran: <c>Attachments.OwnerLocked</c>), y el soporte del concepto tributario del
-/// interés de una línea de crédito (<see cref="SoporteTributarioDeLinea"/>, feature 013, T0361). Los tipos de módulo nunca, y
+/// interés de una línea de crédito (<see cref="SoporteTributarioDeLinea"/>, feature 013, T0361) y los documentos de una solicitud de crédito
+/// mientras no esté decidida (<see cref="DocumentoDeSolicitud"/>, feature 013, T0397). Los tipos de módulo nunca, y
 /// cualquier otro tipo tampoco hasta que tenga su pantalla y su regla (FR-019).
 /// </para>
 /// </summary>
@@ -124,6 +125,31 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteTributarioDeLinea = "CreditLineTaxSupport";
 
+    /// <summary>
+    /// Feature 013, US2 (T0397, T81; DT §2.24): un documento soporte de una solicitud de crédito (cédula, certificación laboral, avalúo). El
+    /// dueño es la <b>solicitud</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.Applications.Read</c>; se sube con
+    /// <c>Lending.Applications.Create</c> mientras la solicitud no esté decidida, y decidida queda bloqueado (<c>Attachments.OwnerLocked</c>):
+    /// es el soporte de lo que se decidió. Antes de decidir lo retira <c>RemoveCreditApplicationDocumentCommand</c>.
+    /// </summary>
+    public const string DocumentoDeSolicitud = "LoanApplicationDocument";
+
+    /// <summary>
+    /// Feature 013, US2 (T0397, T73; DT §2.24): el informe crudo de una consulta a centrales de riesgo. Lo guarda la consulta
+    /// (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> de la consulta): se lee con <c>Lending.CreditBureau.ReadReports</c> (lectura auditada por la
+    /// consulta que lo entrega), no recibe subidas y no se borra.
+    /// </summary>
+    public const string InformeDeCentrales = "LendingBureauReport";
+
+    /// <summary>
+    /// Feature 013, US2 (T0390, C87): el PDF de una simulación enviada a la persona simulada. Lo guarda el envío (<c>OwnerEntityPublicId</c> = el
+    /// <c>PublicId</c> de la persona, porque todavía no hay crédito ni solicitud): se lee con <c>Lending.DebtorMessages.Read</c>, como el mensaje que
+    /// lo lleva, no recibe subidas y no se borra.
+    /// </summary>
+    public const string SimulacionEnviada = "LendingSimulation";
+
+    private const string LeerSolicitudesDeCredito = "Lending.Applications.Read";
+    private const string CrearSolicitudesDeCredito = "Lending.Applications.Create";
+
     private const string VerLineas = "Lending.CreditLines.View";
     private const string AdministrarLineas = "Lending.CreditLines.Manage";
 
@@ -145,6 +171,8 @@ public static class AdjuntosDeModulo
         [DocumentoElectronicoDeVenta] = new("Inventory.Sales.View", Borrable: false, "un archivo de un documento electrónico de venta ante la DIAN"),
         [DocumentoElectronicoDeCompra] = new("Inventory.Purchases.View", Borrable: false, "un archivo de un documento electrónico de compra ante la DIAN"),
         [ActaDeSesionDeCartera] = new("Lending.Sessions.Read", Borrable: false, "el acta sellada de una sesión de un órgano de Cartera"),
+        [InformeDeCentrales] = new("Lending.CreditBureau.ReadReports", Borrable: false, "el informe de una consulta a centrales de riesgo"),
+        [SimulacionEnviada] = new("Lending.DebtorMessages.Read", Borrable: false, "la simulación enviada a la persona"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
@@ -167,6 +195,7 @@ public static class AdjuntosDeModulo
             AutorizacionDeDatos => VerHabeasData,
             SolicitudDelTitular => LeerSolicitudes,
             SoporteTributarioDeLinea => VerLineas,
+            DocumentoDeSolicitud => LeerSolicitudesDeCredito,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -230,6 +259,16 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Línea de crédito no encontrada.");
             return null;
         }
+        if (ownerEntityType == DocumentoDeSolicitud)
+        {
+            var solicitud = await db.CreditApplications.AsNoTracking()
+                .Where(a => a.PublicId == ownerEntityPublicId && !a.IsDeleted)
+                .Select(a => (Domain.Enums.Lending.CreditApplicationStatus?)a.Status)
+                .FirstOrDefaultAsync(ct);
+            if (solicitud is null || !await permisos.HasPermissionAsync(CrearSolicitudesDeCredito, ct))
+                return new Error("Generic.NotFound", "Solicitud de crédito no encontrada.");
+            return SolicitudDecidida(solicitud.Value) ? SolicitudBloqueada() : null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -265,6 +304,17 @@ public static class AdjuntosDeModulo
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es el soporte del concepto tributario de una línea de crédito: respalda sus versiones y no se puede borrar.",
                 new { ownerEntityType });
+        // Feature 013 (T0397): el soporte de una solicitud se borra sólo antes de decidirla, con el permiso de armarla.
+        if (ownerEntityType == DocumentoDeSolicitud)
+        {
+            var solicitud = await db.CreditApplications.AsNoTracking()
+                .Where(a => a.PublicId == ownerEntityPublicId)
+                .Select(a => (Domain.Enums.Lending.CreditApplicationStatus?)a.Status)
+                .FirstOrDefaultAsync(ct);
+            if (permisos is not null && !await permisos.HasPermissionAsync(CrearSolicitudesDeCredito, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return solicitud is { } estadoDeLaSolicitud && SolicitudDecidida(estadoDeLaSolicitud) ? SolicitudBloqueada() : null;
+        }
         // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
         if (ownerEntityType == ProductoDeInventario)
             return permisos is not null && await permisos.HasPermissionAsync(AdministrarCatalogo, ct)
@@ -294,6 +344,17 @@ public static class AdjuntosDeModulo
                 new { ownerEntityType })
             : null;
     }
+
+    /// <summary>Decidida (o terminada): sus soportes se conservan con ella (T81).</summary>
+    public static bool SolicitudDecidida(Domain.Enums.Lending.CreditApplicationStatus estado) =>
+        estado is Domain.Enums.Lending.CreditApplicationStatus.Approved or Domain.Enums.Lending.CreditApplicationStatus.Denied
+            or Domain.Enums.Lending.CreditApplicationStatus.Disbursed or Domain.Enums.Lending.CreditApplicationStatus.Granted
+            or Domain.Enums.Lending.CreditApplicationStatus.Cancelled;
+
+    /// <summary>El soporte de una solicitud decidida no se cambia ni se borra (T81).</summary>
+    public static Error SolicitudBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es soporte de una solicitud de crédito ya decidida: se conserva con la solicitud y no se puede cambiar.",
+        new { ownerEntityType = DocumentoDeSolicitud });
 
     private static Error AjusteBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
         "Es soporte de un ajuste confirmado: se conserva con el ajuste y no se puede cambiar.",

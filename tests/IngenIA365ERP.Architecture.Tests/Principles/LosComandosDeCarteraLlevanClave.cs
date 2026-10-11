@@ -72,6 +72,20 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Configuration.SetCreditLineScoringCommand),
         typeof(IngenIA365ERP.Application.Lending.Configuration.SetCommercialTermEquivalencesCommand),
         typeof(IngenIA365ERP.Application.Lending.Imports.ImportCreditLinesCommand),
+        // US2 (bloque 6A): el envío de la simulación, la solicitud y los grupos conectados.
+        typeof(IngenIA365ERP.Application.Lending.Origination.SendScheduleSimulationCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CreateCreditApplicationCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.UpdateCreditApplicationCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.AttachCreditApplicationDocumentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.RemoveCreditApplicationDocumentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.SubmitCreditApplicationCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.RecordCreditApplicationAnalysisCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.RerunCreditApplicationChecksCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.CancelCreditApplicationCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.ConnectedGroups.RegisterConnectedGroupCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.ConnectedGroups.AddConnectedGroupMemberCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.ConnectedGroups.EndConnectedGroupMemberCommand),
+        typeof(IngenIA365ERP.Application.Lending.Origination.ConnectedGroups.EndConnectedGroupCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

@@ -24,6 +24,8 @@ public class CasosDoradosDeAtribucionesTests
         [
             "01-techo-de-monto-consolidado", "02-vinculado-va-al-consejo", "03-excepcion-por-puntaje-o-alertas", "04-reglas-por-condicion",
             "05-otros-sujetos-con-su-regla", "06-no-exceptuables",
+            // US2 (T0365): los casos de aceptación de la originación.
+            "us2-tres-montos", "us2-5-consolidado-sobre-gerencia", "us2-7-vinculado", "us2-puntaje-bajo", "us2-no-exceptuables",
         ]);
     }
 

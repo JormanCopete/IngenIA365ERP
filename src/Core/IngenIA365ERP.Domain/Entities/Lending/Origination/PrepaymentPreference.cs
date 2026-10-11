@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Origination;
 
@@ -35,4 +36,38 @@ public class PrepaymentPreference : AuditableEntity, IHechoInmutable
     public Guid? EvidenceAttachmentPublicId { get; init; }
 
     public int? RecordedByUserId { get; init; }
+
+    // ------------------------------------------------------------------------------------------- comportamiento (T0388) --
+
+    /// <summary>
+    /// Una versión de la preferencia (data-model §2.14): de un crédito <b>o</b> de un cupo, exactamente uno (<c>CK_LND_PrepaymentPreferences_Scope</c>).
+    /// Por eso la que el deudor elige al radicar viaja en <c>CreditApplication.PrepaymentChoice</c> y nace como fila cuando nace el crédito
+    /// o el cupo, con <c>Origin = Application</c> y la solicitud (US3, US2 cupos).
+    /// </summary>
+    public static PrepaymentPreference Registrar(int personId, int? loanId, int? creditLimitId, PrepaymentChoice? eleccion, int numero,
+        DateTime registradaEl, PreferenceOrigin origen, int? usuarioId, int? applicationId = null, long? operationId = null, Guid? evidencia = null)
+    {
+        if ((loanId is null) == (creditLimitId is null))
+            throw new ArgumentException("La preferencia es de un crédito o de un cupo, exactamente uno.");
+        if (numero < 1) throw new ArgumentOutOfRangeException(nameof(numero), "La versión empieza en 1.");
+        return new PrepaymentPreference
+        {
+            PersonId = personId,
+            LoanId = loanId,
+            CreditLimitId = creditLimitId,
+            Choice = eleccion,
+            VersionNumber = numero,
+            RegisteredAt = registradaEl,
+            Origin = origen,
+            ApplicationId = applicationId,
+            OperationId = operationId,
+            EvidenceAttachmentPublicId = evidencia,
+            RecordedByUserId = usuarioId,
+        };
+    }
+
+    /// <summary>La que rige al instante <paramref name="hasta"/> (la última con <c>RegisteredAt ≤ R</c>, T24).</summary>
+    public static PrepaymentPreference? Vigente(IEnumerable<PrepaymentPreference> versiones, DateTime hasta) =>
+        versiones.Where(p => p.RegisteredAt <= hasta && !p.IsDeleted).OrderByDescending(p => p.RegisteredAt).ThenByDescending(p => p.VersionNumber)
+            .FirstOrDefault();
 }

@@ -25,6 +25,8 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
         "Core/IngenIA365ERP.Application/Lending/Sessions/SessionQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Sessions/ActaDeSesionEnPdf.cs",
         "Core/IngenIA365ERP.Application/Lending/Attributions/RelatedPartyCommands.cs",
+        // US2 (T0393): los grupos conectados, como los vinculados.
+        "Core/IngenIA365ERP.Application/Lending/Origination/ConnectedGroups/ConnectedGroupCommands.cs",
     ];
 
     /// <summary>Cada lectura sensible: su archivo, su consulta y el método de <see cref="LendingAuditEmitter"/> que la audita.</summary>
@@ -33,6 +35,10 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
         ("Core/IngenIA365ERP.Application/Lending/Sessions/SessionQueries.cs", "GetSessionQuery", nameof(LendingAuditEmitter.EmitirActaVistaAsync)),
         ("Core/IngenIA365ERP.Application/Lending/Sessions/ActaDeSesionEnPdf.cs", "GetSessionMinutesPdfQuery", nameof(LendingAuditEmitter.EmitirActaVistaAsync)),
         ("Core/IngenIA365ERP.Application/Lending/Attributions/RelatedPartyCommands.cs", "ListRelatedPartiesQuery", nameof(LendingAuditEmitter.EmitirVinculadosVistosAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Origination/ConnectedGroups/ConnectedGroupCommands.cs", "ListConnectedGroupsQuery",
+            nameof(LendingAuditEmitter.EmitirVinculadosVistosAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Origination/ConnectedGroups/ConnectedGroupCommands.cs", "GetConnectedGroupQuery",
+            nameof(LendingAuditEmitter.EmitirVinculadosVistosAsync)),
     ];
 
     /// <summary>La lista cerrada de research §13 y C89 (los diez eventos de T0256).</summary>

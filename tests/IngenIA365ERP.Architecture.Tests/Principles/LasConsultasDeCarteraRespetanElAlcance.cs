@@ -33,6 +33,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // y el puntaje de una línea fuera del alcance responden el 404 de la línea (ConsultasDeLineas.LineaEnAlcanceAsync).
         "Core/IngenIA365ERP.Application/Lending/Configuration/CreditLineQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Configuration/CreditLineScoringCommands.cs",
+        // US2 (bloque 6A): la simulación y su PDF por la línea del alcance (SimulacionEnAlcance → LineaEnAlcanceAsync); las solicitudes por
+        // oficina y línea (la lista con PorOficinaYLinea; el detalle y el enrutamiento con SolicitudEnAlcance, el 404 de la solicitud).
+        "Core/IngenIA365ERP.Application/Lending/Origination/SimulationQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/CreditApplicationQueries.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -62,6 +66,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US1 (T0341): lo nacional y lo de la cooperativa que no es de una línea.
         ["ListModalitiesQuery"] = "documento nacional CatalogoDeModalidades: sin oficina ni línea",
         ["ListCommercialTermEquivalencesQuery"] = "equivalencias de Comercial: son de la cooperativa, no de una línea",
+        // US2 (T0393): los grupos conectados son personas por su vínculo económico o jurídico, sin oficina; las dos lecturas quedan auditadas.
+        ["ListConnectedGroupsQuery"] = "los grupos conectados son personas por su vínculo, sin oficina (lectura auditada)",
+        ["GetConnectedGroupQuery"] = "los grupos conectados son personas por su vínculo, sin oficina (lectura auditada)",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

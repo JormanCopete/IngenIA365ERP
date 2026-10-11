@@ -81,9 +81,15 @@ public class DebtorMessage : AuditableEntity, IHechoInmutable
 
     public const string CodigoDestinatarioNoObligado = "Lending.DebtorMessage.RecipientNotObligated";
 
-    /// <summary>Los orígenes admitidos en <see cref="OriginKind"/> (data-model §26.1).</summary>
+    /// <summary>
+    /// El envío de una simulación a la persona simulada (feature 013, US2, T0390, C87): informativo, por correo y sin crédito.
+    /// </summary>
+    public const string OrigenSimulacion = "Simulation";
+
+    /// <summary>Los orígenes admitidos en <see cref="OriginKind"/> (data-model §26.1; US2 suma <see cref="OrigenSimulacion"/>, C87).</summary>
     public static IReadOnlyList<string> Origenes { get; } =
-        ["Manual", "Campaign", "CollectionStage", "PriorNotice", "NonDeduction", "PaymentApplied", "PaymentFormChange", "Document", "CollectionFee"];
+        ["Manual", "Campaign", "CollectionStage", "PriorNotice", "NonDeduction", "PaymentApplied", "PaymentFormChange", "Document", "CollectionFee",
+            OrigenSimulacion];
 
     /// <summary>El largo de <see cref="IdempotencyKey"/> (nvarchar(200)).</summary>
     public const int LargoDeLaClave = 200;
@@ -101,8 +107,9 @@ public class DebtorMessage : AuditableEntity, IHechoInmutable
                 "Los mensajes de Cartera sólo van al deudor o a un codeudor obligado del crédito.");
         if (!Enum.IsDefined(m.Purpose) || !Enum.IsDefined(m.Channel))
             throw new ArgumentException("Propósito o canal de mensaje desconocido.", nameof(m));
-        if (m.LoanId is null && m.Purpose != DebtorMessagePurpose.DocumentDelivery)
-            throw new ArgumentException("Sólo la entrega de un documento general va sin crédito.", nameof(m));
+        if (m.LoanId is null && m.Purpose != DebtorMessagePurpose.DocumentDelivery
+            && !(m.Purpose == DebtorMessagePurpose.Informative && m.OriginKind == OrigenSimulacion))
+            throw new ArgumentException("Sólo la entrega de un documento general y el envío de una simulación van sin crédito.", nameof(m));
         if (string.IsNullOrWhiteSpace(m.RenderedBody)) throw new ArgumentException("El cuerpo renderizado no puede estar vacío.", nameof(m));
         if (string.IsNullOrWhiteSpace(m.ChannelCode)) throw new ArgumentException("El canal se sella con el código de su adaptador.", nameof(m));
         if (string.IsNullOrWhiteSpace(m.IdempotencyKey) || m.IdempotencyKey.Length > LargoDeLaClave)

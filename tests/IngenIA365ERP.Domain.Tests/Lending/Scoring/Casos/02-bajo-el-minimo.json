@@ -1,0 +1,35 @@
+// FR-037: un puntaje bajo el mínimo NO rechaza: lo marca (BelowMinimum) y la solicitud sube al nivel de excepción. Igual al mínimo
+// no está bajo. Mismo modelo que 01.
+{
+  "nombre": "02-bajo-el-minimo",
+  "descripcion": "Bajo el mínimo se marca y no rechaza; igual al mínimo no está bajo.",
+  "modelo": {
+    "nivelDeExcepcion": "EXCEP",
+    "minimo": 600,
+    "variables": [
+      { "codigo": "ANTIG", "nombre": "Antigüedad como asociado", "fuente": "Applicant.AssociateSeniorityMonths", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 12, "puntos": 300 }, { "desde": 12, "hasta": 36, "puntos": 600 }, { "desde": 36, "puntos": 900 } ] },
+      { "codigo": "RELCI", "nombre": "Relación cuota/ingreso", "fuente": "Application.PaymentCapacityRatio", "peso": 0.4,
+        "rangos": [ { "desde": 0, "hasta": 0.3, "puntos": 900 }, { "desde": 0.3, "hasta": 0.5, "puntos": 600 }, { "desde": 0.5, "puntos": 200 } ] },
+      { "codigo": "CENTRAL", "nombre": "Puntaje de central", "fuente": "Bureau.Score", "peso": 0.2,
+        "rangos": [ { "desde": 0, "hasta": 500, "puntos": 200 }, { "desde": 500, "hasta": 700, "puntos": 500 }, { "desde": 700, "puntos": 800 } ] }
+    ]
+  },
+  "escenarios": [
+    // 120 + 80 + 40 = 240 < 600.
+    { "nombre": "6 meses, 60 %, central 450",
+      "valores": { "Applicant.AssociateSeniorityMonths": 6, "Application.PaymentCapacityRatio": 0.6, "Bureau.Score": 450 },
+      "esperado": { "puntaje": 240, "bajoElMinimo": true,
+        "variables": [ { "codigo": "ANTIG", "puntos": 300, "aporte": 120 }, { "codigo": "RELCI", "puntos": 200, "aporte": 80 },
+                       { "codigo": "CENTRAL", "puntos": 200, "aporte": 40 } ],
+        "explicacionContiene": [ "por debajo del mínimo 600", "No rechaza" ] } },
+    // 240 + 240 + 100 = 580 < 600.
+    { "nombre": "a veinte puntos del mínimo",
+      "valores": { "Applicant.AssociateSeniorityMonths": 12, "Application.PaymentCapacityRatio": 0.45, "Bureau.Score": 500 },
+      "esperado": { "puntaje": 580, "bajoElMinimo": true } },
+    // 360 + 80 + 160 = 600 = mínimo: no está bajo.
+    { "nombre": "exactamente el mínimo",
+      "valores": { "Applicant.AssociateSeniorityMonths": 36, "Application.PaymentCapacityRatio": 0.5, "Bureau.Score": 700 },
+      "esperado": { "puntaje": 600, "bajoElMinimo": false } }
+  ]
+}
