@@ -147,6 +147,24 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SimulacionEnviada = "LendingSimulation";
 
+    /// <summary>
+    /// Feature 013, US3 (T0450, T81; DT §2.24; adaptadores §9): un documento soporte de una garantía o de un pagaré (avalúo, póliza, registro de la
+    /// prenda, el pagaré físico firmado). El dueño es la <b>garantía</b> o el <b>pagaré</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee
+    /// con <c>Lending.Guarantees.Read</c>; se sube con <c>Lending.Guarantees.Manage</c> mientras la garantía no esté liberada, extinguida ni
+    /// ejecutada (el pagaré, mientras no esté anulado); y se borra sólo mientras la garantía sigue constituida en una solicitud sin decidir (el
+    /// pagaré, sin firmar y sin crédito): perfeccionada o decidida, es soporte de lo que se decidió (<c>Attachments.OwnerLocked</c>).
+    /// </summary>
+    public const string DocumentoDeGarantia = "LendingGuaranteeDocument";
+
+    /// <summary>
+    /// Feature 013, US3 (T0454, T78; DT §2.24): el archivo plano de transferencias de desembolso tal como se generó (SHA-256 en
+    /// <c>LND_DisbursementFiles</c>). Lo genera Cartera: se lee con <c>Lending.DisbursementFiles.Generate</c>, no recibe subidas y no se borra.
+    /// </summary>
+    public const string ArchivoDeDesembolsos = "LendingDisbursementFile";
+
+    private const string LeerGarantias = "Lending.Guarantees.Read";
+    private const string AdministrarGarantias = "Lending.Guarantees.Manage";
+
     private const string LeerSolicitudesDeCredito = "Lending.Applications.Read";
     private const string CrearSolicitudesDeCredito = "Lending.Applications.Create";
 
@@ -173,6 +191,7 @@ public static class AdjuntosDeModulo
         [ActaDeSesionDeCartera] = new("Lending.Sessions.Read", Borrable: false, "el acta sellada de una sesión de un órgano de Cartera"),
         [InformeDeCentrales] = new("Lending.CreditBureau.ReadReports", Borrable: false, "el informe de una consulta a centrales de riesgo"),
         [SimulacionEnviada] = new("Lending.DebtorMessages.Read", Borrable: false, "la simulación enviada a la persona"),
+        [ArchivoDeDesembolsos] = new("Lending.DisbursementFiles.Generate", Borrable: false, "el archivo de desembolsos de crédito que se entregó al banco"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
@@ -196,6 +215,7 @@ public static class AdjuntosDeModulo
             SolicitudDelTitular => LeerSolicitudes,
             SoporteTributarioDeLinea => VerLineas,
             DocumentoDeSolicitud => LeerSolicitudesDeCredito,
+            DocumentoDeGarantia => LeerGarantias,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -269,6 +289,20 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Solicitud de crédito no encontrada.");
             return SolicitudDecidida(solicitud.Value) ? SolicitudBloqueada() : null;
         }
+        if (ownerEntityType == DocumentoDeGarantia)
+        {
+            if (!await permisos.HasPermissionAsync(AdministrarGarantias, ct)) return new Error("Generic.NotFound", "Garantía no encontrada.");
+            var garantia = await db.Collaterals.AsNoTracking().Where(c => c.PublicId == ownerEntityPublicId && !c.IsDeleted)
+                .Select(c => (Domain.Enums.Lending.CollateralStatus?)c.Status).FirstOrDefaultAsync(ct);
+            if (garantia is { } estadoDeLaGarantia)
+                return estadoDeLaGarantia is Domain.Enums.Lending.CollateralStatus.Constituted or Domain.Enums.Lending.CollateralStatus.Valid
+                    ? null
+                    : GarantiaBloqueada();
+            var pagare = await db.PromissoryNotes.AsNoTracking().Where(p => p.PublicId == ownerEntityPublicId && !p.IsDeleted)
+                .Select(p => (Domain.Enums.Lending.PromissoryNoteStatus?)p.Status).FirstOrDefaultAsync(ct);
+            if (pagare is null) return new Error("Generic.NotFound", "Garantía no encontrada.");
+            return pagare == Domain.Enums.Lending.PromissoryNoteStatus.Voided ? GarantiaBloqueada() : null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -315,6 +349,13 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return solicitud is { } estadoDeLaSolicitud && SolicitudDecidida(estadoDeLaSolicitud) ? SolicitudBloqueada() : null;
         }
+        // Feature 013 (T0450, T81): el soporte de una garantía o de un pagaré se borra sólo antes de perfeccionarse y de decidirse su dueño.
+        if (ownerEntityType == DocumentoDeGarantia)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(AdministrarGarantias, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await GarantiaBorrableAsync(db, ownerEntityPublicId, ct) ? null : GarantiaBloqueada();
+        }
         // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
         if (ownerEntityType == ProductoDeInventario)
             return permisos is not null && await permisos.HasPermissionAsync(AdministrarCatalogo, ct)
@@ -350,6 +391,33 @@ public static class AdjuntosDeModulo
         estado is Domain.Enums.Lending.CreditApplicationStatus.Approved or Domain.Enums.Lending.CreditApplicationStatus.Denied
             or Domain.Enums.Lending.CreditApplicationStatus.Disbursed or Domain.Enums.Lending.CreditApplicationStatus.Granted
             or Domain.Enums.Lending.CreditApplicationStatus.Cancelled;
+
+    /// <summary>
+    /// Feature 013 (T0450): ¿se puede retirar un soporte de la garantía o del pagaré? La garantía, sólo constituida, sin crédito y con su solicitud
+    /// sin decidir; el pagaré, sin firmar y sin crédito. Un dueño que ya no existe no tiene nada que proteger.
+    /// </summary>
+    private static async Task<bool> GarantiaBorrableAsync(IApplicationDbContext db, Guid dueno, CancellationToken ct)
+    {
+        var garantia = await db.Collaterals.AsNoTracking().Where(c => c.PublicId == dueno)
+            .Select(c => new { c.Status, c.LoanId, c.ApplicationId }).FirstOrDefaultAsync(ct);
+        if (garantia is not null)
+        {
+            if (garantia.Status != Domain.Enums.Lending.CollateralStatus.Constituted || garantia.LoanId is not null) return false;
+            var solicitud = garantia.ApplicationId is { } id
+                ? await db.CreditApplications.AsNoTracking().Where(a => a.Id == id).Select(a => (Domain.Enums.Lending.CreditApplicationStatus?)a.Status)
+                    .FirstOrDefaultAsync(ct)
+                : null;
+            return solicitud is not { } estado || !SolicitudDecidida(estado);
+        }
+        var pagare = await db.PromissoryNotes.AsNoTracking().Where(p => p.PublicId == dueno).Select(p => new { p.Status, p.LoanId }).FirstOrDefaultAsync(ct);
+        return pagare is null
+            || pagare.LoanId is null && pagare.Status is Domain.Enums.Lending.PromissoryNoteStatus.Created or Domain.Enums.Lending.PromissoryNoteStatus.PendingSignature;
+    }
+
+    /// <summary>El soporte de una garantía perfeccionada o decidida (o de un pagaré firmado) no se cambia ni se borra (T81).</summary>
+    public static Error GarantiaBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es soporte de una garantía o de un pagaré ya perfeccionado o decidido: se conserva y no se puede cambiar.",
+        new { ownerEntityType = DocumentoDeGarantia });
 
     /// <summary>El soporte de una solicitud decidida no se cambia ni se borra (T81).</summary>
     public static Error SolicitudBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,

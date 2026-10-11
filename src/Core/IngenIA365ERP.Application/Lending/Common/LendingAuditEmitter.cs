@@ -87,6 +87,13 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirOperacionRegistradaAsync(Guid operationPublicId, string numero, string clase, object distribucion, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingOperationRegistered, "LoanOperation", operationPublicId, new { number = numero, kind = clase, distribution = distribucion }, ct);
 
+    /// <summary>
+    /// US3 (T0454): el enlace de descarga de un archivo de desembolsos de crédito (cuentas y montos de los beneficiarios). Se registra como el de los
+    /// demás archivos de módulo; no va en <see cref="LecturasSensibles"/>, que es la lista cerrada de research §13.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoDeDesembolsosDescargadoAsync(Guid filePublicId, string numero, string sha256, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingDisbursementFileDownloaded, "DisbursementFile", filePublicId, new { number = numero, sha256 }, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try

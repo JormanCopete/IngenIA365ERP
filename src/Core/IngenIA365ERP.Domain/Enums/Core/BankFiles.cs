@@ -16,6 +16,12 @@ public enum BankFileScope
 
     /// <summary>Pagos a proveedores y terceros desde tesorería (reservado; llega con ese módulo).</summary>
     SupplierPayments = 3,
+
+    /// <summary>
+    /// Transferencias de desembolso de crédito desde Cartera (feature 013, K1, FR-047; contracts/adaptadores-y-archivos.md §6.1). Se guarda
+    /// como entero sin CHECK en <c>COR_BankFileFormats.Scope</c>: agregarlo no pide migración.
+    /// </summary>
+    LoanDisbursement = 4,
 }
 
 /// <summary>Ancho fijo (cada campo en su posición) o delimitado (separador entre campos).</summary>
@@ -111,4 +117,8 @@ public enum BankFieldSource
     SeveranceBaseSalary = 73,
     PayeeHireDate = 74,
     Year = 75,
+
+    // --- Cartera (feature 013; data-model §10 fija los números; adaptadores-y-archivos.md §6.1) ---
+    /// <summary>El número del crédito: concepto y referencia de la transferencia de desembolso (K1) y de la libranza (K2).</summary>
+    LoanNumber = 81,
 }

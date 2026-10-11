@@ -119,7 +119,7 @@ public sealed record DisbursementOrderDto(
 /// <summary>El dueño de una garantía o de un pagaré: la solicitud o el crédito.</summary>
 public sealed record CollateralOwnerDto(string Kind, Guid PublicId, string? Number);
 
-/// <summary>Una garantía (api.md §6.1 <c>CollateralDto</c>); sus comandos son del bloque 7B.</summary>
+/// <summary>Una garantía (api.md §6.1 <c>CollateralDto</c>); sus comandos son los de <c>Disbursements/Collaterals</c> (bloque 7B).</summary>
 public sealed record CollateralDto(
     Guid PublicId,
     string Kind,
@@ -133,9 +133,22 @@ public sealed record CollateralDto(
     DateOnly? ValidUntil,
     string? PolicyNumber,
     DateOnly? PolicyExpiresOn,
-    decimal? FundCoverage);
+    decimal? FundCoverage)
+{
+    public DateOnly? ValuationDate { get; init; }
+    public string? RegistrationReference { get; init; }
+    public byte? MortgageRank { get; init; }
+    public decimal? FundFee { get; init; }
+    public DateOnly? ReleasedOn { get; init; }
+    public DateOnly? ExtinguishedOn { get; init; }
+    public string? ExtinguishReason { get; init; }
+    public DateOnly? ExecutedOn { get; init; }
 
-/// <summary>Un pagaré (api.md §6.2 <c>PromissoryNoteDto</c>); sus comandos son del bloque 7B.</summary>
+    /// <summary>Los adjuntos <c>LendingGuaranteeDocument</c> de la garantía.</summary>
+    public IReadOnlyList<Guid> Documents { get; init; } = [];
+}
+
+/// <summary>Un pagaré (api.md §6.2 <c>PromissoryNoteDto</c>); sus comandos son los de <c>Disbursements/PromissoryNotes</c> (bloque 7B).</summary>
 public sealed record PromissoryNoteDto(
     Guid PublicId,
     string Form,
@@ -146,4 +159,20 @@ public sealed record PromissoryNoteDto(
     string? ExternalNoteId,
     bool Simulated,
     bool Perfected,
-    string? Custody);
+    string? Custody)
+{
+    public DateOnly IssuedOn { get; init; }
+    public DateTime? SignedAt { get; init; }
+    public DateTime? InCustodyAt { get; init; }
+    public DateTime? EndorsedAt { get; init; }
+    public string? EndorseeName { get; init; }
+    public DateTime? VoidedAt { get; init; }
+    public string? VoidReason { get; init; }
+    public DateTime? LastSyncedAt { get; init; }
+
+    /// <summary>La última consulta al depósito informó la firma rechazada (sólo en la respuesta de esa consulta; no se guarda).</summary>
+    public bool SignatureRejected { get; init; }
+
+    /// <summary>Los adjuntos <c>LendingGuaranteeDocument</c> del pagaré.</summary>
+    public IReadOnlyList<Guid> Documents { get; init; } = [];
+}

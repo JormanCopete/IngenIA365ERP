@@ -26,6 +26,7 @@
             <option value="PayrollDisbursement">Dispersión de nómina</option>
             <option value="SeveranceDeposit">Consignación de cesantías</option>
             <option value="SupplierPayments">Pagos a proveedores</option>
+            <option value="LoanDisbursement">Desembolsos de crédito</option>
         </select>
         <PermissionGate Required="Core.BankFileFormats.Manage">
             <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirNuevo(null))">Nuevo formato</SfButton>
@@ -103,6 +104,7 @@
                                 <option value="PayrollDisbursement">Dispersión de nómina</option>
                                 <option value="SeveranceDeposit">Consignación de cesantías</option>
                                 <option value="SupplierPayments">Pagos a proveedores (tesorería)</option>
+                                <option value="LoanDisbursement">Desembolsos de crédito (Cartera)</option>
                             </select>
                         </label>
                         <SfDatePicker TValue="DateTime" Value="@_def.ValidFrom.ToDateTime(TimeOnly.MinValue)" ValueChanged="@((DateTime d) => _def.ValidFrom = DateOnly.FromDateTime(d))" Placeholder="Vigente desde" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />

@@ -261,6 +261,14 @@ try
     // Feature 013, US2 (T0404, C90): el re-escaneo de deudores y codeudores vivos al aplicarse una carga nueva de listas restrictivas.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Origination.ReEscaneoDeListas>();
+    // Feature 013, US3 (T0455; DT §2.13): las tareas del desembolso. cartera.giros-sin-resultado y cartera.garantias-por-vencer una vez al dia;
+    // cartera.pagares cada hora (consulta el deposito por el canal sellado). Las tres salen si Cartera no esta activada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDeGirosSinResultado>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDePagares>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDeGarantiasPorVencer>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

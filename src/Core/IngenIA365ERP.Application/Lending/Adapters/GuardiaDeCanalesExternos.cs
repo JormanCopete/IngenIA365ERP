@@ -1,5 +1,7 @@
 using IngenIA365ERP.Application.Common.ExternalChannels;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Entities.Lending.Origination;
+using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.Extensions.Options;
 
 namespace IngenIA365ERP.Application.Lending.Adapters;
@@ -68,6 +70,28 @@ public sealed class GuardiaDeCanalesExternos(IOptions<CanalesExternosOptions> op
         ArgumentNullException.ThrowIfNull(resultado);
         return Evaluar(efecto, resultado.ChannelCode, resultado.Simulado);
     }
+
+    /// <summary>
+    /// US3 (T0438; T73; contracts/adaptadores-y-archivos.md §3.8; data-model §2.9): ¿el pagaré cuenta como perfeccionado para desembolsar? Firmado
+    /// o en custodia según su clase (<see cref="PromissoryNote.Perfeccionado"/>: el físico firmado o en custodia, el desmaterializado en custodia
+    /// del depósito) <b>y</b> con efecto legal: el desmaterializado de un canal simulado (<see cref="PromissoryNote.IsSimulated"/> o el código
+    /// <c>SIMULADO</c>) nunca perfecciona en producción. El físico no pasa por canal: su efecto lo da la firma y la custodia.
+    /// </summary>
+    public VeredictoDeEfectoLegal EvaluarPagare(PromissoryNote pagare)
+    {
+        ArgumentNullException.ThrowIfNull(pagare);
+        if (!pagare.Perfeccionado)
+            return VeredictoDeEfectoLegal.SinEfecto($"El pagaré está en «{pagare.Status}»: falta la firma o la custodia.",
+                pagare.Kind == PromissoryNoteKind.Physical
+                    ? "Registre la custodia del pagaré físico firmado."
+                    : "Actualice el estado del pagaré en el depósito cuando los firmantes firmen.");
+        return pagare.Kind == PromissoryNoteKind.Dematerialized
+            ? Evaluar(EfectoLegalDeCanal.PromissoryNotePerfection, pagare.CustodianChannelCode, pagare.IsSimulated)
+            : VeredictoDeEfectoLegal.ConEfecto;
+    }
+
+    /// <summary>Atajo de <see cref="EvaluarPagare"/>: verdadero si el pagaré está perfeccionado y con efecto legal.</summary>
+    public bool PagarePerfeccionado(PromissoryNote pagare) => EvaluarPagare(pagare).TieneEfecto;
 
     /// <summary>Lo mismo para un resultado ya sellado en una operación (canal y bandera de simulado).</summary>
     public VeredictoDeEfectoLegal Evaluar(EfectoLegalDeCanal efecto, string? channelCode, bool simulado)

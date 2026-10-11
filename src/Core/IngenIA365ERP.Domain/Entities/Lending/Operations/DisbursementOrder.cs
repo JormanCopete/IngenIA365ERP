@@ -163,6 +163,28 @@ public class DisbursementOrder : AuditableEntity
         _ => false,
     };
 
+    /// <summary>
+    /// ¿Puede ir a un archivo de desembolsos? (§7.4, §7.6; T78): emitida, para pagarse por archivo (sólo transferencia), sin anulación pedida y sin
+    /// otro archivo vivo.
+    /// </summary>
+    public bool ElegibleParaArchivo =>
+        Status == DisbursementOrderStatus.Issued && PaidByFile && Form == DisbursementForm.Transfer && !AnulacionPedida && CurrentDisbursementFileId is null;
+
+    /// <summary>La orden queda en el archivo <paramref name="archivoId"/> (feature 013, US3, T0454): a lo sumo un archivo vivo.</summary>
+    public void AsignarArchivo(int archivoId)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(archivoId, 1);
+        if (!ElegibleParaArchivo)
+            throw new InvalidOperationException($"La orden {Number} no puede ir a un archivo: está en «{Status}» o ya va en otro archivo vivo.");
+        CurrentDisbursementFileId = archivoId;
+    }
+
+    /// <summary>Al anular el archivo <paramref name="archivoId"/>, la orden queda libre para otro; sigue para pagarse por archivo (T78, C10).</summary>
+    public void LiberarArchivo(int archivoId)
+    {
+        if (CurrentDisbursementFileId == archivoId) CurrentDisbursementFileId = null;
+    }
+
     /// <summary>Los resultados que reversan el desembolso desde su origen (§7.11).</summary>
     public static bool Reversa(DisbursementOrderStatus resultado) =>
         resultado is DisbursementOrderStatus.Rejected or DisbursementOrderStatus.CheckNotCashed or DisbursementOrderStatus.Voided;

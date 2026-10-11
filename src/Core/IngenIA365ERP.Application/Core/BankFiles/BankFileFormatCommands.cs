@@ -34,7 +34,12 @@ public static class BankFileFormatErrors
         new ErrorConDatos("Core.BankFileFormat.InUse",
             $"Con este formato ya se generaron {archivos} archivo(s): su estructura no cambia. Sólo se editan el nombre, la vigencia final, las notas y el estado; para otra estructura cree una versión nueva.",
             new { files = archivos });
-    public static readonly Error Seeded = new("Core.BankFileFormat.Seeded", "Un formato sembrado no se borra; desactívelo o cierre su vigencia.");
+    /// <summary>Feature 013 (api.md §9.3, T0454): el formato elegido es de otro ámbito que el del archivo que se genera.</summary>
+    public static Error ScopeMismatch(string code, BankFileScope ambito, BankFileScope esperado) =>
+        new ErrorConDatos("Core.BankFileFormat.ScopeMismatch",
+            $"El formato {code} es de «{ambito}» y este archivo pide uno de «{esperado}». Elija un formato de ese ámbito.",
+            new { code, scope = ambito.ToString(), expected = esperado.ToString() });
+    public static readonly Error Seeded =new("Core.BankFileFormat.Seeded", "Un formato sembrado no se borra; desactívelo o cierre su vigencia.");
 }
 
 // -------------------------------------------------------------------- crear --

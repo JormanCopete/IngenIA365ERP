@@ -233,6 +233,9 @@ public static class AuditEventTypes
     // US3 (T0444, T23): la distribución completa por cuota y concepto de una operación del libro (desembolso, reverso); no es lectura.
     public const string LendingOperationRegistered = "Lending.Operation.Registered";
 
+    // US3 (T0454, bloque 7B): la emisión del enlace de descarga de un archivo de desembolsos (adaptadores §6.2: «enlace firmado de 60 s, auditado»).
+    public const string LendingDisbursementFileDownloaded = "Lending.DisbursementFile.Downloaded";
+
     // Intentos del grupo /api/lending (T67, F9): el 404 por falta de permiso y el 400 del validador, que corre antes que
     // AuditBehavior. Los registra el metadato AuditarIntentoDenegado de la API por AuditoriaDeIntentos.
     public const string LendingAccessDenied = "Lending.Access.Denied";

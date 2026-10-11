@@ -7,6 +7,7 @@ using IngenIA365ERP.ExternalChannels.CreditBureaus;
 using IngenIA365ERP.ExternalChannels.Credentials;
 using IngenIA365ERP.ExternalChannels.Messaging;
 using IngenIA365ERP.ExternalChannels.RestrictiveLists;
+using IngenIA365ERP.ExternalChannels.Securities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -23,7 +24,7 @@ namespace IngenIA365ERP.ExternalChannels;
 /// <item>las credenciales en archivo (<see cref="CredencialesDeCanalExternoEnArchivo"/>, con su caché);</item>
 /// <item>el circuito por cooperativa y canal (<see cref="CircuitoDeCanalExterno"/>, con su estado en memoria);</item>
 /// <item>los adaptadores: <see cref="MensajeriaSimulada"/>, <see cref="ListasSimuladas"/> y <see cref="CanalDeListasCargadas"/>
-/// (<c>CARGA-PROPIA</c>). <c>CentralDeRiesgoSimulada</c> (US2). Los de <c>Securities/</c> los suma US3, y cada proveedor real su
+/// (<c>CARGA-PROPIA</c>). <c>CentralDeRiesgoSimulada</c> (US2). <c>DepositoDeValoresSimulado</c> (US3, <c>Securities/</c>), y cada proveedor real su
 /// adaptador con sus clientes HTTP (<see cref="AgregarClientesDelCanal"/>).</item>
 /// </list>
 /// Dos adaptadores del mismo puerto con el mismo código hacen <b>fallar la composición</b> —el arranque— (§3.1 regla 6): cada uno se anota
@@ -67,6 +68,12 @@ public static class DependencyInjection
         services.TryAddSingleton<MemoriaDeCentralSimulada>();
         services.TryAddSingleton<CentralDeRiesgoSimulada>();
         services.AddSingleton<ICentralDeRiesgo>(sp => sp.GetRequiredService<CentralDeRiesgoSimulada>());
+
+        // Depósito de valores (§3.7, US3 bloque 7B): el simulado, que recuerda por cooperativa los pagarés que creó.
+        AgregarCanal(services, PuertosExternos.DepositoDeValores, DepositoDeValoresSimulado.Codigo, typeof(DepositoDeValoresSimulado));
+        services.TryAddSingleton<MemoriaDeDepositoSimulado>();
+        services.TryAddSingleton<DepositoDeValoresSimulado>();
+        services.AddSingleton<IDepositoDeValores>(sp => sp.GetRequiredService<DepositoDeValoresSimulado>());
 
         // Los clientes HTTP de los proveedores reales que tengan sección (los simulados no hacen HTTP).
         var leidas = seccion.Get<ExternalChannelsOptions>() ?? new ExternalChannelsOptions();

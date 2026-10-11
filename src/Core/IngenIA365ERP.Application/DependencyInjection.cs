@@ -481,6 +481,10 @@ public static class DependencyInjection
         services.AddScoped<Lending.Disbursements.TramoDeDesembolso>();
         services.AddScoped<Lending.Disbursements.RecogidaEnElDesembolso>();
         services.AddScoped<Lending.Disbursements.ReversoDeDesembolso>();
+        // Feature 013, US3 (bloque 7B): el pagaré por el depósito de valores y el archivo plano de desembolsos con el motor común.
+        services.AddScoped<Lending.Disbursements.PromissoryNotes.DepositoDelPagare>();
+        services.AddScoped<Lending.Disbursements.LoanDisbursementLines>();
+        services.AddScoped<Lending.Disbursements.Files.PreparacionDeArchivoDeDesembolsos>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
@@ -591,5 +595,8 @@ public static class DependencyInjection
         // Feature 013, US2 (T0400): el registro de centrales de riesgo; sin AddExternalChannels no tiene adaptadores (el defecto «sin canal»).
         services.AddScoped<Lending.Adapters.ICentralesDeRiesgo, Lending.Adapters.CentralesDeRiesgo>();
         services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Lending.Adapters.ICentralesDeRiesgo>());
+        // Feature 013, US3 (T0436): el registro de depósitos de valores; sin AddExternalChannels no tiene adaptadores (el defecto «sin canal»).
+        services.AddScoped<Lending.Adapters.IDepositosDeValores, Lending.Adapters.DepositosDeValores>();
+        services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Lending.Adapters.IDepositosDeValores>());
     }
 }

@@ -48,6 +48,12 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Disbursements/ListLoanDisbursementsQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Disbursements/ListDisbursementOrdersQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Disbursements/GetDisbursementOrderQuery.cs",
+        // US3 (bloque 7B, parte de T0428): las garantías y los pagarés por la oficina y la línea de su solicitud o su crédito (la lista filtra en
+        // silencio; el detalle responde el 404 de la garantía); los archivos de desembolsos que llevan alguna orden de un crédito del alcance.
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/Collaterals/ListCollateralsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/Collaterals/GetCollateralQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/PromissoryNotes/ListPromissoryNotesQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Disbursements/Files/ListDisbursementFilesQuery.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -88,7 +94,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListContributionBalancesQuery"] = "el saldo de aportes es de la persona, no de una oficina (D19)",
         // US3 (bloque 7A): la vista previa evalúa por RequisitosDelDesembolso, que asegura el alcance de la solicitud (el 404 fuera de él).
         ["PreviewDisbursementQuery"] = "la asegura RequisitosDelDesembolso con el alcance de la solicitud (AsegurarAsync, el 404 de la solicitud)",
-        ["ListTestTreasuryOrdersQuery"] = "doble de prueba de Tesorería fuera de producción (T20): ve lo que recibe la tesorería, no una oficina",
+        // US3 (bloque 7B): la vista previa del archivo toma las órdenes por PreparacionDeArchivoDeDesembolsos, que filtra por el alcance de su
+        // crédito; las cuentas de origen son cuentas bancarias del plan (Contabilidad), sin deudores ni oficina.
+        ["PreviewDisbursementFileQuery"] = "la filtra PreparacionDeArchivoDeDesembolsos: sólo órdenes de créditos del alcance (PorOficinaYLinea)",
+        ["ListDisbursementSourceAccountsQuery"] = "cuentas bancarias del plan de cuentas por IContabilidadParaCartera: sin deudores ni oficina",
+        ["ListTestTreasuryOrdersQuery"] ="doble de prueba de Tesorería fuera de producción (T20): ve lo que recibe la tesorería, no una oficina",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

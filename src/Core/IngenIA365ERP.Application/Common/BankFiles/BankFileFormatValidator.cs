@@ -24,7 +24,38 @@ public static class BankFileFormatValidator
         BankFieldSource.PayeeBankCode, BankFieldSource.PayeeAccountType, BankFieldSource.PayeeAccountNumber,
         BankFieldSource.Amount, BankFieldSource.Concept, BankFieldSource.PayeeEmail,
         BankFieldSource.SeveranceDays, BankFieldSource.SeveranceBaseSalary, BankFieldSource.PayeeHireDate,
+        BankFieldSource.LoanNumber,
     ];
+
+    /// <summary>
+    /// Los orígenes que sirven en cualquier ámbito (feature 013, contracts/adaptadores-y-archivos.md §6.1): empresa, cuenta de origen, fechas,
+    /// lote y conteos.
+    /// </summary>
+    private static readonly HashSet<BankFieldSource> DeTodoRegistro =
+    [
+        BankFieldSource.Constant, BankFieldSource.Blank, BankFieldSource.CompanyNit, BankFieldSource.CompanyNitDv, BankFieldSource.CompanyName,
+        BankFieldSource.SourceAccountNumber, BankFieldSource.SourceAccountType, BankFieldSource.SourceBankCode, BankFieldSource.SourceAgreementCode,
+        BankFieldSource.PaymentDate, BankFieldSource.GenerationDate, BankFieldSource.GenerationTime, BankFieldSource.Sequence,
+        BankFieldSource.BatchReference, BankFieldSource.LineNumber, BankFieldSource.LineCount, BankFieldSource.TotalAmount,
+    ];
+
+    /// <summary>
+    /// Feature 013 (T0452; §6.1): los orígenes del detalle admitidos por ámbito, además de <see cref="DeTodoRegistro"/>. Un ámbito que no está
+    /// aquí (los de nómina y tesorería de la 010) no restringe: sigue como estaba. Un origen fuera de su ámbito es error al guardar el formato.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<BankFileScope, HashSet<BankFieldSource>> DetallePorAmbito = new Dictionary<BankFileScope, HashSet<BankFieldSource>>
+    {
+        [BankFileScope.LoanDisbursement] =
+        [
+            BankFieldSource.PayeeDocumentType, BankFieldSource.PayeeDocument, BankFieldSource.PayeeFullName, BankFieldSource.PayeeFirstNames,
+            BankFieldSource.PayeeLastNames, BankFieldSource.PayeeBankCode, BankFieldSource.PayeeAccountType, BankFieldSource.PayeeAccountNumber,
+            BankFieldSource.PayeeEmail, BankFieldSource.Amount, BankFieldSource.Concept, BankFieldSource.LoanNumber,
+        ],
+    };
+
+    /// <summary>Los orígenes que admite <paramref name="ambito"/>, o nulo si el ámbito no restringe (feature 013, §6.1).</summary>
+    public static IReadOnlySet<BankFieldSource>? OrigenesAdmitidos(BankFileScope ambito) =>
+        DetallePorAmbito.TryGetValue(ambito, out var detalle) ? DeTodoRegistro.Union(detalle).ToHashSet() : null;
 
     private static readonly HashSet<BankFieldSource> FueraDelDetalle =
     [
@@ -49,6 +80,7 @@ public static class BankFileFormatValidator
         if (string.IsNullOrWhiteSpace(def.Code)) Error("format", null, "code", "El código es obligatorio.");
         else if (!Regex.IsMatch(def.Code.Trim(), "^[A-Z0-9][A-Z0-9_-]{0,19}$", RegexOptions.IgnoreCase)) Error("format", null, "code", "El código va en mayúsculas, sin espacios, hasta 20 caracteres (letras, números, guion).");
         if (string.IsNullOrWhiteSpace(def.Name)) Error("format", null, "name", "El nombre es obligatorio.");
+        var admitidos = Enum.TryParse<BankFileScope>(def.Scope, true, out var ambito) ? OrigenesAdmitidos(ambito) : null;
         if (!Enum.TryParse<BankFileScope>(def.Scope, true, out _)) Error("format", null, "scope", $"«{def.Scope}» no es un ámbito conocido ({string.Join(", ", Enum.GetNames<BankFileScope>())}).");
         var esFijo = def.Kind.Equals(nameof(BankFileKind.FixedWidth), StringComparison.OrdinalIgnoreCase);
         var esDelimitado = def.Kind.Equals(nameof(BankFileKind.Delimited), StringComparison.OrdinalIgnoreCase);
@@ -81,6 +113,8 @@ public static class BankFileFormatValidator
             {
                 var src = BankFileFormatDefinition.ParseSource(f.Source);
                 if (src is null) { Error(nombre, f.Order, f.Name, $"Origen desconocido «{f.Source}»."); continue; }
+                if (admitidos is not null && !admitidos.Contains(src.Value))
+                    Error(nombre, f.Order, f.Name, $"{src} no es un origen del ámbito {ambito} (admite {string.Join(", ", admitidos.Order())}).");
                 if (string.IsNullOrWhiteSpace(f.Name)) Error(nombre, f.Order, null, "Cada campo lleva nombre.");
                 if (esFijo && (f.Length is null || f.Length <= 0)) Error(nombre, f.Order, f.Name, "En ancho fijo todo campo tiene largo.");
                 if (f.Length is < 0) Error(nombre, f.Order, f.Name, "El largo no puede ser negativo.");
