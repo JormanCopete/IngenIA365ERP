@@ -31,12 +31,20 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // Fase 5, US1 (T0360, T0362): las líneas de crédito con sus equivalencias de Comercio. Su detalle (/cartera/lineas/{id:guid}, T0361)
         // se abre desde la lista, sin enlace propio: se comprueba aparte.
         ("Pages/Cartera/Lineas.razor", "/cartera/lineas", "Lending.CreditLines.View"),
+        // Fase 6, US2 (T0414): el simulador, las solicitudes, «Mis pendientes» y los cupos.
+        ("Pages/Cartera/Simulador.razor", "/cartera/simulador", "Lending.Simulations.Run"),
+        ("Pages/Cartera/Solicitudes.razor", "/cartera/solicitudes", "Lending.Applications.Read"),
+        ("Pages/Cartera/Aprobaciones.razor", "/cartera/aprobaciones", "Lending.Applications.Read"),
+        ("Pages/Cartera/Cupos.razor", "/cartera/cupos", "Lending.CreditLimits.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
     private static readonly (string Archivo, string Ruta, string Permiso)[] Detalles =
     [
         ("Pages/Cartera/LineaDetalle.razor", "/cartera/lineas/{Id:guid}", "Lending.CreditLines.View"),
+        // US2 (T0414): la solicitud nueva y su detalle se abren desde Solicitudes.
+        ("Pages/Cartera/SolicitudNueva.razor", "/cartera/solicitudes/nueva", "Lending.Applications.Create"),
+        ("Pages/Cartera/SolicitudDetalle.razor", "/cartera/solicitudes/{Id:guid}", "Lending.Applications.Read"),
     ];
 
     [Fact]

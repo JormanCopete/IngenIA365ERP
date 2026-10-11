@@ -298,6 +298,40 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
             .Should().Contain(["CONLIB", "CONCAJA", "ROTATIVO", "VARIBR"]);
     }
 
+    /// <summary>
+    /// US2 (bloque 6C, T0384; US17 Independent Test): en la cooperativa activada de la originación, <c>asesor.o2</c> abre por URL una solicitud
+    /// de la oficina O1 y recibe el mismo 404 que una inexistente, con <c>Lending.Access.OutOfScope</c> en la auditoría; y el analista que
+    /// decide por encima de su atribución recibe <c>Lending.Attribution.LevelRequired</c>.
+    /// </summary>
+    [Fact]
+    public async Task Asesor_o2_no_ve_una_solicitud_de_O1_y_el_analista_no_decide_sobre_su_atribucion()
+    {
+        var esc = await OriginacionE2E.EscenarioAsync(fx, "originacion_activa", activada: true);
+        using var http = fx.CreateClient();
+        var desde = DateTime.UtcNow.AddMinutes(-1);
+        var persona = await OriginacionE2E.DeudorAsync(http, esc.Coop.TokenAdmin, "Oficina", conCentrales: false);
+        var radicada = await OriginacionE2E.RadicarAsync(http, esc.Usuarios.AsesorO1.Token, OriginacionE2E.Solicitud(esc, persona, 15_000_000m));
+        var id = radicada.GetProperty("publicId").GetGuid();
+
+        var ajena = await CarteraE2E.MandarGetAsync(http, esc.Usuarios.AsesorO2.Token, $"{OriginacionE2E.Solicitudes}/{id}");
+        ajena.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await CarteraE2E.CodigoDeErrorAsync(ajena)).Should().Be("Lending.Application.NotFound", "fuera de alcance es lo mismo que inexistente");
+        var inexistente = await CarteraE2E.MandarGetAsync(http, esc.Usuarios.AsesorO2.Token, $"{OriginacionE2E.Solicitudes}/{Guid.NewGuid()}");
+        (await CarteraE2E.CodigoDeErrorAsync(inexistente)).Should().Be("Lending.Application.NotFound");
+        (await CarteraE2E.GetAsync(http, esc.Usuarios.AsesorO2.Token, OriginacionE2E.Solicitudes)).GetProperty("items").EnumerateArray()
+            .Should().NotContain(s => s.GetProperty("publicId").GetGuid() == id, "las listas filtran en silencio");
+
+        var (_, huella) = await OriginacionE2E.EnrutamientoAsync(http, esc.Usuarios.AsesorO1.Token, id);
+        var encima = await OriginacionE2E.DecidirAsync(http, esc.Usuarios.Analista.Token, "applications", id, "Approve", huella);
+        encima.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, await encima.Content.ReadAsStringAsync());
+        (await CarteraE2E.CodigoDeErrorAsync(encima)).Should().Be("Lending.Attribution.LevelRequired");
+
+        var eventos = await EventosAsync(http, esc.Coop, desde);
+        eventos.Should().Contain(e => Texto(e, "action") == "Lending.Access.OutOfScope"
+                                      && Texto(e, "userName")!.Contains("asesor.o2", StringComparison.OrdinalIgnoreCase),
+            "el intento fuera de alcance queda auditado aunque responda 404");
+    }
+
     // ------------------------------------------------------------------------------------- integridad --
 
     [Fact]
@@ -489,15 +523,17 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
     // ----------------------------------------------------------------------------------------- auditoría --
 
     /// <summary>Lleva la auditoría de la cooperativa a Mongo y devuelve los eventos de Cartera desde <paramref name="desde"/>.</summary>
-    private async Task<List<JsonElement>> EventosAsync(HttpClient http, Escenario esc, DateTime desde)
+    private Task<List<JsonElement>> EventosAsync(HttpClient http, Escenario esc, DateTime desde) => EventosAsync(http, esc.Coop, desde);
+
+    private async Task<List<JsonElement>> EventosAsync(HttpClient http, CarteraE2E.CooperativaAislada coop, DateTime desde)
     {
-        await fx.ReenviarAuditoriaAsync(esc.Coop.TenantPublicId);
+        await fx.ReenviarAuditoriaAsync(coop.TenantPublicId);
         await fx.Factory.Services.GetRequiredService<IAuditService>().FlushAsync();
         var hasta = DateTime.UtcNow.AddMinutes(1);
         var eventos = new List<JsonElement>();
         for (var pagina = 1; pagina <= 20; pagina++)
         {
-            var lote = await CarteraE2E.GetAsync(http, esc.Coop.TokenAdmin,
+            var lote = await CarteraE2E.GetAsync(http, coop.TokenAdmin,
                 $"/api/audit/logs?modules=Lending&from={desde:O}&to={hasta:O}&page={pagina}&pageSize=100");
             var items = lote.GetProperty("items").EnumerateArray().ToList();
             eventos.AddRange(items);

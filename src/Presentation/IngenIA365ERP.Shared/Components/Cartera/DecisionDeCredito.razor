@@ -1,0 +1,45 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, US2 (T0411, T0412; contracts/api.md §4.3): el formulario de una decisión individual —resultado, motivo (obligatorio al negar,
+   devolver o pedir una excepción) y las condiciones menores de una aprobación con condiciones (monto y cuotas que no pasan de lo pedido)—. Lo
+   usan «Mis pendientes» y el detalle de la solicitud. *@
+<div class="form-grid">
+    <label class="campo">Resultado *
+        <select class="e-input" value="@Pedido.Resultado" @onchange="@(e => Cambiar(p => p.Resultado = int.Parse(e.Value!.ToString()!)))">
+            @foreach (var r in TextosDeOriginacion.ResultadosDeDecision) { <option value="@r.Valor">@r.Texto</option> }
+        </select>
+    </label>
+    @if (Pedido.Resultado == 2)
+    {
+        <label class="campo">Monto aprobado <input class="e-input" type="number" min="0" step="1000" value="@Pedido.Monto"
+                                                   @onchange="@(e => Cambiar(p => p.Monto = decimal.TryParse(e.Value?.ToString(), out var m) ? m : null))" /></label>
+        <label class="campo">Cuotas aprobadas <input class="e-input" type="number" min="1" value="@Pedido.Cuotas"
+                                                     @onchange="@(e => Cambiar(p => p.Cuotas = int.TryParse(e.Value?.ToString(), out var c) ? c : null))" /></label>
+    }
+    <label class="campo campo-ancho">Motivo @(Pedido.Resultado is 3 or 4 ? "*" : "")
+        <input class="e-input" value="@Pedido.Motivo" maxlength="500" @onchange="@(e => Cambiar(p => p.Motivo = e.Value?.ToString()))" />
+    </label>
+</div>
+
+@code {
+    /// <summary>Lo que la persona eligió.</summary>
+    public sealed class PedidoDeDecision
+    {
+        public int Resultado { get; set; } = 1;
+        public string? Motivo { get; set; }
+        public decimal? Monto { get; set; }
+        public int? Cuotas { get; set; }
+
+        public DecisionRequest ComoRequest(string? huella) => new(Resultado, string.IsNullOrWhiteSpace(Motivo) ? null : Motivo.Trim(),
+            Resultado == 2 ? new CondicionesDeDecisionRequest(Monto, Cuotas) : null, huella);
+    }
+
+    [Parameter] public PedidoDeDecision Pedido { get; set; } = new();
+    [Parameter] public EventCallback<PedidoDeDecision> PedidoChanged { get; set; }
+
+    private Task Cambiar(Action<PedidoDeDecision> cambio)
+    {
+        cambio(Pedido);
+        return PedidoChanged.InvokeAsync(Pedido);
+    }
+}

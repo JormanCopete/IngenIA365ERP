@@ -29,12 +29,24 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/MessageTemplatesEndpoints.cs",
         // US1 (T0341): líneas, versiones, cierre, reapertura, borrado, puntaje, equivalencias e importación.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/CreditLinesEndpoints.cs",
+        // US2 (bloque 6C, T0408, T0393): el envío de la simulación, las solicitudes, las decisiones, las centrales, la liberación de listas,
+        // los cupos, los bloqueos, los saldos de aportes y los grupos conectados.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/SimulationsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ApplicationsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DecisionsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/BureauQueriesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ScreeningResultsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CreditLimitsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/BlocksEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ContributionBalancesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ConnectedGroupsEndpoints.cs",
     ];
 
     /// <summary>
     /// Las escrituras que van sin clave (api.md §1.5): las consultas por POST por el tamaño del cuerpo. Se nombran por el final de la ruta.
+    /// US2 (bloque 6C): la simulación y su PDF (el envío sí lleva clave) y los enlaces firmados de 60 s (repetirlos emite otro).
     /// </summary>
-    private static readonly string[] ConsultasPorPost = ["\"/preview\"", "/usury-check\""];
+    private static readonly string[] ConsultasPorPost = ["\"/preview\"", "/usury-check\"", "\"/schedule\"", "\"/schedule/pdf\"", "/download-link\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así

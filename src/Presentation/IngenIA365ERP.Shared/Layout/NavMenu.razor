@@ -100,6 +100,21 @@
             <PermissionGate Required="Compliance.HabeasData.ViewHistory">
                 <NavLink href="/cartera/autorizaciones" class="nav-subitem">Autorizaciones del titular</NavLink>
             </PermissionGate>
+            @* US2 (T0414): la originación —simular, solicitudes, «Mis pendientes» y cupos—. La solicitud nueva y el detalle se abren desde
+               Solicitudes, sin enlace propio. *@
+            <span class="nav-subgroup-title">Originación</span>
+            <PermissionGate Required="Lending.Simulations.Run">
+                <NavLink href="/cartera/simulador" class="nav-subitem">Simulador</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Applications.Read">
+                <NavLink href="/cartera/solicitudes" class="nav-subitem">Solicitudes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Applications.Read">
+                <NavLink href="/cartera/aprobaciones" class="nav-subitem">Mis pendientes</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.CreditLimits.Read">
+                <NavLink href="/cartera/cupos" class="nav-subitem">Cupos</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">
                 <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>

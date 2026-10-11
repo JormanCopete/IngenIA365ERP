@@ -111,7 +111,7 @@ public sealed class HabeasDataModule : ICarterModule
     private static async Task<object?> PublishAsync(
         [FromBody] PublishPolicyBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new PublishPolicyVersionCommand(
-            body.Title, body.ContentMarkdown, body.EffectiveFrom), ct);
+            body.Title, body.ContentMarkdown, body.EffectiveFrom, body.Purpose ?? DataAuthorizationPurpose.GeneralTreatment), ct);
 
     private static async Task<object?> AcceptAsync(
         [FromBody] AcceptConsentBody body, ISender sender, CancellationToken ct) =>
@@ -126,8 +126,13 @@ public sealed class HabeasDataModule : ICarterModule
         await sender.Send(new ListHabeasDataHistoryQuery(personId), ct);
 }
 
+/// <summary>
+/// La versión de la política (feature 013, US2, bloque 6C): <c>purpose</c> es la finalidad que cubre (sin ella, el tratamiento general). Hasta el
+/// 2026-10-10 la ruta no la reenviaba y toda versión publicada era de tratamiento general: ninguna autorización de estudio del crédito ni de
+/// consulta a centrales se podía registrar (<c>Compliance.HabeasData.NoCurrentPolicy</c>).
+/// </summary>
 public sealed record PublishPolicyBody(
-    string Title, string ContentMarkdown, DateTime EffectiveFrom);
+    string Title, string ContentMarkdown, DateTime EffectiveFrom, DataAuthorizationPurpose? Purpose = null);
 
 public sealed record AcceptConsentBody(int PersonId, string Channel, string? Notes);
 

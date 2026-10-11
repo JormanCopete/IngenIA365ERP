@@ -23,7 +23,7 @@ public class LosProveedoresExternosSoloLosConoceSuAdaptador
     /// <summary>Espacios de nombres (y ensamblados) de los SDK de los proveedores. Vacía hasta que se contrate uno (I1).</summary>
     private static readonly string[] SdksDeProveedores = [];
 
-    /// <summary>Los adaptadores del proyecto (T0081; los de <c>Securities/</c> y <c>CreditBureaus/</c> se suman en US3 y US2).</summary>
+    /// <summary>Los adaptadores del proyecto (T0081; el de <c>CreditBureaus/</c> desde US2; los de <c>Securities/</c> se suman en US3).</summary>
     private static readonly Type[] AdaptadoresConocidos =
     [
         typeof(IngenIA365ERP.ExternalChannels.Messaging.MensajeriaSimulada),
@@ -31,6 +31,8 @@ public class LosProveedoresExternosSoloLosConoceSuAdaptador
         typeof(IngenIA365ERP.ExternalChannels.RestrictiveLists.CanalDeListasCargadas),
         typeof(IngenIA365ERP.ExternalChannels.Credentials.CredencialesDeCanalExternoEnArchivo),
         typeof(IngenIA365ERP.ExternalChannels.Circuit.CircuitoDeCanalExterno),
+        // US2 (T0401, T0382): la central de riesgo simulada; las reales se suman con su contrato.
+        typeof(IngenIA365ERP.ExternalChannels.CreditBureaus.CentralDeRiesgoSimulada),
     ];
 
     private static readonly Regex UsaElProyecto = new(@"\bIngenIA365ERP\.ExternalChannels\b", RegexOptions.Compiled);

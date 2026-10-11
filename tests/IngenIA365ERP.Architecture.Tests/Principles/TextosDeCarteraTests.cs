@@ -12,7 +12,11 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class TextosDeCarteraTests
 {
     /// <summary>Archivos de textos y pantallas de Cartera (relativos a <c>src/</c>).</summary>
-    private static readonly string[] Archivos = [];
+    private static readonly string[] Archivos =
+    [
+        // US2 (T0410–T0413): los textos de la originación.
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeOriginacion.cs",
+    ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos =
     [

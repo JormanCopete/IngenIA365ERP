@@ -126,6 +126,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GobiernoDeCarte
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ConfiguracionDeCarteraClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LineasDeCreditoClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesAlDeudorClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.OriginacionClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CuposClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();

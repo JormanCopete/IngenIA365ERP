@@ -16,7 +16,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// (<c>usuryBlockedSince</c>, no admite créditos nuevos) con la alerta <c>Cartera.LineaCerradaPorUsura</c>;</item>
 /// <item>una versión nueva desde ese día bajo la usura limpia el bloqueo;</item>
 /// <item>un día sin usura registrada (el mes que sigue, porque las dos usuras tienen fin) hace que crear una versión desde ese día responda
-/// <c>NationalValues.Missing</c> y alerte <c>Cartera.ValorNacionalFaltante</c>, aunque el comando falle.</item>
+/// <c>NationalValues.Missing</c> y alerte <c>Cartera.ValorNacionalFaltante</c>, aunque el comando falle; US2 (T0385): simular un desembolso
+/// ese día responde lo mismo y también alerta.</item>
 /// </list>
 /// Usa la usura de <b>microcrédito</b> y no la de consumo: la de consumo del mes la registra <c>ValoresNacionalesYReplicaTests</c> en este
 /// mismo host y espera registrarla él (201), y <c>Los_faltantes_listan…</c> espera la de consumo del mes siguiente sin registrar. (nuevo)
@@ -87,6 +88,18 @@ public sealed class UsuraNuevaCierraLineasTests(CentralIdentityApiFixture fx)
         (await AlertasAsync(coop, "Cartera.ValorNacionalFaltante")).Should().BeGreaterThan(faltantesAntes,
             "la alerta del faltante sobrevive al rollback del comando (US1-3)");
         (await CarteraE2E.GetAsync(http, admin, $"{Lineas}/{linea}")).GetProperty("versions").GetArrayLength().Should().Be(2, "no se guardó la versión");
+
+        // (5) US2 (T0385): del lado de la originación, simular un desembolso en un día sin usura tampoco se puede y alerta a quien la registra
+        // (otro día: la alerta es una por código, clave y fecha).
+        var faltantesDeLaSimulacion = await AlertasAsync(coop, "Cartera.ValorNacionalFaltante");
+        var simulada = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/simulations/schedule", new
+        {
+            creditLinePublicId = linea, amount = 2_000_000m, installments = 12, periodicity = "Monthly", disbursementDate = sinUsura.AddDays(3),
+        });
+        simulada.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, await simulada.Content.ReadAsStringAsync());
+        (await CarteraE2E.CodigoDeErrorAsync(simulada)).Should().Be("NationalValues.Missing");
+        (await AlertasAsync(coop, "Cartera.ValorNacionalFaltante")).Should().BeGreaterThan(faltantesDeLaSimulacion,
+            "simular sin usura del día alerta a quien la registra (US1-3)");
     }
 
     /// <summary>Las alertas de ese tipo en la base de la cooperativa (cualquier estado).</summary>

@@ -17,7 +17,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <item>Origen comercial sin concepto tributario → <c>Lending.CreditLine.InterestTaxConceptMissing</c>.</item>
 /// <item>US1-2: una versión de <c>CONLIB</c> desde el mes siguiente queda en el historial y la de hoy rige hasta la víspera.</item>
 /// <item><c>VARIBR</c> pasa y <c>usury-check</c> explica la efectiva y la usura, sin escribir.</item>
-/// <item>Cerrar y reabrir con motivo; borrar una línea sin uso. El borrado negado con <c>HasLoans</c> lo suma US2, que trae solicitudes.</item>
+/// <item>Cerrar y reabrir con motivo; borrar una línea sin uso. US2 (bloque 6C): borrar una línea con una solicitud responde
+/// <c>Lending.CreditLine.HasLoans</c> con la alternativa de cerrarla (en la cooperativa activada de la originación).</item>
 /// <item>SC-018: <c>Cobranza.HorarioLunesAViernes</c> más amplio que el techo nacional → <c>Lending.Parameter.BelowLegalFloor</c> con el
 /// límite y su fuente.</item>
 /// </list>
@@ -296,6 +297,25 @@ public sealed class LineasDeCreditoYUsuraTests(CentralIdentityApiFixture fx)
     }
 
     // -------------------------------------------------------------------------------------------- SC-018 --
+
+    /// <summary>US2 (bloque 6C): una línea con una solicitud no se borra; se cierra (api.md §3.1).</summary>
+    [Fact]
+    public async Task Una_linea_con_una_solicitud_no_se_borra_y_ofrece_cerrarla()
+    {
+        var esc = await OriginacionE2E.EscenarioAsync(fx, "originacion_activa", activada: true);
+        using var http = fx.CreateClient();
+        var admin = esc.Coop.TokenAdmin;
+        var linea = await CrearExitoAsync(http, admin, "BORRAR", "Línea con una solicitud", OriginacionE2E.VersionDeOriginacion(esc.Hoy, conDocumento: false));
+        var persona = await OriginacionE2E.DeudorAsync(http, admin, "Borrable", conCentrales: false);
+        await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, OriginacionE2E.Solicitudes, OriginacionE2E.Solicitud(esc, persona, 2_000_000m, linea));
+
+        var borrar = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Delete, $"{Lineas}/{linea}?reason=Creada%20por%20error", null);
+        borrar.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, await borrar.Content.ReadAsStringAsync());
+        var cuerpo = await CarteraE2E.LeerAsync(borrar);
+        cuerpo.GetProperty("code").GetString().Should().Be("Lending.CreditLine.HasLoans");
+        cuerpo.GetProperty("data").GetProperty("alternatives").EnumerateArray().Select(a => a.GetString()).Should().Contain("Close");
+        (await CarteraE2E.GetAsync(http, admin, $"{Lineas}/{linea}")).GetProperty("code").GetString().Should().Be("BORRAR", "no se borró");
+    }
 
     [Fact]
     public async Task Un_horario_de_cobranza_mas_amplio_que_el_techo_nacional_se_rechaza_con_el_limite_y_su_fuente()

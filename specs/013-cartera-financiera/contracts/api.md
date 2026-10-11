@@ -639,6 +639,20 @@ vinculados es forzado y no se configura (FR-040).
 Registrar o terminar un vínculo revalida los cupos de la persona: un cupo de un vinculado sin decisión del
 consejo queda bloqueado con «cupo por revalidar» (FR-142).
 
+#### 3.7.1 Grupos conectados — `/connected-groups` (FR-041, C112; US2, bloque 6C, T0393)
+
+| Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
+|---|---|---|---|---|---|
+| `GET /?personPublicId=&includeEnded=` | RelatedParties.Read | `ListConnectedGroupsQuery` | → arreglo `{ publicId, name, basis: EconomicLink \| LegalLink \| CommonCoDebtor \| RelatedParty, grounds, supportAttachmentPublicId?, validFrom, endedAt?, endReason?, members: [{ person, validFrom, endedAt? }] }`; auditado `Lending.RelatedParty.Viewed` | | K1 |
+| `GET /{id}` | RelatedParties.Read | `GetConnectedGroupQuery` | → el anterior; auditado | `Lending.ConnectedGroup.NotFound` | K1 |
+| `POST /` | RelatedParties.Manage | `RegisterConnectedGroupCommand` | `{ name, basis, grounds, memberPublicIds[≥2], supportAttachmentPublicId?, validFrom? }` → 201 | `Validation.Invalid` (sin fundamento o con menos de dos) | K1 |
+| `POST /{id}/members` | RelatedParties.Manage | `AddConnectedGroupMemberCommand` | `{ personPublicId, reason }` → el grupo | `Lending.ConnectedGroup.MemberDuplicate`, `.Ended` | K1 |
+| `POST /{id}/members/{personPublicId}/end` | RelatedParties.Manage | `EndConnectedGroupMemberCommand` | `{ reason }` → el grupo | `Lending.ConnectedGroup.MemberNotFound` | K1 |
+| `POST /{id}/end` | RelatedParties.Manage | `EndConnectedGroupCommand` | `{ reason }` → el grupo terminado | `Lending.ConnectedGroup.Ended` | K1 |
+
+La concentración se mide por deudor y por grupo con el mismo límite; el grupo también se **deriva** al calcular (vinculados de la
+misma persona y codeudores comunes) sin guardarse. Es la pestaña «Grupos conectados» de `/cartera/vinculados`.
+
 ### 3.8 Alcance por línea — `/scopes/users/{userPublicId}` (T62)
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |

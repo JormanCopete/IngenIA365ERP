@@ -300,6 +300,37 @@ public class LosHechosInmutablesNoSeModifican
         }
     }
 
+    /// <summary>
+    /// US2 (T0382; C42): los hechos de la originación están en <see cref="HechosDeCartera"/> con su escritura única —la validación, el
+    /// puntaje, la consulta a centrales, la versión del cupo, la preferencia de abono y la carga de saldos de aportes sin ninguna; el resultado
+    /// de listas sólo con su liberación y el bloqueo sólo con su levantamiento—. Un cupo, una preferencia o un saldo se corrigen con otra
+    /// versión o carga, nunca editándolos.
+    /// </summary>
+    [Fact]
+    public void Los_hechos_de_la_originacion_estan_en_la_lista()
+    {
+        var esperados = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["CreditApplicationCheck"] = [], ["CreditScore"] = [], ["BureauQuery"] = [], ["CreditLimit"] = [], ["PrepaymentPreference"] = [],
+            ["ContributionBalanceLoad"] = [], ["ScreeningResult"] = ["ReleasedAt", "ReleasedByUserId", "ReleaseReason"],
+            ["DebtorBlock"] = ["LiftedOn", "LiftedAt", "LiftedByUserId", "LiftReason"],
+        };
+        foreach (var (nombre, unicas) in esperados)
+        {
+            Assert.True(HechosDeCartera.TryGetValue(nombre, out var declaradas), $"{nombre} no está en HechosDeCartera (T0382).");
+            Assert.Equal(unicas, declaradas);
+        }
+
+        var conjuntos = typeof(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext).GetProperties()
+            .Where(p => p.PropertyType.IsGenericType
+                && typeof(IngenIA365ERP.Domain.Common.IHechoInmutable).IsAssignableFrom(p.PropertyType.GetGenericArguments()[0]))
+            .Select(p => p.Name)
+            .ToList();
+        foreach (var conjunto in new[] { "CreditApplicationChecks", "CreditScores", "ScreeningResults", "BureauQueries", "CreditLimits",
+                     "DebtorBlocks", "PrepaymentPreferences", "ContributionBalanceLoads" })
+            Assert.Contains(conjunto, conjuntos);
+    }
+
     [Fact]
     public void Application_no_borra_ni_actualiza_en_bloque_los_hechos_de_Cartera()
     {

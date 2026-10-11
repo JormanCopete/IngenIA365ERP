@@ -1,0 +1,316 @@
+@page "/cartera/solicitudes/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject OriginacionClient Originacion
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Solicitud de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US2 (T0411; FR-035–FR-042; contracts/api.md §4.2–§4.4): el expediente de una solicitud. En borrador: los documentos (se suben
+   directo al almacén con el dueño LoanApplicationDocument y se asocian a su requisito) y radicar. Radicada: las validaciones con su evidencia,
+   el puntaje con la explicación por variable, el nivel y sus razones, la consulta a centrales, decidir con la huella del enrutamiento que se
+   vio —un nivel colegiado se lleva a sesión— y anular o desistir con motivo. Fuera del alcance, la solicitud no existe (el mismo 404). *@
+<PermissionGate Required="Lending.Applications.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Solicitud @(_s?.Number ?? "en borrador")</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/solicitudes"))">Volver</SfButton>
+            @if (_s is { Status: 1 or 4 })
+            {
+                <PermissionGate Required="Lending.Applications.Submit">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@RadicarAsync">Radicar</SfButton>
+                </PermissionGate>
+            }
+            @if (_s is { Status: 3 })
+            {
+                <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@AbrirDecision">Decidir…</SfButton>
+            }
+            @if (_s is { Status: 1 or 2 or 3 or 4 or 5 })
+            {
+                <PermissionGate Required="Lending.Applications.Cancel">
+                    <SfButton CssClass="e-outline" OnClick="@(() => { _mostrarCancelar = true; _clave = new(); _motivo = null; })">Anular o desistir…</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+        @if (_s is { } s)
+        {
+            @if (s.BlockedByRestrictiveLists)
+            {
+                <p class="aviso aviso-error">La persona coincide con una lista restrictiva: la solicitud queda bloqueada hasta que el oficial de cumplimiento la libere.</p>
+            }
+            @if (s.Approval is { Expired: true })
+            {
+                <p class="aviso aviso-alerta">La aprobación venció: hay que decidir de nuevo antes de desembolsar.</p>
+            }
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@TextosDeOriginacion.EstadoDeSolicitud(s.Status)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Monto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(s.Amount)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Cuotas</span><span class="kpi-value">@s.Installments</span></div>
+                <div class="kpi-card"><span class="kpi-label">Consolidado</span><span class="kpi-value">@(s.ConsolidatedExposure is { } c ? TextosDeOriginacion.Pesos(c) : "—")</span></div>
+            </div>
+            <div class="info-card">
+                <p><strong>Solicitante:</strong> @s.Applicant.FullName · <strong>Línea:</strong> @s.Line.Code · @s.Line.Name · <strong>Oficina:</strong> @(s.Office?.Name)</p>
+                <p><strong>Periodicidad:</strong> @TextosDeOriginacion.Periodicidad(s.Periodicity) · <strong>Abonos a capital:</strong> @TextosDeOriginacion.PreferenciaDeAbono(s.PrepaymentPreference)
+                    @if (s.IsRelatedParty) { <span> · <strong>Persona vinculada</strong> (decide el consejo)</span> }</p>
+                @if (s.Parties.Count > 0)
+                {
+                    <p><strong>Partes:</strong> @string.Join(", ", s.Parties.Select(p => p.Person.FullName))</p>
+                }
+                @if (s.Approval is { } a)
+                {
+                    <p><strong>Aprobación:</strong> @(a.Amount is { } m ? TextosDeOriginacion.Pesos(m) : "") @(a.Conditions) — vence @(a.ExpiresAt?.ToString("dd/MM/yyyy"))</p>
+                }
+            </div>
+
+            <div class="info-card">
+                <h4>Documentos</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Requisito</th><th>Obligatorio</th><th>Documento</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in s.Requirements)
+                        {
+                            var doc = s.Documents.FirstOrDefault(d => d.RequirementCode == r.Code);
+                            <tr><td>@r.Name</td><td>@(r.Mandatory ? "Sí" : "No")</td><td>@(doc is null ? "Falta" : "Adjunto")@(doc?.RejectionReason is { } m ? $" (rechazado: {m})" : "")</td></tr>
+                        }
+                    </tbody>
+                </table>
+                @if (s.Status is 1 or 4)
+                {
+                    <PermissionGate Required="Lending.Applications.Create">
+                        <SubirSoporte OwnerEntityType="@OriginacionClient.DuenoDeDocumentos" OwnerEntityPublicId="@s.PublicId" OnSubido="@CargarAdjuntosAsync" />
+                        @foreach (var a in _sinAsociar)
+                        {
+                            var adjunto = a;
+                            <div class="toolbar">
+                                <span>@adjunto.FileName</span>
+                                <select class="e-input" @onchange="@(e => _requisitoDe[adjunto.PublicId] = e.Value?.ToString())">
+                                    <option value="">Documento adicional</option>
+                                    @foreach (var r in s.Requirements) { <option value="@r.Code">@r.Name</option> }
+                                </select>
+                                <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => AsociarAsync(adjunto))">Asociar</SfButton>
+                            </div>
+                        }
+                    </PermissionGate>
+                }
+            </div>
+
+            @if (s.Checks.Count > 0)
+            {
+                <div class="info-card">
+                    <h4>Validaciones</h4>
+                    @foreach (var chk in s.Checks)
+                    {
+                        <div class="@TextosDeOriginacion.ClaseDeAviso(chk.Outcome)">
+                            <strong>@TextosDeOriginacion.ClaseDeValidacion(chk.Kind)</strong>@(chk.Person is { } p ? $" · {p.FullName}" : ""):
+                            @TextosDeOriginacion.ResultadoDeValidacion(chk.Outcome)@(chk.Outcome == 3 && !chk.IsExceptionable ? " (no admite excepción)" : "")
+                            <span class="texto-tenue"> · evidencia @chk.EvidenceSha256[..12]…</span>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (s.Score is { } puntaje)
+            {
+                <div class="info-card">
+                    <h4>Puntaje: @puntaje.Value.ToString("N2")@(puntaje.Minimum is { } min ? $" (mínimo {min:N2})" : "")</h4>
+                    @if (puntaje.BelowMinimum) { <p class="aviso aviso-alerta">Bajo el mínimo: la solicitud va al nivel de excepción.</p> }
+                    <ul>@foreach (var v in puntaje.Variables) { <li><strong>@v.Code</strong>: @v.Points.ToString("N2") puntos, aporta @v.Contribution.ToString("N4") — @v.Explanation</li> }</ul>
+                </div>
+            }
+
+            @if (_ruta is { } ruta)
+            {
+                <div class="info-card">
+                    <h4>Nivel de decisión: @ruta.EffectiveLevelName</h4>
+                    <p class="texto-apoyo">Monto consolidado @TextosDeOriginacion.Pesos(ruta.ConsolidatedAmount); matriz versión @ruta.MatrixVersion.</p>
+                    <ul>@foreach (var r in ruta.Reasons) { <li>@TextosDeCartera.RazonDeEnrutamiento(r.Kind): @r.Detail</li> }</ul>
+                    @if (ruta.NonExceptionable.Count > 0)
+                    {
+                        <p class="aviso aviso-error">No admite excepción: @string.Join(", ", ruta.NonExceptionable.Select(TextosDeCartera.NoExceptuable)).</p>
+                    }
+                    @if (ruta.EffectiveLevelKind == 2)
+                    {
+                        <PermissionGate Required="Lending.Sessions.Read">
+                            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/actas"))">Llevar a sesión</SfButton>
+                        </PermissionGate>
+                    }
+                </div>
+            }
+
+            <PermissionGate Required="Lending.CreditBureau.Query">
+                @if (s.Status is 3)
+                {
+                    <div class="info-card">
+                        <h4>Centrales de riesgo</h4>
+                        <div class="toolbar">
+                            <label class="campo">Central <input class="e-input" @bind="_central" maxlength="20" /></label>
+                            <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_central))" OnClick="@ConsultarCentralAsync">Consultar</SfButton>
+                        </div>
+                        <p class="texto-tenue">Exige la autorización del titular para consultar centrales. En producción una consulta simulada no sirve para aprobar.</p>
+                    </div>
+                }
+            </PermissionGate>
+
+            @if (s.Decisions.Count > 0)
+            {
+                <div class="info-card">
+                    <h4>Decisiones</h4>
+                    <ul>@foreach (var d in s.Decisions) { <li>@d.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm") — @TextosDeOriginacion.ResultadoDeDecision(d.Outcome)@(d.Reason is { } m ? $": {m}" : "")</li> }</ul>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarDecision" Header="Decidir la solicitud" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la decisión…">
+                <DecisionDeCredito @bind-Pedido="_pedido" />
+                @if (_errorDialogo is not null) { <p class="aviso aviso-error" role="alert">@_errorDialogo</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@DecidirAsync">Registrar decisión</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDecision = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCancelar" Header="Anular o desistir" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <label class="campo">Clase
+                    <select class="e-input" @bind="_claseDeCancelacion">
+                        <option value="Annulment">Anulación</option>
+                        <option value="Withdrawal">Desistimiento del solicitante</option>
+                    </select>
+                </label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_errorDialogo is not null) { <p class="aviso aviso-error" role="alert">@_errorDialogo</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CancelarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCancelar = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private SolicitudDto? _s;
+    private EnrutamientoDeSolicitudDto? _ruta;
+    private List<AdjuntoDto> _sinAsociar = [];
+    private readonly Dictionary<Guid, string?> _requisitoDe = [];
+    private string? _error, _errorDialogo, _motivo, _central = "DATACREDITO";
+    private string _claseDeCancelacion = "Withdrawal";
+    private bool _mostrarDecision, _mostrarCancelar;
+    private DecisionDeCredito.PedidoDeDecision _pedido = new();
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Originacion.SolicitudAsync(Id);
+        if (!r.IsSuccess) { _s = null; _error = r.ErrorMessage ?? "La solicitud no existe."; return; }
+        _s = r.Value;
+        _ruta = _s is { Status: >= 2 } ? (await Originacion.EnrutamientoAsync(Id)).Value : null;
+        await CargarAdjuntosAsync();
+    }
+
+    private async Task CargarAdjuntosAsync()
+    {
+        if (_s is not { Status: 1 or 4 } s) { _sinAsociar = []; return; }
+        var r = await Adjuntos.ListarAsync(OriginacionClient.DuenoDeDocumentos, s.PublicId);
+        var asociados = s.Documents.Select(d => d.AttachmentPublicId).ToHashSet();
+        _sinAsociar = (r.Value ?? []).Where(a => !asociados.Contains(a.PublicId) && a.Disponible).ToList();
+    }
+
+    private async Task AsociarAsync(AdjuntoDto adjunto)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Originacion.AdjuntarDocumentoAsync(Id, new DocumentoDeSolicitudRequest(_requisitoDe.GetValueOrDefault(adjunto.PublicId), adjunto.PublicId),
+            new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo asociar el documento."); return; }
+        await CargarAsync();
+    }
+
+    private async Task RadicarAsync()
+    {
+        if (_s is not { } s) return;
+        using var carga = _accion.Iniciar();
+        var r = await Originacion.RadicarAsync(Id, s.RowVersion, new ClaveDeOperacion());
+        if (!r.IsSuccess)
+        {
+            var faltan = r.Dato<List<System.Text.Json.JsonElement>>("missing");
+            _error = (r.ErrorMessage ?? "No se pudo radicar.") + (faltan is { Count: > 0 }
+                ? " Faltan: " + string.Join(", ", faltan.Select(f => f.TryGetProperty("name", out var n) ? n.GetString() : "")) + "."
+                : "");
+            return;
+        }
+        await Notification.SuccessAsync($"Solicitud radicada con el número {r.Value?.Number}.");
+        await CargarAsync();
+    }
+
+    private void AbrirDecision()
+    {
+        _pedido = new DecisionDeCredito.PedidoDeDecision();
+        _errorDialogo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarDecision = true;
+    }
+
+    private async Task DecidirAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _errorDialogo = null;
+        var r = await Originacion.DecidirSolicitudAsync(Id, _pedido.ComoRequest(_ruta?.ContentSha256), _clave);
+        if (!r.IsSuccess)
+        {
+            _errorDialogo = r.ErrorMessage ?? "No se pudo registrar la decisión.";
+            await CargarAsync();
+            return;
+        }
+        _mostrarDecision = false;
+        await Notification.SuccessAsync("Decisión registrada.");
+        await CargarAsync();
+    }
+
+    private async Task ConsultarCentralAsync()
+    {
+        if (_s is not { } s || string.IsNullOrWhiteSpace(_central)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Originacion.ConsultarCentralAsync(new ConsultaACentralRequest(s.Applicant.PersonPublicId, _central.Trim(), "CreditApplication", s.PublicId),
+            new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la central."); return; }
+        await Notification.SuccessAsync($"Consulta registrada: {TextosDeOriginacion.EstadoDeConsulta(r.Value!.Status)}{(r.Value.Simulated ? " (canal simulado)" : "")}.");
+    }
+
+    private async Task CancelarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _errorDialogo = null;
+        var r = await Originacion.CancelarAsync(Id, new CancelarSolicitudRequest(_claseDeCancelacion, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _errorDialogo = r.ErrorMessage ?? "No se pudo registrar."; return; }
+        _mostrarCancelar = false;
+        await CargarAsync();
+    }
+}

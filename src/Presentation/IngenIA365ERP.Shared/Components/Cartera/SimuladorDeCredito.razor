@@ -1,0 +1,171 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using Microsoft.JSInterop
+@inject OriginacionClient Originacion
+@inject INotificationService Notification
+@inject IJSRuntime JS
+
+@* Feature 013, US2 (T0410; FR-034, FR-013; contracts/api.md §4.1): el simulador de crédito. Muestra el plan cuota a cuota, la tasa efectiva y
+   la nominal, el costo total y la validación de usura —una simulación sobre la usura no es error: se muestra el aviso—, sin registrar nada.
+   Imprimir baja el PDF (sin número ni código, con la leyenda de que no es una aprobación); enviar lo manda por correo a la persona simulada si
+   ella autorizó el tratamiento de sus datos. Lo usan /cartera/simulador y la solicitud nueva (FR-013: visible en toda pantalla de
+   originación); con SimulacionHecha la solicitud toma lo simulado. *@
+<div class="info-card">
+    <h4>Simulador</h4>
+    <div class="form-grid">
+        <div class="campo">Línea de crédito *
+            <SelectorDeLineaDeCredito Value="@_linea" ValueChanged="@(v => { _linea = v; _simulacion = null; })" />
+        </div>
+        <label class="campo">Monto *
+            <input class="e-input" type="number" min="0" step="1000" @bind="_monto" />
+        </label>
+        <label class="campo">Cuotas *
+            <input class="e-input" type="number" min="1" max="600" @bind="_cuotas" />
+        </label>
+        <label class="campo">Periodicidad
+            <select class="e-input" @bind="_periodicidad">
+                <option value="0">La de la línea</option>
+                @foreach (var p in TextosDeOriginacion.Periodicidades.Where(p => p.Valor != 0)) { <option value="@p.Valor">@p.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Sistema
+            <select class="e-input" @bind="_sistema">
+                <option value="0">El de la línea</option>
+                @foreach (var s in TextosDeOriginacion.SistemasDeAmortizacion) { <option value="@s.Valor">@s.Texto</option> }
+            </select>
+        </label>
+        <label class="campo">Desembolso
+            <input type="date" class="e-input" @onchange="@(e => _desembolso = LeerFecha(e.Value))" />
+        </label>
+        <div class="campo campo-ancho">Persona (opcional: aplica su banda de tasa y permite enviarle la simulación)
+            <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" Compacto="true" />
+        </div>
+    </div>
+    <div class="toolbar">
+        <SfButton CssClass="e-primary" IconCss="e-icons e-play" Disabled="@(_carga.Activa || _linea is null || _monto <= 0 || _cuotas <= 0)" OnClick="@SimularAsync">Simular</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@(_simulacion is null || _carga.Activa)" OnClick="@ImprimirAsync">Imprimir</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-send" Disabled="@(_simulacion is null || _persona is null || _carga.Activa)" OnClick="@EnviarAsync">Enviar por correo</SfButton>
+        @if (SimulacionHecha.HasDelegate && _simulacion is not null)
+        {
+            <SfButton CssClass="e-success" OnClick="@UsarAsync">Usar en la solicitud</SfButton>
+        }
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Simulando…">
+        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+        @if (_simulacion is { } s)
+        {
+            @if (!s.Usury.Passes)
+            {
+                <p class="aviso aviso-alerta" role="alert">
+                    La tasa efectiva con cargos (@TextosDeOriginacion.Porcentaje(s.EffectiveRateWithCharges) EA) supera la usura
+                    @(s.Usury.Rate is { } u ? $"de {TextosDeOriginacion.Porcentaje(u)} EA" : "") vigente el @s.Usury.Date.ToString("dd/MM/yyyy").
+                    Con estas condiciones la solicitud no se puede radicar.
+                </p>
+            }
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Tasa efectiva anual</span><span class="kpi-value">@TextosDeOriginacion.Porcentaje(s.EffectiveAnnualRate)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Tasa nominal del período</span><span class="kpi-value">@TextosDeOriginacion.Porcentaje(s.NominalPeriodRate)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Efectiva con cargos</span><span class="kpi-value">@TextosDeOriginacion.Porcentaje(s.EffectiveRateWithCharges)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Costo total</span><span class="kpi-value">@TextosDeOriginacion.Pesos(s.Totals.ToPay)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Usura</span><span class="kpi-value">@(s.Usury.Rate is { } r ? TextosDeOriginacion.Porcentaje(r) : "—")</span></div>
+            </div>
+            <p class="texto-apoyo">
+                @s.CreditLineCode · @s.CreditLineName — @TextosDeOriginacion.Pesos(s.Amount) en @s.InstallmentCount cuotas
+                (@TextosDeOriginacion.Periodicidad(s.Periodicity)), intereses @TextosDeOriginacion.Pesos(s.Totals.Interest), seguros
+                @TextosDeOriginacion.Pesos(s.Totals.Insurance).
+            </p>
+            @foreach (var a in s.Warnings) { <p class="aviso aviso-info">@a.Message</p> }
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguros</th><th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Saldo</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in s.Installments)
+                        {
+                            <tr>
+                                <td class="numero">@c.Number</td>
+                                <td>@c.DueDate.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@c.Principal.ToString("N2", Colombia)</td>
+                                <td class="numero">@c.Interest.ToString("N2", Colombia)</td>
+                                <td class="numero">@c.Insurance.ToString("N2", Colombia)</td>
+                                <td class="numero">@c.Other.ToString("N2", Colombia)</td>
+                                <td class="numero">@c.Total.ToString("N2", Colombia)</td>
+                                <td class="numero">@c.BalanceAfter.ToString("N2", Colombia)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (s.ExplanationLines.Count > 0)
+            {
+                <details>
+                    <summary>Cómo se calculó</summary>
+                    <ul>@foreach (var l in s.ExplanationLines) { <li>@l</li> }</ul>
+                </details>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    private static readonly CultureInfo Colombia = CultureInfo.GetCultureInfo("es-CO");
+
+    /// <summary>Lo que la solicitud nueva toma del simulador: la entrada y el resultado.</summary>
+    [Parameter] public EventCallback<(SimulacionRequest Entrada, SimulacionDto Resultado)> SimulacionHecha { get; set; }
+
+    /// <summary>La línea con que abre (desde la solicitud).</summary>
+    [Parameter] public Guid? LineaInicial { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private Guid? _linea;
+    private decimal _monto = 1_000_000m;
+    private int _cuotas = 12, _periodicidad, _sistema;
+    private DateOnly? _desembolso;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private SimulacionDto? _simulacion;
+    private SimulacionRequest? _entrada;
+    private string? _error;
+    private ClaveDeOperacion _claveDeEnvio = new();
+
+    protected override void OnInitialized() => _linea = LineaInicial;
+
+    private SimulacionRequest Entrada() => new(_linea!.Value, _monto, _cuotas, _periodicidad == 0 ? null : _periodicidad, _desembolso,
+        AmortizationSystem: _sistema == 0 ? null : _sistema, PersonPublicId: _persona?.PublicId);
+
+    private async Task SimularAsync()
+    {
+        if (_linea is null) return;
+        using var carga = _carga.Iniciar();
+        _error = null;
+        _entrada = Entrada();
+        var r = await Originacion.SimularAsync(_entrada);
+        if (!r.IsSuccess) { _simulacion = null; _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
+        _simulacion = r.Value;
+        _claveDeEnvio = new ClaveDeOperacion();
+    }
+
+    private async Task ImprimirAsync()
+    {
+        if (_entrada is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await Originacion.SimulacionEnPdfAsync(_entrada);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el PDF."); return; }
+        using var flujo = new DotNetStreamReference(new MemoryStream(r.Value.Contenido));
+        await JS.InvokeVoidAsync("descargas.downloadFromStream", r.Value.Nombre, r.Value.TipoContenido, flujo);
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_entrada is null || _persona is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await Originacion.EnviarSimulacionAsync(new EnviarSimulacionRequest(_entrada, _persona.PublicId), _claveDeEnvio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar la simulación."); return; }
+        await Notification.SuccessAsync("La simulación quedó en la cola de mensajes al deudor.");
+    }
+
+    private Task UsarAsync() => _entrada is { } e && _simulacion is { } s ? SimulacionHecha.InvokeAsync((e, s)) : Task.CompletedTask;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

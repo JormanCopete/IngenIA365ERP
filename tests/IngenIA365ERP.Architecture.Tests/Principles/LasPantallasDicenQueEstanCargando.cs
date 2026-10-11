@@ -41,6 +41,13 @@ public class LasPantallasDicenQueEstanCargando
         "Administracion/ParticipantesDeIntegracion.razor",
         "Compliance/ListasRestrictivas.razor",
         "Compliance/SolicitudesDelTitular.razor",
+        // Feature 013, US2 (T0414): las pantallas de la originación que cargan datos (el simulador lleva su indicador en el componente).
+        "Cartera/Solicitudes.razor",
+        "Cartera/SolicitudNueva.razor",
+        "Cartera/SolicitudDetalle.razor",
+        "Cartera/Aprobaciones.razor",
+        "Cartera/Cupos.razor",
+        "Cartera/Vinculados.razor",
     ];
 
     [Fact]
