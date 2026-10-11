@@ -1,0 +1,297 @@
+@page "/cartera/lineas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject LineasDeCreditoClient Cliente
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+<PageTitle>Líneas de crédito - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US1 (T0360, T0362; FR-019–FR-033; contracts/api.md §3.1–§3.2): las líneas de crédito del alcance de quien mira, con su
+   estado, modalidad, versión vigente, tasa, holgura frente a la usura de hoy y la marca «cerrada por usura desde …» cuando una usura nueva
+   quedó por debajo de su tasa (la línea sigue activa pero no admite créditos nuevos hasta una versión bajo la usura). El alta registra la
+   línea con su primera versión (el detalle agrega versiones, puntaje, cierre y borrado); la carga masiva usa la plantilla
+   lending.credit-lines con revisión previa (el componente único ImportarPlantilla), y la pestaña «Equivalencias de Comercio» traduce la
+   periodicidad y la unidad de plazo que llegan como texto en las ventas a crédito: son de la cooperativa, no de una línea. *@
+<PermissionGate Required="Lending.CreditLines.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Líneas de crédito</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 0)">Líneas</SfButton>
+            <PermissionGate Required="Lending.CreditLines.Manage">
+                <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => _pestana = 1)">Carga masiva</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@AbrirEquivalenciasAsync">Equivalencias de Comercio</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <input type="search" class="e-input" placeholder="Buscar código o nombre…" @bind="_buscar" @bind:event="oninput" />
+            <label><input type="checkbox" checked="@_conCerradas" @onchange="@(e => CambiarCerradasAsync(e.Value is true))" /> Ver cerradas</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Lending.CreditLines.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAltaAsync">Nueva línea</SfButton>
+            </PermissionGate>
+        </div>
+
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Código</th><th>Nombre</th><th>Estado</th><th>Modalidad</th><th>Versión vigente</th><th class="numero">Tasa</th>
+                            <th class="numero">Holgura de usura</th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var l in Filtradas)
+                        {
+                            var linea = l;
+                            <tr>
+                                <td>@linea.Code</td>
+                                <td>@linea.Name@(linea.CommercialOrigin ? " · Comercio" : "")</td>
+                                <td>
+                                    @TextosDeCartera.EstadoDeLinea(linea.Status)
+                                    @if (linea.ClosedReason is { } motivo) { <br /><span class="texto-tenue">@TextosDeCartera.MotivoDeCierreDeLinea(motivo)</span> }
+                                    @if (linea.UsuryBlockedSince is { } desde) { <br /><span class="aviso aviso-alerta">Cerrada por usura desde @desde.ToString("dd/MM/yyyy")</span> }
+                                </td>
+                                <td>@linea.ModalityCode@(linea.SubsegmentCode is null ? "" : $" / {linea.SubsegmentCode}")</td>
+                                <td>@(linea.CurrentVersion is { } v ? $"Desde {v.ValidFrom:dd/MM/yyyy}" : "Sin versión vigente")</td>
+                                <td class="numero">@Tasa(linea.CurrentVersion)</td>
+                                <td class="numero">
+                                    @if (linea.CurrentVersion?.UsuryHeadroom is { } holgura)
+                                    {
+                                        <span class="@(holgura < 0 ? "texto-alerta" : "")">@LineasDeCreditoClient.Puntos(holgura)</span>
+                                    }
+                                    else { <span class="texto-tenue">—</span> }
+                                </td>
+                                <td><SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/lineas/{linea.PublicId}"))">Ver</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_lineas.Count == 0) { <p class="texto-tenue">No hay líneas de crédito en su alcance. Regístrelas una a una o con la plantilla.</p> }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == 1)
+    {
+        <div class="info-card">
+            <h4>Plantilla de líneas de crédito</h4>
+            <p class="texto-apoyo">
+                Seis hojas: <b>Lineas</b> (una fila por versión: código y fecha desde), <b>Tasas</b> (bandas), <b>Documentos</b>, <b>Seguros</b>,
+                <b>Garantias</b> y <b>Equivalencias</b>. Se aplican las mismas reglas que al registrar una línea en pantalla, incluida la usura de la
+                modalidad a la fecha de cada versión y a hoy. Los porcentajes van en puntos (22,5 = 22,5 % EA).
+            </p>
+            <ImportarPlantilla RutaBase="@LineasDeCreditoClient.RutaDeLineas" PermisoDeDescarga="Lending.CreditLines.View"
+                               PermisoDeImportacion="Lending.CreditLines.Manage" ConDatos="false" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    }
+    else
+    {
+        <div class="info-card">
+            <h4>Equivalencias de Comercio</h4>
+            <p class="texto-apoyo">
+                Traducen a Cartera la periodicidad y la unidad de plazo que llegan como texto en las ventas a crédito. Una venta cuya periodicidad
+                no tiene equivalencia queda para reprocesar hasta que se registre. Cada cambio es una versión desde una fecha, con motivo.
+            </p>
+            <IndicadorDeCarga Cargando="@_cargaEquivalencias.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Clase</th><th>Texto de Comercio</th><th>En Cartera</th><th>Desde</th><th class="numero">Versión</th></tr></thead>
+                        <tbody>
+                            @foreach (var e in _equivalencias)
+                            {
+                                <tr>
+                                    <td>@TextosDeCartera.ClaseDeEquivalencia(e.Kind)</td>
+                                    <td>@e.CommercialCode</td>
+                                    <td>@(e.Periodicity is { } p ? TextosDeCartera.Periodicidad(p) : $"{e.DaysPerUnit} días por unidad")</td>
+                                    <td>@e.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                    <td class="numero">@e.VersionNumber</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_equivalencias.Count == 0) { <p class="texto-tenue">Sin equivalencias registradas.</p> }
+            </IndicadorDeCarga>
+
+            <PermissionGate Required="Lending.CreditLines.Manage">
+                <h5>Registrar equivalencias</h5>
+                <IndicadorDeCarga Cargando="@_guardadoEquivalencias.Activa" Texto="Registrando…">
+                    @foreach (var n in _nuevas)
+                    {
+                        var nueva = n;
+                        <div class="form-grid">
+                            <label class="campo">Clase
+                                <select class="e-input" @bind="nueva.Kind">@foreach (var c in TextosDeCartera.ClasesDeEquivalencia) { <option value="@c.Valor">@c.Texto</option> }</select>
+                            </label>
+                            <label class="campo">Texto de Comercio * <input class="e-input" maxlength="20" placeholder="Monthly, Days…" @bind="nueva.Codigo" /></label>
+                            @if (nueva.Kind == 1)
+                            {
+                                <label class="campo">Periodicidad *
+                                    <select class="e-input" @bind="nueva.Periodicidad">@foreach (var p in TextosDeCartera.Periodicidades) { <option value="@p.Valor">@p.Texto</option> }</select>
+                                </label>
+                            }
+                            else
+                            {
+                                <label class="campo">Días por unidad * <input class="e-input numero" type="number" min="1" @bind="nueva.Dias" /></label>
+                            }
+                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => _nuevas.Remove(nueva))">Quitar</SfButton>
+                        </div>
+                    }
+                    <div class="form-grid">
+                        <label class="campo">Desde * <input type="date" class="e-input" value="@_desdeEquivalencias.ToString("yyyy-MM-dd")" @onchange="@(e => _desdeEquivalencias = LeerFecha(e.Value) ?? _desdeEquivalencias)" /></label>
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" maxlength="500" @bind="_motivoEquivalencias" /></label>
+                    </div>
+                    @if (_errorEquivalencias is not null) { <p class="aviso aviso-error" role="alert">@_errorEquivalencias</p> }
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@(() => _nuevas.Add(new EquivalenciaEditable()))">Agregar fila</SfButton>
+                        <SfButton CssClass="e-primary" Disabled="@(_guardadoEquivalencias.Activa || _nuevas.Count == 0 || string.IsNullOrWhiteSpace(_motivoEquivalencias))"
+                                  OnClick="@GuardarEquivalenciasAsync">Registrar</SfButton>
+                    </div>
+                </IndicadorDeCarga>
+            </PermissionGate>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarAlta" Header="Nueva línea de crédito" Width="1000px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaModalidades.Activa)" Texto="@(_guardado.Activa ? "Registrando la línea…" : "Leyendo el catálogo de modalidades…")">
+                <div class="form-grid">
+                    <CampoCodigo Catalogo="lineas-de-credito" @bind-Value="_codigo" Obligatorio="true" Etiqueta="Código" />
+                    <label class="campo">Nombre * <input class="e-input" maxlength="120" @bind="_nombre" /></label>
+                    <label class="campo campo-ancho">Destino <input class="e-input" maxlength="200" @bind="_destino" /></label>
+                </div>
+                @if (_errorModalidades is not null) { <p class="aviso aviso-error" role="alert">@_errorModalidades</p> }
+                <EditorDeVersionDeLinea V="@_primera" Modalidades="@_modalidades" Errores="@_errores" />
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre))" OnClick="@CrearAsync">Registrar línea</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaModalidades = new(), _cargaEquivalencias = new(), _guardadoEquivalencias = new();
+    private List<LineaDeCreditoResumenDto> _lineas = [];
+    private List<EquivalenciaDeComercioDto> _equivalencias = [];
+    private readonly List<EquivalenciaEditable> _nuevas = [];
+    private CatalogoDeModalidadesDto? _modalidades;
+    private VersionDeLineaRequest _primera = new();
+    private List<string> _errores = [];
+    private ClaveDeOperacion _clave = new(), _claveEquivalencias = new();
+    private int _pestana;
+    private bool _conCerradas, _mostrarAlta;
+    private string _buscar = string.Empty;
+    private string? _codigo, _nombre, _destino, _errorModalidades, _motivoEquivalencias, _errorEquivalencias;
+    private DateOnly _desdeEquivalencias = DateOnly.FromDateTime(DateTime.Today);
+
+    private IEnumerable<LineaDeCreditoResumenDto> Filtradas =>
+        string.IsNullOrWhiteSpace(_buscar)
+            ? _lineas
+            : _lineas.Where(l => l.Code.Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase) || l.Name.Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.LineasAsync(new FiltrosDeLineas(IncludeClosed: _conCerradas));
+        if (!r.IsSuccess) { _lineas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las líneas de crédito."); return; }
+        _lineas = [.. r.Value ?? []];
+    }
+
+    private async Task CambiarCerradasAsync(bool valor)
+    {
+        _conCerradas = valor;
+        await CargarAsync();
+    }
+
+    private static string Tasa(VersionVigenteResumidaDto? v) => v switch
+    {
+        null => "—",
+        { RateKind: 2 } => $"{v.IndexCode} + {LineasDeCreditoClient.Puntos(v.Margin ?? 0m)}",
+        _ => v.CurrentRate is { } t ? $"{LineasDeCreditoClient.Porcentaje(t)} EA" : "—",
+    };
+
+    // --------------------------------------------------------------------------------------------- alta --
+
+    private async Task AbrirAltaAsync()
+    {
+        _codigo = _nombre = _destino = _errorModalidades = null;
+        _errores = [];
+        _primera = new VersionDeLineaRequest { ValidFrom = DateOnly.FromDateTime(DateTime.Today), Reason = "Alta de la línea" };
+        _clave = new ClaveDeOperacion();
+        _mostrarAlta = true;
+        if (_modalidades is not null) return;
+        using var carga = _cargaModalidades.Iniciar();
+        var r = await Cliente.ModalidadesAsync();
+        if (!r.IsSuccess) { _errorModalidades = r.ErrorMessage ?? "No hay catálogo nacional de modalidades vigente."; return; }
+        _modalidades = r.Value;
+    }
+
+    private async Task CrearAsync()
+    {
+        using var carga = _guardado.Iniciar();
+        _errores = [];
+        var r = await Cliente.CrearAsync(new CrearLineaRequest(_codigo!.Trim().ToUpperInvariant(), _nombre!.Trim(),
+            string.IsNullOrWhiteSpace(_destino) ? null : _destino.Trim(), _primera), _clave);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _errores = [.. LineasDeCreditoClient.Explicar(r)];
+            return;
+        }
+        _mostrarAlta = false;
+        await Notification.SuccessAsync($"Línea {r.Value.Code} registrada.");
+        Navegacion.NavigateTo($"/cartera/lineas/{r.Value.PublicId}");
+    }
+
+    // ---------------------------------------------------------------------------------------- equivalencias --
+
+    private async Task AbrirEquivalenciasAsync()
+    {
+        _pestana = 2;
+        using var carga = _cargaEquivalencias.Iniciar();
+        var r = await Cliente.EquivalenciasAsync();
+        if (!r.IsSuccess) { _equivalencias = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las equivalencias."); return; }
+        _equivalencias = [.. (r.Value ?? []).OrderBy(e => e.Kind).ThenBy(e => e.CommercialCode, StringComparer.Ordinal)];
+    }
+
+    private async Task GuardarEquivalenciasAsync()
+    {
+        using var carga = _guardadoEquivalencias.Iniciar();
+        _errorEquivalencias = null;
+        var items = _nuevas.Select(n => new EquivalenciaDeComercioRequest(n.Kind, n.Codigo?.Trim() ?? string.Empty,
+            n.Kind == 1 ? n.Periodicidad : null, n.Kind == 2 ? n.Dias : null)).ToList();
+        var r = await Cliente.FijarEquivalenciasAsync(new EquivalenciasDeComercioRequest(items, _desdeEquivalencias, _motivoEquivalencias!.Trim()), _claveEquivalencias);
+        if (!r.IsSuccess) { _errorEquivalencias = r.ErrorMessage ?? "No se pudieron registrar las equivalencias."; return; }
+        _nuevas.Clear();
+        _motivoEquivalencias = null;
+        _claveEquivalencias = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Equivalencias registradas.");
+        await AbrirEquivalenciasAsync();
+    }
+
+    private sealed class EquivalenciaEditable
+    {
+        public int Kind { get; set; } = 1;
+        public string? Codigo { get; set; }
+        public int Periodicidad { get; set; } = 30;
+        public int? Dias { get; set; }
+    }
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

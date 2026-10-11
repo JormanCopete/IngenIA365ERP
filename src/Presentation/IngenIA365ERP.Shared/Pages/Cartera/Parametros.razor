@@ -13,7 +13,7 @@
    dónde sale (una vigencia o el defecto), los límites legales que la acotan (la cooperativa sólo puede ser más estricta: la API rechaza lo
    que los cruce) y si el defecto sigue «pendiente de validar». Nada se edita en su sitio: un cambio es una vigencia nueva desde una fecha y
    con motivo, y la anterior queda en el historial. Una clave de una entrega que todavía no llegó se muestra «disponible con …» y no se
-   edita; una clave con permiso propio (la segregación) lo pide además. *@
+   edita; una clave con permiso propio (la segregación) lo pide además. Con ámbito «línea», la línea se elige de la lista (US1, T0362). *@
 <PermissionGate Required="Lending.Parameters.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -145,7 +145,7 @@
                         </label>
                         @if (_ambito == 6)
                         {
-                            <label class="campo">Identificador de la línea * <input class="e-input" @bind="_ambitoId" /></label>
+                            <label class="campo">Línea de crédito * <SelectorDeLineaDeCredito @bind-Value="_ambitoId" IncluirCerradas="true" /></label>
                         }
                     }
                     <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = LeerFecha(e.Value) ?? _desde)" /></label>
@@ -174,7 +174,8 @@
     private List<VigenciaDeParametroDto> _vigencias = [];
     private bool _mostrarNueva;
     private string _buscar = string.Empty;
-    private string? _valor, _motivo, _fuente, _ambitoId, _error;
+    private string? _valor, _motivo, _fuente, _error;
+    private Guid? _ambitoId;
     private int _ambito;
     private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
 
@@ -212,7 +213,8 @@
     {
         _editado = p;
         _valor = p.Type == "Bool" ? p.Current.Value : null;
-        _motivo = _fuente = _ambitoId = _error = null;
+        _motivo = _fuente = _error = null;
+        _ambitoId = null;
         _ambito = 0;
         _desde = DateOnly.FromDateTime(DateTime.Today);
         _clave = new ClaveDeOperacion();
@@ -225,7 +227,7 @@
         Guid? ambito = null;
         if (_ambito != 0)
         {
-            if (!Guid.TryParse(_ambitoId, out var id)) { _error = "Indique el identificador de la línea."; return; }
+            if (_ambitoId is not { } id) { _error = "Elija la línea de crédito."; return; }
             ambito = id;
         }
         using var carga = _guardado.Iniciar();

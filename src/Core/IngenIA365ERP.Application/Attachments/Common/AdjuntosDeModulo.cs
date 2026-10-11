@@ -34,7 +34,8 @@ namespace IngenIA365ERP.Application.Attachments.Common;
 /// <c>Inventory.Catalog.Manage</c>, sólo JPEG, PNG y WebP, el producto tiene que existir) y los soportes de un ajuste de
 /// inventario (<see cref="SoporteDeAjuste"/>, feature 012, T255: actas de destrucción, denuncias; subir con
 /// <c>Inventory.Adjustments.Create</c> mientras el ajuste está en borrador o en aprobación, leer con
-/// <c>Inventory.Adjustments.View</c>, y confirmado no se borran: <c>Attachments.OwnerLocked</c>). Los tipos de módulo nunca, y
+/// <c>Inventory.Adjustments.View</c>, y confirmado no se borran: <c>Attachments.OwnerLocked</c>), y el soporte del concepto tributario del
+/// interés de una línea de crédito (<see cref="SoporteTributarioDeLinea"/>, feature 013, T0361). Los tipos de módulo nunca, y
 /// cualquier otro tipo tampoco hasta que tenga su pantalla y su regla (FR-019).
 /// </para>
 /// </summary>
@@ -115,6 +116,17 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string ActaDeSesionDeCartera = "LendingSessionMinutes";
 
+    /// <summary>
+    /// Feature 013, US1 (T0361; D20, T44): el soporte del concepto tributario del interés de una línea de crédito (el concepto de la
+    /// contadora). El dueño es la <b>línea</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>): se sube antes de registrar la versión que lo
+    /// cita en <c>InterestTaxSupportAttachmentPublicId</c>. Se lee con <c>Lending.CreditLines.View</c>, se sube con
+    /// <c>Lending.CreditLines.Manage</c> sobre una línea que exista y no se borra: es lo que respalda una versión sellada.
+    /// </summary>
+    public const string SoporteTributarioDeLinea = "CreditLineTaxSupport";
+
+    private const string VerLineas = "Lending.CreditLines.View";
+    private const string AdministrarLineas = "Lending.CreditLines.Manage";
+
     private const string VerHabeasData = "Compliance.HabeasData.ViewHistory";
     private const string RegistrarAutorizacion = "Compliance.HabeasData.RecordConsent";
     private const string LeerSolicitudes = "Compliance.DataSubjectRequests.Read";
@@ -154,6 +166,7 @@ public static class AdjuntosDeModulo
             EventoDeContingencia => VerContingencias,
             AutorizacionDeDatos => VerHabeasData,
             SolicitudDelTitular => LeerSolicitudes,
+            SoporteTributarioDeLinea => VerLineas,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -210,6 +223,13 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Persona no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteTributarioDeLinea)
+        {
+            if (!await permisos.HasPermissionAsync(AdministrarLineas, ct)
+                || !await db.CreditLines.AnyAsync(l => l.PublicId == ownerEntityPublicId && !l.IsDeleted, ct))
+                return new Error("Generic.NotFound", "Línea de crédito no encontrada.");
+            return null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -239,6 +259,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType is AutorizacionDeDatos or SolicitudDelTitular)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es evidencia del titular de los datos (autorización o solicitud): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013 (T0361): el soporte del concepto tributario respalda una versión sellada de la línea.
+        if (ownerEntityType == SoporteTributarioDeLinea)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es el soporte del concepto tributario de una línea de crédito: respalda sus versiones y no se puede borrar.",
                 new { ownerEntityType });
         // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
         if (ownerEntityType == ProductoDeInventario)

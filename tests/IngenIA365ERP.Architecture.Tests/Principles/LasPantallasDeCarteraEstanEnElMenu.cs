@@ -15,6 +15,7 @@ public class LasPantallasDeCarteraEstanEnElMenu
 
     /// <summary>Pantallas: archivo (relativo a Shared), ruta y permiso.</summary>
     /// <para>Fase 4, US17 (T0324, T0310 y el pendiente de T0273): las diez pantallas de gobierno, configuración y mensajes al deudor.</para>
+    /// <para>Fase 5, US1 (T0362): las líneas de crédito.</para>
     private static readonly (string Archivo, string Ruta, string Permiso)[] Pantallas =
     [
         ("Pages/Cartera/Atribuciones.razor", "/cartera/atribuciones", "Lending.Attributions.View"),
@@ -27,7 +28,32 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Alcances.razor", "/cartera/alcances", "Lending.Scopes.Manage"),
         ("Pages/Cartera/Mensajes.razor", "/cartera/mensajes", "Lending.DebtorMessages.Read"),
         ("Pages/Cartera/PlantillasDeMensaje.razor", "/cartera/plantillas-de-mensaje", "Lending.MessageTemplates.View"),
+        // Fase 5, US1 (T0360, T0362): las líneas de crédito con sus equivalencias de Comercio. Su detalle (/cartera/lineas/{id:guid}, T0361)
+        // se abre desde la lista, sin enlace propio: se comprueba aparte.
+        ("Pages/Cartera/Lineas.razor", "/cartera/lineas", "Lending.CreditLines.View"),
     ];
+
+    /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
+    private static readonly (string Archivo, string Ruta, string Permiso)[] Detalles =
+    [
+        ("Pages/Cartera/LineaDetalle.razor", "/cartera/lineas/{Id:guid}", "Lending.CreditLines.View"),
+    ];
+
+    [Fact]
+    public void Cada_detalle_existe_protegido_y_con_indicador()
+    {
+        var infracciones = new List<string>();
+        foreach (var (archivo, ruta, permiso) in Detalles)
+        {
+            var camino = Path.Combine(Shared, archivo.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(camino)) { infracciones.Add($"{archivo}: no existe"); continue; }
+            var texto = File.ReadAllText(camino);
+            if (!texto.Contains($"@page \"{ruta}\"", StringComparison.Ordinal)) infracciones.Add($"{archivo}: sin @page {ruta}");
+            if (!texto.Contains($"Required=\"{permiso}\"", StringComparison.Ordinal)) infracciones.Add($"{archivo}: sin permiso {permiso}");
+            if (!texto.Contains("<IndicadorDeCarga", StringComparison.Ordinal)) infracciones.Add($"{archivo}: sin IndicadorDeCarga");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Detalles de Cartera fuera del contrato (T98)");
+    }
 
     [Fact]
     public void Cada_pantalla_existe_protegida_con_indicador_y_en_el_menu()

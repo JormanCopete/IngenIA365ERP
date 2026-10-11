@@ -17,7 +17,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// (<c>POST /api/lending/amount-limits</c>).
 /// <list type="table">
 /// <item><c>administrador</c>: <c>cartera.administrador</c> (trae todas las oficinas y líneas).</item>
-/// <item><c>asesor.o1</c>, <c>asesor.o2</c>: <c>cartera.asesor</c>; O1 y O2.</item>
+/// <item><c>asesor.o1</c>, <c>asesor.o2</c>: <c>cartera.asesor</c> + <c>Lending.CreditLines.View</c> (la plantilla del asesor no lee
+/// líneas, api.md §2.4; el ensayo del alcance por línea las consulta); O1 y O2.</item>
 /// <item><c>analista</c>: <c>cartera.analista</c>; O1 y O2.</item>
 /// <item><c>jefe</c>: <c>cartera.jefe</c> + <c>Lending.Payments.BackdateBeforeClose</c>; <c>Lending.Disbursements.Execute</c> hasta 50.000.000.</item>
 /// <item><c>gerente</c>: <c>cartera.gerente</c>.</item>
@@ -33,8 +34,9 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <item><c>sinpersona</c>: <c>cartera.analista</c> sin persona (para <c>Lending.Security.UserWithoutPerson</c>); O1 y O2.</item>
 /// <item><c>lectura</c>: el rol integrado <c>ReadOnly</c>.</item>
 /// </list>
-/// Sin líneas de crédito hasta US1: el alcance de líneas se fija vacío y la tarea de US1 asigna <c>CONLIB</c>, <c>CONCAJA</c> y
-/// <c>ROTATIVO</c> a <c>asesor.o1</c>. Uno por cooperativa: las pruebas que piden los usuarios de la misma cooperativa los comparten. (nuevo)
+/// El alcance de líneas nace vacío; desde US1 (T0343) <see cref="FijarLineasAsync"/> asigna las líneas que ya existen —
+/// <c>SeguridadYHabeasDataDeCarteraTests</c> da <c>CONLIB</c>, <c>CONCAJA</c> y <c>ROTATIVO</c> a <c>asesor.o1</c>, no <c>VARIBR</c>—. Uno
+/// por cooperativa: las pruebas que piden los usuarios de la misma cooperativa los comparten. (nuevo)
 /// </summary>
 public sealed class UsuariosDeCartera
 {
@@ -111,6 +113,7 @@ public sealed class UsuariosDeCartera
         // están en el catálogo: los siembra la historia de la matriz contable (US7), que los suma aquí.
         var contable = await RolPropioAsync(http, admin, "ENS-CAR-CONTA", "Core.NationalValues.Review");
         var pruebas = await RolPropioAsync(http, admin, "ENS-CAR-PRUEBAS", "Lending.TestDoubles.Operate");
+        var lectorDeLineas = await RolPropioAsync(http, admin, "ENS-CAR-LINEAS", "Lending.CreditLines.View");
         var lectura = (await CarteraE2E.GetAsync(http, admin, "/api/admin/roles?includeBuiltIn=true&pageSize=100")).GetProperty("items").EnumerateArray()
             .Single(r => r.GetProperty("code").GetString() == "ReadOnly").GetProperty("publicId").GetGuid();
 
@@ -125,8 +128,8 @@ public sealed class UsuariosDeCartera
         }
 
         await UnoAsync("administrador", [Plantilla("cartera.administrador")], []);
-        await UnoAsync("asesor.o1", [Plantilla("cartera.asesor")], [o1]);
-        await UnoAsync("asesor.o2", [Plantilla("cartera.asesor")], [o2]);
+        await UnoAsync("asesor.o1", [Plantilla("cartera.asesor"), lectorDeLineas], [o1]);
+        await UnoAsync("asesor.o2", [Plantilla("cartera.asesor"), lectorDeLineas], [o2]);
         await UnoAsync("analista", [Plantilla("cartera.analista")], [o1, o2]);
         await UnoAsync("jefe", [Plantilla("cartera.jefe"), ajusteJefe], []);
         await UnoAsync("gerente", [Plantilla("cartera.gerente")], []);
@@ -193,11 +196,21 @@ public sealed class UsuariosDeCartera
             oficina.IsSuccessStatusCode.Should().BeTrue($"oficina {oficinas[i].Codigo} a {clave}: «{await oficina.Content.ReadAsStringAsync()}»");
         }
 
-        // Las líneas de crédito llegan con US1; hasta entonces el alcance de líneas se fija vacío por la misma ruta.
+        // El alcance de líneas nace vacío (FijarLineasAsync lo cambia cuando existen las líneas).
         await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Put, $"/api/lending/scopes/users/{usuario}", new { lines = Array.Empty<object>() });
 
         return new Usuario(clave, correo, token, usuario, persona, roles);
     }
+
+    /// <summary>
+    /// Reemplaza en bloque las líneas que opera <paramref name="usuario"/> (<c>PUT /api/lending/scopes/users/{id}</c>, api.md §3.8); la primera
+    /// queda por defecto. Las oficinas no cambian: las asigna Seguridad.
+    /// </summary>
+    public static Task<System.Text.Json.JsonElement> FijarLineasAsync(HttpClient http, string tokenAdmin, Usuario usuario, params Guid[] lineas) =>
+        CarteraE2E.ExitoAsync(http, tokenAdmin, HttpMethod.Put, $"/api/lending/scopes/users/{usuario.PublicId}", new
+        {
+            lines = lineas.Select((l, i) => new { creditLinePublicId = l, isDefault = i == 0 }).ToList(),
+        });
 
     /// <summary>Un nombre de persona legible desde la clave del usuario (<c>comite.2</c> → <c>Comite2</c>).</summary>
     private static string NombreDe(string clave) =>

@@ -6,7 +6,7 @@
 @* Feature 013, fase 4 (T0322; US17, T62; contracts/api.md §3.8): el alcance de Cartera de un usuario sobre GET/PUT
    /api/lending/scopes/users/{id} (molde AlcanceComercialDeUsuario). Las oficinas son de SÓLO LECTURA —las asigna Seguridad— con la sucursal
    contable de cada una; las líneas de crédito que opera se reemplazan en bloque, a lo sumo una por defecto. Una línea fuera del alcance de
-   quien asigna no existe para él. Hasta que existan las líneas (US1) se agregan por su identificador. *@
+   quien asigna no existe para él. Desde US1 (T0362) se eligen de la lista de líneas por código y nombre (SelectorDeLineaDeCredito). *@
 <IndicadorDeCarga Cargando="@_carga.Activa">
     @if (_alcance is { } a)
     {
@@ -52,8 +52,8 @@
                 </table>
             </div>
             <div class="toolbar">
-                <input class="e-input" placeholder="Identificador de la línea" @bind="_nuevaLinea" />
-                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@Agregar">Agregar línea</SfButton>
+                <SelectorDeLineaDeCredito @bind-Value="_nuevaLinea" LineaElegida="@(l => _elegida = l)" Excluir="@_lineas.Select(l => l.Id).ToList()" />
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_elegida is null)" OnClick="@Agregar">Agregar línea</SfButton>
                 <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar alcance</SfButton>
             </div>
             @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
@@ -70,7 +70,9 @@
     private AlcanceDeCarteraDto? _alcance;
     private List<LineaEditable> _lineas = [];
     private Guid? _porDefecto;
-    private string? _nuevaLinea, _error;
+    private Guid? _nuevaLinea;
+    private LineaDeCreditoResumenDto? _elegida;
+    private string? _error;
     private Guid _cargado;
 
     protected override async Task OnParametersSetAsync()
@@ -104,10 +106,10 @@
     private void Agregar()
     {
         _error = null;
-        if (!Guid.TryParse(_nuevaLinea?.Trim(), out var id)) { _error = "El identificador de la línea no es válido."; return; }
-        if (_lineas.Any(l => l.Id == id)) return;
-        _lineas.Add(new LineaEditable(id, id.ToString()));
+        if (_elegida is not { } linea) { _error = "Elija la línea que va a agregar."; return; }
+        if (_lineas.All(l => l.Id != linea.PublicId)) _lineas.Add(new LineaEditable(linea.PublicId, $"{linea.Code} · {linea.Name}"));
         _nuevaLinea = null;
+        _elegida = null;
     }
 
     private void Quitar(LineaEditable linea)

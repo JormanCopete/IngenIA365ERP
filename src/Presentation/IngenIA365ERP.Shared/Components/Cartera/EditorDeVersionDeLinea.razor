@@ -1,0 +1,532 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@inject AdjuntosClient Adjuntos
+
+@* Feature 013, US1 (T0361; contracts/api.md §3.1 CreditLineVersionInput): el editor de una versión de la línea, por secciones —clasificación,
+   tasas y bandas, mora, montos y plazos, plan, prelación, formas de pago, requisitos, seguros, garantías, cupo y aportes, concepto tributario
+   y documentos—. Lo usan el alta (primera versión) y «Nueva versión» de la línea, que parte de la vigente. Las tasas se digitan en puntos
+   (22,5 = 22,5 % EA) y viajan como fracción. Salir de un campo de tasa avisa (CampoDeTasaSalio) para que la pantalla consulte la usura. El
+   soporte del concepto tributario se sube como adjunto de la línea (POST /api/attachments/uploads, dueño CreditLineTaxSupport) y se elige de
+   los ya subidos: en el alta todavía no hay línea a la que colgarlo. Nada aquí guarda: guarda la pantalla. *@
+<div class="editor-version-linea">
+    @if (Errores is { Count: > 0 })
+    {
+        <div class="aviso aviso-error" role="alert">
+            <ul>@foreach (var e in Errores) { <li>@e</li> }</ul>
+        </div>
+    }
+
+    <div class="info-card">
+        <h4>Vigencia y clasificación</h4>
+        <div class="form-grid">
+            <label class="campo">Rige desde *
+                <input type="date" class="e-input" value="@V.ValidFrom.ToString("yyyy-MM-dd")" @onchange="@(e => V.ValidFrom = LeerFecha(e.Value) ?? V.ValidFrom)" />
+            </label>
+            <label class="campo campo-ancho">Motivo de la versión * <input class="e-input" maxlength="300" @bind="V.Reason" /></label>
+            <label class="campo">Modalidad *
+                <select class="e-input" value="@V.ModalityCode" @onchange="@(e => CambiarModalidad(e.Value?.ToString()))">
+                    <option value="">Elija…</option>
+                    @foreach (var m in Modalidades?.Modalities ?? [])
+                    {
+                        <option value="@m.Code" disabled="@(m.Code == "VIVIENDA")">@m.Name@(m.Code == "VIVIENDA" ? " (llega con K6b)" : "")@(m.Verified ? "" : " · pendiente de validar")</option>
+                    }
+                </select>
+            </label>
+            @if (Subsegmentos.Count > 0)
+            {
+                <label class="campo">Sub-segmento *
+                    <select class="e-input" @bind="V.SubsegmentCode">
+                        <option value="">Elija…</option>
+                        @foreach (var s in Subsegmentos) { <option value="@s">@s</option> }
+                    </select>
+                </label>
+            }
+            @if (ClaveDeUsura is { } clave) { <p class="texto-tenue campo-ancho">Se controla contra la usura certificada <b>@clave</b>.</p> }
+            <label class="campo-check"><input type="checkbox" @bind="V.ForEmployees" /> Línea para empleados de la cooperativa</label>
+            <label class="campo-check"><input type="checkbox" @bind="V.AllowsNonAssociates" /> Admite no asociados (si el perfil regulatorio lo permite)</label>
+            <label class="campo-check"><input type="checkbox" @bind="V.AllowsCommercialOrigin" /> Admite ventas a crédito de Comercio</label>
+            <label class="campo-check"><input type="checkbox" @bind="V.RequiresBureauQuery" /> Exige consulta a centrales</label>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Tasas</h4>
+        <div class="form-grid">
+            <label class="campo">Clase de tasa *
+                <select class="e-input" value="@V.Rates.Current.Kind" @onchange="@(e => CambiarClaseDeTasa(LeerEntero(e.Value) ?? 1))">
+                    @foreach (var c in TextosDeCartera.ClasesDeTasa) { <option value="@c.Valor">@c.Texto</option> }
+                </select>
+            </label>
+            @if (V.Rates.Current.Kind == 1)
+            {
+                <label class="campo">Tasa corriente (% EA) *
+                    <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(V.Rates.Current.EffectiveAnnual)"
+                           @onchange="@(e => V.Rates.Current.EffectiveAnnual = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                </label>
+            }
+            else if (V.Rates.Variable is { } variable)
+            {
+                <label class="campo">Índice * <input class="e-input" maxlength="20" @bind="variable.IndexCode" /></label>
+                <label class="campo">Clave del índice * <input class="e-input" maxlength="20" placeholder="3M, OVERNIGHT…" @bind="variable.IndexKey" /></label>
+                <label class="campo">Margen (puntos) *
+                    <input class="e-input numero" type="number" step="0.0001" value="@Pct(variable.Margin)"
+                           @onchange="@(e => variable.Margin = LeerPct(e.Value) ?? 0m)" @onblur="SalioDeTasaAsync" />
+                </label>
+                <label class="campo">Piso (% EA)
+                    <input class="e-input numero" type="number" step="0.0001" value="@Pct(variable.Floor)" @onchange="@(e => variable.Floor = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                </label>
+                <label class="campo">Techo (% EA)
+                    <input class="e-input numero" type="number" step="0.0001" value="@Pct(variable.Ceiling)" @onchange="@(e => variable.Ceiling = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                </label>
+                <label class="campo">Reajuste
+                    <select class="e-input" value="@(variable.ResetPeriodicity?.ToString() ?? "")" @onchange="@(e => variable.ResetPeriodicity = LeerEntero(e.Value))">
+                        <option value="">Con cada cuota</option>
+                        @foreach (var p in TextosDeCartera.Periodicidades.Where(p => p.Valor >= 30)) { <option value="@p.Valor">@p.Texto</option> }
+                    </select>
+                </label>
+            }
+            <label class="campo">Convención de días *
+                <select class="e-input" @bind="V.DayCount">@foreach (var c in TextosDeCartera.Convenciones) { <option value="@c.Valor">@c.Texto</option> }</select>
+            </label>
+            <label class="campo">Equivalencia
+                <select class="e-input" @bind="V.RateEquivalence">@foreach (var c in TextosDeCartera.Equivalencias) { <option value="@c.Valor">@c.Texto</option> }</select>
+            </label>
+        </div>
+
+        <h5>Bandas por monto, plazo y segmento</h5>
+        <p class="texto-tenue">Cada banda pasa su propio control de usura. Vacío = sin límite. Dos bandas de las mismas dimensiones no se cruzan.</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead>
+                    <tr>
+                        <th>Monto desde</th><th>Monto hasta</th><th>Plazo desde (meses)</th><th>Plazo hasta</th><th>Deudor</th><th>Empleados</th>
+                        <th>@(V.Rates.Current.Kind == 1 ? "Tasa (% EA)" : "Margen (puntos)")</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in V.Rates.Bands)
+                    {
+                        var banda = b;
+                        <tr>
+                            <td><input class="e-input numero" type="number" min="0" step="1" @bind="banda.AmountFrom" /></td>
+                            <td><input class="e-input numero" type="number" min="0" step="1" @bind="banda.AmountTo" /></td>
+                            <td><input class="e-input numero" type="number" min="0" @bind="banda.TermFrom" /></td>
+                            <td><input class="e-input numero" type="number" min="0" @bind="banda.TermTo" /></td>
+                            <td>
+                                <select class="e-input" value="@(banda.DebtorKind?.ToString() ?? "")" @onchange="@(e => banda.DebtorKind = LeerEntero(e.Value))">
+                                    <option value="">Cualquiera</option>
+                                    @foreach (var t in TextosDeCartera.TiposDeDeudor) { <option value="@t.Valor">@t.Texto</option> }
+                                </select>
+                            </td>
+                            <td>
+                                <select class="e-input" value="@(banda.ForEmployees switch { true => "si", false => "no", _ => "" })"
+                                        @onchange="@(e => banda.ForEmployees = e.Value?.ToString() switch { "si" => true, "no" => false, _ => null })">
+                                    <option value="">Indiferente</option><option value="si">Sí</option><option value="no">No</option>
+                                </select>
+                            </td>
+                            <td>
+                                @if (V.Rates.Current.Kind == 1)
+                                {
+                                    <input class="e-input numero" type="number" step="0.0001" value="@Pct(banda.EffectiveAnnual)"
+                                           @onchange="@(e => banda.EffectiveAnnual = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                                }
+                                else
+                                {
+                                    <input class="e-input numero" type="number" step="0.0001" value="@Pct(banda.Margin)"
+                                           @onchange="@(e => banda.Margin = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                                }
+                            </td>
+                            <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => V.Rates.Bands.Remove(banda))" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => V.Rates.Bands.Add(new BandaDeTasaRequest()))">Agregar banda</SfButton>
+    </div>
+
+    <div class="info-card">
+        <h4>Mora</h4>
+        <div class="form-grid">
+            <label class="campo">Clase de tasa de mora *
+                <select class="e-input" @bind="V.Rates.Default.Kind">@foreach (var c in TextosDeCartera.ClasesDeMora) { <option value="@c.Valor">@c.Texto</option> }</select>
+            </label>
+            @if (V.Rates.Default.Kind == 1)
+            {
+                <label class="campo">Tasa de mora (% EA) *
+                    <input class="e-input numero" type="number" step="0.0001" value="@Pct(V.Rates.Default.EffectiveAnnual)"
+                           @onchange="@(e => V.Rates.Default.EffectiveAnnual = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                </label>
+            }
+            else
+            {
+                <label class="campo">Factor sobre la corriente *
+                    <input class="e-input numero" type="number" step="0.000001" min="0" @bind="V.Rates.Default.Factor" />
+                    <span class="texto-tenue">1,5 = una vez y media. Pendiente de validar por la contadora. Nunca supera la usura del día.</span>
+                </label>
+            }
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Montos y plazos</h4>
+        <div class="form-grid">
+            <label class="campo">Monto mínimo * <input class="e-input numero" type="number" min="0" step="1" @bind="V.Amounts.Min" /></label>
+            <label class="campo">Monto máximo * <input class="e-input numero" type="number" min="0" step="1" @bind="V.Amounts.Max" /></label>
+            <label class="campo">Plazo mínimo (meses) * <input class="e-input numero" type="number" min="0" @bind="V.Terms.MinMonths" /></label>
+            <label class="campo">Plazo máximo (meses) * <input class="e-input numero" type="number" min="0" @bind="V.Terms.MaxMonths" /></label>
+            <label class="campo">Cuotas máximas <input class="e-input numero" type="number" min="0" @bind="V.Terms.MaxInstallments" /></label>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Plan de pagos</h4>
+        <div class="form-grid">
+            <div class="campo campo-ancho">Periodicidades *
+                <div class="toolbar">
+                    @foreach (var p in TextosDeCartera.Periodicidades)
+                    {
+                        var valor = p.Valor;
+                        <label><input type="checkbox" checked="@V.Periodicities.Contains(valor)" @onchange="@(e => Alternar(V.Periodicities, valor, e.Value))" /> @p.Texto</label>
+                    }
+                </div>
+            </div>
+            <label class="campo">Periodicidad por defecto *
+                <select class="e-input" value="@(V.DefaultPeriodicity?.ToString() ?? "")" @onchange="@(e => V.DefaultPeriodicity = LeerEntero(e.Value))">
+                    <option value="">La primera</option>
+                    @foreach (var p in TextosDeCartera.Periodicidades.Where(p => V.Periodicities.Contains(p.Valor))) { <option value="@p.Valor">@p.Texto</option> }
+                </select>
+            </label>
+            <label class="campo">Día de pago <input class="e-input numero" type="number" min="1" max="31" @bind="V.PaymentDay" /></label>
+            <div class="campo campo-ancho">Sistemas de amortización *
+                <div class="toolbar">
+                    @foreach (var s in TextosDeCartera.Sistemas)
+                    {
+                        var valor = s.Valor;
+                        <label><input type="checkbox" checked="@V.Amortization.Systems.Contains(valor)" @onchange="@(e => Alternar(V.Amortization.Systems, valor, e.Value))" /> @s.Texto</label>
+                    }
+                </div>
+            </div>
+            <label class="campo">Sistema por defecto
+                <select class="e-input" value="@(V.Amortization.Default?.ToString() ?? "")" @onchange="@(e => V.Amortization.Default = LeerEntero(e.Value))">
+                    <option value="">El primero</option>
+                    @foreach (var s in TextosDeCartera.Sistemas.Where(s => V.Amortization.Systems.Contains(s.Valor))) { <option value="@s.Valor">@s.Texto</option> }
+                </select>
+            </label>
+            <label class="campo-check"><input type="checkbox" @bind="V.Amortization.AllowsExtraordinary" /> Admite cuotas extraordinarias</label>
+            <label class="campo-check"><input type="checkbox" @bind="V.Amortization.AllowsTranches" /> Admite desembolso por tramos</label>
+            <label class="campo">Gracia
+                <select class="e-input" @bind="V.Amortization.Grace.Kind">@foreach (var g in TextosDeCartera.ClasesDeGracia) { <option value="@g.Valor">@g.Texto</option> }</select>
+            </label>
+            @if (V.Amortization.Grace.Kind != 0)
+            {
+                <label class="campo">Cuotas de gracia máximas * <input class="e-input numero" type="number" min="1" @bind="V.Amortization.Grace.MaxInstallments" /></label>
+            }
+            @if (V.Amortization.Grace.Kind == 2)
+            {
+                <label class="campo">Interés de la gracia *
+                    <select class="e-input" value="@(V.Amortization.Grace.InterestTreatment?.ToString() ?? "")" @onchange="@(e => V.Amortization.Grace.InterestTreatment = LeerEntero(e.Value))">
+                        <option value="">Elija…</option>
+                        @foreach (var i in TextosDeCartera.InteresesEnGracia) { <option value="@i.Valor">@i.Texto</option> }
+                    </select>
+                </label>
+            }
+            <label class="campo">Redondeo: unidad
+                <select class="e-input" value="@(V.Rounding.Unit?.ToString(CultureInfo.InvariantCulture) ?? "0.01")" @onchange="@(e => V.Rounding.Unit = LeerDecimal(e.Value))">
+                    @foreach (var u in new[] { "0.01", "1", "10", "100", "1000" }) { <option value="@u">@u.Replace('.', ',')</option> }
+                </select>
+            </label>
+            <label class="campo">Redondeo: modo
+                <select class="e-input" @bind="V.Rounding.Mode">@foreach (var m in TextosDeCartera.ModosDeRedondeo) { <option value="@m.Valor">@m.Texto</option> }</select>
+            </label>
+            <label class="campo">Redondeo: momento
+                <select class="e-input" @bind="V.Rounding.Moment">@foreach (var m in TextosDeCartera.MomentosDeRedondeo) { <option value="@m.Valor">@m.Texto</option> }</select>
+            </label>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Prelación y formas de pago</h4>
+        <div class="form-grid">
+            <label class="campo">Prelación
+                <select class="e-input" @bind="V.AllocationOrder">@foreach (var p in TextosDeCartera.Prelaciones) { <option value="@p.Valor">@p.Texto</option> }</select>
+            </label>
+            @if (V.AllowsCommercialOrigin)
+            {
+                <label class="campo">Recalcular por notas de Comercio
+                    <select class="e-input" @bind="V.CommercialNoteRecalculation">@foreach (var r in TextosDeCartera.Recalculos) { <option value="@r.Valor">@r.Texto</option> }</select>
+                </label>
+            }
+            <div class="campo campo-ancho">Formas de pago *
+                <div class="toolbar">
+                    @foreach (var f in TextosDeCartera.FormasDePago)
+                    {
+                        var valor = f.Valor;
+                        <label><input type="checkbox" checked="@V.PaymentForms.Contains(valor)" @onchange="@(e => Alternar(V.PaymentForms, valor, e.Value))" /> @f.Texto</label>
+                    }
+                </div>
+            </div>
+            <label class="campo">Forma por defecto
+                <select class="e-input" value="@(V.DefaultPaymentForm?.ToString() ?? "")" @onchange="@(e => V.DefaultPaymentForm = LeerEntero(e.Value))">
+                    <option value="">La primera</option>
+                    @foreach (var f in TextosDeCartera.FormasDePago.Where(f => V.PaymentForms.Contains(f.Valor))) { <option value="@f.Valor">@f.Texto</option> }
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Requisitos, cupo y aportes</h4>
+        <div class="form-grid">
+            <label class="campo">Antigüedad mínima como asociado (meses) <input class="e-input numero" type="number" min="0" @bind="V.Requirements.MinAssociateSeniorityMonths" /></label>
+            <label class="campo">Edad mínima <input class="e-input numero" type="number" min="0" @bind="V.Requirements.MinAge" /></label>
+            <label class="campo">Edad máxima <input class="e-input numero" type="number" min="0" @bind="V.Requirements.MaxAge" /></label>
+            <label class="campo-check"><input type="checkbox" @bind="V.Requirements.RequiresEmployment" /> Exige vínculo laboral</label>
+            <label class="campo">Veces los aportes <input class="e-input numero" type="number" min="0" step="0.01" @bind="V.CreditLimit.ContributionsMultiple" /></label>
+            <label class="campo">Endeudamiento máximo <input class="e-input numero" type="number" min="0" step="1" @bind="V.CreditLimit.MaxIndebtedness" /></label>
+            <label class="campo">Saldo mínimo de aportes <input class="e-input numero" type="number" min="0" step="1" @bind="V.CreditLimit.MinContributions" /></label>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h4>Seguros</h4>
+        <p class="texto-tenue">Un seguro cuya prima la cooperativa retiene en parte (o autoasegurado) computa para la usura.</p>
+        @foreach (var s in V.Insurances)
+        {
+            var seguro = s;
+            <div class="form-grid">
+                <label class="campo">Código * <input class="e-input" maxlength="10" @bind="seguro.Code" /></label>
+                <label class="campo">Nombre * <input class="e-input" maxlength="120" @bind="seguro.Name" /></label>
+                <div class="campo campo-ancho">Aseguradora * @(Aseguradora(seguro.InsurerPersonPublicId))
+                    <PersonSearchPicker ShowHelpText="false" Compacto="true" OnPersonSelected="@(p => ElegirAseguradora(seguro, p))" />
+                </div>
+                <label class="campo">Base
+                    <select class="e-input" @bind="seguro.Base">@foreach (var b in TextosDeCartera.BasesDeSeguro) { <option value="@b.Valor">@b.Texto</option> }</select>
+                </label>
+                <label class="campo">Tarifa por período (%)
+                    <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(seguro.Rate)" @onchange="@(e => seguro.Rate = LeerPct(e.Value) ?? 0m)" @onblur="SalioDeTasaAsync" />
+                </label>
+                <label class="campo">Periodicidad
+                    <select class="e-input" @bind="seguro.Periodicity">@foreach (var p in TextosDeCartera.Periodicidades) { <option value="@p.Valor">@p.Texto</option> }</select>
+                </label>
+                <label class="campo">Porcentaje retenido (%)
+                    <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(seguro.RetainedFraction)" @onchange="@(e => seguro.RetainedFraction = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                </label>
+                <label class="campo-check"><input type="checkbox" @bind="seguro.Mandatory" /> Obligatorio</label>
+                <label class="campo-check"><input type="checkbox" @bind="seguro.SelfInsured" /> Autoasegurado</label>
+                <label class="campo-check"><input type="checkbox" @bind="seguro.IsDebtorLifeInsurance" /> Vida deudores</label>
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => V.Insurances.Remove(seguro))">Quitar</SfButton>
+            </div>
+        }
+        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => V.Insurances.Add(new SeguroRequest()))">Agregar seguro</SfButton>
+    </div>
+
+    <div class="info-card">
+        <h4>Garantías</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Monto desde</th><th>Monto hasta</th><th>Plazo desde</th><th>Plazo hasta</th><th>Codeudores</th><th>Tipos admitidos</th><th>Cobertura mínima (%)</th><th>Aportes cuentan</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var g in V.CollateralRules)
+                    {
+                        var regla = g;
+                        <tr>
+                            <td><input class="e-input numero" type="number" min="0" step="1" @bind="regla.AmountFrom" /></td>
+                            <td><input class="e-input numero" type="number" min="0" step="1" @bind="regla.AmountTo" /></td>
+                            <td><input class="e-input numero" type="number" min="0" @bind="regla.TermFrom" /></td>
+                            <td><input class="e-input numero" type="number" min="0" @bind="regla.TermTo" /></td>
+                            <td><input class="e-input numero" type="number" min="0" @bind="regla.CoDebtors" /></td>
+                            <td>
+                                @foreach (var t in TextosDeCartera.Garantias)
+                                {
+                                    var valor = t.Valor;
+                                    <label class="campo-check"><input type="checkbox" checked="@regla.AdmittedKinds.Contains(valor)" @onchange="@(e => Alternar(regla.AdmittedKinds, valor, e.Value))" /> @t.Texto</label>
+                                }
+                            </td>
+                            <td><input class="e-input numero" type="number" step="0.01" min="0" value="@Pct(regla.MinCoverage)" @onchange="@(e => regla.MinCoverage = LeerPct(e.Value))" /></td>
+                            <td><input type="checkbox" @bind="regla.ContributionsCount" /></td>
+                            <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => V.CollateralRules.Remove(regla))" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => V.CollateralRules.Add(new ReglaDeGarantiaRequest()))">Agregar regla</SfButton>
+    </div>
+
+    <div class="info-card">
+        <h4>Documentos exigidos</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Obligatorio</th><th>Monto desde</th><th>Monto hasta</th><th>Deudor</th><th>Forma de pago</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var d in V.Documents)
+                    {
+                        var documento = d;
+                        <tr>
+                            <td><input class="e-input" maxlength="10" @bind="documento.Code" /></td>
+                            <td><input class="e-input" maxlength="120" @bind="documento.Name" /></td>
+                            <td><input type="checkbox" @bind="documento.Mandatory" /></td>
+                            <td><input class="e-input numero" type="number" min="0" step="1" @bind="documento.AmountFrom" /></td>
+                            <td><input class="e-input numero" type="number" min="0" step="1" @bind="documento.AmountTo" /></td>
+                            <td>
+                                <select class="e-input" value="@(documento.DebtorKind?.ToString() ?? "")" @onchange="@(e => documento.DebtorKind = LeerEntero(e.Value))">
+                                    <option value="">Cualquiera</option>
+                                    @foreach (var t in TextosDeCartera.TiposDeDeudor) { <option value="@t.Valor">@t.Texto</option> }
+                                </select>
+                            </td>
+                            <td>
+                                <select class="e-input" value="@(documento.PaymentForm?.ToString() ?? "")" @onchange="@(e => documento.PaymentForm = LeerEntero(e.Value))">
+                                    <option value="">Todas</option>
+                                    @foreach (var f in TextosDeCartera.FormasDePago) { <option value="@f.Valor">@f.Texto</option> }
+                                </select>
+                            </td>
+                            <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => V.Documents.Remove(documento))" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => V.Documents.Add(new DocumentoExigidoRequest()))">Agregar documento</SfButton>
+    </div>
+
+    <div class="info-card">
+        <h4>Concepto tributario del interés</h4>
+        <p class="texto-tenue">
+            Obligatorio en una línea que admite ventas de Comercio con tasa mayor que cero: sin él la línea no se activa. El soporte es el
+            concepto de la contadora, subido como adjunto de la línea.
+        </p>
+        <div class="form-grid">
+            <label class="campo">Concepto
+                <select class="e-input" value="@(V.InterestTaxConcept is null ? "" : V.InterestTaxConcept.Taxed ? "2" : "1")" @onchange="@(e => CambiarConcepto(e.Value?.ToString()))">
+                    <option value="">Sin concepto</option>
+                    <option value="1">Interés no gravado</option>
+                    <option value="2">Interés gravado</option>
+                </select>
+            </label>
+            @if (V.InterestTaxConcept is { } concepto)
+            {
+                @if (LineaId is { } linea)
+                {
+                    <label class="campo campo-ancho">Soporte
+                        <select class="e-input" value="@(concepto.SupportAttachmentPublicId?.ToString() ?? "")"
+                                @onchange="@(e => concepto.SupportAttachmentPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija el soporte…</option>
+                            @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName (@a.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy"))</option> }
+                        </select>
+                    </label>
+                    <div class="campo campo-ancho">
+                        <SubirSoporte OwnerEntityType="@LineasDeCreditoClient.DuenoDelSoporteTributario" OwnerEntityPublicId="@linea" OnSubido="@CargarSoportesAsync" />
+                    </div>
+                }
+                else
+                {
+                    <p class="aviso aviso-info campo-ancho">
+                        El soporte se sube a una línea que ya existe: registre la línea sin ventas de Comercio y agregue el concepto con su soporte en
+                        una versión nueva desde su detalle.
+                    </p>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public VersionDeLineaRequest V { get; set; } = new();
+
+    /// <summary>El catálogo nacional de modalidades vigente (lo lee la pantalla una vez).</summary>
+    [Parameter] public CatalogoDeModalidadesDto? Modalidades { get; set; }
+
+    /// <summary>La línea a la que se cuelga el soporte tributario; nula en el alta.</summary>
+    [Parameter] public Guid? LineaId { get; set; }
+
+    /// <summary>Los nombres de las aseguradoras que ya trae la versión de la que se parte.</summary>
+    [Parameter] public IReadOnlyDictionary<Guid, string>? NombresDeAseguradoras { get; set; }
+
+    /// <summary>Lo que la API rechazó al guardar, en español.</summary>
+    [Parameter] public IReadOnlyList<string>? Errores { get; set; }
+
+    /// <summary>Al salir de un campo de tasa: la pantalla consulta la usura (usury-check).</summary>
+    [Parameter] public EventCallback CampoDeTasaSalio { get; set; }
+
+    private readonly Dictionary<Guid, string> _aseguradoras = [];
+    private List<AdjuntoDto> _soportes = [];
+    private Guid? _soportesDe;
+
+    private ModalidadDto? Modalidad => Modalidades?.Modalities.FirstOrDefault(m => m.Code == V.ModalityCode);
+
+    private IReadOnlyList<string> Subsegmentos => Modalidad?.Subsegments ?? [];
+
+    private string? ClaveDeUsura =>
+        Modalidad?.Combinations.FirstOrDefault(c => c.SubsegmentCode == V.SubsegmentCode)?.UsuryKey ?? Modalidad?.UsuryKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (NombresDeAseguradoras is not null)
+            foreach (var (id, nombre) in NombresDeAseguradoras) _aseguradoras.TryAdd(id, nombre);
+        if (LineaId != _soportesDe)
+        {
+            _soportesDe = LineaId;
+            await CargarSoportesAsync();
+        }
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (LineaId is not { } linea) { _soportes = []; return; }
+        var r = await Adjuntos.ListarAsync(LineasDeCreditoClient.DuenoDelSoporteTributario, linea);
+        _soportes = r.IsSuccess && r.Value is not null ? [.. r.Value.Where(a => a.Disponible).OrderByDescending(a => a.CreatedAt)] : [];
+    }
+
+    private void CambiarModalidad(string? codigo)
+    {
+        V.ModalityCode = codigo ?? string.Empty;
+        V.SubsegmentCode = Subsegmentos.Count == 1 ? Subsegmentos[0] : null;
+    }
+
+    private void CambiarClaseDeTasa(int clase)
+    {
+        V.Rates.Current.Kind = clase;
+        if (clase == 2) { V.Rates.Variable ??= new TasaVariableRequest(); V.Rates.Current.EffectiveAnnual = null; }
+        else V.Rates.Variable = null;
+    }
+
+    private void CambiarConcepto(string? valor) =>
+        V.InterestTaxConcept = valor switch
+        {
+            "1" or "2" => new ConceptoTributarioRequest { Taxed = valor == "2", SupportAttachmentPublicId = V.InterestTaxConcept?.SupportAttachmentPublicId },
+            _ => null,
+        };
+
+    private void ElegirAseguradora(SeguroRequest seguro, PersonSearchPicker.PersonSearchItem persona)
+    {
+        seguro.InsurerPersonPublicId = persona.PublicId;
+        _aseguradoras[persona.PublicId] = persona.FullName;
+    }
+
+    private string Aseguradora(Guid id) =>
+        id == Guid.Empty ? "(sin elegir)" : _aseguradoras.TryGetValue(id, out var nombre) ? nombre : "(elegida)";
+
+    private Task SalioDeTasaAsync() => CampoDeTasaSalio.InvokeAsync();
+
+    private static void Alternar(List<int> lista, int valor, object? marcado)
+    {
+        if (marcado is true) { if (!lista.Contains(valor)) lista.Add(valor); }
+        else lista.Remove(valor);
+    }
+
+    /// <summary>Una fracción en puntos para el campo (0,245 → «24.5»).</summary>
+    private static string Pct(decimal? fraccion) => fraccion is { } f ? (f * 100m).ToString("0.######", CultureInfo.InvariantCulture) : "";
+
+    /// <summary>Puntos digitados a fracción, con a lo sumo seis decimales.</summary>
+    private static decimal? LeerPct(object? valor) => LeerDecimal(valor) is { } p ? Math.Round(p / 100m, 6) : null;
+
+    private static decimal? LeerDecimal(object? valor) =>
+        decimal.TryParse(valor?.ToString()?.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private static int? LeerEntero(object? valor) => int.TryParse(valor?.ToString(), out var n) ? n : null;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

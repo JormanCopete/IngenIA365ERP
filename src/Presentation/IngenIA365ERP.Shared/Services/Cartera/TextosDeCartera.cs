@@ -283,4 +283,80 @@ public static class TextosDeCartera
         7 => "K6b",
         _ => $"K{Numero(v)}",
     };
+
+    // ------------------------------------------------------------------------------------- líneas de crédito (US1) --
+
+    public static IReadOnlyList<(int Valor, string Texto)> EstadosDeLinea { get; } = [(1, "Borrador"), (2, "Activa"), (3, "Cerrada")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeTasa { get; } = [(1, "Fija"), (2, "Variable")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeMora { get; } = [(1, "Fija (EA)"), (2, "Relativa a la corriente")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Convenciones { get; } = [(1, "30/360"), (2, "Real/365"), (3, "Real/360")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Equivalencias { get; } = [(1, "Compuesta"), (2, "Lineal")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Sistemas { get; } = [(1, "Cuota fija"), (2, "Abono constante a capital"), (3, "Pago único")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Periodicidades { get; } =
+    [
+        (0, "Pago único"), (7, "Semanal"), (10, "Decadal"), (15, "Quincenal"), (30, "Mensual"), (60, "Bimestral"), (90, "Trimestral"),
+        (180, "Semestral"), (360, "Anual"),
+    ];
+
+    public static IReadOnlyList<(int Valor, string Texto)> FormasDePago { get; } =
+        [(1, "Caja"), (2, "Nómina propia"), (3, "Libranza (pagaduría)"), (4, "Débito automático")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeGracia { get; } = [(0, "Sin gracia"), (1, "A capital"), (2, "Total")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> InteresesEnGracia { get; } = [(1, "En la primera cuota"), (2, "Distribuido")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ModosDeRedondeo { get; } =
+        [(1, "Al más cercano"), (2, "Al par"), (3, "Hacia arriba"), (4, "Hacia abajo")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> MomentosDeRedondeo { get; } = [(1, "Por concepto"), (2, "Por cuota"), (3, "Por total")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Prelaciones { get; } = [(1, "Cuota más antigua primero"), (2, "Concepto primero")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> Recalculos { get; } = [(1, "Reducir el plazo"), (2, "Reducir la cuota")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> TiposDeDeudor { get; } = [(1, "Asociado"), (2, "Cliente")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> BasesDeSeguro { get; } = [(1, "Saldo"), (2, "Monto inicial")];
+
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeEquivalencia { get; } = [(1, "Periodicidad"), (2, "Unidad de plazo")];
+
+    public static string EstadoDeLinea(int v) => De(EstadosDeLinea, v);
+
+    public static string ClaseDeTasa(int v) => De(ClasesDeTasa, v);
+
+    public static string ClaseDeMora(int v) => De(ClasesDeMora, v);
+
+    public static string Convencion(int v) => De(Convenciones, v);
+
+    public static string Sistema(int v) => De(Sistemas, v);
+
+    public static string Periodicidad(int v) => De(Periodicidades, v);
+
+    public static string FormaDePago(int v) => De(FormasDePago, v);
+
+    public static string ClaseDeGracia(int v) => De(ClasesDeGracia, v);
+
+    public static string TipoDeDeudor(int? v) => v is { } x ? De(TiposDeDeudor, x) : "Cualquiera";
+
+    public static string BaseDeSeguro(int v) => De(BasesDeSeguro, v);
+
+    public static string ClaseDeEquivalencia(int v) => De(ClasesDeEquivalencia, v);
+
+    /// <summary>«Manual» o «Modalidad retirada del catálogo nacional».</summary>
+    public static string MotivoDeCierreDeLinea(int? v) => v switch
+    {
+        1 => "Cierre manual",
+        2 => "Modalidad retirada del catálogo nacional",
+        _ => "",
+    };
+
+    /// <summary>Una lista de valores de un catálogo, separados por coma.</summary>
+    public static string Lista(IReadOnlyList<(int Valor, string Texto)> catalogo, IEnumerable<int> valores) =>
+        string.Join(", ", valores.Select(v => De(catalogo, v)));
 }

@@ -19,11 +19,16 @@ namespace IngenIA365ERP.Application.Common.NationalValues;
 /// <para>Las alertas (<c>Cartera.ValorNacionalFaltante</c>, <c>Cartera.IndiceDesactualizado</c>) se levantan con
 /// <see cref="IAlertas"/>, que guarda: se llama donde no hay otros cambios pendientes o donde el faltante aborta lo que se hacía.
 /// Sin <see cref="IAlertas"/> (pruebas, semillas) sólo se anotan en el log. (nuevo)</para>
+///
+/// <para>Feature 013, US1-3 (T0344): dentro de una operación idempotente la alerta se <b>encola</b> en <see cref="AlertasDiferidas"/> y la
+/// levanta <c>IdempotencyBehavior</c> al terminar, fuera de la transacción: el faltante suele hacer fallar el comando, y la alerta guardada
+/// adentro se revertía con él.</para>
 /// </summary>
 public sealed class LectorDeValoresNacionales(
     IApplicationDbContext db,
     IAlertas? alertas = null,
-    ILogger<LectorDeValoresNacionales>? logger = null) : IValoresNacionales
+    ILogger<LectorDeValoresNacionales>? logger = null,
+    AlertasDiferidas? diferidas = null) : IValoresNacionales
 {
     private readonly ILogger _logger = logger ?? (ILogger)NullLogger.Instance;
 
@@ -108,6 +113,11 @@ public sealed class LectorDeValoresNacionales(
 
     private async Task LevantarAsync(AlertaALevantar alerta, CancellationToken ct)
     {
+        if (alertas is not null && diferidas is { Activa: true })
+        {
+            diferidas.Encolar(alerta);
+            return;
+        }
         if (alertas is null)
         {
             _logger.LogWarning("[ValoresNacionales.Alerta] {Tipo}: {Cuerpo}", alerta.TypeCode, alerta.Body);

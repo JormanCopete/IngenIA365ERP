@@ -31,9 +31,11 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// un no miembro no vota; <c>secretaria</c> registra votos de otros y <c>comite.2</c> sólo el propio; voto de reemplazo; el PDF de una sesión
 /// abierta es el borrador; la fracción de vinculados 3/4 en una cooperativa con actividad financiera → <c>Lending.Parameter.BelowLegalFloor</c>.</item>
 /// <item>US17-3, SC-014: un evento <c>Lending.*</c> alterado y otro borrado en el Mongo del contenedor salen <c>Altered</c> y <c>Deleted</c>.</item>
+/// <item>US1 (T0343): el alcance por línea. <c>asesor.o1</c> opera <c>CONLIB</c>, <c>CONCAJA</c> y <c>ROTATIVO</c>: la lista no le muestra
+/// <c>VARIBR</c> y por URL recibe el 404 genérico, con <c>Lending.Access.OutOfScope</c> en la auditoría.</item>
 /// </list>
-/// Lo que necesita créditos (US17-1 por desembolso, US17-4 en el archivo de centrales, US17-5 con una obligación viva, el alcance por línea
-/// de <c>asesor.o1</c>) lo suman a esta clase las fases de US1, US2, US3, US16 y del contrato de obligaciones, nunca con <c>Skip</c>. (nuevo)
+/// Lo que necesita créditos (US17-1 por desembolso, US17-4 en el archivo de centrales, US17-5 con una obligación viva) lo suman a esta clase
+/// las fases de US2, US3, US16 y del contrato de obligaciones, nunca con <c>Skip</c>. (nuevo)
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture fx)
@@ -258,6 +260,42 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
         acta.GetProperty("status").GetInt32().Should().Be((int)SessionStatus.Closed);
         acta.GetProperty("number").GetString().Should().StartWith("CC-");
         acta.GetProperty("items").EnumerateArray().Single().GetProperty("outcome").GetInt32().Should().Be((int)CreditDecisionOutcome.Approve);
+    }
+
+    // ---------------------------------------------------------------------------------- alcance por línea (US1) --
+
+    [Fact]
+    public async Task Asesor_o1_no_ve_una_linea_fuera_de_su_alcance_y_por_URL_recibe_el_404_generico()
+    {
+        var esc = await EscenarioAsync();
+        using var http = fx.CreateClient();
+        var lineas = await LineasE2E.LineasDelEnsayoAsync(fx, esc.Coop);
+        var asesor = esc.Usuarios.AsesorO1;
+        await UsuariosDeCartera.FijarLineasAsync(http, esc.Coop.TokenAdmin, asesor, lineas["CONLIB"], lineas["CONCAJA"], lineas["ROTATIVO"]);
+        var desde = DateTime.UtcNow.AddMinutes(-1);
+
+        var vistas = (await CarteraE2E.GetAsync(http, asesor.Token, LineasE2E.Lineas)).EnumerateArray()
+            .Select(l => l.GetProperty("code").GetString()).ToList();
+        vistas.Should().BeEquivalentTo(["CONLIB", "CONCAJA", "ROTATIVO"], "sólo las líneas de su alcance");
+        (await CarteraE2E.GetAsync(http, asesor.Token, $"{LineasE2E.Lineas}/{lineas["CONLIB"]}")).GetProperty("code").GetString().Should().Be("CONLIB");
+
+        var fuera = await CarteraE2E.MandarGetAsync(http, asesor.Token, $"{LineasE2E.Lineas}/{lineas["VARIBR"]}");
+        fuera.StatusCode.Should().Be(HttpStatusCode.NotFound, await fuera.Content.ReadAsStringAsync());
+        var inexistente = await CarteraE2E.MandarGetAsync(http, asesor.Token, $"{LineasE2E.Lineas}/{Guid.NewGuid()}");
+        inexistente.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await CarteraE2E.CodigoDeErrorAsync(fuera)).Should().Be(await CarteraE2E.CodigoDeErrorAsync(inexistente),
+            "fuera del alcance es el mismo 404 que una línea que no existe (Lending.CreditLine.NotFound, api.md §3.1)");
+        var usura = await CarteraE2E.EnviarAsync(http, asesor.Token, HttpMethod.Post, $"{LineasE2E.Lineas}/{lineas["VARIBR"]}/usury-check", new { });
+        usura.StatusCode.Should().Be(HttpStatusCode.NotFound, "la consulta de usura tampoco la revela");
+
+        var eventos = await EventosAsync(http, esc, desde);
+        eventos.Should().Contain(e => Texto(e, "action") == "Lending.Access.OutOfScope"
+                                      && Texto(e, "userName")!.Contains("asesor.o1", StringComparison.OrdinalIgnoreCase),
+            "el intento fuera de alcance queda auditado aunque responda 404");
+
+        // El administrador las ve todas.
+        (await CarteraE2E.GetAsync(http, esc.Coop.TokenAdmin, LineasE2E.Lineas)).EnumerateArray().Select(l => l.GetProperty("code").GetString())
+            .Should().Contain(["CONLIB", "CONCAJA", "ROTATIVO", "VARIBR"]);
     }
 
     // ------------------------------------------------------------------------------------- integridad --

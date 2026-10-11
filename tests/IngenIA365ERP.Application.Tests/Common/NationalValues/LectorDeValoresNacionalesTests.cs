@@ -72,6 +72,27 @@ public class LectorDeValoresNacionalesTests
     }
 
     [Fact]
+    public async Task Dentro_de_una_operacion_idempotente_el_faltante_se_encola_para_levantarse_al_terminar()
+    {
+        // Feature 013, US1-3 (T0344): la alerta guardada dentro de la transacción del comando se revertía con él.
+        var diferidas = new AlertasDiferidas();
+        diferidas.Abrir();
+
+        var r = await new LectorDeValoresNacionales(_db, _alertas, diferidas: diferidas)
+            .LeerAsync(CodigosDeValorNacional.Usura, "MICROCREDITO", new DateOnly(2026, 12, 1));
+
+        r.Error.Code.Should().Be(ErroresDeValoresNacionales.MissingCode);
+        _levantadas.Should().BeEmpty("no se guarda en la transacción de la operación");
+        diferidas.Cerrar();
+        diferidas.Tomar().Should().ContainSingle().Which.TypeCode.Should().Be(AlertasDeValoresNacionales.ValorNacionalFaltante);
+
+        // Fuera de una operación (la cola inactiva) se levanta en el acto, como antes.
+        await new LectorDeValoresNacionales(_db, _alertas, diferidas: diferidas)
+            .LeerAsync(CodigosDeValorNacional.Usura, "MICROCREDITO", new DateOnly(2026, 12, 2));
+        _levantadas.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task El_ultimo_indice_publicado_se_devuelve_y_si_es_viejo_alerta_IndiceDesactualizado()
     {
         await CopiasDePrueba.SembrarAsync(_db, PrimeraReplica,

@@ -199,6 +199,8 @@ public static class DependencyInjection
         // Feature 012 (T39, T093-T094): levantar y atender alertas, y qué alertas alcanzan a quien pregunta. Los
         // destinatarios por permiso (IDestinatariosPorPermiso) los resuelve la API. Adelanto de T096.
         services.AddScoped<Common.Alerts.IAlertas, Common.Alerts.Alertas>();
+        // Feature 013 (US1-3): las alertas que sobreviven a la operación que las descubre (las levanta IdempotencyBehavior al terminar).
+        services.AddScoped<Common.Alerts.AlertasDiferidas>();
         // Feature 013 (C68, T0090): el alcance de Cartera sobre los destinatarios; hasta US17 no filtra.
         services.TryAddScoped<Common.Alerts.IFiltroDeAlcanceDeAlertas, Common.Alerts.SinFiltroDeAlcanceDeAlertas>();
         services.AddScoped<Common.Alerts.VisibilidadDeAlertas>();

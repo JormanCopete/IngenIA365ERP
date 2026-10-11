@@ -93,6 +93,7 @@ namespace IngenIA365ERP.App
             // Feature 013, fase 4 (T0315, T0310): gobierno, configuración y mensajes al deudor de Cartera.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GobiernoDeCarteraClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ConfiguracionDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LineasDeCreditoClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesAlDeudorClient>();
             builder.Services.AddSingleton<IImpresionDeDocumentos, ImpresionNativa>();
             // Feature 012, US7 (T532): el lado contable de la integración con Inventario; misma salvedad (CentralAuthClient, verificacion de MAUI).
