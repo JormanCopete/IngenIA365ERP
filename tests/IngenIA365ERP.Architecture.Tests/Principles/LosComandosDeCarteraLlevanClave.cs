@@ -27,12 +27,14 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/ParametersEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/DebtorMessagesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/MessageTemplatesEndpoints.cs",
+        // US1 (T0341): líneas, versiones, cierre, reapertura, borrado, puntaje, equivalencias e importación.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CreditLinesEndpoints.cs",
     ];
 
     /// <summary>
     /// Las escrituras que van sin clave (api.md §1.5): las consultas por POST por el tamaño del cuerpo. Se nombran por el final de la ruta.
     /// </summary>
-    private static readonly string[] ConsultasPorPost = ["\"/preview\""];
+    private static readonly string[] ConsultasPorPost = ["\"/preview\"", "/usury-check\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -61,6 +63,15 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Collections.SendDebtorMessageCommand),
         typeof(IngenIA365ERP.Application.Lending.Collections.CancelDebtorMessageCommand),
         typeof(IngenIA365ERP.Application.Lending.Collections.CreateMessageTemplateVersionCommand),
+        // US1 (T0341).
+        typeof(IngenIA365ERP.Application.Lending.Configuration.CreateCreditLineCommand),
+        typeof(IngenIA365ERP.Application.Lending.Configuration.AddCreditLineVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Configuration.CloseCreditLineCommand),
+        typeof(IngenIA365ERP.Application.Lending.Configuration.ReopenCreditLineCommand),
+        typeof(IngenIA365ERP.Application.Lending.Configuration.DeleteCreditLineCommand),
+        typeof(IngenIA365ERP.Application.Lending.Configuration.SetCreditLineScoringCommand),
+        typeof(IngenIA365ERP.Application.Lending.Configuration.SetCommercialTermEquivalencesCommand),
+        typeof(IngenIA365ERP.Application.Lending.Imports.ImportCreditLinesCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

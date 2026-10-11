@@ -132,6 +132,8 @@ public static class DependencyInjection
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.ReglaDePerdidaEsperada);
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Payroll.NationalValues.EfectoDeReplicacionEnNomina>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Common.NationalValues.EfectoDeReplicacionLimitesLegales>();
+        // Feature 013, US1 (T0357): una usura o un catálogo de modalidades nuevos bloquean o cierran las líneas que ya no los respetan.
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Configuration.EfectoDeReplicacionUsuraEnLineas>();
         services.AddScoped<Common.NationalValues.ReplicacionDeValoresNacionales>();
         services.AddScoped<Common.NationalValues.IValoresNacionales, Common.NationalValues.LectorDeValoresNacionales>();
         services.AddScoped<Common.NationalValues.INormativaVigente, Common.NationalValues.LectorDeDocumentoNormativo>();
@@ -222,6 +224,12 @@ public static class DependencyInjection
         // que la ley fija sobre los vinculados, los asuntos de acta por sujeto (cada historia registra el suyo; dos con el mismo sujeto no
         // arman el registro), la validación única del punto de acta cerrado, el voto presencial y el PDF del acta (la API registra el de
         // QuestPDF, T0297; sin él el acta se cierra sin adjunto)—.
+        // Feature 013, US1 (T0352–T0355): las reglas únicas de una versión de línea, su único escritor, el lector a (D, R) de la versión
+        // vigente y el de las equivalencias de Comercial a la fecha de la venta.
+        services.AddScoped<Lending.Configuration.ReglasDeLineaDeCredito>();
+        services.AddScoped<Lending.Configuration.AltaDeVersionDeLinea>();
+        services.AddScoped<Lending.Configuration.VersionVigenteDeLinea>();
+        services.AddScoped<Lending.Configuration.EquivalenciasDeComercio>();
         services.AddScoped<Lending.Attributions.MatrizVigenteDeAtribuciones>();
         services.AddScoped<Lending.Attributions.VinculadosVigentes>();
         services.AddScoped<Lending.Attributions.AltaDeVinculados>();

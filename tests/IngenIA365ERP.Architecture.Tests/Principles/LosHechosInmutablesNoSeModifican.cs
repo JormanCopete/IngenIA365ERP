@@ -285,6 +285,21 @@ public class LosHechosInmutablesNoSeModifican
         }
     }
 
+    /// <summary>
+    /// US1 (T0341; C42): la versión de una línea con sus cuatro hijas y las equivalencias de Comercial son hechos sin escritura única: se
+    /// corrigen con una versión nueva (la anterior rige hasta la víspera), nunca editándolas.
+    /// </summary>
+    [Fact]
+    public void Las_versiones_de_lineas_sus_hijas_y_las_equivalencias_estan_en_la_lista()
+    {
+        foreach (var nombre in new[] { "CreditLineVersion", "CreditLineRateBand", "CreditLineDocumentRequirement", "CreditLineInsurance",
+                     "CreditLineCollateralRule", "CommercialTermEquivalence" })
+        {
+            Assert.True(HechosDeCartera.TryGetValue(nombre, out var declaradas), $"{nombre} no está en HechosDeCartera (T0341).");
+            Assert.Empty(declaradas);
+        }
+    }
+
     [Fact]
     public void Application_no_borra_ni_actualiza_en_bloque_los_hechos_de_Cartera()
     {
@@ -300,6 +315,11 @@ public class LosHechosInmutablesNoSeModifican
         Assert.Contains("CreditDecisions", conjuntos);
         Assert.Contains("SessionVotes", conjuntos);
         Assert.Contains("LendingActivations", conjuntos);
+        // US1 (T0341): las versiones de líneas, sus hijas y las equivalencias de Comercial.
+        Assert.Contains("CreditLineVersions", conjuntos);
+        Assert.Contains("CreditLineRateBands", conjuntos);
+        Assert.Contains("CreditLineInsurances", conjuntos);
+        Assert.Contains("CommercialTermEquivalences", conjuntos);
     }
 
     private static readonly Regex SetPublico =new(@"public\s+[^;{=]+\{\s*get;\s*set;", RegexOptions.Compiled);

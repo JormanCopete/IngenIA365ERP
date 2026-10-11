@@ -28,6 +28,10 @@ public class TextosDeCarteraTests
     [
         "Core/IngenIA365ERP.Application/Lending/Common/ErroresDeGobierno.cs",
         "Core/IngenIA365ERP.Application/Lending/Collections/ErroresDeMensajesAlDeudor.cs",
+        // US1 (T0341): líneas, usura, puntaje y equivalencias; y lo que alerta la réplica.
+        "Core/IngenIA365ERP.Application/Lending/Configuration/ErroresDeLineasDeCredito.cs",
+        "Core/IngenIA365ERP.Application/Lending/Configuration/EfectoDeReplicacionUsuraEnLineas.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Scoring/ModeloDePuntaje.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

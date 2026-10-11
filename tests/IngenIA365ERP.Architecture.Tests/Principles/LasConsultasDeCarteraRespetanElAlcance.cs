@@ -29,6 +29,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US17 (T0273): la cola de mensajes al deudor y la vista previa de una plantilla con un crédito de ejemplo.
         "Core/IngenIA365ERP.Application/Lending/Collections/DebtorMessageQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Collections/MessageTemplateQueries.cs",
+        // US1 (T0341): las líneas son el eje del alcance por línea. La lista filtra por PorLinea; el detalle, la versión, la consulta de usura
+        // y el puntaje de una línea fuera del alcance responden el 404 de la línea (ConsultasDeLineas.LineaEnAlcanceAsync).
+        "Core/IngenIA365ERP.Application/Lending/Configuration/CreditLineQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Configuration/CreditLineScoringCommands.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -55,6 +59,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListMigrationLoadsQuery"] = "la carga de migración es de toda la cooperativa",
         ["GetMigrationLoadQuery"] = "la carga de migración es de toda la cooperativa",
         ["GetLendingActivationStatusQuery"] = "la activación es de toda la cooperativa",
+        // US1 (T0341): lo nacional y lo de la cooperativa que no es de una línea.
+        ["ListModalitiesQuery"] = "documento nacional CatalogoDeModalidades: sin oficina ni línea",
+        ["ListCommercialTermEquivalencesQuery"] = "equivalencias de Comercial: son de la cooperativa, no de una línea",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);
@@ -66,6 +73,25 @@ public class LasConsultasDeCarteraRespetanElAlcance
     {
         var faltantes = ReglaSobreFuente.Faltantes(ReglaSobreFuente.ArchivosNombrados(Archivos), Requerido);
         ReglaSobreFuente.SinInfracciones(faltantes, "Una consulta de Cartera no filtra por el alcance (SC-015)");
+    }
+
+    /// <summary>
+    /// US1 (T0341): la lista de líneas filtra en silencio por la línea (<c>PorLinea</c>) y el detalle, la versión, la consulta de usura y el
+    /// puntaje pasan por la guarda que responde el 404 de la línea fuera del alcance.
+    /// </summary>
+    [Fact]
+    public void Las_consultas_de_lineas_filtran_por_la_linea_o_responden_el_404_de_la_linea()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var consultas = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Configuration", "CreditLineQueries.cs"));
+        var puntaje = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Configuration", "CreditLineScoringCommands.cs"));
+        var comunes = FuenteSinComentarios.Leer(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Configuration", "CreditLineCommands.cs"));
+
+        Assert.Matches(@"class ListCreditLinesQueryHandler[\s\S]*?\.PorLinea\(alcance", consultas);
+        foreach (var handler in new[] { "GetCreditLineQueryHandler", "GetCreditLineVersionQueryHandler", "CheckCreditLineUsuryQueryHandler" })
+            Assert.Matches($@"class {handler}[\s\S]*?LineaEnAlcanceAsync\(", consultas);
+        Assert.Matches(@"class GetCreditLineScoringQueryHandler[\s\S]*?LineaEnAlcanceAsync\(", puntaje);
+        Assert.Matches(@"LineaEnAlcanceAsync[\s\S]*?AsegurarAsync\(null, linea\.Id, ErroresDeLineasDeCredito\.LineaInexistente\(\)", comunes);
     }
 
     [Fact]
