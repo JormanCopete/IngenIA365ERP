@@ -23,7 +23,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <item>T0238 (pendiente de la fase 3): el administrador ve en <c>/api/admin/permissions/mine</c> el catálogo <c>Lending.*</c> menos lo que
 /// se le excluye (<c>Lending.Decisions.*</c>, <c>Lending.Sessions.Vote</c>; C86) y <c>/api/admin/roles/templates?module=Lending</c> devuelve
 /// las trece plantillas.</item>
-/// <item>US17-1 (sin desembolso): <c>lectura</c> recibe 404 en las escrituras de gobierno y queda <c>Lending.Access.Denied</c>.</item>
+/// <item>US17-1: <c>lectura</c> recibe 404 en las escrituras de gobierno y queda <c>Lending.Access.Denied</c>; US3 (bloque 7C) suma el
+/// desembolso, las órdenes de giro, la anulación del crédito, el archivo de desembolsos, las garantías y el pagaré.</item>
 /// <item>US17-2: <c>revisor</c> lee matrices, órganos, actas y vinculados —la lectura del acta deja <c>Lending.Session.Viewed</c>— y toda
 /// escritura le responde 404 (el voto, que se abre con <c>Sessions.Read</c>, 422 <c>Lending.Permission.Required</c>, api.md §1.4).</item>
 /// <item>F9: un comando con un campo inválido queda <c>Lending.Request.Rejected</c> con campos y códigos, sin valores.</item>
@@ -81,6 +82,48 @@ public sealed class SeguridadYHabeasDataDeCarteraTests(CentralIdentityApiFixture
 
     /// <summary>El tamaño del catálogo <c>Lending.*</c> de <c>LendingPermissionCatalogSeeder</c> (contracts/api.md §2.1).</summary>
     private const int CatalogoDeCartera = 123;
+
+    /// <summary>
+    /// US17-1 por desembolso (US3, bloque 7C): <c>lectura</c> no desembolsa, no anula órdenes ni créditos, no genera archivos de desembolsos ni
+    /// registra garantías o pagarés: el filtro de permisos responde el 404 genérico antes del handler y cada intento queda
+    /// <c>Lending.Access.Denied</c>. Tampoco ve las órdenes ni los archivos.
+    /// </summary>
+    [Fact]
+    public async Task Lectura_no_desembolsa_ni_anula_giros_ni_genera_archivos_y_queda_Lending_Access_Denied()
+    {
+        var esc = await EscenarioAsync();
+        using var http = fx.CreateClient();
+        var desde = DateTime.UtcNow.AddMinutes(-1);
+        var lectura = esc.Usuarios.Lectura.Token;
+        var cualquiera = Guid.NewGuid();
+
+        List<(string Ruta, object Cuerpo)> escrituras =
+        [
+            ("/api/lending/disbursements", new { applicationPublicId = cualquiera, form = "Check" }),
+            ($"/api/lending/disbursement-orders/{cualquiera}/void", new { reason = "Intento sin permiso" }),
+            ($"/api/lending/disbursement-orders/{cualquiera}/reissue", new { form = "Check", reason = "Intento sin permiso" }),
+            ($"/api/lending/loans/{cualquiera}/void", new { reason = "Intento sin permiso" }),
+            ("/api/lending/disbursement-files", new { formatPublicId = cualquiera, sourceAccountPublicId = cualquiera, orderPublicIds = new[] { cualquiera } }),
+            ("/api/lending/collaterals", new { ownerKind = "Application", ownerPublicId = cualquiera, kind = "Pledge", description = "Vehículo", value = 1_000_000m }),
+            ("/api/lending/promissory-notes", new { ownerKind = "Application", ownerPublicId = cualquiera, form = "Physical" }),
+        ];
+        foreach (var (ruta, cuerpo) in escrituras)
+        {
+            var resp = await CarteraE2E.ConClaveAsync(http, lectura, HttpMethod.Post, ruta, cuerpo);
+            resp.StatusCode.Should().Be(HttpStatusCode.NotFound, $"{ruta}: «{await resp.Content.ReadAsStringAsync()}»");
+            (await CarteraE2E.CodigoDeErrorAsync(resp)).Should().Be("Generic.NotFound");
+        }
+        foreach (var ruta in new[] { "/api/lending/disbursement-files", "/api/lending/disbursement-orders" })
+        {
+            var resp = await CarteraE2E.MandarGetAsync(http, lectura, ruta);
+            if (ruta.EndsWith("files", StringComparison.Ordinal))
+                resp.StatusCode.Should().Be(HttpStatusCode.NotFound, "los archivos de desembolsos sólo los ve quien los genera");
+        }
+
+        var denegados = (await EventosAsync(http, esc, desde)).Where(e => Texto(e, "action") == "Lending.Access.Denied"
+            && Texto(e, "userName")?.Contains("lectura", StringComparison.OrdinalIgnoreCase) == true).ToList();
+        denegados.Count.Should().BeGreaterThanOrEqualTo(escrituras.Count, "cada intento sin permiso queda auditado antes del 404");
+    }
 
     // -------------------------------------------------------------------------------------- US17-1 y US17-2 --
 

@@ -302,7 +302,11 @@ public static class VistaDeMensajes
     {
         var rutaDelLote = rutaDelLoteResumido ?? (lote => $"/contabilidad/inventario/lotes/{lote:D}");
         if (entregas.Count == 0) return [];
-        var conConsumidor = destinos.Select(d => d.Destino).ToHashSet(StringComparer.Ordinal);
+        // Disponible = hay en el despliegue un consumidor del destino que acepta ese tipo y versión (feature 013, US3: DestinoCartera consume
+        // ResultadoDelGiro desde K1, pero las ventas a crédito de Comercial siguen sin consumidor hasta US6 y la bandeja lo sigue diciendo).
+        var consumidores = destinos.ToList();
+        bool Disponible(string destino, string tipo, short version) =>
+            consumidores.Any(d => string.Equals(d.Destino, destino, StringComparison.Ordinal) && d.Acepta(tipo, version));
 
         var loteIds = entregas.Where(e => e.BatchId != null).Select(e => e.BatchId!.Value).Distinct().ToList();
         var lotes = loteIds.Count == 0
@@ -347,7 +351,7 @@ public static class VistaDeMensajes
                 m.PrevalidationOutcome,
                 bloqueos.Where(b => b.MessageId == e.MessageId && b.Destination == e.Destination)
                     .Select(b => new BloqueoDelMensajeDto(b.PublicId, b.Type, b.Status)).ToList(),
-                conConsumidor.Contains(e.Destination),
+                Disponible(e.Destination, m.Type, m.Version),
                 null);
         }).ToList();
     }

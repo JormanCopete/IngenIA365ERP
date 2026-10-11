@@ -13,8 +13,10 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// Corre por <c>IEjecutorEnCooperativa</c> con el actor «Proceso de integración» y nunca usa los permisos del usuario de origen (I-2).
 ///
 /// <para>
-/// <b>Registro</b>: queda para el bloque 7C, junto con las rutas y las e2e. Registrarlo ya haría que el despachador consuma las ventas a crédito de
-/// Comercial que hoy se saltan (no hay consumidor de <c>Lending</c>) y las rechace por versión antes de que US6 traiga su familia. (nuevo)
+/// <b>Registro</b> (bloque 7C): en <c>AddApplication</c>. El destino <c>Lending</c> sólo cuenta cuando este consumidor acepta todo lo que adopta la
+/// fila <c>CAR</c> del registro (<c>RegistroDeIntegracion.ImplementacionDisponible</c>); la semilla la deja adoptando también
+/// <c>VentaACreditoRegistrada</c> v1/v2 y <c>AjusteDeVentaACredito</c> v1, que llegan con US6. Hasta entonces el despachador no le entrega nada
+/// —ni las ventas a crédito de Comercial, que siguen esperando sin intentos ni rechazos, ni el <c>ResultadoDelGiro</c>—. (nuevo)
 /// </para>
 /// </summary>
 public sealed class DestinoCartera(ISender sender, ILogger<DestinoCartera> logger) : IDestinoDeMensajes

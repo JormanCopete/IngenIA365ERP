@@ -71,6 +71,31 @@ public class ListIntegrationMessagesQueryTests
         (await Listar(new(Destination: IntegrationDestinations.Lending))).Value.Messages.Items.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Feature 013, US3 (bloque 7C): con <c>DestinoCartera</c> registrado, el destino <c>Lending</c> está disponible sólo para lo que acepta
+    /// (<c>ResultadoDelGiro</c> v1); la venta a crédito de Comercial sigue «no disponible» hasta US6.
+    /// </summary>
+    [Fact]
+    public async Task Con_DestinoCartera_Lending_esta_disponible_solo_para_lo_que_acepta()
+    {
+        var giro = _b.Mensaje(tipo: "ResultadoDelGiro", clave: $"Confirmation:{Guid.NewGuid():N}");
+        _b.Entrega(giro, destino: IntegrationDestinations.Lending, modo: DeliveryMode.Always);
+        var credito = _b.Mensaje(tipo: "VentaACreditoRegistrada", clave: $"Confirmation:{Guid.NewGuid():N}");
+        _b.Entrega(credito, destino: IntegrationDestinations.Lending, modo: DeliveryMode.Always);
+        IDestinoDeMensajes[] destinos =
+        [
+            new DestinoFalso(IntegrationDestinations.Accounting),
+            new Application.Lending.Integration.DestinoCartera(Substitute.For<MediatR.ISender>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Application.Lending.Integration.DestinoCartera>.Instance),
+        ];
+
+        var filas = (await new ListIntegrationMessagesQueryHandler(_b.Db, Vistas(), destinos).Handle(new ListIntegrationMessagesQuery(), default))
+            .Value.Messages.Items;
+
+        filas.Single(m => m.MessagePublicId == giro.PublicId).DestinationAvailable.Should().BeTrue();
+        filas.Single(m => m.MessagePublicId == credito.PublicId).DestinationAvailable.Should().BeFalse("la familia de Comercial llega con US6");
+    }
+
     [Fact]
     public async Task BlockedBy_dice_a_quien_espera_y_Lending_no_esta_disponible()
     {

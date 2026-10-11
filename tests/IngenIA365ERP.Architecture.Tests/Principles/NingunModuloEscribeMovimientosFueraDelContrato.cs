@@ -91,4 +91,21 @@ public class NingunModuloEscribeMovimientosFueraDelContrato
             "en la misma escritura que contabiliza, y su RowVersion convierte una carrera en reintento):\n  " +
             string.Join("\n  ", infractores));
     }
+
+    /// <summary>
+    /// Feature 013, US3 (T0428): el desembolso de Cartera no arma comprobantes ni toma el consecutivo contable: emite
+    /// <c>CreditoDesembolsado</c> y Contabilidad contabiliza; sus números (<c>CR-</c>, <c>DS-</c>, <c>OG-</c>, <c>ARD-</c>) los da
+    /// <c>NumeradorDeCartera</c>. La carpeta existe: la regla no vigila un fantasma.
+    /// </summary>
+    [Fact]
+    public void El_desembolso_de_Cartera_no_numera_ni_escribe_comprobantes()
+    {
+        var carpeta = Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Lending", "Disbursements");
+        Assert.True(Directory.Exists(carpeta), "No existe Application/Lending/Disbursements (US3).");
+        var infractores = Directory.EnumerateFiles(carpeta, "*.cs", SearchOption.AllDirectories)
+            .Where(f => { var t = File.ReadAllText(f); return Numeracion.IsMatch(t) || Escritura.IsMatch(t); })
+            .Select(Path.GetFileName)
+            .ToList();
+        Assert.True(infractores.Count == 0, "El desembolso toca NextNumber o arma comprobantes:\n  " + string.Join("\n  ", infractores));
+    }
 }

@@ -40,13 +40,25 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/BlocksEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/ContributionBalancesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/ConnectedGroupsEndpoints.cs",
+        // US3 (bloque 7C, T0428, T0457): el desembolso, las órdenes de giro, la anulación del crédito pendiente de giro, el archivo de
+        // desembolsos, las garantías, el pagaré y la tesorería de prueba.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DisbursementsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DisbursementOrdersEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/LoansEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DisbursementFilesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollateralsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PromissoryNotesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/TestDoublesEndpoints.cs",
     ];
 
     /// <summary>
     /// Las escrituras que van sin clave (api.md §1.5): las consultas por POST por el tamaño del cuerpo. Se nombran por el final de la ruta.
-    /// US2 (bloque 6C): la simulación y su PDF (el envío sí lleva clave) y los enlaces firmados de 60 s (repetirlos emite otro).
+    /// US2 (bloque 6C): la simulación y su PDF (el envío sí lleva clave) y los enlaces firmados de 60 s (repetirlos emite otro). US3 (bloque 7C):
+    /// la vista previa del desembolso y la del archivo (no escriben) y actualizar el estado del pagaré (sólo trae lo que el depósito ya sabe;
+    /// repetirlo no cambia nada).
     /// </summary>
-    private static readonly string[] ConsultasPorPost = ["\"/preview\"", "/usury-check\"", "\"/schedule\"", "\"/schedule/pdf\"", "/download-link\""];
+    private static readonly string[] ConsultasPorPost =
+        ["\"/preview\"", "/usury-check\"", "\"/schedule\"", "\"/schedule/pdf\"", "/download-link\"", "/disbursement-preview\"", "/refresh\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -109,6 +121,23 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.RegisterDebtorBlockCommand),
         typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.LiftDebtorBlockCommand),
         typeof(IngenIA365ERP.Application.Lending.Origination.CreditLimits.ImportContributionBalancesCommand),
+        // US3 (bloque 7C, T0428): el desembolso, el giro y su anulación, el archivo de desembolsos, las garantías, el pagaré y la tesorería de
+        // prueba. Sin clave sólo RefreshPromissoryNoteStatusCommand (consulta al depósito, ConsultasPorPost) y el enlace de descarga.
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.ExecuteLoanDisbursementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.VoidDisbursementOrderCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.ReissueDisbursementOrderCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.VoidPendingLoanCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.Files.GenerateLoanDisbursementFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.Files.VoidLoanDisbursementFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.Collaterals.RegisterCollateralCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.Collaterals.UpdateCollateralCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.Collaterals.ChangeCollateralStatusCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.Collaterals.ReleaseCollateralCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.CreatePromissoryNoteCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.RegisterPhysicalPromissoryNoteCustodyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.EndorsePromissoryNoteCommand),
+        typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.VoidPromissoryNoteCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestDisbursementResultCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

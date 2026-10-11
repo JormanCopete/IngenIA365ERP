@@ -33,6 +33,9 @@ public class LosProveedoresExternosSoloLosConoceSuAdaptador
         typeof(IngenIA365ERP.ExternalChannels.Circuit.CircuitoDeCanalExterno),
         // US2 (T0401, T0382): la central de riesgo simulada; las reales se suman con su contrato.
         typeof(IngenIA365ERP.ExternalChannels.CreditBureaus.CentralDeRiesgoSimulada),
+        // US3 (T0428, T0437): el depósito de valores simulado y su memoria por cooperativa.
+        typeof(IngenIA365ERP.ExternalChannels.Securities.DepositoDeValoresSimulado),
+        typeof(IngenIA365ERP.ExternalChannels.Securities.MemoriaDeDepositoSimulado),
     ];
 
     private static readonly Regex UsaElProyecto = new(@"\bIngenIA365ERP\.ExternalChannels\b", RegexOptions.Compiled);

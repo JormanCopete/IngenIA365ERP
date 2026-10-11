@@ -13,7 +13,8 @@
 @* Feature 013, US2 (T0411; FR-035–FR-042; contracts/api.md §4.2–§4.4): el expediente de una solicitud. En borrador: los documentos (se suben
    directo al almacén con el dueño LoanApplicationDocument y se asocian a su requisito) y radicar. Radicada: las validaciones con su evidencia,
    el puntaje con la explicación por variable, el nivel y sus razones, la consulta a centrales, decidir con la huella del enrutamiento que se
-   vio —un nivel colegiado se lleva a sesión— y anular o desistir con motivo. Fuera del alcance, la solicitud no existe (el mismo 404). *@
+   vio —un nivel colegiado se lleva a sesión— y anular o desistir con motivo. Fuera del alcance, la solicitud no existe (el mismo 404).
+   US3 (T0460): la zona «Garantías y pagaré» (GarantiasYPagare) y, aprobada, el botón «Desembolsar» hacia /cartera/desembolsos?solicitud=. *@
 <PermissionGate Required="Lending.Applications.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -29,6 +30,12 @@
             @if (_s is { Status: 3 })
             {
                 <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@AbrirDecision">Decidir…</SfButton>
+            }
+            @if (_s is { Status: 5 })
+            {
+                <PermissionGate Required="Lending.Disbursements.Execute">
+                    <SfButton CssClass="e-primary" OnClick="@(() => Navegacion.NavigateTo($"/cartera/desembolsos?solicitud={Id}"))">Desembolsar</SfButton>
+                </PermissionGate>
             }
             @if (_s is { Status: 1 or 2 or 3 or 4 or 5 })
             {
@@ -102,6 +109,10 @@
                     </PermissionGate>
                 }
             </div>
+
+            <PermissionGate Required="Lending.Guarantees.Read">
+                <GarantiasYPagare Solicitud="@s" />
+            </PermissionGate>
 
             @if (s.Checks.Count > 0)
             {

@@ -36,6 +36,10 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Solicitudes.razor", "/cartera/solicitudes", "Lending.Applications.Read"),
         ("Pages/Cartera/Aprobaciones.razor", "/cartera/aprobaciones", "Lending.Applications.Read"),
         ("Pages/Cartera/Cupos.razor", "/cartera/cupos", "Lending.CreditLimits.Read"),
+        // Fase 7, US3 (T0462): el desembolso con sus órdenes y archivos, y los dobles de prueba (el menú los dibuja sólo si el servidor los
+        // publica). Las garantías y el pagaré viven en el detalle de la solicitud (GarantiasYPagare).
+        ("Pages/Cartera/Desembolsos.razor", "/cartera/desembolsos", "Lending.Disbursements.Execute"),
+        ("Pages/Cartera/DoblesDePrueba.razor", "/cartera/dobles-de-prueba", "Lending.TestDoubles.Operate"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>

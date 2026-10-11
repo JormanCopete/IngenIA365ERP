@@ -43,7 +43,12 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     ];
 
     /// <summary>Carpetas de Cartera (relativas a <c>src/</c>) que no pueden nombrar a otros módulos salvo por sus puertos.</summary>
-    private static readonly string[] CarpetasDeCartera = [];
+    private static readonly string[] CarpetasDeCartera =
+    [
+        // US3 (bloque 7C, T0428): el desembolso, su reverso, las garantías, el pagaré y el archivo de desembolsos. La recogida paga por
+        // IContratoDeObligaciones; la cuenta de origen llega por IContabilidadParaCartera; el formato y el motor del archivo son de Common.
+        "Core/IngenIA365ERP.Application/Lending/Disbursements",
+    ];
 
     /// <summary>Espacios de otros módulos que el ArchUnit revisa (los de <see cref="CarpetasDeOtrosModulos"/>).</summary>
     private static readonly string[] EspaciosDeOtrosModulos =
@@ -169,4 +174,25 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         .Select(m => m.Name)
         .Order(StringComparer.Ordinal)
         .ToList();
+
+    /// <summary>
+    /// US3 (T0428, FR-046, T21): la recogida de créditos propios en el desembolso paga por el contrato (<c>IContratoDeObligaciones</c>, clase
+    /// <c>OwnLoanPayoff</c>), igual que cualquier recaudador; no llama un servicio interno de pagos de Cartera.
+    /// </summary>
+    [Fact]
+    public void La_recogida_del_desembolso_paga_por_el_contrato()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var recogida = Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Disbursements", "RecogidaEnElDesembolso.cs");
+        Assert.True(File.Exists(recogida), "No existe Application/Lending/Disbursements/RecogidaEnElDesembolso.cs (T0444).");
+        Assert.Contains("IContratoDeObligaciones", FuenteSinComentarios.Leer(recogida), StringComparison.Ordinal);
+
+        var interno = new Regex(@"\bIngenIA365ERP\.Application\.Lending\.Payments\b|\bAplicadorDePagos\b", RegexOptions.Compiled);
+        var infractores = Directory.EnumerateFiles(Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending", "Disbursements"), "*.cs",
+                SearchOption.AllDirectories)
+            .Where(f => interno.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(raiz, f))
+            .ToList();
+        ReglaSobreFuente.SinInfracciones(infractores, "El desembolso paga fuera del contrato de obligaciones (FR-046)");
+    }
 }

@@ -475,8 +475,13 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.EmisionDeCartera>();
         services.AddScoped<Lending.Activation.RequisitosDeActivacion>();
         // Feature 013, US3 (bloque 7A): el desembolso, el giro y su reverso. IMotorDeCreditoEnDesembolso es el punto de extensión que la fase 8
-        // reemplaza (ReconstruccionDeCredito, PuestaAlDiaDeCredito, Conciliar). DestinoCartera se registra con las rutas y las e2e (bloque 7C).
+        // reemplaza (ReconstruccionDeCredito, PuestaAlDiaDeCredito, Conciliar).
         services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolsoProvisional>();
+        // Feature 013, US3 (bloque 7C, T0449): Cartera como destino de la bandeja (ResultadoDelGiro v1; US6 suma la familia de Comercial). No
+        // cambia lo que viaja de Comercial: el destino Lending sólo cuenta cuando su consumidor acepta todo lo que la fila CAR adopta
+        // (RegistroDeIntegracion.ImplementacionDisponible), y la semilla la deja adoptando VentaACreditoRegistrada y AjusteDeVentaACredito: hasta
+        // US6 lo de Lending sigue esperando, sin intentos ni rechazos, igual que sin consumidor.
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Lending.Integration.DestinoCartera>();
         services.AddScoped<Lending.Disbursements.RequisitosDelDesembolso>();
         services.AddScoped<Lending.Disbursements.TramoDeDesembolso>();
         services.AddScoped<Lending.Disbursements.RecogidaEnElDesembolso>();

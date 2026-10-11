@@ -1,0 +1,129 @@
+@page "/cartera/dobles-de-prueba"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject DoblesDePruebaClient Dobles
+@inject INotificationService Notification
+
+<PageTitle>Dobles de prueba de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US3 (T0461; FR-089, T20; contracts/api.md §20): sólo fuera de producción. La tesorería de prueba muestra las órdenes de giro y
+   las anulaciones que recibió y emite el resultado de cada orden como lo haría Tesorería (girada, rechazada, cheque no cobrado o anulada), con
+   la persona que prueba como usuario de origen. Si el servidor no publica los dobles (producción), la página lo dice y no ofrece nada. US5 suma
+   el recaudador de prueba. *@
+<PermissionGate Required="Lending.TestDoubles.Operate" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Dobles de prueba de Cartera</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+    <p class="aviso aviso-alerta"><strong>AMBIENTE DE PRUEBAS</strong> — lo que se emite aquí no lo hace la Tesorería real.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_disponibles is null)
+        {
+            <p class="texto-apoyo">Este servidor no tiene dobles de prueba de Cartera.</p>
+        }
+        else if (_disponibles.Treasury)
+        {
+            <h4>Tesorería de prueba</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Orden</th><th>Crédito</th><th>Forma</th><th>Beneficiario</th><th class="numero">Neto</th><th>Estado</th><th>Resultados</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var o in _ordenes)
+                        {
+                            var orden = o;
+                            <tr>
+                                <td>@orden.OrderNumber</td>
+                                <td>@orden.LoanNumber</td>
+                                <td>@TextosDeDesembolso.Forma(orden.Form)@(orden.PaidByFile ? " · por archivo" : "")</td>
+                                <td>@orden.Beneficiary</td>
+                                <td class="numero">@TextosDeOriginacion.Pesos(orden.NetAmount)</td>
+                                <td>@TextosDeDesembolso.EstadoDeOrden(orden.Status)@(orden.VoidRequested ? $" · anulación pedida: {orden.VoidReason}" : "")</td>
+                                <td>@string.Join(", ", orden.Results.Select(TextosDeDesembolso.EstadoDeOrden))</td>
+                                <td>
+                                    @if (orden.Status is "Issued" or "Disbursed")
+                                    {
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => Abrir(orden))">Resultado…</SfButton>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_ordenes.Count == 0) { <p class="texto-tenue">La tesorería de prueba no ha recibido órdenes.</p> }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@($"Resultado de la orden {_orden?.OrderNumber}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Emitiendo el resultado…">
+                <label class="campo">Resultado
+                    <select class="e-input" @bind="_resultado">
+                        @foreach (var e in TextosDeDesembolso.EstadosDeOrden.Where(e => e.Valor != "Issued")) { <option value="@e.Valor">@e.Texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Referencia de Tesorería * <input class="e-input" @bind="_referencia" maxlength="60" /></label>
+                <label class="campo">Valor (vacío = el neto) <input class="e-input" type="number" min="0" step="1" @bind="_valor" /></label>
+                <label class="campo campo-ancho">Motivo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_referencia))" OnClick="@EmitirAsync">Emitir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private DoblesDisponiblesDto? _disponibles;
+    private List<OrdenEnTesoreriaDePruebaDto> _ordenes = [];
+    private OrdenEnTesoreriaDePruebaDto? _orden;
+    private bool _mostrar;
+    private string _resultado = "Disbursed";
+    private string? _referencia, _motivo, _error;
+    private decimal? _valor;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _disponibles = await Dobles.DisponiblesAsync();
+        _ordenes = _disponibles is { Treasury: true } ? [.. (await Dobles.OrdenesAsync()).Value ?? []] : [];
+    }
+
+    private void Abrir(OrdenEnTesoreriaDePruebaDto orden)
+    {
+        _orden = orden;
+        _resultado = orden.Status == "Disbursed" ? "CheckNotCashed" : "Disbursed";
+        _referencia = $"TES-{orden.OrderNumber}";
+        _valor = null;
+        _motivo = null;
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task EmitirAsync()
+    {
+        if (_orden is null || string.IsNullOrWhiteSpace(_referencia)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Dobles.ResultadoAsync(_orden.OrderPublicId, new ResultadoDePruebaRequest(_resultado, _referencia.Trim(), Amount: _valor,
+            Reason: string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo emitir el resultado."; return; }
+        _mostrar = false;
+        await Notification.SuccessAsync("Resultado emitido: Cartera lo consume desde la bandeja de mensajes.");
+        await CargarAsync();
+    }
+}

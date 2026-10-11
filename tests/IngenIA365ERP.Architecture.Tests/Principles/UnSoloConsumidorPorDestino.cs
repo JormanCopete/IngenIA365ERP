@@ -16,7 +16,12 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 public class UnSoloConsumidorPorDestino
 {
     /// <summary>Destinos (valor de <c>IntegrationDestinations</c>) que deben tener exactamente un consumidor.</summary>
-    private static readonly string[] Destinos = [IntegrationDestinations.Accounting];
+    private static readonly string[] Destinos =
+    [
+        IntegrationDestinations.Accounting,
+        // US3 (bloque 7C, T0428): DestinoCartera; el de Treasury es el doble (TesoreriaDePrueba) hasta que exista Tesorería.
+        IntegrationDestinations.Lending,
+    ];
 
     private static IReadOnlyList<string> TodosLosDestinos() => typeof(IntegrationDestinations)
         .GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => f.IsLiteral).Select(f => (string)f.GetRawConstantValue()!).ToList();

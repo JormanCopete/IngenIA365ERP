@@ -30,6 +30,12 @@ public class LosComandosDeConsumoNoTienenRuta
         "ScheduleIntegrationBatchesCommand",
         "StartIntegrationBatchCommand",
         "CloseIntegrationBatchCommand",
+        // Feature 013, US3 (T0428): el consumo del resultado del giro (lo manda DestinoCartera) y los comandos de las tres tareas del
+        // desembolso (los manda cada ITareaProgramada por IEjecutorEnCooperativa).
+        "ConsumeTreasuryResultCommand",
+        "AlertDisbursementOrdersWithoutResultCommand",
+        "SyncPromissoryNotesCommand",
+        "AlertExpiringCollateralsCommand",
     ];
 
     [Fact]

@@ -3,6 +3,7 @@ using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Integration;
+using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.Application.Lending.Collections.Tareas;
 using IngenIA365ERP.Domain.Enums.Lending;
 
@@ -24,7 +25,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// horarios, regla 7). Lo que pide un crédito —el inmediato de un domingo → <c>Lending.DebtorMessage.OutsideLegalWindow</c> con
 /// <c>nextAllowedAt</c>, el programado para el domingo → <c>Deferred</c> y despachado el lunes a la primera hora permitida, y el informativo
 /// con la versión nueva de <c>ABONOCAP</c>— lo suma a esta clase la fase de US3 sobre el primer crédito desembolsado, nunca con
-/// <c>Skip</c>. (nuevo)
+/// <c>Skip</c>. US3 (bloque 7C) lo suma sobre la cooperativa «desembolso» (<see cref="DesembolsoE2E"/>). (nuevo)
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public sealed class MensajesAlDeudorTests(CentralIdentityApiFixture fx)
@@ -151,6 +152,111 @@ public sealed class MensajesAlDeudorTests(CentralIdentityApiFixture fx)
         (await CarteraE2E.GetAsync(http, admin, $"{Mensajes}/{siguiente.GetProperty("publicId").GetGuid()}"))
             .GetProperty("body").GetString().Should().Contain("esta listo");
     }
+
+    // ------------------------------------------------------------------------------ con un crédito (US3) --
+
+    /// <summary>
+    /// US3 (bloque 7C, T0429): sobre el primer crédito desembolsado (la cooperativa «desembolso», <see cref="DesembolsoE2E"/>), un informativo
+    /// por SMS de <c>ABONOCAP</c>: inmediato un domingo → <c>Lending.DebtorMessage.OutsideLegalWindow</c> con <c>nextAllowedAt</c>; programado
+    /// para el domingo → <c>Deferred</c> y despachado el día hábil siguiente a la primera hora permitida; y una versión nueva de <c>ABONOCAP</c>
+    /// la usa el mensaje siguiente.
+    /// </summary>
+    [Fact]
+    public async Task Con_un_credito_el_domingo_no_sale_se_difiere_al_dia_habil_y_la_version_nueva_de_ABONOCAP_rige()
+    {
+        var esc = await DesembolsoE2E.EscenarioAsync(fx);
+        using var http = fx.CreateClient();
+        var admin = esc.Coop.TokenAdmin;
+        var (_, persona, hecho) = await DesembolsoE2E.CreditoDesembolsadoAsync(http, esc, "Informado");
+        await AutorizarCanalAsync(http, admin, persona);
+        var credito = hecho.GetProperty("loanPublicId").GetGuid();
+        var conductor = new ConductorDelDespachador(fx);
+
+        var ahora = conductor.Reloj.AhoraLocal;
+        var hoy = DateOnly.FromDateTime(ahora.DateTime);
+        var dias = ((int)DayOfWeek.Sunday - (int)hoy.DayOfWeek + 7) % 7;
+        var domingo = new DateTimeOffset(hoy.AddDays(dias == 0 ? 7 : dias).ToDateTime(new TimeOnly(10, 0)), ahora.Offset);
+
+        // Programado para el domingo: nace diferido al primer instante permitido después.
+        var programado = await InformativoAsync(http, admin, credito, persona, domingo);
+        programado.StatusCode.Should().Be(HttpStatusCode.Created, await programado.Content.ReadAsStringAsync());
+        var diferido = await CarteraE2E.LeerAsync(programado);
+        diferido.GetProperty("status").GetInt32().Should().Be((int)DebtorMessageEventKind.Deferred, diferido.ToString());
+        var siguiente = Instante(diferido.GetProperty("lastEvent").GetProperty("nextAttemptAt").GetString()!, ahora.Offset);
+        siguiente.Should().BeAfter(domingo);
+        siguiente.ToOffset(ahora.Offset).DayOfWeek.Should().NotBe(DayOfWeek.Sunday);
+        var id = diferido.GetProperty("publicId").GetGuid();
+
+        // Inmediato un domingo: no sale y dice desde cuándo se puede.
+        using (conductor.Adelantar(domingo - ahora))
+        {
+            var inmediato = await InformativoAsync(http, admin, credito, persona, null);
+            var fuera = await InventarioE2E.FallaAsync(inmediato, "Lending.DebtorMessage.OutsideLegalWindow");
+            fuera.GetProperty("data").GetProperty("nextAllowedAt").GetString().Should().NotBeNullOrWhiteSpace();
+            fuera.GetProperty("data").GetProperty("reasons").EnumerateArray().Select(r => r.GetString()).Should().Contain("Sunday");
+
+            await fx.CorrerTareaAsync(esc.Coop.TenantPublicId, TareaDeMensajesAlDeudor.NombreDeLaTarea);
+            (await CarteraE2E.GetAsync(http, admin, $"{Mensajes}/{id}")).GetProperty("message").GetProperty("status").GetInt32()
+                .Should().Be((int)DebtorMessageEventKind.Deferred, "el domingo no se despacha");
+        }
+
+        // Llegado el día hábil siguiente, cartera.mensajes lo despacha.
+        using (conductor.Adelantar(siguiente - ahora + TimeSpan.FromMinutes(5)))
+            await fx.CorrerTareaAsync(esc.Coop.TenantPublicId, TareaDeMensajesAlDeudor.NombreDeLaTarea);
+        var despachado = await CarteraE2E.GetAsync(http, admin, $"{Mensajes}/{id}");
+        despachado.GetProperty("message").GetProperty("status").GetInt32().Should()
+            .BeOneOf([(int)DebtorMessageEventKind.Simulated, (int)DebtorMessageEventKind.Delivered], despachado.ToString());
+
+        // La versión nueva de ABONOCAP rige para el mensaje siguiente; el anterior conserva la suya.
+        var antes = despachado.GetProperty("message").GetProperty("template").GetProperty("version").GetInt32();
+        var nueva = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Plantillas}/ABONOCAP/versions", new
+        {
+            purpose = "Informative", channel = "Sms", body = "{{NombreDeLaCooperativa}}: abonamos {{ValorAplicado}} a su credito {{NumeroDelCredito}}.",
+            validFrom = esc.Hoy, reason = "Texto nuevo del abono a capital (desembolso)",
+        });
+        nueva.StatusCode.Should().Be(HttpStatusCode.Created, await nueva.Content.ReadAsStringAsync());
+        var version = (await CarteraE2E.LeerAsync(nueva)).GetProperty("version").GetInt32();
+        version.Should().Be(antes + 1);
+        var otroDia = new DateTimeOffset(siguiente.ToOffset(ahora.Offset).Date.AddDays(1).AddHours(10), ahora.Offset);
+        var siguienteMensaje = await InformativoAsync(http, admin, credito, persona, otroDia);
+        siguienteMensaje.StatusCode.Should().Be(HttpStatusCode.Created, await siguienteMensaje.Content.ReadAsStringAsync());
+        var leido = await CarteraE2E.LeerAsync(siguienteMensaje);
+        leido.GetProperty("template").GetProperty("version").GetInt32().Should().Be(version, "el mensaje siguiente usa la versión nueva");
+        (await CarteraE2E.GetAsync(http, admin, $"{Mensajes}/{id}")).GetProperty("message").GetProperty("template").GetProperty("version").GetInt32()
+            .Should().Be(antes, "el anterior conserva la suya");
+        (await CarteraE2E.GetAsync(http, admin, $"{Mensajes}/{leido.GetProperty("publicId").GetGuid()}")).GetProperty("body").GetString()
+            .Should().Contain("abonamos");
+    }
+
+    /// <summary>Un informativo por SMS de <c>ABONOCAP</c> sobre el crédito; sin <paramref name="para"/> es inmediato.</summary>
+    private static Task<HttpResponseMessage> InformativoAsync(HttpClient http, string token, Guid credito, Guid persona, DateTimeOffset? para) =>
+        CarteraE2E.ConClaveAsync(http, token, HttpMethod.Post, Mensajes, new
+        {
+            loanPublicId = credito, recipientPersonPublicId = persona, channel = "Sms", purpose = "Informative", templateCode = "ABONOCAP", scheduledFor = para,
+            variables = new Dictionary<string, string> { ["ValorAplicado"] = "$ 500.000", ["NuevaCuota"] = "$ 120.000", ["NuevoPlazo"] = "30 meses" },
+        });
+
+    /// <summary>La autorización del canal SMS (con su evidencia y la política de esa finalidad): sin ella un informativo se excluye.</summary>
+    private static async Task AutorizarCanalAsync(HttpClient http, string admin, Guid persona)
+    {
+        (await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/compliance/habeas-data/policies/", new
+        {
+            title = "Política de datos: ContactChannel", contentMarkdown = "Texto de la política de contacto para las e2e del desembolso.",
+            effectiveFrom = DateTime.UtcNow.AddMinutes(-1), purpose = "ContactChannel",
+        })).IsSuccessStatusCode.Should().BeTrue();
+        var evidencia = await OriginacionE2E.SubirEvidenciaAsync(http, admin, persona);
+        var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/compliance/habeas-data/authorizations", new
+        {
+            personPublicId = persona, purpose = "ContactChannel", contactChannel = "Sms", evidenceAttachmentPublicId = evidencia, grantedAt = DateTime.UtcNow,
+        });
+        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"autorización del canal: «{await resp.Content.ReadAsStringAsync()}»");
+    }
+
+    /// <summary>Un instante del contrato: con zona, tal cual; sin ella, en hora de Colombia.</summary>
+    private static DateTimeOffset Instante(string texto, TimeSpan zonaLocal) =>
+        texto.EndsWith('Z') || System.Text.RegularExpressions.Regex.IsMatch(texto, @"[+-]\d{2}:\d{2}$")
+            ? DateTimeOffset.Parse(texto, System.Globalization.CultureInfo.InvariantCulture)
+            : new DateTimeOffset(DateTime.Parse(texto, System.Globalization.CultureInfo.InvariantCulture), zonaLocal);
 
     // ---------------------------------------------------------------------------------------- escenario --
 

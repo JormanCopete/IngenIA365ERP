@@ -16,6 +16,8 @@ public class LosDoblesDePruebaNoSeRegistranEnProduccion
     [
         // Fase 3 (T0146, T0230): TesoreriaDePrueba; US5 suma RecaudadorDePrueba sobre la misma guarda.
         "Presentation/IngenIA365ERP.API/Integration/DoblesDePruebaDeCartera.cs",
+        // US3 (T0428, T0457): las rutas de TesoreriaDePrueba se mapean con la misma guarda (en producción no existen).
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/TestDoublesEndpoints.cs",
     ];
 
     private static readonly Regex Requerido = new(@"IsProduction\(\)", RegexOptions.Compiled);
