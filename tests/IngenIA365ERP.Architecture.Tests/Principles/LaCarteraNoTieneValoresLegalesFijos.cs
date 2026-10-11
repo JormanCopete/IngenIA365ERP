@@ -63,6 +63,11 @@ public class LaCarteraNoTieneValoresLegalesFijos
         "Core/IngenIA365ERP.Domain/Lending/DayCount",
         "Core/IngenIA365ERP.Domain/Lending/Rates",
         "Core/IngenIA365ERP.Domain/Lending/Schedules",
+        // US4 (T0480): la causación, la mora, la suspensión y la reconstrucción tampoco (los umbrales de mora y de suspensión son parámetros
+        // con vigencia o el Anexo 1 replicado, nunca un número).
+        "Core/IngenIA365ERP.Domain/Lending/Accrual",
+        "Core/IngenIA365ERP.Domain/Lending/Delinquency",
+        "Core/IngenIA365ERP.Domain/Lending/Replay",
     ];
 
     private static readonly Regex SieteODiez = new(@"(?<![\w.])(7|10)(?:[mM])?(?![\w.])", RegexOptions.Compiled);
@@ -76,6 +81,9 @@ public class LaCarteraNoTieneValoresLegalesFijos
         var archivos = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor)
             .Concat(ReglaSobreFuente.ArchivosNombrados(["Core/IngenIA365ERP.Domain/Lending/MotorDeCartera.cs"])).ToList();
         Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Schedules", "FechasDeVencimiento.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Accrual", "ReglaDeSuspension.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Delinquency", "AlturaDeMora.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Replay", "ReconstruccionDeCredito.cs"), StringComparison.Ordinal));
 
         var infracciones = new List<string>();
         foreach (var archivo in archivos)

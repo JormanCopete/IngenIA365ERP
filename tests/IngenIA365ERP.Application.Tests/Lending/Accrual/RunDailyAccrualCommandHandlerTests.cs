@@ -61,6 +61,7 @@ public class RunDailyAccrualCommandHandlerTests : IAsyncLifetime
         mensaje.PublicId.Should().Be(parte.MessagePublicId!.Value);
         mensaje.OriginPublicId.Should().Be(parte.PublicId);
         mensaje.OriginEventKey.Should().Be($"Confirmation:{parte.PublicId:N}");
+        mensaje.OriginNumber.Should().Be($"CAU-{d:yyyyMMdd}-0001", "el rótulo de la parte del ciclo (mensajes.md §3), en los 30 de la columna");
         mensaje.OriginActorKind.Should().Be(ActorKind.Process, "lo origina el proceso: el tipo lo admite (T11)");
         fila.MessagePublicId.Should().Be(mensaje.PublicId, "la fila guarda el mensaje de su parte (T14)");
         mensaje.PayloadJson.Should().Contain("\"runKind\":\"DailyCycle\"").And.Contain("\"controlTotal\"").And.Contain("\"partNumber\":1");
@@ -144,6 +145,7 @@ public class RunDailyAccrualCommandHandlerTests : IAsyncLifetime
         (await _c.Db.LoanTransactions.AnyAsync(t => t.Concept == LoanConcept.CurrentInterestInSuspense)).Should().BeTrue();
         var suspendida = await _c.Db.IntegrationMessages.SingleAsync(m => m.Type == CausacionSuspendidaV1.Type);
         suspendida.OriginEventKey.Should().Be($"Confirmation:{_c.Credito.PublicId:N}", "el hecho por crédito del ciclo (C02)");
+        suspendida.OriginNumber.Should().StartWith("CAU-").And.HaveLength("CAU-20270315-0001".Length);
         suspendida.PersonPublicId.Should().Be(_c.D.O.Ana.PublicId);
         suspendida.PayloadJson.Should().Contain("\"cause\":\"ArrearsThreshold\"").And.Contain("\"daysPastDue\":61");
         var parte = await _c.Db.AccountingFactParts.SingleAsync(p => p.FactType == CausacionSuspendidaV1.Type);
@@ -307,6 +309,6 @@ public class RunDailyAccrualCommandHandlerTests : IAsyncLifetime
         var corrida = await _c.CausarHastaAsync(Hoy.AddDays(3));
 
         corrida.CurrentStep.Should().Be(PasosDelCiclo.Verificacion);
-        _c.D.O.L.Levantadas.Should().Contain(a => a.TypeCode == TiposDeAlerta.CreditoSinCausar && a.DedupKey!.EndsWith(":libro"));
+        _c.D.O.L.Levantadas.Should().Contain(a => a.TypeCode == TiposDeAlerta.LibroDescuadrado && a.DedupKey == $"{TiposDeAlerta.LibroDescuadrado}:{_c.Credito.PublicId:D}");
     }
 }

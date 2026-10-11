@@ -35,6 +35,24 @@ public class EmisionesDeProcesoPermitidas
         Assert.All(CatalogoDeMensajes.Todos.Where(t => t.AdmiteProceso), t => Assert.Equal(ModulosDeOrigen.Cartera, t.OriginModule));
     }
 
+    /// <summary>
+    /// US4 (T0480): el ciclo diario emite por proceso la causación, la suspensión y su reanudación, el anticipo, la dimensión cambiada, el ajuste
+    /// por fecha valor y el saldo a favor; lo que nace de una persona —el desembolso y el pago aplicado— nunca lo origina el proceso.
+    /// </summary>
+    [Fact]
+    public void Los_hechos_del_ciclo_admiten_proceso_y_el_desembolso_y_el_pago_no()
+    {
+        string[] delCiclo =
+        [
+            "InteresCausado", "MoraCausada", "SeguroCausado", "CausacionSuspendida", "CausacionReanudada", "AnticipoAplicado",
+            "DimensionContableCambiada", "AjusteDeCausacionPorFechaValor", "SaldoAFavorReconocido",
+        ];
+        foreach (var tipo in delCiclo)
+            Assert.True(CatalogoDeMensajes.Todos.Single(t => t.Type == tipo).AdmiteProceso, $"{tipo} lo emite el ciclo diario: admite proceso (T11).");
+        foreach (var tipo in new[] { "CreditoDesembolsado", "PagoAplicado" })
+            Assert.False(CatalogoDeMensajes.Todos.Single(t => t.Type == tipo).AdmiteProceso, $"{tipo} lo origina una persona: no admite proceso (T11).");
+    }
+
     [Fact]
     public void Ningun_tipo_de_Inventario_Tesoreria_ni_Recaudo_admite_proceso()
     {

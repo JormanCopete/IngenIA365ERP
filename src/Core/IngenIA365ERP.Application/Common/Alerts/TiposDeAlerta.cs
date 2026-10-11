@@ -82,6 +82,13 @@ public static class TiposDeAlerta
     public const string PlazoRegulatorioPorVencer = "Cartera.PlazoRegulatorioPorVencer";
     public const string PatrimonioTecnicoNoDisponible = "Cartera.PatrimonioTecnicoNoDisponible";
     public const string TareaDiariaNoCorrio = "Cartera.TareaDiariaNoCorrio";
+
+    /// <summary>
+    /// US4 (bloque 8C): la verificación del libro (<c>POST /api/lending/integrity/verify</c> o la muestra del paso 8 del ciclo) encontró que el
+    /// libro de un crédito no cuadra con su reconstrucción. Hasta el 2026-10-11 se levantaba como <see cref="CreditoSinCausar"/> con la clave
+    /// <c>…:libro</c>: no es un crédito sin causar sino un libro descuadrado, y lo revisan cartera y la contadora.
+    /// </summary>
+    public const string LibroDescuadrado = "Cartera.LibroDescuadrado";
     public const string NoAplicadoDePagaduria = "Cartera.NoAplicadoDePagaduria";
     public const string GiroDePagaduriaAtrasado = "Cartera.GiroDePagaduriaAtrasado";
     public const string ArchivoDeDescuentosPendiente = "Cartera.ArchivoDeDescuentosPendiente";
@@ -213,6 +220,8 @@ public static class TiposDeAlerta
             ["Accounting.RegulatoryIndicators.Manage"], AppYCorreo, AlertSeverity.Critical, "K1"),
         new(TareaDiariaNoCorrio, Cartera, "Una tarea diaria de Cartera no corrió en su día (C123, SC-020).",
             ["Lending.Processes.Run"], AppYCorreo, AlertSeverity.Warning, "K1"),
+        new(LibroDescuadrado, Cartera, "El libro de un crédito no cuadra con su reconstrucción (verificación de integridad, T33).",
+            ["Lending.Processes.Run", "Accounting.LendingRules.Manage"], AppYCorreo, AlertSeverity.Critical, "K1"),
         new(NoAplicadoDePagaduria, Cartera, "El resultado de descuentos de una pagaduría trajo no aplicados.",
             ["Lending.PayrollNotApplied.Manage"], SoloApp, AlertSeverity.Warning, "K2"),
         new(GiroDePagaduriaAtrasado, Cartera, "Venció la ventana de giro de una pagaduría.",

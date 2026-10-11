@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
@@ -42,6 +43,20 @@ public sealed class UsuariosDeCartera
 {
     /// <summary>Un usuario del ensayo: su token, su <c>PublicId</c>, su persona (nula en <c>sinpersona</c>) y sus roles.</summary>
     public sealed record Usuario(string Clave, string Correo, string Token, Guid PublicId, Guid? Persona, IReadOnlyList<Guid> Roles);
+
+    /// <summary>La contraseña con que los usuarios del ensayo aceptan su invitación.</summary>
+    public const string ClaveDelEnsayo = "Ensayo-Cartera-2026!";
+
+    /// <summary>
+    /// Un access nuevo del usuario por <c>/api/auth/login</c> (una sola membresía: selección automática). Lo usan las pruebas largas: el access
+    /// dura 15 minutos (US4, T0483).
+    /// </summary>
+    public static async Task<string> IngresarAsync(HttpClient http, Usuario usuario)
+    {
+        var resp = await http.PostAsJsonAsync("/api/auth/login", new { email = usuario.Correo, password = ClaveDelEnsayo });
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, $"ingresar como {usuario.Clave}: «{await resp.Content.ReadAsStringAsync()}»");
+        return (await CarteraE2E.LeerAsync(resp)).GetProperty("accessToken").GetString()!;
+    }
 
     /// <summary>Una oficina (<c>ADM_Branches</c>) y la agencia contable (<c>COR_Branches</c>) vinculada a ella.</summary>
     public sealed record Oficina(string Codigo, Guid OficinaPublicId, Guid AgenciaPublicId);
@@ -170,7 +185,7 @@ public sealed class UsuariosDeCartera
         var admin = coop.TokenAdmin;
         var invitacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitar a {clave}: «{await invitacion.Content.ReadAsStringAsync()}»");
-        var token = await CarteraE2E.AceptarInvitacionAsync(fx, http, correo, "Ensayo-Cartera-2026!");
+        var token = await CarteraE2E.AceptarInvitacionAsync(fx, http, correo, ClaveDelEnsayo);
         var usuario = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, correo);
 
         foreach (var rol in roles)

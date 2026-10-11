@@ -19,6 +19,7 @@ public static class ErroresDeCorridas
     public const string CodigoNoReintentable = "Lending.ProcessRun.NotRetryable";
     public const string CodigoInexistente = "Lending.ProcessRun.NotFound";
     public const string CodigoYaTerminada = "Lending.ProcessRun.AlreadyCompleted";
+    public const string CodigoFechaFutura = "Lending.ProcessRun.FutureDate";
 
     public static Error EnCurso(LendingProcessKind clase, Guid corrida) => new ErrorConDatos(CodigoEnCurso,
         $"Ya hay una corrida de {Nombre(clase)} en curso. Espere a que termine.", new { processRunPublicId = corrida, kind = clase.ToString() });
@@ -33,6 +34,14 @@ public static class ErroresDeCorridas
         "Sólo se reintenta una corrida que falló o que terminó con créditos sin causar.", new { status = estado.ToString() });
 
     public static Error Inexistente() => new(CodigoInexistente, "La corrida no existe.");
+
+    /// <summary>
+    /// US4 (bloque 8C): un ciclo de una fecha que todavía no llega causaría intereses de días no vividos; se ordena desde ese día (el
+    /// procesador, por su lado, nunca crea uno después de hoy).
+    /// </summary>
+    public static Error FechaFutura(DateOnly fecha, DateOnly hoy) => new ErrorConDatos(CodigoFechaFutura,
+        $"No se causa un día que no ha llegado: el ciclo del {fecha:yyyy-MM-dd} se puede ordenar desde ese día (hoy es {hoy:yyyy-MM-dd}).",
+        new { date = fecha, today = hoy });
 
     public static Error YaTerminada(DateOnly fecha, Guid corrida, LendingProcessRunStatus estado) => new ErrorConDatos(CodigoYaTerminada,
         $"La corrida del ciclo del {fecha:yyyy-MM-dd} ya terminó. Si quedó con créditos sin causar, reinténtela.",
@@ -75,6 +84,7 @@ public sealed class RequestLendingProcessRunCommandHandler(IApplicationDbContext
     {
         if (request.Kind != LendingProcessKind.DailyCycle) return Result.Failure<ProcessRunRequestedDto>(ErroresDeCorridas.ClaseNoOrdenable(request.Kind));
         var fecha = request.Date ?? reloj.HoyLocal;
+        if (fecha > reloj.HoyLocal) return Result.Failure<ProcessRunRequestedDto>(ErroresDeCorridas.FechaFutura(fecha, reloj.HoyLocal));
         var existente = await db.LendingProcessRuns.AsNoTracking()
             .Where(r => r.Kind == request.Kind && r.ProcessDate == fecha && !r.IsDeleted)
             .Select(r => new { r.PublicId, r.Status }).FirstOrDefaultAsync(ct);

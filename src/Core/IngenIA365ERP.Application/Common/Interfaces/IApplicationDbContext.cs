@@ -514,5 +514,14 @@ public interface IApplicationDbContext
     /// </summary>
     void DescartarCambios();
 
+    /// <summary>
+    /// Descarta todo lo que el contexto siga sin guardar <b>salvo</b> <paramref name="conservar"/>, que queda seguido como sin cambios con su
+    /// token de concurrencia intacto (feature 013, US4, bloque 8C). Es lo que hace una tanda larga entre una parte y la siguiente: suelta el libro
+    /// y las proyecciones y sigue con la corrida. No se puede hacer con <see cref="DescartarCambios"/> y volver a adjuntar: en PostgreSQL el token
+    /// es la columna de sistema <c>xmin</c>, una propiedad sombra que se pierde al soltar la entidad, y el guardado siguiente fallaría por
+    /// concurrencia (en SQL Server <c>RowVersion</c> viaja en la entidad y no se notaba). No toca la base.
+    /// </summary>
+    void DescartarCambiosSalvo(params object[] conservar);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

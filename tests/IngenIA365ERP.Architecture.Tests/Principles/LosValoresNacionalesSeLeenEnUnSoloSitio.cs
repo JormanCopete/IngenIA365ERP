@@ -73,6 +73,26 @@ public class LosValoresNacionalesSeLeenEnUnSoloSitio
         }
     }
 
+    /// <summary>
+    /// US4 (T0480): las series que usa el motor de Cartera (<c>ISeriesRegulatorias</c>: usura por modalidad, índices, festivos, el Anexo 1) las
+    /// arma <c>SeriesRegulatoriasDeCartera</c> sobre los lectores únicos; no lee <c>COR_NationalValues</c> ni los documentos por su cuenta y no está
+    /// entre los exentos.
+    /// </summary>
+    [Fact]
+    public void Las_series_de_Cartera_leen_por_los_lectores_unicos()
+    {
+        const string series = "src/Core/IngenIA365ERP.Application/Lending/Engine/SeriesRegulatoriasDeCartera.cs";
+        var root = RepoPath.FindRepoRoot();
+        var camino = Path.Combine(root, series);
+        Assert.True(File.Exists(camino), $"{series} no existe: si se movió, actualizá esta prueba.");
+        Assert.DoesNotContain(series, Exentos);
+        var texto = FuenteSinComentarios.Leer(camino);
+        Assert.False(Prohibidos.Any(p => p.Patron.IsMatch(texto)), "SeriesRegulatoriasDeCartera lee la réplica directo (FR-015, T40).");
+        Assert.Contains("IValoresNacionales", texto, StringComparison.Ordinal);
+        Assert.Contains("ICalendarioHabil", texto, StringComparison.Ordinal);
+        Assert.Contains(typeof(IngenIA365ERP.Application.Lending.Engine.SeriesRegulatoriasDeCartera).GetInterfaces(), i => i.Name == "ISeriesRegulatorias");
+    }
+
     [Fact]
     public void Hay_un_solo_lector_por_puerto()
     {

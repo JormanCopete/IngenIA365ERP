@@ -60,6 +60,29 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
     }
 
     /// <summary>
+    /// Feature 013, US4 (T0480; T5, C59): el procesador de Cartera se arranca sólo desde <c>API/Program.cs</c> (el DbMigrator nunca lo
+    /// arranca), su pasada corre cada cooperativa por <c>IEjecutorEnCooperativa</c> y el ciclo diario escribe sólo dentro de la tanda (la
+    /// guarda de arriba lo exige del procesador; ésta, de la pasada que llama).
+    /// </summary>
+    [Fact]
+    public void Procesador_de_Cartera_arranca_solo_desde_Program_y_su_pasada_va_por_el_ejecutor()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var arranque = new Regex(@"\bAddHostedService\b[^;]*\bProcesadorDeCartera\b", RegexOptions.Compiled | RegexOptions.Singleline);
+        var arrancan = RepoPath.ProductionCSharpFiles()
+            .Where(f => arranque.IsMatch(FuenteSinComentarios.Leer(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(arrancan.Count == 1 && string.Equals(arrancan[0], ProgramDeLaApi, StringComparison.OrdinalIgnoreCase),
+            "ProcesadorDeCartera se arranca sólo con AddHostedService en API/Program.cs (T5). Lo arrancan:\n  " + string.Join("\n  ", arrancan));
+
+        var pasada = FuenteSinComentarios.Leer(Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Processes", "PasadaDeCartera.cs"));
+        Assert.Contains("IEjecutorEnCooperativa", pasada);
+        Assert.Contains("ConductorDeCorridasDeCartera", pasada);
+        Assert.DoesNotContain("SaveChangesAsync", pasada);
+    }
+
+    /// <summary>
     /// Servicios alojados existentes que no operan por cooperativa, por nombre de tipo y con su motivo.
     /// Pueden heredar <c>BackgroundService</c> sin el ejecutor y registrarse fuera de <c>Program.cs</c>.
     /// </summary>

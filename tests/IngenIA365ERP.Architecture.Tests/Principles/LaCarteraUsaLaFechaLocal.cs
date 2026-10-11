@@ -64,6 +64,41 @@ public class LaCarteraUsaLaFechaLocal
         ReglaSobreFuente.SinInfracciones(infracciones, "El motor de Cartera no recibe sus fechas por parámetro (T9, T27)");
     }
 
+    /// <summary>
+    /// US4 (T0480): la causación y la mora también trabajan en <c>DateOnly</c> y reciben sus fechas. <c>Replay</c> no entra en esta lista: la
+    /// reconstrucción recibe R (<c>RegisteredAt ≤ R</c>, T24) y R es un instante <c>DateTime</c> en UTC; el reloj tampoco lo consulta (lo
+    /// vigila <see cref="La_reconstruccion_recibe_R_y_no_consulta_el_reloj"/>).
+    /// </summary>
+    private static readonly string[] CarpetasDelMotorDeUS4 = [
+        "Core/IngenIA365ERP.Domain/Lending/Accrual",
+        "Core/IngenIA365ERP.Domain/Lending/Delinquency",
+    ];
+
+    [Fact]
+    public void La_causacion_y_la_mora_trabajan_en_DateOnly()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(CarpetasDelMotorDeUS4).ToList();
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Accrual", "Causacion.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Delinquency", "AlturaDeMora.cs"), StringComparison.Ordinal));
+        var infracciones = ReglaSobreFuente.Infracciones(archivos, [
+            (new Regex(@"\bDateTime(Offset)?\b(?!\.DaysInMonth\b)", RegexOptions.Compiled), "usa DateTime en la causación o la mora (las fechas de negocio son DateOnly)"),
+            (new Regex(@"\b(IDateTimeService|TimeProvider|HoyLocal)\b", RegexOptions.Compiled), "consulta el reloj desde el motor"),
+        ]);
+        ReglaSobreFuente.SinInfracciones(infracciones, "La causación o la mora de Cartera no reciben sus fechas por parámetro (T9, T27)");
+    }
+
+    [Fact]
+    public void La_reconstruccion_recibe_R_y_no_consulta_el_reloj()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(["Core/IngenIA365ERP.Domain/Lending/Replay"]).ToList();
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Replay", "ReconstruccionDeCredito.cs"), StringComparison.Ordinal));
+        var infracciones = ReglaSobreFuente.Infracciones(archivos, [
+            (new Regex(@"\b(IDateTimeService|TimeProvider|HoyLocal|TodayUtc)\b", RegexOptions.Compiled), "consulta el reloj desde la reconstrucción"),
+            (new Regex(@"\bDateTime(Offset)?\.(Now|UtcNow|Today)\b", RegexOptions.Compiled), "lee el reloj directo"),
+        ]);
+        ReglaSobreFuente.SinInfracciones(infracciones, "La reconstrucción de Cartera no recibe R por parámetro (T24)");
+    }
+
     [Fact]
     public void Cartera_no_lee_el_reloj_por_su_cuenta()
     {

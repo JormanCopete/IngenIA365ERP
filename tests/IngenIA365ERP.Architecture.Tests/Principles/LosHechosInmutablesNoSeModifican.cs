@@ -331,6 +331,44 @@ public class LosHechosInmutablesNoSeModifican
             Assert.Contains(conjunto, conjuntos);
     }
 
+    /// <summary>
+    /// US4 (T0480): los hechos del proceso diario —el libro, la operación (sólo su reverso se escribe una vez), las condiciones, el plan y sus
+    /// cuotas, la posición diaria versionada y las partes de los hechos contables— están en <see cref="HechosDeCartera"/> y en
+    /// <c>Entities/Lending/Transactions</c>, <c>Projections</c> e <c>Integration</c>; sus conjuntos los cubre la regla genérica. La corrida y sus
+    /// errores no son hechos: la corrida avanza y el error se resuelve.
+    /// </summary>
+    [Fact]
+    public void Los_hechos_del_proceso_diario_estan_en_la_lista()
+    {
+        var esperados = new Dictionary<string, (string EspacioDeNombres, string[] Unicas)>(StringComparer.Ordinal)
+        {
+            ["LoanTransaction"] = ("IngenIA365ERP.Domain.Entities.Lending.Transactions", []),
+            ["LoanDailyPosition"] = ("IngenIA365ERP.Domain.Entities.Lending.Projections", []),
+            ["AccountingFactPart"] = ("IngenIA365ERP.Domain.Entities.Lending.Integration", []),
+            ["LoanOperation"] = ("IngenIA365ERP.Domain.Entities.Lending.Operations", ["ReversedByOperationId"]),
+            ["LoanTermsVersion"] = ("IngenIA365ERP.Domain.Entities.Lending.Loans", []),
+            ["RepaymentScheduleVersion"] = ("IngenIA365ERP.Domain.Entities.Lending.Schedules", []),
+            ["RepaymentInstallment"] = ("IngenIA365ERP.Domain.Entities.Lending.Schedules", []),
+        };
+        var tipos = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes();
+        foreach (var (nombre, (espacio, unicas)) in esperados)
+        {
+            Assert.True(HechosDeCartera.TryGetValue(nombre, out var declaradas), $"{nombre} no está en HechosDeCartera (T0480).");
+            Assert.Equal(unicas, declaradas);
+            Assert.Contains(tipos, t => t.Name == nombre && t.Namespace == espacio);
+        }
+        Assert.False(typeof(IngenIA365ERP.Domain.Common.IHechoInmutable).IsAssignableFrom(typeof(IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun)));
+
+        var conjuntos = typeof(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext).GetProperties()
+            .Where(p => p.PropertyType.IsGenericType
+                && typeof(IngenIA365ERP.Domain.Common.IHechoInmutable).IsAssignableFrom(p.PropertyType.GetGenericArguments()[0]))
+            .Select(p => p.Name)
+            .ToList();
+        foreach (var conjunto in new[] { "LoanTransactions", "LoanDailyPositions", "AccountingFactParts", "LoanTermsVersions", "RepaymentScheduleVersions",
+                     "RepaymentInstallments" })
+            Assert.Contains(conjunto, conjuntos);
+    }
+
     [Fact]
     public void Application_no_borra_ni_actualiza_en_bloque_los_hechos_de_Cartera()
     {

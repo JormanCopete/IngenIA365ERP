@@ -70,6 +70,19 @@ public class ProcessRunCommandsTests : IDisposable
             "otra fecha es otra corrida");
     }
 
+    [Fact]
+    public async Task Un_ciclo_de_una_fecha_que_no_ha_llegado_no_se_ordena()
+    {
+        // Bloque 8C: el comando dejaba encolar un ciclo de mañana, que habría causado intereses de un día no vivido (el procesador nunca crea
+        // uno después de hoy, pero la ruta sí lo admitía).
+        var r = await Pedir().Handle(Orden(LendingProcessKind.DailyCycle, _g.Reloj.HoyLocal.AddDays(1)), default);
+
+        r.Error.Code.Should().Be(ErroresDeCorridas.CodigoFechaFutura);
+        r.Error.Message.Should().NotContain("Lending.");
+        (await _g.Db.LendingProcessRuns.CountAsync()).Should().Be(0);
+        (await Pedir().Handle(Orden(LendingProcessKind.DailyCycle, _g.Reloj.HoyLocal), default)).IsSuccess.Should().BeTrue("hoy sí se ordena");
+    }
+
     [Theory]
     [InlineData(LendingProcessKind.MonthlyClose)]
     [InlineData(LendingProcessKind.CloseReopen)]

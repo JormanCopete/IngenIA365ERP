@@ -16,6 +16,8 @@ public class TextosDeCarteraTests
     [
         // US2 (T0410–T0413): los textos de la originación.
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeOriginacion.cs",
+        // US4 (T0508–T0510): los textos de los créditos, la liquidación, el libro y las corridas.
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeCreditos.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos =

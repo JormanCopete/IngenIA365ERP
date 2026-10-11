@@ -59,7 +59,10 @@ public class VerifyLendingLedgerIntegrityQueryHandlerTests : IAsyncLifetime
         {
             LoanPublicId = _c.Credito.PublicId, Date = dia, Concept = "CurrentInterest", Installment = (int?)1, Ledger = real.Amount + 50m, Reconstruction = real.Amount,
         });
-        _c.D.O.L.Levantadas.Should().Contain(a => a.TypeCode == TiposDeAlerta.CreditoSinCausar && a.EntityPublicId == _c.Credito.PublicId);
+        var alerta = _c.D.O.L.Levantadas.Should().ContainSingle(a => a.TypeCode == TiposDeAlerta.LibroDescuadrado).Which;
+        alerta.EntityPublicId.Should().Be(_c.Credito.PublicId);
+        alerta.DedupKey.Should().Be($"{TiposDeAlerta.LibroDescuadrado}:{_c.Credito.PublicId:D}", "una alerta por crédito descuadrado");
+        _c.D.O.L.Levantadas.Should().NotContain(a => a.TypeCode == TiposDeAlerta.CreditoSinCausar, "un libro descuadrado no es un crédito sin causar");
         (await _c.Db.LoanTransactions.CountAsync()).Should().Be(filas, "verificar no corrige nada");
         (await _c.Verificar().Handle(new VerifyLendingLedgerIntegrityQuery(UpTo: Hoy.AddDays(3)), default)).Value.Mismatches
             .Should().BeEmpty("hasta el día 3 el libro cuadra");

@@ -40,6 +40,8 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // publica). Las garantías y el pagaré viven en el detalle de la solicitud (GarantiasYPagare).
         ("Pages/Cartera/Desembolsos.razor", "/cartera/desembolsos", "Lending.Disbursements.Execute"),
         ("Pages/Cartera/DoblesDePrueba.razor", "/cartera/dobles-de-prueba", "Lending.TestDoubles.Operate"),
+        // Fase 8, US4 (T0510): los créditos; su detalle (/cartera/creditos/{id:guid}, T0509) se abre desde la lista.
+        ("Pages/Cartera/Creditos.razor", "/cartera/creditos", "Lending.Loans.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
@@ -49,6 +51,8 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // US2 (T0414): la solicitud nueva y su detalle se abren desde Solicitudes.
         ("Pages/Cartera/SolicitudNueva.razor", "/cartera/solicitudes/nueva", "Lending.Applications.Create"),
         ("Pages/Cartera/SolicitudDetalle.razor", "/cartera/solicitudes/{Id:guid}", "Lending.Applications.Read"),
+        // US4 (T0509): el expediente del crédito; la pestaña de liquidación exige además Lending.Payoffs.Read (se comprueba aparte).
+        ("Pages/Cartera/CreditoDetalle.razor", "/cartera/creditos/{Id:guid}", "Lending.Loans.Read"),
     ];
 
     [Fact]
@@ -65,6 +69,18 @@ public class LasPantallasDeCarteraEstanEnElMenu
             if (!texto.Contains("<IndicadorDeCarga", StringComparison.Ordinal)) infracciones.Add($"{archivo}: sin IndicadorDeCarga");
         }
         ReglaSobreFuente.SinInfracciones(infracciones, "Detalles de Cartera fuera del contrato (T98)");
+    }
+
+    /// <summary>
+    /// US4 (T0509): la liquidación es una lectura auditada con su propio permiso: la pestaña va detrás de <c>Lending.Payoffs.Read</c> y cada
+    /// zona que carga (resumen, liquidación, estado de cuenta, plan, operaciones, comprobante, libro, garantías) tiene su indicador.
+    /// </summary>
+    [Fact]
+    public void El_detalle_del_credito_protege_la_liquidacion_y_carga_por_zona()
+    {
+        var texto = File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "CreditoDetalle.razor"));
+        Assert.Contains("Required=\"Lending.Payoffs.Read\"", texto, StringComparison.Ordinal);
+        Assert.True(Regex.Matches(texto, "<IndicadorDeCarga ").Count >= 8, "CreditoDetalle: un IndicadorDeCarga por zona que carga.");
     }
 
     [Fact]

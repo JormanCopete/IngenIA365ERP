@@ -44,27 +44,38 @@ public static class OriginacionE2E
         Guid Consejo,
         IReadOnlyList<(Guid Persona, Guid Miembro)> Consejeros,
         Guid PersonaEnLista,
-        Guid RolDeRadicacion);
+        Guid RolDeRadicacion)
+    {
+        /// <summary>
+        /// La modalidad de las líneas del ensayo cuando no es la de consumo (US4, T0482): en el host «Valores nacionales e2e» la usura de consumo
+        /// la registra <c>ValoresNacionalesYReplicaTests</c> y nadie más puede registrarla; nulo = consumo por caja.
+        /// </summary>
+        public string? Modalidad { get; init; }
+    }
 
     private static readonly Dictionary<(CentralIdentityApiFixture, string), Task<Escenario>> Escenarios = [];
     private static readonly object Cerrojo = new();
     private static int _documento;
 
-    /// <summary>Una cooperativa de originación por nombre y fixture; <paramref name="activada"/> la activa por <c>ActivarCarteraAsync</c> (C107).</summary>
-    public static Task<Escenario> EscenarioAsync(CentralIdentityApiFixture fx, string nombre, bool activada)
+    /// <summary>
+    /// Una cooperativa de originación por nombre y fixture; <paramref name="activada"/> la activa por <c>ActivarCarteraAsync</c> (C107). Con
+    /// <paramref name="modalidad"/> las líneas son de esa modalidad (sin subsegmento) y el escenario no registra los valores de la central: quien
+    /// lo pide registra antes la usura de esa modalidad (US4, T0482).
+    /// </summary>
+    public static Task<Escenario> EscenarioAsync(CentralIdentityApiFixture fx, string nombre, bool activada, string? modalidad = null)
     {
         lock (Cerrojo)
         {
             if (!Escenarios.TryGetValue((fx, nombre), out var tarea))
             {
-                tarea = PrepararAsync(fx, nombre, activada);
+                tarea = PrepararAsync(fx, nombre, activada, modalidad);
                 Escenarios[(fx, nombre)] = tarea;
             }
             return tarea;
         }
     }
 
-    private static async Task<Escenario> PrepararAsync(CentralIdentityApiFixture fx, string nombre, bool activada)
+    private static async Task<Escenario> PrepararAsync(CentralIdentityApiFixture fx, string nombre, bool activada, string? modalidad)
     {
         var hoy = CarteraE2E.Hoy(fx);
         var coop = await CarteraE2E.CooperativaAisladaAsync(fx, nombre, primerEjercicioContable: hoy.Year);
@@ -73,12 +84,15 @@ public static class OriginacionE2E
         using var http = fx.CreateClient();
         var admin = coop.TokenAdmin;
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop);
-        await LineasE2E.PrepararAsync(fx, coop);
+        if (modalidad is null) await LineasE2E.PrepararAsync(fx, coop);
+        else await NationalValues.ValoresNacionalesE2E.ReplicarAsync(fx, coop.TenantPublicId);
         fx.Dobles.PatrimonioTecnico(coop.TenantPublicId, PatrimonioTecnico, hoy.AddDays(-1));
 
         // Las líneas: ORIGEN sin documentos y, en la activada, CONDOC con la cédula obligatoria.
-        var origen = await CrearExitoAsync(http, admin, "ORIGEN", "Consumo para la originación", VersionDeOriginacion(hoy, conDocumento: false));
-        Guid? conDocumento = activada ? await CrearExitoAsync(http, admin, "CONDOC", "Consumo con documentos", VersionDeOriginacion(hoy, conDocumento: true)) : null;
+        var origen = await CrearExitoAsync(http, admin, "ORIGEN", "Consumo para la originación", VersionDeOriginacion(hoy, conDocumento: false, modalidad));
+        Guid? conDocumento = activada
+            ? await CrearExitoAsync(http, admin, "CONDOC", "Consumo con documentos", VersionDeOriginacion(hoy, conDocumento: true, modalidad))
+            : null;
         var lineas = conDocumento is { } d ? new[] { origen, d } : [origen];
         foreach (var u in new[] { usuarios.AsesorO1, usuarios.AsesorO2, usuarios.Analista, usuarios.Comite1, usuarios.SinPersona })
             await UsuariosDeCartera.FijarLineasAsync(http, admin, u, lineas);
@@ -158,13 +172,14 @@ public static class OriginacionE2E
             reason = "Monto operativo de cupos de quien radica en el ensayo",
         });
 
-        return new Escenario(coop, usuarios, hoy, origen, conDocumento, comite, miembros, consejo, consejeros, enLista, radicacion);
+        return new Escenario(coop, usuarios, hoy, origen, conDocumento, comite, miembros, consejo, consejeros, enLista, radicacion) { Modalidad = modalidad };
     }
 
     /// <summary>La versión de las líneas del ensayo: consumo por caja al 22 % EA, de 500.000 a 100.000.000 y de 1 a 60 meses.</summary>
-    public static Dictionary<string, object?> VersionDeOriginacion(DateOnly desde, bool conDocumento)
+    /// <remarks>Con <paramref name="modalidad"/>, de esa modalidad y sin subsegmento (US4, T0482).</remarks>
+    public static Dictionary<string, object?> VersionDeOriginacion(DateOnly desde, bool conDocumento, string? modalidad = null)
     {
-        var v = VersionFija(desde, "CONSUMO", "SinLibranza", 0.22m, "Versión de la originación (e2e)");
+        var v = VersionFija(desde, modalidad ?? "CONSUMO", modalidad is null ? "SinLibranza" : null, 0.22m, "Versión de la originación (e2e)");
         v["amounts"] = new { min = 500_000m, max = 100_000_000m };
         if (conDocumento) v["documents"] = new[] { new { code = "CEDULA", name = "Copia de la cédula", mandatory = true } };
         return v;

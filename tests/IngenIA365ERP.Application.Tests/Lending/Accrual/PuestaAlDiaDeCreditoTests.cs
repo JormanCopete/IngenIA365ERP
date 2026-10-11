@@ -56,6 +56,7 @@ public class PuestaAlDiaDeCreditoTests : IAsyncLifetime
         });
         filas.Should().OnlyContain(f => f.MessagePublicId == parte.MessagePublicId);
         var mensaje = await _c.Db.IntegrationMessages.SingleAsync(m => m.PublicId == parte.MessagePublicId);
+        mensaje.OriginNumber.Should().Be($"ALD-{tramo.Number}-1", "el rótulo de la puesta al día nombra la operación que la pidió (mensajes.md §3)");
         mensaje.PayloadJson.Should().Contain("\"catchUpOperation\":{").And.Contain(tramo.PublicId.ToString())
             .And.Contain("\"batchNumber\":1").And.Contain("\"runKind\":null").And.Contain($"\"valueDate\":\"{Hoy.AddDays(1):yyyy-MM-dd}\"");
         (await _c.Db.LoanDailyPositions.CountAsync(p => p.LoanId == credito && p.PositionDate > Hoy && p.PositionDate < d)).Should().Be(4);

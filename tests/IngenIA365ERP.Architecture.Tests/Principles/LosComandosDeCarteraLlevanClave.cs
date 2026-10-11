@@ -49,6 +49,8 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollateralsEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PromissoryNotesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/TestDoublesEndpoints.cs",
+        // US4 (bloque 8C, T0506): ordenar y reintentar corridas. IntegrityEndpoints no está: su única ruta es una consulta por POST.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/ProcessRunsEndpoints.cs",
     ];
 
     /// <summary>
@@ -58,7 +60,9 @@ public class LosComandosDeCarteraLlevanClave
     /// repetirlo no cambia nada).
     /// </summary>
     private static readonly string[] ConsultasPorPost =
-        ["\"/preview\"", "/usury-check\"", "\"/schedule\"", "\"/schedule/pdf\"", "/download-link\"", "/disbursement-preview\"", "/refresh\""];
+        ["\"/preview\"", "/usury-check\"", "\"/schedule\"", "\"/schedule/pdf\"", "/download-link\"", "/disbursement-preview\"", "/refresh\"",
+            // US4 (bloque 8C): verificar el libro (api.md §16.5: no corrige nada).
+            "\"/verify\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -138,6 +142,9 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.EndorsePromissoryNoteCommand),
         typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.VoidPromissoryNoteCommand),
         typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestDisbursementResultCommand),
+        // US4 (bloque 8C, T0506): ordenar y reintentar una corrida del ciclo diario.
+        typeof(IngenIA365ERP.Application.Lending.Processes.RequestLendingProcessRunCommand),
+        typeof(IngenIA365ERP.Application.Lending.Processes.RetryLendingProcessRunCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

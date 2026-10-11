@@ -23,7 +23,7 @@ public sealed record ResultadoDeVerificacion(int Revisados, DateOnly? Hasta, IRe
 /// La verificación del libro de Cartera (feature 013, US4, T0505; data-model §5.3, T33): para cada crédito, Σ libro por (día valor, concepto,
 /// cuota) = la reconstrucción con la información de ahora, para todo día hasta su marca de agua (<see cref="MotorDeCartera.Verificar"/>; día por
 /// día es más fuerte que el acumulado). Completa o sobre una muestra repartida en el orden de los créditos; nunca corrige nada: cada crédito con
-/// diferencias levanta <c>Cartera.CreditoSinCausar</c> (no hay un tipo propio para el libro descuadrado; ver el informe de 8B). (nuevo)
+/// diferencias levanta <c>Cartera.LibroDescuadrado</c> (bloque 8C; <c>DedupKey …:{crédito}</c>), para cartera y la contadora. (nuevo)
 /// </summary>
 public sealed class VerificacionDelLibro(IApplicationDbContext db, CargadorDeReconstruccion cargador, IAlertas alertas)
 {
@@ -62,11 +62,11 @@ public sealed class VerificacionDelLibro(IApplicationDbContext db, CargadorDeRec
                 if (suyas.Count == 0) continue;
                 diferencias.AddRange(suyas.Select(x => new LedgerMismatchDto(cargado.Credito.PublicId, cargado.Credito.Number, x.Dia, x.Concepto.ToString(),
                     x.Cuota, x.Libro, x.Reconstruccion)));
-                await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.CreditoSinCausar, $"Libro del crédito {cargado.Credito.Number} descuadrado",
+                await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.LibroDescuadrado, $"Libro del crédito {cargado.Credito.Number} descuadrado",
                     $"El libro del crédito {cargado.Credito.Number} no cuadra con su reconstrucción en {suyas.Count} día(s) y concepto(s), desde el "
                     + $"{Origination.ErroresDeOriginacion.Fecha(suyas[0].Dia)}. Nada se corrigió: revise las operaciones del crédito con soporte.",
                     EntityType: "Loan", EntityPublicId: cargado.Credito.PublicId,
-                    DedupKey: $"{TiposDeAlerta.CreditoSinCausar}:{cargado.Credito.PublicId:D}:libro", ModuloDeOrigen: "Lending"), ct);
+                    DedupKey: $"{TiposDeAlerta.LibroDescuadrado}:{cargado.Credito.PublicId:D}", ModuloDeOrigen: "Lending"), ct);
             }
         }
         return new ResultadoDeVerificacion(elegidos.Count, hastaVerificado, diferencias, reloj.ElapsedMilliseconds);

@@ -649,6 +649,28 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     /// <inheritdoc />
     public void DescartarCambios() => ChangeTracker.Clear();
 
+    /// <inheritdoc />
+    public void DescartarCambiosSalvo(params object[] conservar)
+    {
+        ArgumentNullException.ThrowIfNull(conservar);
+        // El token de concurrencia de cada una (en PostgreSQL, la sombra xmin) antes de soltar: Attach lo dejaría en su valor por defecto.
+        var tokens = conservar.Distinct(ReferenceEqualityComparer.Instance).Select(entidad => (Entidad: entidad!, Valores: Entry(entidad!).Properties
+                .Where(p => p.Metadata.IsConcurrencyToken).Select(p => (p.Metadata.Name, p.CurrentValue)).ToList()))
+            .ToList();
+        ChangeTracker.Clear();
+        foreach (var (entidad, valores) in tokens)
+        {
+            var entrada = Attach(entidad);
+            foreach (var (nombre, valor) in valores)
+            {
+                var propiedad = entrada.Property(nombre);
+                propiedad.CurrentValue = valor;
+                propiedad.OriginalValue = valor;
+                propiedad.IsModified = false;
+            }
+        }
+    }
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         // Feature 012 (T137): hechos inmutables y documentos confirmados, antes de tocar nada (T17, T18).

@@ -30,6 +30,9 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
         // US2 (bloque 6B): el informe de centrales (detalle y enlace) y la liberación de una coincidencia en listas.
         "Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Origination/ScreeningResultCommands.cs",
+        // US4 (T0480): la liquidación y el estado de cuenta (lo que cuesta cancelar).
+        "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs",
     ];
 
     /// <summary>Cada lectura sensible: su archivo, su consulta y el método de <see cref="LendingAuditEmitter"/> que la audita.</summary>
@@ -48,6 +51,11 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
             nameof(LendingAuditEmitter.EmitirInformeDeCentralesVistoAsync)),
         ("Core/IngenIA365ERP.Application/Lending/Origination/ScreeningResultCommands.cs", "ReleaseScreeningMatchCommand",
             nameof(LendingAuditEmitter.EmitirCoincidenciaLiberadaAsync)),
+        // US4 (T0480): la liquidación a (D, R) y el estado de cuenta auditan Lending.Payoff.Viewed con D, R y la huella.
+        ("Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs", "GetLoanSettlementQuery",
+            nameof(LendingAuditEmitter.EmitirLiquidacionVistaAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs", "GetLoanStatementQuery",
+            nameof(LendingAuditEmitter.EmitirLiquidacionVistaAsync)),
     ];
 
     /// <summary>La lista cerrada de research §13 y C89 (los diez eventos de T0256).</summary>

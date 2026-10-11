@@ -1975,7 +1975,7 @@ Saltar un día con el reloj de la suite y correr la tanda siguiente:
 
 #### Arquitectura
 
-- [ ] T0480 [US4] Llenar las listas de esta historia en `tests/IngenIA365ERP.Architecture.Tests/Principles/` (DT §2.25):
+- [X] T0480 [US4] Llenar las listas de esta historia en `tests/IngenIA365ERP.Architecture.Tests/Principles/` (DT §2.25):
   · `ElMotorDeCarteraEsDecimal`: sin `double`, `float`, `Math.Pow`, `Math.Exp`, `Math.Log` en `Domain/Lending`;
   · `NadieEscribeElLibroDeCarteraFueraDelRegistro`: `LND_LoanTransactions`, `LND_LoanControls`, `LND_LoanDailyPositions`, `LND_LoanOperations`, `LND_LoanTermsVersions` y el plan, C45;
   · `LosSaldosYTasasDeCarteraTienenSuPrecision`: las columnas de §4–§7 y §22, con el alias;
@@ -1985,10 +1985,11 @@ Saltar un día con el reloj de la suite y correr la tanda siguiente:
   · `LosValoresNacionalesSeLeenEnUnSoloSitio`: `ISeriesRegulatorias` no lee `COR_NationalValues` directamente;
   · `LasLecturasSensiblesDeCarteraSeAuditan`: `GetLoanSettlementQuery`, `GetLoanStatementQuery`.
   · Además, ampliar `NingunTrabajoDeFondoOperaSinCooperativa` con `ProcesadorDeCartera` y comprobar que `PrincipioXI_ContableImmutable` y `LosHechosInmutablesNoSeModifican` ya ven `Entities/Lending/Transactions` y las entidades H de esta fase.
+  - Hecho (2026-10-11): `Principles/`: `ElMotorDeCarteraEsDecimal` (mira las piezas de US4: causación, suspensión, mora, reconstrucción, reglas, explicación y huella), `LaCarteraUsaLaFechaLocal` (`Accrual` y `Delinquency` en `DateOnly`; `Replay` queda fuera porque R es un instante, pero no consulta el reloj), `LaCarteraNoTieneValoresLegalesFijos` (sin 7 ni 10 sueltos también en `Accrual`, `Delinquency` y `Replay`), `EmisionesDeProcesoPermitidas` (los del ciclo admiten proceso; `CreditoDesembolsado` y `PagoAplicado` no), `LosValoresNacionalesSeLeenEnUnSoloSitio` (`SeriesRegulatoriasDeCartera` sobre los lectores únicos), `LasLecturasSensiblesDeCarteraSeAuditan` (+ liquidación y estado de cuenta con `EmitirLiquidacionVistaAsync`), `LosSaldosYTasasDeCarteraTienenSuPrecision` (alias de libro, posición, condiciones, plan, operaciones y partes), `NingunTrabajoDeFondoOperaSinCooperativa` (el procesador arranca sólo en `Program.cs` y su pasada va por el ejecutor sin guardar), `LosComandosDeCarteraLlevanClave` (+ `ProcessRunsEndpoints`, sus dos comandos y `/verify` entre las consultas por POST), `PrincipioXI_ContableImmutable` (posiciones, partes y operaciones no se borran) y `LosHechosInmutablesNoSeModifican` (los hechos del proceso diario y sus conjuntos). `NadieEscribeElLibroDeCarteraFueraDelRegistro` ya cubría todo. Arquitectura verde (545).
 
 #### e2e (colección «Cartera e2e», dos motores)
 
-- [ ] T0481 [US4] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/CausacionYLiquidacionTests.cs` (nombre fijo de quickstart §1.7) en una cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` (C107), con `Lending:Process:Enabled = false` y tandas a mano con `RunDailyAccrualCommand` y `RelojDeLaSuite`:
+- [X] T0481 [US4] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/CausacionYLiquidacionTests.cs` (nombre fijo de quickstart §1.7) en una cooperativa aislada activada con `CarteraE2E.ActivarCarteraAsync` (C107), con `Lending:Process:Enabled = false` y tandas a mano con `RunDailyAccrualCommand` y `RelojDeLaSuite`:
   · repetir la tanda no duplica;
   · la vencida causa sólo mora;
   · suspensión con `CausacionSuspendida`;
@@ -1999,12 +2000,15 @@ Saltar un día con el reloj de la suite y correr la tanda siguiente:
   · `POST /integrity/verify` sin diferencias;
   · `POST /process-runs` responde 202 y una segunda `Lending.Process.AlreadyRunning`;
   · la auditoría de la corrida queda en la base de auditoría de su cooperativa (PublicId, lección de la 009).
-- [ ] T0482 [US4] Agregar a `tests/IngenIA365ERP.API.IntegrationTests/Lending/ValoresNacionalesYReplicaTests.cs` (colección «Valores nacionales e2e», la crea la fase 2) el escenario de T28: el maestro corrige la usura con `SupersedesPublicId` después de causar; la réplica encola la corrida `NationalValueCorrection`; la corrida deja ajuste y saldo a favor; una liquidación con R anterior no cambia (SC-002).
-- [ ] T0483 [US4] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/CausacionDiariaPerformanceTests.cs` con `[FactDeRendimiento]` (omitida sin `RUN_PERF_TESTS=1`, nunca con `return`), escenario de quickstart §1.8:
+  - Hecho (2026-10-11): `Lending/CausacionYLiquidacionTests.cs` (dos pruebas, cooperativas «causacion» y «causacion_motores») sobre `Lending/CausacionE2E.cs` (ordenar por la ruta, tandas a mano por `IEjecutorEnCooperativa` con el tamaño pedido, reloj de la suite, cerrojo sostenido en otra transacción). Cubre 202 y `AlreadyRunning`/`AlreadyCompleted`/`FutureDate`, repetir no escribe, un día saltado con un día por fila, mora sólo sobre lo vencido desde el día siguiente a la exigible, suspenso desde el día 61 sin reclasificar, liquidación de hoy, pasada y futura repetida idéntica, R anterior a un reverso de desembolso registrado después, `NationalValues.Missing` que frena sólo su crédito (error de grupo, corrida `Completed`), `validUntil` con la usura certificada hasta un día, `/integrity/verify` sin diferencias, auditoría (`Lending.Payoff.Viewed` y la orden de la corrida) en la cooperativa; y lo que InMemory no prueba: `SKIP LOCKED`/`READPAST` con un crédito ocupado, dos corridas a la vez sin causar dos veces, la corrida guardada tanda tras tanda tras soltarla (tandas de uno), `RowVersion`/`xmin` (`ConcurrencyConflictException`), `UK_LND_AccountingFactParts_Batch` y la precisión de las columnas. Destapó dos defectos del producto (ver informe 8C). PostgreSQL: verde (colección «Cartera e2e» + «Valores nacionales e2e»: 62 pasan, 2 omitidas de rendimiento). SQL Server: verde (62 pasan, 2 omitidas).
+- [X] T0482 [US4] Agregar a `tests/IngenIA365ERP.API.IntegrationTests/Lending/ValoresNacionalesYReplicaTests.cs` (colección «Valores nacionales e2e», la crea la fase 2) el escenario de T28: el maestro corrige la usura con `SupersedesPublicId` después de causar; la réplica encola la corrida `NationalValueCorrection`; la corrida deja ajuste y saldo a favor; una liquidación con R anterior no cambia (SC-002).
+  - Hecho (2026-10-11): `NationalValues/ValoresNacionalesYReplicaTests.La_correccion_de_la_usura_despues_de_causar_ajusta_el_libro_y_no_cambia_lo_que_se_sabia`, en la modalidad `PRODUCTIVO_RURAL` (la de consumo y la de microcrédito son de las otras pruebas del host; `OriginacionE2E`/`DesembolsoE2E` aceptan `modalidad` y entonces no registran los valores de la central): causa cinco días, el maestro corrige la usura por debajo de la tasa, la réplica encola una corrida `NationalValueCorrection` pedida por el proceso, la corrida deja un `AccrualAdjustment` negativo por día con partes `AjusteDeCausacionPorFechaValor`, el libro vuelve a cuadrar y la liquidación con R anterior es idéntica. El saldo a favor no se puede producir sin pagos (US5). PostgreSQL: verde (colección «Cartera e2e» + «Valores nacionales e2e»: 62 pasan, 2 omitidas de rendimiento). SQL Server: verde (62 pasan, 2 omitidas).
+- [X] T0483 [US4] Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/CausacionDiariaPerformanceTests.cs` con `[FactDeRendimiento]` (omitida sin `RUN_PERF_TESTS=1`, nunca con `return`), escenario de quickstart §1.8:
   · 50.000 créditos vivos cargados por la migración en una cooperativa aislada; una pasada completa del ciclo en menos de 30 min;
   · mientras corre, en otra cooperativa los pagos y consultas siguen dentro de SC-008;
   · deja medidos tandas, partes, mensajes, líneas del resumido del día (pregunta C5), filas de `LND_LoanDailyPositions` (D13) y de `COR_IntegrationMessages` (B3), y un día saltado puesto al día sin duplicados.
   · depende de la migración y la activación de US8 (fase 13) y del contrato de US5 (fase 9)
+  - Hecho (2026-10-11): `Lending/CausacionDiariaPerformanceTests.cs` con `[FactDeRendimiento]`: siembra la cartera copiando en la base el grafo de un crédito desembolsado (crédito, operación, condiciones, plan, cuotas, libro, control y partes) mientras no exista la carga de US8; corre la pasada en tandas de 250, mide tandas, partes, mensajes, líneas del resumido, posiciones y mensajes, consulta la otra cooperativa (p95; los pagos llegan con US5) y pone al día un día saltado sin duplicados. `CARTERA_CREDITOS_DE_RENDIMIENTO` baja el tamaño para probar el arnés (el umbral de 30 min sólo se juzga con 50.000). Sin la variable, omitida en los dos motores. Medido con `RUN_PERF_TESTS=1` en PostgreSQL con 50.000 créditos: siembra 346 s; pasada **919 s** (≈15 min, bajo los 30) en 201 tandas, 0 fallidos, 200 partes y 200 mensajes, 50.000 líneas del resumido, 50.000 posiciones nuevas; la otra cooperativa, 7.698 consultas con p95 23 ms; la puesta al día de dos días, 434 s, sin duplicados. En SQL Server el arnés con 1.500 (pasada 32 s, p95 32 ms); los 50.000 en SQL Server quedan para la medición previa a la promoción (quickstart §1.8). Los pagos de la otra cooperativa y la carga por migración llegan con US5 y US8.
 
 ### Implementation for User Story 4
 
@@ -2120,10 +2124,13 @@ la mora, la suspensión, la regeneración del plan y la reconstrucción a (D, R)
 
 #### API y pantallas
 
-- [ ] T0506 [US4] Completar `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/LoansEndpoints.cs` con las consultas de `api.md` §8.1 (`date` y `recordedAsOf`, C83). Crear `ProcessRunsEndpoints.cs` (§16.4) e `IntegrityEndpoints.cs` (§16.5). Todo con `.RequirePermission` y el 404 genérico.
-- [ ] T0507 [P] [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/{CreditosClient,CorridasDeCarteraClient}.cs` y registrarlos.
-- [ ] T0508 [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Creditos.razor` (`/cartera/creditos`, `Lending.Loans.Read`): búsqueda por número, deudor, línea, oficina, estado y mora, dentro del alcance.
-- [ ] T0509 [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/CreditoDetalle.razor` (`/cartera/creditos/{id:guid}`) con pestañas:
+- [X] T0506 [US4] Completar `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/LoansEndpoints.cs` con las consultas de `api.md` §8.1 (`date` y `recordedAsOf`, C83). Crear `ProcessRunsEndpoints.cs` (§16.4) e `IntegrityEndpoints.cs` (§16.5). Todo con `.RequirePermission` y el 404 genérico.
+  - Hecho (2026-10-11): `API/Endpoints/Lending/LoansEndpoints.cs` (+ lista, detalle, estado de cuenta, liquidación con `date`/`recordedAsOf` en UTC, plan y versiones, operaciones y comprobante, libro), `ProcessRunsEndpoints.cs` (lista, detalle, orden y reintento con 202 y clave) e `IntegrityEndpoints.cs` (`POST /integrity/verify`, sin clave). Nuevo `Lending.ProcessRun.FutureDate` (defecto: la ruta admitía ordenar un ciclo de mañana), con prueba en `ProcessRunCommandsTests`, data-model §10 y api.md §16.4.
+- [X] T0507 [P] [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Services/Cartera/{CreditosClient,CorridasDeCarteraClient}.cs` y registrarlos.
+  - Hecho (2026-10-11): `Shared/Services/Cartera/{CreditosClient,CorridasDeCarteraClient,CarteraDtos.Creditos,TextosDeCreditos}.cs`, registrados en Web, Web.Client y MAUI; `Shared.Tests/Cartera/CreditosClientTests.cs` (lecturas sin clave, orden y reintento con clave, R en UTC con su zona, sin `Authorization`).
+- [X] T0508 [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Creditos.razor` (`/cartera/creditos`, `Lending.Loans.Read`): búsqueda por número, deudor, línea, oficina, estado y mora, dentro del alcance.
+  - Hecho (2026-10-11): `Pages/Cartera/Creditos.razor`: número o deudor, estado, línea, oficina, modalidad y mora mínima; saldos de la última posición con su fecha; `IndicadorDeCarga`.
+- [X] T0509 [US4] Crear `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/CreditoDetalle.razor` (`/cartera/creditos/{id:guid}`) con pestañas:
   · resumen;
   · liquidación con fecha D y «con la información hasta» R, y la explicación;
   · estado de cuenta;
@@ -2133,17 +2140,20 @@ la mora, la suspensión, la regeneración del plan y la reconstrucción a (D, R)
   · garantías y orden de giro.
   · La pestaña de liquidación exige `Payoffs.Read` (`PermissionGate`).
   · `IndicadorDeCarga` por zona; textos sin códigos técnicos (`TextosDeCarteraTests`).
-- [ ] T0510 [US4] Agregar al grupo «Cartera» del menú el enlace a `/cartera/creditos` con `PermissionGate` y la página a `LasPantallasDeCarteraEstanEnElMenu`. Las corridas se ven en el detalle de `/cartera/bandeja-de-mensajes` (ver notas: DT §2.16 no fija pantalla de corridas).
+  - Hecho (2026-10-11): `Pages/Cartera/CreditoDetalle.razor` con siete pestañas leídas al abrirlas, cada zona con su indicador (ocho); la liquidación detrás de `Lending.Payoffs.Read` con fecha y «con la información hasta» (hora local convertida a UTC), saldos por concepto y cuota, explicación y huella; `TextosDeCreditos` en `TextosDeCarteraTests`; `LasPantallasDeCarteraEstanEnElMenu` comprueba el permiso y los indicadores.
+- [X] T0510 [US4] Agregar al grupo «Cartera» del menú el enlace a `/cartera/creditos` con `PermissionGate` y la página a `LasPantallasDeCarteraEstanEnElMenu`. Las corridas se ven en el detalle de `/cartera/bandeja-de-mensajes` (ver notas: DT §2.16 no fija pantalla de corridas).
+  - Hecho (2026-10-11): Subgrupo «Créditos» del menú con `/cartera/creditos` detrás de `Lending.Loans.Read`; la pantalla y su detalle en `LasPantallasDeCarteraEstanEnElMenu`. **Pendiente**: `/cartera/bandeja-de-mensajes` todavía no existe (llega con la bandeja de Cartera, US7), así que las corridas sólo se ven por la ruta `/api/lending/process-runs`; el runbook lo dice.
 
 #### Documentación
 
-- [ ] T0511 [P] [US4] Escribir `docs/manual/cartera-causacion-y-liquidacion.md` **(nuevo)**, para la contadora:
+- [X] T0511 [P] [US4] Escribir `docs/manual/cartera-causacion-y-liquidacion.md` **(nuevo)**, para la contadora:
   · convenciones, equivalencia y tope de usura;
   · causación del día (d − 1, d] y puesta al día;
   · suspensión, día no hábil y reajuste;
   · liquidación a (D, R) y su reproducibilidad;
   · cómo leer un caso dorado.
-- [ ] T0512 [P] [US4] Escribir `docs/operaciones/cartera-proceso-diario.md` **(nuevo)**:
+  - Hecho (2026-10-11): `docs/manual/cartera-causacion-y-liquidacion.md` (y en `docs/INDICE-DOCUMENTACION.md`).
+- [X] T0512 [P] [US4] Escribir `docs/operaciones/cartera-proceso-diario.md` **(nuevo)**:
   · opciones `Lending:Process` y arrendamiento;
   · ver, reintentar y ordenar corridas;
   · día sin causar y alertas;
@@ -2151,6 +2161,7 @@ la mora, la suspensión, la regeneración del plan y la reconstrucción a (D, R)
   · `POST /integrity/verify`;
   · volumen y partición por año (D13).
   · Agregar los dos documentos a `docs/INDICE-DOCUMENTACION.md`.
+  - Hecho (2026-10-11): `docs/operaciones/cartera-proceso-diario.md`; los dos documentos en `docs/INDICE-DOCUMENTACION.md`.
 
 **Checkpoint**:
 - los casos dorados de esta fase y las cuatro propiedades pasan al centavo;
@@ -2159,6 +2170,11 @@ la mora, la suspensión, la regeneración del plan y la reconstrucción a (D, R)
 - una cooperativa activada causa sola cada día desde las 00:30, se pone al día sin duplicar y liquida a cualquier (D, R)
   con el mismo resultado;
 - el libro es igual a la reconstrucción.
+- **Cerrada el 2026-10-11 (bloque 8C)**: rutas, clientes, pantallas, listas de arquitectura, manual y runbook; `CausacionYLiquidacionTests` y la
+  corrección por valor nacional verdes en los dos motores; casos dorados, propiedades y `RendimientoDeCausacionTests` (~11 s) verdes. Tipo de alerta propio `Cartera.LibroDescuadrado`. Defectos del
+  producto corregidos con prueba: la sombra `xmin` que se perdía al soltar la corrida entre tandas (PostgreSQL), el rótulo de las partes que no cabía en
+  `origin.number` (30) y el ciclo que se podía ordenar para una fecha futura. SC-007 medido en PostgreSQL con 50.000 créditos sintéticos: la pasada en 919 s. Queda para fases siguientes: la medición
+  con la carga real de la migración (US8) y en SQL Server y los pagos de la otra cooperativa (US5), el saldo a favor de la corrección (US5) y la pantalla de corridas en la bandeja (US7).
 
 ---
 

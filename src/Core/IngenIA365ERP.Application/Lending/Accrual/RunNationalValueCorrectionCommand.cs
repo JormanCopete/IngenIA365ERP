@@ -145,8 +145,7 @@ public sealed class CorreccionDeValorNacional(
             return Result.Success();
         }, ct);
 
-        db.DescartarCambios();
-        db.LendingProcessRuns.Attach(corrida);
+        db.DescartarCambiosSalvo(corrida);
         corrida.CursorLoanId = ids.Max();
         return AvanceDeCorrida.Pendiente;
     }

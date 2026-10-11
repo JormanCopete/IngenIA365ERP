@@ -49,26 +49,31 @@ public static class DesembolsoE2E
         public DateOnly Hoy => Originacion.Hoy;
     }
 
-    private static readonly Dictionary<CentralIdentityApiFixture, Task<Escenario>> Escenarios = [];
+    private static readonly Dictionary<(CentralIdentityApiFixture, string), Task<Escenario>> Escenarios = [];
     private static readonly object Cerrojo = new();
     private static int _documento;
 
-    public static Task<Escenario> EscenarioAsync(CentralIdentityApiFixture fx)
+    /// <summary>
+    /// El escenario del desembolso en la cooperativa <paramref name="nombre"/> («desembolso» la de las e2e de la fase 7; US4 usa otras, porque
+    /// su ciclo diario causa todos los créditos vivos de la cooperativa y mueve sus marcas).
+    /// </summary>
+    /// <remarks>Con <paramref name="modalidad"/>, las líneas son de esa modalidad (ver <see cref="OriginacionE2E.EscenarioAsync"/>).</remarks>
+    public static Task<Escenario> EscenarioAsync(CentralIdentityApiFixture fx, string nombre = "desembolso", string? modalidad = null)
     {
         lock (Cerrojo)
         {
-            if (!Escenarios.TryGetValue(fx, out var tarea))
+            if (!Escenarios.TryGetValue((fx, nombre), out var tarea))
             {
-                tarea = PrepararAsync(fx);
-                Escenarios[fx] = tarea;
+                tarea = PrepararAsync(fx, nombre, modalidad);
+                Escenarios[(fx, nombre)] = tarea;
             }
             return tarea;
         }
     }
 
-    private static async Task<Escenario> PrepararAsync(CentralIdentityApiFixture fx)
+    private static async Task<Escenario> PrepararAsync(CentralIdentityApiFixture fx, string nombre, string? modalidad)
     {
-        var orig = await OriginacionE2E.EscenarioAsync(fx, "desembolso", activada: true);
+        var orig = await OriginacionE2E.EscenarioAsync(fx, nombre, activada: true, modalidad);
         using var http = fx.CreateClient();
         var admin = orig.Coop.TokenAdmin;
         var hoy = orig.Hoy;
@@ -78,7 +83,7 @@ public static class DesembolsoE2E
             kind = "SecuritiesDepository", channelCode = "SIMULADO", validFrom = hoy, reason = "Depósito de valores simulado para el desembolso (e2e)",
         });
 
-        var version = VersionDeOriginacion(hoy, conDocumento: false);
+        var version = VersionDeOriginacion(hoy, conDocumento: false, modalidad);
         version["collateralRules"] = new[] { new { coDebtors = 0, promissoryNoteKind = "Dematerialized" } };
         var pagare = await CrearExitoAsync(http, admin, "PAGARE", "Consumo con pagaré desmaterializado", version);
         var lineas = new List<Guid> { orig.Origen, pagare };

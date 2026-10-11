@@ -95,6 +95,54 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
         Assert.Empty(decimalesDeEquivalencias);
     }
 
+    /// <summary>
+    /// US4 (T0480; data-model §4–§7 y §22): el alias de las columnas del libro, la posición diaria, las condiciones, el plan, las operaciones y
+    /// las partes. Los saldos son pesos (<c>Monto</c>); la tasa pactada o aplicada, fracción (<c>TasaAnual</c>); la sobretasa y la efectiva
+    /// resultante, derivadas (<c>TasaEquivalente</c>). Las e2e de la fase comprueban en los dos motores que la columna guarda lo que dice.
+    /// </summary>
+    private static readonly (string Carpeta, string Configuracion, string Propiedad, string Alias)[] AliasDeEstaFase =
+    [
+        ("Transactions", "LoanTransactionConfiguration", "Amount", "Monto"),
+        ("Operations", "LoanOperationConfiguration", "Amount", "Monto"),
+        ("Operations", "LoanOperationConfiguration", "ExcessAmount", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "Principal", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "PrincipalPastDue", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "CurrentInterest", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "DefaultInterest", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "CurrentInterestInSuspense", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "DefaultInterestInSuspense", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "Insurance", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "PayoffAmount", "Monto"),
+        ("Projections", "LoanDailyPositionConfiguration", "AppliedAnnualRate", "TasaAnual"),
+        ("Loans", "LoanTermsVersionConfiguration", "AnnualRate", "TasaAnual"),
+        ("Loans", "LoanTermsVersionConfiguration", "Margin", "TasaAnual"),
+        ("Loans", "LoanTermsVersionConfiguration", "RateFloor", "TasaAnual"),
+        ("Loans", "LoanTermsVersionConfiguration", "RateCeiling", "TasaAnual"),
+        ("Loans", "LoanTermsVersionConfiguration", "DefaultRate", "TasaAnual"),
+        ("Loans", "LoanTermsVersionConfiguration", "RoundingUnit", "Monto"),
+        ("Loans", "LoanTermsVersionConfiguration", "ResultingEffectiveRate", "TasaEquivalente"),
+        ("Loans", "LoanTermsVersionConfiguration", "ChargesSpread", "TasaEquivalente"),
+        ("Schedules", "RepaymentInstallmentConfiguration", "Principal", "Monto"),
+        ("Schedules", "RepaymentInstallmentConfiguration", "Interest", "Monto"),
+        ("Schedules", "RepaymentInstallmentConfiguration", "ClosingPrincipal", "Monto"),
+        ("Schedules", "RepaymentScheduleVersionConfiguration", "PrincipalBase", "Monto"),
+        ("Integration", "AccountingFactPartConfiguration", "TotalAmount", "Monto"),
+    ];
+
+    [Fact]
+    public void El_libro_la_posicion_y_las_partes_usan_el_alias_de_su_clase_de_numero()
+    {
+        var raiz = Path.Combine(RepoPath.FindRepoRoot(), "src", "Infrastructure", "IngenIA365ERP.Persistence", "Configurations", "Lending");
+        var mal = new List<string>();
+        foreach (var (carpeta, configuracion, propiedad, alias) in AliasDeEstaFase)
+        {
+            var texto = File.ReadAllText(Path.Combine(raiz, carpeta, configuracion + ".cs"));
+            if (!new Regex($@"\bProperty\(\s*\w+\s*=>\s*\w+\.{propiedad}\s*\)\s*\.{alias}\(").IsMatch(texto))
+                mal.Add($"{configuracion}: {propiedad} debe ser {alias}");
+        }
+        Assert.True(mal.Count == 0, "Columnas de Cartera de US4 con un alias que no es el de su clase (T35):\n  " + string.Join("\n  ", mal));
+    }
+
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
         (new Regex(@"\.HasPrecision\(\s*\d", RegexOptions.Compiled), "precisión con números sueltos"),
         (new Regex(@"HasColumnType\(\s*\""(numeric|decimal)\(", RegexOptions.Compiled), "tipo decimal con números sueltos"),

@@ -120,6 +120,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DesembolsosClie
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();

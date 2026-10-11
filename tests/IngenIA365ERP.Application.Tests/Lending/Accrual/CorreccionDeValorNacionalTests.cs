@@ -117,6 +117,8 @@ public class CorreccionDeValorNacionalTests : IAsyncLifetime
         ajustes.Should().OnlyContain(a => a.MessagePublicId == parte.MessagePublicId);
         var mensaje = await _c.Db.IntegrationMessages.SingleAsync(m => m.PublicId == parte.MessagePublicId);
         mensaje.OriginEventKey.Should().Be($"Confirmation:{parte.PublicId:N}");
+        mensaje.OriginNumber.Should().StartWith("VNC-").And.Match(n => n.Length <= PartesDeHechosDeCartera.LargoDelRotulo,
+            "con el nombre del tipo («AjusteDeCausacionPorFechaValor-…») no cabía en los 30 de la columna y los dos motores rechazaban la tanda");
         mensaje.PayloadJson.Should().Contain("\"cause\":\"NationalValueCorrection\"").And.Contain("\"correctedNationalValue\":{")
             .And.Contain(correccion.SourcePublicId.ToString()).And.Contain("\"runKind\":\"NationalValueCorrection\"");
         (await _c.Db.IntegrationMessageDeliveries.SingleAsync(x => x.MessageId == mensaje.Id)).Mode.Should().Be(DeliveryMode.Batch);

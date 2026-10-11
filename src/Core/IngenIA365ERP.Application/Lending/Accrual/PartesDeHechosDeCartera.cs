@@ -194,7 +194,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             var control = lineasDelHecho.Sum(l => l.Amounts.Sum(a => a.Amount));
             var partePublicId = Guid.NewGuid();
             var contenido = Contenido(g.Key.Tipo, origen, dia, tanda, numeroDeParte, totales, lineasDelHecho, control, valorCorregido);
-            var emitido = await emision.HechoDeParteAsync(new EmisionDeParte(partePublicId, Rotulo(g.Key.Tipo, dia, numeroDeParte),
+            var emitido = await emision.HechoDeParteAsync(new EmisionDeParte(partePublicId, Rotulo(origen, dia, numeroDeParte),
                 contable.Value, datosDelPrimero.SucursalPublicId, null, null,
                 origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch ? null : dia, origen.UsuarioDeOrigen), g.Key.Tipo, contenido, ct);
             if (emitido.IsFailure) return Result.Failure<PartesEmitidas>(emitido.Error);
@@ -245,7 +245,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             var tanda = origen.Fuente == AccountingFactPartSource.LoanCatchUp ? 1 : origen.Tanda(g.Key.Dia);
             var numeroDeParte = SiguienteParte(origen, ref ordinal);
             var partePublicId = Guid.NewGuid();
-            var rotulo = Rotulo(g.Key.Tipo, g.Key.Dia, numeroDeParte);
+            var rotulo = Rotulo(origen, g.Key.Dia, numeroDeParte);
             var suyos = new List<IntegrationMessage>();
             foreach (var h in g.OrderBy(h => h.Datos.Credito.Id))
             {
@@ -292,8 +292,28 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         return ordinal;
     }
 
-    private static string Rotulo(string tipo, DateOnly dia, int parte) =>
-        string.Create(CultureInfo.InvariantCulture, $"{tipo}-{dia:yyyyMMdd}-{parte}");
+    /// <summary>El largo de <c>origin.number</c> (<c>COR_IntegrationMessages.OriginNumber</c>, mensajes.md §3: string(30)).</summary>
+    public const int LargoDelRotulo = 30;
+
+    /// <summary>
+    /// El rótulo visible de una parte, su <c>origin.number</c> (mensajes.md §3): <c>CAU-20261214-0007</c> en el ciclo diario, <c>VNC-…</c> en la
+    /// corrección por valor nacional, <c>CIE-…</c> y <c>REA-…</c> en el cierre y su reapertura, y <c>ALD-{operación}-{n}</c> en la puesta al día
+    /// de una operación. Hasta el bloque 8C llevaba el nombre del tipo (<c>AjusteDeCausacionPorFechaValor-20261214-1</c>), que no cabe en los 30
+    /// caracteres de la columna: InMemory no lo nota y PostgreSQL y SQL Server rechazaban el guardado de la tanda.
+    /// </summary>
+    public static string Rotulo(OrigenDePartes origen, DateOnly dia, int parte)
+    {
+        ArgumentNullException.ThrowIfNull(origen);
+        var rotulo = origen.Fuente switch
+        {
+            AccountingFactPartSource.LoanCatchUp when origen.Disparadora is { } op => string.Create(CultureInfo.InvariantCulture, $"ALD-{op.Number}-{parte}"),
+            AccountingFactPartSource.NationalValueCorrectionBatch => string.Create(CultureInfo.InvariantCulture, $"VNC-{dia:yyyyMMdd}-{parte:0000}"),
+            AccountingFactPartSource.MonthlyClose => string.Create(CultureInfo.InvariantCulture, $"CIE-{dia:yyyyMMdd}-{parte:0000}"),
+            AccountingFactPartSource.CloseReopening => string.Create(CultureInfo.InvariantCulture, $"REA-{dia:yyyyMMdd}-{parte:0000}"),
+            _ => string.Create(CultureInfo.InvariantCulture, $"CAU-{dia:yyyyMMdd}-{parte:0000}"),
+        };
+        return rotulo.Length <= LargoDelRotulo ? rotulo : rotulo[..LargoDelRotulo];
+    }
 
     private static string Huella<T>(T lista)
     {

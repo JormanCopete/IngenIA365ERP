@@ -128,6 +128,12 @@
                     <NavLink href="/cartera/dobles-de-prueba" class="nav-subitem">Dobles de prueba</NavLink>
                 </PermissionGate>
             }
+            @* US4 (T0510): los créditos con su liquidación a cualquier fecha, estado de cuenta, plan, operaciones y libro. Las corridas del
+               proceso diario se ven en el detalle de la bandeja de mensajes (DT §2.16 no fija pantalla de corridas). *@
+            <span class="nav-subgroup-title">Créditos</span>
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/creditos" class="nav-subitem">Créditos</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">
                 <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>

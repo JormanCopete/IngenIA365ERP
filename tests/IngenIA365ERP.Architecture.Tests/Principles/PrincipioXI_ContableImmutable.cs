@@ -69,6 +69,24 @@ public class PrincipioXI_ContableImmutable
         Assert.True(infractores.Count == 0, "Filas del libro de Cartera borradas o actualizadas (Principio XI):\n  " + string.Join("\n  ", infractores));
     }
 
+    /// <summary>
+    /// Feature 013, US4 (T0480): la posición diaria (se versiona, nunca se sobrescribe: D13), las partes de los hechos contables y las operaciones
+    /// tampoco se borran ni se actualizan en bloque; la regla de arriba sólo ve el libro.
+    /// </summary>
+    [Fact]
+    public void Las_posiciones_las_partes_y_las_operaciones_de_Cartera_no_se_borran()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var escritura = new Regex(@"\.(LoanDailyPositions|AccountingFactParts|LoanOperations)\s*\.\s*(Remove|RemoveRange|ExecuteDelete|ExecuteDeleteAsync|ExecuteUpdate|ExecuteUpdateAsync)\b",
+            RegexOptions.Compiled);
+        var infractores = RepoPath.ProductionCSharpFiles()
+            .Where(f => escritura.IsMatch(File.ReadAllText(f)))
+            .Select(f => Path.GetRelativePath(root, f))
+            .ToList();
+        Assert.True(infractores.Count == 0, "Posiciones, partes u operaciones de Cartera borradas o actualizadas en bloque (Principio XI):\n  "
+            + string.Join("\n  ", infractores));
+    }
+
     private static readonly Regex RemoveCall = new(
         @"\.(Remove|RemoveRange)\s*\(",
         RegexOptions.Compiled);

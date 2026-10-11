@@ -37,6 +37,12 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 
     public void DescartarCambios() => ChangeTracker.Clear();
 
+    public void DescartarCambiosSalvo(params object[] conservar)
+    {
+        ChangeTracker.Clear();
+        foreach (var entidad in conservar.Distinct(ReferenceEqualityComparer.Instance)) Attach(entidad!);
+    }
+
     // === Auth-related, sí registradas ===
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();

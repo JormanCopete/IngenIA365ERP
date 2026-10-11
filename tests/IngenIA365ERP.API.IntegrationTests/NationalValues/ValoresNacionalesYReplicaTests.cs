@@ -4,6 +4,8 @@ using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.API.IntegrationTests.Lending;
+using IngenIA365ERP.Domain.Enums.Lending;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.API.IntegrationTests.NationalValues;
 
@@ -157,6 +159,87 @@ public sealed class ValoresNacionalesYReplicaTests(CentralIdentityApiFixture fx)
             && DateOnly.Parse(f.GetProperty("date").GetString()!) >= hoy && DateOnly.Parse(f.GetProperty("date").GetString()!) <= siguiente.AddDays(40),
             "la usura del mes siguiente no está registrada (C69)");
         faltantes.Should().NotContain(f => f.GetProperty("code").GetString() == "SMMLV", "la semilla central deja el salario mínimo del año");
+    }
+
+    /// <summary>
+    /// T0482 (US4, T28, C03, C05; SC-002): el maestro corrige la usura con <c>SupersedesPublicId</c> después de causar; la réplica encola en la misma
+    /// transacción la corrida <c>NationalValueCorrection</c>; la corrida deja un ajuste por día con su parte <c>AjusteDeCausacionPorFechaValor</c> y
+    /// el libro vuelve a cuadrar; una liquidación con R anterior a la corrección no cambia. Usa la modalidad <c>PRODUCTIVO_RURAL</c>, que ningún otro
+    /// ensayo de este host registra: la usura de consumo es de <see cref="El_maestro_registra_la_replica_copia_en_orden_y_la_correccion_respeta_lo_que_se_sabia"/>
+    /// y la de microcrédito de <c>UsuraNuevaCierraLineasTests</c>. El saldo a favor (<c>CreditBalanceRecognized</c>) necesita un interés ya pagado
+    /// que la corrección baje: llega con los pagos (US5); sin pagos la corrección sólo ajusta.
+    /// </summary>
+    [Fact]
+    public async Task La_correccion_de_la_usura_despues_de_causar_ajusta_el_libro_y_no_cambia_lo_que_se_sabia()
+    {
+        const string modalidad = "PRODUCTIVO_RURAL";
+        using var http = fx.CreateClient();
+        var maestro = await ValoresNacionalesE2E.TokenMaestroAsync(fx, http);
+        var hoy = CarteraE2E.Hoy(fx);
+        var usura = await RegistrarAsync(http, maestro, new
+        {
+            code = "USURA", key = modalidad, validFrom = new DateOnly(hoy.Year, hoy.Month, 1), value = 0.60m, unit = "EA",
+            source = "Superintendencia Financiera, certificación de prueba de la corrección (e2e)",
+        });
+
+        var esc = await DesembolsoE2E.EscenarioAsync(fx, "vn_correccion", modalidad);
+        var tenant = esc.Coop.TenantPublicId;
+        var jefe = esc.Usuarios.Jefe.Token;
+        var (_, _, hecho) = await DesembolsoE2E.CreditoDesembolsadoAsync(http, esc, "Corregido", 2_000_000m);
+        var credito = hecho.GetProperty("loanPublicId").GetGuid();
+
+        // Causar cinco días a la tasa pactada (22 % EA, bajo la usura de 60 %).
+        using (CausacionE2E.RelojEn(fx, hoy.AddDays(5)))
+            await CausacionE2E.CicloDeHoyAsync(fx, http, jefe, tenant);
+        (await CausacionE2E.MarcaAsync(fx, tenant, credito)).Should().Be(hoy.AddDays(5));
+        var antes = await CausacionE2E.LiquidacionAsync(http, jefe, credito, hoy.AddDays(5));
+        var loQueSeSabia = DateTime.UtcNow;
+        await Task.Delay(TimeSpan.FromSeconds(1));
+
+        // El maestro corrige la usura a 20 % (por debajo de la tasa pactada): la réplica encola la corrección.
+        var correccion = await InventarioE2E.MandarAsync(http, maestro, HttpMethod.Post, $"{Central}/{usura}/corrections", new
+        {
+            value = 0.20m, source = "Superintendencia Financiera, certificación corregida (e2e)", reason = "La certificación publicada traía otra tasa",
+        });
+        correccion.StatusCode.Should().Be(HttpStatusCode.Created, await correccion.Content.ReadAsStringAsync());
+        await ValoresNacionalesE2E.ReplicarAsync(fx, tenant);
+        var pendientes = (await CarteraE2E.GetAsync(http, jefe, $"{CausacionE2E.Corridas}?kind=NationalValueCorrection")).GetProperty("items")
+            .EnumerateArray().ToList();
+        pendientes.Should().ContainSingle("la réplica encola una corrida por valor corregido (C05)");
+        pendientes[0].GetProperty("status").GetString().Should().Be("Requested");
+        pendientes[0].GetProperty("requestedBy").GetProperty("kind").GetString().Should().Be("Process");
+        var corrida = pendientes[0].GetProperty("publicId").GetGuid();
+
+        using (CausacionE2E.RelojEn(fx, hoy.AddDays(5)))
+            await CausacionE2E.CorrerCorreccionAsync(fx, tenant, corrida, tamano: 1);
+
+        (await CarteraE2E.GetAsync(http, jefe, $"{CausacionE2E.Corridas}/{corrida}")).GetProperty("run").GetProperty("status").GetString()
+            .Should().Be("Completed");
+        var filas = await CausacionE2E.CausacionAsync(fx, tenant, credito);
+        var ajustes = filas.Where(f => f.Clase == LoanTransactionKind.AccrualAdjustment).ToList();
+        ajustes.Should().NotBeEmpty("la causación al 22 % pasaba la usura corregida: cada día se ajusta (T28)");
+        ajustes.Should().OnlyContain(f => f.Valor < 0m && f.Concepto == LoanConcept.CurrentInterest);
+        ajustes.Select(f => f.Dia).Distinct().Should().BeEquivalentTo(Enumerable.Range(1, 5).Select(i => hoy.AddDays(i)), "un ajuste por día causado");
+        var partes = await CausacionE2E.EnLaBaseAsync(fx, tenant, async db =>
+        {
+            var id = await db.LendingProcessRuns.Where(r => r.PublicId == corrida).Select(r => r.Id).SingleAsync();
+            return await db.AccountingFactParts.AsNoTracking().Where(p => p.ProcessRunId == id).Select(p => new { p.FactType, p.SourceKind }).ToListAsync();
+        });
+        partes.Should().NotBeEmpty().And.OnlyContain(p => p.FactType == "AjusteDeCausacionPorFechaValor"
+            && p.SourceKind == AccountingFactPartSource.NationalValueCorrectionBatch);
+
+        // SC-002: con R anterior a la corrección la liquidación es la misma; con todo lo sabido, baja.
+        using (CausacionE2E.RelojEn(fx, hoy.AddDays(5)))
+        {
+            var conR = await CausacionE2E.LiquidacionAsync(http, jefe, credito, hoy.AddDays(5), loQueSeSabia);
+            conR.GetProperty("fingerprint").GetString().Should().Be(antes.GetProperty("fingerprint").GetString());
+            conR.GetProperty("toPayOff").GetDecimal().Should().Be(antes.GetProperty("toPayOff").GetDecimal());
+            var ahora = await CausacionE2E.LiquidacionAsync(http, jefe, credito, hoy.AddDays(5));
+            ahora.GetProperty("toPayOff").GetDecimal().Should().BeLessThan(antes.GetProperty("toPayOff").GetDecimal(), "la usura corregida topa el interés");
+            ahora.GetProperty("usuryCapped").GetBoolean().Should().BeTrue();
+            var verificacion = await CarteraE2E.ExitoAsync(http, esc.Coop.TokenAdmin, HttpMethod.Post, CausacionE2E.Integridad, new { loanPublicIds = new[] { credito } });
+            verificacion.GetProperty("mismatches").GetArrayLength().Should().Be(0, "después de la corrección el libro vuelve a cuadrar con la reconstrucción");
+        }
     }
 
     // ------------------------------------------------------------------------------------------ ayudantes --

@@ -57,6 +57,30 @@ public class ElMotorDeCarteraEsDecimal
         Assert.Contains(ReglaSobreFuente.ArchivosEn(Carpetas), a => a.EndsWith(Path.Combine("Collections", "VentanaLegalDeContacto.cs"), StringComparison.Ordinal));
     }
 
+    /// <summary>US4 (T0480): la causación, la mora, la suspensión y la reconstrucción a (D, R), que la regla también tiene que estar mirando.</summary>
+    private static readonly string[] PiezasDeUS4 =
+    [
+        Path.Combine("Accrual", "Causacion.cs"),
+        Path.Combine("Accrual", "ReglaDeSuspension.cs"),
+        Path.Combine("Delinquency", "AlturaDeMora.cs"),
+        Path.Combine("Replay", "CausacionDeCredito.cs"),
+        Path.Combine("Replay", "EntradaDeReconstruccion.cs"),
+        Path.Combine("Replay", "EstadoDelCredito.cs"),
+        Path.Combine("Replay", "LibroTeorico.cs"),
+        Path.Combine("Replay", "ReconstruccionDeCredito.cs"),
+        Path.Combine("Lending", "VersionesDeReglas.cs"),
+        Path.Combine("Lending", "ExplicacionDeCartera.cs"),
+        Path.Combine("Lending", "HuellaDeCartera.cs"),
+    ];
+
+    [Fact]
+    public void La_regla_mira_la_causacion_la_mora_y_la_reconstruccion()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        foreach (var pieza in PiezasDeUS4)
+            Assert.Contains(archivos, a => a.EndsWith(pieza, StringComparison.Ordinal));
+    }
+
     [Fact]
     public void El_motor_no_usa_coma_flotante()
     {

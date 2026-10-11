@@ -207,12 +207,12 @@ public sealed class CicloDiarioDeCartera(
         where l.Status == LoanStatus.Active && (cursor == null || c.LoanId > cursor)
         select c;
 
-    private void Soltar(LendingProcessRun corrida, IReadOnlyList<LendingProcessRunError> errores)
-    {
-        db.DescartarCambios();
-        db.LendingProcessRuns.Attach(corrida);
-        foreach (var e in errores.Where(e => e.Id != 0)) db.LendingProcessRunErrors.Attach(e);
-    }
+    /// <summary>
+    /// Suelta todo salvo la corrida y sus errores ya guardados, con su token de concurrencia (bloque 8C: en PostgreSQL la sombra <c>xmin</c> se
+    /// perdía al soltar y volver a adjuntar, y el guardado de la corrida fallaba por concurrencia después de la primera tanda).
+    /// </summary>
+    private void Soltar(LendingProcessRun corrida, IReadOnlyList<LendingProcessRunError> errores) =>
+        db.DescartarCambiosSalvo([corrida, .. errores.Where(e => e.Id != 0)]);
 
     private async Task UnaTandaAsync(LendingProcessRun corrida, DateOnly d, IReadOnlyList<int> ids, int intento, List<AlertaPendiente> alertasPendientes,
         List<LendingProcessRunError> errores, CancellationToken ct)

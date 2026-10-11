@@ -161,7 +161,7 @@ public class AlertasConAlcanceYModuloTests : IDisposable
             IngenIA365ERP.Application.Core.RegulatoryProfile.AlertasDelPerfilRegulatorio.GrupoNiifDistinto,
             IngenIA365ERP.ExternalChannels.Circuit.CircuitoDeCanalExterno.TipoDeAlerta,
             TiposDeAlerta.ValidacionFallida, TiposDeAlerta.VentaNoIncorporada, TiposDeAlerta.TareaDiariaNoCorrio,
-            TiposDeAlerta.PlazoDelTitularPorVencer, TiposDeAlerta.CoincidenciaEnListas,
+            TiposDeAlerta.PlazoDelTitularPorVencer, TiposDeAlerta.CoincidenciaEnListas, TiposDeAlerta.LibroDescuadrado,
         ];
 
         usados.Should().OnlyContain(t => TiposDeAlerta.Buscar(t) != null);
@@ -182,6 +182,19 @@ public class AlertasConAlcanceYModuloTests : IDisposable
         var garantia = await _db.AlertTypes.SingleAsync(t => t.TypeCode == TiposDeAlerta.GarantiaPorVencer);
 
         ProyeccionDeUmbrales(garantia.ThresholdsJson).Should().Contain(TiposDeAlerta.DiasDeAnticipacion, 30m);
+    }
+
+    [Fact]
+    public async Task El_libro_descuadrado_se_siembra_para_cartera_y_la_contadora()
+    {
+        // US4 (bloque 8C): la verificación del libro tiene su tipo propio; antes se levantaba como Cartera.CreditoSinCausar con «…:libro».
+        var libro = await _db.AlertTypes.SingleAsync(t => t.TypeCode == TiposDeAlerta.LibroDescuadrado);
+
+        libro.Module.Should().Be("Lending");
+        libro.Permisos().Should().BeEquivalentTo(["Lending.Processes.Run", "Accounting.LendingRules.Manage"]);
+        libro.Severity.Should().Be(IngenIA365ERP.Domain.Enums.Alerts.AlertSeverity.Critical);
+        libro.Channels.Should().HaveFlag(IngenIA365ERP.Domain.Enums.Alerts.AlertChannels.Email);
+        TiposDeAlerta.Buscar(TiposDeAlerta.LibroDescuadrado)!.DisponibleDesde.Should().Be("K1");
     }
 
     private static Dictionary<string, decimal> ProyeccionDeUmbrales(string? json) =>
