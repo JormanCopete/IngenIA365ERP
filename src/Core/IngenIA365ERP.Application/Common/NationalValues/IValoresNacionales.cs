@@ -27,6 +27,12 @@ public interface IValoresNacionales
     /// rige o nulo si falta. No alerta: quien la recorre decide qué hacer con un hueco.
     /// </summary>
     Task<SerieDeValorNacional> LeerSerieAsync(string codigo, string clave, DateOnly desde, DateOnly hasta, DateTime? informacionHasta = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// La copia de una fila central por su <c>SourcePublicId</c>, con la réplica que la trajo (feature 013, US4, T0500: la corrida
+    /// <c>NationalValueCorrection</c> sabe así qué valor la provocó). Nulo si no está replicada. Sin alertas.
+    /// </summary>
+    Task<ValorNacionalVigente?> LeerCopiaAsync(Guid sourcePublicId, CancellationToken ct = default) => Task.FromResult<ValorNacionalVigente?>(null);
 }
 
 /// <summary>Un valor nacional vigente leído de la copia de la cooperativa.</summary>
@@ -48,7 +54,11 @@ public sealed record ValorNacionalVigente(
     long Sequence,
     DateTime KnownAt,
     EstadoDeRevision Estado,
-    bool Desactualizado = false);
+    bool Desactualizado = false)
+{
+    /// <summary>La réplica que trajo la copia (feature 013, US4, T0500); nula si no se pidió.</summary>
+    public int? ReplicationId { get; init; }
+}
 
 /// <summary>La serie de un código y clave en un rango: el valor de cada día, o nulo si falta.</summary>
 public sealed class SerieDeValorNacional(string codigo, string clave, IReadOnlyDictionary<DateOnly, ValorNacionalVigente?> dias)

@@ -13,6 +13,13 @@ namespace IngenIA365ERP.API.Integration;
 /// <c>MaxParallelCooperatives</c> a la vez y con un presupuesto menor que el arrendamiento; las corridas de una cooperativa sin
 /// Cartera activada no se tocan. Los ejecutores de las cuatro clases de corrida llegan con US4 y US9: hasta entonces sus corridas
 /// quedan <c>Requested</c> con advertencia. (nuevo)
+///
+/// <para>US4 (bloque 8B, T0501): el ciclo diario y la corrección por valor nacional ya tienen ejecutor
+/// (<c>EjecutorDelCicloDiario</c>, <c>EjecutorDeLaCorreccionDeValorNacional</c>). La pasada lleva de <c>Lending:Process</c> también
+/// <c>StartTimeLocal</c> (el ciclo de hoy no nace antes) y <c>BatchSize</c> (créditos por tanda); el conductor elige la corrida en el
+/// orden de data-model §22.1, crea el <c>DailyCycle</c> siguiente sólo con el anterior <c>Completed</c> o <c>CompletedWithErrors</c>,
+/// conduce las tandas desde <c>CursorLoanId</c> —la tanda que falla al guardar se reintenta crédito por crédito— y renueva
+/// <c>lending.process</c> entre tandas; la corrida cierra con <c>TotalsJson</c> y <c>ResultSha256</c> como evento resumen.</para>
 /// </summary>
 public sealed class ProcesadorDeCartera(
     PasadaDeCartera pasada,

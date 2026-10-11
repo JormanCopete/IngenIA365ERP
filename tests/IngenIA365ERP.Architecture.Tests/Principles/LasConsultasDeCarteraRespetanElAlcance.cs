@@ -54,6 +54,18 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Disbursements/Collaterals/GetCollateralQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Disbursements/PromissoryNotes/ListPromissoryNotesQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Disbursements/Files/ListDisbursementFilesQuery.cs",
+        // US4 (bloque 8B, T0503, T0504): los créditos por la oficina y la línea (la lista con PorOficinaYLinea; el detalle, el plan, las
+        // operaciones, el comprobante y el libro con CreditoEnAlcance, el 404 del crédito); la liquidación y el estado de cuenta con
+        // LecturaDelCredito (el mismo 404 y Lending.Access.OutOfScope).
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListLoansQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/GetLoanQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/GetRepaymentScheduleQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListRepaymentScheduleVersionsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanOperationsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/GetLoanOperationQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanTransactionsQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -99,6 +111,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["PreviewDisbursementFileQuery"] = "la filtra PreparacionDeArchivoDeDesembolsos: sólo órdenes de créditos del alcance (PorOficinaYLinea)",
         ["ListDisbursementSourceAccountsQuery"] = "cuentas bancarias del plan de cuentas por IContabilidadParaCartera: sin deudores ni oficina",
         ["ListTestTreasuryOrdersQuery"] ="doble de prueba de Tesorería fuera de producción (T20): ve lo que recibe la tesorería, no una oficina",
+        // US4 (bloque 8B, T0499, T0505): las corridas son de toda la cooperativa y no traen datos del deudor (Lending.Processes.View); la
+        // verificación del libro es de toda la cartera, del auditor (Lending.Integrity.Verify), y sólo devuelve números de crédito y cifras.
+        ["ListLendingProcessRunsQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
+        ["GetLendingProcessRunQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
+        ["VerifyLendingLedgerIntegrityQuery"] = "la verificación del libro es de toda la cartera (Integrity.Verify, el auditor): número del crédito y cifras",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

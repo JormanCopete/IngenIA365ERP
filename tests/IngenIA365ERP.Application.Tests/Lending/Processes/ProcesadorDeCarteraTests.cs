@@ -25,6 +25,10 @@ namespace IngenIA365ERP.Application.Tests.Lending.Processes;
 /// </summary>
 public class ProcesadorDeCarteraTests
 {
+    // US4 (T0474): las pruebas del final conducen el ciclo diario de verdad —el conductor crea el DailyCycle siguiente, uno a la vez, hasta HoyLocal
+    // pasada la hora de inicio; renueva lending.process entre tandas; un ciclo fallido no deja crear el siguiente; el tamaño de la tanda viaja con
+    // la pasada—.
+
     private static readonly DateTime Ahora = new(2026, 10, 7, 5, 30, 0, DateTimeKind.Utc);
     private static readonly ParametrosDeLaPasada Parametros = new(2, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(120));
 
@@ -33,6 +37,13 @@ public class ProcesadorDeCarteraTests
         public TenantDirectoryEntry Entrada { get; } = new(nombre.Length, Guid.NewGuid(), nombre, nombre);
         public TestApplicationDbContext Db { get; } = TestDbContextFactory.Create();
         public IArrendamientos Arrendamientos { get; } = Substitute.For<IArrendamientos>();
+
+        /// <summary>La fecha y hora locales de la cooperativa (US4): con el defecto, el conductor no crea ciclos.</summary>
+        public DateOnly HoyLocal { get; set; }
+
+        public TimeOnly HoraLocal { get; set; } = new(10, 0);
+
+        public Application.Lending.Accrual.ParametrosDeLaTandaDeCartera Tanda { get; } = new();
     }
 
     private sealed class EjecutorDePrueba(LendingProcessKind clase, Func<LendingProcessRun, AvanceDeCorrida> tanda) : IEjecutorDeCorridaDeCartera
@@ -67,12 +78,15 @@ public class ProcesadorDeCarteraTests
             {
                 var reloj = Substitute.For<IDateTimeService>();
                 reloj.UtcNow.Returns(Ahora);
+                reloj.HoyLocal.Returns(c.HoyLocal);
+                reloj.AhoraLocal.Returns(new DateTimeOffset(c.HoyLocal.ToDateTime(c.HoraLocal), TimeSpan.FromHours(-5)));
                 var servicios = new ServiceCollection()
                     .AddSingleton<IApplicationDbContext>(c.Db)
                     .AddSingleton(c.Arrendamientos)
                     .AddSingleton(reloj)
                     .AddSingleton<Microsoft.Extensions.Logging.ILogger<ConductorDeCorridasDeCartera>>(NullLogger<ConductorDeCorridasDeCartera>.Instance)
                     .AddSingleton<IEnumerable<IEjecutorDeCorridaDeCartera>>(ejecutores)
+                    .AddSingleton(c.Tanda)
                     .AddScoped<ConductorDeCorridasDeCartera>()
                     .BuildServiceProvider();
                 await Task.Delay(20, ct);
@@ -245,5 +259,74 @@ public class ProcesadorDeCarteraTests
         ConductorDeCorridasDeCartera.Clases.Should().BeEquivalentTo(
             [LendingProcessKind.DailyCycle, LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen, LendingProcessKind.NationalValueCorrection],
             "las cuatro clases de corrida de C59");
+    }
+
+    // ----------------------------------------------------------------------------------------------- US4 (T0474) --
+
+    private static readonly DateOnly Activacion = new(2026, 10, 1);
+
+    [Fact]
+    public async Task Crea_el_ciclo_siguiente_uno_a_la_vez_hasta_hoy_pasada_la_hora_de_inicio()
+    {
+        var c = Activada("C");
+        c.HoyLocal = Activacion.AddDays(2);
+        c.HoraLocal = new TimeOnly(0, 10);
+        var fechas = new List<DateOnly?>();
+        var ciclo = new EjecutorDePrueba(LendingProcessKind.DailyCycle, r => { fechas.Add(r.ProcessDate); return AvanceDeCorrida.Terminada; });
+        var (pasada, _) = Pasada([c], ciclo);
+
+        await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+
+        fechas.Should().Equal(Activacion, Activacion.AddDays(1));
+        var corridas = await c.Db.LendingProcessRuns.OrderBy(r => r.ProcessDate).ToListAsync();
+        corridas.Should().OnlyContain(r => r.Status == LendingProcessRunStatus.Completed && r.RequestedByKind == ActorKind.Process);
+        corridas.Select(r => r.ExecutionOrigin).Should().Equal("Tarea:cartera.diario:2026-10-01", "Tarea:cartera.diario:2026-10-02");
+
+        c.HoraLocal = new TimeOnly(0, 45);
+        await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+        fechas.Should().Equal(Activacion, Activacion.AddDays(1), Activacion.AddDays(2));
+
+        await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+        fechas.Should().HaveCount(3, "no se crea el ciclo de mañana");
+    }
+
+    [Fact]
+    public async Task Un_ciclo_fallido_no_deja_crear_el_siguiente_y_la_hora_de_inicio_viene_de_la_pasada()
+    {
+        var c = Activada("C");
+        c.HoyLocal = Activacion.AddDays(3);
+        var ciclo = new EjecutorDePrueba(LendingProcessKind.DailyCycle, _ => throw new InvalidOperationException("se cayó la base"));
+        var (pasada, _) = Pasada([c], ciclo);
+
+        await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+        await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+
+        (await c.Db.LendingProcessRuns.SingleAsync()).Should().BeEquivalentTo(new { ProcessDate = (DateOnly?)Activacion, Status = LendingProcessRunStatus.Failed },
+            "el ciclo siguiente sólo nace con el anterior Completed o CompletedWithErrors");
+
+        var otra = Activada("D");
+        otra.HoyLocal = Activacion;
+        otra.HoraLocal = new TimeOnly(5, 0);
+        var (tarde, _) = Pasada([otra], new EjecutorDePrueba(LendingProcessKind.DailyCycle, _ => AvanceDeCorrida.Terminada));
+        await tarde.CorrerAsync(Parametros with { HoraDeInicio = new TimeOnly(6, 0) }, null, CancellationToken.None);
+        (await otra.Db.LendingProcessRuns.CountAsync()).Should().Be(0, "a las 5:00 no se corre el ciclo de hoy si empieza a las 6:00");
+    }
+
+    [Fact]
+    public async Task Renueva_el_arrendamiento_entre_tandas_y_pasa_el_tamano_de_la_tanda()
+    {
+        var c = Activada("C");
+        Corrida(c, LendingProcessKind.DailyCycle);
+        var tandas = 0;
+        var ciclo = new EjecutorDePrueba(LendingProcessKind.DailyCycle, _ => ++tandas < 3 ? AvanceDeCorrida.Pendiente : AvanceDeCorrida.Terminada);
+        var (pasada, _) = Pasada([c], ciclo);
+        // El reloj del conductor está quieto: el presupuesto alcanza para todas las tandas.
+
+        await pasada.CorrerAsync(Parametros with { TamanoDeTanda = 37 }, null, CancellationToken.None);
+
+        tandas.Should().Be(3);
+        await c.Arrendamientos.Received(3).RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, Parametros.DuracionDelArrendamiento, Arg.Any<CancellationToken>());
+        c.Tanda.TamanoDeTanda.Should().Be(37);
+        (await c.Db.LendingProcessRuns.SingleAsync()).BatchCount.Should().Be(3);
     }
 }

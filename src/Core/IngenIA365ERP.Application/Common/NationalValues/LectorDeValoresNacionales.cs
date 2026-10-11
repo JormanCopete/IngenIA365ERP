@@ -85,6 +85,12 @@ public sealed class LectorDeValoresNacionales(
         return new SerieDeValorNacional(codigo, clave, dias);
     }
 
+    public async Task<ValorNacionalVigente?> LeerCopiaAsync(Guid sourcePublicId, CancellationToken ct = default)
+    {
+        var copia = await db.NationalValues.AsNoTracking().FirstOrDefaultAsync(v => v.SourcePublicId == sourcePublicId, ct);
+        return copia is null ? null : await AVigenteAsync(copia, desactualizado: false, ct) with { ReplicationId = copia.ReplicationId };
+    }
+
     private Task<List<NationalValue>> VersionesAsync(string codigo, string clave, DateOnly hasta, CancellationToken ct) =>
         db.NationalValues.AsNoTracking()
             .Where(v => v.Code == codigo && v.Key == clave && v.ValidFrom <= hasta && !v.IsDeleted)

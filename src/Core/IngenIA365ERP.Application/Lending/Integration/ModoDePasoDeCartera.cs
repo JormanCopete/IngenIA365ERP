@@ -35,7 +35,15 @@ public sealed class ModoDePasoDeCartera(IApplicationDbContext db, IContabilidadP
     /// El modo con que nace la entrega del hecho <paramref name="tipoDeHecho"/> (el <c>Type</c> del mensaje) con fecha contable
     /// <paramref name="fechaContable"/>. Un tipo fuera del catálogo de Cartera es un defecto del emisor (excepción).
     /// </summary>
-    public async Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, CancellationToken ct)
+    public Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, CancellationToken ct) =>
+        ResolverAsync(tipoDeHecho, fechaContable, emitidoPorElProceso: false, ct);
+
+    /// <summary>
+    /// Como el anterior, sabiendo quién lo emite (feature 013, US4, T0497; T56): <c>DimensionContableCambiada</c> sin vigencia propia sale
+    /// <c>EnLinea</c> si la emite una operación y <c>PorLotes</c> (con su disparador) si la detecta el ciclo diario
+    /// (<c>ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite</c>).
+    /// </summary>
+    public async Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, bool emitidoPorElProceso, CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tipoDeHecho);
         var tipo = CatalogoDeMensajes.DelModulo(ModulosDeOrigen.Cartera).FirstOrDefault(t => t.Type == tipoDeHecho)
@@ -54,6 +62,8 @@ public sealed class ModoDePasoDeCartera(IApplicationDbContext db, IContabilidadP
             .FirstOrDefaultAsync(ct);
 
         var modo = defecto?.DefaultMode ?? EnLinea;
+        if (emitidoPorElProceso && modo == EnLinea && tipoDeHecho == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.DimensionContableCambiadaV1.Type)
+            modo = PorLotes;
         var disparador = defecto?.DefaultBatchTrigger is { Length: > 0 } propio ? propio : DisparadorPorDefecto;
         var codigoCorto = defecto?.ShortCode is { Length: > 0 } corto ? corto : tipo.CodigoCorto ?? tipoDeHecho;
         return Result.Success<ModoDeEntrega>(modo switch

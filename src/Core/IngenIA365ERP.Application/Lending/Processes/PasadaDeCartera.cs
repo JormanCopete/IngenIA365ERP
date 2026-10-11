@@ -11,6 +11,12 @@ namespace IngenIA365ERP.Application.Lending.Processes;
 /// <param name="DuracionDelArrendamiento">TTL de <c>lending.process</c>.</param>
 public sealed record ParametrosDeLaPasada(int MaxParallelCooperatives, TimeSpan Presupuesto, TimeSpan DuracionDelArrendamiento)
 {
+    /// <summary>La hora local desde la que corre el ciclo del día (<c>StartTimeLocal</c>, 00:30; US4, T0501).</summary>
+    public TimeOnly HoraDeInicio { get; init; } = new(0, 30);
+
+    /// <summary>Créditos por tanda (<c>BatchSize</c>, 250; US4, T0501).</summary>
+    public int TamanoDeTanda { get; init; } = Accrual.ParametrosDeLaTandaDeCartera.TamanoPorDefecto;
+
     /// <summary>Lo que está mal; vacío si sirve. El presupuesto tiene que caber en el arrendamiento (T5).</summary>
     public IReadOnlyList<string> Problemas()
     {
@@ -89,7 +95,7 @@ public sealed class PasadaDeCartera(
         try
         {
             await ejecutor.EjecutarAsync(cooperativa, actor, Origen, async (servicios, c) =>
-                resultado = await servicios.GetRequiredService<ConductorDeCorridasDeCartera>().ConducirAsync(parametros.Presupuesto, c), ct);
+                resultado = await servicios.GetRequiredService<ConductorDeCorridasDeCartera>().ConducirAsync(parametros, c), ct);
         }
         finally
         {

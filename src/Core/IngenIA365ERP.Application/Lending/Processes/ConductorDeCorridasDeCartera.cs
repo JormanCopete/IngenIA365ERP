@@ -1,3 +1,5 @@
+using IngenIA365ERP.Application.Common.Execution;
+using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -40,7 +42,9 @@ public sealed class ConductorDeCorridasDeCartera(
     IApplicationDbContext db,
     IEnumerable<IEjecutorDeCorridaDeCartera> ejecutores,
     IDateTimeService reloj,
-    ILogger<ConductorDeCorridasDeCartera> logger)
+    ILogger<ConductorDeCorridasDeCartera> logger,
+    IArrendamientos? arrendamientos = null,
+    Accrual.ParametrosDeLaTandaDeCartera? tanda = null)
 {
     /// <summary>Las cuatro clases que conduce el procesador, en su orden de prioridad después de la que ya corre (§22.1, C59).</summary>
     public static IReadOnlyList<LendingProcessKind> Clases { get; } =
@@ -58,24 +62,38 @@ public sealed class ConductorDeCorridasDeCartera(
 
     private readonly IReadOnlyList<IEjecutorDeCorridaDeCartera> _ejecutores = [.. ejecutores];
 
-    public async Task<ResultadoDeConduccion> ConducirAsync(TimeSpan presupuesto, CancellationToken ct)
+    /// <summary>Conduce con el presupuesto y los defectos de la pasada (la firma del esqueleto).</summary>
+    public Task<ResultadoDeConduccion> ConducirAsync(TimeSpan presupuesto, CancellationToken ct) =>
+        ConducirAsync(new ParametrosDeLaPasada(1, presupuesto, presupuesto + presupuesto), ct);
+
+    /// <summary>
+    /// Conduce las corridas de la cooperativa dentro del presupuesto de la pasada (US4, T0501): en el orden de §22.1, y cada vez que el ciclo
+    /// del día anterior terminó (<c>Completed</c> o <c>CompletedWithErrors</c>), crea el <c>DailyCycle</c> del día siguiente —uno a la vez— hasta
+    /// <c>HoyLocal</c>, el de hoy sólo pasada la hora de inicio. Renueva <c>lending.process</c> entre tandas.
+    /// </summary>
+    public async Task<ResultadoDeConduccion> ConducirAsync(ParametrosDeLaPasada parametros, CancellationToken ct)
     {
-        var activada = await db.LendingSetups.AsNoTracking().AnyAsync(s => s.ActivationDate != null, ct);
-        if (!activada) return ResultadoDeConduccion.SinActivar;
+        ArgumentNullException.ThrowIfNull(parametros);
+        var setup = await db.LendingSetups.AsNoTracking().Where(s => s.ActivationDate != null).Select(s => s.ActivationDate).FirstOrDefaultAsync(ct);
+        if (setup is not { } activacion) return ResultadoDeConduccion.SinActivar;
+        if (tanda is not null) tanda.TamanoDeTanda = parametros.TamanoDeTanda;
 
-        var limite = reloj.UtcNow + presupuesto;
-        var corridas = (await db.LendingProcessRuns
-                .Where(r => r.Status == LendingProcessRunStatus.Running || r.Status == LendingProcessRunStatus.Requested)
-                .ToListAsync(ct))
-            .Where(r => Clases.Contains(r.Kind))
-            .OrderBy(r => r.Status == LendingProcessRunStatus.Running ? 0 : 1)
-            .ThenBy(r => Clases.ToList().IndexOf(r.Kind))
-            .ThenBy(r => r.RequestedAt)
-            .ToList();
-
-        foreach (var corrida in corridas)
+        var limite = reloj.UtcNow + parametros.Presupuesto;
+        var conducidas = new HashSet<int>();
+        while (reloj.UtcNow < limite)
         {
-            if (reloj.UtcNow >= limite) break;
+            await CrearElCicloSiguienteAsync(activacion, parametros.HoraDeInicio, ct);
+            var corrida = (await db.LendingProcessRuns
+                    .Where(r => r.Status == LendingProcessRunStatus.Running || r.Status == LendingProcessRunStatus.Requested)
+                    .ToListAsync(ct))
+                .Where(r => Clases.Contains(r.Kind) && !conducidas.Contains(r.Id))
+                .OrderBy(r => r.Status == LendingProcessRunStatus.Running ? 0 : 1)
+                .ThenBy(r => Clases.ToList().IndexOf(r.Kind))
+                .ThenBy(r => r.Kind == LendingProcessKind.DailyCycle ? r.ProcessDate : null)
+                .ThenBy(r => r.RequestedAt)
+                .FirstOrDefault();
+            if (corrida is null) break;
+            conducidas.Add(corrida.Id);
 
             var ejecutor = _ejecutores.FirstOrDefault(e => e.Clase == corrida.Kind);
             if (ejecutor is null)
@@ -88,7 +106,7 @@ public sealed class ConductorDeCorridasDeCartera(
             var id = corrida.Id;
             try
             {
-                await ConducirUnaAsync(corrida, ejecutor, limite, ct);
+                await ConducirUnaAsync(corrida, ejecutor, limite, parametros, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -103,7 +121,37 @@ public sealed class ConductorDeCorridasDeCartera(
         return ResultadoDeConduccion.Conducida;
     }
 
-    private async Task ConducirUnaAsync(LendingProcessRun corrida, IEjecutorDeCorridaDeCartera ejecutor, DateTime limite, CancellationToken ct)
+    /// <summary>
+    /// El <c>DailyCycle</c> siguiente (data-model §22.1, §22.4): si no hay uno pedido o corriendo y el último terminó (o no hay ninguno), el del
+    /// día siguiente al último —o el de la activación—, sólo hasta <c>HoyLocal</c> y el de hoy desde <paramref name="horaDeInicio"/>. Uno a la
+    /// vez: así los días sin correr se recorren de a uno desde la marca de cada crédito. Un ciclo <c>Failed</c> no deja crear el siguiente.
+    /// </summary>
+    private async Task CrearElCicloSiguienteAsync(DateOnly activacion, TimeOnly horaDeInicio, CancellationToken ct)
+    {
+        var ciclos = db.LendingProcessRuns.Where(r => r.Kind == LendingProcessKind.DailyCycle && !r.IsDeleted);
+        if (await ciclos.AnyAsync(r => r.Status == LendingProcessRunStatus.Requested || r.Status == LendingProcessRunStatus.Running, ct)) return;
+        var ultimo = await ciclos.OrderByDescending(r => r.ProcessDate).Select(r => new { r.ProcessDate, r.Status }).FirstOrDefaultAsync(ct);
+        if (ultimo is not null && ultimo.Status is not (LendingProcessRunStatus.Completed or LendingProcessRunStatus.CompletedWithErrors)) return;
+
+        var siguiente = ultimo?.ProcessDate is { } fecha ? fecha.AddDays(1) : activacion;
+        var hoy = reloj.HoyLocal;
+        if (siguiente > hoy) return;
+        if (siguiente == hoy && TimeOnly.FromTimeSpan(reloj.AhoraLocal.TimeOfDay) < horaDeInicio) return;
+
+        db.LendingProcessRuns.Add(new LendingProcessRun
+        {
+            Kind = LendingProcessKind.DailyCycle,
+            ProcessDate = siguiente,
+            Status = LendingProcessRunStatus.Requested,
+            RequestedByKind = ActorKind.Process,
+            ExecutionOrigin = Accrual.CicloDiarioDeCartera.OrigenDelDia(siguiente),
+            RequestedAt = reloj.UtcNow,
+        });
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task ConducirUnaAsync(LendingProcessRun corrida, IEjecutorDeCorridaDeCartera ejecutor, DateTime limite, ParametrosDeLaPasada parametros,
+        CancellationToken ct)
     {
         var ahora = reloj.UtcNow;
         corrida.Status = LendingProcessRunStatus.Running;
@@ -117,6 +165,8 @@ public sealed class ConductorDeCorridasDeCartera(
             var avance = await ejecutor.EjecutarTandaAsync(corrida, restante, ct);
             corrida.BatchCount += 1;
             corrida.LastHeartbeatAt = reloj.UtcNow;
+            if (arrendamientos is not null)
+                await arrendamientos.RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, parametros.DuracionDelArrendamiento, ct);
             if (avance == AvanceDeCorrida.Terminada)
             {
                 corrida.Status = corrida.FailedLoans > 0 ? LendingProcessRunStatus.CompletedWithErrors : LendingProcessRunStatus.Completed;

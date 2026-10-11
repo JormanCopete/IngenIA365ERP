@@ -8,7 +8,9 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Attributions;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Configuration;
+using IngenIA365ERP.Application.Lending.Accrual;
 using IngenIA365ERP.Application.Lending.Disbursements;
+using IngenIA365ERP.Application.Lending.Engine;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 using IngenIA365ERP.Application.Lending.Ledger;
@@ -32,7 +34,7 @@ namespace IngenIA365ERP.Application.Tests.Lending.Disbursements;
 /// <item>la cajera, con persona, que desembolsa (no intervino: radicar y desembolsar no chocan);</item>
 /// <item>un banco con código ACH, la mora sobre intereses no permitida por la ley (límite 0) y Contabilidad iniciada con el mes abierto y la
 /// evaluación contable «no disponible» (<c>NotApplicable</c>), salvo que la prueba lo cambie;</item>
-/// <item>el contrato de obligaciones como doble (lo construye la fase 9) y el motor provisional del crédito (fase 8).</item>
+/// <item>el contrato de obligaciones como doble (lo construye la fase 9) y el motor real del crédito (fase 8, bloque 8B).</item>
 /// </list>
 /// (nuevo)
 /// </summary>
@@ -83,14 +85,22 @@ internal sealed class DesembolsoDePrueba : IDisposable
     public FechaContable FechaContable() => new(Contabilidad, Alertas);
     public EmisorDeMensajes Emisor() => new(Db, G.Actor, G.Reloj);
     public EmisionDeCartera Emision() => new(Db, Emisor(), FechaContable(), new ModoDePasoDeCartera(Db, Contabilidad), G.Actor);
-    public IMotorDeCreditoEnDesembolso MotorDelCredito() => Motor ?? new MotorDeCreditoEnDesembolsoProvisional(Db);
+    public IMotorDeCreditoEnDesembolso MotorDelCredito() => Motor ?? new MotorDeCreditoEnDesembolso(Db, Cargador(), PuestaAlDia());
+
+    // Feature 013, US4 (bloque 8B): el motor real del crédito, sus series y la puesta al día. Una sola instancia por escenario de lo que
+    // recuerda algo entre llamadas (la puesta al día preparada antes del tramo y escrita después).
+    private PuestaAlDiaDeCredito? _puestaAlDia;
+    public SeriesRegulatoriasDeCartera Series() => new(O.L.Valores(), O.L.Normativa(), new CalendarioDeDiasHabiles(Db), Parametros());
+    public CargadorDeReconstruccion Cargador() => new(Db, Series());
+    public PartesDeHechosDeCartera Partes() => new(Db, Emision(), FechaContable());
+    public PuestaAlDiaDeCredito PuestaAlDia() => _puestaAlDia ??= new(Db, Cargador(), Registro(), Partes(), G.Reloj);
     public ValidacionPreviaContableDeCartera ValidacionPrevia() => new(Contabilidad, G.Parametros(), G.Reloj);
     public RequisitosDelDesembolso Requisitos() =>
         new(Db, O.Simulador(), O.Concentracion(), O.Bloqueos, G.Intervenciones(), O.Guardia(), Parametros(), G.Parametros(), ValidacionPrevia(),
             MotorDelCredito(), Emision(), G.Alcance, G.Auditoria, G.Actor, G.Reloj);
     public RegistroDeCartera Registro() => new(Db);
     public NumeradorDeCartera Numerador() => new(Db, O.Cerrojo);
-    public TramoDeDesembolso Tramos() => new(Db, Registro(), Numerador(), Parametros(), new CalendarioDeDiasHabiles(Db), G.Actor, G.Reloj);
+    public TramoDeDesembolso Tramos() => new(Db, Registro(), Numerador(), Parametros(), new CalendarioDeDiasHabiles(Db), G.Actor, G.Reloj, Cargador());
     public ReversoDeDesembolso Reverso() => new(Db, Registro(), Numerador(), MotorDelCredito(), Emision(), FechaContable(), G.Reloj);
 
     public ExecuteLoanDisbursementCommandHandler Desembolsar() =>

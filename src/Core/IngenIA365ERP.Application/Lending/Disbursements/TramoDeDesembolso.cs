@@ -34,7 +34,8 @@ public sealed class TramoDeDesembolso(
     ReglasDeParametrosDeCartera parametros,
     ICalendarioHabil calendario,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Engine.CargadorDeReconstruccion cargador)
 {
     public const string PrefijoDeCredito = "CR-";
     public const string PrefijoDeDesembolso = "DS-";
@@ -193,13 +194,29 @@ public sealed class TramoDeDesembolso(
     }
 
     /// <summary>
-    /// La versión del plan sobre lo desembolsado (D12; data-model §4.4): las cuotas del simulador con su fecha exigible (art. 829, el siguiente
-    /// hábil). Σ capital = lo desembolsado al centavo, o <c>Lending.Schedule.PrincipalMismatch</c> (SC-017).
+    /// El plan del tramo (D12): el del simulador en el primero; en uno siguiente, el plan del crédito a la fecha valor (su reconstrucción)
+    /// <b>regenerado</b> con el tramo desde la primera cuota que vence después (<see cref="Domain.Lending.MotorDeCartera.RegenerarPlan"/>, US4),
+    /// que es lo mismo que la reconstrucción hará con la operación.
+    /// </summary>
+    public async Task<PlanDePagos> PlanDelTramoAsync(RequisitosEvaluados r, CancellationToken ct)
+    {
+        if (r.EsElPrimero || r.CreditoId is not { } creditoId) return r.Simulacion.Plan;
+        var cargado = await cargador.CargarAsync(creditoId, null, r.FechaValor, ct);
+        if (cargado is not { Listo: true })
+            throw new InvalidOperationException($"No se pudo reconstruir el crédito para regenerar su plan: {cargado?.Error?.Code} {cargado?.Error?.Message}");
+        var anterior = Domain.Lending.MotorDeCartera.Reconstruir(cargado.Entrada!, r.FechaValor).Plan
+            ?? throw new InvalidOperationException("El crédito no tiene plan a la fecha valor del tramo.");
+        return Domain.Lending.MotorDeCartera.RegenerarPlan(anterior, new EntradaDeRegeneracion(r.FechaValor) { CambioDeCapital = r.Bruto });
+    }
+
+    /// <summary>
+    /// La versión del plan sobre lo desembolsado (D12; data-model §4.4): las cuotas de <paramref name="plan"/> (<see cref="PlanDelTramoAsync"/>)
+    /// con su fecha exigible (art. 829, el siguiente hábil). Σ capital = lo desembolsado al centavo, o <c>Lending.Schedule.PrincipalMismatch</c>
+    /// (SC-017).
     /// </summary>
     public async Task<RepaymentScheduleVersion> PlanAsync(Loan credito, LoanTermsVersion condiciones, LoanOperation operacion, RequisitosEvaluados r,
-        int numeroDeVersion, CancellationToken ct)
+        int numeroDeVersion, PlanDePagos plan, CancellationToken ct)
     {
-        var plan = r.Simulacion.Plan;
         if (plan.TotalCapital != r.Desembolsado)
             throw new InvalidOperationException(
                 $"Lending.Schedule.PrincipalMismatch: el plan suma {plan.TotalCapital.ToString(CultureInfo.InvariantCulture)} de capital y lo desembolsado es {r.Desembolsado.ToString(CultureInfo.InvariantCulture)}.");
@@ -216,7 +233,7 @@ public sealed class TramoDeDesembolso(
             EffectiveValueDate = r.FechaValor,
             RegisteredAt = operacion.RegisteredAt,
             PrincipalBase = r.Desembolsado,
-            FirstRegeneratedInstallment = 1,
+            FirstRegeneratedInstallment = plan.PrimeraCuotaRegenerada,
             InstallmentCount = plan.Cuotas.Count,
             RulesVersion = plan.RulesVersion,
             InputsSha256 = r.Simulacion.Huella,
@@ -236,7 +253,7 @@ public sealed class TramoDeDesembolso(
             OtherCharges = 0m,
             Total = c.Total,
             ClosingPrincipal = c.SaldoFinal,
-            IsExtraordinary = plan.Entrada.Extraordinarias.Any(x => x.Cuota == c.Numero),
+            IsExtraordinary = c.Extraordinaria != 0m || plan.Entrada.Extraordinarias.Any(x => x.Cuota == c.Numero),
             IsGraceInstallment = c.SoloInteres,
         }).ToList();
         registro.RegistrarPlan(version, cuotas);
@@ -244,9 +261,9 @@ public sealed class TramoDeDesembolso(
     }
 
     /// <summary>El plan resumido del hecho (<c>LoanPlanSummaryV1</c>, mensajes.md §10.1).</summary>
-    public static LoanPlanSummaryV1 Resumen(RequisitosEvaluados r, int numeroDeVersion)
+    public static LoanPlanSummaryV1 Resumen(RequisitosEvaluados r, int numeroDeVersion, PlanDePagos? regenerado = null)
     {
-        var plan = r.Simulacion.Plan;
+        var plan = regenerado ?? r.Simulacion.Plan;
         var e = r.Simulacion.Entrada;
         return new LoanPlanSummaryV1
         {

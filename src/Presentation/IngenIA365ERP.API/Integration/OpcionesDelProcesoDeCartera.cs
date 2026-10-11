@@ -28,7 +28,11 @@ public sealed class OpcionesDelProcesoDeCartera
     /// <summary>Créditos por tanda.</summary>
     public int BatchSize { get; set; } = 250;
 
-    public ParametrosDeLaPasada Pasada() => new(MaxParallelCooperatives, TimeSpan.FromSeconds(BudgetSeconds), TimeSpan.FromSeconds(LeaseTtlSeconds));
+    public ParametrosDeLaPasada Pasada() => new(MaxParallelCooperatives, TimeSpan.FromSeconds(BudgetSeconds), TimeSpan.FromSeconds(LeaseTtlSeconds))
+    {
+        HoraDeInicio = TimeOnly.TryParseExact(StartTimeLocal, "HH:mm", out var hora) ? hora : new TimeOnly(0, 30),
+        TamanoDeTanda = BatchSize > 0 ? BatchSize : IngenIA365ERP.Application.Lending.Accrual.ParametrosDeLaTandaDeCartera.TamanoPorDefecto,
+    };
 
     /// <summary>Lo que está mal, con la clave completa; vacío si todo está bien.</summary>
     public IReadOnlyList<string> Problemas()

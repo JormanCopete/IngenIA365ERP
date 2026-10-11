@@ -586,7 +586,7 @@ está activada, salvo la réplica)
 | Nombre | Cadencia | Qué hace | E | Origen |
 |---|---|---|---|---|
 | `valores-nacionales.replicar` | cada pasada | `ReplicateNationalValuesCommand` en cada cooperativa | K1 | R4 |
-| `cartera.vigilancia` | cada hora | `Cartera.ProcesoDiarioNoCorrio`, `Cartera.CreditoSinCausar`, `Cartera.CierreMensualPendiente` | K1 | PM-14, R17 |
+| `cartera.vigilancia` | cada hora | `Cartera.ProcesoDiarioNoCorrio`, `Cartera.CreditoSinCausar`, `Cartera.TareaDiariaNoCorrio` **(C123, T0502: cada tarea diaria registrada de una entrega vigente cuya marca `LND_ProcessRuns` `ScheduledTask` —la escribe sólo `MarcaDeTareaDiariaDeCartera`— es anterior a ayer)**, `Cartera.CierreMensualPendiente` (US9) | K1 | PM-14, R17 |
 | `cartera.reservas-vencidas` | diaria | Vence reservas sin confirmar ni liberar; `Cartera.ReservaVencida` | K1 | PM-14 |
 | `cartera.giros-sin-resultado` | diaria | Órdenes sin resultado; `Cartera.GiroSinResultado` | K1 | PM-14 |
 | `cartera.cierre-programado` | diaria | Crea la corrida `MonthlyClose` si `Riesgo.CierreProgramado` está activo | K1 | PM-14, R13 (CH38) |

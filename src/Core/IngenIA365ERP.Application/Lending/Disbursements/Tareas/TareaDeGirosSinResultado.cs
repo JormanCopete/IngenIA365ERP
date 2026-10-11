@@ -74,6 +74,8 @@ public sealed class TareaDeGirosSinResultado : ITareaProgramada
     {
         var r = await servicios.GetRequiredService<ISender>().Send(new AlertDisbursementOrdersWithoutResultCommand(), ct);
         if (r.IsFailure) throw new InvalidOperationException($"La revisión de giros sin resultado falló: {r.Error.Code} {r.Error.Message}");
+        // Feature 013, US4 (T0502, SC-020): la marca de la última ejecución, que vigila cartera.vigilancia.
+        await servicios.GetRequiredService<ISender>().Send(new Processes.Tareas.RegisterDailyLendingTaskRunCommand(Nombre), ct);
     }
 }
 

@@ -269,6 +269,9 @@ try
         IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDePagares>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDeGarantiasPorVencer>();
+    // Feature 013, US4 (T0502; DT §2.13): la vigilancia de los procesos de Cartera cada hora (ciclo de ayer, créditos sin causar, tareas diarias).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Processes.Tareas.VigilanciaDeCartera>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

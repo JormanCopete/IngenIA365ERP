@@ -104,5 +104,7 @@ public sealed class TareaDeGarantiasPorVencer : ITareaProgramada
     {
         var r = await servicios.GetRequiredService<ISender>().Send(new AlertExpiringCollateralsCommand(), ct);
         if (r.IsFailure) throw new InvalidOperationException($"La revisión de garantías por vencer falló: {r.Error.Code} {r.Error.Message}");
+        // Feature 013, US4 (T0502, SC-020): la marca de la última ejecución, que vigila cartera.vigilancia.
+        await servicios.GetRequiredService<ISender>().Send(new Processes.Tareas.RegisterDailyLendingTaskRunCommand(Nombre), ct);
     }
 }

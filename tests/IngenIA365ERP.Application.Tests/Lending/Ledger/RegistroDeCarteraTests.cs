@@ -8,6 +8,8 @@ using IngenIA365ERP.Domain.Entities.Lending.Schedules;
 using IngenIA365ERP.Domain.Entities.Lending.Transactions;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Replay;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Tests.Lending.Ledger;
@@ -18,6 +20,10 @@ namespace IngenIA365ERP.Application.Tests.Lending.Ledger;
 /// agua; <c>Sequence</c> y <c>RegisteredAt</c> son monótonos por crédito (<c>max(ahora, último + 1 tick)</c>); un espejo lleva
 /// <c>ReversesTransactionId</c> y signo contrario y no se espeja otro espejo; la causación avanza de a un día. US4 y US5 suman
 /// <c>Conciliar</c> y la escritura en bloque. Todo en un solo guardado, por navegación, aunque el crédito sea nuevo.
+///
+/// <para>US4 (T0469): la causación del proceso entra en bloque (un <c>AddRange</c>) avanzando la marca de d − 1 a d, con su resumen de tanda y
+/// el mensaje de su parte en cada fila; la posición de un día cambiado agrega una versión nueva y nunca sobrescribe; <c>Conciliar</c> registra
+/// cada diferencia por (día valor, concepto, cuota) con su clase y la fecha contable del período abierto; <c>Reversar</c> espeja todo o nada.</para>
 /// </summary>
 public class RegistroDeCarteraTests
 {
@@ -149,4 +155,119 @@ public class RegistroDeCarteraTests
         ((Action)(() => Registro().RegistrarPlan(plan, [new RepaymentInstallment { ScheduleVersion = plan, InstallmentNumber = 1 },
             new RepaymentInstallment { ScheduleVersion = plan, InstallmentNumber = 1 }]))).Should().Throw<InvalidOperationException>();
     }
+
+    // ------------------------------------------------------------------------------------- US4 (T0469: causación y conciliación) --
+
+    private static MovimientoDeLibro Causado(DateOnly dia, LoanConcept concepto, int? cuota, decimal monto) =>
+        new(dia, LoanTransactionKind.Accrual, concepto, cuota, monto);
+
+    [Fact]
+    public async Task La_causacion_del_proceso_entra_en_bloque_avanza_la_marca_de_un_dia_y_resume_la_tanda()
+    {
+        var credito = Credito();
+        _db.Loans.Add(credito);
+        await _db.SaveChangesAsync();
+        var control = Registro().IniciarControl(credito, new DateOnly(2026, 10, 6), Ahora);
+        await _db.SaveChangesAsync();
+        var mensaje = Guid.NewGuid();
+        var dias = new[] { new DateOnly(2026, 10, 7), new DateOnly(2026, 10, 8) };
+
+        var resumen = Registro().CausarEnBloque(dias.Select(d => new CausacionAEscribir(control, d,
+        [
+            RegistroDeCartera.FilaDeCausacion(credito.Id, Causado(d, LoanConcept.CurrentInterest, 1, 1_234.56m), 9, null, d, Ahora, mensaje),
+            RegistroDeCartera.FilaDeCausacion(credito.Id, Causado(d, LoanConcept.Insurance, 1, 100m), 9, null, d, Ahora, mensaje),
+        ])).ToList());
+        _db.ChangeTracker.Entries<LoanTransaction>().Should().HaveCount(4, "un solo AddRange con las cuatro filas");
+        await _db.SaveChangesAsync();
+
+        control.LastAccruedDate.Should().Be(new DateOnly(2026, 10, 8), "de d − 1 a d, en orden");
+        resumen.Should().BeEquivalentTo(new { Creditos = 1, Dias = 2, Filas = 4 });
+        resumen.PorConcepto[LoanConcept.CurrentInterest].Should().Be(2_469.12m);
+        resumen.Total.Should().Be(2_669.12m);
+        var filas = await _db.LoanTransactions.ToListAsync();
+        filas.Should().OnlyContain(f => f.ProcessRunId == 9 && f.OperationId == null && f.MessagePublicId == mensaje && f.Kind == LoanTransactionKind.Accrual);
+    }
+
+    [Fact]
+    public void La_causacion_en_bloque_rechaza_un_dia_fuera_de_orden_y_filas_ajenas()
+    {
+        var control = new LoanControl { LoanId = 1, LastAccruedDate = new DateOnly(2026, 10, 5) };
+        var saltado = new DateOnly(2026, 10, 7);
+        ((Action)(() => Registro().CausarEnBloque([new CausacionAEscribir(control, saltado, [])]))).Should().Throw<InvalidOperationException>(
+            "causar el 7 exige la marca en el 6 (T6)");
+
+        var ajena = RegistroDeCartera.FilaDeCausacion(2, Causado(new DateOnly(2026, 10, 6), LoanConcept.CurrentInterest, 1, 5m), 9, null, new DateOnly(2026, 10, 6), Ahora, null);
+        ((Action)(() => Registro().CausarEnBloque([new CausacionAEscribir(control, new DateOnly(2026, 10, 6), [ajena])]))).Should().Throw<InvalidOperationException>();
+        ((Action)(() => RegistroDeCartera.FilaDeCausacion(1, new MovimientoDeLibro(Hoy, LoanTransactionKind.Disbursement, LoanConcept.Principal, null, 5m), 9, null,
+            Hoy, Ahora, null))).Should().Throw<InvalidOperationException>("la causación sólo escribe filas Accrual");
+    }
+
+    [Fact]
+    public async Task Una_operacion_fechada_atras_agrega_una_version_nueva_de_cada_dia_cambiado_y_nunca_sobrescribe()
+    {
+        using var c = await Accrual.CausacionDePrueba.CrearAsync();
+        var d = c.D.G.HoyLocal.AddDays(2);
+        await c.CausarHastaAsync(d);
+        var credito = c.Credito;
+        var antes = await c.Db.LoanDailyPositions.Where(p => p.LoanId == credito.Id && p.PositionDate == d).ToListAsync();
+        antes.Should().ContainSingle().Which.Version.Should().Be(1);
+
+        // La misma reconstrucción: misma huella, no hay versión nueva.
+        var cargado = await c.Cargador().CargarAsync(credito.Id, null, d, default);
+        var control = await c.Db.LoanControls.SingleAsync(x => x.LoanId == credito.Id);
+        var estado = MotorDeCartera.Reconstruir(cargado!.Entrada!, d);
+        c.D.Registro().PosicionVersionada(control, estado, credito, cargado.Vigentes, 1, antes[0].InputsSha256, Ahora).Should().BeNull();
+
+        // Con un cambio (otra huella): versión 2, la 1 intacta.
+        var cambiada = c.D.Registro().PosicionVersionada(control, estado, credito, cargado.Vigentes, 1, "otra", Ahora);
+        await c.Db.SaveChangesAsync();
+        cambiada!.Version.Should().Be(2);
+        (await c.Db.LoanDailyPositions.CountAsync(p => p.LoanId == credito.Id && p.PositionDate == d)).Should().Be(2);
+        (await c.Db.LoanDailyPositions.SingleAsync(p => p.LoanId == credito.Id && p.PositionDate == d && p.Version == 1)).InputsSha256
+            .Should().Be(antes[0].InputsSha256);
+    }
+
+    [Fact]
+    public async Task Conciliar_registra_cada_diferencia_como_fila_nueva_de_su_clase_con_fecha_contable_del_periodo_abierto()
+    {
+        var credito = Credito();
+        _db.Loans.Add(credito);
+        var control = Registro().IniciarControl(credito, Hoy, Ahora);
+        var op = Registro().RegistrarOperacion(control, Ahora, sello => Operacion(credito, sello, LoanOperationKind.PaymentReversal));
+        var dia = new DateOnly(2026, 10, 1);
+        List<DiferenciaDeLibro> diferencias =
+        [
+            new(dia, LoanConcept.CurrentInterest, 2, 500m, 300m),
+            new(dia, LoanConcept.DefaultInterest, 2, 100m, 0m),
+            new(dia, LoanConcept.DefaultInterestInSuspense, 2, 0m, 100m),
+            new(dia, LoanConcept.Principal, 2, 1_000m, 900m),
+        ];
+
+        var filas = Registro().Conciliar(credito.Id, diferencias, op, null, Hoy, Ahora, null);
+        await _db.SaveChangesAsync();
+
+        filas.Select(f => (f.Kind, f.Concept, f.Amount)).Should().BeEquivalentTo(new[]
+        {
+            (LoanTransactionKind.AccrualAdjustment, LoanConcept.CurrentInterest, -200m),
+            (LoanTransactionKind.SuspenseReclassification, LoanConcept.DefaultInterest, -100m),
+            (LoanTransactionKind.SuspenseReclassification, LoanConcept.DefaultInterestInSuspense, 100m),
+            (LoanTransactionKind.PaymentReallocation, LoanConcept.Principal, -100m),
+        });
+        (await _db.LoanTransactions.ToListAsync()).Should().OnlyContain(f => f.ValueDate == dia && f.AccountingDate == Hoy && f.OperationId == op.Id
+            && f.InstallmentNumber == 2, "cada diferencia por (día valor, concepto, cuota) enlazada a su operación");
+    }
+
+    [Fact]
+    public void Reversar_espeja_todo_o_nada()
+    {
+        var original = new LoanTransaction { LoanId = 3, OperationId = 10, Kind = LoanTransactionKind.Accrual, Concept = LoanConcept.CurrentInterest, Amount = 10m, ValueDate = Hoy };
+        var espejo = new LoanTransaction { LoanId = 3, OperationId = 11, Kind = LoanTransactionKind.Accrual, Concept = LoanConcept.CurrentInterest, Amount = -10m, ValueDate = Hoy, ReversesTransactionId = 5 };
+        var reverso = new LoanOperation { LoanId = 3, Kind = LoanOperationKind.PaymentReversal, RegisteredAt = Ahora };
+
+        Registro().Reversar([original, espejo], reverso, Hoy).Error.Code.Should().Be(ErroresDelLibroDelCartera());
+        _db.ChangeTracker.Entries<LoanTransaction>().Should().BeEmpty("si una no se espeja, no se agrega ninguna");
+        Registro().Reversar([original], reverso, Hoy).Value.Should().ContainSingle(f => f.Amount == -10m);
+    }
+
+    private static string ErroresDelLibroDelCartera() => ErroresDelLibroDeCartera.ReversoDeReversoCode;
 }

@@ -41,7 +41,8 @@ public sealed record PropuestaDeEspejos(IReadOnlyList<FilaDelLibro> AEspejar, Da
 /// <item><b>Un solo tramo vivo</b>: un espejo por cada fila propia del tramo (su capital) y por cada fila de la causación del crédito
 /// (<c>Accrual</c>, <c>AccrualAdjustment</c>, <c>SuspenseReclassification</c>): el crédito queda como si el desembolso no hubiera existido
 /// (C101).</item>
-/// <item><b>Varios tramos</b>: sólo el capital del tramo; la diferencia de causación la produce el recálculo desde la fecha valor del tramo
+/// <item><b>Varios tramos</b>: sólo el capital del tramo (no la causación de la puesta al día que su operación pidió, US4); la diferencia de
+/// causación la produce el recálculo desde la fecha valor del tramo
 /// (<see cref="PropuestaDeEspejos.ConciliarCausacionDesde"/>), como <c>AccrualAdjustment</c> por (día valor, concepto, cuota) (C49).</item>
 /// </list>
 /// Ningún espejo de un espejo (<c>Lending.Reversal.OfReversal</c>) y ninguna fila se espeja dos veces: lo ya espejado queda fuera. US5 le suma
@@ -80,7 +81,9 @@ public static class EspejosDelReverso
         var yaEspejadas = libro.Where(f => f.EspejoDe is not null).Select(f => f.EspejoDe!.Value).ToHashSet();
         bool Vigente(FilaDelLibro f) => !f.EsEspejo && !yaEspejadas.Contains(f.Id);
 
-        var aEspejar = delTramo.Where(Vigente).ToList();
+        // Con varios tramos, del tramo sólo su capital: la causación que lleva su operación es la puesta al día que pidió (US4, C04), causada
+        // sobre los tramos anteriores; la diferencia de causación del tramo la da la conciliación.
+        var aEspejar = delTramo.Where(f => Vigente(f) && (tramosVivos == 1 || !DeCausacion.Contains(f.Clase))).ToList();
         if (tramosVivos > 1) return new PropuestaDeEspejos(aEspejar.OrderBy(f => f.Id).ToList(), fechaValorDelTramo);
 
         aEspejar.AddRange(libro.Where(f => f.OperacionId != operacionDelTramo && DeCausacion.Contains(f.Clase) && Vigente(f)));

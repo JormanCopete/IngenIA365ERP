@@ -226,6 +226,8 @@ public sealed class ConsumeTreasuryResultCommandHandlerTests : IAsyncLifetime
         _d = await DesembolsoDePrueba.CrearAsync(Origination.OriginacionDePrueba.VersionDeLinea() with { Amortization = new AmortizationInput { AllowsTranches = true } });
         var motor = Substitute.For<IMotorDeCreditoEnDesembolso>();
         motor.LiquidarAsync(default, default, default).ReturnsForAnyArgs(new LiquidacionParaRecogida(0m, 0, false));
+        motor.RegistrarPuestaAlDiaAsync(default!, default)
+            .ReturnsForAnyArgs(Result.Success<IReadOnlyList<Domain.Entities.Integration.Transactions.IntegrationMessage>>([]));
         motor.ConciliarCausacionAsync(default, default, default!, default, default).ReturnsForAnyArgs(ci =>
             Task.FromResult<IReadOnlyList<LoanTransaction>>(
             [

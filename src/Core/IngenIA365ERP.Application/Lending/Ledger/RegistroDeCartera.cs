@@ -6,8 +6,26 @@ using IngenIA365ERP.Domain.Entities.Lending.Projections;
 using IngenIA365ERP.Domain.Entities.Lending.Schedules;
 using IngenIA365ERP.Domain.Entities.Lending.Transactions;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Replay;
 
 namespace IngenIA365ERP.Application.Lending.Ledger;
+
+/// <summary>
+/// La causación de un crédito y un día que entra en bloque (feature 013, US4, T0494): la fila de control (que avanza de d − 1 a d) y las
+/// filas <c>Accrual</c> de ese día valor, ya armadas con <see cref="RegistroDeCartera.FilaDeCausacion"/>. (nuevo)
+/// </summary>
+public sealed record CausacionAEscribir(LoanControl Control, DateOnly Dia, IReadOnlyList<LoanTransaction> Filas);
+
+/// <summary>
+/// El resumen de lo que entró en bloque (T67: la causación no lleva diff por fila sino un evento resumen por tanda): créditos, días, filas y
+/// el total con signo por concepto. (nuevo)
+/// </summary>
+public sealed record ResumenDeCausacion(int Creditos, int Dias, int Filas, IReadOnlyDictionary<LoanConcept, decimal> PorConcepto)
+{
+    public static ResumenDeCausacion Vacio { get; } = new(0, 0, 0, new Dictionary<LoanConcept, decimal>());
+
+    public decimal Total => PorConcepto.Values.Sum();
+}
 
 /// <summary>El sello que el registro da a una operación: su <c>Sequence</c> y su <c>RegisteredAt</c> monótonos por crédito. (nuevo)</summary>
 public sealed record SelloDeCartera(int Sequence, DateTime RegisteredAt);
@@ -175,6 +193,192 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             throw new InvalidOperationException(
                 $"La causación del {fecha:yyyy-MM-dd} exige la marca en la víspera; el crédito {control.LoanId} está causado hasta el {control.LastAccruedDate:yyyy-MM-dd}.");
         control.LastAccruedDate = fecha;
+    }
+
+    // ------------------------------------------------------------------------------------------ US4 (T0494, C45) --
+
+    /// <summary>
+    /// Una fila <c>Accrual</c> del libro a partir de la del libro teórico (US4): la escribe la corrida (<paramref name="processRunId"/>) o la
+    /// operación que pone al día (<paramref name="operacion"/>), con la fecha contable del día causado (T36) y el mensaje de su parte o de su
+    /// crédito (T14).
+    /// </summary>
+    public static LoanTransaction FilaDeCausacion(int loanId, MovimientoDeLibro fila, int? processRunId, LoanOperation? operacion, DateOnly fechaContable,
+        DateTime registradoEn, Guid? mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(fila);
+        if (fila.Clase != LoanTransactionKind.Accrual)
+            throw new InvalidOperationException("La causación sólo escribe filas Accrual.");
+        return new LoanTransaction
+        {
+            LoanId = loanId,
+            ProcessRunId = operacion is null ? processRunId : null,
+            Operation = operacion,
+            OperationId = operacion is { Id: not 0 } op ? op.Id : null,
+            Kind = LoanTransactionKind.Accrual,
+            Concept = fila.Concepto,
+            InstallmentNumber = fila.Cuota,
+            Amount = fila.Monto,
+            ValueDate = fila.Dia,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+        };
+    }
+
+    /// <summary>
+    /// La causación de una tanda o de una puesta al día, <b>en bloque</b> (T67, data-model §5.1): avanza la marca de cada crédito un día a
+    /// la vez (<c>d − 1 → d</c>, en el orden dado) y agrega todas las filas con un solo <c>AddRange</c>; quien guarda la tanda suelta del
+    /// seguimiento lo escrito al terminar (sin <c>ChangeTracker</c> entre tandas). Devuelve el resumen que va a la corrida (el evento resumen
+    /// de T67: la causación no lleva diff por fila).
+    /// </summary>
+    public ResumenDeCausacion CausarEnBloque(IReadOnlyList<CausacionAEscribir> causaciones)
+    {
+        ArgumentNullException.ThrowIfNull(causaciones);
+        var filas = new List<LoanTransaction>();
+        foreach (var c in causaciones)
+        {
+            if (c.Filas.Any(f => f.Kind != LoanTransactionKind.Accrual || f.ValueDate != c.Dia || f.Amount == 0m || f.LoanId != c.Control.LoanId))
+                throw new InvalidOperationException($"La causación del {c.Dia:yyyy-MM-dd} del crédito {c.Control.LoanId} trae filas que no son suyas.");
+            if (c.Filas.Any(f => (f.OperationId is not null || f.Operation is not null) == (f.ProcessRunId is not null)))
+                throw new InvalidOperationException("Una fila del libro tiene exactamente un origen: la operación o la corrida (CK_LND_LoanTransactions_Origin).");
+            AvanzarCausacion(c.Control, c.Dia);
+            filas.AddRange(c.Filas);
+        }
+        if (filas.Count > 0) db.LoanTransactions.AddRange(filas);
+        return new ResumenDeCausacion(
+            causaciones.Select(c => c.Control.LoanId).Distinct().Count(),
+            causaciones.Count,
+            filas.Count,
+            filas.GroupBy(f => f.Concept).OrderBy(g => (int)g.Key).ToDictionary(g => g.Key, g => g.Sum(f => f.Amount)));
+    }
+
+    /// <summary>
+    /// <b>Conciliar</b> (T33, data-model §5.1): registra cada diferencia del libro contra la reconstrucción por (día valor, concepto, cuota)
+    /// como una fila nueva —nunca corrige una existente— con la fecha contable del período abierto y enlazada a su operación o a su corrida:
+    /// <c>SuspenseReclassification</c> si es la mitad de un traslado entre un concepto y su suspenso del mismo día y cuota,
+    /// <c>PaymentReallocation</c> si es capital, y <c>AccrualAdjustment</c> en lo demás. Agrega y devuelve las filas.
+    /// </summary>
+    public IReadOnlyList<LoanTransaction> Conciliar(int loanId, IReadOnlyList<DiferenciaDeLibro> diferencias, LoanOperation? operacion, int? processRunId,
+        DateOnly fechaContable, DateTime registradoEn, Guid? mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(diferencias);
+        var filas = Diferencias(loanId, diferencias, operacion, processRunId, fechaContable, registradoEn, mensaje);
+        RegistrarTransacciones(filas);
+        return filas;
+    }
+
+    /// <summary>Las filas que <see cref="Conciliar"/> registraría, sin agregarlas (las agrega quien las junta con otras, p. ej. un reverso).</summary>
+    public static IReadOnlyList<LoanTransaction> Diferencias(int loanId, IReadOnlyList<DiferenciaDeLibro> diferencias, LoanOperation? operacion,
+        int? processRunId, DateOnly fechaContable, DateTime registradoEn, Guid? mensaje) =>
+        diferencias.Where(d => d.Diferencia != 0m).Select(d => new LoanTransaction
+        {
+            LoanId = loanId,
+            Operation = operacion,
+            OperationId = operacion is { Id: not 0 } op ? op.Id : null,
+            ProcessRunId = operacion is null ? processRunId : null,
+            Kind = ClaseDeDiferencia(d, diferencias),
+            Concept = d.Concepto,
+            InstallmentNumber = d.Cuota,
+            Amount = d.Diferencia,
+            ValueDate = d.Dia,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+        }).ToList();
+
+    /// <summary>La clase de la fila que registra una diferencia de la conciliación.</summary>
+    public static LoanTransactionKind ClaseDeDiferencia(DiferenciaDeLibro d, IReadOnlyList<DiferenciaDeLibro> todas)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        ArgumentNullException.ThrowIfNull(todas);
+        if (d.Concepto == LoanConcept.Principal) return LoanTransactionKind.PaymentReallocation;
+        LoanConcept? pareja = d.Concepto switch
+        {
+            LoanConcept.CurrentInterest => LoanConcept.CurrentInterestInSuspense,
+            LoanConcept.CurrentInterestInSuspense => LoanConcept.CurrentInterest,
+            LoanConcept.DefaultInterest => LoanConcept.DefaultInterestInSuspense,
+            LoanConcept.DefaultInterestInSuspense => LoanConcept.DefaultInterest,
+            _ => null,
+        };
+        var traslado = pareja is { } p && todas.Any(o => o.Dia == d.Dia && o.Cuota == d.Cuota && o.Concepto == p && o.Diferencia == -d.Diferencia);
+        return traslado ? LoanTransactionKind.SuspenseReclassification : LoanTransactionKind.AccrualAdjustment;
+    }
+
+    /// <summary>
+    /// <b>Reversar</b> (T33, C49, C101): los espejos de <paramref name="originales"/> en la operación de reverso, por <see cref="Espejar"/>, y los
+    /// agrega. Falla sin agregar nada si alguna ya es un espejo (<c>Lending.Reversal.OfReversal</c>).
+    /// </summary>
+    public Result<IReadOnlyList<LoanTransaction>> Reversar(IEnumerable<LoanTransaction> originales, LoanOperation reverso, DateOnly fechaContable)
+    {
+        ArgumentNullException.ThrowIfNull(originales);
+        var espejos = new List<LoanTransaction>();
+        foreach (var original in originales)
+        {
+            var espejo = Espejar(original, reverso, fechaContable);
+            if (espejo.IsFailure) return Result.Failure<IReadOnlyList<LoanTransaction>>(espejo.Error);
+            espejos.Add(espejo.Value);
+        }
+        RegistrarTransacciones(espejos);
+        return Result.Success<IReadOnlyList<LoanTransaction>>(espejos);
+    }
+
+    /// <summary>
+    /// La posición del día de un crédito armada desde su reconstrucción (data-model §6.1): saldos por concepto, capital vencido, altura de mora,
+    /// suspensión, usura topada, tasa del día y la huella como <c>InputsSha256</c>. La versión la decide quien llama
+    /// (<see cref="PosicionVersionada"/>). La calificación diaria queda vacía hasta US9.
+    /// </summary>
+    public static LoanDailyPosition Posicion(EstadoDelCredito estado, Loan credito, LoanTermsVersion condiciones, int version, DateTime registradoEn,
+        LoanStatus? estadoDelCredito = null)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(condiciones);
+        return new LoanDailyPosition
+        {
+            LoanId = credito.Id,
+            Loan = credito.Id == 0 ? credito : null,
+            PositionDate = estado.Fecha,
+            Version = version,
+            RegisteredAt = Utc(registradoEn),
+            Status = estadoDelCredito ?? credito.Status,
+            BranchId = credito.BranchId,
+            CreditLineId = credito.CreditLineId,
+            ModalityCode = condiciones.ModalityCode,
+            SubsegmentCode = condiciones.SubsegmentCode,
+            Principal = estado.Saldo(LoanConcept.Principal),
+            PrincipalPastDue = estado.CapitalVencido,
+            CurrentInterest = estado.Saldo(LoanConcept.CurrentInterest),
+            DefaultInterest = estado.Saldo(LoanConcept.DefaultInterest),
+            CurrentInterestInSuspense = estado.Saldo(LoanConcept.CurrentInterestInSuspense),
+            DefaultInterestInSuspense = estado.Saldo(LoanConcept.DefaultInterestInSuspense),
+            Insurance = estado.Saldo(LoanConcept.Insurance),
+            CollectionFee = estado.Saldo(LoanConcept.CollectionFee),
+            OtherCharge = estado.Saldo(LoanConcept.OtherCharge),
+            Advance = estado.Anticipo,
+            CreditBalance = estado.SaldoAFavor,
+            PayoffAmount = estado.ValorParaCancelar,
+            DaysPastDue = estado.AlturaDeMora.Dias,
+            OldestUnpaidInstallment = estado.AlturaDeMora.CuotaMasAntigua,
+            InstallmentsPastDue = estado.AlturaDeMora.CuotasVencidas,
+            IsSuspended = estado.Suspendida,
+            UsuryCapped = estado.UsuraTopada,
+            AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA,
+            InputsSha256 = estado.Huella,
+        };
+    }
+
+    /// <summary>
+    /// La posición de un día con su versión (data-model §6.1): la primera es la 1; si el día ya tiene versiones, una nueva sólo si la huella
+    /// cambió (<paramref name="ultimaHuella"/>), con <c>Version</c> = la última + 1. Nunca sobrescribe. La agrega y devuelve; nula si no cambió.
+    /// </summary>
+    public LoanDailyPosition? PosicionVersionada(LoanControl control, EstadoDelCredito estado, Loan credito, LoanTermsVersion condiciones,
+        int ultimaVersion, string? ultimaHuella, DateTime registradoEn, LoanStatus? estadoDelCredito = null)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        if (ultimaVersion > 0 && string.Equals(ultimaHuella, estado.Huella, StringComparison.Ordinal)) return null;
+        var posicion = Posicion(estado, credito, condiciones, ultimaVersion + 1, registradoEn, estadoDelCredito);
+        RegistrarPosicion(control, posicion);
+        return posicion;
     }
 
     /// <summary>Las transiciones del crédito de data-model §8.1 (feature 013, US3, T0444, T0447, T0448).</summary>

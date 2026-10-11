@@ -166,13 +166,18 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                 ? tramos.Condiciones(credito, operacion, r)
                 : await db.LoanTermsVersions.AsNoTracking().Where(t => t.LoanId == credito.Id).OrderByDescending(t => t.VersionNumber).FirstAsync(ct);
             var numeroDelPlan = await tramos.SiguienteVersionDelPlanAsync(credito.Id, ct);
-            var plan = await tramos.PlanAsync(credito, condiciones, operacion, r, numeroDelPlan, ct);
+            var planDelTramo = await tramos.PlanDelTramoAsync(r, ct);
+            var plan = await tramos.PlanAsync(credito, condiciones, operacion, r, numeroDelPlan, planDelTramo, ct);
             registro.RegistrarPosicion(control, Posicion(credito, r, operacion, condiciones));
 
             // Recogidas por el contrato, en esta transacción y antes de guardar nada: si una no queda aplicada, el desembolso no existe.
             var aplicadas = await recogida.AplicarAsync(operacion, deudor.PublicId, r.Recogidas, ct);
             if (aplicadas.IsFailure) return Falla(aplicadas.Error);
             await db.SaveChangesAsync(ct);
+
+            // La puesta al día calculada antes del tramo (US4, C04): sus partes LoanCatchUp apuntan a esta operación, ya guardada.
+            var puestaAlDia = await motor.RegistrarPuestaAlDiaAsync(operacion, ct);
+            if (puestaAlDia.IsFailure) return Falla(puestaAlDia.Error);
 
             // La orden por el neto (nunca en especie: el validador lo impide).
             var orden = await tramos.EmitirOrdenAsync(credito, operacion, r.Beneficiario!, r.Bruto, r.Recogido, e.PaidByFile, null, ct);
@@ -203,7 +208,7 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
                 Amount = a.Comprobante.AppliedAmount,
             }).ToList();
             var emitidos = await emision.DesembolsoAsync(new DesembolsoAEmitir(hecho, operacion, r.Tramo, r.EsElUltimo, r.Forma, r.Beneficiario!.ComoPayee(),
-                r.Bruto, recogidas, orden, TramoDeDesembolso.Resumen(r, numeroDelPlan), r.Prevalidacion.Outcome), ct);
+                r.Bruto, recogidas, orden, TramoDeDesembolso.Resumen(r, numeroDelPlan, planDelTramo), r.Prevalidacion.Outcome), ct);
             if (emitidos.IsFailure) return Falla(emitidos.Error);
 
             await db.SaveChangesAsync(ct);

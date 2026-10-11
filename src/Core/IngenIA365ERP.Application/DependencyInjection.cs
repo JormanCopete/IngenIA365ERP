@@ -474,9 +474,22 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.CategoriaContableDeCartera>();
         services.AddScoped<Lending.Integration.EmisionDeCartera>();
         services.AddScoped<Lending.Activation.RequisitosDeActivacion>();
-        // Feature 013, US3 (bloque 7A): el desembolso, el giro y su reverso. IMotorDeCreditoEnDesembolso es el punto de extensión que la fase 8
-        // reemplaza (ReconstruccionDeCredito, PuestaAlDiaDeCredito, Conciliar).
-        services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolsoProvisional>();
+        // Feature 013, US4 (bloque 8B): la carga de la reconstrucción, las series regulatorias, las partes de hechos, la puesta al día y el ciclo
+        // diario. IMotorDeCreditoEnDesembolso (el punto de extensión de la fase 7) ya es el motor real.
+        services.AddScoped<Lending.Engine.ISeriesRegulatorias, Lending.Engine.SeriesRegulatoriasDeCartera>();
+        services.AddScoped<Lending.Engine.CargadorDeReconstruccion>();
+        services.AddScoped<Lending.Accrual.PartesDeHechosDeCartera>();
+        services.AddScoped<Lending.Accrual.PuestaAlDiaDeCredito>();
+        services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolso>();
+        services.AddScoped<Lending.Accrual.ParametrosDeLaTandaDeCartera>();
+        services.AddScoped<Lending.Accrual.ReajusteDeTasa>();
+        services.AddScoped<Lending.Ledger.VerificacionDelLibro>();
+        services.AddScoped<Lending.Accrual.CicloDiarioDeCartera>();
+        services.AddScoped<Lending.Accrual.CorreccionDeValorNacional>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Accrual.EjecutorDelCicloDiario>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Accrual.EjecutorDeLaCorreccionDeValorNacional>();
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Accrual.EfectoDeReplicacionCorreccionDeValorNacional>();
+        services.AddScoped<Lending.Processes.Tareas.MarcaDeTareaDiariaDeCartera>();
         // Feature 013, US3 (bloque 7C, T0449): Cartera como destino de la bandeja (ResultadoDelGiro v1; US6 suma la familia de Comercial). No
         // cambia lo que viaja de Comercial: el destino Lending sólo cuenta cuando su consumidor acepta todo lo que la fila CAR adopta
         // (RegistroDeIntegracion.ImplementacionDisponible), y la semilla la deja adoptando VentaACreditoRegistrada y AjusteDeVentaACredito: hasta
