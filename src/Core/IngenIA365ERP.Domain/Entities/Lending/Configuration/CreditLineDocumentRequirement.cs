@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Configuration;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Configuration;
 
@@ -31,4 +32,21 @@ public class CreditLineDocumentRequirement : AuditableEntity, IHechoInmutable
     public int? MaxAgeDays { get; init; }
 
     public int Order { get; init; }
+
+
+    /// <summary>El documento de una versión ya guardada (T0351).</summary>
+    public static CreditLineDocumentRequirement Nuevo(int creditLineVersionId, BorradorDeDocumento d) => new()
+    {
+        CreditLineVersionId = creditLineVersionId,
+        Code = d.Code.Trim().ToUpperInvariant(),
+        Name = d.Name.Trim(),
+        IsMandatory = d.IsMandatory,
+        AppliesTo = d.AppliesTo,
+        MinAmount = d.MinAmount,
+        MaxAmount = d.MaxAmount,
+        DebtorKind = d.DebtorKind,
+        RepaymentChannel = d.RepaymentChannel,
+        MaxAgeDays = d.MaxAgeDays,
+        Order = d.Order,
+    };
 }

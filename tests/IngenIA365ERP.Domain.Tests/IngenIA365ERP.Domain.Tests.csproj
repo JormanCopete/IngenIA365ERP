@@ -50,6 +50,9 @@
     <None Include="Lending\Sessions\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Lending\Attributions\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Lending\Collections\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, US1 (T0330, T0331): casos dorados del motor financiero (plan, tasas y usura), calculados con la hoja
+         Lending\Casos\calcular.py (decimal de 40 digitos), que se versiona junto a ellos. -->
+    <None Include="Lending\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

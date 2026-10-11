@@ -1,0 +1,38 @@
+// SC-023, D3 (quickstart §1.2, caso 02): real/365 de base fija en 2028, año bisiesto. El período del 15-02-2028 al 15-03-2028
+// tiene 29 días reales porque el 29 de febrero causa como cualquier otro día; la base sigue siendo 365. Redondeo a la unidad
+// (1 peso) POR CUOTA: interés al centavo, el total de la cuota a pesos enteros y el residuo a capital. Tasa diaria =
+// RaizEntera(1,20; 365) − 1. El control de usura anualiza la TIR diaria sobre 365 (D3).
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora.
+{
+  "nombre": "Cuota fija real/365 con 29 de febrero",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Actual365", "equivalencia": "Compound",
+    "redondeo": { "unidad": 1, "modo": "AwayFromZero", "momento": "PerInstallment" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 5000000, "plazoCuotas": 6, "periodicidad": "Monthly", "tasaEA": 0.200000,
+    "fechaDesembolso": "2028-01-15", "modalidad": "CONSUMO"
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2028-01-01", "ea": 0.265000, "registradoEn": "2027-12-31T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000002" } ]
+  },
+  "operaciones": [],
+  "consultas": [],
+  "esperado": {
+    "tasas": { "diaria": 0.000499635890955618, "nominalDelPeriodo": 0.015309470499731217, "cuotaNivelada": 878425, "efectiva": 0.200000, "efectivaSinCargos": 0.200000 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": 1.48,
+      "totales": { "capital": 5000000, "interes": 270551.48, "seguro": 0 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2028-02-15", "dias": 31, "capital": 800398.22, "interes": 78026.78, "seguro": 0, "saldo": 4199601.78 },
+        { "numero": 2, "vencimiento": "2028-03-15", "dias": 29, "capital": 817147.56, "interes": 61277.44, "seguro": 0, "saldo": 3382454.22 },
+        { "numero": 3, "vencimiento": "2028-04-15", "dias": 31, "capital": 825640.60, "interes": 52784.40, "seguro": 0, "saldo": 2556813.62 },
+        { "numero": 4, "vencimiento": "2028-05-15", "dias": 30, "capital": 839821.78, "interes": 38603.22, "seguro": 0, "saldo": 1716991.84 },
+        { "numero": 5, "vencimiento": "2028-06-15", "dias": 31, "capital": 851630.73, "interes": 26794.27, "seguro": 0, "saldo": 865361.11 },
+        { "numero": 6, "vencimiento": "2028-07-15", "dias": 30, "capital": 865361.11, "interes": 13065.37, "seguro": 0, "saldo": 0 }
+      ]
+    },
+    "usura": { "veredicto": "Pasa", "usura": 0.265000, "holgura": 0.065000 }
+  }
+}

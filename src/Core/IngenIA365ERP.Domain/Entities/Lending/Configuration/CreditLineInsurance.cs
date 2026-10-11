@@ -1,5 +1,7 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Schedules;
+using IngenIA365ERP.Domain.Lending.Configuration;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Configuration;
 
@@ -35,4 +37,34 @@ public class CreditLineInsurance : AuditableEntity, IHechoInmutable
 
     /// <summary>El seguro que abre la reclamación por fallecimiento (FR-097, T102).</summary>
     public bool IsDebtorLifeInsurance { get; init; }
+
+
+    /// <summary>El seguro de una versión ya guardada (T0351).</summary>
+    public static CreditLineInsurance Nuevo(int creditLineVersionId, BorradorDeSeguro s) => new()
+    {
+        CreditLineVersionId = creditLineVersionId,
+        Code = s.Code.Trim().ToUpperInvariant(),
+        Name = s.Name.Trim(),
+        InsurerPersonId = s.InsurerPersonId,
+        Base = s.Base,
+        Rate = s.Rate,
+        ChargePeriodicity = s.ChargePeriodicity,
+        AccrualTiming = s.AccrualTiming,
+        IsMandatory = s.IsMandatory,
+        RetainedFraction = s.RetainedFraction,
+        SelfInsured = s.SelfInsured,
+        IsDebtorLifeInsurance = s.IsDebtorLifeInsurance,
+    };
+
+    /// <summary>
+    /// ¿Computa para la usura? Sí si la cooperativa retiene parte de la prima o se autoasegura (FR-021, R36); el seguro que paga
+    /// entera a la aseguradora tiene una contraprestación distinta al crédito y no computa.
+    /// </summary>
+    public static bool ComputaParaUsura(decimal? retainedFraction, bool selfInsured) => retainedFraction > 0m || selfInsured;
+
+    /// <inheritdoc cref="ComputaParaUsura(decimal?, bool)"/>
+    public bool Computa() => ComputaParaUsura(RetainedFraction, SelfInsured);
+
+    /// <summary>El seguro como lo recibe el plan.</summary>
+    public SeguroDelPlan ParaElPlan() => new(Code, Base, Rate, ChargePeriodicity, Computa());
 }

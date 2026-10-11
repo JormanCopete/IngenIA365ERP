@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Configuration;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Configuration;
 
@@ -32,4 +33,21 @@ public class CreditLineCollateralRule : AuditableEntity, IHechoInmutable
     public bool ContributionsCountAsCollateral { get; init; }
 
     public PromissoryNoteKind? RequiredPromissoryNoteKind { get; init; }
+
+
+    /// <summary>La regla de garantía de una versión ya guardada (T0351).</summary>
+    public static CreditLineCollateralRule Nueva(int creditLineVersionId, BorradorDeGarantia g) => new()
+    {
+        CreditLineVersionId = creditLineVersionId,
+        Order = g.Order,
+        MinAmount = g.MinAmount,
+        MaxAmount = g.MaxAmount,
+        MinTermMonths = g.MinTermMonths,
+        MaxTermMonths = g.MaxTermMonths,
+        RequiredCoDebtors = g.RequiredCoDebtors,
+        AdmittedKinds = ListaDeEnums.Conjunto(g.AdmittedKinds),
+        MinimumCoverage = g.MinimumCoverage,
+        ContributionsCountAsCollateral = g.ContributionsCountAsCollateral,
+        RequiredPromissoryNoteKind = g.RequiredPromissoryNoteKind,
+    };
 }

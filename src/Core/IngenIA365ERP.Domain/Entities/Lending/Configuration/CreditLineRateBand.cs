@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Configuration;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Configuration;
 
@@ -32,4 +33,29 @@ public class CreditLineRateBand : AuditableEntity, IHechoInmutable
     public decimal? AnnualRate { get; init; }
 
     public decimal? Margin { get; init; }
+
+
+    /// <summary>La banda de una versión ya guardada (T0351); la valida la versión entera (<c>CreditLineVersion.Validar</c>).</summary>
+    public static CreditLineRateBand Nueva(int creditLineVersionId, BorradorDeBanda b) => new()
+    {
+        CreditLineVersionId = creditLineVersionId,
+        Order = b.Order,
+        MinAmount = b.MinAmount,
+        MaxAmount = b.MaxAmount,
+        MinTermMonths = b.MinTermMonths,
+        MaxTermMonths = b.MaxTermMonths,
+        DebtorKind = b.DebtorKind,
+        ForEmployees = b.ForEmployees,
+        MinSeniorityMonths = b.MinSeniorityMonths,
+        AnnualRate = b.AnnualRate,
+        Margin = b.Margin,
+    };
+
+    /// <summary>¿Casa la banda con la solicitud? (monto, plazo en meses, tipo de deudor, empleado, antigüedad). Gana la primera por orden.</summary>
+    public bool Casa(decimal monto, int plazoMeses, DebtorKind? tipoDeDeudor, bool esEmpleado, int? antiguedadMeses) =>
+        (MinAmount is null || monto >= MinAmount) && (MaxAmount is null || monto <= MaxAmount)
+        && (MinTermMonths is null || plazoMeses >= MinTermMonths) && (MaxTermMonths is null || plazoMeses <= MaxTermMonths)
+        && (DebtorKind is null || DebtorKind == tipoDeDeudor)
+        && (ForEmployees is null || ForEmployees == esEmpleado)
+        && (MinSeniorityMonths is null || (antiguedadMeses ?? 0) >= MinSeniorityMonths);
 }

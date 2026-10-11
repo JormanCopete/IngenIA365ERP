@@ -1,0 +1,71 @@
+// SC-017, CH39 (quickstart §1.2, caso 27): los días de la periodicidad salen del valor del enum (Weekly = 7, Biweekly = 15), nunca
+// de un literal. SEMANAL en real/365: cada vencimiento siete días después del anterior (08-01, 15-01…), períodos de 7 días.
+// La variante QUINCENAL en 30/360 con día de pago 15: el mes se parte en las ranuras 15 y 30 (30 de febrero → 28); desembolso el
+// 10-01-2027, primer vencimiento la primera ranura que no cae antes del 25-01 → 30-01 (20 días), luego 15-02 (15), 28-02 (15: el
+// fin de febrero completa 30), 15-03 (15)… Calculado con calcular.py. Pendiente de validar por la contadora.
+{
+  "nombre": "Periodicidad semanal y quincenal",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Actual365", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1000000, "plazoCuotas": 8, "periodicidad": "Weekly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2027-01-01", "modalidad": "CONSUMO"
+  },
+  "variantes": [
+    {
+      "nombre": "quincenal",
+      "condiciones": {
+        "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+        "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+        "prelacion": "OldestInstallmentFirst",
+        "monto": 1000000, "plazoCuotas": 6, "periodicidad": "Biweekly", "tasaEA": 0.240000,
+        "fechaDesembolso": "2027-01-10", "diaDePago": 15, "modalidad": "CONSUMO"
+      }
+    }
+  ],
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-01-01", "ea": 0.265000, "registradoEn": "2026-12-31T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000027" } ]
+  },
+  "operaciones": [],
+  "consultas": [],
+  "esperado": {
+    "tasas": { "diaria": 0.000589519944145636, "nominalDelPeriodo": 0.004145325491575291, "cuotaNivelada": 127336.54, "efectiva": 0.240000, "efectivaSinCargos": 0.240000 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": -0.05,
+      "totales": { "capital": 1000000, "interes": 18692.27, "seguro": 0 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-01-08", "dias": 7, "capital": 123202.60, "interes": 4133.94, "seguro": 0, "saldo": 876797.40 },
+        { "numero": 2, "vencimiento": "2027-01-15", "dias": 7, "capital": 123711.91, "interes": 3624.63, "seguro": 0, "saldo": 753085.49 },
+        { "numero": 3, "vencimiento": "2027-01-22", "dias": 7, "capital": 124223.33, "interes": 3113.21, "seguro": 0, "saldo": 628862.16 },
+        { "numero": 4, "vencimiento": "2027-01-29", "dias": 7, "capital": 124736.86, "interes": 2599.68, "seguro": 0, "saldo": 504125.30 },
+        { "numero": 5, "vencimiento": "2027-02-05", "dias": 7, "capital": 125252.51, "interes": 2084.03, "seguro": 0, "saldo": 378872.79 },
+        { "numero": 6, "vencimiento": "2027-02-12", "dias": 7, "capital": 125770.30, "interes": 1566.24, "seguro": 0, "saldo": 253102.49 },
+        { "numero": 7, "vencimiento": "2027-02-19", "dias": 7, "capital": 126290.23, "interes": 1046.31, "seguro": 0, "saldo": 126812.26 },
+        { "numero": 8, "vencimiento": "2027-02-26", "dias": 7, "capital": 126812.26, "interes": 524.23, "seguro": 0, "saldo": 0 }
+      ]
+    },
+    "usura": { "veredicto": "Pasa", "usura": 0.265000, "holgura": 0.025000 },
+    "variantes": {
+      "quincenal": {
+        "tasas": { "diaria": 0.000597710167622401, "nominalDelPeriodo": 0.009003261879519731, "cuotaNivelada": 172472.31, "efectiva": 0.245283, "efectivaSinCargos": 0.245283 },
+        "plan": {
+          "interesDeGracia": 0,
+          "residuo": 0.03,
+          "totales": { "capital": 1000000, "interes": 34833.89, "seguro": 0 },
+          "cuotas": [
+            { "numero": 1, "vencimiento": "2027-01-30", "dias": 20, "capital": 160449.98, "interes": 12022.33, "seguro": 0, "saldo": 839550.02 },
+            { "numero": 2, "vencimiento": "2027-02-15", "dias": 15, "capital": 164913.62, "interes": 7558.69, "seguro": 0, "saldo": 674636.40 },
+            { "numero": 3, "vencimiento": "2027-02-28", "dias": 15, "capital": 166398.38, "interes": 6073.93, "seguro": 0, "saldo": 508238.02 },
+            { "numero": 4, "vencimiento": "2027-03-15", "dias": 15, "capital": 167896.51, "interes": 4575.80, "seguro": 0, "saldo": 340341.51 },
+            { "numero": 5, "vencimiento": "2027-03-30", "dias": 15, "capital": 169408.13, "interes": 3064.18, "seguro": 0, "saldo": 170933.38 },
+            { "numero": 6, "vencimiento": "2027-04-15", "dias": 15, "capital": 170933.38, "interes": 1538.96, "seguro": 0, "saldo": 0 }
+          ]
+        },
+        "usura": { "veredicto": "Pasa", "usura": 0.265000, "holgura": 0.019717 }
+      }
+    }
+  }
+}

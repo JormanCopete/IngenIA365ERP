@@ -53,4 +53,46 @@ public class LaCarteraNoTieneValoresLegalesFijos
         }
         ReglaSobreFuente.SinInfracciones(infracciones, "Valores legales fijos en el código de Cartera (FR-014): cada uno es un valor nacional o un parámetro");
     }
+
+    /// <summary>
+    /// US1 (T0340; CH39, M16): el motor de días, tasas, usura y plan no escribe <c>7</c> ni <c>10</c> como número suelto —ni entero
+    /// ni decimal—: los días de la semana y de la década salen del valor de <c>RepaymentPeriodicity</c> (<c>(int)Weekly</c>,
+    /// <c>(int)TenDay</c>). Se miran el código sin comentarios y sin el texto de las cadenas.
+    /// </summary>
+    private static readonly string[] CarpetasDelMotor = [
+        "Core/IngenIA365ERP.Domain/Lending/DayCount",
+        "Core/IngenIA365ERP.Domain/Lending/Rates",
+        "Core/IngenIA365ERP.Domain/Lending/Schedules",
+    ];
+
+    private static readonly Regex SieteODiez = new(@"(?<![\w.])(7|10)(?:[mM])?(?![\w.])", RegexOptions.Compiled);
+
+    private static readonly Regex Cadena = new("\\$?@?\"(?:[^\"\\\\]|\\\\.)*\"", RegexOptions.Compiled);
+
+    [Fact]
+    public void El_motor_no_escribe_los_dias_de_la_semana_ni_de_la_decada()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var archivos = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor)
+            .Concat(ReglaSobreFuente.ArchivosNombrados(["Core/IngenIA365ERP.Domain/Lending/MotorDeCartera.cs"])).ToList();
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Schedules", "FechasDeVencimiento.cs"), StringComparison.Ordinal));
+
+        var infracciones = new List<string>();
+        foreach (var archivo in archivos)
+        {
+            var relativo = ReglaSobreFuente.Relativo(root, archivo);
+            var lineas = File.ReadAllLines(archivo);
+            for (var i = 0; i < lineas.Length; i++)
+            {
+                var linea = lineas[i].Trim();
+                if (ReglaSobreFuente.EsComentario(linea)) continue;
+                var codigo = Cadena.Replace(linea, "\"\"");
+                var comentario = codigo.IndexOf("//", StringComparison.Ordinal);
+                if (comentario >= 0) codigo = codigo[..comentario];
+                foreach (Match m in SieteODiez.Matches(codigo))
+                    infracciones.Add($"{relativo}:{i + 1}: literal '{m.Value}' (use el valor de RepaymentPeriodicity)");
+            }
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "El motor de Cartera escribe 7 o 10 como literal (CH39)");
+    }
 }

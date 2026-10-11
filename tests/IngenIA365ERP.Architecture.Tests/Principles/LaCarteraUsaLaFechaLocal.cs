@@ -41,6 +41,29 @@ public class LaCarteraUsaLaFechaLocal
         Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Collections", "ColaDeMensajesAlDeudor.cs"), StringComparison.Ordinal));
     }
 
+    /// <summary>US1 (T0340): el motor de días, tasas, usura y plan trabaja en <c>DateOnly</c>; de <c>DateTime</c> sólo usa los días del mes.</summary>
+    private static readonly string[] CarpetasDelMotor = [
+        "Core/IngenIA365ERP.Domain/Lending/DayCount",
+        "Core/IngenIA365ERP.Domain/Lending/Rates",
+        "Core/IngenIA365ERP.Domain/Lending/Schedules",
+    ];
+
+    [Fact]
+    public void El_motor_de_US1_recibe_las_fechas_y_trabaja_en_DateOnly()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor)
+            .Concat(ReglaSobreFuente.ArchivosNombrados(["Core/IngenIA365ERP.Domain/Lending/MotorDeCartera.cs"])).ToList();
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("DayCount", "ContadorDeDias.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Schedules", "GeneradorDePlan.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Rates", "ControlDeUsura.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith("MotorDeCartera.cs", StringComparison.Ordinal));
+        var infracciones = ReglaSobreFuente.Infracciones(archivos, [
+            (new Regex(@"\bDateTime(Offset)?\b(?!\.DaysInMonth\b)", RegexOptions.Compiled), "usa DateTime en el motor (las fechas de negocio son DateOnly)"),
+            (new Regex(@"\b(IDateTimeService|TimeProvider|HoyLocal)\b", RegexOptions.Compiled), "consulta el reloj desde el motor"),
+        ]);
+        ReglaSobreFuente.SinInfracciones(infracciones, "El motor de Cartera no recibe sus fechas por parámetro (T9, T27)");
+    }
+
     [Fact]
     public void Cartera_no_lee_el_reloj_por_su_cuenta()
     {

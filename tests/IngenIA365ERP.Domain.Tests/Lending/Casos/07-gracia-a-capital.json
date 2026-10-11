@@ -1,0 +1,44 @@
+// SC-017, FR-023 (quickstart §1.2, caso 07): gracia a capital de 3 períodos y PRIMER PERÍODO IRREGULAR. Desembolso el 20-12-2026
+// con día de pago 5: el primer vencimiento es el primer día 5 que no cae antes del desembolso más un mes (20-01-2027) → 05-02-2027,
+// 45 días en 30/360 (360·1 + 30·(2 − 12) + (5 − 20) = 45). Las cuotas 1 a 3 pagan sólo interés; las 9 restantes, la cuota fija
+// sobre 6.000.000 con los factores reales de sus períodos. Calculado con calcular.py. Pendiente de validar por la contadora.
+{
+  "nombre": "Gracia a capital con primer período irregular",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 6000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.210000,
+    "fechaDesembolso": "2026-12-20", "diaDePago": 5, "modalidad": "CONSUMO",
+    "gracia": { "clase": "Principal", "periodos": 3 }
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2026-12-01", "ea": 0.265000, "registradoEn": "2026-11-30T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000007" } ]
+  },
+  "operaciones": [],
+  "consultas": [],
+  "esperado": {
+    "tasas": { "diaria": 0.000529641209312931, "nominalDelPeriodo": 0.016011867773387359, "cuotaNivelada": 721169.61, "efectiva": 0.209996, "efectivaSinCargos": 0.209996 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": -0.01,
+      "totales": { "capital": 6000000, "interes": 827351.03, "seguro": 0 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-02-05", "dias": 45, "capital": 0, "interes": 144682.13, "seguro": 0, "saldo": 6000000 },
+        { "numero": 2, "vencimiento": "2027-03-05", "dias": 30, "capital": 0, "interes": 96071.21, "seguro": 0, "saldo": 6000000 },
+        { "numero": 3, "vencimiento": "2027-04-05", "dias": 30, "capital": 0, "interes": 96071.21, "seguro": 0, "saldo": 6000000 },
+        { "numero": 4, "vencimiento": "2027-05-05", "dias": 30, "capital": 625098.40, "interes": 96071.21, "seguro": 0, "saldo": 5374901.60 },
+        { "numero": 5, "vencimiento": "2027-06-05", "dias": 30, "capital": 635107.40, "interes": 86062.21, "seguro": 0, "saldo": 4739794.20 },
+        { "numero": 6, "vencimiento": "2027-07-05", "dias": 30, "capital": 645276.65, "interes": 75892.96, "seguro": 0, "saldo": 4094517.55 },
+        { "numero": 7, "vencimiento": "2027-08-05", "dias": 30, "capital": 655608.74, "interes": 65560.87, "seguro": 0, "saldo": 3438908.81 },
+        { "numero": 8, "vencimiento": "2027-09-05", "dias": 30, "capital": 666106.26, "interes": 55063.35, "seguro": 0, "saldo": 2772802.55 },
+        { "numero": 9, "vencimiento": "2027-10-05", "dias": 30, "capital": 676771.86, "interes": 44397.75, "seguro": 0, "saldo": 2096030.69 },
+        { "numero": 10, "vencimiento": "2027-11-05", "dias": 30, "capital": 687608.24, "interes": 33561.37, "seguro": 0, "saldo": 1408422.45 },
+        { "numero": 11, "vencimiento": "2027-12-05", "dias": 30, "capital": 698618.14, "interes": 22551.47, "seguro": 0, "saldo": 709804.31 },
+        { "numero": 12, "vencimiento": "2028-01-05", "dias": 30, "capital": 709804.31, "interes": 11365.29, "seguro": 0, "saldo": 0 }
+      ]
+    },
+    "usura": { "veredicto": "Pasa", "usura": 0.265000, "holgura": 0.055004 }
+  }
+}

@@ -1,0 +1,45 @@
+// SC-002, FR-021 (quickstart §1.2, caso 03): real/360 sobre una EA. La tasa diaria sale de base 360 pero cada mes causa sus días
+// reales: en un año de 365 días el deudor paga (1 + r_d)^365 − 1 > 25 %. La EA pactada (0,250000) está BAJO la usura
+// (0,252000), pero la efectiva resultante —TIR diaria de los flujos con fechas reales, anualizada sobre 365— la SUPERA:
+// ControlDeUsura bloquea aunque la nominal y la pactada pasen. El seguro de vida no retiene prima (computa = false): no cuenta.
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora.
+{
+  "nombre": "Cuota fija real/360 que supera la usura por la efectiva",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Actual360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 3000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.250000,
+    "fechaDesembolso": "2027-03-10", "modalidad": "CONSUMO",
+    "seguros": [ { "codigo": "VIDA", "base": "OutstandingBalance", "tarifa": 0.000500, "periodicidad": "Monthly", "computa": false } ]
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-03-01", "ea": 0.252000, "registradoEn": "2027-02-27T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000003" } ]
+  },
+  "operaciones": [],
+  "consultas": [],
+  "esperado": {
+    "tasas": { "diaria": 0.000620035340587494, "nominalDelPeriodo": 0.018769265121506027, "cuotaNivelada": 282187.09, "efectiva": 0.253880, "efectivaSinCargos": 0.253880 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": 0.07,
+      "totales": { "capital": 3000000, "interes": 386245.15, "seguro": 10089.50 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-04-10", "dias": 31, "capital": 223984.28, "interes": 58202.81, "seguro": 1500, "saldo": 2776015.72 },
+        { "numero": 2, "vencimiento": "2027-05-10", "dias": 30, "capital": 230083.31, "interes": 52103.78, "seguro": 1388.01, "saldo": 2545932.41 },
+        { "numero": 3, "vencimiento": "2027-06-10", "dias": 31, "capital": 232793.61, "interes": 49393.48, "seguro": 1272.97, "saldo": 2313138.80 },
+        { "numero": 4, "vencimiento": "2027-07-10", "dias": 30, "capital": 238771.17, "interes": 43415.92, "seguro": 1156.57, "saldo": 2074367.63 },
+        { "numero": 5, "vencimiento": "2027-08-10", "dias": 31, "capital": 241942.41, "interes": 40244.68, "seguro": 1037.18, "saldo": 1832425.22 },
+        { "numero": 6, "vencimiento": "2027-09-10", "dias": 31, "capital": 246636.32, "interes": 35550.77, "seguro": 916.21, "saldo": 1585788.90 },
+        { "numero": 7, "vencimiento": "2027-10-10", "dias": 30, "capital": 252423, "interes": 29764.09, "seguro": 792.89, "saldo": 1333365.90 },
+        { "numero": 8, "vencimiento": "2027-11-10", "dias": 31, "capital": 256318.54, "interes": 25868.55, "seguro": 666.68, "saldo": 1077047.36 },
+        { "numero": 9, "vencimiento": "2027-12-10", "dias": 30, "capital": 261971.70, "interes": 20215.39, "seguro": 538.52, "saldo": 815075.66 },
+        { "numero": 10, "vencimiento": "2028-01-10", "dias": 31, "capital": 266373.86, "interes": 15813.23, "seguro": 407.54, "saldo": 548701.80 },
+        { "numero": 11, "vencimiento": "2028-02-10", "dias": 31, "capital": 271541.76, "interes": 10645.33, "seguro": 274.35, "saldo": 277160.04 },
+        { "numero": 12, "vencimiento": "2028-03-10", "dias": 29, "capital": 277160.04, "interes": 5027.12, "seguro": 138.58, "saldo": 0 }
+      ]
+    },
+    "usura": { "veredicto": "Excede", "usura": 0.252000, "holgura": -0.001880 }
+  }
+}

@@ -1,0 +1,78 @@
+using IngenIA365ERP.Domain.Enums.Lending;
+
+namespace IngenIA365ERP.Domain.Lending;
+
+/// <summary>
+/// El redondeo sellado de una línea y de su crédito (feature 013, T35, R44, M15; FR-010; data-model §0.4): <b>unidad</b> (0,01; 1;
+/// 10; 100; 1.000), <b>modo</b> y <b>momento</b>. El motor no redondea en ningún otro punto: las tasas derivadas van a 18 decimales
+/// (<c>EquivalenciaDeTasas</c>) y los montos pasan por aquí.
+///
+/// <list type="bullet">
+/// <item><see cref="RoundingMode.AwayFromZero"/>: el medio se aleja de cero; <see cref="RoundingMode.ToEven"/>: el medio va al par;
+/// <see cref="RoundingMode.Up"/>: hacia arriba (techo); <see cref="RoundingMode.Down"/>: hacia abajo (piso).</item>
+/// <item>Momento en el plan (<c>GeneradorDePlan</c>): <see cref="RoundingMoment.PerConcept"/> redondea a la unidad cada concepto
+/// (capital, interés, seguro, la cuota nivelada); <see cref="RoundingMoment.PerInstallment"/> deja los conceptos al centavo y lleva a
+/// la unidad el total de la cuota, con el residuo a capital; <see cref="RoundingMoment.PerTotal"/> deja todo el plan al centavo y la
+/// unidad se aplica al total de una liquidación (US4, US5).</item>
+/// </list>
+///
+/// <para>En los tres el residuo queda visible: el plan dice en su explicación lo que absorbió la última cuota. Puro. (nuevo)</para>
+/// </summary>
+public sealed record RedondeoDeCartera
+{
+    /// <summary>El centavo: la unidad mínima de un monto (<c>Monto</c>, 18,2).</summary>
+    public static decimal Centavo { get; } = new(1, 0, 0, false, 2);
+
+    /// <summary>Las unidades admitidas: 0,01; 1; 10; 100; 1.000.</summary>
+    public static IReadOnlyList<decimal> UnidadesAdmitidas { get; } = [Centavo, 1m, new decimal(10), 100m, new decimal(1000)];
+
+    /// <summary>Al centavo, alejándose de cero, por concepto: el defecto cuando la línea no dice otra cosa.</summary>
+    public static RedondeoDeCartera AlCentavo { get; } = new(Centavo, RoundingMode.AwayFromZero, RoundingMoment.PerConcept);
+
+    public RedondeoDeCartera(decimal unidad, RoundingMode modo, RoundingMoment momento)
+    {
+        if (!UnidadesAdmitidas.Contains(unidad))
+            throw new ArgumentOutOfRangeException(nameof(unidad), unidad, "La unidad de redondeo es 0,01; 1; 10; 100 o 1.000.");
+        if (!Enum.IsDefined(modo)) throw new ArgumentOutOfRangeException(nameof(modo), modo, "Modo de redondeo desconocido.");
+        if (!Enum.IsDefined(momento)) throw new ArgumentOutOfRangeException(nameof(momento), momento, "Momento de redondeo desconocido.");
+        Unidad = unidad;
+        Modo = modo;
+        Momento = momento;
+    }
+
+    public decimal Unidad { get; }
+
+    public RoundingMode Modo { get; }
+
+    public RoundingMoment Momento { get; }
+
+    /// <summary>A la unidad sellada, con el modo sellado.</summary>
+    public decimal Redondear(decimal valor) => AUnidad(valor, Unidad, Modo);
+
+    /// <summary>Al centavo, con el modo sellado.</summary>
+    public decimal RedondearAlCentavo(decimal valor) => AUnidad(valor, Centavo, Modo);
+
+    /// <summary>Un concepto del plan (interés, seguro, extraordinaria): a la unidad si el momento es por concepto; si no, al centavo.</summary>
+    public decimal Concepto(decimal valor) => Momento == RoundingMoment.PerConcept ? Redondear(valor) : RedondearAlCentavo(valor);
+
+    /// <summary>¿Lleva a la unidad el total de cada cuota?</summary>
+    public bool PorCuota => Momento == RoundingMoment.PerInstallment;
+
+    /// <summary>
+    /// <paramref name="valor"/> a un múltiplo de <paramref name="unidad"/>: <c>Round(valor / unidad) × unidad</c>. <c>Up</c> y
+    /// <c>Down</c> son dirigidos (techo y piso), no de medio.
+    /// </summary>
+    public static decimal AUnidad(decimal valor, decimal unidad, RoundingMode modo)
+    {
+        if (unidad <= 0m) throw new ArgumentOutOfRangeException(nameof(unidad), unidad, "La unidad es mayor que cero.");
+        var regla = modo switch
+        {
+            RoundingMode.AwayFromZero => MidpointRounding.AwayFromZero,
+            RoundingMode.ToEven => MidpointRounding.ToEven,
+            RoundingMode.Up => MidpointRounding.ToPositiveInfinity,
+            RoundingMode.Down => MidpointRounding.ToNegativeInfinity,
+            _ => throw new ArgumentOutOfRangeException(nameof(modo), modo, "Modo de redondeo desconocido."),
+        };
+        return decimal.Round(valor / unidad, 0, regla) * unidad;
+    }
+}

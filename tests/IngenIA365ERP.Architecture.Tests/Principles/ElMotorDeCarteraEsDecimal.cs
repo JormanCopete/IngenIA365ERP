@@ -21,7 +21,31 @@ public class ElMotorDeCarteraEsDecimal
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
         (new Regex(@"\b(double|float|Single|Double)\b", RegexOptions.Compiled), "usa coma flotante"),
         (new Regex(@"\bMath\.(Pow|Exp|Log|Log10|Sqrt)\(", RegexOptions.Compiled), "usa Math en coma flotante"),
+        // US1 (T0340): tampoco por la puerta de atrás.
+        (new Regex(@"\bMathF\.", RegexOptions.Compiled), "usa MathF (coma flotante)"),
+        (new Regex(@"\bConvert\.To(Double|Single)\(", RegexOptions.Compiled), "convierte a coma flotante"),
     ];
+
+    /// <summary>US1 (T0340): las piezas del motor de esta fase, que la regla tiene que estar mirando.</summary>
+    private static readonly string[] PiezasDeUS1 =
+    [
+        Path.Combine("DayCount", "ContadorDeDias.cs"),
+        Path.Combine("Rates", "EquivalenciaDeTasas.cs"),
+        Path.Combine("Rates", "TasaDelDia.cs"),
+        Path.Combine("Rates", "ControlDeUsura.cs"),
+        Path.Combine("Schedules", "FechasDeVencimiento.cs"),
+        Path.Combine("Schedules", "GeneradorDePlan.cs"),
+        Path.Combine("Lending", "MotorDeCartera.cs"),
+        Path.Combine("Lending", "RedondeoDeCartera.cs"),
+    ];
+
+    [Fact]
+    public void La_regla_mira_los_dias_las_tasas_la_usura_y_el_plan()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        foreach (var pieza in PiezasDeUS1)
+            Assert.Contains(archivos, a => a.EndsWith(pieza, StringComparison.Ordinal));
+    }
 
     /// <summary>La regla bitemporal que leen las versiones de Cartera (T0143): también sin coma flotante.</summary>
     private static readonly string[] Archivos = ["Core/IngenIA365ERP.Domain/Common/VigenciaBitemporal.cs"];
