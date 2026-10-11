@@ -128,6 +128,29 @@ public class HuellaDeCarteraTests
         otra.Calcular().Should().NotBe(HuellaEsperada);
     }
 
+    /// <summary>
+    /// US4 (T0467; T24, M15): la huella de una liquidación a (D, R) lleva el prefijo de la versión de reglas, no depende del orden en
+    /// que el cargador (EF) entregue las operaciones y cambia si cambia la fecha o lo que se liquida.
+    /// </summary>
+    [Fact]
+    public void La_huella_de_una_liquidacion_lleva_la_version_de_reglas_y_no_depende_del_orden_de_EF()
+    {
+        var entrada = Replay.CreditosDePrueba.Simple() with { };
+        var tramo = new Domain.Lending.Replay.EntradaDeOperacion("T2", IngenIA365ERP.Domain.Enums.Lending.LoanOperationKind.Disbursement, new DateOnly(2027, 3, 1),
+            Replay.CreditosDePrueba.Instante(new DateOnly(2027, 3, 1)), 2) { Monto = 1_000_000m };
+        var conTramo = entrada with { Operaciones = [.. entrada.Operaciones, tramo] };
+        var alReves = entrada with { Operaciones = [tramo, .. entrada.Operaciones] };
+        var d = new DateOnly(2027, 4, 20);
+
+        var estado = MotorDeCartera.Reconstruir(conTramo, d);
+        estado.TextoCanonico.Should().StartWith("LND-2026.1|{\"cuotaMasAntigua\":");
+        estado.Huella.Should().MatchRegex("^[0-9a-f]{64}$").And.Be(HuellaDeCartera.DeTexto(estado.TextoCanonico));
+        MotorDeCartera.Reconstruir(alReves, d).Huella.Should().Be(estado.Huella, "el orden de llegada no es dato");
+        MotorDeCartera.Reconstruir(conTramo, d).Huella.Should().Be(estado.Huella, "repetida, la misma");
+        MotorDeCartera.Reconstruir(conTramo, d.AddDays(1)).Huella.Should().NotBe(estado.Huella, "otra D, otra liquidación");
+        MotorDeCartera.Reconstruir(entrada, d).Huella.Should().NotBe(estado.Huella, "sin el tramo, otra liquidación");
+    }
+
     [Fact]
     public void Los_identificadores_y_los_textos_con_control_se_escriben_de_forma_unica()
     {

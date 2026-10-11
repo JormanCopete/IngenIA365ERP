@@ -1,0 +1,145 @@
+// SC-013, FR-140, D5 (quickstart §1.2, caso 26): crédito migrado con intereses en suspenso. Al corte (30-06-2027) llega con saldo
+// inicial por concepto y cuota —corriente causada antes de suspender (18.000 en la cuota 1), corriente y mora ya en suspenso— y su
+// plan cargado: el capital por cuota se CONSERVA y el interés desde el corte lo causa el motor. La cuota 1 venció el 10-03-2027: al
+// corte la altura es 112 ≥ 61, así que el crédito ya está suspendido (no hay transición) y lo nuevo va a CurrentInterestInSuspense y
+// DefaultInterestInSuspense; los 18.000 de corriente no se reclasifican. Sin pagos.
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora (acta de activación, D5).
+{
+  "nombre": "Crédito migrado con suspenso",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1200000, "plazoCuotas": 6, "periodicidad": "Monthly", "tasaEA": 0.250000,
+    "fechaDesembolso": "2027-02-10", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [ { "clave": "CONSUMO", "desde": "2027-01-01", "ea": 0.265000, "registradoEn": "2026-12-31T15:00:00Z",
+                 "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000026" } ],
+    "festivos": [ "2027-07-05", "2027-07-20", "2027-08-07", "2027-08-16" ],
+    "tolerancias": [ { "desde": "2026-01-01", "valor": 1000 } ],
+    "umbralesDeSuspension": [ { "desde": "2026-01-01", "dias": 61 } ]
+  },
+  "operaciones": [
+    {
+      "id": "M1", "tipo": "OpeningBalance", "fechaValor": "2027-06-30", "registradoEn": "2027-07-01T10:00:00Z",
+      "saldos": [
+        { "concepto": "Principal", "valor": 1200000 },
+        { "concepto": "CurrentInterest", "cuota": 1, "valor": 18000 },
+        { "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 9000 },
+        { "concepto": "CurrentInterestInSuspense", "cuota": 4, "valor": 15000 },
+        { "concepto": "CurrentInterestInSuspense", "cuota": 5, "valor": 4000 }
+      ],
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-03-10", "capital": 200000 },
+        { "numero": 2, "vencimiento": "2027-04-10", "capital": 200000 },
+        { "numero": 3, "vencimiento": "2027-05-10", "capital": 200000 },
+        { "numero": 4, "vencimiento": "2027-06-10", "capital": 200000 },
+        { "numero": 5, "vencimiento": "2027-07-10", "desde": "2027-06-10", "capital": 200000 },
+        { "numero": 6, "vencimiento": "2027-08-10", "capital": 200000 }
+      ]
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2027-07-02",
+      "informacionHasta": "2027-07-02T23:00:00Z",
+      "libroDesde": "2027-06-30",
+      "conPlan": true,
+      "esperado": {
+        "saldos": { "Principal": 1200000, "CurrentInterest": 18000, "CurrentInterestInSuspense": 19496.18, "DefaultInterestInSuspense": 10045.44 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 18000 },
+          { "cuota": 1, "concepto": "DefaultInterestInSuspense", "valor": 9261.36 },
+          { "cuota": 2, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 2, "concepto": "DefaultInterestInSuspense", "valor": 261.36 },
+          { "cuota": 3, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 3, "concepto": "DefaultInterestInSuspense", "valor": 261.36 },
+          { "cuota": 4, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 4, "concepto": "CurrentInterestInSuspense", "valor": 15000 },
+          { "cuota": 4, "concepto": "DefaultInterestInSuspense", "valor": 261.36 },
+          { "cuota": 5, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 5, "concepto": "CurrentInterestInSuspense", "valor": 4496.18 },
+          { "cuota": 6, "concepto": "Principal", "valor": 200000 }
+        ],
+        "capitalVencido": 800000,
+        "diasDeMora": 114,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 4,
+        "suspendida": true,
+        "valorParaCancelar": 1247541.62,
+        "tasaDiariaCorriente": 0.000620035340587494,
+        "tasaDiariaMora": 0.000653191353786404,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2027-06-30", "clase": "OpeningBalance", "concepto": "Principal", "cuota": null, "valor": 1200000 },
+          { "dia": "2027-06-30", "clase": "OpeningBalance", "concepto": "CurrentInterest", "cuota": 1, "valor": 18000 },
+          { "dia": "2027-06-30", "clase": "OpeningBalance", "concepto": "CurrentInterestInSuspense", "cuota": 4, "valor": 15000 },
+          { "dia": "2027-06-30", "clase": "OpeningBalance", "concepto": "CurrentInterestInSuspense", "cuota": 5, "valor": 4000 },
+          { "dia": "2027-06-30", "clase": "OpeningBalance", "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 9000 },
+          { "dia": "2027-07-01", "clase": "Accrual", "concepto": "CurrentInterestInSuspense", "cuota": 5, "valor": 248.01 },
+          { "dia": "2027-07-01", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 130.64 },
+          { "dia": "2027-07-01", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 2, "valor": 130.64 },
+          { "dia": "2027-07-01", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 3, "valor": 130.64 },
+          { "dia": "2027-07-01", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 4, "valor": 130.64 },
+          { "dia": "2027-07-02", "clase": "Accrual", "concepto": "CurrentInterestInSuspense", "cuota": 5, "valor": 248.17 },
+          { "dia": "2027-07-02", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 1, "valor": 130.72 },
+          { "dia": "2027-07-02", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 2, "valor": 130.72 },
+          { "dia": "2027-07-02", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 3, "valor": 130.72 },
+          { "dia": "2027-07-02", "clase": "Accrual", "concepto": "DefaultInterestInSuspense", "cuota": 4, "valor": 130.72 }
+        ],
+        "plan": {
+          "cuotas": [
+            { "numero": 1, "vencimiento": "2027-03-10", "dias": 0, "capital": 200000, "interes": 0, "seguro": 0, "saldo": 1000000 },
+            { "numero": 2, "vencimiento": "2027-04-10", "dias": 30, "capital": 200000, "interes": 0, "seguro": 0, "saldo": 800000 },
+            { "numero": 3, "vencimiento": "2027-05-10", "dias": 30, "capital": 200000, "interes": 0, "seguro": 0, "saldo": 600000 },
+            { "numero": 4, "vencimiento": "2027-06-10", "dias": 30, "capital": 200000, "interes": 0, "seguro": 0, "saldo": 400000 },
+            { "numero": 5, "vencimiento": "2027-07-10", "dias": 30, "capital": 200000, "interes": 2487.07, "seguro": 0, "saldo": 200000 },
+            { "numero": 6, "vencimiento": "2027-08-10", "dias": 30, "capital": 200000, "interes": 3753.85, "seguro": 0, "saldo": 0 }
+          ],
+          "totales": { "capital": 1200000, "interes": 6240.92 }
+        }
+      }
+    },
+    {
+      "fecha": "2027-08-31",
+      "informacionHasta": "2027-08-31T23:00:00Z",
+      "esperado": {
+        "saldos": { "Principal": 1200000, "CurrentInterest": 18000, "CurrentInterestInSuspense": 25240.92, "DefaultInterestInSuspense": 49797.66 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 18000 },
+          { "cuota": 1, "concepto": "DefaultInterestInSuspense", "valor": 16895.77 },
+          { "cuota": 2, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 2, "concepto": "DefaultInterestInSuspense", "valor": 7895.77 },
+          { "cuota": 3, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 3, "concepto": "DefaultInterestInSuspense", "valor": 7895.77 },
+          { "cuota": 4, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 4, "concepto": "CurrentInterestInSuspense", "valor": 15000 },
+          { "cuota": 4, "concepto": "DefaultInterestInSuspense", "valor": 7895.77 },
+          { "cuota": 5, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 5, "concepto": "CurrentInterestInSuspense", "valor": 6487.07 },
+          { "cuota": 5, "concepto": "DefaultInterestInSuspense", "valor": 6585.54 },
+          { "cuota": 6, "concepto": "Principal", "valor": 200000 },
+          { "cuota": 6, "concepto": "CurrentInterestInSuspense", "valor": 3753.85 },
+          { "cuota": 6, "concepto": "DefaultInterestInSuspense", "valor": 2629.04 }
+        ],
+        "capitalVencido": 1200000,
+        "diasDeMora": 174,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 6,
+        "suspendida": true,
+        "valorParaCancelar": 1293038.58,
+        "tasaDiariaCorriente": 0.000620035340587494,
+        "tasaDiariaMora": 0.000653191353786404,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": []
+      }
+    }
+  ]
+}

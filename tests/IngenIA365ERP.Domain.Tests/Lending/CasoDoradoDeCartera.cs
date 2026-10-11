@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Rates;
+using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
 namespace IngenIA365ERP.Domain.Tests.Lending;
@@ -24,6 +25,16 @@ namespace IngenIA365ERP.Domain.Tests.Lending;
 /// <item><c>esperado</c> de esta fase (casos sin operaciones): tasas, plan cuota a cuota y veredicto de usura; con
 /// <c>variantes</c>, lo de cada una en <c>esperado.variantes[nombre]</c>.</item>
 /// </list>
+/// </para>
+///
+/// <para>
+/// US4 (T0464) amplía el mismo esquema sin romperlo: las condiciones de causación (mora, sobretasa, tasa variable, causación de
+/// seguros, reestructuraciones, insolvencia, castigo), las series de umbral de suspensión y tolerancia, la usura con «hasta» y
+/// «corrige», operaciones con fecha valor y <c>registradoEn</c> (desembolso o tramo, saldo inicial migrado, reajuste con el índice
+/// publicado), variantes con sus propias operaciones y consultas, y <c>consultas</c> a (D, R) con su <c>modo</c>: la reconstrucción
+/// (saldos por cuota y concepto, mora, suspensión, tasas, libro desde <c>libroDesde</c>, plan con <c>conPlan</c>), «PagosATiempo» (la
+/// causación que proyecta el plan), «Causacion» (causar día a día desde la <c>marca</c>) y «Diferencias» (lo que cambia el libro entre
+/// <c>comparaConR</c> y R).
 /// </para>
 /// </summary>
 public sealed class CasoDoradoDeCartera
@@ -54,10 +65,10 @@ public sealed class CasoDoradoDeCartera
         JsonSerializer.Deserialize<CasoDoradoDeCartera>(File.ReadAllText(ruta), Opciones)
         ?? throw new InvalidOperationException($"El caso {ruta} está vacío.");
 
-    /// <summary>El plan principal y cada variante, con lo que esperan.</summary>
+    /// <summary>El plan principal y cada variante, con lo que esperan (nada si el caso no trae «esperado» de plan).</summary>
     public IEnumerable<(string Nombre, CondicionesJson Condiciones, EsperadoJson Esperado)> Escenarios()
     {
-        var esperado = Esperado ?? throw new InvalidOperationException($"{Nombre}: no trae «esperado».");
+        if (Esperado is not { } esperado) yield break;
         yield return (Nombre, Condiciones, esperado);
         foreach (var v in Variantes)
         {
@@ -80,6 +91,51 @@ public sealed class CasoDoradoDeCartera
                 .Select(u => new UsuraCertificada(u.Ea, u.PublicId ?? Guid.Empty, u.Clave, u.Desde))
                 .FirstOrDefault();
 
+    /// <summary>Las consultas del caso y de cada variante, con las condiciones y operaciones con que se corren.</summary>
+    public IEnumerable<(string Nombre, CondicionesJson Condiciones, List<OperacionJson> Operaciones, ConsultaJson Consulta)> TodasLasConsultas()
+    {
+        foreach (var c in Consultas) yield return (Nombre, Condiciones, Operaciones, c);
+        foreach (var v in Variantes)
+            foreach (var c in v.Consultas ?? [])
+                yield return ($"{Nombre} · {v.Nombre}", v.Condiciones, v.Operaciones ?? Operaciones, c);
+    }
+
+    /// <summary>
+    /// La entrada de la reconstrucción con <paramref name="r"/> como R: las condiciones selladas con la versión vigente, el plan pactado
+    /// de las condiciones, las operaciones (el reajuste con el último índice publicado a su fecha y conocido al registrarlo, FR-067) y las
+    /// series de la modalidad. La usura lleva su <c>Sequence</c> por el orden del archivo, como en la hoja.
+    /// </summary>
+    public EntradaDeReconstruccion Entrada(CondicionesJson c, IReadOnlyList<OperacionJson> operaciones, DateTime r) =>
+        new(c.Credito(VersionesDeReglas.Vigente), c.Entrada(), operaciones.Select((o, i) => Operacion(o, i)).ToList(), r)
+        {
+            Usura = Series.Usura.Select((u, i) => (u, i)).Where(x => x.u.Clave == c.Modalidad)
+                .Select(x => new ValorDeUsura(x.u.Desde, x.u.Ea, x.u.RegistradoEn, x.i + 1, x.u.PublicId ?? Guid.Empty)
+                {
+                    ValidTo = x.u.Hasta,
+                    SupersedesPublicId = x.u.Corrige,
+                }).ToList(),
+            Festivos = Series.Festivos,
+            UmbralesDeSuspension = Series.UmbralesDeSuspension.Select(u => new ValorConVigencia<int>(u.Desde, u.Dias)).ToList(),
+            Tolerancias = Series.Tolerancias.Select(t => new ValorConVigencia<decimal>(t.Desde, t.Valor)).ToList(),
+        };
+
+    private EntradaDeOperacion Operacion(OperacionJson o, int indice) =>
+        new(o.Id, Enum.Parse<LoanOperationKind>(o.Tipo), o.FechaValor, o.RegistradoEn, o.Secuencia ?? indice + 1)
+        {
+            Monto = o.Monto,
+            Saldos = o.Saldos.Select(s => new SaldoInicialDeCredito(s.Concepto, s.Cuota, s.Valor)).ToList(),
+            CuotasMigradas = o.Cuotas.Select(q => new CuotaMigrada(q.Numero, q.Vencimiento, q.Capital) { Desde = q.Desde }).ToList(),
+            Indice = o.Indice is { } codigo ? IndicePara(codigo, o.FechaValor, o.RegistradoEn) : null,
+            Reversa = o.Reversa,
+        };
+
+    private IndiceDeReferencia IndicePara(string codigo, DateOnly fecha, DateTime registrado) =>
+        Series.Indices.Where(x => x.Codigo == codigo && x.Desde <= fecha && x.RegistradoEn <= registrado)
+            .OrderByDescending(x => x.Desde).ThenByDescending(x => x.RegistradoEn)
+            .Select(x => new IndiceDeReferencia(x.Valor, x.PeriodosNominales))
+            .FirstOrDefault()
+        ?? throw new InvalidOperationException($"{Nombre}: no hay índice {codigo} publicado al {fecha:yyyy-MM-dd}.");
+
     public sealed class CondicionesJson
     {
         public AmortizationSystem Sistema { get; set; }
@@ -98,6 +154,36 @@ public sealed class CasoDoradoDeCartera
         public List<ExtraordinariaJson> Extraordinarias { get; set; } = [];
         public GraciaJson? Gracia { get; set; }
         public List<SeguroJson> Seguros { get; set; } = [];
+        // US4: condiciones de causación.
+        public DefaultRateKind ClaseDeMora { get; set; } = DefaultRateKind.RelativeToCurrent;
+        public decimal? FactorDeMora { get; set; }
+        public decimal? MoraFijaEA { get; set; }
+        public decimal SobretasaDeCargos { get; set; }
+        public bool MoraSobreIntereses { get; set; }
+        public InsuranceAccrualTiming CausacionDeSeguros { get; set; } = InsuranceAccrualTiming.AtDueDate;
+        public int Reestructuraciones { get; set; }
+        public DateOnly? InsolvenciaDesde { get; set; }
+        public DateOnly? CastigoDesde { get; set; }
+        public bool UsuraRequerida { get; set; } = true;
+        public TasaVariableJson? TasaVariable { get; set; }
+
+        /// <summary>Las condiciones selladas del crédito (US4).</summary>
+        public CondicionesDeCredito Credito(string rulesVersion) => new(rulesVersion, TasaEA, ClaseDeMora, Convencion, Equivalencia, Periodicidad,
+            new RedondeoDeCartera(Redondeo.Unidad, Redondeo.Modo, Redondeo.Momento))
+        {
+            FactorDeMora = FactorDeMora,
+            MoraFijaEA = MoraFijaEA,
+            SobretasaDeCargos = SobretasaDeCargos,
+            MoraSobreIntereses = MoraSobreIntereses,
+            CausacionDeSeguros = CausacionDeSeguros,
+            Reestructuraciones = Reestructuraciones,
+            InsolvenciaDesde = InsolvenciaDesde,
+            CastigoDesde = CastigoDesde,
+            UsuraRequerida = UsuraRequerida,
+            Margen = TasaVariable?.Margen ?? 0m,
+            Piso = TasaVariable?.Piso,
+            Techo = TasaVariable?.Techo,
+        };
 
         public EntradaDePlan Entrada() => new(Monto, FechaDesembolso, PlazoCuotas, Periodicidad, Sistema, TasaEA, Convencion, Equivalencia,
             new RedondeoDeCartera(Redondeo.Unidad, Redondeo.Modo, Redondeo.Momento))
@@ -117,6 +203,16 @@ public sealed class CasoDoradoDeCartera
     {
         public string Nombre { get; set; } = string.Empty;
         public CondicionesJson Condiciones { get; set; } = new();
+        /// <summary>US4: las operaciones de la variante (sin ellas, las del caso) y sus consultas.</summary>
+        public List<OperacionJson>? Operaciones { get; set; }
+        public List<ConsultaJson>? Consultas { get; set; }
+    }
+
+    public sealed class TasaVariableJson
+    {
+        public decimal Margen { get; set; }
+        public decimal? Piso { get; set; }
+        public decimal? Techo { get; set; }
     }
 
     public sealed class RedondeoJson
@@ -154,12 +250,27 @@ public sealed class CasoDoradoDeCartera
         public List<UsuraJson> Usura { get; set; } = [];
         public List<DateOnly> Festivos { get; set; } = [];
         public List<IndiceJson> Indices { get; set; } = [];
+        public List<UmbralJson> UmbralesDeSuspension { get; set; } = [];
+        public List<ToleranciaJson> Tolerancias { get; set; } = [];
+    }
+
+    public sealed class UmbralJson
+    {
+        public DateOnly Desde { get; set; }
+        public int Dias { get; set; }
+    }
+
+    public sealed class ToleranciaJson
+    {
+        public DateOnly Desde { get; set; }
+        public decimal Valor { get; set; }
     }
 
     public sealed class UsuraJson
     {
         public string Clave { get; set; } = string.Empty;
         public DateOnly Desde { get; set; }
+        public DateOnly? Hasta { get; set; }
         public decimal Ea { get; set; }
         public DateTime RegistradoEn { get; set; }
         public Guid? PublicId { get; set; }
@@ -177,7 +288,7 @@ public sealed class CasoDoradoDeCartera
         public DateTime RegistradoEn { get; set; }
     }
 
-    /// <summary>Una operación con fecha valor y de registro (US4/US5); en esta fase los casos no traen ninguna.</summary>
+    /// <summary>Una operación con fecha valor y de registro (US4/US5).</summary>
     public sealed class OperacionJson
     {
         public string Id { get; set; } = string.Empty;
@@ -187,14 +298,100 @@ public sealed class CasoDoradoDeCartera
         public DateOnly FechaValor { get; set; }
         public DateTime RegistradoEn { get; set; }
         public JsonElement? Esperado { get; set; }
+        // US4
+        public long? Secuencia { get; set; }
+        public decimal? Monto { get; set; }
+        public string? Indice { get; set; }
+        public string? Reversa { get; set; }
+        public List<SaldoInicialJson> Saldos { get; set; } = [];
+        public List<CuotaMigradaJson> Cuotas { get; set; } = [];
+    }
+
+    public sealed class SaldoInicialJson
+    {
+        public LoanConcept Concepto { get; set; }
+        public int? Cuota { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    public sealed class CuotaMigradaJson
+    {
+        public int Numero { get; set; }
+        public DateOnly Vencimiento { get; set; }
+        public DateOnly? Desde { get; set; }
+        public decimal Capital { get; set; }
     }
 
     /// <summary>Una consulta a la fecha D con la información hasta R (US4).</summary>
     public sealed class ConsultaJson
     {
+        /// <summary><c>Reconstruccion</c> (defecto), <c>PagosATiempo</c>, <c>Causacion</c> o <c>Diferencias</c>.</summary>
+        public string Modo { get; set; } = "Reconstruccion";
         public DateOnly Fecha { get; set; }
         public DateTime InformacionHasta { get; set; }
-        public JsonElement? Esperado { get; set; }
+        public DateOnly? LibroDesde { get; set; }
+        public bool ConPlan { get; set; }
+        public DateOnly? Marca { get; set; }
+        public DateTime? ComparaConR { get; set; }
+        public EsperadoDeConsultaJson? Esperado { get; set; }
+    }
+
+    /// <summary>Lo que espera una consulta; cada modo trae lo suyo (la reconstrucción, todos sus campos).</summary>
+    public sealed class EsperadoDeConsultaJson
+    {
+        public Dictionary<string, decimal>? Saldos { get; set; }
+        public List<SaldoDeCuotaJson>? PorCuota { get; set; }
+        public decimal? CapitalVencido { get; set; }
+        public int? DiasDeMora { get; set; }
+        public int? CuotaMasAntigua { get; set; }
+        public int? CuotasVencidas { get; set; }
+        public bool? Suspendida { get; set; }
+        public decimal? ValorParaCancelar { get; set; }
+        public decimal? TasaDiariaCorriente { get; set; }
+        public decimal? TasaDiariaMora { get; set; }
+        public bool? UsuraTopada { get; set; }
+        public DateOnly? ValidaHasta { get; set; }
+        public List<TransicionJson>? Transiciones { get; set; }
+        public List<FilaDeLibroJson>? Libro { get; set; }
+        public PlanDeConsultaJson? Plan { get; set; }
+        public List<CausadoJson>? Causado { get; set; }
+        public List<FilaDeLibroJson>? Causacion { get; set; }
+        public List<FilaDeLibroJson>? Diferencias { get; set; }
+    }
+
+    public sealed class SaldoDeCuotaJson
+    {
+        public int? Cuota { get; set; }
+        public LoanConcept Concepto { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    public sealed class TransicionJson
+    {
+        public DateOnly Fecha { get; set; }
+        public bool Suspendida { get; set; }
+    }
+
+    public sealed class FilaDeLibroJson
+    {
+        public DateOnly Dia { get; set; }
+        public LoanTransactionKind? Clase { get; set; }
+        public LoanConcept Concepto { get; set; }
+        public int? Cuota { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    public sealed class PlanDeConsultaJson
+    {
+        public List<CuotaJson> Cuotas { get; set; } = [];
+        public TotalesJson Totales { get; set; } = new();
+    }
+
+    public sealed class CausadoJson
+    {
+        public int Cuota { get; set; }
+        public LoanConcept Concepto { get; set; }
+        public decimal Valor { get; set; }
     }
 
     public sealed class EsperadoJson

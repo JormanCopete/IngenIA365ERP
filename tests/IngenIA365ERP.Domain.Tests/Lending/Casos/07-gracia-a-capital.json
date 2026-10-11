@@ -17,7 +17,55 @@
                  "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000007" } ]
   },
   "operaciones": [],
-  "consultas": [],
+  "consultas": [
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-01-20",
+      "informacionHasta": "2027-01-20T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 96071.21 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-02-05",
+      "informacionHasta": "2027-02-05T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 144682.13 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-05-05",
+      "informacionHasta": "2027-05-05T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 144682.13 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 96071.21 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 96071.21 },
+          { "cuota": 4, "concepto": "CurrentInterest", "valor": 96071.21 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-05-20",
+      "informacionHasta": "2027-05-20T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 144682.13 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 96071.21 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 96071.21 },
+          { "cuota": 4, "concepto": "CurrentInterest", "valor": 96071.21 },
+          { "cuota": 5, "concepto": "CurrentInterest", "valor": 42860.22 }
+        ]
+      }
+    }
+  ],
   "esperado": {
     "tasas": { "diaria": 0.000529641209312931, "nominalDelPeriodo": 0.016011867773387359, "cuotaNivelada": 721169.61, "efectiva": 0.209996, "efectivaSinCargos": 0.209996 },
     "plan": {

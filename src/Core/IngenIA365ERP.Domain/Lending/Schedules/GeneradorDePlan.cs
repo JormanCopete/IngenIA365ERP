@@ -188,7 +188,7 @@ public static class GeneradorDePlan
 
             saldo -= capital;
             cuotas.Add(new CuotaDelPlan(numero, desde[k], fechas[k], dias[k], tasas[k], saldoInicial, capital, interesTotal, porcion,
-                seguros, saldo, soloInteres));
+                seguros, saldo, soloInteres) { Extraordinaria = extra[k] });
             explicacion.Tramo(new TramoDeCartera(desde[k], fechas[k], dias[k], tasaDiaria, saldoInicial, interes, nameof(LoanConcept.CurrentInterest), numero));
         }
 
@@ -199,7 +199,296 @@ public static class GeneradorDePlan
                 "difference", sumaDeCapital - e.Monto));
 
         explicacion.Linea($"La última cuota paga el saldo de capital y absorbe el residuo de redondeo: {ExplicacionDeCartera.Numero(residuo)}.");
-        return new PlanDePagos(VersionesDeReglas.Vigente, e, tasaDiaria, nominal, cuotaNivelada, interesDeGracia, residuo, cuotas, explicacion);
+        return new PlanDePagos(VersionesDeReglas.Vigente, e, tasaDiaria, nominal, cuotaNivelada, interesDeGracia, residuo, cuotas, explicacion)
+        {
+            PeriodosDeGracia = graciaTotal ? Enumerable.Range(0, g).Select(k => new PeriodoDeGracia(desde[k], fechas[k])).ToList() : [],
+        };
+    }
+
+    /// <summary>No quedan cuotas que venzan después de la fecha y el hecho cambia el capital (US4).</summary>
+    public const string CodigoSinCuotasPorRegenerar = "Lending.Schedule.NothingToRegenerate";
+
+    /// <summary>Regenerar dentro de una gracia total: no está soportado en K1 (US4).</summary>
+    public const string CodigoRegeneracionEnGraciaTotal = "Lending.Schedule.RegenerationInTotalGrace";
+
+    /// <summary>
+    /// La <b>regeneración</b> del plan por un hecho con fecha valor (US4, T0486; D12, FR-067, R37): desde la primera cuota que vence
+    /// después de la fecha, conservando su número y sus fechas; las anteriores quedan como estaban.
+    /// <list type="bullet">
+    /// <item>La primera cuota regenerada causa en tramos: lo que ya corrió hasta la fecha con la base y la tasa anteriores, y desde la
+    /// fecha con la base cambiada (más el tramo, menos el abono) y la tasa nueva (reajuste). Su interés es el redondeo de la suma exacta
+    /// de sus tramos, como lo causa la causación (T25).</item>
+    /// <item>Cuota fija: la nivelada que lleva el saldo a cero con ese primer interés ya fijo y los factores reales de las siguientes
+    /// (las de sólo interés de una gracia a capital no amortizan); abono constante: el capital pendiente entre las que amortizan; pago
+    /// único: el saldo al vencimiento.</item>
+    /// <item>El seguro de la primera regenerada no cambia (su período ya empezó); el de las siguientes se recalcula sobre su saldo
+    /// inicial, o sobre lo desembolsado si su base es el monto (D9).</item>
+    /// <item>Σ capital = lo desembolsado menos lo abonado y la última absorbe el residuo; si no cuadra,
+    /// <see cref="CodigoCapitalDescuadrado"/>.</item>
+    /// </list>
+    /// La elección de un abono (plazo o cuota, FR-075) la agrega US5 sobre esta misma regeneración.
+    /// </summary>
+    public static PlanDePagos Regenerar(PlanDePagos anterior, EntradaDeRegeneracion r)
+    {
+        ArgumentNullException.ThrowIfNull(anterior);
+        ArgumentNullException.ThrowIfNull(r);
+        var e = anterior.Entrada;
+        var red = e.Redondeo;
+        var eaNueva = r.NuevaTasaEfectivaAnual ?? e.TasaEfectivaAnual;
+        var rdNueva = r.NuevaTasaEfectivaAnual is { } ea
+            ? EquivalenciaDeTasas.TasaDiaria(ea, e.Convencion, e.Equivalencia, e.Periodicidad)
+            : anterior.TasaDiaria;
+        var nominal = EquivalenciaDeTasas.NominalDelPeriodo(eaNueva, e.Periodicidad);
+        var cuotas = anterior.Cuotas;
+        var k = -1;
+        for (var j = 0; j < cuotas.Count; j++)
+            if (cuotas[j].Vencimiento > r.Fecha) { k = j; break; }
+
+        var explicacion = new ExplicacionDeCartera().Agregar(anterior.Explicacion);
+        if (k < 0)
+        {
+            if (r.CambioDeCapital != 0m)
+                throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoSinCuotasPorRegenerar,
+                    $"No quedan cuotas que venzan después del {ExplicacionDeCartera.Fecha(r.Fecha)}: el capital no se puede repartir.", "date", r.Fecha));
+            explicacion.Linea($"Desde el {ExplicacionDeCartera.Fecha(r.Fecha)} la tasa es {ExplicacionDeCartera.Numero(eaNueva)} EA; no quedan cuotas por regenerar.");
+            return anterior with { Entrada = e with { TasaEfectivaAnual = eaNueva }, TasaDiaria = rdNueva, TasaNominalDelPeriodo = nominal, Explicacion = explicacion };
+        }
+        if (anterior.PeriodosDeGracia.Count > 0 && r.Fecha < cuotas[0].Desde)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoRegeneracionEnGraciaTotal,
+                "Un tramo, un abono o un reajuste dentro de la gracia total no se regenera en K1.", "date", r.Fecha));
+
+        var x = cuotas[k];
+        var restante = 0m;
+        for (var j = k; j < cuotas.Count; j++) restante += cuotas[j].Capital;
+        if (restante != x.SaldoInicial)
+            throw new ArgumentException(
+                $"La regeneración del {ExplicacionDeCartera.Fecha(r.Fecha)} es anterior a otra ya aplicada: los hechos se regeneran en el orden de su fecha valor.",
+                nameof(r));
+        var tramos = new List<TramoDeInteres>();
+        var i0 = 0m;
+        foreach (var t in x.TramosDeInteres(anterior.TasaDiaria))
+        {
+            if (t.Desde >= r.Fecha) continue;
+            var hasta = t.Hasta < r.Fecha ? t.Hasta : r.Fecha;
+            tramos.Add(t with { Hasta = hasta });
+            if (hasta > t.Desde)
+                i0 += t.Base * EquivalenciaDeTasas.TasaDelPeriodo(t.TasaDiaria, ContadorDeDias.Dias(e.Convencion, t.Desde, hasta), e.Equivalencia);
+        }
+        var despues = x.SaldoInicial + r.CambioDeCapital;
+        if (despues < 0m)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoCapitalDescuadrado,
+                "El abono supera el capital que falta por vencer.", "difference", despues));
+        tramos.Add(new TramoDeInteres(r.Fecha, x.Vencimiento, despues, rdNueva));
+        var i1 = i0 + despues * EquivalenciaDeTasas.TasaDelPeriodo(rdNueva, ContadorDeDias.Dias(e.Convencion, r.Fecha, x.Vencimiento), e.Equivalencia);
+
+        var n = cuotas.Count;
+        var tasas = cuotas.Select(c => EquivalenciaDeTasas.TasaDelPeriodo(rdNueva, c.Dias, e.Equivalencia)).ToArray();
+        var montoTotal = cuotas.Take(k).Sum(c => c.Capital) + despues;
+        var entrada = e with { Monto = montoTotal, TasaEfectivaAnual = eaNueva };
+
+        var a = e.Sistema == AmortizationSystem.LevelPayment ? NiveladaDesde(despues, k, i1, cuotas, tasas) : 0m;
+        var amortizan = 0;
+        var extrasRestantes = 0m;
+        for (var j = k; j < n; j++)
+        {
+            if (!cuotas[j].SoloInteres) amortizan++;
+            extrasRestantes += cuotas[j].Extraordinaria;
+        }
+        var abono = e.Sistema == AmortizationSystem.ConstantPrincipal ? (despues - extrasRestantes) / amortizan : 0m;
+
+        var nuevas = new List<CuotaDelPlan>(n);
+        nuevas.AddRange(cuotas.Take(k));
+        var saldo = despues;
+        var residuo = 0m;
+        for (var j = k; j < n; j++)
+        {
+            var y = cuotas[j];
+            var esUltimo = j == n - 1;
+            var saldoInicial = saldo;
+            var interes = red.Concepto(j == k ? i1 : saldo * tasas[j]);
+            var porcion = y.InteresDeGracia;
+            var interesTotal = interes + porcion;
+            IReadOnlyList<SeguroDeCuota> seguros = j == k
+                ? y.Seguros
+                : e.Seguros.Select(s => new SeguroDeCuota(s.Codigo, red.Concepto(SeguroExacto(entrada, s, saldoInicial, y.Dias, y.Numero == 1)), s.Computa)).ToList();
+            var seguro = seguros.Sum(s => s.Valor);
+
+            decimal capital;
+            if (y.SoloInteres)
+            {
+                capital = 0m;
+            }
+            else
+            {
+                var teorico = e.Sistema switch
+                {
+                    AmortizationSystem.LevelPayment => red.PorCuota
+                        ? red.Redondear(a + y.Extraordinaria + porcion + seguro) - interesTotal - seguro
+                        : CuotaRedondeada(red, a) + y.Extraordinaria - interes,
+                    AmortizationSystem.ConstantPrincipal => red.PorCuota
+                        ? red.Redondear(abono + y.Extraordinaria + interesTotal + seguro) - interesTotal - seguro
+                        : red.Concepto(abono) + y.Extraordinaria,
+                    _ => saldo,
+                };
+                if (esUltimo)
+                {
+                    capital = saldo;
+                    residuo = capital - teorico;
+                }
+                else
+                {
+                    capital = teorico;
+                    if (capital < 0m)
+                    {
+                        capital = 0m;
+                        if (e.Sistema == AmortizationSystem.LevelPayment) a = NiveladaDesde(saldo, j + 1, null, cuotas, tasas);
+                    }
+                    if (capital > saldo) capital = saldo;
+                }
+            }
+            saldo -= capital;
+            nuevas.Add(new CuotaDelPlan(y.Numero, y.Desde, y.Vencimiento, y.Dias, tasas[j], j == k ? despues : saldoInicial, capital,
+                interesTotal, porcion, seguros, saldo, y.SoloInteres)
+            {
+                Extraordinaria = y.Extraordinaria,
+                Tramos = j == k ? tramos : null,
+            });
+        }
+
+        var suma = nuevas.Sum(c => c.Capital);
+        if (suma != montoTotal)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoCapitalDescuadrado,
+                $"El capital del plan regenerado suma {ExplicacionDeCartera.Numero(suma)} y el saldo es {ExplicacionDeCartera.Numero(montoTotal)}.",
+                "difference", suma - montoTotal));
+
+        explicacion.Linea($"Regenerado el {ExplicacionDeCartera.Fecha(r.Fecha)} desde la cuota {x.Numero.ToString(Inv)}: cambio de capital "
+            + $"{ExplicacionDeCartera.Numero(r.CambioDeCapital)}, tasa {ExplicacionDeCartera.Numero(eaNueva)} EA; la cuota {x.Numero.ToString(Inv)} "
+            + $"causa en {tramos.Count.ToString(Inv)} tramos ({ExplicacionDeCartera.Numero(i1)} exacto); residuo en la última: {ExplicacionDeCartera.Numero(residuo)}.");
+        return new PlanDePagos(anterior.RulesVersion, entrada, rdNueva, nominal,
+            e.Sistema == AmortizationSystem.LevelPayment ? CuotaRedondeada(red, a) : null,
+            anterior.InteresDeGracia, residuo, nuevas, explicacion)
+        {
+            PeriodosDeGracia = anterior.PeriodosDeGracia,
+            PrimeraCuotaRegenerada = x.Numero,
+        };
+    }
+
+    /// <summary>
+    /// El plan de un crédito <b>migrado</b> (US4, T0486; D5, FR-140): el capital por cuota cargado se conserva —si no suma el saldo de
+    /// capital, la última absorbe la diferencia y queda en la explicación; si la dejaría negativa, <see cref="CodigoCapitalDescuadrado"/>—
+    /// y el interés de cada período lo pone el motor desde el corte (lo anterior viene como saldo inicial por concepto). Las cuotas que
+    /// vencieron antes del corte no causan en el plan.
+    /// </summary>
+    public static PlanDePagos DesdeMigracion(EntradaDePlanMigrado m)
+    {
+        ArgumentNullException.ThrowIfNull(m);
+        if (m.Cuotas.Count == 0) throw new ArgumentException("Un plan migrado tiene al menos una cuota.", nameof(m));
+        var red = m.Redondeo;
+        var rd = EquivalenciaDeTasas.TasaDiaria(m.TasaEfectivaAnual, m.Convencion, m.Equivalencia, m.Periodicidad);
+        var filas = m.Cuotas.OrderBy(c => c.Numero).ToList();
+        var capitales = filas.Select(c => c.Capital).ToArray();
+        var residuo = m.SaldoDeCapital - capitales.Sum();
+        capitales[^1] += residuo;
+        if (capitales[^1] < 0m)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoCapitalDescuadrado,
+                $"El capital de las cuotas cargadas supera el saldo de capital al corte en {ExplicacionDeCartera.Numero(-residuo)}.",
+                "difference", -residuo));
+
+        var cuotas = new List<CuotaDelPlan>(filas.Count);
+        DateOnly? anterior = null;
+        for (var i = 0; i < filas.Count; i++)
+        {
+            var f = filas[i];
+            var desde = f.Desde ?? anterior ?? m.Corte;
+            var saldoInicial = 0m;
+            for (var j = i; j < capitales.Length; j++) saldoInicial += capitales[j];
+            var inicio = desde > m.Corte ? desde : m.Corte;
+            var dias = f.Vencimiento > desde ? ContadorDeDias.Dias(m.Convencion, desde, f.Vencimiento) : 0;
+            var causa = f.Vencimiento > m.Corte;
+            var interes = causa
+                ? red.Concepto(saldoInicial * EquivalenciaDeTasas.TasaDelPeriodo(rd, ContadorDeDias.Dias(m.Convencion, inicio, f.Vencimiento), m.Equivalencia))
+                : 0m;
+            cuotas.Add(new CuotaDelPlan(f.Numero, desde, f.Vencimiento, dias, EquivalenciaDeTasas.TasaDelPeriodo(rd, dias, m.Equivalencia), saldoInicial,
+                capitales[i], interes, 0m, [], saldoInicial - capitales[i], false)
+            {
+                Tramos = causa ? [new TramoDeInteres(inicio, f.Vencimiento, saldoInicial, rd)] : [],
+            });
+            anterior = f.Vencimiento;
+        }
+
+        var explicacion = new ExplicacionDeCartera()
+            .Linea($"Plan migrado al corte del {ExplicacionDeCartera.Fecha(m.Corte)} (D5): se conserva el capital de cada cuota cargada; el interés lo "
+                + "causa el motor desde el corte.")
+            .Linea($"La última cuota absorbe la diferencia entre el saldo de capital y las cuotas cargadas: {ExplicacionDeCartera.Numero(residuo)}.");
+        var entrada = new EntradaDePlan(m.SaldoDeCapital, m.Corte, filas.Count, m.Periodicidad, m.Sistema, m.TasaEfectivaAnual, m.Convencion,
+            m.Equivalencia, red);
+        return new PlanDePagos(VersionesDeReglas.Vigente, entrada, rd, EquivalenciaDeTasas.NominalDelPeriodo(m.TasaEfectivaAnual, m.Periodicidad),
+            null, 0m, residuo, cuotas, explicacion);
+    }
+
+    /// <summary>
+    /// La causación que proyecta el plan suponiendo pagos a tiempo (US4, T0486; T25): por cuota, el interés corriente causado hasta
+    /// <paramref name="fecha"/> —el redondeo de la suma exacta de sus tramos hasta esa fecha; a su vencimiento es exactamente el interés
+    /// de la cuota— y el seguro de las cuotas ya vencidas. El interés de una gracia total va a la primera cuota con su propio redondeo,
+    /// como la cobra el plan. Es lo que esperan las <c>consultas</c> «pagando a tiempo» de los casos dorados.
+    /// </summary>
+    public static IReadOnlyList<CausadoDeCuota> ProyectarCausacion(PlanDePagos plan, DateOnly fecha)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var e = plan.Entrada;
+        var red = e.Redondeo;
+        var salida = new List<CausadoDeCuota>();
+        foreach (var c in plan.Cuotas)
+        {
+            var exacto = 0m;
+            foreach (var t in c.TramosDeInteres(plan.TasaDiaria))
+            {
+                var hasta = t.Hasta < fecha ? t.Hasta : fecha;
+                if (hasta > t.Desde)
+                    exacto += t.Base * EquivalenciaDeTasas.TasaDelPeriodo(t.TasaDiaria, ContadorDeDias.Dias(e.Convencion, t.Desde, hasta), e.Equivalencia);
+            }
+            var valor = red.Concepto(exacto);
+            if (c.Numero == 1 && plan.PeriodosDeGracia.Count > 0)
+            {
+                var gracia = 0m;
+                foreach (var p in plan.PeriodosDeGracia)
+                {
+                    var hasta = p.Hasta < fecha ? p.Hasta : fecha;
+                    if (p.Desde < fecha)
+                        gracia += e.Monto * EquivalenciaDeTasas.TasaDelPeriodo(plan.TasaDiaria, ContadorDeDias.Dias(e.Convencion, p.Desde, hasta), e.Equivalencia);
+                }
+                valor += red.Concepto(gracia);
+            }
+            if (valor != 0m) salida.Add(new CausadoDeCuota(c.Numero, LoanConcept.CurrentInterest, valor));
+            if (c.Seguro != 0m && fecha >= c.Vencimiento) salida.Add(new CausadoDeCuota(c.Numero, LoanConcept.Insurance, c.Seguro));
+        }
+        return salida;
+    }
+
+    /// <summary>
+    /// La nivelada de una regeneración: el saldo tras cada cuota es <c>α + β·A</c> (las de sólo interés no lo mueven; la primera, con su
+    /// interés <paramref name="interesDeLaPrimera"/> ya fijo si se da) y A es la que deja el último en cero.
+    /// </summary>
+    private static decimal NiveladaDesde(decimal saldo, int desde, decimal? interesDeLaPrimera, IReadOnlyList<CuotaDelPlan> cuotas, IReadOnlyList<decimal> tasas)
+    {
+        var alfa = saldo;
+        var beta = 0m;
+        for (var j = desde; j < cuotas.Count; j++)
+        {
+            if (cuotas[j].SoloInteres) continue;
+            if (j == desde && interesDeLaPrimera is { } i1)
+            {
+                alfa += i1;
+            }
+            else
+            {
+                alfa *= 1m + tasas[j];
+                beta *= 1m + tasas[j];
+            }
+            alfa -= cuotas[j].Extraordinaria;
+            beta -= 1m;
+        }
+        return -alfa / beta;
     }
 
     /// <summary>

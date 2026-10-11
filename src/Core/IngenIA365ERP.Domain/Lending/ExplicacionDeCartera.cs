@@ -6,6 +6,10 @@ namespace IngenIA365ERP.Domain.Lending;
 /// Un tramo de la explicación (feature 013, M11, §2.8): de <see cref="Desde"/> (excluida) a <see cref="Hasta"/> (incluida),
 /// <see cref="Dias"/> días de la convención, la tasa diaria aplicada, la base sobre la que se aplicó y lo que dio, con su concepto
 /// y la cuota a la que va. (nuevo)
+///
+/// <para>US4 (T0484) le suma lo de un tramo de causación: la EA de donde salió la tasa (<see cref="TasaEA"/>), el tope diario de la
+/// usura de esos días (<see cref="TopeDiario"/>), si la tasa se topó (<see cref="Topada"/>) y si lo causado fue a suspenso
+/// (<see cref="Suspendido"/>). <see cref="Valor"/> es el acumulado exacto del tramo; el libro lleva su redondeo por diferencia.</para>
 /// </summary>
 public sealed record TramoDeCartera(
     DateOnly Desde,
@@ -15,7 +19,11 @@ public sealed record TramoDeCartera(
     decimal Base,
     decimal Valor,
     string Concepto,
-    int? Cuota = null);
+    int? Cuota = null,
+    decimal? TasaEA = null,
+    decimal? TopeDiario = null,
+    bool Topada = false,
+    bool Suspendido = false);
 
 /// <summary>
 /// La explicación de un cálculo de Cartera (feature 013, M11, §2.8; FR-010, SC-023): los tramos con sus días, tasa diaria y base,
@@ -73,5 +81,8 @@ public sealed class ExplicacionDeCartera
 
     private static string TextoDelTramo(TramoDeCartera t) =>
         $"{Fecha(t.Desde)}..{Fecha(t.Hasta)}: {t.Dias.ToString(Inv)} días × tasa diaria {Numero(t.TasaDiaria)} sobre {Numero(t.Base)} → "
-        + $"{t.Concepto} {Numero(t.Valor)}" + (t.Cuota is { } c ? $" (cuota {c.ToString(Inv)})" : string.Empty);
+        + $"{t.Concepto} {Numero(t.Valor)}" + (t.Cuota is { } c ? $" (cuota {c.ToString(Inv)})" : string.Empty)
+        + (t.TasaEA is { } ea ? $"; EA {Numero(ea)}" : string.Empty)
+        + (t.Topada && t.TopeDiario is { } tope ? $"; topada en la usura (tope diario {Numero(tope)})" : string.Empty)
+        + (t.Suspendido ? "; en suspenso" : string.Empty);
 }

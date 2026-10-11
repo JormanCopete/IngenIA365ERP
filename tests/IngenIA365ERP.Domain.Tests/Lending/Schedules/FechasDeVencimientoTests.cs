@@ -122,6 +122,37 @@ public class FechasDeVencimientoTests
         }
     }
 
+    // ------------------------------------------------------------------------------------- US4 (T0467, T0485; D2, FR-070)
+
+    /// <summary>Festivos nacionales de prueba (los replicados; Nómina puede tener otros «Manual» que aquí no cuentan).</summary>
+    private static readonly DateOnly[] Festivos = [F("2026-10-12"), F("2027-01-11"), F("2027-03-25"), F("2027-03-26")];
+
+    [Theory]
+    [InlineData("2026-10-12", "2026-10-13")] // lunes festivo (Día de la Raza) → martes
+    [InlineData("2026-12-12", "2026-12-12")] // sábado: es hábil (D2)
+    [InlineData("2026-12-13", "2026-12-14")] // domingo → lunes
+    [InlineData("2027-01-10", "2027-01-12")] // domingo y lunes festivo (Reyes trasladado) → martes
+    [InlineData("2027-03-25", "2027-03-27")] // jueves y viernes santos → sábado, que es hábil
+    [InlineData("2026-11-12", "2026-11-12")] // jueves hábil: el mismo día
+    public void La_fecha_exigible_es_el_habil_siguiente_y_el_sabado_es_habil(string vencimiento, string exigible)
+    {
+        var calendario = FechasDeVencimiento.CalendarioDelArticulo829(Festivos);
+        FechasDeVencimiento.FechaExigible(F(vencimiento), calendario).Should().Be(F(exigible));
+    }
+
+    [Fact]
+    public void Las_fechas_exigibles_de_un_plan_conservan_el_orden_y_solo_miran_los_festivos_que_reciben()
+    {
+        var vencimientos = FechasDeVencimiento.Generar(F("2026-09-12"), RepaymentPeriodicity.Monthly, 4, diaDePago: 12);
+        vencimientos.Should().Equal(Fs("2026-10-12", "2026-11-12", "2026-12-12", "2027-01-12"));
+        FechasDeVencimiento.FechasExigibles(vencimientos, FechasDeVencimiento.CalendarioDelArticulo829(Festivos))
+            .Should().Equal(Fs("2026-10-13", "2026-11-12", "2026-12-12", "2027-01-12"));
+        // Sin la lista de festivos el lunes 12-10 es hábil: el calendario no sabe de festivos por su cuenta.
+        FechasDeVencimiento.FechasExigibles(vencimientos, FechasDeVencimiento.CalendarioDelArticulo829([]))
+            .Should().Equal(vencimientos);
+        FechasDeVencimiento.CalendarioDelArticulo829([]).DiasDeDescanso.Should().Equal(DayOfWeek.Sunday);
+    }
+
     [Fact]
     public void Datos_imposibles_son_errores_de_quien_llama()
     {

@@ -1,0 +1,110 @@
+// SC-001, FR-068, D11, US4-5 (quickstart §1.2, caso 23): liquidación a una fecha futura. La última usura certificada conocida es
+// la de marzo de 2027 (hasta el 31-03). A una fecha cubierta (31-03) la liquidación no lleva «válida hasta»; al 20-05-2027 se
+// proyecta sin pagos intermedios con la última usura conocida (D11) y dice que vale hasta el 31-03-2027, el último día con usura
+// certificada. La causación real de un día sin usura sí se bloquea (NationalValues.Missing, la decide la aplicación). Sin pagos.
+// Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la contadora.
+{
+  "nombre": "Liquidación futura",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Actual365", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 5000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.230000,
+    "fechaDesembolso": "2027-01-10", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5
+  },
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2027-01-01", "hasta": "2027-01-31", "ea": 0.265000, "registradoEn": "2026-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000231" },
+      { "clave": "CONSUMO", "desde": "2027-02-01", "hasta": "2027-02-28", "ea": 0.260000, "registradoEn": "2027-01-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000232" },
+      { "clave": "CONSUMO", "desde": "2027-03-01", "hasta": "2027-03-31", "ea": 0.255000, "registradoEn": "2027-02-28T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000233" }
+    ],
+    "festivos": [ "2027-03-22", "2027-03-25", "2027-03-26", "2027-05-01", "2027-05-10" ]
+  },
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 5000000, "fechaValor": "2027-01-10", "registradoEn": "2027-01-10T15:00:00Z" }
+  ],
+  "consultas": [
+    {
+      "fecha": "2027-03-31",
+      "informacionHasta": "2027-03-31T12:00:00Z",
+      "esperado": {
+        "saldos": { "Principal": 5000000, "CurrentInterest": 213412.01, "DefaultInterest": 16758.60 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 376383.38 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 88687.49 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 11614.67 },
+          { "cuota": 2, "concepto": "Principal", "valor": 391059.23 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 74011.64 },
+          { "cuota": 2, "concepto": "DefaultInterest", "valor": 5143.93 },
+          { "cuota": 3, "concepto": "Principal", "valor": 389995.89 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 50712.88 },
+          { "cuota": 4, "concepto": "Principal", "valor": 399130.82 },
+          { "cuota": 5, "concepto": "Principal", "valor": 403993.02 },
+          { "cuota": 6, "concepto": "Principal", "valor": 412912.78 },
+          { "cuota": 7, "concepto": "Principal", "valor": 418482.89 },
+          { "cuota": 8, "concepto": "Principal", "valor": 425905.73 },
+          { "cuota": 9, "concepto": "Principal", "valor": 434488.63 },
+          { "cuota": 10, "concepto": "Principal", "valor": 441166.97 },
+          { "cuota": 11, "concepto": "Principal", "valor": 449515.26 },
+          { "cuota": 12, "concepto": "Principal", "valor": 456965.40 }
+        ],
+        "capitalVencido": 767442.61,
+        "diasDeMora": 49,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 2,
+        "suspendida": false,
+        "valorParaCancelar": 5230170.61,
+        "tasaDiariaCorriente": 0.000567322974741671,
+        "tasaDiariaMora": 0.000622482902073755,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": []
+      }
+    },
+    {
+      "fecha": "2027-05-20",
+      "informacionHasta": "2027-03-31T12:00:00Z",
+      "esperado": {
+        "saldos": { "Principal": 5000000, "CurrentInterest": 323515.92, "DefaultInterest": 52889.73 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 376383.38 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 88687.49 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 23437.15 },
+          { "cuota": 2, "concepto": "Principal", "valor": 391059.23 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 74011.64 },
+          { "cuota": 2, "concepto": "DefaultInterest", "valor": 17427.38 },
+          { "cuota": 3, "concepto": "Principal", "valor": 389995.89 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 75074.98 },
+          { "cuota": 3, "concepto": "DefaultInterest", "valor": 9783.56 },
+          { "cuota": 4, "concepto": "Principal", "valor": 399130.82 },
+          { "cuota": 4, "concepto": "CurrentInterest", "valor": 65940.05 },
+          { "cuota": 4, "concepto": "DefaultInterest", "valor": 2241.64 },
+          { "cuota": 5, "concepto": "Principal", "valor": 403993.02 },
+          { "cuota": 5, "concepto": "CurrentInterest", "valor": 19801.76 },
+          { "cuota": 6, "concepto": "Principal", "valor": 412912.78 },
+          { "cuota": 7, "concepto": "Principal", "valor": 418482.89 },
+          { "cuota": 8, "concepto": "Principal", "valor": 425905.73 },
+          { "cuota": 9, "concepto": "Principal", "valor": 434488.63 },
+          { "cuota": 10, "concepto": "Principal", "valor": 441166.97 },
+          { "cuota": 11, "concepto": "Principal", "valor": 449515.26 },
+          { "cuota": 12, "concepto": "Principal", "valor": 456965.40 }
+        ],
+        "capitalVencido": 1556569.32,
+        "diasDeMora": 99,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 4,
+        "suspendida": false,
+        "valorParaCancelar": 5376405.65,
+        "tasaDiariaCorriente": 0.000567322974741671,
+        "tasaDiariaMora": 0.000622482902073755,
+        "usuraTopada": true,
+        "validaHasta": "2027-03-31",
+        "transiciones": []
+      }
+    }
+  ]
+}

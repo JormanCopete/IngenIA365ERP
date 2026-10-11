@@ -19,7 +19,60 @@
     "festivos": []
   },
   "operaciones": [],
-  "consultas": [],
+  "consultas": [
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-02-14",
+      "informacionHasta": "2027-02-14T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 10080.64 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-02-28",
+      "informacionHasta": "2027-02-28T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2027-03-16",
+      "informacionHasta": "2027-03-16T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 10658.85 }
+        ]
+      }
+    },
+    {
+      "modo": "PagosATiempo",
+      "fecha": "2028-01-31",
+      "informacionHasta": "2028-01-31T23:00:00Z",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 20069.30 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 18403.90 },
+          { "cuota": 4, "concepto": "CurrentInterest", "valor": 16708.39 },
+          { "cuota": 5, "concepto": "CurrentInterest", "valor": 14982.21 },
+          { "cuota": 6, "concepto": "CurrentInterest", "valor": 13224.81 },
+          { "cuota": 7, "concepto": "CurrentInterest", "valor": 11435.61 },
+          { "cuota": 8, "concepto": "CurrentInterest", "valor": 9614.06 },
+          { "cuota": 9, "concepto": "CurrentInterest", "valor": 7759.56 },
+          { "cuota": 10, "concepto": "CurrentInterest", "valor": 5871.52 },
+          { "cuota": 11, "concepto": "CurrentInterest", "valor": 3949.32 },
+          { "cuota": 12, "concepto": "CurrentInterest", "valor": 1992.36 }
+        ]
+      }
+    }
+  ],
   "esperado": {
     "tasas": { "diaria": 0.000597710167622401, "nominalDelPeriodo": 0.018087582483510675, "cuotaNivelada": 112143.01, "efectiva": 0.241990, "efectivaSinCargos": 0.241990 },
     "plan": {

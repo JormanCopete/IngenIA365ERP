@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Common.Calendar;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.DayCount;
 
@@ -20,8 +21,8 @@ namespace IngenIA365ERP.Domain.Lending.Schedules;
 /// El primer vencimiento es <paramref name="primerVencimiento"/> si viene (el período irregular queda entre el desembolso y esa
 /// fecha); si no y hay día de pago, la primera fecha de pago que no caiga antes del desembolso más un período (el primer período
 /// dura entre uno y dos períodos: nunca menos de uno); sin día de pago, el desembolso más un período. El pago único vence en
-/// <paramref name="primerVencimiento"/>, que es obligatorio. Puro: sin calendario hábil (la fecha exigible del art. 829 es de
-/// <c>CalendarioHabil</c>). (nuevo)
+/// <paramref name="primerVencimiento"/>, que es obligatorio. Puro: los vencimientos no miran el calendario hábil; la fecha exigible
+/// del art. 829 (<see cref="FechaExigible"/>, US4) la da <see cref="CalendarioHabil"/> con los festivos que recibe. (nuevo)
 /// </para>
 /// </summary>
 public static class FechasDeVencimiento
@@ -54,6 +55,31 @@ public static class FechasDeVencimiento
 
     /// <summary>El día <paramref name="dia"/> del mes, o el último si el mes no lo tiene.</summary>
     public static DateOnly EnElDia(int anio, int mes, int dia) => new(anio, mes, Math.Min(dia, DateTime.DaysInMonth(anio, mes)));
+
+    /// <summary>
+    /// El calendario del art. 829 del Código de Comercio (US4, T0485; D2, FR-070): no hábiles sólo los domingos y los festivos
+    /// <b>nacionales</b> que recibe (los replicados, nunca los «Manual» de Nómina); el sábado es hábil. La regla no se configura.
+    /// </summary>
+    public static CalendarioHabil CalendarioDelArticulo829(IEnumerable<DateOnly> festivosNacionales) =>
+        new(festivosNacionales, [DayOfWeek.Sunday]);
+
+    /// <summary>
+    /// La fecha exigible de un vencimiento (US4, T0485; FR-070): el mismo día si es hábil; si no, el hábil siguiente. Hasta esa fecha
+    /// se paga sin mora; el capital de la cuota vence el día siguiente (T30) y el interés corriente de esos días va a la cuota
+    /// siguiente.
+    /// </summary>
+    public static DateOnly FechaExigible(DateOnly vencimiento, CalendarioHabil calendario)
+    {
+        ArgumentNullException.ThrowIfNull(calendario);
+        return calendario.SiguienteHabil(vencimiento);
+    }
+
+    /// <summary>Las fechas exigibles de unos vencimientos, en el mismo orden.</summary>
+    public static IReadOnlyList<DateOnly> FechasExigibles(IEnumerable<DateOnly> vencimientos, CalendarioHabil calendario)
+    {
+        ArgumentNullException.ThrowIfNull(vencimientos);
+        return vencimientos.Select(v => FechaExigible(v, calendario)).ToList();
+    }
 
     private static List<DateOnly> PorMeses(DateOnly desembolso, int meses, int periodos, int? diaDePago, DateOnly? primerVencimiento)
     {

@@ -53,6 +53,51 @@ public sealed record EntradaDePlan(
     public IReadOnlyList<SeguroDelPlan> Seguros { get; init; } = [];
 }
 
+/// <summary>
+/// Un tramo de interés de una cuota (US4, T0486): de <see cref="Desde"/> (excluida) a <see cref="Hasta"/> (incluida) causa
+/// <see cref="Base"/> con <see cref="TasaDiaria"/>; cambia de tramo cuando un desembolso, un abono o un reajuste cambian la base o la
+/// tasa a mitad del período. El interés de la cuota es el redondeo de la suma exacta de sus tramos.
+/// </summary>
+public sealed record TramoDeInteres(DateOnly Desde, DateOnly Hasta, decimal Base, decimal TasaDiaria);
+
+/// <summary>Un período sin cuota de la gracia total: de <see cref="Desde"/> (excluida) a <see cref="Hasta"/> (incluida).</summary>
+public sealed record PeriodoDeGracia(DateOnly Desde, DateOnly Hasta);
+
+/// <summary>
+/// Lo que regenera el plan desde una fecha (US4, T0486; D12, FR-067): la fecha valor del hecho, el cambio de capital (un tramo suma, un
+/// abono resta) y, si cambió, la tasa EA nueva (reajuste). La elección del deudor ante un abono (plazo o cuota) la agrega US5.
+/// </summary>
+public sealed record EntradaDeRegeneracion(DateOnly Fecha)
+{
+    public decimal CambioDeCapital { get; init; }
+
+    public decimal? NuevaTasaEfectivaAnual { get; init; }
+}
+
+/// <summary>Una cuota de un plan migrado (D5): número, vencimiento y capital pendiente al corte; el inicio de su período si se conoce.</summary>
+public sealed record CuotaMigrada(int Numero, DateOnly Vencimiento, decimal Capital)
+{
+    public DateOnly? Desde { get; init; }
+}
+
+/// <summary>
+/// El plan de un crédito migrado (US4, T0486; D5, FR-140): el corte, el saldo de capital al corte, las cuotas cargadas con su capital
+/// (que se conserva) y las condiciones con que el motor causa desde el corte.
+/// </summary>
+public sealed record EntradaDePlanMigrado(
+    DateOnly Corte,
+    decimal SaldoDeCapital,
+    IReadOnlyList<CuotaMigrada> Cuotas,
+    RepaymentPeriodicity Periodicidad,
+    AmortizationSystem Sistema,
+    decimal TasaEfectivaAnual,
+    DayCountConvention Convencion,
+    RateEquivalence Equivalencia,
+    RedondeoDeCartera Redondeo);
+
+/// <summary>Lo causado de un concepto en una cuota hasta una fecha (proyección con pagos a tiempo, US4).</summary>
+public sealed record CausadoDeCuota(int Cuota, LoanConcept Concepto, decimal Valor);
+
 /// <summary>Lo que cobra un seguro en una cuota.</summary>
 public sealed record SeguroDeCuota(string Codigo, decimal Valor, bool Computa);
 
@@ -75,6 +120,20 @@ public sealed record CuotaDelPlan(
     decimal SaldoFinal,
     bool SoloInteres)
 {
+    /// <summary>La cuota extraordinaria (prima) que lleva, a la unidad sellada; cero si no lleva (US4: la regeneración la conserva).</summary>
+    public decimal Extraordinaria { get; init; }
+
+    /// <summary>
+    /// Los tramos de base y tasa con que causa su interés suponiendo pagos a tiempo (US4, T0486). Nulo: uno solo, de
+    /// <see cref="Desde"/> a <see cref="Vencimiento"/> sobre <see cref="SaldoInicial"/> con la tasa diaria del plan. Una cuota
+    /// regenerada a mitad de su período (un tramo, un reajuste) lleva los suyos; una migrada ya vencida al corte, ninguno.
+    /// </summary>
+    public IReadOnlyList<TramoDeInteres>? Tramos { get; init; }
+
+    /// <summary>Los tramos de interés de la cuota: los suyos o el único del período con <paramref name="tasaDiaria"/>.</summary>
+    public IReadOnlyList<TramoDeInteres> TramosDeInteres(decimal tasaDiaria) =>
+        Tramos ?? [new TramoDeInteres(Desde, Vencimiento, SaldoInicial, tasaDiaria)];
+
     public decimal Seguro => Seguros.Sum(s => s.Valor);
 
     /// <summary>Lo que de los seguros computa para la usura.</summary>
@@ -99,6 +158,15 @@ public sealed record PlanDePagos(
     IReadOnlyList<CuotaDelPlan> Cuotas,
     ExplicacionDeCartera Explicacion)
 {
+    /// <summary>
+    /// Los períodos sin cuota de una gracia total, en orden (US4): cada uno causa sobre el monto sin interés sobre interés y lo causado
+    /// va a la primera cuota. Vacío sin gracia total.
+    /// </summary>
+    public IReadOnlyList<PeriodoDeGracia> PeriodosDeGracia { get; init; } = [];
+
+    /// <summary>El número de la primera cuota que esta versión regeneró (1 si nació entera; US4, data-model §4.4).</summary>
+    public int PrimeraCuotaRegenerada { get; init; } = 1;
+
     public decimal TotalCapital => Cuotas.Sum(c => c.Capital);
 
     public decimal TotalInteres => Cuotas.Sum(c => c.Interes);
