@@ -83,6 +83,40 @@ public sealed class HuellaDeCartera
     /// <summary>El SHA-256 del JSON canónico, en hexadecimal minúscula de 64.</summary>
     public string Calcular() => DeTexto(Canonico());
 
+    /// <summary>
+    /// La huella canónica de una <b>simulación de pago</b> (US5, T0536; T32, R40; interfaces.md §3.6): el <c>SimulationId</c>. Firma, con el
+    /// prefijo de la <paramref name="rulesVersion"/> del crédito, el crédito, la modalidad, el valor, la fecha valor, la elección, la cuota
+    /// específica y la <b>distribución</b> que resulta —las líneas por cuota y concepto (ordenadas por cuota y concepto), el anticipo y su
+    /// cuota, el anticipo usado, el saldo a favor, el excedente y el plan nuevo—. No firma el estado del crédito: si entre simular y aplicar
+    /// sólo corrió la causación de días que no cambian la distribución, la huella es la misma; si la distribución cambió, otra
+    /// («la distribución cambió»). Montos a dos decimales, fechas <c>yyyy-MM-dd</c>, enumeraciones por número.
+    /// </summary>
+    public static string DeSimulacion(Guid credito, string rulesVersion, Payments.DistribucionDePago distribucion)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rulesVersion);
+        ArgumentNullException.ThrowIfNull(distribucion);
+        static IEnumerable<Payments.LineaDeDistribucion> Ordenadas(IEnumerable<Payments.LineaDeDistribucion> lineas) =>
+            lineas.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto);
+        var d = distribucion;
+        var canonico = new HuellaDeCartera()
+            .Identificador("credito", credito)
+            .Enumeracion("modalidad", (Enums.Lending.PaymentModality?)d.Modalidad)
+            .Decimal("valor", d.Valor, 2)
+            .Fecha("fechaValor", d.FechaValor)
+            .Enumeracion("eleccion", d.Eleccion)
+            .Entero("cuota", d.Cuota)
+            .Lista("lineas", Ordenadas(d.Lineas), (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
+            .Lista("anticipoUsado", Ordenadas(d.AnticipoUsado), (h, l) => h.Entero("cuota", l.Cuota).Decimal("monto", l.Monto, 2))
+            .Decimal("anticipo", d.Anticipo, 2)
+            .Entero("cuotaDelAnticipo", d.CuotaDelAnticipo)
+            .Decimal("saldoAFavor", d.SaldoAFavor, 2)
+            .Decimal("excedente", d.Excedente, 2)
+            .Lista("planNuevo", d.PlanNuevo?.Cuotas ?? [], (h, c) => h.Entero("numero", c.Numero).Fecha("vencimiento", c.Vencimiento)
+                .Decimal("capital", c.Capital, 2).Decimal("interes", c.Interes, 2).Decimal("seguro", c.Seguro, 2))
+            .Canonico();
+        return DeTexto($"{rulesVersion}|{canonico}");
+    }
+
     /// <summary>El SHA-256 de un texto canónico ya armado (para verificar una huella guardada).</summary>
     public static string DeTexto(string canonico) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonico)));

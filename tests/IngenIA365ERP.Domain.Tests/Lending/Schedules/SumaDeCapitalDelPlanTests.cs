@@ -129,6 +129,74 @@ public class SumaDeCapitalDelPlanTests
         regenerados.Should().BeGreaterThan(Planes / 2);
     }
 
+    /// <summary>
+    /// US5 (T0536; FR-075, SC-017): un abono extraordinario con la elección del deudor regenera el plan con Σ capital = saldo al centavo y la
+    /// numeración y las fechas conservadas. «Reducir la cuota» conserva todas las cuotas; «reducir el plazo» quita cuotas del final y, en
+    /// cuota fija, conserva la cuota nivelada sellada (capital + interés = la nivelada más la extraordinaria) en todas menos la última, que
+    /// absorbe el residuo.
+    /// </summary>
+    [Fact]
+    public void Un_abono_con_eleccion_suma_el_saldo_y_reducir_el_plazo_conserva_la_cuota()
+    {
+        var azar = new Random(Semilla + 5);
+        var abonos = 0;
+        var cuotasQuitadas = 0;
+        using var _ = new AssertionScope();
+        for (var i = 0; i < Planes; i++)
+        {
+            var entrada = EntradaAlAzar(azar);
+            if (entrada.Gracia == GraceKind.Total) continue;
+            var plan = GeneradorDePlan.Generar(entrada);
+            var ultimo = plan.Cuotas[^1].Vencimiento;
+            var fecha = entrada.FechaDesembolso.AddDays(azar.Next(0, Math.Max(1, ultimo.DayNumber - entrada.FechaDesembolso.DayNumber)));
+            var k = plan.Cuotas.ToList().FindIndex(c => c.Vencimiento > fecha);
+            if (k < 0) continue;
+            var abono = decimal.Round(plan.Cuotas[k].SaldoInicial * azar.Next(1, 95) / 100m, 2);
+            if (abono <= 0m) continue;
+            foreach (var eleccion in new[] { PrepaymentChoice.ReduceTerm, PrepaymentChoice.ReduceInstallment })
+            {
+                var donde = $"plan {i}, abono de {abono} el {fecha:yyyy-MM-dd} con {eleccion} ({entrada.Sistema}, {entrada.Periodicidad}, "
+                    + $"{entrada.Redondeo.Unidad} {entrada.Redondeo.Modo} {entrada.Redondeo.Momento}, gracia {entrada.Gracia})";
+                PlanDePagos nuevo;
+                try
+                {
+                    nuevo = GeneradorDePlan.Regenerar(plan, new EntradaDeRegeneracion(fecha) { CambioDeCapital = -abono, Eleccion = eleccion });
+                }
+                catch (ReglaDeCarteraException ex) when (ex.Codigo == GeneradorDePlan.CodigoCapitalDescuadrado)
+                {
+                    throw new Xunit.Sdk.XunitException($"{donde}: la regeneración descuadró el capital ({ex.Message}).");
+                }
+
+                nuevo.TotalCapital.Should().Be(plan.TotalCapital - abono, donde);
+                nuevo.Cuotas[^1].SaldoFinal.Should().Be(0m, donde);
+                nuevo.Cuotas.Take(k).Should().Equal(plan.Cuotas.Take(k), $"{donde}: las cuotas que ya vencieron no cambian");
+                nuevo.Cuotas.Should().OnlyContain(c => c.Capital >= 0m && c.Interes >= 0m && c.SaldoFinal >= 0m, donde);
+                nuevo.Cuotas.Select(c => (c.Numero, c.Vencimiento)).Should().Equal(
+                    plan.Cuotas.Take(nuevo.Cuotas.Count).Select(c => (c.Numero, c.Vencimiento)), $"{donde}: numeración y fechas");
+                nuevo.Cuotas.Count.Should().BeGreaterThan(k, $"{donde}: la primera regenerada queda");
+                MotorDeCartera.ProyectarCausacion(nuevo, nuevo.Cuotas[k].Vencimiento)
+                    .Where(c => c.Cuota == nuevo.Cuotas[k].Numero && c.Concepto == LoanConcept.CurrentInterest).Sum(c => c.Valor)
+                    .Should().Be(nuevo.Cuotas[k].Interes, $"{donde}: la cuota del abono causa en sus tramos");
+                if (eleccion == PrepaymentChoice.ReduceInstallment)
+                {
+                    nuevo.Cuotas.Should().HaveCount(plan.Cuotas.Count, $"{donde}: reducir la cuota conserva las cuotas");
+                    continue;
+                }
+                nuevo.Cuotas.Count.Should().BeLessThanOrEqualTo(plan.Cuotas.Count, donde);
+                cuotasQuitadas += plan.Cuotas.Count - nuevo.Cuotas.Count;
+                if (entrada.Sistema == AmortizationSystem.LevelPayment && entrada.Redondeo.Momento != RoundingMoment.PerInstallment)
+                {
+                    nuevo.CuotaNivelada.Should().Be(plan.CuotaNivelada, $"{donde}: reducir el plazo conserva la cuota");
+                    foreach (var c in nuevo.Cuotas.Skip(k).SkipLast(1).Where(c => !c.SoloInteres && c.Capital > 0m))
+                        (c.Capital + c.Interes).Should().Be(plan.CuotaNivelada!.Value + c.Extraordinaria, $"{donde}: cuota {c.Numero}");
+                }
+            }
+            abonos++;
+        }
+        abonos.Should().BeGreaterThan(Planes / 3);
+        cuotasQuitadas.Should().BeGreaterThan(Planes / 3, "reducir el plazo quita cuotas");
+    }
+
     [Fact]
     public void Un_hecho_anterior_a_otra_regeneracion_o_un_tramo_sin_cuotas_por_vencer_se_rechazan()
     {

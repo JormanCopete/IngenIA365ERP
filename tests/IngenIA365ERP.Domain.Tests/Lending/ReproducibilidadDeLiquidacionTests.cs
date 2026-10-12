@@ -118,15 +118,16 @@ public class ReproducibilidadDeLiquidacionTests
     public void Una_operacion_que_la_reconstruccion_no_interpreta_se_rechaza_y_una_version_desconocida_tambien()
     {
         var entrada = CreditosDePrueba.Simple();
+        // US5 ya interpreta los pagos; una condonación (K3) todavía no.
         var pago = entrada with
         {
-            Operaciones = [.. entrada.Operaciones, new EntradaDeOperacion("P1", LoanOperationKind.Payment, new DateOnly(2027, 2, 15), CreditosDePrueba.Instante(new DateOnly(2027, 2, 15)), 2)],
+            Operaciones = [.. entrada.Operaciones, new EntradaDeOperacion("W1", LoanOperationKind.Waiver, new DateOnly(2027, 2, 15), CreditosDePrueba.Instante(new DateOnly(2027, 2, 15)), 2)],
         };
         ((Action)(() => MotorDeCartera.Reconstruir(pago, new DateOnly(2027, 3, 1)))).Should().Throw<ReglaDeCarteraException>()
-            .Which.Codigo.Should().Be(ReconstruccionDeCredito.CodigoOperacionNoSoportada, "los pagos los interpreta US5");
+            .Which.Codigo.Should().Be(ReconstruccionDeCredito.CodigoOperacionNoSoportada, "las condonaciones las interpreta K3");
 
-        // El punto de extensión: US5 registra su intérprete y la reconstrucción lo usa.
-        var interpretes = new Dictionary<LoanOperationKind, IInterpreteDeOperacion> { [LoanOperationKind.Payment] = new PagoDePrueba() };
+        // El punto de extensión: una historia registra su intérprete y la reconstrucción lo usa.
+        var interpretes = new Dictionary<LoanOperationKind, IInterpreteDeOperacion> { [LoanOperationKind.Waiver] = new PagoDePrueba() };
         MotorDeCartera.Reconstruir(pago, new DateOnly(2027, 3, 1), interpretes: interpretes).Libro.Movimientos
             .Should().Contain(m => m.Clase == LoanTransactionKind.PaymentAllocation);
 
@@ -136,7 +137,7 @@ public class ReproducibilidadDeLiquidacionTests
         VersionesDeReglas.Para(VersionesDeReglas.Vigente).Should().BeSameAs(VersionesDeReglas.K1);
     }
 
-    /// <summary>Un intérprete de prueba: deja una fila del pago, como haría US5 con <c>AplicadorDePagos</c>.</summary>
+    /// <summary>Un intérprete de prueba: deja una fila, como hace US5 con <c>AplicadorDePagos</c>.</summary>
     private sealed class PagoDePrueba : IInterpreteDeOperacion
     {
         public void Aplicar(ContextoDeReconstruccion contexto, EntradaDeOperacion operacion) =>

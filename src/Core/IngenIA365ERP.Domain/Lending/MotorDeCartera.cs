@@ -104,6 +104,29 @@ public static class MotorDeCartera
         return estado.Libro.Diferencias(libro, hasta);
     }
 
+    // ------------------------------------------------------------------------------------------------ US5 (T0534–T0536)
+
+    /// <summary>
+    /// Reparte un pago sobre el estado a su fecha valor con la prelación sellada (FR-071, FR-072): la misma función para simular y para
+    /// aplicar; la reconstrucción la usa con cada pago.
+    /// </summary>
+    public static Payments.DistribucionDePago DistribuirPago(EstadoDelCredito estado, Payments.SolicitudDeDistribucion solicitud,
+        Payments.Prelacion prelacion, RedondeoDeCartera redondeo) =>
+        Payments.AplicadorDePagos.Distribuir(estado, solicitud, prelacion, redondeo);
+
+    /// <summary>Las dos alternativas de un abono extraordinario sin elección (reducir plazo, reducir cuota), cada una con su plan (SC-003).</summary>
+    public static IReadOnlyList<Payments.DistribucionDePago> AlternativasDeAbono(EstadoDelCredito estado, Payments.SolicitudDeDistribucion solicitud,
+        Payments.Prelacion prelacion, RedondeoDeCartera redondeo) =>
+        Payments.AplicadorDePagos.Alternativas(estado, solicitud, prelacion, redondeo);
+
+    /// <summary>El anticipo aplicado a una cuota en su vencimiento (paso (5) del ciclo diario; D6).</summary>
+    public static Payments.AplicacionDeAnticipo? AplicarAnticipo(EstadoDelCredito estado, int cuota, Payments.Prelacion prelacion) =>
+        Payments.AplicadorDePagos.AplicarAnticipo(estado, cuota, prelacion);
+
+    /// <summary>El <c>SimulationId</c>: la huella canónica de la simulación (T32).</summary>
+    public static string HuellaDeSimulacion(Guid credito, string rulesVersion, Payments.DistribucionDePago distribucion) =>
+        HuellaDeCartera.DeSimulacion(credito, rulesVersion, distribucion);
+
     /// <summary>Los días de mora con tolerancia y fecha exigible (T30).</summary>
     public static ResultadoDeAlturaDeMora AlturaDeMora(DateOnly dia, IEnumerable<CuotaParaMora> cuotas, decimal tolerancia, int? umbralDePagaduria = null) =>
         Delinquency.AlturaDeMora.Calcular(dia, cuotas, tolerancia, umbralDePagaduria);

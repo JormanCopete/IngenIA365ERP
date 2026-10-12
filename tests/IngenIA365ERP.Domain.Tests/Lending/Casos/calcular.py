@@ -8,6 +8,10 @@ Casos/*.json: el plan cuota a cuota (capital, interes, seguro, saldo), las tasas
 efectiva con y sin cargos) y el veredicto de usura. Nunca en Excel: el double y los empates de redondeo dan otras
 cifras (T26).
 
+US5 (fase 9, T0513) suma los pagos (bloque «US5»): prelacion, las siete modalidades, anticipo al vencer, abono con su eleccion,
+cancelacion y resolucion de saldos; el "esperado" de cada operacion de pago (su distribucion con la informacion hasta su registro) y,
+en las consultas con "conPagos", la distribucion de cada pago a (D, R), que muestra la redistribucion.
+
 US4 (fase 8, T0464) la amplia con la causacion, la mora, la suspension, la regeneracion del plan (tramos, reajustes), el plan
 migrado y la reconstruccion a (D, R), calculadas DIA POR DIA (el C# avanza por segmentos entre eventos), para los "esperado" de
 las "consultas" de cada caso y de cada variante: modo "Reconstruccion" (defecto), "PagosATiempo", "Causacion" y "Diferencias".
@@ -553,8 +557,12 @@ def exacto_de_tramos(tramos, conv, eq, hasta=None):
     return total
 
 
-def regenerar(plan, c, v, nueva_ea=None, cambio=D(0)):
-    """Regenera desde la primera cuota que vence despues de v conservando numero y fechas; la primera lleva sus tramos."""
+def regenerar(plan, c, v, nueva_ea=None, cambio=D(0), eleccion=None, ajustes=None):
+    """Regenera desde la primera cuota que vence despues de v conservando numero y fechas; la primera lleva sus tramos.
+    US5: los ajustes de capital (pagos) de las cuotas que vencen despues de v se consolidan en el cambio; con ReduceTerm se conserva la
+    cuota nivelada (o el capital de cada cuota) y salen cuotas del final."""
+    if ajustes:
+        cambio = cambio + sum((ajustes.get(x["numero"], D(0)) for x in plan["cuotas"] if fecha(x["vencimiento"]) > v), D(0))
     conv, eq, per, sistema = c["convencion"], c.get("equivalencia", "Compound"), c.get("periodicidad", "Monthly"), c["sistema"]
     r = Redondeo(c["redondeo"])
     seguros = c.get("seguros") or []
@@ -579,6 +587,8 @@ def regenerar(plan, c, v, nueva_ea=None, cambio=D(0)):
     n = len(cuotas)
     tasas = [tasa_del_periodo(rd_new, cuotas[j]["dias"], eq) for j in range(n)]
     monto_total = sum(cuotas[j]["capital"] for j in range(k)) + c_after
+    if eleccion == "ReduceTerm" and c_after < x["_saldoIni"]:
+        return reducir_plazo(plan, c, cuotas, k, tr, i1, c_after, tasas, monto_total, nuevo)
 
     def nivelada_desde(saldo, j0, i_primero=None):
         # Saldo tras cada cuota = alfa + beta*A; la cuota de solo interes no lo mueve; A anula el ultimo.
@@ -644,6 +654,72 @@ def regenerar(plan, c, v, nueva_ea=None, cambio=D(0)):
     return nuevo
 
 
+def reducir_plazo(plan, c, cuotas, k, tr, i1, c_after, tasas, monto_total, nuevo):
+    """US5: reducir el plazo. Cuota fija: la nivelada sellada hasta acabar el saldo (la que lo termina paga el saldo y absorbe el residuo).
+    Sin nivelada: el capital de cada cuota se conserva y el abono sale desde la ultima. Siempre queda la primera regenerada."""
+    per = c.get("periodicidad", "Monthly")
+    r = Redondeo(c["redondeo"])
+    seguros = c.get("seguros") or []
+    n = len(cuotas)
+    x = cuotas[k]
+    nivelada = plan["cuotaNivelada"] if c["sistema"] == "LevelPayment" else None
+    caps = [y["capital"] for y in cuotas]
+    ultima = n - 1
+    if nivelada is None:
+        quitar = x["_saldoIni"] - c_after
+        j = n - 1
+        while j >= k and quitar > 0:
+            t = min(caps[j], quitar)
+            caps[j] -= t
+            quitar -= t
+            j -= 1
+        while ultima > k and caps[ultima] == 0:
+            ultima -= 1
+    nuevas = [dict(y) for y in cuotas[:k]]
+    saldo, residuo = c_after, D(0)
+    for j in range(k, ultima + 1):
+        y = dict(cuotas[j])
+        saldo_ini = saldo
+        interes = r.concepto(i1 if j == k else saldo * tasas[j])
+        porcion = y["_porcion"]
+        interes_total = interes + porcion
+        if j == k:
+            seg_cuota = y["seguro"]
+        else:
+            seg_cuota = D(0)
+            for seg in seguros:
+                base_s = saldo_ini if seg["base"] == "OutstandingBalance" else monto_total
+                seg_cuota += r.concepto(base_s * D(seg["tarifa"]) * factor_de_seguro(seg, per, y["dias"], y["numero"] == 1))
+        termina = False
+        if y["_solo"]:
+            capital = D(0)
+        elif nivelada is not None:
+            teorico = (r.unidad_(nivelada + y["_extra"] + porcion + seg_cuota) - interes_total - seg_cuota
+                       if r.momento == "PerInstallment" else r.cuota_nivelada(nivelada) + y["_extra"] - interes)
+            if j == n - 1 or teorico >= saldo:
+                capital = saldo
+                residuo = capital - teorico
+                termina = True
+            else:
+                capital = teorico if teorico >= 0 else D(0)
+        else:
+            capital = min(caps[j], saldo)
+            if j == ultima:
+                capital = saldo
+        saldo -= capital
+        y.update({"capital": capital, "interes": interes_total, "seguro": seg_cuota, "saldo": saldo,
+                  "_saldoIni": c_after if j == k else saldo_ini, "_tramos": tr if j == k else None})
+        nuevas.append(y)
+        if termina:
+            break
+    assert sum(y["capital"] for y in nuevas) == monto_total, "Lending.Schedule.PrincipalMismatch"
+    nuevo["cuotas"] = nuevas
+    nuevo["monto"] = monto_total
+    nuevo["residuo"] = residuo
+    nuevo["cuotaNivelada"] = plan["cuotaNivelada"]
+    return nuevo
+
+
 def plan_migrado(c, corte, cuotas_cargadas, principal):
     """D5: el capital por cuota se conserva; el interes de cada periodo lo pone el motor desde el corte."""
     conv, eq, per = c["convencion"], c.get("equivalencia", "Compound"), c.get("periodicidad", "Monthly")
@@ -685,6 +761,270 @@ def proyectar_causacion(plan, c, D_):
         if x["seguro"] and D_ >= fecha(x["vencimiento"]):
             out.append({"cuota": x["numero"], "concepto": "Insurance", "valor": x["seguro"]})
     return out
+
+
+# ===================================================================================================== US5 (fase 9, T0513)
+# Pagos: prelacion, las siete modalidades, anticipo al vencer, abono extraordinario con su eleccion (plan regenerado) o saldo a favor,
+# cancelacion con el anticipo del mismo credito, resolucion de saldos. Reglas (FR-071-FR-081, D4-D8, D24; las que no estaban escritas
+# van marcadas con [decision]):
+# - Exigible a la fecha valor v: las cuotas con vencimiento <= v (incluida la que vence ese dia) con todos sus conceptos [decision].
+#   Todo pago cubre primero lo exigible (FR-072).
+# - Prelacion OldestInstallmentFirst: por cuota (sin cuota = la mas antigua) y dentro por concepto; ConceptFirst: por concepto y dentro
+#   por cuota. Orden de conceptos: gastos (solo si se informaron; si no, al final [decision]) -> seguros -> mora con su suspenso -> corriente
+#   con su suspenso -> capital; lo que la lista no nombra va despues.
+# - Gracia total repartida: el interes de la gracia que el libro lleva en la cuota 1 se atribuye, desde la ultima cuota, a lo sumo su porcion
+#   a cada cuota j >= 2 y el resto a la 1; se cobra (y cuenta para la mora) con la cuota a la que se atribuye [decision].
+# - Cuota del ciclo: lo exigible y la primera cuota con vencimiento >= v; si aun no vence, lo que le toca (capital pendiente + interes y
+#   seguro del plan - anticipo de esa cuota - anticipo general) queda como anticipo de esa cuota (D8).
+# - Anticipo y valor libre: lo exigible y el resto como anticipo general, hasta lo que falta por vencer segun el plan [decision para el
+#   valor libre]; lo que sobra es excedente (D5).
+# - Abono extraordinario: lo exigible y el resto a capital con la eleccion (plan regenerado desde la primera cuota que vence despues de v);
+#   sin eleccion, saldo a favor (D24); si el resto alcanza el capital por vencer, cancelacion (D5).
+# - Cancelacion: todo lo cobrable, primero con el anticipo del credito (el general y luego el de cada cuota), nunca el saldo a favor (D7).
+# - El dia que vence una cuota, antes de las operaciones de ese dia, el anticipo de esa cuota y luego el general la cubren con la prelacion,
+#   parcial si no alcanza (D6); lo que sobra del de la cuota, ya cubierta, pasa al general.
+# - Cada pago se redistribuye desde su decision en orden (fecha valor, secuencia): un pago fechado atras o un reverso redistribuyen los
+#   posteriores (D4, FR-081). Reducir el plazo: cuota fija con la nivelada sellada hasta acabar el saldo; si no, se conserva el capital de
+#   cada cuota y el abono sale desde la ultima.
+
+def prelacion_de(c):
+    lista = c.get("conceptosDePrelacion") or ["CollectionFee", "Insurance", "DefaultInterest", "CurrentInterest", "Principal"]
+    susp = bool(c.get("suspensoConSuConcepto", True))
+    gastos = bool(c.get("gastosInformados", False))
+    salida = []
+    for x in lista:
+        if x == "CollectionFee" and not gastos:
+            continue
+        if x in ("CurrentInterestInSuspense", "DefaultInterestInSuspense") and susp:
+            continue
+        salida.append(x)
+        if susp and x == "DefaultInterest":
+            salida.append("DefaultInterestInSuspense")
+        if susp and x == "CurrentInterest":
+            salida.append("CurrentInterestInSuspense")
+    for x in COBRABLES:
+        if x not in salida and x not in ("CurrentInterestInSuspense", "DefaultInterestInSuspense", "CollectionFee"):
+            salida.append(x)
+    for x in ("DefaultInterestInSuspense", "CurrentInterestInSuspense", "CollectionFee"):
+        if x not in salida:
+            salida.append(x)
+    return {"orden": c.get("prelacion", "OldestInstallmentFirst"), "pos": {x: i for i, x in enumerate(salida)},
+            "fueraDeOrden": bool(c.get("cuotaEspecificaFueraDeOrden", False))}
+
+
+def reparte_gracia(plan):
+    return bool(plan["periodosGracia"]) and any(x["_porcion"] != 0 for x in plan["cuotas"][1:])
+
+
+def atribuir_gracia(plan, saldo):
+    """La porcion de la gracia de cada cuota j >= 2 (desde la ultima) y el resto a la cuota 1."""
+    salida, queda = {}, saldo
+    if reparte_gracia(plan) and queda > 0:
+        for x in reversed(plan["cuotas"][1:]):
+            porcion = min(x["_porcion"], queda)
+            if porcion <= 0:
+                continue
+            salida[x["numero"]] = porcion
+            queda -= porcion
+    salida[plan["cuotas"][0]["numero"]] = queda
+    return salida
+
+
+def cubetas_de(snap, prel):
+    plan = snap["plan"]
+    primera = plan["cuotas"][0]["numero"]
+    out = []
+    for (cuota, concepto), v in sorted(snap["por"].items(), key=lambda kv: (kv[0][0] if kv[0][0] is not None else 0, ORDEN[kv[0][1]])):
+        if v <= 0 or concepto not in COBRABLES:
+            continue
+        if concepto == "CurrentInterest" and cuota == primera and reparte_gracia(plan):
+            for j, parte in atribuir_gracia(plan, v).items():
+                if parte > 0:
+                    out.append((j, cuota, concepto, parte))
+            continue
+        out.append((cuota, cuota, concepto, v))
+    if prel["orden"] == "ConceptFirst":
+        out.sort(key=lambda c: (prel["pos"][c[2]], c[0] or 0))
+    else:
+        out.sort(key=lambda c: (c[0] or 0, prel["pos"][c[2]]))
+    return out
+
+
+def repartir(cubetas, fondos):
+    lineas, resto = [], fondos
+    for _, libro, concepto, monto in cubetas:
+        if resto <= 0:
+            break
+        t = min(resto, monto)
+        if t <= 0:
+            continue
+        resto -= t
+        for l in lineas:
+            if l["cuota"] == libro and l["concepto"] == concepto:
+                l["valor"] += t
+                break
+        else:
+            lineas.append({"cuota": libro, "concepto": concepto, "valor": t})
+    return lineas, resto
+
+
+def exigible_(plan, orden, v):
+    if orden is None:
+        return True
+    x = next((y for y in plan["cuotas"] if y["numero"] == orden), None)
+    return x is None or fecha(x["vencimiento"]) <= v
+
+
+def pend_(snap, n):
+    return snap["por"].get((n, "Principal"), D(0))
+
+
+def anticipo_(snap, cuota):
+    return snap["por"].get((cuota, "Advance"), D(0))
+
+
+def anticipo_total(snap):
+    return sum((v for (c, k), v in snap["por"].items() if k == "Advance"), D(0))
+
+
+def valor_de_cuota(snap, x):
+    return pend_(snap, x["numero"]) + x["interes"] + x["seguro"]
+
+
+def nueva_distribucion(sol):
+    return {"modalidad": sol["modalidad"], "valor": sol["valor"], "fechaValor": sol["fechaValor"], "eleccion": sol.get("eleccion"),
+            "cuota": sol.get("cuota"), "lineas": [], "anticipoUsado": [], "anticipo": D(0), "cuotaDelAnticipo": None, "saldoAFavor": D(0),
+            "excedente": D(0), "planNuevo": None, "cancela": False, "avisos": []}
+
+
+def cerrar(cubetas, d):
+    d["cancela"] = d["planNuevo"] is None and len(cubetas) > 0 and sum(c[3] for c in cubetas) == sum((l["valor"] for l in d["lineas"]), D(0))
+    return d
+
+
+def cancelacion(snap, cubetas, d):
+    total = sum((c[3] for c in cubetas), D(0))
+    usado, por_usar = [], total
+    fuentes = sorted(((c, v) for (c, k), v in snap["por"].items() if k == "Advance" and v > 0), key=lambda cv: (cv[0] is not None, cv[0] or 0))
+    for c, v in fuentes:
+        t = min(v, por_usar)
+        if t <= 0:
+            break
+        usado.append({"cuota": c, "concepto": "Advance", "valor": t})
+        por_usar -= t
+    pago = min(d["valor"], por_usar)
+    lineas, _ = repartir(cubetas, sum((u["valor"] for u in usado), D(0)) + pago)
+    d.update({"lineas": lineas, "anticipoUsado": usado, "excedente": d["valor"] - pago, "cancela": pago == por_usar})
+    return d
+
+
+def problema_de_pago(snap, sol, prel):
+    if sol["modalidad"] != "SpecificInstallment":
+        return None
+    n = sol.get("cuota")
+    if n is None or all(x["numero"] != n for x in snap["plan"]["cuotas"]):
+        return "Lending.Payment.ModalityNotAllowed"
+    if prel["fueraDeOrden"]:
+        return None
+    pend = [c for c in cubetas_de(snap, prel) if (c[0] or 0) < n and exigible_(snap["plan"], c[0], sol["fechaValor"]) and c[3] > 0]
+    return "Lending.Payment.SpecificInstallmentBlocked" if pend else None
+
+
+def distribuir(snap, sol, prel, cond_json):
+    plan, v = snap["plan"], sol["fechaValor"]
+    assert problema_de_pago(snap, sol, prel) is None
+    cubetas = cubetas_de(snap, prel)
+    exig = [c for c in cubetas if exigible_(plan, c[0], v)]
+    d = nueva_distribucion(sol)
+    m = sol["modalidad"]
+    if m == "FullPayoff":
+        return cancelacion(snap, cubetas, d)
+    if m == "PastDue":
+        d["lineas"], d["excedente"] = repartir(exig, sol["valor"])
+        return cerrar(cubetas, d)
+    if m == "CycleInstallment":
+        d["lineas"], resto = repartir(exig, sol["valor"])
+        ciclo = next((x for x in plan["cuotas"] if fecha(x["vencimiento"]) >= v), None)
+        if ciclo is None or fecha(ciclo["vencimiento"]) == v or resto == 0:
+            d["excedente"] = resto
+            return cerrar(cubetas, d)
+        falta = max(D(0), valor_de_cuota(snap, ciclo) - anticipo_(snap, ciclo["numero"]) - anticipo_(snap, None))
+        a = min(resto, falta)
+        d.update({"anticipo": a, "cuotaDelAnticipo": ciclo["numero"] if a > 0 else None, "excedente": resto - a,
+                  "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if a > 0 else []})
+        return cerrar(cubetas, d)
+    if m in ("Advance", "FreeAmount"):
+        d["lineas"], resto = repartir(exig, sol["valor"])
+        por_vencer = sum((valor_de_cuota(snap, x) for x in plan["cuotas"] if fecha(x["vencimiento"]) > v), D(0))
+        a = min(resto, max(D(0), por_vencer - anticipo_total(snap)))
+        d.update({"anticipo": a, "excedente": resto - a,
+                  "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if (a > 0 or m == "Advance") else []})
+        return cerrar(cubetas, d)
+    if m == "ExtraordinaryPrincipal":
+        lineas, resto = repartir(exig, sol["valor"])
+        d["lineas"] = lineas
+        if resto == 0:
+            return cerrar(cubetas, d)
+        por_vencer = sum((pend_(snap, x["numero"]) for x in plan["cuotas"] if fecha(x["vencimiento"]) > v), D(0))
+        if resto >= por_vencer:
+            d = cancelacion(snap, cubetas, nueva_distribucion(sol))
+            d["avisos"] = d["avisos"] + ["Lending.Payment.TreatedAsPayoff"]
+            return d
+        if sol.get("eleccion") is None:
+            d.update({"saldoAFavor": resto, "avisos": ["Lending.Payment.PreferenceAssumed"]})
+            return cerrar(cubetas, d)
+        ajustes = {x["numero"]: pend_(snap, x["numero"]) - x["capital"] for x in plan["cuotas"] if pend_(snap, x["numero"]) != x["capital"]}
+        d["planNuevo"] = regenerar(plan, cond_json, v, None, -resto, sol["eleccion"], ajustes)
+        d["lineas"] = lineas + [{"cuota": None, "concepto": "Principal", "valor": resto}]
+        return cerrar(cubetas, d)
+    if m == "SpecificInstallment":
+        n = sol["cuota"]
+        x = next(y for y in plan["cuotas"] if y["numero"] == n)
+        de_la = [c for c in cubetas if c[0] == n]
+        if fecha(x["vencimiento"]) <= v:
+            d["lineas"], d["excedente"] = repartir(de_la, sol["valor"])
+            return cerrar(cubetas, d)
+        falta = max(D(0), valor_de_cuota(snap, x) - anticipo_(snap, n))
+        a = min(sol["valor"], falta)
+        d.update({"anticipo": a, "cuotaDelAnticipo": n if a > 0 else None, "excedente": sol["valor"] - a,
+                  "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if a > 0 else []})
+        return cerrar(cubetas, d)
+    raise ValueError(m)
+
+
+def aplicar_anticipo(snap, n, prel):
+    propio, general = anticipo_(snap, n), anticipo_(snap, None)
+    if propio <= 0 and general <= 0:
+        return None
+    de_la = [c for c in cubetas_de(snap, prel) if c[0] == n]
+    debe = sum((c[3] for c in de_la), D(0))
+    up = min(max(propio, D(0)), debe)
+    ug = min(max(general, D(0)), debe - up)
+    lineas, _ = repartir(de_la, up + ug)
+    cubierta = up + ug == debe
+    liberado = max(propio, D(0)) - up if cubierta else D(0)
+    if not lineas and liberado == 0:
+        return None
+    usado = ([{"cuota": n, "concepto": "Advance", "valor": up}] if up > 0 else []) + \
+            ([{"cuota": None, "concepto": "Advance", "valor": ug}] if ug > 0 else [])
+    return {"fecha": snap["fecha"], "cuota": n, "lineas": lineas, "usado": usado, "liberado": liberado, "cubierta": cubierta}
+
+
+def tope_legal(monto, t):
+    nacional = D(t["vecesNacional"])
+    propias = D(t["vecesCooperativa"]) if t.get("vecesCooperativa") is not None else None
+    veces = propias if propias is not None and propias > nacional else nacional
+    tope = veces * D(t["smmlv"])
+    return {"dentroDelTope": monto <= tope, "topeEnPesos": tope, "veces": veces}
+
+
+def distribucion_json(d):
+    salida = {"distribucion": [dict(l) for l in d["lineas"]], "anticipoUsado": [dict(u) for u in d["anticipoUsado"]],
+              "anticipo": d["anticipo"], "cuotaDelAnticipo": d["cuotaDelAnticipo"], "saldoAFavor": d["saldoAFavor"],
+              "excedente": d["excedente"], "aplicado": d["valor"] - d["excedente"], "cancela": d["cancela"], "avisos": list(d["avisos"])}
+    if d["planNuevo"] is not None:
+        salida["planNuevo"] = plan_de_consulta(d["planNuevo"])
+    return salida
 
 
 # ----------------------------------------------------------------------------------------- reconstruccion a (D, R), T24
@@ -729,7 +1069,55 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     if not ops:
         return None
     origen = fecha(ops[0]["fechaValor"])
-    estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": []}
+    # "apertura": lo que no sale de la causacion por (concepto, cuota): saldos iniciales y, desde US5, lo que mueven los pagos (en
+    # ("Principal", n) el capital pendiente de la cuota n fuera del plan).
+    estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen}
+    prel = prelacion_de(cond_json)
+
+    def mover(dia, clase, concepto, cuota, monto):
+        if monto == 0:
+            return
+        key = (concepto, cuota)
+        estado["apertura"][key] = estado["apertura"].get(key, D(0)) + monto
+        estado["libro"].append((dia, clase, concepto, cuota, monto))
+
+    def pend(x):
+        return x["capital"] + estado["apertura"].get(("Principal", x["numero"]), D(0))
+
+    def consolidar(p, v):
+        for x in p["cuotas"]:
+            if fecha(x["vencimiento"]) > v:
+                estado["apertura"].pop(("Principal", x["numero"]), None)
+
+    def regenerar_ctx(v, ea, cambio):
+        p = estado["plan"]
+        ajustes = {x["numero"]: estado["apertura"][("Principal", x["numero"])] for x in p["cuotas"]
+                   if estado["apertura"].get(("Principal", x["numero"]), D(0)) != 0}
+        nuevo = regenerar(p, cond_json, v, ea, cambio, None, ajustes)
+        consolidar(p, v)
+        estado["plan"] = nuevo
+
+    def asentar_pago(o, v, d):
+        clase = "Recovery" if cond["castigo"] is not None and cond["castigo"] <= v else "PaymentAllocation"
+        for u in d["anticipoUsado"]:
+            mover(v, "AdvanceApplied", "Advance", u["cuota"], -u["valor"])
+        for l in d["lineas"]:
+            if l["concepto"] == "Principal" and l["cuota"] is None:
+                estado["libro"].append((v, clase, "Principal", None, -l["valor"]))
+            else:
+                mover(v, clase, l["concepto"], l["cuota"], -l["valor"])
+        if d["anticipo"] > 0:
+            mover(v, "AdvanceReceived", "Advance", d["cuotaDelAnticipo"], d["anticipo"])
+        if d["saldoAFavor"] > 0:
+            mover(v, "CreditBalanceRecognized", "CreditBalance", None, d["saldoAFavor"])
+        if d["planNuevo"] is not None:
+            consolidar(estado["plan"], v)
+            estado["plan"] = d["planNuevo"]
+        estado["pagos"][o["id"]] = d
+
+    def solicitud_de(o, v):
+        return {"modalidad": o.get("modalidad") or "FreeAmount", "valor": D(o["valor"] if o.get("valor") is not None else o["monto"]),
+                "fechaValor": v, "eleccion": o.get("eleccion"), "cuota": int(o["cuota"]) if o.get("cuota") is not None else None}
 
     def aplicar(o):
         v = fecha(o["fechaValor"]); t = o["tipo"]
@@ -739,7 +1127,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                 assert monto == D(cond_json["monto"]), "el primer tramo es el monto del plan"
                 estado["plan"] = generar_plan(cond_json)
             else:
-                estado["plan"] = regenerar(estado["plan"], cond_json, v, None, monto)
+                regenerar_ctx(v, None, monto)
             estado["libro"].append((v, "Disbursement", "Principal", None, monto))
         elif t == "OpeningBalance":
             saldos = o["saldos"]
@@ -755,7 +1143,37 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             ix = o["_indice"]
             ea = tasa_variable(ix["valor"], ix["periodosNominales"], cond["margen"], cond["piso"], cond["techo"])
             estado["ea"] = ea
-            estado["plan"] = regenerar(estado["plan"], cond_json, v, ea, D(0))
+            regenerar_ctx(v, ea, D(0))
+        elif t in ("Payment", "ProvisionalCollection"):
+            snap = instantanea(v)
+            sol = solicitud_de(o, v)
+            pr = prel
+            problema = problema_de_pago(snap, sol, pr)
+            if problema == "Lending.Payment.SpecificInstallmentBlocked":
+                pr = dict(prel, fueraDeOrden=True)
+            elif problema == "Lending.Payment.ModalityNotAllowed":
+                sol = dict(sol, modalidad="FreeAmount", cuota=None)
+            asentar_pago(o, v, distribuir(snap, sol, pr, cond_json))
+        elif t == "CreditBalanceResolution":
+            concepto, monto = o["concepto"], D(o["valor"])
+            fuentes = sorted(((c_, x) for (k_, c_), x in estado["apertura"].items() if k_ == concepto and x > 0),
+                             key=lambda cv: (cv[0] is not None, cv[0] or 0))
+            disponible = sum((x for _, x in fuentes), D(0))
+            if monto > disponible:
+                raise ValueError("Lending.CreditBalance.Insufficient")
+            if o.get("comoAbonoACapital"):
+                d = distribuir(instantanea(v), {"modalidad": "ExtraordinaryPrincipal", "valor": monto, "fechaValor": v,
+                                                "eleccion": o["eleccion"], "cuota": None}, prel, cond_json)
+                mover(v, "CreditBalanceSettled", "CreditBalance", None, -(d["valor"] - d["excedente"]))
+                asentar_pago(o, v, d)
+            else:
+                queda = monto
+                for c_, x in fuentes:
+                    t_ = min(x, queda)
+                    if t_ <= 0:
+                        break
+                    mover(v, "CreditBalanceSettled", concepto, c_, -t_)
+                    queda -= t_
         else:
             raise ValueError(f"operacion {t} no soportada en K1")
 
@@ -781,7 +1199,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         return cs
 
     def saldo(numero, concepto, d):
-        total = estado["apertura"].get((concepto, numero), D(0))
+        total = estado["apertura"].get((concepto, numero), D(0)) if concepto != "Principal" else D(0)
         for k in ven.todas:
             if k[0] == concepto and k[1] == numero:
                 total += r.concepto(ven.exacto(k, d))
@@ -815,7 +1233,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             n_ = x["numero"]
             if not vencida[n_]:
                 continue
-            sv = x["capital"] + sum(saldo(n_, cc, d - UN_DIA) for cc in ("CurrentInterest", "CurrentInterestInSuspense", "Insurance"))
+            sv = pend(x) + interes_corriente(n_, d - UN_DIA) + saldo(n_, "Insurance", d - UN_DIA)
             if sv > tol:
                 cands.append(n_)
         altura = (d - ex[min(cands)]).days if cands else 0
@@ -829,6 +1247,17 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         elif umb is not None and altura >= umb:
             motivo = "Delinquency"
         return {"ex": ex, "vencida": vencida, "altura": altura, "cands": cands, "motivo": motivo}
+
+    def interes_corriente(numero, d):
+        """La corriente (con su suspenso) que se cobra a una cuota, con la gracia repartida atribuida a su cuota (US5)."""
+        p = plan()
+        susp = saldo(numero, "CurrentInterestInSuspense", d)
+        if not reparte_gracia(p):
+            return saldo(numero, "CurrentInterest", d) + susp
+        primera = p["cuotas"][0]["numero"]
+        partes = atribuir_gracia(p, saldo(primera, "CurrentInterest", d))
+        propio = D(0) if numero == primera else saldo(numero, "CurrentInterest", d)
+        return propio + partes.get(numero, D(0)) + susp
 
     def deseadas(d, ev):
         nonlocal primer_sin_usura
@@ -845,25 +1274,69 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         out = {}
         cuotas = p["cuotas"]
         if p["periodosGracia"] and d <= cuotas[0]["_desde"]:
-            out[(cur, 1, True)] = (sum(x["capital"] for x in cuotas), dc, periodo)
+            out[(cur, 1, True)] = (sum(pend(x) for x in cuotas), dc, periodo)
         else:
             k = next((x["numero"] for x in cuotas if fecha(x["vencimiento"]) >= d), cuotas[-1]["numero"])
-            b = sum(x["capital"] for x in cuotas if not ev["vencida"][x["numero"]])
+            b = sum(pend(x) for x in cuotas if not ev["vencida"][x["numero"]])
             if b > 0:
                 out[(cur, k, False)] = (b, dc, periodo)
         for x in cuotas:
             n_ = x["numero"]
             if ev["vencida"][n_]:
-                b = x["capital"]
+                b = pend(x)
                 if cond["moraSobreIntereses"]:
-                    b += saldo(n_, "CurrentInterest", d - UN_DIA) + saldo(n_, "CurrentInterestInSuspense", d - UN_DIA)
+                    b += interes_corriente(n_, d - UN_DIA)
                 if b > 0:
                     out[(mor, n_, False)] = (b, dm, periodo)
         return out
 
+    def saldos_a(dia):
+        p = plan()
+        claves_ = set(ven.todas) | {("Insurance", x["numero"], False) for x in p["cuotas"] if x["seguro"]}
+        por_ = {}
+        for x in p["cuotas"]:
+            if pend(x):
+                por_[(x["numero"], "Principal")] = pend(x)
+        for k in claves_:
+            v_ = r.concepto(seguro_exacto(k[1], dia)) if k[0] == "Insurance" else r.concepto(ven.exacto(k, dia))
+            if v_:
+                por_[(k[1], k[0])] = por_.get((k[1], k[0]), D(0)) + v_
+        for (concepto, cuota), v_ in estado["apertura"].items():
+            if concepto == "Principal" and cuota is not None:
+                continue
+            por_[(cuota, concepto)] = por_.get((cuota, concepto), D(0)) + v_
+        return {k: v_ for k, v_ in por_.items() if v_}
+
+    def instantanea(dia):
+        return {"fecha": dia, "plan": plan(), "por": saldos_a(dia)}
+
+    def aplicar_anticipos(hasta):
+        if hasta <= estado["antHasta"]:
+            return
+        desde = estado["antHasta"]
+        estado["antHasta"] = hasta
+        for x in list(plan()["cuotas"]):
+            venc = fecha(x["vencimiento"])
+            if not (desde < venc <= hasta):
+                continue
+            if not any(k[0] == "Advance" and v_ > 0 for k, v_ in estado["apertura"].items()):
+                break
+            a = aplicar_anticipo(instantanea(venc), x["numero"], prel)
+            if a is None:
+                continue
+            for u in a["usado"]:
+                mover(venc, "AdvanceApplied", "Advance", u["cuota"], -u["valor"])
+            for l in a["lineas"]:
+                mover(venc, "AdvanceApplied", l["concepto"], l["cuota"], -l["valor"])
+            if a["liberado"] > 0:
+                mover(venc, "AdvanceApplied", "Advance", a["cuota"], -a["liberado"])
+                mover(venc, "AdvanceReceived", "Advance", None, a["liberado"])
+            estado["anticipos"].append(a)
+
     previo = evaluar(origen)["motivo"] is not None
     d = origen + UN_DIA
     while d <= D_:
+        aplicar_anticipos(d - UN_DIA)
         while pendientes and fecha(pendientes[0]["fechaValor"]) < d:
             aplicar(pendientes.pop(0))
         ev = evaluar(d)
@@ -873,6 +1346,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             transiciones.append({"fecha": d.isoformat(), "suspendida": ahora})
         previo = ahora
         d += UN_DIA
+    aplicar_anticipos(D_)
     while pendientes:
         aplicar(pendientes.pop(0))
 
@@ -899,23 +1373,12 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             key = (dia_, clase, concepto, cuota)
             filas[key] = filas.get(key, D(0)) + valor
     filas_libro = [{"dia": k[0].isoformat(), "clase": k[1], "concepto": k[2], "cuota": k[3], "valor": v}
-                   for k, v in sorted(filas.items(), key=lambda kv: (kv[0][0], kv[0][1] != "Disbursement" and kv[0][1] != "OpeningBalance",
-                                                                       ORDEN[kv[0][2]], kv[0][3] or 0)) if v]
+                   for k, v in sorted(filas.items(), key=lambda kv: (kv[0][0], kv[0][1] == "Accrual", ORDEN[kv[0][2]], kv[0][3] or 0)) if v]
 
     # saldos a D
     ev = evaluar(D_) if D_ > origen else {"vencida": {x["numero"]: False for x in p["cuotas"]}, "altura": 0, "cands": [], "motivo": None,
                                            "ex": {x["numero"]: exigible(fecha(x["vencimiento"]), festivos) for x in p["cuotas"]}}
-    por = {}
-    for x in p["cuotas"]:
-        if x["capital"]:
-            por[(x["numero"], "Principal")] = x["capital"]
-    for k in claves:
-        v = U(k, D_)
-        if v:
-            por[(k[1], k[0])] = por.get((k[1], k[0]), D(0)) + v
-    for (concepto, cuota), v in estado["apertura"].items():
-        por[(cuota, concepto)] = por.get((cuota, concepto), D(0)) + v
-    por = {k: v for k, v in por.items() if v}
+    por = saldos_a(D_)
     saldos = {}
     for (cuota, concepto), v in por.items():
         saldos[concepto] = saldos.get(concepto, D(0)) + v
@@ -925,7 +1388,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         "saldos": {c_: saldos[c_] for c_ in CONCEPTOS if c_ in saldos},
         "porCuota": [{"cuota": k[0], "concepto": k[1], "valor": v}
                      for k, v in sorted(por.items(), key=lambda kv: (kv[0][0] if kv[0][0] is not None else 0, ORDEN[kv[0][1]]))],
-        "capitalVencido": sum((x["capital"] for x in p["cuotas"] if ev["vencida"][x["numero"]]), D(0)),
+        "capitalVencido": sum((pend(x) for x in p["cuotas"] if ev["vencida"][x["numero"]]), D(0)),
         "diasDeMora": ev["altura"],
         "cuotaMasAntigua": min(ev["cands"]) if ev["cands"] else None,
         "cuotasVencidas": len(ev["cands"]),
@@ -934,7 +1397,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         "tasaDiariaCorriente": dc, "tasaDiariaMora": dm, "usuraTopada": topc or topm,
         "validaHasta": (primer_sin_usura - UN_DIA).isoformat() if primer_sin_usura is not None else None,
         "transiciones": transiciones,
-        "_libro": filas_libro, "_plan": p,
+        "_libro": filas_libro, "_plan": p, "_pagos": estado["pagos"], "_anticipos": estado["anticipos"],
     }
 
 
@@ -985,6 +1448,30 @@ def esperado_de_consulta(caso, cond_json, ops_json, con):
         salida["libro"] = e["_libro"]
     if con.get("conPlan"):
         salida["plan"] = plan_de_consulta(e["_plan"])
+    if con.get("conPagos"):
+        salida["pagos"] = [dict(distribucion_json(d), id=i) for i, d in e["_pagos"].items()]
+    return salida
+
+
+def esperado_de_operacion(caso, cond_json, ops_json, op):
+    """US5: la distribucion de un pago con la informacion hasta su registro (simular = aplicar) y, si trae topeLegal, el tope."""
+    ops = [dict(o, _indice=indice_para(caso, o)) if o["tipo"] == "RateReset" else o for o in ops_json]
+    v, R = fecha(op["fechaValor"]), instante(op["registradoEn"])
+    e = reconstruir(caso, cond_json, ops, v, R)
+    salida = distribucion_json(e["_pagos"][op["id"]])
+    if op.get("topeLegal"):
+        salida["topeLegal"] = tope_legal(D(cond_json["monto"]), op["topeLegal"])
+    return salida
+
+
+def operaciones_calculadas(caso, cond_json, ops_json):
+    """Las operaciones con su "esperado" recalculado (solo las que lo traen)."""
+    salida = []
+    for op in ops_json:
+        nueva = dict(op)
+        if "esperado" in op:
+            nueva["esperado"] = esperado_de_operacion(caso, cond_json, ops_json, op)
+        salida.append(nueva)
     return salida
 
 
@@ -1070,16 +1557,23 @@ def main():
         caso = cargar(ruta)
         esperado = esperado_completo(caso) if "esperado" in caso else None
         consultas = consultas_calculadas(caso)
+        operaciones = operaciones_calculadas(caso, caso["condiciones"], caso.get("operaciones") or [])
+        for var in caso.get("variantes") or []:
+            if var.get("operaciones"):
+                var["operaciones"] = operaciones_calculadas(caso, var["condiciones"], var["operaciones"])
         if escribir:
             with open(ruta, encoding="utf-8") as f:
                 crudo = f.read()
+            if any("esperado" in o for o in caso.get("operaciones") or []):
+                a, b = bloque(crudo, "operaciones")
+                crudo = crudo[:a] + a_json(operaciones, 2, 2) + crudo[b:]
             if esperado is not None:
                 i = crudo.rindex('\n  "esperado":')
                 crudo = crudo[:i] + '\n  "esperado": ' + a_json(esperado, 2, 2) + "\n}\n"
             if consultas:
                 a, b = bloque(crudo, "consultas")
                 crudo = crudo[:a] + a_json(consultas, 2, 2) + crudo[b:]
-            if any(v.get("consultas") for v in caso.get("variantes") or []):
+            if any(v.get("consultas") or v.get("operaciones") for v in caso.get("variantes") or []):
                 a, b = bloque(crudo, "variantes")
                 crudo = crudo[:a] + a_json(caso["variantes"], 2, 2) + crudo[b:]
             with open(ruta, "w", encoding="utf-8", newline="\n") as f:
@@ -1093,6 +1587,12 @@ def main():
             for vc, vo in zip(caso.get("variantes") or [], original.get("variantes") or []):
                 for calc, orig in zip(vc.get("consultas") or [], vo.get("consultas") or []):
                     ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+                for calc, orig in zip(vc.get("operaciones") or [], vo.get("operaciones") or []):
+                    if "esperado" in orig:
+                        ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+            for calc, orig in zip(operaciones, original.get("operaciones") or []):
+                if "esperado" in orig:
+                    ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
             print(f"{nombre}: {'coincide' if ok else 'DIFIERE'}")
             malos += 0 if ok else 1
         else:
@@ -1101,6 +1601,8 @@ def main():
                 print(a_json(esperado, 2, 2))
             if consultas:
                 print(a_json(consultas, 2, 2))
+            if any("esperado" in o for o in operaciones):
+                print(a_json(operaciones, 2, 2))
     sys.exit(1 if malos else 0)
 
 

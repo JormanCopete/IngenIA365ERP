@@ -65,13 +65,19 @@ public sealed record PeriodoDeGracia(DateOnly Desde, DateOnly Hasta);
 
 /// <summary>
 /// Lo que regenera el plan desde una fecha (US4, T0486; D12, FR-067): la fecha valor del hecho, el cambio de capital (un tramo suma, un
-/// abono resta) y, si cambió, la tasa EA nueva (reajuste). La elección del deudor ante un abono (plazo o cuota) la agrega US5.
+/// abono resta) y, si cambió, la tasa EA nueva (reajuste). US5 (T0536) agrega la elección del deudor ante un abono extraordinario.
 /// </summary>
 public sealed record EntradaDeRegeneracion(DateOnly Fecha)
 {
     public decimal CambioDeCapital { get; init; }
 
     public decimal? NuevaTasaEfectivaAnual { get; init; }
+
+    /// <summary>
+    /// La elección del deudor ante un abono (FR-075): <see cref="PrepaymentChoice.ReduceTerm"/> conserva la cuota y quita cuotas del final;
+    /// <see cref="PrepaymentChoice.ReduceInstallment"/> (o nula: un tramo, un reajuste) conserva las cuotas y recalcula su valor.
+    /// </summary>
+    public PrepaymentChoice? Eleccion { get; init; }
 }
 
 /// <summary>Una cuota de un plan migrado (D5): número, vencimiento y capital pendiente al corte; el inicio de su período si se conoce.</summary>
@@ -174,4 +180,30 @@ public sealed record PlanDePagos(
     public decimal TotalSeguro => Cuotas.Sum(c => c.Seguro);
 
     public decimal TotalAPagar => Cuotas.Sum(c => c.Total);
+
+    /// <summary>¿La gracia total reparte su interés en varias cuotas (<see cref="GraceInterestTreatment.Distributed"/>)?</summary>
+    public bool RepartaLaGracia => PeriodosDeGracia.Count > 0 && Cuotas.Skip(1).Any(c => c.InteresDeGracia != 0m);
+
+    /// <summary>
+    /// A qué cuota pertenece el interés corriente que el libro lleva en la primera (US5, T0533): la causación pone todo el interés de una
+    /// gracia total en la cuota 1, pero con <see cref="GraceInterestTreatment.Distributed"/> el plan lo cobra repartido. Del
+    /// <paramref name="saldoDeLaPrimera"/> se atribuye a cada cuota j ≥ 2, empezando por la última, a lo sumo su porción
+    /// (<see cref="CuotaDelPlan.InteresDeGracia"/>), y el resto a la cuota 1: lo que ya se pagó fue lo más antiguo, así que lo que queda es
+    /// de las cuotas más nuevas. Así la prelación y la altura de mora cobran cada porción con su cuota. Sin reparto, todo es de la 1.
+    /// </summary>
+    public IReadOnlyDictionary<int, decimal> AtribuirInteresDeLaPrimera(decimal saldoDeLaPrimera)
+    {
+        var salida = new Dictionary<int, decimal>();
+        var queda = saldoDeLaPrimera;
+        if (RepartaLaGracia && queda > 0m)
+            for (var j = Cuotas.Count - 1; j >= 1; j--)
+            {
+                var porcion = Math.Min(Cuotas[j].InteresDeGracia, queda);
+                if (porcion <= 0m) continue;
+                salida[Cuotas[j].Numero] = porcion;
+                queda -= porcion;
+            }
+        salida[Cuotas[0].Numero] = queda;
+        return salida;
+    }
 }

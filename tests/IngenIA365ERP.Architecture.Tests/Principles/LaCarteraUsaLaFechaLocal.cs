@@ -72,6 +72,8 @@ public class LaCarteraUsaLaFechaLocal
     private static readonly string[] CarpetasDelMotorDeUS4 = [
         "Core/IngenIA365ERP.Domain/Lending/Accrual",
         "Core/IngenIA365ERP.Domain/Lending/Delinquency",
+        // US5 (T0533–T0535): la prelación, el aplicador de pagos y el tope del prepago reciben la fecha valor.
+        "Core/IngenIA365ERP.Domain/Lending/Payments",
     ];
 
     [Fact]
@@ -80,6 +82,7 @@ public class LaCarteraUsaLaFechaLocal
         var archivos = ReglaSobreFuente.ArchivosEn(CarpetasDelMotorDeUS4).ToList();
         Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Accrual", "Causacion.cs"), StringComparison.Ordinal));
         Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Delinquency", "AlturaDeMora.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Payments", "AplicadorDePagos.cs"), StringComparison.Ordinal));
         var infracciones = ReglaSobreFuente.Infracciones(archivos, [
             (new Regex(@"\bDateTime(Offset)?\b(?!\.DaysInMonth\b)", RegexOptions.Compiled), "usa DateTime en la causación o la mora (las fechas de negocio son DateOnly)"),
             (new Regex(@"\b(IDateTimeService|TimeProvider|HoyLocal)\b", RegexOptions.Compiled), "consulta el reloj desde el motor"),

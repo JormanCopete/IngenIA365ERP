@@ -16,6 +16,12 @@ public sealed record DiferenciaDeLibro(DateOnly Dia, LoanConcept Concepto, int? 
 {
     /// <summary>Reconstrucción − libro: lo que falta registrar (con signo).</summary>
     public decimal Diferencia => Reconstruccion - Libro;
+
+    /// <summary>
+    /// La diferencia es de los hechos de las operaciones (pagos, anticipos, saldos a favor) y no de la causación; sólo la marca
+    /// <see cref="LibroTeorico.DiferenciasPorFamilia"/> (US5).
+    /// </summary>
+    public bool DeHechos { get; init; }
 }
 
 /// <summary>
@@ -73,5 +79,26 @@ public sealed class LibroTeorico
             .Select(kv => new DiferenciaDeLibro(kv.Key.Item1, kv.Key.Item2, kv.Key.Item3, kv.Value.Libro, kv.Value.Teorico))
             .OrderBy(d => d.Dia).ThenBy(d => (int)d.Concepto).ThenBy(d => d.Cuota ?? 0)
             .ToList();
+    }
+
+    /// <summary>Las clases de fila que son causación (lo demás son hechos de las operaciones).</summary>
+    public static bool EsDeCausacion(LoanTransactionKind clase) =>
+        clase is LoanTransactionKind.Accrual or LoanTransactionKind.AccrualAdjustment or LoanTransactionKind.SuspenseReclassification;
+
+    /// <summary>
+    /// Como <see cref="Diferencias"/>, pero por familia (US5, T33): la causación por un lado y los hechos de las operaciones (pagos,
+    /// anticipos, saldos a favor, desembolsos) por otro, así un reverso con pagos posteriores registra cada diferencia con su clase
+    /// (<see cref="DiferenciaDeLibro.DeHechos"/>): <c>PaymentReallocation</c> la de los hechos, <c>AccrualAdjustment</c> o
+    /// <c>SuspenseReclassification</c> la de la causación.
+    /// </summary>
+    public IReadOnlyList<DiferenciaDeLibro> DiferenciasPorFamilia(IEnumerable<MovimientoDeLibro> libro, DateOnly? hasta = null)
+    {
+        ArgumentNullException.ThrowIfNull(libro);
+        var lista = libro.ToList();
+        var causacion = new LibroTeorico(_movimientos.Where(m => EsDeCausacion(m.Clase)))
+            .Diferencias(lista.Where(m => EsDeCausacion(m.Clase)), hasta);
+        var hechos = new LibroTeorico(_movimientos.Where(m => !EsDeCausacion(m.Clase)))
+            .Diferencias(lista.Where(m => !EsDeCausacion(m.Clase)), hasta).Select(d => d with { DeHechos = true });
+        return causacion.Concat(hechos).OrderBy(d => d.Dia).ThenBy(d => d.DeHechos).ThenBy(d => (int)d.Concepto).ThenBy(d => d.Cuota ?? 0).ToList();
     }
 }

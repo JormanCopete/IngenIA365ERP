@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Schedules;
@@ -91,6 +92,15 @@ public sealed class CasoDoradoDeCartera
                 .Select(u => new UsuraCertificada(u.Ea, u.PublicId ?? Guid.Empty, u.Clave, u.Desde))
                 .FirstOrDefault();
 
+    /// <summary>US5: las operaciones con «esperado» del caso y de cada variante, con las condiciones y la lista con que se corren.</summary>
+    public IEnumerable<(string Nombre, CondicionesJson Condiciones, List<OperacionJson> Operaciones, OperacionJson Operacion)> OperacionesConEsperado()
+    {
+        foreach (var o in Operaciones.Where(o => o.Esperado is not null)) yield return (Nombre, Condiciones, Operaciones, o);
+        foreach (var v in Variantes)
+            foreach (var o in (v.Operaciones ?? []).Where(o => o.Esperado is not null))
+                yield return ($"{Nombre} · {v.Nombre}", v.Condiciones, v.Operaciones!, o);
+    }
+
     /// <summary>Las consultas del caso y de cada variante, con las condiciones y operaciones con que se corren.</summary>
     public IEnumerable<(string Nombre, CondicionesJson Condiciones, List<OperacionJson> Operaciones, ConsultaJson Consulta)> TodasLasConsultas()
     {
@@ -127,6 +137,7 @@ public sealed class CasoDoradoDeCartera
             CuotasMigradas = o.Cuotas.Select(q => new CuotaMigrada(q.Numero, q.Vencimiento, q.Capital) { Desde = q.Desde }).ToList(),
             Indice = o.Indice is { } codigo ? IndicePara(codigo, o.FechaValor, o.RegistradoEn) : null,
             Reversa = o.Reversa,
+            Contenido = o.Contenido(),
         };
 
     private IndiceDeReferencia IndicePara(string codigo, DateOnly fecha, DateTime registrado) =>
@@ -166,6 +177,14 @@ public sealed class CasoDoradoDeCartera
         public DateOnly? CastigoDesde { get; set; }
         public bool UsuraRequerida { get; set; } = true;
         public TasaVariableJson? TasaVariable { get; set; }
+        // US5: la prelación sellada (data-model §1.8); sin lista, la de defecto.
+        public List<LoanConcept>? ConceptosDePrelacion { get; set; }
+        public bool SuspensoConSuConcepto { get; set; } = true;
+        public bool CuotaEspecificaFueraDeOrden { get; set; }
+        public bool GastosInformados { get; set; }
+
+        public Prelacion PrelacionSellada() =>
+            new(Prelacion, ConceptosDePrelacion ?? [], SuspensoConSuConcepto, CuotaEspecificaFueraDeOrden, GastosInformados);
 
         /// <summary>Las condiciones selladas del crédito (US4).</summary>
         public CondicionesDeCredito Credito(string rulesVersion) => new(rulesVersion, TasaEA, ClaseDeMora, Convencion, Equivalencia, Periodicidad,
@@ -183,6 +202,7 @@ public sealed class CasoDoradoDeCartera
             Margen = TasaVariable?.Margen ?? 0m,
             Piso = TasaVariable?.Piso,
             Techo = TasaVariable?.Techo,
+            Prelacion = PrelacionSellada(),
         };
 
         public EntradaDePlan Entrada() => new(Monto, FechaDesembolso, PlazoCuotas, Periodicidad, Sistema, TasaEA, Convencion, Equivalencia,
@@ -293,11 +313,32 @@ public sealed class CasoDoradoDeCartera
     {
         public string Id { get; set; } = string.Empty;
         public string Tipo { get; set; } = string.Empty;
-        public string? Modalidad { get; set; }
-        public JsonElement? Valor { get; set; }
+        public PaymentModality? Modalidad { get; set; }
+        public decimal? Valor { get; set; }
         public DateOnly FechaValor { get; set; }
         public DateTime RegistradoEn { get; set; }
-        public JsonElement? Esperado { get; set; }
+        /// <summary>US5: la distribución de un pago con la información hasta su registro (simular = aplicar).</summary>
+        public EsperadoDePagoJson? Esperado { get; set; }
+        // US5
+        public PrepaymentChoice? Eleccion { get; set; }
+        public int? Cuota { get; set; }
+        public LoanConcept? Concepto { get; set; }
+        public bool ComoAbonoACapital { get; set; }
+        public TopeLegalJson? TopeLegal { get; set; }
+
+        /// <summary>El contenido que lee el intérprete de la reconstrucción.</summary>
+        public object? Contenido() => Tipo switch
+        {
+            nameof(LoanOperationKind.Payment) or nameof(LoanOperationKind.ProvisionalCollection) when Valor is { } v =>
+                new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v) { Eleccion = Eleccion, Cuota = Cuota },
+            nameof(LoanOperationKind.CreditBalanceResolution) =>
+                new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m) { ComoAbonoACapital = ComoAbonoACapital, Eleccion = Eleccion },
+            _ => null,
+        };
+
+        /// <summary>La solicitud del pago.</summary>
+        public SolicitudDeDistribucion Solicitud() =>
+            new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor) { Eleccion = Eleccion, Cuota = Cuota };
         // US4
         public long? Secuencia { get; set; }
         public decimal? Monto { get; set; }
@@ -333,6 +374,8 @@ public sealed class CasoDoradoDeCartera
         public bool ConPlan { get; set; }
         public DateOnly? Marca { get; set; }
         public DateTime? ComparaConR { get; set; }
+        /// <summary>US5: la consulta trae la distribución de cada pago a (D, R).</summary>
+        public bool ConPagos { get; set; }
         public EsperadoDeConsultaJson? Esperado { get; set; }
     }
 
@@ -357,6 +400,51 @@ public sealed class CasoDoradoDeCartera
         public List<CausadoJson>? Causado { get; set; }
         public List<FilaDeLibroJson>? Causacion { get; set; }
         public List<FilaDeLibroJson>? Diferencias { get; set; }
+        public List<PagoEsperadoJson>? Pagos { get; set; }
+    }
+
+    /// <summary>US5: lo que se espera de la distribución de un pago (quickstart §1.2).</summary>
+    public class EsperadoDePagoJson
+    {
+        public List<LineaJson> Distribucion { get; set; } = [];
+        public List<LineaJson> AnticipoUsado { get; set; } = [];
+        public decimal Anticipo { get; set; }
+        public int? CuotaDelAnticipo { get; set; }
+        public decimal SaldoAFavor { get; set; }
+        public decimal Excedente { get; set; }
+        public decimal Aplicado { get; set; }
+        public bool Cancela { get; set; }
+        public List<string> Avisos { get; set; } = [];
+        public PlanDeConsultaJson? PlanNuevo { get; set; }
+        public TopeEsperadoJson? TopeLegal { get; set; }
+    }
+
+    /// <summary>La distribución de un pago a (D, R), con el Id de su operación.</summary>
+    public sealed class PagoEsperadoJson : EsperadoDePagoJson
+    {
+        public string Id { get; set; } = string.Empty;
+    }
+
+    public sealed class LineaJson
+    {
+        public int? Cuota { get; set; }
+        public LoanConcept Concepto { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    /// <summary>El tope legal del prepago sin penalidad (caso 32): el SMMLV del desembolso y las veces, de la ley y de la cooperativa.</summary>
+    public sealed class TopeLegalJson
+    {
+        public decimal Smmlv { get; set; }
+        public decimal VecesNacional { get; set; }
+        public decimal? VecesCooperativa { get; set; }
+    }
+
+    public sealed class TopeEsperadoJson
+    {
+        public bool DentroDelTope { get; set; }
+        public decimal TopeEnPesos { get; set; }
+        public decimal Veces { get; set; }
     }
 
     public sealed class SaldoDeCuotaJson

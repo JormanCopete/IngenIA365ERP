@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Accrual;
 using IngenIA365ERP.Domain.Lending.Delinquency;
+using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
@@ -95,6 +96,32 @@ public sealed class EstadoDelCredito
     public IReadOnlyList<TransicionDeEstado> Transiciones { get; }
 
     public LibroTeorico Libro { get; }
+
+    /// <summary>
+    /// Los pagos que la reconstrucción distribuyó hasta D, por el Id de su operación (US5, T0535): la distribución se recalcula desde la
+    /// decisión de cada uno, así que con un pago fechado atrás o un reverso aquí se ve la redistribución (D4, FR-081).
+    /// </summary>
+    public IReadOnlyDictionary<string, DistribucionDePago> Pagos { get; internal init; } = new Dictionary<string, DistribucionDePago>();
+
+    /// <summary>Los anticipos aplicados a una cuota en su vencimiento hasta D (FR-074, D6), en orden de fecha.</summary>
+    public IReadOnlyList<AplicacionDeAnticipo> AnticiposAplicados { get; internal init; } = [];
+
+    /// <summary>
+    /// Un estado armado a mano (US5, T0514): la fecha, el plan y los saldos por cuota y concepto, sin libro ni explicación; las cuotas salen
+    /// del plan con su capital pendiente de los saldos y vencidas si la fecha pasó su vencimiento. Lo usan las pruebas y quien simula sobre
+    /// saldos ya conocidos; la reconstrucción arma el suyo.
+    /// </summary>
+    public static EstadoDelCredito Armado(DateOnly fecha, PlanDePagos plan, IReadOnlyList<SaldoDeCuota> saldos, string? rulesVersion = null)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(saldos);
+        var ordenados = saldos.Where(s => s.Valor != 0m).OrderBy(s => s.Cuota ?? 0).ThenBy(s => (int)s.Concepto).ToList();
+        var cuotas = plan.Cuotas.Select(c => new EstadoDeCuota(c.Numero, c.Vencimiento, c.Vencimiento,
+            ordenados.Where(s => s.Concepto == LoanConcept.Principal && s.Cuota == c.Numero).Sum(s => s.Valor), fecha > c.Vencimiento)).ToList();
+        var version = rulesVersion ?? plan.RulesVersion;
+        return new EstadoDelCredito(fecha, fecha.ToDateTime(TimeOnly.MinValue), version, plan.Entrada.FechaDesembolso, plan, cuotas, ordenados,
+            ResultadoDeAlturaDeMora.AlDia, null, null, null, [], LibroTeorico.Vacio, () => new ExplicacionDeCartera().Linea("Estado armado a mano."));
+    }
 
     /// <summary>Los tramos de causación (días, tasa del día, base, tope y suspensión) y lo que hizo el motor, en palabras.</summary>
     public ExplicacionDeCartera Explicacion => _explicacion ??= _explicar();

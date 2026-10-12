@@ -89,4 +89,48 @@ public static class EspejosDelReverso
         aEspejar.AddRange(libro.Where(f => f.OperacionId != operacionDelTramo && DeCausacion.Contains(f.Clase) && Vigente(f)));
         return new PropuestaDeEspejos(aEspejar.OrderBy(f => f.Id).ToList(), null);
     }
+
+    /// <summary>
+    /// La propuesta del reverso de un <b>pago</b> (US5, T0515; FR-080, FR-081, T33; data-model §7.11): un espejo por cada fila propia del pago
+    /// (sus <c>PaymentAllocation</c>, <c>Recovery</c>, <c>AdvanceReceived</c>, <c>AdvanceApplied</c>, <c>CreditBalanceRecognized</c>, …) y,
+    /// desde su fecha valor, la conciliación contra la reconstrucción sin el pago, que redistribuye los posteriores con su fecha valor y su
+    /// elección: cada diferencia por (día valor, concepto, cuota) con su clase (<see cref="ClaseDeLaDiferencia"/>).
+    /// </summary>
+    /// <exception cref="ReglaDeCarteraException">El pago es un espejo (un reverso no se reversa) o no tiene filas.</exception>
+    public static PropuestaDeEspejos DelPago(IReadOnlyCollection<FilaDelLibro> libro, long operacionDelPago, DateOnly fechaValorDelPago)
+    {
+        ArgumentNullException.ThrowIfNull(libro);
+        var delPago = libro.Where(f => f.OperacionId == operacionDelPago).ToList();
+        if (delPago.Count == 0)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoReversoDeReverso,
+                "El pago no tiene filas en el libro: no hay nada que reversar.", "operationId", operacionDelPago));
+        if (delPago.Any(f => f.EsEspejo))
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoReversoDeReverso,
+                "Un reverso no se reversa. Para rehacer, registre una operación nueva.", "operationId", operacionDelPago));
+        var yaEspejadas = libro.Where(f => f.EspejoDe is not null).Select(f => f.EspejoDe!.Value).ToHashSet();
+        return new PropuestaDeEspejos(delPago.Where(f => !yaEspejadas.Contains(f.Id)).OrderBy(f => f.Id).ToList(), fechaValorDelPago);
+    }
+
+    /// <summary>
+    /// La clase con que se registra una diferencia de la conciliación de un reverso (T33, data-model §7.11): <c>PaymentReallocation</c> si es
+    /// de los hechos de las operaciones (un pago posterior redistribuido) o de capital; <c>SuspenseReclassification</c> si es la mitad de un
+    /// traslado entre un concepto y su suspenso del mismo día y cuota; <c>AccrualAdjustment</c> en lo demás.
+    /// </summary>
+    public static LoanTransactionKind ClaseDeLaDiferencia(Replay.DiferenciaDeLibro diferencia, IReadOnlyList<Replay.DiferenciaDeLibro> todas)
+    {
+        ArgumentNullException.ThrowIfNull(diferencia);
+        ArgumentNullException.ThrowIfNull(todas);
+        if (diferencia.DeHechos || diferencia.Concepto == LoanConcept.Principal) return LoanTransactionKind.PaymentReallocation;
+        LoanConcept? pareja = diferencia.Concepto switch
+        {
+            LoanConcept.CurrentInterest => LoanConcept.CurrentInterestInSuspense,
+            LoanConcept.CurrentInterestInSuspense => LoanConcept.CurrentInterest,
+            LoanConcept.DefaultInterest => LoanConcept.DefaultInterestInSuspense,
+            LoanConcept.DefaultInterestInSuspense => LoanConcept.DefaultInterest,
+            _ => null,
+        };
+        var traslado = pareja is { } p && todas.Any(o => !o.DeHechos && o.Dia == diferencia.Dia && o.Cuota == diferencia.Cuota && o.Concepto == p
+            && o.Diferencia == -diferencia.Diferencia);
+        return traslado ? LoanTransactionKind.SuspenseReclassification : LoanTransactionKind.AccrualAdjustment;
+    }
 }

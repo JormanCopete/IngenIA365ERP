@@ -68,6 +68,8 @@ public class LaCarteraNoTieneValoresLegalesFijos
         "Core/IngenIA365ERP.Domain/Lending/Accrual",
         "Core/IngenIA365ERP.Domain/Lending/Delinquency",
         "Core/IngenIA365ERP.Domain/Lending/Replay",
+        // US5 (T0533–T0535): la prelación, el aplicador de pagos y el tope del prepago (las veces del SMMLV llegan por parámetro).
+        "Core/IngenIA365ERP.Domain/Lending/Payments",
     ];
 
     private static readonly Regex SieteODiez = new(@"(?<![\w.])(7|10)(?:[mM])?(?![\w.])", RegexOptions.Compiled);

@@ -71,6 +71,11 @@ public class ElMotorDeCarteraEsDecimal
         Path.Combine("Lending", "VersionesDeReglas.cs"),
         Path.Combine("Lending", "ExplicacionDeCartera.cs"),
         Path.Combine("Lending", "HuellaDeCartera.cs"),
+        // US5 (T0533–T0536): la prelación, el aplicador de pagos y el tope del prepago.
+        Path.Combine("Payments", "Prelacion.cs"),
+        Path.Combine("Payments", "AplicadorDePagos.cs"),
+        Path.Combine("Payments", "DistribucionDePago.cs"),
+        Path.Combine("Payments", "TopeLegalDePrepago.cs"),
     ];
 
     [Fact]

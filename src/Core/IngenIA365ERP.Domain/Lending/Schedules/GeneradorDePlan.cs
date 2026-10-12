@@ -226,12 +226,32 @@ public static class GeneradorDePlan
     /// <item>Σ capital = lo desembolsado menos lo abonado y la última absorbe el residuo; si no cuadra,
     /// <see cref="CodigoCapitalDescuadrado"/>.</item>
     /// </list>
-    /// La elección de un abono (plazo o cuota, FR-075) la agrega US5 sobre esta misma regeneración.
+    /// US5 (T0536; FR-075, SC-017) agrega la elección del deudor ante un abono extraordinario (<see cref="EntradaDeRegeneracion.Eleccion"/>):
+    /// <list type="bullet">
+    /// <item><see cref="PrepaymentChoice.ReduceInstallment"/> (y la regeneración sin elección): la de arriba, mismas cuotas y valor nuevo.</item>
+    /// <item><see cref="PrepaymentChoice.ReduceTerm"/>: en cuota fija se conserva la cuota nivelada sellada y se amortiza con ella hasta que el
+    /// saldo se acaba; la que lo termina paga el saldo (absorbe el residuo) y las siguientes desaparecen. En los demás sistemas (y en un plan
+    /// migrado, que no tiene nivelada) se conserva el capital de cada cuota y el abono se quita desde la última. Siempre queda la primera
+    /// regenerada, que ya causa.</item>
+    /// </list>
     /// </summary>
-    public static PlanDePagos Regenerar(PlanDePagos anterior, EntradaDeRegeneracion r)
+    public static PlanDePagos Regenerar(PlanDePagos anterior, EntradaDeRegeneracion r) => Regenerar(anterior, r, null);
+
+    /// <summary>
+    /// La regeneración con el capital que los pagos ya movieron en cada cuota (US5): lo que la reconstrucción lleva fuera del plan en las
+    /// cuotas que vencen después de la fecha se consolida en el cambio de capital, para que el plan nuevo cuadre con el capital pendiente
+    /// (quien llama deja esos ajustes en cero). Sin ajustes es <see cref="Regenerar(PlanDePagos, EntradaDeRegeneracion)"/>.
+    /// </summary>
+    /// <param name="ajustesDeCapital">Por número de cuota, el capital pendiente menos el del plan (negativo si se pagó).</param>
+    public static PlanDePagos Regenerar(PlanDePagos anterior, EntradaDeRegeneracion r, IReadOnlyDictionary<int, decimal>? ajustesDeCapital)
     {
         ArgumentNullException.ThrowIfNull(anterior);
         ArgumentNullException.ThrowIfNull(r);
+        if (ajustesDeCapital is { Count: > 0 })
+        {
+            var consolidado = anterior.Cuotas.Where(c => c.Vencimiento > r.Fecha).Sum(c => ajustesDeCapital.GetValueOrDefault(c.Numero));
+            if (consolidado != 0m) r = r with { CambioDeCapital = r.CambioDeCapital + consolidado };
+        }
         var e = anterior.Entrada;
         var red = e.Redondeo;
         var eaNueva = r.NuevaTasaEfectivaAnual ?? e.TasaEfectivaAnual;
@@ -285,6 +305,9 @@ public static class GeneradorDePlan
         var tasas = cuotas.Select(c => EquivalenciaDeTasas.TasaDelPeriodo(rdNueva, c.Dias, e.Equivalencia)).ToArray();
         var montoTotal = cuotas.Take(k).Sum(c => c.Capital) + despues;
         var entrada = e with { Monto = montoTotal, TasaEfectivaAnual = eaNueva };
+
+        if (r.Eleccion == PrepaymentChoice.ReduceTerm && despues < x.SaldoInicial)
+            return ReducirPlazo(anterior, r, k, tramos, i1, despues, tasas, montoTotal, entrada, rdNueva, nominal, eaNueva, explicacion);
 
         var a = e.Sistema == AmortizationSystem.LevelPayment ? NiveladaDesde(despues, k, i1, cuotas, tasas) : 0m;
         var amortizan = 0;
@@ -367,6 +390,108 @@ public static class GeneradorDePlan
         return new PlanDePagos(anterior.RulesVersion, entrada, rdNueva, nominal,
             e.Sistema == AmortizationSystem.LevelPayment ? CuotaRedondeada(red, a) : null,
             anterior.InteresDeGracia, residuo, nuevas, explicacion)
+        {
+            PeriodosDeGracia = anterior.PeriodosDeGracia,
+            PrimeraCuotaRegenerada = x.Numero,
+        };
+    }
+
+    /// <summary>
+    /// «Reducir el plazo» (US5, T0536; FR-075): desde la cuota <paramref name="k"/> (que causa en sus <paramref name="tramos"/>), en cuota fija
+    /// con la nivelada sellada hasta acabar el saldo; si no, conservando el capital de cada cuota y quitando el abono desde la última.
+    /// </summary>
+    private static PlanDePagos ReducirPlazo(PlanDePagos anterior, EntradaDeRegeneracion r, int k, List<TramoDeInteres> tramos, decimal i1,
+        decimal despues, IReadOnlyList<decimal> tasas, decimal montoTotal, EntradaDePlan entrada, decimal rdNueva, decimal nominal, decimal eaNueva,
+        ExplicacionDeCartera explicacion)
+    {
+        var e = anterior.Entrada;
+        var red = e.Redondeo;
+        var cuotas = anterior.Cuotas;
+        var n = cuotas.Count;
+        var x = cuotas[k];
+        var nivelada = e.Sistema == AmortizationSystem.LevelPayment ? anterior.CuotaNivelada : null;
+
+        // Sin nivelada: el capital de cada cuota se conserva y el abono sale desde la última.
+        var capitales = cuotas.Select(c => c.Capital).ToArray();
+        var ultima = n - 1;
+        if (nivelada is null)
+        {
+            var quitar = x.SaldoInicial - despues;
+            for (var j = n - 1; j >= k && quitar > 0m; j--)
+            {
+                var t = Math.Min(capitales[j], quitar);
+                capitales[j] -= t;
+                quitar -= t;
+            }
+            while (ultima > k && capitales[ultima] == 0m) ultima--;
+        }
+
+        var nuevas = new List<CuotaDelPlan>(n);
+        nuevas.AddRange(cuotas.Take(k));
+        var saldo = despues;
+        var residuo = 0m;
+        for (var j = k; j <= ultima; j++)
+        {
+            var y = cuotas[j];
+            var saldoInicial = saldo;
+            var interes = red.Concepto(j == k ? i1 : saldo * tasas[j]);
+            var porcion = y.InteresDeGracia;
+            var interesTotal = interes + porcion;
+            IReadOnlyList<SeguroDeCuota> seguros = j == k
+                ? y.Seguros
+                : e.Seguros.Select(s => new SeguroDeCuota(s.Codigo, red.Concepto(SeguroExacto(entrada, s, saldoInicial, y.Dias, y.Numero == 1)), s.Computa)).ToList();
+            var seguro = seguros.Sum(s => s.Valor);
+
+            decimal capital;
+            var termina = false;
+            if (y.SoloInteres)
+            {
+                capital = 0m;
+            }
+            else if (nivelada is { } a)
+            {
+                var teorico = red.PorCuota
+                    ? red.Redondear(a + y.Extraordinaria + porcion + seguro) - interesTotal - seguro
+                    : CuotaRedondeada(red, a) + y.Extraordinaria - interes;
+                if (j == n - 1 || teorico >= saldo)
+                {
+                    capital = saldo;
+                    residuo = capital - teorico;
+                    termina = true;
+                }
+                else
+                {
+                    capital = teorico < 0m ? 0m : teorico;
+                }
+            }
+            else
+            {
+                capital = Math.Min(capitales[j], saldo);
+                if (j == ultima) capital = saldo;
+            }
+            saldo -= capital;
+            nuevas.Add(new CuotaDelPlan(y.Numero, y.Desde, y.Vencimiento, y.Dias, tasas[j], j == k ? despues : saldoInicial, capital,
+                interesTotal, porcion, seguros, saldo, y.SoloInteres)
+            {
+                Extraordinaria = y.Extraordinaria,
+                Tramos = j == k ? tramos : null,
+            });
+            if (termina) break;
+        }
+
+        var suma = nuevas.Sum(c => c.Capital);
+        if (suma != montoTotal)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoCapitalDescuadrado,
+                $"El capital del plan regenerado suma {ExplicacionDeCartera.Numero(suma)} y el saldo es {ExplicacionDeCartera.Numero(montoTotal)}.",
+                "difference", suma - montoTotal));
+
+        var quitadas = n - nuevas.Count;
+        explicacion.Linea($"Abono del {ExplicacionDeCartera.Fecha(r.Fecha)} con «reducir el plazo» desde la cuota {x.Numero.ToString(Inv)}: "
+            + $"cambio de capital {ExplicacionDeCartera.Numero(r.CambioDeCapital)}; "
+            + (nivelada is { } nv ? $"se conserva la cuota de {ExplicacionDeCartera.Numero(nv)}" : "se conserva el capital de cada cuota")
+            + $" y salen {quitadas.ToString(Inv)} cuotas del final; residuo en la última: {ExplicacionDeCartera.Numero(residuo)}.");
+        return new PlanDePagos(anterior.RulesVersion, entrada with { Periodos = Math.Max(1, e.Periodos - quitadas) }, rdNueva, nominal,
+            nivelada ?? anterior.CuotaNivelada, anterior.InteresDeGracia, residuo, nuevas, explicacion)
         {
             PeriodosDeGracia = anterior.PeriodosDeGracia,
             PrimeraCuotaRegenerada = x.Numero,

@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Schedules;
 
@@ -52,6 +53,9 @@ public sealed record CondicionesDeCredito(
 
     /// <summary>Si la modalidad exige usura certificada para causar (sin ella la causación real se bloquea, D11).</summary>
     public bool UsuraRequerida { get; init; } = true;
+
+    /// <summary>La prelación sellada (US5, T0533; data-model §1.8): la misma para simular y aplicar un pago.</summary>
+    public Prelacion Prelacion { get; init; } = Prelacion.PorDefecto;
 }
 
 /// <summary>Un valor de usura de la modalidad del crédito, tal como se replicó (bitemporal, T38).</summary>
@@ -89,7 +93,10 @@ public sealed record EntradaDeOperacion(string Id, LoanOperationKind Clase, Date
     /// <summary>El <see cref="Id"/> de la operación que esta reversa.</summary>
     public string? Reversa { get; init; }
 
-    /// <summary>Lo que traiga una clase que suman US5 y US6 (su intérprete sabe leerlo).</summary>
+    /// <summary>
+    /// Lo que traiga una clase que suman US5 y US6 (su intérprete sabe leerlo): <see cref="ContenidoDePago"/> en <c>Payment</c> y
+    /// <c>ProvisionalCollection</c>, <see cref="ContenidoDeResolucion"/> en <c>CreditBalanceResolution</c>.
+    /// </summary>
     public object? Contenido { get; init; }
 }
 
