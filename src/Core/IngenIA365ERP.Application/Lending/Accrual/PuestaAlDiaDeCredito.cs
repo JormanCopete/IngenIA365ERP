@@ -89,6 +89,12 @@ public sealed class PuestaAlDiaDeCredito(
     /// <summary>Si hay causación calculada esperando su operación.</summary>
     public bool HayPendiente => _pendientes.Count > 0;
 
+    /// <summary>
+    /// Si el crédito ya tiene causación calculada esperando la operación que la pidió (US5: la recogida dentro de un desembolso no la vuelve a
+    /// calcular ni se la apropia; la escribe el desembolso con su tramo).
+    /// </summary>
+    public bool EstaPendiente(int loanId) => _pendientes.Any(p => p.Control.LoanId == loanId);
+
     /// <summary>Calcula la puesta al día de <paramref name="loanIds"/> hasta <paramref name="hasta"/> (las filas de control ya bloqueadas). No escribe.</summary>
     public async Task PrepararAsync(IReadOnlyCollection<int> loanIds, DateOnly hasta, CancellationToken ct)
     {
@@ -123,15 +129,19 @@ public sealed class PuestaAlDiaDeCredito(
         return dias;
     }
 
-    /// <summary>Escribe lo preparado con la operación que lo pidió (ya guardada: su <c>Id</c> va en la parte). Devuelve los mensajes.</summary>
-    public async Task<Result<IReadOnlyList<IntegrationMessage>>> RegistrarAsync(LoanOperation disparadora, CancellationToken ct)
+    /// <summary>
+    /// Escribe lo preparado con la operación que lo pidió (ya guardada: su <c>Id</c> va en la parte). Devuelve los mensajes. Con
+    /// <paramref name="soloCreditos"/>, sólo lo de esos créditos (US5: el contrato escribe lo que él preparó; lo de un desembolso en curso sigue
+    /// esperando a su tramo).
+    /// </summary>
+    public async Task<Result<IReadOnlyList<IntegrationMessage>>> RegistrarAsync(LoanOperation disparadora, CancellationToken ct,
+        IReadOnlyCollection<int>? soloCreditos = null)
     {
         ArgumentNullException.ThrowIfNull(disparadora);
-        if (_pendientes.Count == 0) return Result.Success<IReadOnlyList<IntegrationMessage>>([]);
+        var pendientes = _pendientes.Where(p => soloCreditos is null || soloCreditos.Contains(p.Control.LoanId)).ToList();
+        if (pendientes.Count == 0) return Result.Success<IReadOnlyList<IntegrationMessage>>([]);
         if (disparadora.Id == 0) throw new InvalidOperationException("La puesta al día se registra con la operación que la pidió ya guardada.");
-
-        var pendientes = _pendientes.ToList();
-        _pendientes.Clear();
+        _pendientes.RemoveAll(p => pendientes.Contains(p));
         var datos = await partes.DatosAsync(pendientes.Select(p => p.Cargado), ct);
         var origen = new OrigenDePartes(AccountingFactPartSource.LoanCatchUp, null, disparadora, new Dictionary<DateOnly, int>(), null);
         var lineas = pendientes.SelectMany(p => p.Dias.Select(d => new LineaDeCausacion(datos[p.Control.LoanId], d.Dia, d.Filas))).ToList();
@@ -160,8 +170,14 @@ public sealed class PuestaAlDiaDeCredito(
                 registro.PosicionVersionada(p.Control, d.Estado, p.Cargado.Credito, p.Cargado.Vigentes, u.Version, u.Huella, ahora);
             }
 
-        // Suspensión o reanudación: un hecho por crédito y clase (la última de la puesta al día).
+        // Suspensión o reanudación: un hecho por crédito y clase (la última de la puesta al día). Y los anticipos aplicados al vencer en los días
+        // puestos al día (US5, paso (5)): un AnticipoAplicado por crédito y día, y sus filas sin operación propia (las lleva esta).
         var hechos = new List<HechoPorCredito>();
+        var fuentes = await AnticiposAlVencer.FuentesAsync(db, pendientes.Select(p => p.Control.LoanId).ToList(), ct);
+        foreach (var p in pendientes)
+            foreach (var d in p.Dias)
+                if (AnticiposAlVencer.Hecho(datos[p.Control.LoanId], d, ahora, fuentes[p.Control.LoanId]) is { } anticipo)
+                    hechos.Add(anticipo);
         foreach (var p in pendientes)
         {
             var dd = datos[p.Control.LoanId];
@@ -175,6 +191,13 @@ public sealed class PuestaAlDiaDeCredito(
         }
         var porCredito = await partes.PorCreditoAsync(origen, hechos, ct);
         if (porCredito.IsFailure) return Result.Failure<IReadOnlyList<IntegrationMessage>>(porCredito.Error);
+        foreach (var p in pendientes)
+            foreach (var d in p.Dias)
+            {
+                var filas = AnticiposAlVencer.FilasDelLibro(p.Control.LoanId, d, null, disparadora, ahora,
+                    AnticiposAlVencer.Mensaje(porCredito.Value, p.Cargado.Credito.PublicId, d.Dia));
+                if (filas.Count > 0) registro.RegistrarTransacciones(filas);
+            }
         return Result.Success<IReadOnlyList<IntegrationMessage>>([.. masivas.Value.Mensajes, .. porCredito.Value.Mensajes]);
     }
 
@@ -183,6 +206,6 @@ public sealed class PuestaAlDiaDeCredito(
         CancellationToken ct)
     {
         await PrepararAsync(loanIds, hasta, ct);
-        return await RegistrarAsync(disparadora, ct);
+        return await RegistrarAsync(disparadora, ct, loanIds);
     }
 }

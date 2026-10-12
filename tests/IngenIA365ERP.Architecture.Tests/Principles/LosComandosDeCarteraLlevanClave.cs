@@ -145,6 +145,13 @@ public class LosComandosDeCarteraLlevanClave
         // US4 (bloque 8C, T0506): ordenar y reintentar una corrida del ciclo diario.
         typeof(IngenIA365ERP.Application.Lending.Processes.RequestLendingProcessRunCommand),
         typeof(IngenIA365ERP.Application.Lending.Processes.RetryLendingProcessRunCommand),
+        // US5 (bloque 9B): el reverso por pantalla, la preferencia del crédito y el recaudador de prueba. Los métodos del contrato no son
+        // IOperacionIdempotente (T21): su clave es la de negocio del recaudador.
+        typeof(IngenIA365ERP.Application.Lending.Payments.Commands.ReverseLoanPaymentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payments.Commands.ChangePrepaymentPreferenceCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ApplyTestCollectorPaymentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ReverseTestCollectorPaymentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ResolveTestCollectorCreditBalanceCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

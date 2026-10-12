@@ -74,7 +74,8 @@ public static class PasosDelCiclo
 /// <item>la causación corriente, de mora y de seguros con el motor, día por día desde la marca + 1 hasta d (<c>MotorDeCartera.Causar</c>), en
 /// bloque por <see cref="RegistroDeCartera"/> con las partes y sus mensajes masivos (<see cref="PartesDeHechosDeCartera"/>);</item>
 /// <item>la suspensión y la reanudación (<c>CausacionSuspendida</c>/<c>CausacionReanudada</c> por crédito);</item>
-/// <item>el gancho de anticipos al vencer (vacío hasta US5);</item>
+/// <item>los anticipos al vencer (US5): <see cref="AnticiposAlVencer"/>, filas <c>AdvanceApplied</c> de la corrida y un <c>AnticipoAplicado</c> por
+/// crédito y día;</item>
 /// <item>los bloqueos automáticos por mora (<c>Bloqueos.DiasDeMoraParaBloquear</c>) y por retiro del asociado según el maestro (FR-060), con su
 /// levantamiento automático, y la dimensión contable cambiada (el deudor que deja de ser empleado o pasa a serlo, C8);</item>
 /// <item>el gancho de cobranza (vacío hasta K4);</item>
@@ -329,7 +330,29 @@ public sealed class CicloDiarioDeCartera(
                 hechos.Add(new HechoPorCredito(tipo, dd, x.Dia, contenido));
             }
 
-        // (5) Anticipos al vencer: US5. (6) Bloqueos y dimensión contable cambiada. (7) Cobranza: K4.
+        // (5) Anticipos al vencer (US5, bloque 9B): un AnticipoAplicado por crédito y día que venció una cuota cubierta, y sus filas AdvanceApplied
+        // con la corrida (mensajes.md §10.10).
+        corrida.CurrentStep = PasosDelCiclo.Anticipos;
+        var fuentes = await AnticiposAlVencer.FuentesAsync(db, causados.Select(c => c.Control.LoanId).ToList(), ct);
+        var anticipos = new List<HechoPorCredito>();
+        foreach (var c in causados)
+            foreach (var x in c.Dias)
+                if (AnticiposAlVencer.Hecho(datos[c.Control.LoanId], x, ahora, fuentes[c.Control.LoanId]) is { } anticipo)
+                    anticipos.Add(anticipo);
+        if (anticipos.Count > 0)
+        {
+            var emitidos = await partes.PorCreditoAsync(origen, anticipos, ct);
+            if (emitidos.IsFailure) throw new InvalidOperationException($"{emitidos.Error.Code}: {emitidos.Error.Message}");
+            foreach (var c in causados)
+                foreach (var x in c.Dias)
+                {
+                    var filas = AnticiposAlVencer.FilasDelLibro(c.Control.LoanId, x, corrida.Id, null, ahora,
+                        AnticiposAlVencer.Mensaje(emitidos.Value, c.Cargado.Credito.PublicId, x.Dia));
+                    if (filas.Count > 0) registro.RegistrarTransacciones(filas);
+                }
+        }
+
+        // (6) Bloqueos y dimensión contable cambiada. (7) Cobranza: K4.
         corrida.CurrentStep = PasosDelCiclo.Bloqueos;
         await BloqueosAsync(causados.Select(c => (c.Cargado, c.Dias[^1].Estado)).ToList(), d, ahora, ct);
         hechos.AddRange(await DimensionesCambiadasAsync(causados.Select(c => (datos[c.Control.LoanId], c.Dias[^1].Estado)).ToList(), d, ahora, ct));

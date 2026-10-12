@@ -66,6 +66,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanTransactionsQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs",
+        // US5 (bloque 9B, T0552–T0554): la simulación de pantalla, la vista previa del reverso y la preferencia del crédito, por CreditoEnAlcance.
+        "Core/IngenIA365ERP.Application/Lending/Payments/Queries/SimulateLoanPaymentQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payments/Queries/PreviewLoanPaymentReversalQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payments/Queries/GetPrepaymentPreferenceQuery.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -116,6 +120,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListLendingProcessRunsQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
         ["GetLendingProcessRunQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
         ["VerifyLendingLedgerIntegrityQuery"] = "la verificación del libro es de toda la cartera (Integrity.Verify, el auditor): número del crédito y cifras",
+        // US5 (bloque 9B, T0556): el recaudador de prueba llama al contrato de obligaciones, que es un puerto sin el alcance de Cartera (FR-004).
+        ["ListTestCollectorObligationsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
+        ["SimulateTestCollectorPaymentQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
+        ["ListTestCollectorReversalsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): ve lo que recibe el recaudador, no una oficina",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

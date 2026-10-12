@@ -7,6 +7,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Schedules;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +44,10 @@ public sealed record CreditoCargado(
 /// gracia y seguros sellados). Un migrado no lleva plan: lo da su <c>OpeningBalance</c> con las cuotas del plan migrado.</item>
 /// <item>Operaciones: todas menos las que no mueven saldos (<c>PreferenceChange</c>); una clase sin intérprete hace fallar el crédito con
 /// <c>Lending.Replay.OperationKindNotSupported</c>, a propósito.</item>
+/// <item>US5 (bloque 9B): cada pago y cada cobro provisional lleva su <b>decisión</b> (<see cref="Payments.DecisionDePago"/>: modalidad, valor
+/// tomado, elección y cuota) y cada resolución de saldo la suya (<see cref="Payments.DecisionDeResolucion"/>); cada reverso, la operación que
+/// reversa. La prelación es la sellada en las condiciones vigentes (<c>AllocationOrder</c>, <c>ConceptPriority</c>,
+/// <c>SuspenseWithItsConcept</c>, <c>AllowsSpecificInstallmentOutOfOrder</c>) y el castigo, la fecha en que el crédito se castigó.</item>
 /// <item>Seguros (decisión de US4): el libro y el motor causan <b>un</b> concepto <c>Insurance</c> por cuota —la suma de los seguros del
 /// plan—; el desglose por seguro vive en las condiciones selladas y en el plan, y el hecho <c>SeguroCausado</c> lleva a la aseguradora como
 /// contraparte sólo cuando el crédito tiene un único seguro. El momento de causación (<c>InsuranceAccrualTiming</c>) es el del primer
@@ -116,6 +121,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                     Condiciones(pactadas, vigentes, leidas.Value) with
                     {
                         CausacionDeSeguros = momentosDeSeguro.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
+                        Prelacion = PrelacionSellada(vigentes),
+                        CastigoDesde = credito.WrittenOffOn,
                     },
                     credito.Origin == LoanOrigin.Migration ? null : Plan(pactadas, ops),
                     ops.Where(o => !SinEfectoEnSaldos.Contains(o.Kind))
@@ -173,6 +180,33 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             {
                 OperacionId = f.OperationId is { } o ? Id(o) : null,
             }).ToList());
+    }
+
+    /// <summary>
+    /// La entrada con una operación de pago o de resolución todavía sin guardar y su contenido (US5, bloque 9B): la que se está aplicando en la
+    /// misma transacción, para tomar del libro teórico sus filas y las diferencias que deja en los días ya causados.
+    /// </summary>
+    public static EntradaDeReconstruccion ConOperacion(EntradaDeReconstruccion entrada, LoanOperation operacion, object contenido)
+    {
+        ArgumentNullException.ThrowIfNull(contenido);
+        var con = ConOperacion(entrada, operacion);
+        return con with { Operaciones = [.. con.Operaciones.Take(con.Operaciones.Count - 1), con.Operaciones[^1] with { Contenido = contenido }] };
+    }
+
+    /// <summary>El identificador con que entra a la reconstrucción una operación (guardada o todavía sin <c>Id</c>).</summary>
+    public static string IdEnLaEntrada(LoanOperation operacion) => IdNuevo(operacion);
+
+    /// <summary>
+    /// La prelación sellada en las condiciones (data-model §1.8; US5, T0533): el orden, la lista de conceptos, el suspenso con su concepto y la
+    /// cuota específica fuera de orden. Unas condiciones sin orden sellado (anteriores a la prelación) usan la de defecto.
+    /// </summary>
+    public static Domain.Lending.Payments.Prelacion PrelacionSellada(LoanTermsVersion condiciones)
+    {
+        ArgumentNullException.ThrowIfNull(condiciones);
+        return Enum.IsDefined(condiciones.AllocationOrder)
+            ? Domain.Lending.Payments.Prelacion.DesdeSellada(condiciones.AllocationOrder, condiciones.ConceptPriority, condiciones.SuspenseWithItsConcept,
+                condiciones.AllowsSpecificInstallmentOutOfOrder)
+            : Domain.Lending.Payments.Prelacion.PorDefecto;
     }
 
     /// <summary>El identificador de una operación guardada en la entrada del motor.</summary>
@@ -233,7 +267,17 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                 ? condiciones.FirstOrDefault(t => t.OperationId == o.Id)?.AnnualRate
                 : null,
             Reversa = o.ReversesOperationId is { } r ? Id(r) : null,
+            Contenido = Contenido(o),
         };
+
+    /// <summary>La decisión de un pago, de un cobro provisional o de una resolución de saldo (US5); nula en las demás clases.</summary>
+    private static object? Contenido(LoanOperation o) => o.Kind switch
+    {
+        LoanOperationKind.Payment or LoanOperationKind.ProvisionalCollection => Payments.DecisionDePago.ContenidoDe(o)
+            ?? (o.Kind == LoanOperationKind.ProvisionalCollection ? new Domain.Lending.Payments.ContenidoDePago(PaymentModality.FreeAmount, o.Amount) : null),
+        LoanOperationKind.CreditBalanceResolution => Payments.DecisionDeResolucion.Leer(o.Payload)?.Contenido(),
+        _ => null,
+    };
 
     private sealed record ExtraordinariaSellada(int Installment, decimal Amount);
 

@@ -53,7 +53,20 @@ public class PerfilesSugeridosDeCarteraTests
 
         codigos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal));
         codigos.Should().NotContain("Lending.Sessions.Vote");
-        codigos.Should().HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 5, "todo Lending.* menos los cuatro Decisions y el voto");
+        codigos.Should().HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 6, "todo Lending.* menos los cuatro Decisions, el voto y los dobles de prueba");
+    }
+
+    /// <summary>
+    /// Feature 013, US5, T0555 (api.md §2.5; C85): asesor y jefe cambian la preferencia del deudor, el gerente autoriza la fecha valor antes de un cierre
+    /// y ninguna plantilla trae <c>Lending.TestDoubles.Operate</c> (se concede a mano, fuera de producción).
+    /// </summary>
+    [Fact]
+    public void La_fecha_valor_antes_de_un_cierre_es_del_gerente_y_los_dobles_de_prueba_de_ninguna_plantilla()
+    {
+        Catalogo.Should().Contain(["Lending.PrepaymentPreferences.Manage", "Lending.Payments.BackdateBeforeClose", "Lending.TestDoubles.Operate"]);
+        Codigos("cartera.gerente").Should().Contain("Lending.Payments.BackdateBeforeClose");
+        foreach (var plantilla in PerfilesSugeridos.DelModulo("Lending"))
+            Codigos(plantilla.Key).Should().NotContain("Lending.TestDoubles.Operate", $"«{plantilla.Key}» no trae los dobles de prueba");
     }
 
     [Fact]

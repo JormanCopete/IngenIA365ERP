@@ -164,6 +164,31 @@ public class RecaudoPorNominaTests
         (await e.D.Db.PayrollRuns.SingleAsync(x => x.PublicId == e.RunPublicId)).Status.Should().Be(PayrollRunStatus.Approved);
     }
 
+    /// <summary>
+    /// Feature 013, US5, T0524 (C55): descartar el borrador anula las novedades <c>LoanDeduction</c> que materializó (como las recurrentes) y el cálculo
+    /// siguiente las vuelve a generar desde <c>CuotasDeNominaAsync</c>, una por empleado, obligación y período.
+    /// </summary>
+    [Fact]
+    public async Task Descartar_el_borrador_anula_las_cuotas_de_Cartera_y_el_calculo_siguiente_las_vuelve_a_generar()
+    {
+        var e = await CalculadoAsync();
+        (await e.D.Db.PayrollNovelties.CountAsync(n => n.Origin == NoveltyOrigin.LoanDeduction && n.Status == NoveltyStatus.Active)).Should().Be(2);
+
+        var descartado = await new IngenIA365ERP.Application.Payroll.Runs.DiscardPayrollRun.DiscardPayrollRunCommandHandler(e.D.Db, e.D.Lock, e.D.Clock, e.D.User,
+            e.D.AuditEmitter).Handle(new IngenIA365ERP.Application.Payroll.Runs.DiscardPayrollRun.DiscardPayrollRunCommand(e.RunPublicId, "Fechas equivocadas"),
+            CancellationToken.None);
+        descartado.IsSuccess.Should().BeTrue(descartado.Error.Message);
+        var anuladas = await e.D.Db.PayrollNovelties.AsNoTracking().Where(n => n.Origin == NoveltyOrigin.LoanDeduction).ToListAsync();
+        anuladas.Should().HaveCount(2).And.OnlyContain(n => n.Status == NoveltyStatus.Cancelled && n.StatusReason == CuotasDeCarteraEnNomina.RecurringNoveltiesMaterializerReason);
+
+        var otra = await new CalculatePayrollRunCommandHandler(e.D.Db, e.D.Loader, e.D.Recurrentes, e.D.CuotasDeCartera, e.D.Lock, e.D.Clock, e.D.User,
+            NullLogger<CalculatePayrollRunCommandHandler>.Instance).Handle(new CalculatePayrollRunCommand(e.D.Marzo.PublicId), CancellationToken.None);
+
+        otra.IsSuccess.Should().BeTrue(otra.Error.Message);
+        var vigentes = await e.D.Db.PayrollNovelties.AsNoTracking().Where(n => n.Origin == NoveltyOrigin.LoanDeduction && n.Status == NoveltyStatus.Active).ToListAsync();
+        vigentes.Select(n => n.ObligationPublicId).Should().BeEquivalentTo(new Guid?[] { e.Cabe, e.NoCabe }, "una por empleado, obligación y período (C55)");
+    }
+
     [Fact]
     public async Task La_consulta_de_descuentos_de_Cartera_de_la_corrida_los_muestra_por_empleado_y_obligacion()
     {

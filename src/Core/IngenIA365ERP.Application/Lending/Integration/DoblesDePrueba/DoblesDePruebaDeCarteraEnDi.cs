@@ -8,7 +8,7 @@ namespace IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 /// <c>API/Integration/DoblesDePruebaDeCartera.Registrar</c>, que lee <c>Lending:TestDoubles:Enabled</c> y le pasa
 /// <c>IHostEnvironment.IsProduction()</c> (el único criterio de producción, el del despliegue y no el de la cooperativa):
 /// <list type="bullet">
-/// <item>pedidos fuera de producción: se registran (<see cref="TesoreriaDePrueba"/>; US5 suma el recaudador);</item>
+/// <item>pedidos fuera de producción: se registran (<see cref="TesoreriaDePrueba"/> y, desde US5, <see cref="RecaudadorDePrueba"/>);</item>
 /// <item>no pedidos: no se registra nada;</item>
 /// <item>pedidos en producción: <see cref="InvalidOperationException"/> con un mensaje en español, y la API no arranca.</item>
 /// </list>
@@ -35,6 +35,8 @@ public static class DoblesDePruebaDeCarteraEnDi
         }
 
         services.AddScoped<IDestinoDeMensajes, TesoreriaDePrueba>();
+        // US5 (T0557): el recaudador de prueba, consumidor del destino Receipts y recaudador TST del contrato.
+        services.AddScoped<IDestinoDeMensajes, RecaudadorDePrueba>();
         return true;
     }
 }

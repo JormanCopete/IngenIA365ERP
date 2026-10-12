@@ -459,11 +459,27 @@ public static class DependencyInjection
         // las consultas a Cartera responden CarteraNoHabilitada (la entrega IC, T661, registra la real). El crédito dentro del pago, su
         // aprobación (SourceType DocumentPayment, Subject ProvisionalCredit) y la marca de lo que se está aprobando en la petición.
         services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Common.Integration.Lending.ConsultasDeCarteraNoHabilitada>();
-        // Feature 013 (T0152, T85): los puertos que Cartera ofrece, en su modo provisional («sin activar», «no habilitada»). Las
-        // implementaciones reales (Application/Lending/Integration) los reemplazan cuando nace CarteraNucleo (US5, US6).
-        services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Common.Integration.Lending.ConsultaDeObligacionesSinActivar>();
-        services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Common.Integration.Lending.ContratoDeObligacionesSinActivar>();
+        // Feature 013 (T0152, T85): los puertos que Cartera ofrece. US5 (bloque 9B, T0550): el contrato de obligaciones y la consulta de
+        // obligaciones son ya los reales (Application/Lending/Integration), Scoped sobre el IApplicationDbContext del ámbito de quien llama; antes de
+        // activar responden igual que los provisionales (interfaces §3.17). Las reservas siguen «no habilitadas» hasta US6.
+        services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Lending.Integration.ObligacionesDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Lending.Integration.ContratoDeObligacionesDeCartera>();
         services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Common.Integration.Lending.ReservasDeCarteraNoHabilitada>();
+        // US5 (bloque 9B, T0538–T0548): el núcleo de los pagos, sus reglas y su auditoría. Los validadores del contrato (Contrato/
+        // ValidadoresDelContrato.cs) los registra AddValidatorsFromAssembly. Los cierres de Cartera (US9) y la vigencia de documentos (US13) nacen
+        // vacíos y sus historias los reemplazan.
+        services.AddScoped<Lending.Integration.ITransaccionDelRecaudador, Lending.Integration.TransaccionDelRecaudador>();
+        services.AddScoped<Lending.Integration.AuditoriaDeEscriturasDeCartera>();
+        services.AddScoped<Lending.Integration.Contrato.NoDescontadosDelLote>();
+        services.TryAddScoped<Lending.Payments.ICierresDeCartera, Lending.Payments.SinCierresDeCartera>();
+        services.TryAddScoped<Lending.Payments.IVigenciaDeDocumentosDeCartera, Lending.Payments.SinDocumentosQueAnular>();
+        services.AddScoped<Lending.Payments.IAvisoDeAbonoConPreferencia, Lending.Payments.AvisoDeAbonoPorMensajeria>();
+        services.AddScoped<Lending.Payments.ReglasDeFechaValor>();
+        services.AddScoped<Lending.Payments.FirmezaDelPago>();
+        services.AddScoped<Lending.Payments.PreferenciaDePrepagoVigente>();
+        services.AddScoped<Lending.Payments.AplicacionDePagos>();
+        services.AddScoped<Lending.Payments.ReversionDePago>();
+        services.AddScoped<Lending.Payments.ResolucionDeSaldoAFavor>();
         // Feature 013 (T0227-T0229, T0233; C106, C107): el puerto de Contabilidad para Cartera en su forma provisional (US7 registra el
         // adaptador real ContabilidadParaCartera con la misma firma), las piezas tempranas de la integración contable de Cartera, su
         // único emisor y los requisitos de la activación. Los dobles de prueba (TesoreriaDePrueba) los registra la API, nunca aquí.

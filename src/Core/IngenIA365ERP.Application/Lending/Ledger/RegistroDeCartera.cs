@@ -125,9 +125,10 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
     /// <summary>
     /// El espejo de una fila del libro en la operación de reverso (FR-002): mismo crédito, clase, concepto, cuota y fecha valor,
     /// importe con signo contrario, <c>ReversesTransactionId</c> = la original y la fecha contable del período abierto. Un espejo no
-    /// se espeja (<c>Lending.Reversal.OfReversal</c>). No lo agrega: va en <see cref="RegistrarTransacciones"/> con las demás.
+    /// se espeja (<c>Lending.Reversal.OfReversal</c>). No lo agrega: va en <see cref="RegistrarTransacciones"/> con las demás. US5: el espejo de un
+    /// pago lleva el mensaje de su <c>PagoReversado</c> (<paramref name="mensaje"/>).
     /// </summary>
-    public static Result<LoanTransaction> Espejar(LoanTransaction original, LoanOperation reverso, DateOnly fechaContable)
+    public static Result<LoanTransaction> Espejar(LoanTransaction original, LoanOperation reverso, DateOnly fechaContable, Guid? mensaje = null)
     {
         ArgumentNullException.ThrowIfNull(original);
         ArgumentNullException.ThrowIfNull(reverso);
@@ -148,7 +149,7 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             RegisteredAt = reverso.RegisteredAt,
             ReversesTransactionId = original.Id,
             InControl = original.InControl,
-            MessagePublicId = null,
+            MessagePublicId = mensaje,
         });
     }
 
@@ -302,6 +303,125 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         };
         var traslado = pareja is { } p && todas.Any(o => o.Dia == d.Dia && o.Cuota == d.Cuota && o.Concepto == p && o.Diferencia == -d.Diferencia);
         return traslado ? LoanTransactionKind.SuspenseReclassification : LoanTransactionKind.AccrualAdjustment;
+    }
+
+    // ---------------------------------------------------------------------------------------- US5 (bloque 9B, C45) --
+
+    /// <summary>Las clases de fila de los hechos de un pago, una resolución o un anticipo al vencer (data-model §5.1, §7.8–§7.10).</summary>
+    public static IReadOnlySet<LoanTransactionKind> ClasesDeHecho { get; } = new HashSet<LoanTransactionKind>
+    {
+        LoanTransactionKind.PaymentAllocation, LoanTransactionKind.Recovery, LoanTransactionKind.AdvanceReceived, LoanTransactionKind.AdvanceApplied,
+        LoanTransactionKind.CreditBalanceRecognized, LoanTransactionKind.CreditBalanceSettled, LoanTransactionKind.PaymentReallocation,
+    };
+
+    /// <summary>
+    /// Una fila de un hecho a partir de la del libro teórico (US5): la de un pago, una resolución o un anticipo aplicado al vencer, que escribe la
+    /// operación (<paramref name="operacion"/>) o la corrida (<paramref name="processRunId"/>), con su fecha contable y el mensaje del hecho que la
+    /// lleva. Sólo las clases de <see cref="ClasesDeHecho"/>; la causación va por <see cref="FilaDeCausacion"/>.
+    /// </summary>
+    public static LoanTransaction FilaDeHecho(int loanId, MovimientoDeLibro fila, LoanOperation? operacion, int? processRunId, DateOnly fechaContable,
+        DateTime registradoEn, Guid? mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(fila);
+        if (!ClasesDeHecho.Contains(fila.Clase))
+            throw new InvalidOperationException($"La fila {fila.Clase} no es de un hecho de pago, resolución o anticipo.");
+        return new LoanTransaction
+        {
+            LoanId = loanId,
+            ProcessRunId = operacion is null ? processRunId : null,
+            Operation = operacion,
+            OperationId = operacion is { Id: not 0 } op ? op.Id : null,
+            Kind = fila.Clase,
+            Concept = fila.Concepto,
+            InstallmentNumber = fila.Cuota,
+            Amount = fila.Monto,
+            ValueDate = fila.Dia,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+        };
+    }
+
+    /// <summary>
+    /// Las filas de las diferencias de una conciliación <b>por familia</b> (US5, T33; <see cref="LibroTeorico.DiferenciasPorFamilia"/>): cada
+    /// diferencia por (día valor, concepto, cuota) es una fila nueva enlazada a <paramref name="operacion"/>, con la clase de
+    /// <see cref="Domain.Lending.Reversos.EspejosDelReverso.ClaseDeLaDiferencia"/> —<c>PaymentReallocation</c> la de los hechos (un pago posterior
+    /// redistribuido) o el capital, <c>SuspenseReclassification</c> la mitad de un traslado al suspenso, <c>AccrualAdjustment</c> lo demás— y el
+    /// mensaje que la lleva. No las agrega: van en <see cref="RegistrarTransacciones"/> con las demás de la operación.
+    /// </summary>
+    public static IReadOnlyList<LoanTransaction> DiferenciasPorFamilia(int loanId, IReadOnlyList<DiferenciaDeLibro> diferencias, LoanOperation operacion,
+        DateOnly fechaContable, DateTime registradoEn, Func<DiferenciaDeLibro, LoanTransactionKind, Guid?> mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(diferencias);
+        ArgumentNullException.ThrowIfNull(operacion);
+        ArgumentNullException.ThrowIfNull(mensaje);
+        return diferencias.Where(d => d.Diferencia != 0m).Select(d =>
+        {
+            var clase = Domain.Lending.Reversos.EspejosDelReverso.ClaseDeLaDiferencia(d, diferencias);
+            return new LoanTransaction
+            {
+                LoanId = loanId,
+                Operation = operacion,
+                OperationId = operacion.Id == 0 ? null : operacion.Id,
+                Kind = clase,
+                Concept = d.Concepto,
+                InstallmentNumber = d.Cuota,
+                Amount = d.Diferencia,
+                ValueDate = d.Dia,
+                AccountingDate = fechaContable,
+                RegisteredAt = Utc(registradoEn),
+                MessagePublicId = mensaje(d, clase),
+            };
+        }).ToList();
+    }
+
+    /// <summary>
+    /// La versión del plan que regenera un pago (un abono extraordinario con elección, FR-075) o su reverso (la redistribución que lo cambia): el
+    /// plan del motor con sus cuotas, la versión de condiciones vigente, la operación y la fecha exigible de cada cuota por el art. 829. La agrega.
+    /// </summary>
+    public RepaymentScheduleVersion RegistrarPlanRegenerado(int loanId, int numero, LoanTermsVersion condiciones, LoanOperation operacion,
+        Domain.Lending.Schedules.PlanDePagos plan, IReadOnlyList<DateOnly> festivos)
+    {
+        ArgumentNullException.ThrowIfNull(condiciones);
+        ArgumentNullException.ThrowIfNull(operacion);
+        ArgumentNullException.ThrowIfNull(plan);
+        var version = new RepaymentScheduleVersion
+        {
+            LoanId = loanId,
+            VersionNumber = numero,
+            TermsVersionId = condiciones.Id,
+            TermsVersion = condiciones.Id == 0 ? condiciones : null,
+            Operation = operacion,
+            OperationId = operacion.Id,
+            EffectiveValueDate = operacion.ValueDate,
+            RegisteredAt = operacion.RegisteredAt,
+            PrincipalBase = plan.TotalCapital,
+            FirstRegeneratedInstallment = plan.PrimeraCuotaRegenerada,
+            InstallmentCount = plan.Cuotas.Count,
+            RulesVersion = plan.RulesVersion,
+            InputsSha256 = operacion.InputsSha256,
+        };
+        var articulo829 = Domain.Lending.Schedules.FechasDeVencimiento.CalendarioDelArticulo829(festivos);
+        var cuotas = plan.Cuotas.Select(c => new RepaymentInstallment
+        {
+            ScheduleVersion = version,
+            InstallmentNumber = c.Numero,
+            PeriodStart = c.Desde,
+            DueDate = c.Vencimiento,
+            ExigibleDate = Domain.Lending.Schedules.FechasDeVencimiento.FechaExigible(c.Vencimiento, articulo829),
+            OpeningPrincipal = c.SaldoInicial,
+            Principal = c.Capital,
+            Interest = c.Interes,
+            GraceInterest = c.InteresDeGracia,
+            Insurance = c.Seguro,
+            OtherCharges = 0m,
+            Total = c.Total,
+            ClosingPrincipal = c.SaldoFinal,
+            IsExtraordinary = c.Extraordinaria != 0m,
+            IsGraceInstallment = c.SoloInteres,
+        }).ToList();
+        RegistrarPlan(version, cuotas);
+        return version;
     }
 
     /// <summary>

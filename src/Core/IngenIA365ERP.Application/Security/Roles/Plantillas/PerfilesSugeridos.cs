@@ -132,7 +132,8 @@ public static class PerfilesSugeridos
             "Parametriza y opera toda la Cartera, pero no decide créditos ni vota en sesiones: administrar no es aprobar crédito.",
             ["Lending.*"],
             "Todas las oficinas y líneas (trae Lending.Scope.AllOffices y AllLines); sin límite de monto.",
-            ["Lending.Decisions.*", "Lending.Sessions.Vote"]),
+            // US5 (T0555, api.md §2.5): Lending.TestDoubles.Operate no lo trae ninguna plantilla; se concede a mano fuera de producción.
+            ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.TestDoubles.Operate"]),
 
         new("cartera.asesor", ModuloCartera, "Asesor de crédito",
             "Simula, radica y envía solicitudes, consulta centrales, registra garantías y pagarés, emite documentos y escribe al deudor.",
