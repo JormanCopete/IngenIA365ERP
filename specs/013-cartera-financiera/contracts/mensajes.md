@@ -1157,7 +1157,7 @@ la novedad. Un cambio de dimensión que la novedad provoque va aparte en `Dimens
 
 | Campo | Tipo | Oblig. | Qué es |
 |---|---|---|---|
-| (comunes por crédito) | | | `dimensions` = las nuevas; `amounts` = lo que la novedad mueve: intereses capitalizados (`reasonCode` = `Capitalizacion`, rol `IngresoDiferido`), cargos refinanciados |
+| (comunes por crédito) | | | `dimensions` = las nuevas; `amounts` = lo que la novedad mueve: intereses capitalizados (`reasonCode` = `Capitalizacion`; el concepto dice de dónde salen: `CurrentInterest`/`DefaultInterest` = lo causado, `CurrentInterestInSuspense`/`DefaultInterestInSuspense` = lo suspendido, ver la nota), cargos refinanciados |
 | `previousDimensions` | `LoanFactDimensionsV1` | sí | La combinación anterior: con `dimensions`, las dos puntas del traslado de cada saldo (C22); en `CreditoNovado`, las del crédito anterior |
 | `noveltyPublicId` | Guid | sí | `LND_LoanNovelties` |
 | `sessionItemPublicId` | Guid | no | El punto del acta que la aprobó (T64) |
@@ -1171,6 +1171,21 @@ la novedad. Un cambio de dimensión que la novedad provoque va aparte en `Dimens
 
 `CreditoModificado` lleva la misma forma sin capitalización obligatoria (`"amounts": []` cuando sólo cambia el plan) y
 `CreditoNovado`, además, `"newLoan": { "loanPublicId": "…", "loanNumber": "CR-0003105" }`.
+
+**Capitalización** (alineado con `contabilidad.md` §2.1 el 2026-10-13; antes esta tabla decía «rol `IngresoDiferido`» para
+todo interés capitalizado). Cartera no elige roles: manda cada importe capitalizado con su concepto y
+`reasonCode = Capitalizacion`, y Contabilidad lo traduce así:
+
+- **lo causado** (`CurrentInterest`, `DefaultInterest`) sale de `InteresPorCobrar` y va a `Capital`: débito `Capital`,
+  crédito `InteresPorCobrar`;
+- **lo suspendido** (`CurrentInterestInSuspense`, `DefaultInterestInSuspense`) va a `Capital` contra `IngresoDiferido`
+  (débito `Capital`, crédito `IngresoDiferido`) y, además, **se cancela su orden**: débito `ContraOrdenContingente`, crédito
+  `SuspensoEnOrden` por el mismo importe, porque ese interés deja de estar en suspenso al volverse capital. Así lo
+  construye `OperacionesDeCartera` para `CreditoReestructurado`, `CreditoModificado` y `CreditoNovado` (caso dorado
+  `31-reestructuracion-con-capitalizacion`: 96.400 causados y 20.000 en suspenso). La cancelación de la orden es una
+  **propuesta pendiente de validar por la contadora** (C7, como `IngresoDiferido`).
+
+El ejemplo de arriba sólo capitaliza lo causado (`CurrentInterest` 96.400).
 
 ### 10.21 `CondonacionAprobada` v1 (K3)
 

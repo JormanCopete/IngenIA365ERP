@@ -5215,6 +5215,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.Prevalidation.NotPostable` | 422 · aviso | «Contabilidad no tiene regla para {combinacion}. Pida a la contadora completar la matriz.» | 422 sólo en pantallas de Cartera con `Contabilidad.FaltaDeRegla = Bloquear`; en el contrato, el consumidor y los procesos, aviso sellado (A8) | T56 |
 | `Lending.Prevalidation.NoResponse` | 422 · aviso | «Contabilidad no respondió a tiempo: la operación sigue y queda marcada para revisión.» (aviso); con `Contabilidad.PoliticaSinRespuesta = Bloquear` en una pantalla de Cartera, 422 «Contabilidad no respondió a tiempo y la cooperativa pide no confirmar sin su respuesta. Intente de nuevo en unos minutos.» | D7; el 422 sólo en pantallas (C80, T0655) | T56 |
 | `Lending.Accounting.NotStarted` **(nuevo, C111; T0658)** | 409 | «La contabilidad de la cooperativa no está iniciada: no hay con qué conciliar la cartera. Iníciela en Contabilidad › Configuración.» | conciliación contable de Cartera (`GET /api/lending/accounting/reconciliation`) sin contabilidad iniciada (§14.2) | T58 |
+| `Lending.AccountingFactPart.NotFound` **(nuevo, C111; T0658)** | 404 | «La parte de hechos contables no existe.» | `GET /api/lending/accounting/fact-parts/{id}` de una parte inexistente o de una oficina fuera del alcance de quien pregunta (el mismo 404, T62) | T58 |
 | `Lending.Application.NotFound` **(nuevo, US2, C111)** | 404 | «La solicitud de crédito no existe.» | solicitud inexistente, borrada o fuera del alcance de oficina y línea (también en el detalle y el enrutamiento) | T62 |
 | `Lending.Application.NotEditable` **(nuevo, US2, C111)** | 422 | «La solicitud ya no se puede modificar: sólo se edita en borrador o cuando se devolvió para corregir.» (`data.status`) | editar fuera de `Draft`/`Returned`; adjuntar a una decidida | §2.1 |
 | `Lending.Application.RequirementUnknown` **(nuevo, US2, C111)** | 422 | ««{código}» no es un documento que pida la línea de esta solicitud. Elija uno de la lista de documentos de la línea.» (`data.requirementCode`) | adjuntar con un requisito que la versión de la línea no tiene | §2.3 |
@@ -5290,6 +5291,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Integration.Participant.VersionNotSupported` | 422 | «Cartera no acepta la versión {version} de {contrato}.» | PM-07 |
 | `Integration.Participant.Overlaps` **(fijado aquí)** | 422 | «Ya hay un participante vigente con esa clave o ese destino en esas fechas.» | T16 |
 | `Integration.Destination.DuplicateConsumer` | — (falla el arranque) | «Hay dos consumidores para el destino {destino}.» | T15 |
+| `Integration.SendNotApplicable.ModeStillNotPosted` (existe, de la plataforma de la 012; **ahora también para Cartera**, T0624 bloque B) | 422 | «El modo de paso de {tipos} sigue en «no pasa» a hoy: cámbielo antes de enviar lo que no pasó.» (`data.documentTypeCodes[]`) | `POST /api/lending/messages/send-not-applicable` mientras el tipo de hecho siga en `NoPasa` (`VistaDeBandejaDeCartera`, modo vigente por `ModoDePasoDeCartera`) | T56 |
 | `Parameters.NotYetAvailable` **(nuevo, T0065)** | 422 | ««{clave}» todavía no está disponible: llega con la entrega {entrega}.» | la plataforma, para una línea de entregas que no nombra su propio código (Cartera usa `Lending.Parameter.NotYetAvailable`) | T43 |
 | `Core.RegulatoryProfile.Overlaps` **(fijado en api.md §21.4)** | 422 | «Ya hay una versión del perfil que rige desde el {fecha}. Si está mal, regístrela como corrección de esa versión.» (también: la versión ya fue corregida) | `AddRegulatoryProfileVersionCommand` | T50 |
 | `Core.RegulatoryProfile.OrganizationTypeUnknown` **(fijado en api.md §21.4)** | 422 | ««{código}» no es un tipo de organización del catálogo de la Superintendencia vigente el {fecha}. Elija uno de la lista.» | `AddRegulatoryProfileVersionCommand` | T50 |
@@ -5329,6 +5331,15 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Accounting.LendingRule.ValidToInvalid` **(nuevo, T0642, C111)** | 422 | «La vigencia empieza el {desde}: no puede terminar el {hasta}.» | T52 |
 | `Accounting.LendingRule.NatureMismatch` **(nuevo, T0642, aviso)** | aviso al guardar (se guarda) | «La cuenta {cuenta} es de naturaleza {n} y el rol {rol} es de naturaleza {m}…» (§3.6; la completitud lo sigue listando) | T52 |
 | `Accounting.LendingRule.BridgeRequiresCrossDocument` · `.SummarizedAccrualPerLoan` **(nuevo, T0643, avisos de la completitud)** | aviso | puente cuya cuenta exige cruce; cuenta de la causación resumida que exige tercero o cruce (una línea por crédito, C5) | T52 |
+| `Accounting.LendingBatch.AlreadyRunning` **(nuevo, T0645, C111)** | 422 | «Ya hay un lote de Cartera en curso (lote {número}): espere a que termine.» (`data: { batchPublicId, number }`) | `POST /api/accounting/lending/batches` (`OrderIntegrationBatchCommand` con `OriginModule = CAR`) con otro lote `CAR` en curso; un lote `CAR` en curso no detiene al de `INV` | T56 |
+| `Accounting.LendingBatch.NotFound` **(nuevo, T0649, C111)** | 404 | «No existe ese lote de Cartera.» | `GET /api/accounting/lending/batches/{id}` de un lote inexistente o que no es de Cartera | T56 |
+| `Accounting.RegulatoryIndicator.SupportRequired` **(nuevo, T0649, C111)** | 422 | «Adjunte el soporte del indicador (el formato de patrimonio técnico o el certificado) antes de registrarlo.» | `RegisterRegulatoryIndicatorCommand` sin `supportAttachmentPublicId` | T59 |
+| `Accounting.RegulatoryIndicator.SupportInvalid` **(nuevo, T0649, C111)** | 422 | «El soporte no existe o no es un adjunto de indicador regulatorio: súbalo de nuevo desde la pantalla de indicadores.» | soporte que no es un adjunto `RegulatoryIndicatorSupport` disponible | T59 |
+| `Accounting.RegulatoryIndicator.NotFound` **(nuevo, T0649, C111)** | 404 | «No existe ese indicador regulatorio.» | declarado en `AccountingErrors`; hoy ningún handler lo devuelve (un `supersedesPublicId` inexistente responde `SupersedesInvalid`) | T59 |
+| `Accounting.RegulatoryIndicator.SupersedesInvalid` **(nuevo, T0649, C111)** | 422 | «Sólo se corrige un indicador vigente del mismo tipo y del mismo corte: elija el que reemplaza en la lista.» | reemplazar uno de otro tipo o corte, o uno ya reemplazado | T59 |
+| `Accounting.RegulatoryIndicator.AlreadyRegistered` **(nuevo, T0649, C111)** | 422 | «Ya hay un indicador de ese tipo con corte al {corte}: para corregirlo, registre el nuevo indicando cuál reemplaza.» (`data.cutoffDate`) | registrar otro del mismo tipo y corte sin `supersedesPublicId` | T59 |
+| `Accounting.VoucherType.NotAllowedForModule` (existe, de la 009; **ahora también para Cartera**, T0642) | 422 · consumo `Rejected` | «El tipo de comprobante {código} no puede usarlo Cartera.» | `SetLendingVoucherMappingCommand` con un tipo que no es `Usage = Module`, `ModuleCode = CAR` y activo (también un tipo informativo); en el consumo, un mapeo que dejó de ser de CAR | T54 |
+| `Accounting.Document.ModuleOwned` (existe, de la 009; **mensaje propio para Cartera**, T0651) | 422 | «Este comprobante lo generó Cartera: se corrige en Cartera (reverso del pago, del desembolso o reapertura del cierre) y llega como comprobante nuevo.» (en un resumido: «… y reúne {n} créditos») (`data.origin`) | `ReverseDocumentCommand` sobre un comprobante de origen `CAR` desde Comprobantes | T55 |
 | `Payroll.Settlement.LoanProposalOutdated` | 422 | «Las obligaciones del empleado en Cartera cambiaron desde el cálculo. Recalcule la liquidación.» | T92 |
 | `Payroll.Settlement.LoanAmountsChanged` | 422 | «Cartera no pudo aplicar los descuentos tal como se calcularon ({detalle}). Recalcule o ajuste los descuentos.» | T92 |
 | `Payroll.Settlement.PortfolioUnavailable` | aviso (se conserva) | el actual | DE-04 |
@@ -5342,6 +5353,21 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Inventory.Credit.LendingNoResponse` | 422 | «Cartera no respondió a tiempo y la política es no vender. Intente de nuevo.» | T95 |
 | `Person.HasActiveLoans` | 422 (se conserva) | «La persona tiene obligaciones vivas en Cartera, como deudora o codeudora, o está en una carga por activar: no se puede eliminar.» (mensaje nuevo) | T94 |
 | `THROW 50013` | migración | «Retiro de la cartera heredada detenido: {tabla} tiene {n} filas. Respalde la base y registre la aprobación LND.RetiroHeredado.Aprobado.» | T87 |
+
+**Alineación con el código (2026-10-13, cierre de la fase 11, C111).** Los códigos de la integración contable de US7 que
+esta sección todavía no listaba se agregaron arriba (`Accounting.LendingBatch.*`, `Accounting.RegulatoryIndicator.*`,
+`Lending.AccountingFactPart.NotFound`, y `Accounting.VoucherType.NotAllowedForModule`, `Accounting.Document.ModuleOwned` e
+`Integration.SendNotApplicable.ModeStillNotPosted` en su uso para Cartera). Diferencias de nombre o forma con los contratos,
+donde **rige el código**:
+
+- `api.md` §23.6 y §23.7 llaman `Accounting.RegulatoryIndicator.Duplicate` al registro repetido del mismo tipo y corte;
+  el código es `Accounting.RegulatoryIndicator.AlreadyRegistered` (con `SupersedesInvalid` para un reemplazo mal dirigido).
+- `api.md` §16.1 dice `data: { types[] }` para `Integration.SendNotApplicable.ModeStillNotPosted`; el error de la plataforma
+  lleva `data.documentTypeCodes[]` (en Cartera, los tipos de hecho).
+- `Lending.Accounting.NotStarted` figura en §10.1 con 409; `ErrorEnvelopeFilter` no le da regla propia y lo responde con el
+  **422** de negocio por defecto.
+- `Accounting.LendingRule.NatureMismatch`, `.BridgeRequiresCrossDocument` y `.SummarizedAccrualPerLoan` son avisos (de la
+  regla guardada o de la completitud), no errores que corten.
 
 ---
 

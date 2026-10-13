@@ -592,6 +592,47 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
   producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
 
+- **Cartera financiera (feature 013, rama `013-cartera-financiera`, fases 1–11, 2026-10-13; rama local, sin merge ni
+  despliegue)**: Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas K1–K6b; K1
+  es el mínimo para salir en vivo y **no sale sin Recaudo y Tesorería** (en prueba, un recaudador y una tesorería de
+  prueba, que no existen en producción). Hasta aquí: plataforma y retiro de las tablas `LND_` de crédito heredadas
+  (fases 1–3), gobierno y seguridad (US17), líneas y usura (US1), originación (US2), desembolso, garantías y pagaré
+  (US3), causación diaria y liquidación (US4), pagos por el **contrato de obligaciones** —Cartera no aplica pagos por
+  pantalla— (US5), ventas a crédito de Comercial (US6) y la **integración contable** (US7, fase 11). Reglas que no se
+  negocian de US7: **Cartera no conoce cuentas ni escribe asientos** —emite hechos `CAR → Accounting` en la misma
+  transacción que su operación, ningún hecho lleva una cuenta, y Contabilidad sólo conoce a Cartera por
+  `IDimensionesDeCartera` y la bandeja (`CarteraNoConoceContabilidad` en las dos direcciones,
+  `LosHechosDeCarteraNoLlevanCuentas`)—; el destino `Accounting` sigue con **un solo consumidor**, `DestinoContabilidad`
+  (mudado a `Application/Accounting/Integration` con lo común de los dos emisores), que es un **enrutador de dos
+  emisores**: `INV` a los comandos de Inventario sin cambios, `CAR` a `PostLendingFactsCommand` /
+  `PostLendingSummaryGroupCommand`, siempre por `AccountingPoster`; la **matriz** `ACC_LendingPostingRules` resuelve
+  hecho × rol (26 roles) × dimensiones **por código** (exigidas por igualdad; opcionales con pesos Línea 512, Empleado
+  256, Gracia 128, Sub-segmento 64, Reestructurado 32, PorCuentaDelAsociado 16, Sucursal 4 y Hecho 2 **sólo en los roles
+  de resultado**; el hecho va en `*` en los roles de saldo, orden, pasivo, puente, diferido y contingentes; el centro de
+  costo se asigna y no pesa, C77), con vigencia y sin retroactividad sobre lo contabilizado, plantilla con **filas
+  sugeridas sin cuenta** (no se siembra ninguna regla) y completitud; **un comprobante por unidad** (una operación y su
+  modo; los acompañantes sellan el del principal y el tipo sale del hecho principal: `DS`, `RC`, `DN` si recauda Nómina,
+  `CA`, `PV` y el nuevo `CN` —24 tipos sembrados, 40 permisos contables—) y la causación **por lotes resumida**: un `CA`
+  por día con la sucursal en cada línea y una línea por crédito donde la cuenta exige tercero o cruce; los reversos
+  heredan el modo de su original; la **validación previa** (`IContabilidadParaCartera.EvaluarAsync`) **bloquea sólo en
+  las pantallas de Cartera** (`Lending.Prevalidation.NotPostable` / `.NoResponse`), mientras el contrato de
+  obligaciones, Comercial y los procesos aplican, sellan y alertan (`Cartera.HechoNoContabilizable`, enmienda A8); lo de
+  Cartera **no se reversa desde Comprobantes** (`Accounting.Document.ModuleOwned` con mensaje propio y
+  `Accounting.Document.LendingCorrectsWithNewVoucher` en `PrepareReversalAsync`): se corrige con un **comprobante
+  nuevo** de su propio hecho y fecha, con las dimensiones vigentes del saldo; Contabilidad **no cierra un mes que
+  Cartera, activada, no cerró** (`Accounting.Period.LendingNotClosed`, sin reconocimiento; avisos reconocibles
+  `LendingPending` y `LendingLoadWillExpire`), leyendo sólo recibos `ACC_LendingPostings` y entregas; la conciliación
+  compara **por conjuntos de cuentas** y explica cada diferencia hecho por hecho; `DESC_CARTERA` vuelve a contabilizar
+  en Nómina contra el puente «recaudos por nómina para Cartera» (enmienda D-08 de la 010). La 009 quedó enmendada en
+  sus artefactos (E-01, 2026-10-13). La migración aditiva `IntegracionContableDeCartera` (cuatro tablas `ACC_`) es
+  **regenerable**: la fase 12 la quita y la vuelve a generar detrás de `CarteraRiesgo` (C103, C104) y no se aplica fuera
+  de local ni de las e2e hasta congelar K1. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+  `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
+  completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
+  pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.
+  Recetas: `docs/manual/contabilidad-contrato-de-contabilizacion.md` §9 y `docs/manual/cartera-integracion-contable.md`
+  (para la contadora, con lo pendiente de validar); las de fases anteriores, `docs/manual/cartera-*.md`.
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application

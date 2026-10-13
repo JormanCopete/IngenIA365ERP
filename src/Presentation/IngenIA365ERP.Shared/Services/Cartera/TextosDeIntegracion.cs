@@ -40,6 +40,17 @@ public static class TextosDeIntegracion
         _ => v ?? "—",
     };
 
+    /// <summary>Los destinos de lo que Cartera emite (<c>IntegrationDestinations</c>), para el filtro de la bandeja de emitidos (US7).</summary>
+    public static IReadOnlyList<(string Valor, string Texto)> Destinos { get; } =
+    [
+        ("Accounting", "Contabilidad"),
+        ("Inventory", "Comercial"),
+        ("Treasury", "Tesorería"),
+        ("Receipts", "Recaudo"),
+    ];
+
+    public static string Destino(string? v) => Destinos.FirstOrDefault(d => d.Valor == v).Texto ?? Modulo(v);
+
     public static string ResultadoDeEvaluacion(string? v) => v switch
     {
         "Accepted" => "Aceptado",

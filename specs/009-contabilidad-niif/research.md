@@ -100,6 +100,10 @@ Alternatives.
   atómica de Inventario es documento + mensaje; la de Contabilidad, comprobante + recibo
   (`ACC_InventoryPostings`) en el consumidor (`PostInventoryMessagesCommand`), con el mismo
   `PrepareAsync`. La atomicidad queda así de dos lados, unidos por el mensaje.
+  *Enmienda 013 (E-01, 2026-10-13)*: Cartera (013) tampoco llama al contrato desde su operación: la unidad
+  atómica de Cartera es operación + transacciones de su libro + hecho; la de Contabilidad,
+  comprobante + recibo (`ACC_LendingPostings`) en el consumidor (`PostLendingFactsCommand`, o
+  `PostLendingSummaryGroupCommand` en la causación resumida), con el mismo `PrepareAsync`.
 - **Rationale**: es exactamente el molde de `PayrollAccountingPoster` (que «deliberadamente no
   guarda») y de las fábricas de la 008 (`PersonFactory`), y da la atomicidad de FR-036 sin
   transacción explícita (`IApplicationDbContext` no la expone). Una sola clase de reglas es lo que
@@ -303,6 +307,10 @@ Alternatives.
   falta el tipo `EG`). Los documentos de módulo guardan `SourceType/SourcePublicId`, y la
   anulación del módulo reversa por ese vínculo (corrige el bug de `VoidInventoryDocument`). Las
   cuentas «11100501» cableadas desaparecen: banco por parametrización.
+  *Enmienda 013 (E-01, 2026-10-13)*: la entrada de Cartera pasa a «matriz `ACC_LendingPostingRules` por hechos (013)»;
+  las cuentas como texto de la cartera heredada (`LND_CreditLineParameters`,
+  `LND_PortfolioAccounts`, `LND_ProvisionParameters`) se retiran con `RetiroDeLaCarteraHeredada`, y
+  `AccountReferenceFinder` mira la matriz de Cartera. `SavingsParameter` sigue como aquí se dice.
 - **Rationale**: FR-036..041; no se inventa contabilidad para módulos que no la tienen definida
   (sería decidir política contable por ellos): se conecta lo que existe y se hace visible lo que
   falta.
@@ -321,6 +329,8 @@ Alternatives.
   `develop`.
 - **Rationale**: 13 historias y 88 requisitos no caben en un PR revisable; Nómina necesita
   contabilidad real cuanto antes (es lo que está en producción).
+  *Enmienda 013 (E-01, 2026-10-13)*: E3 queda sin Cartera: Tesorería y CDT/Ahorros. Cartera llega por hechos con la 013
+  (US7, entrega K1), y las tareas de Cartera de E3 quedan «reemplazadas por la 013».
 
 ## R18. Pruebas de arquitectura y alcance
 

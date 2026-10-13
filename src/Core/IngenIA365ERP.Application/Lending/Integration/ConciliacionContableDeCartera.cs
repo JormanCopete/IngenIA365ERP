@@ -148,6 +148,13 @@ public sealed class ConciliacionContableDeCartera(
 
     // ------------------------------------------------------------------------------------------- hechos sin procesar --
 
+    /// <summary>
+    /// Los contingentes (§19) no mueven el libro del crédito y no entran a la conciliación: no explican nada. Hasta el 2026-10-13 el
+    /// <c>CreditoAprobadoSinDesembolsar</c> (siempre <c>NotApplicable</c>, «no pasa») tomaba las filas de su operación —el desembolso— y «explicaba»
+    /// el capital ya contabilizado, dejando un descuadre sin explicar falso del tamaño del crédito.
+    /// </summary>
+    private static readonly string[] Contingentes = [.. MovimientoContingenteDeCartera.Tipos];
+
     private sealed record Pendiente(HechoQueExplicaDto Hecho, Guid OrigenPublicId, string? ClaseDeRecaudador, IReadOnlyList<MovimientoDeCombinacionDeCartera> Movimientos);
 
     private async Task<List<Pendiente>> PendientesAsync(DateOnly corte, IReadOnlyList<MovimientoDeCombinacionDeCartera> movimientos, CancellationToken ct)
@@ -155,7 +162,7 @@ public sealed class ConciliacionContableDeCartera(
         var filas = await db.IntegrationMessageDeliveries.AsNoTracking()
             .Where(d => d.Destination == IntegrationDestinations.Accounting && SinProcesar.Contains(d.Status)
                 && d.Message!.OriginModule == ModulosDeOrigen.Cartera && d.Message.Kind == IntegrationMessageKind.Business
-                && d.Message.OperationDate <= corte)
+                && d.Message.OperationDate <= corte && !Contingentes.Contains(d.Message.Type))
             .Select(d => new { d.Status, d.Message!.PublicId, d.Message.Type, d.Message.OriginNumber, d.Message.OperationDate, d.Message.OriginPublicId, d.Message.PayloadJson })
             .ToListAsync(ct);
         var porMensaje = movimientos.Where(m => m.Mensaje is not null).ToLookup(m => m.Mensaje!.Value);

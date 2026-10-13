@@ -54,6 +54,10 @@ public class LosHechosInmutablesNoSeModifican
         "RegulatoryProfileVersion",
         "RestrictiveListLoad",
         "RestrictiveListEntry",
+        // Feature 013, US7 (T0609, T0634): el recibo contable de un hecho de Cartera (Entities/Accounting/Transactions, que además cubre
+        // PrincipioXI_ContableImmutable) y el indicador regulatorio, de sólo inserción (corregir es registrar otro que lo reemplaza).
+        "LendingPosting",
+        "RegulatoryIndicator",
     ];
 
     /// <summary>

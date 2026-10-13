@@ -1,0 +1,257 @@
+@page "/contabilidad/indicadores-regulatorios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject IntegracionContableDeCarteraClient Integracion
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Indicadores regulatorios - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US7 (T0667; contracts/api.md §23.6, contracts/contabilidad.md §4.4, §15; T59, C33): el patrimonio técnico y la relación de
+   solvencia que registra el contador con su soporte, y que Cartera lee para sus límites. Lista con el corte, el valor, la fuente, el soporte,
+   «vigente hasta» (corte + Contabilidad.IndicadoresVigenciaMeses, el mismo parámetro que usa Cartera) y si está vigente (el último de su tipo,
+   sin reemplazar y sin vencer). Registrar es un hecho de sólo inserción: el soporte se sube antes, directo al almacén, a nombre del
+   PublicId que la pantalla reserva al abrir el registro (tipo de dueño RegulatoryIndicatorSupport) y queda bloqueado con el indicador;
+   corregir es registrar otro del mismo tipo y corte que reemplaza al anterior. *@
+<PermissionGate Required="Accounting.RegulatoryIndicators.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Indicadores regulatorios</h3>
+        <div class="toolbar">
+            <label class="campo">Tipo
+                <select class="e-input" @bind="_filtroTipo">
+                    <option value="">Todos</option>
+                    @foreach (var t in TextosDeContabilidadDeCartera.TiposDeIndicador) { <option value="@t.Nombre">@t.Texto</option> }
+                </select>
+            </label>
+            <label class="campo">A la fecha <input type="date" class="e-input" value="@(_aLaFecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _aLaFecha = LeerFecha(e.Value))" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+            <PermissionGate Required="Accounting.RegulatoryIndicators.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirRegistro(null))">Registrar indicador</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_lista is { } l)
+        {
+            <p class="texto-apoyo">
+                @if (l.ValidityMonths is { } meses) { <span>Un indicador vale @meses mes(es) desde su corte; Cartera usa el último vigente de cada tipo.</span> }
+                else { <span class="aviso aviso-alerta">El parámetro de vigencia de los indicadores no está registrado: ninguno se puede juzgar vencido.</span> }
+            </p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Tipo</th><th>Corte</th><th class="numero">Valor</th><th>Fuente</th><th>Soporte</th><th>Vigente hasta</th><th>Vigente</th><th>Registrado</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var i in l.Items.OrderBy(i => i.Indicator.Kind).ThenByDescending(i => i.Indicator.CutoffDate).ThenByDescending(i => i.Indicator.RegisteredAt))
+                        {
+                            var item = i;
+                            var ind = item.Indicator;
+                            <tr class="@(item.Current ? "resaltada" : "")">
+                                <td>@TextosDeContabilidadDeCartera.TipoDeIndicador(ind.Kind)</td>
+                                <td>@ind.CutoffDate.ToString("dd/MM/yyyy")</td>
+                                <td class="numero">@Valor(ind)</td>
+                                <td>@ind.Source@if (!string.IsNullOrWhiteSpace(ind.Notes)) { <br /><span class="texto-tenue">@ind.Notes</span> }</td>
+                                <td>
+                                    @if (ind.SupportAttachmentPublicId is { } soporte)
+                                    {
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-download" Disabled="@_descarga.Activa" OnClick="@(() => DescargarSoporteAsync(ind, soporte))">Descargar</SfButton>
+                                    }
+                                    else { <span>—</span> }
+                                </td>
+                                <td>@(item.ExpiresOn?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>
+                                    @if (ind.SupersededByPublicId is not null) { <span class="texto-tenue">Reemplazado</span> }
+                                    else if (item.Current) { <span>Sí</span> }
+                                    else { <span class="texto-tenue">No</span> }
+                                </td>
+                                <td>@ind.RegisteredBy · @ind.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    @if (ind.SupersededByPublicId is null)
+                                    {
+                                        <PermissionGate Required="Accounting.RegulatoryIndicators.Manage">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirRegistro(ind))">Reemplazar…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (l.Items.Count == 0)
+                        {
+                            <tr><td colspan="9" class="texto-tenue">Sin indicadores registrados con estos filtros.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarRegistro" Header="@(_reemplaza is null ? "Registrar indicador" : "Reemplazar indicador")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                @if (_reemplaza is { } r)
+                {
+                    <p>Reemplaza el @TextosDeContabilidadDeCartera.TipoDeIndicador(r.Kind).ToLowerInvariant() con corte al @r.CutoffDate.ToString("dd/MM/yyyy") (@Valor(r)). El anterior se conserva en la historia como reemplazado.</p>
+                }
+                <div class="form-grid">
+                    <label class="campo">Tipo *
+                        <select class="e-input" disabled="@(_reemplaza is not null)" @bind="_f.Tipo">
+                            <option value="">Elija…</option>
+                            @foreach (var t in TextosDeContabilidadDeCartera.TiposDeIndicador) { <option value="@t.Nombre">@t.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Fecha de corte *
+                        <input type="date" class="e-input" disabled="@(_reemplaza is not null)" value="@(_f.Corte?.ToString("yyyy-MM-dd"))" @onchange="@(e => _f.Corte = LeerFecha(e.Value))" />
+                    </label>
+                    <label class="campo">@(EsSolvencia ? "Valor * (en porcentaje: 12 = 12 %)" : "Valor * (en pesos)")
+                        <input class="e-input numero" type="number" step="any" min="0"
+                               value="@(_f.Valor?.ToString(CultureInfo.InvariantCulture))"
+                               @onchange="@(e => _f.Valor = decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var v) ? v : null)" />
+                    </label>
+                    <label class="campo campo-ancho">Fuente * <input class="e-input" @bind="_f.Fuente" @bind:event="oninput" maxlength="200" placeholder="Formato de patrimonio técnico de diciembre…" /></label>
+                    <label class="campo campo-ancho">Notas <input class="e-input" @bind="_f.Notas" maxlength="500" /></label>
+                    <label class="campo campo-ancho">Soporte *
+                        <select class="e-input" value="@(_f.Soporte?.ToString() ?? "")" @onchange="@(e => _f.Soporte = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">@(_soportes.Count == 0 ? "Suba primero el soporte" : "Elija el soporte…")</option>
+                            @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName (@a.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))</option> }
+                        </select>
+                    </label>
+                    <div class="campo campo-ancho">
+                        <SubirSoporte OwnerEntityType="@DuenoDelSoporte" OwnerEntityPublicId="@_reservado" OnSubido="@CargarSoportesAsync" />
+                    </div>
+                </div>
+                @if (_errorRegistro is not null) { <p class="aviso aviso-error" role="alert">@_errorRegistro</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(!PuedeRegistrar)" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarRegistro = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    /// <summary>El tipo de dueño del soporte (<c>AdjuntosDeModulo.SoporteDeIndicadorRegulatorio</c>).</summary>
+    private const string DuenoDelSoporte = "RegulatoryIndicatorSupport";
+
+    private sealed class Formulario
+    {
+        public string? Tipo { get; set; }
+        public DateOnly? Corte { get; set; }
+        public decimal? Valor { get; set; }
+        public string? Fuente { get; set; }
+        public string? Notas { get; set; }
+        public Guid? Soporte { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _descarga = new();
+    private IndicadoresConVigenciaDto? _lista;
+    private string _filtroTipo = string.Empty;
+    private DateOnly? _aLaFecha;
+    private string? _error, _errorRegistro;
+    private bool _mostrarRegistro;
+    private Formulario _f = new();
+    private IndicadorRegulatorioDto? _reemplaza;
+    private Guid _reservado = Guid.NewGuid();
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _soportes = [];
+
+    private bool EsSolvencia => TextosDeContabilidadDeCartera.TiposDeIndicador
+        .FirstOrDefault(t => t.Nombre == _f.Tipo).Valor == TextosDeContabilidadDeCartera.RelacionDeSolvencia;
+
+    private bool PuedeRegistrar => !_guardado.Activa && !string.IsNullOrWhiteSpace(_f.Tipo) && _f.Corte is not null && _f.Valor is > 0
+                                   && !string.IsNullOrWhiteSpace(_f.Fuente) && _f.Soporte is not null;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.IndicadoresAsync(string.IsNullOrWhiteSpace(_filtroTipo) ? null : _filtroTipo, _aLaFecha);
+        _lista = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudieron consultar los indicadores.";
+        if (!r.IsSuccess) await Notification.ErrorAsync(_error!);
+    }
+
+    /// <summary>
+    /// Abre el registro con un <c>PublicId</c> reservado nuevo: el soporte se sube a su nombre y el indicador se registra con él. Para
+    /// reemplazar, el tipo y el corte son los del anterior.
+    /// </summary>
+    private void AbrirRegistro(IndicadorRegulatorioDto? reemplaza)
+    {
+        _reemplaza = reemplaza;
+        _reservado = Guid.NewGuid();
+        _soportes = [];
+        _errorRegistro = null;
+        _f = reemplaza is null
+            ? new Formulario()
+            : new Formulario
+            {
+                Tipo = TextosDeContabilidadDeCartera.TiposDeIndicador.FirstOrDefault(t => t.Valor == reemplaza.Kind).Nombre,
+                Corte = reemplaza.CutoffDate,
+            };
+        _mostrarRegistro = true;
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        var r = await Adjuntos.ListarAsync(DuenoDelSoporte, _reservado);
+        _soportes = r.IsSuccess ? [.. (r.Value ?? []).Where(a => a.Disponible).OrderByDescending(a => a.CreatedAt)] : [];
+        if (_f.Soporte is null || _soportes.All(a => a.PublicId != _f.Soporte)) _f.Soporte = _soportes.FirstOrDefault()?.PublicId;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (!PuedeRegistrar) return;
+        using var guardado = _guardado.Iniciar();
+        _errorRegistro = null;
+        var valor = EsSolvencia ? _f.Valor!.Value / 100m : _f.Valor!.Value;
+        var r = await Integracion.RegistrarIndicadorAsync(new RegistrarIndicadorRegulatorioRequest(_f.Tipo!, _f.Corte!.Value, valor, _f.Fuente!.Trim(),
+            _f.Soporte, _reemplaza?.RegulatoryIndicatorPublicId, string.IsNullOrWhiteSpace(_f.Notas) ? null : _f.Notas.Trim(), _reservado));
+        if (!r.IsSuccess)
+        {
+            _errorRegistro = r.ErrorMessage ?? "No se pudo registrar el indicador.";
+            return;
+        }
+        _mostrarRegistro = false;
+        await Notification.SuccessAsync(_reemplaza is null ? "Indicador registrado." : "Indicador reemplazado: el anterior queda en la historia.");
+        await CargarAsync();
+    }
+
+    private async Task DescargarSoporteAsync(IndicadorRegulatorioDto indicador, Guid soporte)
+    {
+        using var descarga = _descarga.Iniciar();
+        var enlace = await Adjuntos.EnlaceDeDescargaAsync(soporte);
+        if (!enlace.IsSuccess || enlace.Value is not { Url: { } url })
+        {
+            await Notification.ErrorAsync(enlace.ErrorMessage ?? "No se pudo preparar la descarga del soporte.");
+            return;
+        }
+        try
+        {
+            await Adjuntos.DescargarAsync(url, $"soporte-{indicador.CutoffDate:yyyy-MM-dd}");
+        }
+        catch (JSException ex)
+        {
+            await Notification.ErrorAsync($"El navegador no pudo guardar el archivo: {ex.Message}");
+        }
+    }
+
+    /// <summary>El valor con su unidad: la relación de solvencia como porcentaje y el patrimonio técnico en pesos.</summary>
+    private static string Valor(IndicadorRegulatorioDto i) => i.Kind == TextosDeContabilidadDeCartera.RelacionDeSolvencia
+        ? (i.Value * 100m).ToString("0.##", CultureInfo.GetCultureInfo("es-CO")) + " %"
+        : i.Value.ToString("N0", CultureInfo.GetCultureInfo("es-CO"));
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

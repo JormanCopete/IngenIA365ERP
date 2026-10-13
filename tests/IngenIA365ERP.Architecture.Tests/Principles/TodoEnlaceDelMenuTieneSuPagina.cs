@@ -83,6 +83,30 @@ public class TodoEnlaceDelMenuTieneSuPagina
         Assert.True(Existe(Rutas(shared), ruta), $"{ruta} está en el menú pero no tiene @page.");
     }
 
+    /// <summary>
+    /// Feature 013, US7 (T0611; DT §2.16): las pantallas de la integración contable de Cartera —el subgrupo «Cartera» de Contabilidad, los
+    /// indicadores regulatorios y la conciliación contable de Cartera— están en el menú y tienen su página. El detalle de un lote
+    /// (<c>/contabilidad/cartera/lotes/{Id:guid}</c>) se abre desde la lista y desde el enlace de origen de un comprobante: sólo exige su página.
+    /// </summary>
+    [Theory]
+    [InlineData("/contabilidad/cartera/matriz", true)]
+    [InlineData("/contabilidad/cartera/tipos-de-comprobante", true)]
+    [InlineData("/contabilidad/cartera/completitud", true)]
+    [InlineData("/contabilidad/cartera/lotes", true)]
+    [InlineData("/contabilidad/cartera/lotes/{Id:guid}", false)]
+    [InlineData("/contabilidad/indicadores-regulatorios", true)]
+    [InlineData("/cartera/conciliacion-contable", true)]
+    public void Las_pantallas_de_la_integracion_contable_de_Cartera_tienen_su_pagina(string ruta, bool enElMenu)
+    {
+        var shared = Shared();
+        if (enElMenu)
+        {
+            var menu = File.ReadAllText(Path.Combine(shared, "Layout", "NavMenu.razor"));
+            Assert.Contains(Enlace.Matches(menu).Select(m => m.Groups[1].Value), href => href == ruta);
+        }
+        Assert.True(Existe(Rutas(shared), ruta), $"{ruta} no tiene @page.");
+    }
+
     private static string Shared() =>
         Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared");
 

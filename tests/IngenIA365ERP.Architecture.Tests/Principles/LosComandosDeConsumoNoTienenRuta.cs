@@ -41,6 +41,9 @@ public class LosComandosDeConsumoNoTienenRuta
         "ConsumeCommercialCreditMessageCommand",
         "ConsumeLendingObligationResponseCommand",
         "ExpireLoanNumberReservationsCommand",
+        // US7 (T0609): el consumo contable de los hechos de Cartera, por unidad y por grupo resumido (los manda DestinoContabilidad).
+        "PostLendingFactsCommand",
+        "PostLendingSummaryGroupCommand",
     ];
 
     [Fact]

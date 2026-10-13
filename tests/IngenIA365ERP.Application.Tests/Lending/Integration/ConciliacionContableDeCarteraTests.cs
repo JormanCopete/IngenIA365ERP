@@ -118,6 +118,44 @@ public class ConciliacionContableDeCarteraTests : IAsyncLifetime
         _alertas.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// Defecto del 2026-10-13 (e2e de T0632): el contingente <c>CreditoAprobadoSinDesembolsar</c> de la misma operación —siempre «no pasa»— no tiene
+    /// filas propias en el libro, tomaba las de su operación (el desembolso) y «explicaba» el capital ya contabilizado: un descuadre falso del tamaño
+    /// del crédito. Los contingentes no explican nada.
+    /// </summary>
+    [Fact]
+    public async Task Un_contingente_que_no_pasa_no_explica_el_capital_ya_contabilizado()
+    {
+        var (r, sucursal) = await DesembolsarAsync();
+        await MarcarAsync(r.Hecho, DeliveryStatus.Processed);
+        _contable.Saldo("Capital", sucursal, r.Bruto);
+        _contable.Saldo("DesembolsoPorGirar", sucursal, -r.Neto);
+        var hecho = await _d.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.PublicId == r.Hecho);
+        var contingente = new IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage
+        {
+            Type = IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CreditoAprobadoSinDesembolsarV1.Type, Kind = hecho.Kind,
+            OriginModule = hecho.OriginModule, OriginKind = hecho.OriginKind, OriginPublicId = hecho.OriginPublicId, OriginNumber = hecho.OriginNumber,
+            OriginEventKey = "Confirmation:contingente", ChainRootPublicId = hecho.ChainRootPublicId, OperationDate = hecho.OperationDate,
+            BranchPublicId = hecho.BranchPublicId, PayloadJson = "{\"amounts\":[{\"concept\":\"Principal\",\"amount\":-1}]}", PayloadSha256 = "x",
+            OriginUserName = "Ensayo", EmittedAt = DateTime.UtcNow,
+        };
+        _d.Db.IntegrationMessages.Add(contingente);
+        await _d.Db.SaveChangesAsync();
+        _d.Db.IntegrationMessageDeliveries.Add(new IngenIA365ERP.Domain.Entities.Integration.IntegrationMessageDelivery
+        {
+            MessageId = contingente.Id, Destination = IntegrationDestinations.Accounting, Mode = DeliveryMode.NotPosted, Status = DeliveryStatus.NotApplicable,
+        });
+        await _d.Db.SaveChangesAsync();
+        _d.Db.ChangeTracker.Clear();
+
+        var c = (await ConciliarAsync()).Value;
+
+        var capital = c.Sets.Single(s => s.Family == "Capital");
+        capital.Facts.Should().BeEmpty("el contingente no mueve el libro del crédito");
+        capital.Unexplained.Should().Be(0m);
+        c.UnexplainedTotal.Should().Be(0m);
+    }
+
     [Fact]
     public async Task Un_descuadre_sin_explicar_alerta_una_vez_por_corte_y_conjunto()
     {

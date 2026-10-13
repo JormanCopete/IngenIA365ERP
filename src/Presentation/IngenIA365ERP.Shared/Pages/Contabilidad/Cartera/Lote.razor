@@ -1,0 +1,157 @@
+@page "/contabilidad/cartera/lotes/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject IntegracionContableDeCarteraClient Integracion
+@inject INotificationService Notification
+
+<PageTitle>Lote de contabilización de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US7 (T0666; contracts/api.md §23.4; contracts/contabilidad.md §10.2, §10.5): un lote de hechos de Cartera con sus totales
+   (débitos y créditos de los comprobantes que dejaron sus recibos), los comprobantes que generó —cada uno con su enlace; un resumido reúne
+   varios hechos y créditos—, los rechazos con quién los corrige y los hechos con los créditos de cada parte. Un rechazo se reprocesa desde
+   la bandeja de mensajes de Cartera una vez corregido. Es también el destino de un comprobante resumido de Cartera (EnlacesDeOrigen). *@
+<PermissionGate Required="Accounting.LendingBatches.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/contabilidad/cartera/lotes">Volver a los lotes</a>
+            <PermissionGate Required="Lending.Messages.Read">
+                <a class="e-btn e-outline" href="@($"/cartera/bandeja-de-mensajes?lote={Id}")">Mensajes del lote</a>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_d is { } d)
+        {
+            var b = d.Detail.Batch;
+            <div class="info-card">
+                <p>
+                    @TextosDeInventario.Texto(TextosDeInventario.DisparadoresDeLote, b.Trigger)@(b.ScheduleKey is { } k ? $" ({k})" : "") ·
+                    <b>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeLote, b.Status)</b>@(b.Late ? " · atrasado" : "")
+                </p>
+                <p class="texto-tenue">
+                    Pedido por @(b.RequestedBy.Name ?? TextosDeInventario.Texto(TextosDeInventario.ActoresDeIntegracion, b.RequestedBy.Kind)) el @b.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    @if (b.StartedAt is { } i) { <text> · empezó @i.ToLocalTime().ToString("HH:mm:ss")</text> }
+                    @if (b.FinishedAt is { } f) { <text> · terminó @f.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</text> }
+                    @if (b.DateFrom is { } desde) { <text> · rango @desde.ToString("dd/MM/yyyy") – @b.DateTo?.ToString("dd/MM/yyyy")</text> }
+                    @if (b.Period is { } p) { <text> · período @p.Month.ToString("00")/@p.Year</text> }
+                </p>
+                @if (b.Status is 0 or 1)
+                {
+                    <p class="aviso aviso-info">El lote corre en segundo plano; «Actualizar» trae su avance.</p>
+                }
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Messages</span><span class="kpi-label">Hechos</span></div>
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Vouchers</span><span class="kpi-label">Comprobantes</span></div>
+                <div class="kpi-card"><span class="kpi-value">@b.Totals.Rejected</span><span class="kpi-label">Rechazos</span></div>
+                <div class="kpi-card"><span class="kpi-value">@d.Totals.Debit.ToString("N2")</span><span class="kpi-label">Débitos</span></div>
+                <div class="kpi-card"><span class="kpi-value">@d.Totals.Credit.ToString("N2")</span><span class="kpi-label">Créditos</span></div>
+            </div>
+
+            <h4>Comprobantes</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Comprobante</th><th>Fecha</th><th>Forma</th><th class="numero">Hechos</th><th class="numero">Créditos</th></tr></thead>
+                    <tbody>
+                        @foreach (var v in d.Detail.Vouchers)
+                        {
+                            <tr>
+                                <td><a href="@($"/contabilidad/comprobantes/{v.AccountingDocumentPublicId}")">@v.VoucherTypeCode @(v.Number?.ToString() ?? "")</a></td>
+                                <td>@v.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@(v.Summarized ? "Resumido" : "Por hecho")</td>
+                                <td class="numero">@v.FactsCount</td>
+                                <td class="numero">@v.LoansCount</td>
+                            </tr>
+                        }
+                        @if (d.Detail.Vouchers.Count == 0) { <tr><td colspan="5" class="texto-tenue">Sin comprobantes.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (d.Detail.Rejected.Count > 0)
+            {
+                <h4>Rechazos</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Hecho</th><th>Código</th><th>Qué pasa</th><th>Quién corrige</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var x in d.Detail.Rejected)
+                            {
+                                <tr class="resaltada">
+                                    <td>@TextosDeContabilidadDeCartera.TipoDeHecho(x.Type)@(x.OriginNumber is { } n ? $" · {n}" : "")</td>
+                                    <td><code>@x.Code</code></td>
+                                    <td>@x.Message</td>
+                                    <td><QuienLoCorrige Quien="@x.WhoFixes" /></td>
+                                    <td>
+                                        <PermissionGate Required="Lending.Messages.Read">
+                                            <a href="@($"/cartera/bandeja-de-mensajes?mensaje={x.MessagePublicId}")">Mensaje</a>
+                                        </PermissionGate>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <h4>Hechos</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Hecho</th><th>Origen</th><th>Fecha contable</th><th>Sucursal</th><th>Estado</th><th>Créditos</th></tr></thead>
+                    <tbody>
+                        @foreach (var h in d.Detail.Facts)
+                        {
+                            <tr>
+                                <td>@TextosDeContabilidadDeCartera.TipoDeHecho(h.Type)</td>
+                                <td>@(h.OriginNumber ?? "—")</td>
+                                <td>@h.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>@(h.Branch ?? "—")</td>
+                                <td>@TextosDeInventario.EstadoDeEntrega(h.Status)</td>
+                                <td>
+                                    @if (h.Loans.Count == 0) { <span>—</span> }
+                                    else if (h.Loans.Count <= CreditosVisibles) { <span>@string.Join(", ", h.Loans)</span> }
+                                    else { <span title="@string.Join(", ", h.Loans)">@string.Join(", ", h.Loans.Take(CreditosVisibles)) y @(h.Loans.Count - CreditosVisibles) más</span> }
+                                </td>
+                            </tr>
+                        }
+                        @if (d.Detail.Facts.Count == 0) { <tr><td colspan="6" class="texto-tenue">Sin hechos.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    /// <summary>Cuántos números de crédito se muestran por hecho; el resto, en el título.</summary>
+    private const int CreditosVisibles = 5;
+
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private LoteDeCarteraConTotalesDto? _d;
+    private string? _error;
+
+    private string Titulo => _d is { } d ? $"Lote {d.Detail.Batch.Number} de Cartera" : "Lote de contabilización de Cartera";
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Integracion.LoteAsync(Id);
+        _d = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo consultar el lote.";
+        if (!r.IsSuccess) await Notification.ErrorAsync(_error!);
+    }
+}

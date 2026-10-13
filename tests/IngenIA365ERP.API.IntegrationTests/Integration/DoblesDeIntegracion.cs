@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using IngenIA365ERP.Application.Accounting.Inventory;
+using IngenIA365ERP.Application.Accounting.Lending;
 using IngenIA365ERP.Application.Accounting.Integration;
 using IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 using IngenIA365ERP.Application.Common.Integration;
@@ -103,15 +104,18 @@ public sealed class DestinoContabilidadConDoble(DestinoContabilidad real, Dobles
 }
 
 /// <summary>
-/// El puerto de Contabilidad para Cartera (feature 013, US2, T0384): el provisional de K1, salvo en la cooperativa marcada con
-/// <see cref="DoblesDeIntegracion.PatrimonioTecnico"/>, donde los indicadores traen ese patrimonio técnico. Molde:
+/// El puerto de Contabilidad para Cartera (feature 013, US2, T0384; US7 bloque C): el adaptador real (<see cref="ContabilidadParaCartera"/>),
+/// salvo en la cooperativa marcada: con <see cref="DoblesDeIntegracion.PatrimonioTecnico"/> los indicadores traen ese patrimonio técnico, y con
+/// <see cref="DoblesDeIntegracion.ContabilidadNoResponde"/> la validación previa «no responde» (el puerto lanza). Molde:
 /// <see cref="ContabilidadParaInventarioConDoble"/>. (nuevo)
 /// </summary>
-public sealed class ContabilidadParaCarteraConDoble(ContabilidadParaCarteraProvisional real, DoblesDeIntegracion dobles, ICurrentTenantService tenant)
+public sealed class ContabilidadParaCarteraConDoble(ContabilidadParaCartera real, DoblesDeIntegracion dobles, ICurrentTenantService tenant)
     : IContabilidadParaCartera
 {
     public Task<Result<ResultadoDeEvaluacionContableDto>> EvaluarAsync(IReadOnlyList<MensajeContableDto> hechos, CancellationToken ct) =>
-        real.EvaluarAsync(hechos, ct);
+        dobles.NoResponde(DoblesDeIntegracion.Cooperativa(tenant))
+            ? throw new TimeoutException("Doble de pruebas: Contabilidad no responde.")
+            : real.EvaluarAsync(hechos, ct);
 
     public Task<Result<SaldosMapeadosDeCarteraDto>> SaldosDeCuentasMapeadasAsync(DateOnly corte, IReadOnlyList<CombinacionDeSaldo> combinaciones,
         CancellationToken ct) => real.SaldosDeCuentasMapeadasAsync(corte, combinaciones, ct);

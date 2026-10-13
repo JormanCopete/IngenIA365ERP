@@ -52,6 +52,12 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         // US17 (T0273): la cola de mensajes al deudor (destinatario, cuerpo, destino copiado).
         ("GET /api/lending/debtor-messages", "Lending.DebtorMessages.Read", "DebtorMessagesEndpoints.cs"),
         ("GET /api/lending/debtor-messages/{id}", "Lending.DebtorMessages.Read", "DebtorMessagesEndpoints.cs"),
+        // US7 (T0610; api.md §16.1, §16.3, DT §2.14): los hechos contables y la lista por crédito de una parte (número, tercero, valores) y la
+        // bandeja de mensajes emitidos, con Messages.Read y nunca con un .View. La conciliación (Reconciliation.View) son cifras por conjunto.
+        ("GET /api/lending/accounting/facts", "Lending.Messages.Read", "AccountingIntegrationEndpoints.cs"),
+        ("GET /api/lending/accounting/fact-parts/{id}", "Lending.Messages.Read", "AccountingIntegrationEndpoints.cs"),
+        ("GET /api/lending/messages", "Lending.Messages.Read", "LendingMessagesEndpoints.cs"),
+        ("GET /api/lending/messages/{id}", "Lending.Messages.Read", "LendingMessagesEndpoints.cs"),
     ];
 
     /// <summary>Los DTO que devuelven las rutas <c>.View</c> de esta fase (se recorren con sus tipos anidados).</summary>
@@ -63,6 +69,8 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         typeof(AlertDto), typeof(AlertTypeDto),
         // T0273: las plantillas de mensaje y su vista previa (MessageTemplates.View).
         typeof(MessageTemplateVersionDto), typeof(MessageTemplatePreviewDto),
+        // T0610: la conciliación contable (Reconciliation.View): conjuntos de cuentas, cifras y hechos sin deudor.
+        typeof(IngenIA365ERP.Application.Lending.Integration.ConciliacionContableDto),
     ];
 
     private static readonly Regex PropiedadPersonal = new(

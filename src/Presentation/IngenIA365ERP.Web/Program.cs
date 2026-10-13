@@ -131,6 +131,10 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos,
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();
 // Feature 012, US7 (T532): el lado contable de la integración con Inventario (matriz, tipos de comprobante, completitud, lotes).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableClient>();
+// Feature 013, US7 (T0663): el lado contable de la integración con Cartera (matriz, tipos de comprobante, completitud, lotes, indicadores)
+// y, desde Cartera, los hechos contables, la conciliación y la bandeja de mensajes emitidos.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableDeCarteraClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ConciliacionContableClient>();
 // Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient>();
 // Feature 008 — permisos efectivos del usuario en la cooperativa activa (PermissionGate).

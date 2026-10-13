@@ -1,6 +1,7 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Lending.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
+using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Domain.Entities.Integration;
@@ -70,6 +71,34 @@ public class PostLendingSummaryGroupCommandHandlerTests
 
         var recibos = await E.D.Db.LendingPostings.ToListAsync();
         recibos.Should().HaveCount(4).And.OnlyContain(p => p.AccountingDocumentId == documento.Id && p.BatchPublicId == lote.PublicId);
+    }
+
+    /// <summary>
+    /// Defecto del 2026-10-13 (medición de T0633): si la cuenta exige tercero pero no cruce, dos créditos del mismo deudor se juntaban en una línea.
+    /// La línea por crédito de §10.4 no depende de que la cuenta pida cruce.
+    /// </summary>
+    [Fact]
+    public void Con_tercero_y_sin_cruce_sigue_siendo_una_linea_por_credito()
+    {
+        var tipo = new TipoDeLaUnidadDeCartera("InteresCausado", null, 1, "CA", null, null);
+        ConstruccionDeCartera Una(string credito, decimal valor) => new(
+            new PostingRequest("CA", new DateOnly(2026, 11, 14), "x", new AccountingOrigin("CAR", "LendingIssuedDocument", Guid.NewGuid()),
+            [
+                new PostingLine { AccountCode = "14430501", Debit = valor, PersonId = 7, BranchId = 1 },
+                new PostingLine { AccountCode = "41502501", Credit = valor, BranchId = 1 },
+            ]),
+            tipo,
+            [
+                new LineaDeCartera(["InteresCausado"], "InteresPorCobrar", "CurrentInterest", [credito], "14430501", "Interés", ConservaDetalle: true),
+                new LineaDeCartera(["InteresCausado"], "Ingreso", "CurrentInterest", [credito], "41502501", "Ingreso", ConservaDetalle: false),
+            ],
+            [], new DateOnly(2026, 11, 14), null!);
+
+        var resumen = PostLendingSummaryGroupCommandHandler.Resumen([Una("000123", 100m), Una("000124", 50m)], Guid.NewGuid(), 1);
+
+        resumen.Lines.Where(l => l.AccountCode == "14430501").Select(l => l.Debit)
+            .Should().BeEquivalentTo([100m, 50m], "una línea por crédito aunque los dos sean del mismo tercero y la cuenta no pida cruce");
+        resumen.Lines.Should().ContainSingle(l => l.AccountCode == "41502501").Which.Credit.Should().Be(150m);
     }
 
     [Fact]

@@ -64,6 +64,20 @@
             <PermissionGate Required="Accounting.InventoryBatches.View">
                 <NavLink href="/contabilidad/inventario/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
             </PermissionGate>
+            @* Feature 013, US7 (T0669): el lado contable de la integración con Cartera (enmienda E-01 de la 009) y los indicadores
+               regulatorios que Cartera lee. El detalle de un lote (/contabilidad/cartera/lotes/{id}) se abre desde la lista. *@
+            <span class="nav-subgroup-title">Cartera</span>
+            <PermissionGate Required="Accounting.LendingRules.View">
+                <NavLink href="/contabilidad/cartera/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/cartera/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/cartera/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Accounting.LendingBatches.View">
+                <NavLink href="/contabilidad/cartera/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Accounting.RegulatoryIndicators.View">
+                <NavLink href="/contabilidad/indicadores-regulatorios" class="nav-subitem">Indicadores regulatorios</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 013 (T0187, enmienda A10): lo conservado de la cartera heredada —ahorros, depósitos, CDT, aportes,
@@ -137,6 +151,10 @@
             @* US6 (T0602): lo que llega a Cartera (ventas a crédito, ajustes, resultados del giro) y las corridas del proceso. *@
             <PermissionGate Required="Lending.Messages.Read">
                 <NavLink href="/cartera/bandeja-de-mensajes" class="nav-subitem">Bandeja de mensajes</NavLink>
+            </PermissionGate>
+            @* US7 (T0669): Cartera frente a Contabilidad —la conciliación y los hechos contables con sus partes—. *@
+            <PermissionGate Required="Lending.Reconciliation.View" AnyOf="@(new[] { "Lending.Messages.Read" })">
+                <NavLink href="/cartera/conciliacion-contable" class="nav-subitem">Conciliación contable</NavLink>
             </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">

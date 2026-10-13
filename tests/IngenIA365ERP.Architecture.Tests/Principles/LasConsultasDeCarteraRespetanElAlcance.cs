@@ -130,6 +130,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US5 (bloque 9B, T0556): el recaudador de prueba llama al contrato de obligaciones, que es un puerto sin el alcance de Cartera (FR-004).
         ["ListTestCollectorObligationsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
         ["SimulateTestCollectorPaymentQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
+        // US7: el catálogo sembrado de tipos de hecho (LND_FactTypes), de la cooperativa y sin deudores.
+        ["ListLendingFactTypesQuery"] = "catálogo de la cooperativa: los tipos de hecho no tienen oficina ni deudores",
         ["ListTestCollectorReversalsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): ve lo que recibe el recaudador, no una oficina",
     };
 
@@ -161,6 +163,19 @@ public class LasConsultasDeCarteraRespetanElAlcance
             Assert.Matches($@"class {handler}[\s\S]*?LineaEnAlcanceAsync\(", consultas);
         Assert.Matches(@"class GetCreditLineScoringQueryHandler[\s\S]*?LineaEnAlcanceAsync\(", puntaje);
         Assert.Matches(@"LineaEnAlcanceAsync[\s\S]*?AsegurarAsync\(null, linea\.Id, ErroresDeLineasDeCredito\.LineaInexistente\(\)", comunes);
+    }
+
+    /// <summary>
+    /// US7 (T0610): las tres consultas de la integración contable vistas desde Cartera piden el alcance en su handler —la conciliación por las
+    /// oficinas (y una sucursal fuera de él es el 404), los hechos por la sucursal de su sobre, una parte por su oficina—.
+    /// </summary>
+    [Fact]
+    public void Las_consultas_contables_de_Cartera_piden_el_alcance_en_su_handler()
+    {
+        var consultas = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Lending",
+            "Integration", "Queries", "LendingAccountingQueries.cs"));
+        foreach (var handler in new[] { "GetLendingAccountingReconciliationQueryHandler", "ListLendingAccountingFactsQueryHandler", "GetAccountingFactPartQueryHandler" })
+            Assert.Matches($@"class {handler}\([^)]*IAlcanceDeCartera[\s\S]*?\.ObtenerAsync\(", consultas);
     }
 
     [Fact]

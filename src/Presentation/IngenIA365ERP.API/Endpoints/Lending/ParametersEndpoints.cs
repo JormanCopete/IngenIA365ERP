@@ -3,6 +3,7 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.Parameters.AddParameterVersion;
 using IngenIA365ERP.Application.Common.Parameters.GetParameterHistory;
 using IngenIA365ERP.Application.Common.Parameters.ListParameters;
+using IngenIA365ERP.Application.Lending.Integration.Queries;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using MediatR;
@@ -15,7 +16,7 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// fijo por la ruta. Leer exige <c>Lending.Parameters.View</c>; registrar una vigencia <c>Lending.Parameters.Manage</c> —y el permiso propio de
 /// la clave, que revisa el comando (<c>Segregacion.Incompatibilidades</c> → <c>Lending.Segregation.Manage</c>)— con <c>Idempotency-Key</c>.
 /// Los pisos y techos legales y la entrega de cada clave los aplica <c>ReglasDeParametrosDeCartera</c>. Los ámbitos son <c>None</c> y
-/// <c>CreditLine</c>; <c>LendingFactType</c> y su lista (<c>/fact-types</c>) los publica US7. Cada ruta sólo reenvía al
+/// <c>CreditLine</c> y, desde US7, <c>LendingFactType</c> con su lista (<c>GET /api/lending/fact-types</c>, <c>Parameters.View</c>). Cada ruta sólo reenvía al
 /// <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class ParametersEndpoints : ICarterModule
@@ -30,6 +31,12 @@ public class ParametersEndpoints : ICarterModule
         parametros.MapGet("/", async (string? key, DateOnly? date, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListParametersQuery(ParametrosDeCartera.Modulo, key, date), ct))
             .WithName("Lending_Parameters_List")
+            .RequirePermission(Ver);
+
+        // US7: el catálogo de tipos de hecho (ámbito LendingFactType y filtro del envío posterior de la bandeja).
+        LendingGroup.Grupo(app, "/fact-types", "Cartera Parámetros").MapGet("/", async (ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListLendingFactTypesQuery(), ct))
+            .WithName("Lending_FactTypes_List")
             .RequirePermission(Ver);
 
         parametros.MapGet("/{key}/history", async (string key, ParameterScopeKind? scopeKind, Guid? scopePublicId, ISender sender, CancellationToken ct) =>

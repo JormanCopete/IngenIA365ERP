@@ -63,6 +63,19 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
 
     // ----------------------------------------------------------------------------------------- aprobado sin desembolsar --
 
+    /// <summary>
+    /// Defecto del 2026-10-13 (e2e de Cartera): el número del cupo rotativo (<c>CUP-</c> + doce hexadecimales) pasaba entero como
+    /// <c>OriginDocumentTypeCode</c> cuando terminaba en letra, y el <c>varchar(10)</c> reventaba el otorgamiento. El tipo de documento del sobre es el
+    /// prefijo hasta el guion y nunca pasa de diez caracteres.
+    /// </summary>
+    [Theory]
+    [InlineData("CUP-1A2B3C4D5E6F", "CreditLimit", "CUP-")]
+    [InlineData("CUP-1A2B3C4D5E60", "CreditLimit", "CUP-")]
+    [InlineData("SOL000123", "CreditApplication", "SOL")]
+    [InlineData("ABCDEFGHIJKLMNO", "CreditLimit", "ABCDEFGHIJ")]
+    public void El_tipo_de_documento_del_sobre_es_el_prefijo_del_numero_y_cabe_en_diez(string numero, string clase, string esperado) =>
+        MovimientoContingenteDeCartera.TipoDeDocumentoDe(numero, clase).Should().Be(esperado);
+
     [Fact]
     public async Task Aprobar_sube_el_contingente_por_lo_aprobado_y_repetir_no_emite_nada()
     {

@@ -234,7 +234,7 @@ public sealed class ReversionDePago(
         };
         var reasignaciones = await aplicacion.ReasignacionesAsync(credito, efecto.Reasignaciones, ct);
         var u = await emision.PagoReversadoAsync(new ReversoDePagoAEmitir(datos.Hecho(contable.Value), reverso, pago, r.IniciadoPor, r.Motivo.Trim(),
-            EmisionDeCartera.Montos(c.Espejos, f => f.Monto), efecto.DeCausacion, reasignaciones, reverso.Amount, reabre, recaudador, pagador,
+            EmisionDeCartera.Montos(c.Espejos, RestituidoPorElReverso), efecto.DeCausacion, reasignaciones, reverso.Amount, reabre, recaudador, pagador,
             actor.Kind == Domain.Enums.Integration.ActorKind.Person ? new UserRefV1 { CentralUserId = actor.CentralUserId, Name = actor.Name } : null), ct);
 
         var mensajeDelReverso = u.De(PagoReversadoV1.Type);
@@ -358,4 +358,13 @@ public sealed class ReversionDePago(
     private static IReadOnlyList<LineaDeDistribucionDto> Ajustes(EfectoEnElLibro e) =>
         e.Diferencias.GroupBy(d => (d.Cuota, d.Concepto)).Select(g => new LineaDeDistribucionDto(g.Key.Cuota, ComprobantesDePago.Concepto(g.Key.Concepto),
             g.Sum(d => d.Diferencia))).Where(l => l.Amount != 0m).OrderBy(l => l.InstallmentNumber ?? 0).ThenBy(l => (int)l.Concept).ToList();
+
+    /// <summary>
+    /// Lo que el reverso restituye por concepto, en positivo como dice el contrato (<c>PagoReversadoV1.Amounts</c>, mensajes.md §10.8): el espejo de
+    /// lo que el pago bajó de un activo (capital, intereses, cargos) sube y es positivo; el de lo que el pago dejó como anticipo o saldo a favor
+    /// baja ese pasivo con el deudor y su espejo es negativo, así que se le cambia el signo. Hasta el 2026-10-13 viajaba negativo y Contabilidad
+    /// acreditaba el anticipo otra vez en lugar de debitarlo (lo destapó la conciliación de la e2e de T0632). (nuevo)
+    /// </summary>
+    public static decimal RestituidoPorElReverso(MovimientoDeLibro espejo) =>
+        espejo.Concepto is LoanConcept.Advance or LoanConcept.CreditBalance ? -espejo.Monto : espejo.Monto;
 }

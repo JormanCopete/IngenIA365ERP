@@ -56,4 +56,50 @@ public class LosHechosDeCarteraNoLlevanCuentas
 
         ReglaSobreFuente.SinInfracciones(infracciones, "Un record de mensaje de Cartera tiene una propiedad de cuenta contable (FR-126)");
     }
+
+    /// <summary>
+    /// Feature 013, US7 (T0606; contracts/contabilidad.md §1.2): partiendo de los tipos del catálogo de mensajes de Cartera
+    /// (<see cref="CatalogoDeMensajesDeCarteraV1.Todos"/>) y de todo record de <c>Contracts/Lending</c>, recorre recursivamente sus bloques
+    /// (<c>LoanFactDimensionsV1</c>, <c>ConceptAmountV1</c>, <c>LoanFactLineV1</c>, <c>GeneralImpairmentLineV1</c>…, también dentro de listas)
+    /// y rechaza toda propiedad cuyo nombre empiece por <c>Account</c> o <c>Cuenta</c>, salvo los dos sellos de texto que no son cuentas.
+    /// </summary>
+    [Fact]
+    public void Ningun_bloque_de_un_hecho_de_Cartera_lleva_una_cuenta()
+    {
+        var raices = CatalogoDeMensajesDeCarteraV1.Todos.Select(t => t.Record)
+            .Concat(typeof(LoanRefV1).Assembly.GetTypes().Where(t => t.Namespace == typeof(LoanRefV1).Namespace && t.IsClass && !t.IsAbstract))
+            .Distinct()
+            .ToList();
+        Assert.True(CatalogoDeMensajesDeCarteraV1.Todos.Count >= 35, "El catálogo de mensajes de Cartera perdió tipos.");
+
+        var visitados = new HashSet<Type>();
+        var pendientes = new Queue<Type>(raices);
+        var infracciones = new List<string>();
+        while (pendientes.Count > 0)
+        {
+            var tipo = pendientes.Dequeue();
+            if (!visitados.Add(tipo)) continue;
+            foreach (var propiedad in tipo.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if ((propiedad.Name.StartsWith("Account", StringComparison.Ordinal) || propiedad.Name.StartsWith("Cuenta", StringComparison.Ordinal))
+                    && !SellosQueNoSonCuentas.Contains(propiedad.Name))
+                    infracciones.Add($"{tipo.Name}.{propiedad.Name}");
+                foreach (var hijo in TiposDeBloque(propiedad.PropertyType)) pendientes.Enqueue(hijo);
+            }
+        }
+
+        Assert.True(visitados.Count > raices.Count, "No se recorrió ningún bloque anidado: ¿cambió la forma de los contratos?");
+        ReglaSobreFuente.SinInfracciones(infracciones, "Un bloque de un hecho de Cartera lleva una cuenta contable (FR-126)");
+    }
+
+    /// <summary>Los bloques propios de los contratos que cuelgan de una propiedad (directo, en arreglo, lista o diccionario).</summary>
+    private static IEnumerable<Type> TiposDeBloque(Type tipo)
+    {
+        if (tipo.IsArray) return TiposDeBloque(tipo.GetElementType()!);
+        if (tipo.IsGenericType) return tipo.GetGenericArguments().SelectMany(TiposDeBloque);
+        return tipo.Namespace is { } ns && ns.StartsWith("IngenIA365ERP.Application.Common.Integration.Contracts", StringComparison.Ordinal)
+               && tipo.IsClass && !tipo.IsAbstract
+            ? [tipo]
+            : [];
+    }
 }

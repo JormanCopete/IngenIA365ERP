@@ -165,6 +165,19 @@ public class LosEndpointsProtegidosExigenPermiso
         return tramos;
     }
 
+    /// <summary>
+    /// Feature 013, US7 (T0610): las rutas de la integración contable de Cartera entran al recorrido por los globs de <c>Endpoints/Accounting</c>
+    /// y <c>Endpoints/Lending</c>; aquí se fija que estén y que no se las exceptúe por nombre.
+    /// </summary>
+    [Fact]
+    public void Las_rutas_de_la_integracion_contable_de_Cartera_estan_en_el_recorrido()
+    {
+        var archivos = Archivos().ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.Contains(Path.Combine("Endpoints", "Accounting", "LendingIntegrationEndpoints.cs"), archivos);
+        Assert.Contains(Path.Combine("Endpoints", "Lending", "AccountingIntegrationEndpoints.cs"), archivos);
+        Assert.Contains(Path.Combine("Endpoints", "Lending", "LendingMessagesEndpoints.cs"), archivos);
+    }
+
     [Theory]
     [MemberData(nameof(LosArchivos))]
     public void Cada_ruta_lleva_RequirePermission(string relativo)

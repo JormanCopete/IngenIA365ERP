@@ -72,6 +72,29 @@ public class UnSoloConsumidorPorDestino
         Assert.Matches(@"ConsumidoresPorDestino\.Validar\(", File.ReadAllText(programa));
     }
 
+    /// <summary>
+    /// US7 (T0609; contracts/contabilidad.md §6, C82): el único consumidor del destino <c>Accounting</c> es <c>DestinoContabilidad</c>, que vive
+    /// en lo común del consumidor contable (<c>Application/Accounting/Integration</c>) y reparte por módulo de origen: Inventario y Cartera no
+    /// tienen consumidor propio.
+    /// </summary>
+    [Fact]
+    public void El_destino_Accounting_lo_consume_solo_DestinoContabilidad_en_la_carpeta_comun()
+    {
+        var aplicacion = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly;
+        var consumidores = aplicacion.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IDestinoDeMensajes).IsAssignableFrom(t))
+            .ToList();
+        var destino = Assert.Single(consumidores, t => t.Name == "DestinoContabilidad");
+        Assert.Equal("IngenIA365ERP.Application.Accounting.Integration", destino.Namespace);
+
+        var fuentes = RepoPath.ProductionCSharpFiles()
+            .Where(f => Consumidores([File.ReadAllText(f)], IntegrationDestinations.Accounting) > 0)
+            .Select(f => f.Replace(Path.DirectorySeparatorChar, '/'))
+            .ToList();
+        var unico = Assert.Single(fuentes);
+        Assert.EndsWith("Application/Accounting/Integration/DestinoContabilidad.cs", unico, StringComparison.Ordinal);
+    }
+
     private sealed class Consumidor(string destino) : IDestinoDeMensajes
     {
         public string Destino => destino;

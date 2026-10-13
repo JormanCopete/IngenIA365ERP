@@ -50,6 +50,16 @@ public class LasPantallasDicenQueEstanCargando
         "Cartera/Vinculados.razor",
         // US5 (T0526, T0563): la caja de prueba con el recaudador y la tesorería de prueba.
         "Cartera/DoblesDePrueba.razor",
+        // US7 (T0611): la integración contable de Cartera, también las que no usan SfGrid.
+        "Cartera/ConciliacionContable.razor",
+        "Cartera/BandejaDeMensajes.razor",
+        "Contabilidad/Cartera/Matriz.razor",
+        "Contabilidad/Cartera/TiposDeComprobanteDeCartera.razor",
+        "Contabilidad/Cartera/Completitud.razor",
+        "Contabilidad/Cartera/Lotes.razor",
+        "Contabilidad/Cartera/Lote.razor",
+        "Contabilidad/IndicadoresRegulatorios.razor",
+        "Contabilidad/Periodos.razor",
     ];
 
     [Fact]

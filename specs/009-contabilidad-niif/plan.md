@@ -134,7 +134,7 @@ Detalle y alternativas en [research.md](research.md).
 |---|---|---|---|
 | **E1 núcleo** | US1, US2, US3, US4 (Nómina), US7 | migración, dominio y contrato, catálogos y semillas, configuración, plan y auxiliares, tipos y períodos (abrir/cerrar mes), digitación con borradores/contabilizar/reversar, Nómina por el contrato con terceros institucionales, permisos, auditoría de accesos, pantallas nuevas y retiro de las 22 heredadas, pruebas | `009-contabilidad-niif` |
 | **E2 consultas, cierres y apertura** | US5, US6, US13 | libro auxiliar con profundización, balance de prueba, libros, estados financieros, saldo diario promedio, exportación auditada, cierre y reapertura de ejercicio, apertura importada | `009-e2-consultas-cierres` |
-| **E3 módulos restantes** | US4 (escenario 7) | Cartera, Tesorería, CDT/Ahorros por el contrato (*enmienda 012*: sin Inventario, que llega por mensajes con la 012); parametrizaciones validadas; anulaciones por vínculo; consulta de parametrizaciones inválidas | `009-e3-modulos` |
+| **E3 módulos restantes** | US4 (escenario 7) | Cartera, Tesorería, CDT/Ahorros por el contrato (*enmienda 012*: sin Inventario, que llega por mensajes con la 012; *enmienda 013, E-01, 2026-10-13*: sin Cartera, reemplazada por la 013, que llega por hechos con su matriz `ACC_LendingPostingRules`); parametrizaciones validadas; anulaciones por vínculo; consulta de parametrizaciones inválidas | `009-e3-modulos` |
 | **E4 satélites** | US8–US12 | conciliación bancaria, presupuesto, impuestos y certificados, exógena, activos | `009-e4-satelites` |
 
 Cada etapa se mergea a `develop`, se despliega a DEV/QA y se verifica según `quickstart.md`
@@ -196,6 +196,8 @@ src/Core/IngenIA365ERP.Application/
     Reconciliation/*, Budgets/*, Taxes/*, Exogenous/*, Assets/*                # E4
   Payroll/Services/PayrollAccountingPoster.cs (sobre AccountingPoster; PersonId en líneas)
   Lending/*, Inventory/*, Treasury/*, CDT/* (los 12 escritores, sobre el contrato)          # E3
+  # enmienda 012: Inventory/* fuera (mensajes); enmienda 013 (E-01, 2026-10-13): Lending/* fuera,
+  # reemplazados por la 013 (sus escritores se retiran con la cartera heredada)
 src/Infrastructure/IngenIA365ERP.Persistence/
   Configurations/Accounting/*.cs (reescritas), Configurations/{Core,Payroll,Treasury,Lending,CDT,Inventory}/… (columnas nuevas)
   Seeding/Parametric/Data/{puc-comercial,puc-solidario,rubros-niif,voucher-types,cross-document-types,exogena-2026}.json (EmbeddedResource)
@@ -246,6 +248,8 @@ reemplazan a las heredadas bajo `Pages/Contabilidad` (mismo módulo, rutas nueva
   parametrización, la operación falla con mensaje (nunca en silencio); Tesorería, Cartera
   (provisión) y CDT/Ahorros ganan columnas de cuentas. Cada uno queda documentado en
   `contracts/contabilizacion.md` §4 y puede necesitar su propia feature contable después.
+  *Enmienda 013 (E-01, 2026-10-13)*: Cartera tuvo la suya: no gana columnas de cuentas; llega por
+  hechos y su parametrización es la matriz `ACC_LendingPostingRules` (`specs/013-cartera-financiera/contracts/contabilidad.md`).
 - **Rendimiento con saldos derivados**: índices definidos en `data-model.md`; prueba de carga
   `RUN_PERF_TESTS=1` con un millón de líneas en E2; resumen materializado diferido (R4).
 - **Concurrencia de numeración**: reintento en servidor probado con dos clientes en la e2e;

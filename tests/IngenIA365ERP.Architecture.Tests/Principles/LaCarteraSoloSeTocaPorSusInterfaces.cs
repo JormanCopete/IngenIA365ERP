@@ -40,6 +40,10 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         "Core/IngenIA365ERP.Domain/Entities/Savings",
         "Core/IngenIA365ERP.Domain/Entities/Inventory",
         "Core/IngenIA365ERP.Domain/Inventory",
+        // US7 (T0608): el consumidor contable de Cartera y lo común del destino Accounting conocen a Cartera sólo por IDimensionesDeCartera
+        // y por la bandeja (el contenido de los mensajes, en Common.Integration.Contracts.Lending).
+        "Core/IngenIA365ERP.Application/Accounting/Lending",
+        "Core/IngenIA365ERP.Application/Accounting/Integration",
     ];
 
     /// <summary>Carpetas de Cartera (relativas a <c>src/</c>) que no pueden nombrar a otros módulos salvo por sus puertos.</summary>
@@ -91,9 +95,13 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
 
     private static string ConHijos(string ns) => $"^{Regex.Escape(ns)}(\\..+)?$";
 
-    /// <summary>Todo espacio <c>*.Lending*</c> salvo los puertos de <c>Application.Common.Integration.Lending</c> y los contratos de mensajes.</summary>
+    /// <summary>
+    /// Todo espacio <c>*.Lending*</c> salvo los puertos de <c>Application.Common.Integration.Lending</c> y los contratos de mensajes, y salvo el
+    /// consumidor contable de Cartera y sus tablas (<c>Application.Accounting.Lending</c>, <c>Domain.Entities.Accounting.Lending</c>, US7), que
+    /// son de Contabilidad aunque se llamen así.
+    /// </summary>
     private const string LendingSalvoPuertos =
-        @"^IngenIA365ERP\.(?!Application\.Common\.Integration(\.|$))([\w.]+\.)?Lending(\..+)?$";
+        @"^IngenIA365ERP\.(?!Application\.Common\.Integration(\.|$))(?!(Application|Domain(\.Entities)?)\.Accounting(\.|$))([\w.]+\.)?Lending(\..+)?$";
 
     [Fact]
     public void Ningun_otro_modulo_toca_Cartera_salvo_por_sus_puertos()
@@ -114,6 +122,24 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
                 .Check(Arquitectura.Value);
     }
 
+    /// <summary>
+    /// US7 (T0608): el consumidor contable de Cartera y lo común del destino <c>Accounting</c> conocen a Cartera sólo por
+    /// <c>IDimensionesDeCartera</c> y por el contenido de los mensajes (<c>Application.Common.Integration</c>). Los nombres de los conceptos
+    /// (<c>Domain.Enums.Lending.LoanConcept</c>) son el vocabulario de esos mensajes y se admiten; las entidades y la aplicación de Cartera, no.
+    /// </summary>
+    [Fact]
+    public void El_lado_contable_no_depende_de_Cartera_salvo_por_su_puerto_y_los_mensajes()
+    {
+        const string carteraSalvoPuertosYVocabulario =
+            @"^IngenIA365ERP\.(?!Application\.Common\.Integration(\.|$))(?!(Application|Domain(\.Entities)?)\.Accounting(\.|$))(?!Domain\.Enums\.Lending(\.|$))([\w.]+\.)?Lending(\..+)?$";
+        var cartera = Types().That().ResideInNamespaceMatching(carteraSalvoPuertosYVocabulario);
+        foreach (var ns in new[] { "IngenIA365ERP.Application.Accounting.Lending", "IngenIA365ERP.Application.Accounting.Integration" })
+            Types().That().ResideInNamespaceMatching(ConHijos(ns))
+                .Should().NotDependOnAny(cartera)
+                .Because($"T0608, C27: {ns} conoce a Cartera por IDimensionesDeCartera y por los mensajes")
+                .Check(Arquitectura.Value);
+    }
+
     [Fact]
     public void Cartera_no_toca_otros_modulos_salvo_por_los_puertos_que_consume()
     {
@@ -124,13 +150,15 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     [Fact]
     public void Los_puertos_que_Cartera_ofrece_declaran_exactamente_sus_metodos()
     {
-        // T90, R117: IDimensionesDeCartera lo suma US7.
+        // T90, R117; US7 (T0608, enmienda A1, C27): IDimensionesDeCartera, el que Contabilidad usa para la matriz y la completitud.
         Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync"], MetodosDe(typeof(IConsultasDeCartera)));
+        Assert.Equal(["CatalogoAsync", "CombinacionesEnUsoAsync"], MetodosDe(typeof(IDimensionesDeCartera)));
         Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(typeof(IReservasDeCartera)));
         Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
         Assert.Equal(["AplicarAsync", "ListarAsync", "ResolverSaldoAFavorAsync", "ReversarAsync", "SimularAsync"], MetodosDe(typeof(IContratoDeObligaciones)));
         Assert.Equal(1, IContratoDeObligaciones.VersionDelContrato);
-        foreach (var puerto in new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones) })
+        foreach (var puerto in new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones),
+                     typeof(IDimensionesDeCartera) })
             Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
     }
 
@@ -138,7 +166,8 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     public void Fuera_de_Cartera_solo_los_provisionales_del_mismo_espacio_implementan_los_puertos()
     {
         // Los dobles viven en tests/ (otro ensamblado). Las implementaciones reales vivirán en Application.Lending.Integration (US5, US6).
-        var puertos = new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones) };
+        var puertos = new[] { typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones),
+            typeof(IDimensionesDeCartera) };
         var ensamblados = new[] { typeof(IngenIA365ERP.Application.DependencyInjection).Assembly, typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly, typeof(ApplicationDbContext).Assembly };
         var ajenos = ensamblados.SelectMany(a => a.GetTypes())
             .Where(t => t is { IsClass: true, IsAbstract: false } && puertos.Any(p => p.IsAssignableFrom(t)))
@@ -227,6 +256,20 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
             .ToList();
 
         Assert.True(violaciones.Count == 0, "Tablas de Nómina o Comercial con FK a Cartera (FR-008, C34): " + string.Join(", ", violaciones));
+    }
+
+    /// <summary>
+    /// US7 (T0608, T0657): la implementación real de <c>IDimensionesDeCartera</c> es de Cartera (<c>Application/Lending/Integration</c>) y
+    /// <c>DependencyInjection</c> la registra.
+    /// </summary>
+    [Fact]
+    public void Las_dimensiones_que_Contabilidad_pregunta_las_da_Cartera()
+    {
+        var dimensiones = typeof(IngenIA365ERP.Application.Lending.Integration.DimensionesDeCartera);
+        Assert.True(typeof(IDimensionesDeCartera).IsAssignableFrom(dimensiones));
+        Assert.Equal("IngenIA365ERP.Application.Lending.Integration", dimensiones.Namespace);
+        var di = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
+        Assert.Matches(@"IDimensionesDeCartera,\s*[\w.]*DimensionesDeCartera>", di);
     }
 
     private static List<string> MetodosDe(System.Type puerto) => puerto

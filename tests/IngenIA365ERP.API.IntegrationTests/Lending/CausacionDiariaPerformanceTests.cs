@@ -30,6 +30,13 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// el contrato en la otra cooperativa llegan con US5 (fase 9); hasta entonces se miden las consultas. El tamaño se puede bajar con
 /// <c>CARTERA_CREDITOS_DE_RENDIMIENTO</c> para probar el arnés; el umbral sólo se juzga con los 50.000. (nuevo)
 /// </para>
+///
+/// <para>
+/// US7 (T0633; pregunta C5, rige aceptar un <c>CA</c> por día con la sucursal por línea): con la matriz cargada por la plantilla y la cuenta de
+/// interés exigiendo tercero (<see cref="ContabilidadDeCarteraE2E"/>), deja medidos el tiempo del lote <c>LendingAccrualRun</c> del día —las
+/// pasadas del despachador que corren <c>PostLendingSummaryGroupCommand</c>— y las líneas del comprobante resumido (~20.000 esperadas con 50.000
+/// créditos; la cuenta que exige tercero lleva una por crédito). Sólo se informa: no hay umbral fijado para el lote.
+/// </para>
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx, ITestOutputHelper salida)
@@ -48,6 +55,9 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         var h = esc.Hoy;
         using var http = fx.CreateClient();
         var jefe = esc.Usuarios.Jefe.Token;
+
+        // US7 (T0633): la matriz por la plantilla, con la cuenta de interés que exige tercero, antes del primer hecho.
+        await ContabilidadDeCarteraE2E.MatrizPorPlantillaAsync(http, esc.Coop.TokenAdmin, h, conHuecos: false);
 
         var plantilla = (await DesembolsoE2E.CreditoDesembolsadoAsync(http, esc, "Plantilla", 3_000_000m)).Desembolso.GetProperty("loanPublicId").GetGuid();
         var consultado = (await DesembolsoE2E.CreditoDesembolsadoAsync(http, otra, "Consultado", 2_000_000m)).Desembolso.GetProperty("loanPublicId").GetGuid();
@@ -95,6 +105,26 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         medidas.posiciones.Should().Be(cuantos, "una posición por crédito y día (D13)");
         if (tiempos.Count > 0) p95.Should().BeLessThan(1_000, "SC-008: las consultas de la otra cooperativa siguen bajo un segundo");
         if (cuantos >= CreditosPorDefecto) duracion.Should().BeLessThan(Umbral, "SC-007: una pasada del ciclo sobre 50.000 créditos en menos de 30 minutos");
+
+        // US7 (T0633): el lote LendingAccrualRun del día y su CA resumido, por el despachador conducido a mano.
+        var despachador = new Integration.ConductorDelDespachador(fx);
+        var loteReloj = Stopwatch.StartNew();
+        await despachador.PasadasAsync(tenant, 5);
+        var tiempoDelLote = loteReloj.Elapsed;
+        var resumido = await EnLaBaseAsync(fx, tenant, async db =>
+        {
+            var lote = await db.IntegrationBatches.AsNoTracking()
+                .Where(b => b.Trigger == Domain.Enums.Integration.BatchTrigger.LendingAccrualRun).OrderByDescending(b => b.Id).FirstOrDefaultAsync();
+            if (lote is null) return (Estado: "sin lote", Comprobantes: 0, Lineas: 0, ConTercero: 0);
+            var documentos = await db.LendingPostings.AsNoTracking().Where(p => p.BatchPublicId == lote.PublicId && p.AccountingDocumentId != null)
+                .Select(p => p.AccountingDocumentId!.Value).Distinct().ToListAsync();
+            var lineas = await db.JournalEntries.AsNoTracking().CountAsync(j => documentos.Contains(j.DocumentId));
+            var conTercero = await db.JournalEntries.AsNoTracking().CountAsync(j => documentos.Contains(j.DocumentId) && j.PersonId != null);
+            return (Estado: lote.Status.ToString(), Comprobantes: documentos.Count, Lineas: lineas, ConTercero: conTercero);
+        });
+        salida.WriteLine($"Lote LendingAccrualRun ({resumido.Estado}): {tiempoDelLote.TotalSeconds:N0} s; {resumido.Comprobantes:N0} comprobante(s) CA, " +
+                         $"{resumido.Lineas:N0} líneas ({resumido.ConTercero:N0} con tercero: una por crédito en la cuenta de interés).");
+        resumido.Comprobantes.Should().BeGreaterThan(0, "la causación del día deja su CA resumido (C5)");
 
         // Un día saltado (h+2) y su puesta al día con el ciclo de h+3: cada día una vez. El access dura 15 minutos: se vuelve a ingresar.
         jefe = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Jefe);

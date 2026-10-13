@@ -141,6 +141,16 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
 
     public const string CodigoInventarioPendiente = "Accounting.Period.InventoryPending";
 
+    /// <summary>
+    /// Feature 013, US7 (T0652; contracts/api.md §24): cerrar reconociendo lo que corresponda de Inventario y de Cartera. Sin reconocer,
+    /// Cartera puede responder <c>Accounting.Period.LendingPending</c> (hechos sin procesar) o <c>Accounting.Period.LendingLoadWillExpire</c>
+    /// (una carga sin activar); <c>Accounting.Period.LendingNotClosed</c> no se reconoce.
+    /// </summary>
+    public Task<ResultadoContable<EmptyResponse>> CerrarPeriodoAsync(int year, int month, bool reconocerPendientesDeInventario,
+        bool reconocerPendientesDeCartera, bool reconocerCargaDeCartera, CancellationToken ct = default) =>
+        EnviarConDatosAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/{year}/{month}/close",
+            new CerrarPeriodoContableRequest(reconocerPendientesDeInventario, reconocerPendientesDeCartera, reconocerCargaDeCartera), ct);
+
     public Task<InvitationApiResult<EmptyResponse>> ReabrirPeriodoAsync(int year, int month, string motivo, CancellationToken ct = default) =>
         EnviarAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/{year}/{month}/reopen", new MotivoRequest(motivo), ct);
 

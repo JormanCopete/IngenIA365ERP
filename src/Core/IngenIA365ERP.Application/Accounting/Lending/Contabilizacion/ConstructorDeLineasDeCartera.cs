@@ -935,7 +935,11 @@ public static class ConstructorDeLineasDeCartera
         return new ConstruccionDeCartera(request, tipo, sumadas.Select(s => s.Mapa).ToList(), [], fecha, principal);
     }
 
-    /// <summary>Suma las líneas con la misma cuenta, lado, sucursal, centro, tercero y cruce; el mapa junta hechos y créditos.</summary>
+    /// <summary>
+    /// Suma las líneas con la misma cuenta, lado, sucursal, centro, tercero y cruce —y, en las cuentas que exigen tercero, cruce o base, el mismo
+    /// crédito: una línea por crédito (§10.4) aunque la cuenta no pida cruce; hasta el 2026-10-13 los créditos del mismo deudor de una parte se
+    /// juntaban—; el mapa junta hechos y créditos.
+    /// </summary>
     private static List<(PostingLine Linea, LineaDeCartera Mapa)> SumarIguales(
         IReadOnlyList<(PostingLine Linea, Partida Partida, string AccountName, bool ConservaDetalle)> lineas)
     {
@@ -944,7 +948,7 @@ public static class ConstructorDeLineasDeCartera
         foreach (var (linea, partida, nombre, conserva) in lineas)
         {
             var clave = string.Join('|', linea.AccountCode, linea.Debit > 0m ? "D" : "C", linea.BranchId, linea.CostCenterId, linea.PersonId,
-                linea.CrossDocumentType, linea.CrossDocumentNumber);
+                linea.CrossDocumentType, linea.CrossDocumentNumber, conserva ? partida.Credito : null);
             if (indice.TryGetValue(clave, out var i))
             {
                 var previa = resultado[i];

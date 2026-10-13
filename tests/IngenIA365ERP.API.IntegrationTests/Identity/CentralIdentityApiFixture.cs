@@ -203,8 +203,9 @@ public class CentralIdentityApiFixture : IAsyncLifetime
                 services.AddScoped<IngenIA365ERP.Application.Accounting.Inventory.ContabilidadParaInventario>();
                 services.RemoveAll<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario>();
                 services.AddScoped<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario, Integration.ContabilidadParaInventarioConDoble>();
-                // Feature 013, US2 (T0384): el patrimonio técnico que marca una prueba de Cartera (el provisional de K1 no lo tiene).
-                services.AddScoped<IngenIA365ERP.Application.Common.Integration.Accounting.ContabilidadParaCarteraProvisional>();
+                // Feature 013, US2 (T0384): el patrimonio técnico que marca una prueba de Cartera; desde US7 (bloque C) el doble envuelve al
+                // adaptador real (ContabilidadParaCartera) y además «no responde» a la validación previa en la cooperativa marcada.
+                services.AddScoped<IngenIA365ERP.Application.Accounting.Lending.ContabilidadParaCartera>();
                 services.RemoveAll<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaCartera>();
                 services.AddScoped<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaCartera, Integration.ContabilidadParaCarteraConDoble>();
                 services.AddScoped<IngenIA365ERP.Application.Accounting.Integration.DestinoContabilidad>();

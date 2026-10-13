@@ -117,4 +117,29 @@ public class LotesDeCarteraTests
         entrega.Status.Should().Be(DeliveryStatus.InBatch);
         entrega.Message!.OperationDate.Should().Be(new DateOnly(2026, 11, 3), "el hecho conserva su fecha contable original");
     }
+
+    /// <summary>
+    /// Defecto del 2026-10-13 (e2e de T0632, C01): un pago y sus acompañantes son una unidad (origen y evento) y un solo comprobante. Reprocesar sólo
+    /// el <c>PagoAplicado</c> rechazado lo consumía solo —«sin comprobante (valor cero)»— y su <c>AnticipoRecibido</c> quedaba rechazado aparte. Ahora
+    /// los rechazados de la misma unidad entran al mismo lote; los de otra unidad, no.
+    /// </summary>
+    [Fact]
+    public async Task Reprocesar_un_hecho_trae_a_los_rechazados_de_su_misma_unidad_y_no_a_otros()
+    {
+        var unidad = EscenarioContableDeCartera.Copia(EscenarioContableDeCartera.UnidadDe("04-pago-por-caja-con-anticipo"));
+        unidad.Should().HaveCountGreaterThan(1, "el caso trae el pago con su acompañante");
+        var otra = EscenarioContableDeCartera.Copia(EscenarioContableDeCartera.UnidadDe("01-desembolso-por-transferencia"));
+        E.Emitir(unidad, DeliveryStatus.Rejected);
+        E.Emitir(otra, DeliveryStatus.Rejected);
+        var handler = new ReprocessMessagesCommandHandler(E.D.Db, E.ActorActual, E.D.Clock, [new DestinoFalso(IntegrationDestinations.Accounting)], _senal);
+
+        var r = await handler.Handle(new ReprocessMessagesCommand([unidad[0].MessageId], "Se creó el puente del recaudador") { OperationKey = Guid.NewGuid() }, default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        E.D.Db.ChangeTracker.Clear();
+        var estados = await E.D.Db.IntegrationMessageDeliveries.Include(d => d.Message)
+            .ToDictionaryAsync(d => d.Message!.PublicId, d => d.Status);
+        unidad.Select(m => estados[m.MessageId]).Should().OnlyContain(s => s == DeliveryStatus.InBatch, "toda la unidad se reprocesa junta");
+        otra.Select(m => estados[m.MessageId]).Should().OnlyContain(s => s == DeliveryStatus.Rejected, "otra unidad no se arrastra");
+    }
 }

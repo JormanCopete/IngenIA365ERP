@@ -12,7 +12,11 @@
 @* Feature 013, US6 (T0602; contracts/api.md §16.2, §16.4; T17, C95, C102): lo que llega a Cartera —las ventas a crédito y sus ajustes de Comercial y
    los resultados del giro de Tesorería— con su estado, sus evaluaciones, el crédito que originó y la respuesta enviada a Comercial; un recibo
    rechazado se marca no reprocesable con motivo (emite la obligación rechazada definitiva). La pestaña «Corridas del proceso» (pendiente desde US4)
-   lista las corridas del ciclo diario con su avance y sus errores, sin datos del deudor. La fase de US7 le suma los mensajes emitidos. *@
+   lista las corridas del ciclo diario con su avance y sus errores, sin datos del deudor.
+   Feature 013, US7 (contracts/api.md §16.1): la pestaña «Emitidos» (BandejaDeEmitidos) muestra lo que Cartera emitió —los hechos a
+   Contabilidad y las respuestas a Comercial— con su reproceso y su envío posterior. ?origen= la abre filtrada por la operación, la parte o
+   el cierre de origen (a donde lleva «Ver en Cartera» de un comprobante, EnlacesDeOrigen); ?mensaje= abre un mensaje y ?lote= los de un
+   lote de Contabilidad. *@
 <PermissionGate Required="Lending.Messages.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -22,6 +26,7 @@
             <PermissionGate Required="Lending.Processes.View">
                 <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Corridas del proceso</SfButton>
             </PermissionGate>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(2))">Emitidos</SfButton>
         </div>
     </div>
 
@@ -116,6 +121,10 @@
             </div>
         }
     }
+    else if (_pestana == 2)
+    {
+        <BandejaDeEmitidos Origen="@Origen" Mensaje="@Mensaje" Lote="@Lote" />
+    }
     else
     {
         <div class="toolbar">
@@ -174,6 +183,21 @@
 
 @code {
     private const int Tamano = 20;
+
+    /// <summary>La operación, la parte o el cierre de origen de un comprobante de Cartera: abre «Emitidos» filtrada.</summary>
+    [SupplyParameterFromQuery(Name = "origen")] public Guid? Origen { get; set; }
+
+    /// <summary>Un mensaje emitido para abrir de una vez.</summary>
+    [SupplyParameterFromQuery(Name = "mensaje")] public Guid? Mensaje { get; set; }
+
+    /// <summary>Un lote de Contabilidad cuyos mensajes emitidos se listan.</summary>
+    [SupplyParameterFromQuery(Name = "lote")] public Guid? Lote { get; set; }
+
+    /// <summary><c>emitidos</c> abre esa pestaña sin filtro (lo usa el cierre contable del mes).</summary>
+    [SupplyParameterFromQuery(Name = "pestana")] public string? Pestana { get; set; }
+
+    private bool AbreEmitidos => Origen is not null || Mensaje is not null || Lote is not null || Pestana == "emitidos";
+
     private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _cargaCorridas = new(), _guardado = new();
     private ClaveDeOperacion _clave = new();
     private int _pestana, _pagina = 1;
@@ -187,11 +211,26 @@
     private bool _verDetalle, _mostrarMarcar;
     private string? _motivo, _error;
 
-    protected override Task OnInitializedAsync() => CargarAsync(1);
+    protected override Task OnInitializedAsync()
+    {
+        if (AbreEmitidos)
+        {
+            _pestana = 2;
+            return Task.CompletedTask;
+        }
+        return CargarAsync(1);
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Un enlace a la misma página con otro origen (desde un comprobante) vuelve a abrir «Emitidos».
+        if (AbreEmitidos) _pestana = 2;
+    }
 
     private async Task CambiarAsync(int pestana)
     {
         _pestana = pestana;
+        if (pestana == 0 && _recibos.Count == 0) await CargarAsync(1);
         if (pestana == 1 && _corridas.Count == 0) await CargarCorridasAsync();
     }
 

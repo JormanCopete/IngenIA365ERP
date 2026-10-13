@@ -186,7 +186,7 @@ public sealed class MovimientoContingenteDeCartera(IApplicationDbContext db, Emi
         var yaHay = db.IntegrationMessages.Local.Any(m => m.OriginPublicId == origen && m.Type == tipo)
             || await db.IntegrationMessages.AsNoTracking().AnyAsync(m => m.OriginPublicId == origen && m.Type == tipo, ct);
         var clave = yaHay ? ClavesDeEvento.ConfirmacionPor(Guid.NewGuid()) : ClavesDeEvento.Confirmacion;
-        var emitido = await emision.ContingenteAsync(new OrigenDeEmision(MessageOriginKind.Document, origen, clase, EmisionDeCartera.Prefijo(numero) ?? clase,
+        var emitido = await emision.ContingenteAsync(new OrigenDeEmision(MessageOriginKind.Document, origen, clase, TipoDeDocumentoDe(numero, clase),
             numero, fecha.Value, sucursal, PersonPublicId: deudor), tipo, clave, contenido, ct);
         return emitido.IsFailure ? Result.Failure<IntegrationMessage?>(emitido.Error) : Result.Success<IntegrationMessage?>(emitido.Value);
     }
@@ -218,4 +218,16 @@ public sealed class MovimientoContingenteDeCartera(IApplicationDbContext db, Emi
 
     /// <summary>El texto de un saldo contingente (para la auditoría y los mensajes al usuario).</summary>
     public static string Texto(decimal valor) => valor.ToString("N2", CultureInfo.GetCultureInfo("es-CO"));
+
+    /// <summary>
+    /// El <c>OriginDocumentTypeCode</c> del sobre (<c>varchar(10)</c>): el prefijo del número hasta su guion (<c>CUP-</c>, <c>SOL-</c>) o, sin guion, el
+    /// de <see cref="EmisionDeCartera.Prefijo"/>, nunca más de diez caracteres. Hasta el 2026-10-13 el número del cupo (<c>CUP-</c> + doce
+    /// caracteres hexadecimales que pueden terminar en letra) pasaba entero y el guardado del cupo rotativo reventaba. (nuevo)
+    /// </summary>
+    public static string TipoDeDocumentoDe(string numero, string clase)
+    {
+        var guion = numero.IndexOf('-', StringComparison.Ordinal);
+        var prefijo = guion > 0 ? numero[..(guion + 1)] : EmisionDeCartera.Prefijo(numero) ?? clase;
+        return prefijo.Length <= 10 ? prefijo : prefijo[..10];
+    }
 }

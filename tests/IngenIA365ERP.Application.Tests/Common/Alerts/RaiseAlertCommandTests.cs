@@ -61,6 +61,29 @@ public class RaiseAlertCommandTests
             EntityType: "Product", EntityPublicId: Producto, ScopeWarehousePublicId: Bodega,
             DedupKey: $"{TiposDeAlerta.Quiebre}:{Producto:D}:{Bodega:D}");
 
+    /// <summary>
+    /// Defecto del 2026-10-13 (feature 013, US7, e2e de Cartera): la condición de <c>Cartera.HechoNoContabilizable</c> lleva la combinación de
+    /// dimensiones y pasaba de los 200 caracteres de <c>COR_Alerts.DedupKey</c>; el guardado reventaba y con él el desembolso que alertaba. La
+    /// clave larga se acota con su huella: cabe, es estable (la segunda vez repite la misma alerta) y no se confunde con otra parecida.
+    /// </summary>
+    [Fact]
+    public async Task Una_condicion_mas_larga_que_la_columna_se_acota_con_su_huella_y_sigue_deduplicando()
+    {
+        var larga = $"{TiposDeAlerta.Quiebre}:{new string('x', 260)}";
+        var otra = $"{TiposDeAlerta.Quiebre}:{new string('x', 259)}y";
+        AlertaALevantar Con(string clave) => Quiebre() with { DedupKey = clave };
+
+        (await Levantar(Con(larga))).Value.Desenlace.Should().Be(DesenlaceDeAlerta.Levantada);
+        (await Levantar(Con(larga))).Value.Desenlace.Should().Be(DesenlaceDeAlerta.Repetida);
+        (await Levantar(Con(otra))).Value.Desenlace.Should().Be(DesenlaceDeAlerta.Levantada);
+
+        var claves = await _db.Alerts.Select(a => a.DedupKey).ToListAsync();
+        claves.Should().HaveCount(2).And.OnlyContain(c => c.Length <= IngenIA365ERP.Application.Common.Alerts.Alertas.LargoDeLaClave);
+        claves.Should().OnlyHaveUniqueItems();
+        IngenIA365ERP.Application.Common.Alerts.Alertas.ClaveAcotada("corta").Should().Be("corta");
+        (await Alertas().AtenderPorProcesoAsync(larga, "Atendida por el proceso", CancellationToken.None)).Should().BeTrue("se atiende con la misma clave");
+    }
+
     [Fact]
     public async Task Levanta_la_alerta_con_el_tipo_vigente_y_la_entrega_por_SendNotificationCommand()
     {

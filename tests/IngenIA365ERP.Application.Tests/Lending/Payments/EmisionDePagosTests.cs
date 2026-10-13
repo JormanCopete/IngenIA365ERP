@@ -125,6 +125,31 @@ public class EmisionDePagosTests : IAsyncLifetime
         espejos.Should().NotBeEmpty().And.OnlyContain(t => t.MessagePublicId == reversado.PublicId);
     }
 
+    /// <summary>
+    /// Defecto del 2026-10-13 (e2e de T0632): el reverso de un pago que había quedado como anticipo emitía el anticipo en negativo (el espejo del
+    /// libro) y Contabilidad acreditaba el anticipo otra vez. El contrato dice «positivos: lo que el reverso restituye» (mensajes.md §10.8): el
+    /// anticipo que se deshace viaja en positivo, como el capital que se restituye.
+    /// </summary>
+    [Fact]
+    public async Task El_reverso_de_un_anticipo_lo_emite_en_positivo_como_lo_restituido()
+    {
+        var pago = _p.Pago(ModalidadDePago.Advance, 100_000m);
+        await _p.AplicadoAsync(pago);
+
+        var r = await _p.Contrato().ReversarAsync(new SolicitudDeReverso(PagosDePrueba.Prueba, pago.IdempotencyKey, "Cheque devuelto"), default);
+        _p.Db.ChangeTracker.Clear();
+
+        r.Result.Should().Be(ResultadoDelContrato.Applied, r.Message);
+        var reversado = await _p.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == PagoReversadoV1.Type);
+        var contenido = System.Text.Json.JsonSerializer.Deserialize<PagoReversadoV1>(reversado.PayloadJson,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        contenido.Amounts.Should().ContainSingle(a => a.Concept == "Advance").Which.Amount.Should().Be(100_000m);
+        contenido.Amounts.Should().OnlyContain(a => a.Amount > 0m, "todo lo restituido viaja en positivo");
+        IngenIA365ERP.Application.Lending.Payments.ReversionDePago.RestituidoPorElReverso(
+            new IngenIA365ERP.Domain.Lending.Replay.MovimientoDeLibro(default, LoanTransactionKind.AdvanceReceived, LoanConcept.CreditBalance, null, -5m))
+            .Should().Be(5m);
+    }
+
     [Fact]
     public async Task PagoAplicado_no_lo_origina_el_proceso()
     {

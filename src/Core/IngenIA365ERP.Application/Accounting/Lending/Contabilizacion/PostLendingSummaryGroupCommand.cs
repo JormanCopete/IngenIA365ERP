@@ -194,8 +194,12 @@ public sealed class PostLendingSummaryGroupCommandHandler(
                 var mapa = c.Mapa[i];
                 creditos.UnionWith(mapa.Creditos);
                 var lado = linea.Debit > 0m ? "D" : "C";
+                // Una línea por crédito en las cuentas que exigen tercero, cruce o base (§10.4): el crédito va en la clave aunque la cuenta no
+                // pida cruce. Hasta el 2026-10-13 dos créditos del mismo deudor se juntaban en una línea si la cuenta sólo exigía tercero (lo
+                // destapó la medición de T0633).
                 var clave = mapa.ConservaDetalle
-                    ? string.Join('|', "detalle", linea.AccountCode, lado, linea.BranchId, linea.CostCenterId, linea.PersonId, linea.CrossDocumentType, linea.CrossDocumentNumber)
+                    ? string.Join('|', "detalle", linea.AccountCode, lado, linea.BranchId, linea.CostCenterId, linea.PersonId, linea.CrossDocumentType,
+                        linea.CrossDocumentNumber, string.Join(',', mapa.Creditos.Order(StringComparer.Ordinal)))
                     : string.Join('|', linea.AccountCode, lado, linea.BranchId, linea.CostCenterId);
                 if (indice.TryGetValue(clave, out var j))
                 {

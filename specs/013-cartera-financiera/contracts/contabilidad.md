@@ -101,7 +101,7 @@ y los asientos de ejemplo, en §24.
 | `CarteraReclasificadaPorCalificacion` | RCL | B | cada rol con la categoría nueva | el mismo rol con la anterior (al revés en `DeterioroIndividual`) | ídem | PV | K1 |
 | `ReversoDeCierre` | RCI | B | el espejo de la parte del cierre que revierte, con las dimensiones vigentes | ídem | hereda de la parte del cierre | PV | K1 |
 | `GastoDeCobranzaCausado` | GCO | B | propio: `CargoPorCobrar`; por cuenta del asociado: `PagoPorCuentaDelAsociado` | propio: `Ingreso`; por cuenta del asociado: `CuentaPorPagarATercero` | EnLinea | CA | K4 |
-| `CreditoReestructurado` | REE | B | cada rol con `Restructured = true`; capitalización: `Capital` | el mismo rol con la combinación anterior; capitalización: `InteresPorCobrar` (lo causado) o `IngresoDiferido` (lo suspendido) | EnLinea | CN | K3 |
+| `CreditoReestructurado` | REE | B | cada rol con `Restructured = true`; capitalización: `Capital`; lo suspendido capitalizado: también `ContraOrdenContingente` | el mismo rol con la combinación anterior; capitalización: `InteresPorCobrar` (lo causado) o `IngresoDiferido` (lo suspendido); lo suspendido capitalizado: también `SuspensoEnOrden` (se cancela su orden, pendiente de validar) | EnLinea | CN | K3 |
 | `CreditoModificado` | MOD | B | como `DimensionContableCambiada`, si cambió alguna dimensión | ídem | EnLinea | CN | K3 |
 | `CreditoNovado` | NOV | B | los roles del crédito nuevo (hereda categoría y marca) | los mismos roles del crédito anterior; capitalización como `CreditoReestructurado` | EnLinea | CN | K3 |
 | `CondonacionAprobada` | CON | B | `DeterioroIndividual` hasta su saldo y `GastoDeCastigoOCondonacion` (`Waiver`) por el resto; suspenso: `ContraOrdenContingente` | el concepto condonado; suspenso: `SuspensoEnOrden` | EnLinea | CN | K3 |
@@ -132,6 +132,13 @@ Reglas que valen para todos:
   `SaldoAFavorReconocido`, `CierreDeCarteraRealizado`, `CierreDeCarteraReabierto` y, si se aprueba A3, los tres de
   §19 (`AdmiteProceso = true`, C15). Contabilidad no los trata distinto: el recibo guarda `OriginActorKind`, y el
   «registrado por» de su comprobante es `Actor.NombreDelProceso` («Proceso de integración», C23).
+- **Capitalización** (`CreditoReestructurado`, `CreditoModificado`, `CreditoNovado`; nota del 2026-10-13). Lo causado que
+  se capitaliza sale de `InteresPorCobrar` y lo suspendido va contra `IngresoDiferido`; **además se cancela la orden del
+  suspenso capitalizado**: débito `ContraOrdenContingente`, crédito `SuspensoEnOrden` por el mismo importe, porque ese
+  interés deja de estar en suspenso al volverse capital (sin esto, `SuspensoEnOrden` quedaría con un saldo que Cartera ya
+  no tiene y la conciliación no cuadraría). Así lo construye `OperacionesDeCartera` (bloque A2, T0646; caso dorado 31).
+  La cancelación es una **propuesta pendiente de validar por la contadora** (C7, como `IngresoDiferido`); `mensajes.md`
+  §10.20 se alineó con esta regla.
 
 ### 2.2 Roles (`RolesDeCuentaDeCartera`)
 
@@ -1565,6 +1572,19 @@ la baja: se cobraron de más 12.000 ya pagados y se causaron de más 3.000 aún 
 |---|---|---|
 | `SaldoAFavorReconocido` (`NationalValueCorrection`, `RC`) | `Ingreso` · CONSUMO · `CurrentInterest` 12.000,00 | `SaldoAFavor` 12.000,00 |
 | `AjusteDeCausacionPorFechaValor` (`CA` resumido) | `Ingreso` · CONSUMO · `CurrentInterest` 3.000,00 | `InteresPorCobrar` · `CurrentInterest` 3.000,00 |
+
+**Nota: capitalización en una reestructuración** (`CreditoReestructurado`, `CN`, K3; agregada el 2026-10-13, caso dorado
+31; no es uno de los quince). Se capitalizan 96.400 de interés causado y 20.000 de interés en suspenso:
+
+| # | Rol · dimensiones | Débito | Crédito |
+|---|---|---|---|
+| 1 | `Capital` · CONSUMO · SinLibranza · C · reestructurado | 116.400,00 | |
+| 2 | `InteresPorCobrar` · C · `CurrentInterest` | | 96.400,00 |
+| 3 | `IngresoDiferido` · CONSUMO | | 20.000,00 |
+| 4 | `ContraOrdenContingente` | 20.000,00 | |
+| 5 | `SuspensoEnOrden` · C · `CurrentInterestInSuspense` | | 20.000,00 |
+
+Las líneas 4 y 5 cancelan la orden del suspenso capitalizado: **propuesta pendiente de validar por la contadora** (C7).
 
 ## 25. Enmienda de la 009 (E-01)
 

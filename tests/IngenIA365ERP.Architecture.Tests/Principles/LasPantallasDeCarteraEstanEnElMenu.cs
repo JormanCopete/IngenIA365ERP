@@ -44,6 +44,14 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Creditos.razor", "/cartera/creditos", "Lending.Loans.Read"),
         // Fase 10, US6 (T0602): la bandeja de mensajes —los recibos y las corridas del proceso—.
         ("Pages/Cartera/BandejaDeMensajes.razor", "/cartera/bandeja-de-mensajes", "Lending.Messages.Read"),
+        // Fase 11, US7 (T0611; DT §2.16): la conciliación contable de Cartera y, en el grupo de Contabilidad, la matriz, los tipos de
+        // comprobante, la completitud, los lotes y los indicadores regulatorios.
+        ("Pages/Cartera/ConciliacionContable.razor", "/cartera/conciliacion-contable", "Lending.Reconciliation.View"),
+        ("Pages/Contabilidad/Cartera/Matriz.razor", "/contabilidad/cartera/matriz", "Accounting.LendingRules.View"),
+        ("Pages/Contabilidad/Cartera/TiposDeComprobanteDeCartera.razor", "/contabilidad/cartera/tipos-de-comprobante", "Accounting.LendingRules.View"),
+        ("Pages/Contabilidad/Cartera/Completitud.razor", "/contabilidad/cartera/completitud", "Accounting.LendingRules.View"),
+        ("Pages/Contabilidad/Cartera/Lotes.razor", "/contabilidad/cartera/lotes", "Accounting.LendingBatches.View"),
+        ("Pages/Contabilidad/IndicadoresRegulatorios.razor", "/contabilidad/indicadores-regulatorios", "Accounting.RegulatoryIndicators.View"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
@@ -55,6 +63,8 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/SolicitudDetalle.razor", "/cartera/solicitudes/{Id:guid}", "Lending.Applications.Read"),
         // US4 (T0509): el expediente del crédito; la pestaña de liquidación exige además Lending.Payoffs.Read (se comprueba aparte).
         ("Pages/Cartera/CreditoDetalle.razor", "/cartera/creditos/{Id:guid}", "Lending.Loans.Read"),
+        // US7 (T0611): el detalle de un lote de Cartera se abre desde Lotes y desde el origen de un comprobante.
+        ("Pages/Contabilidad/Cartera/Lote.razor", "/contabilidad/cartera/lotes/{Id:guid}", "Accounting.LendingBatches.View"),
     ];
 
     [Fact]
