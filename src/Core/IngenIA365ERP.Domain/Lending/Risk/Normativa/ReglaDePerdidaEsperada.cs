@@ -10,7 +10,8 @@ namespace IngenIA365ERP.Domain.Lending.Risk.Normativa;
 ///
 /// <para>Esquema 1 (camelCase): <c>{ obligatedOrganizationTypes: [codigo], obligatedEmployeeFundCategories: [codigo],
 /// coveredSegments: [codigo], historyMonths, voluntaryNoticeDays }</c>. Códigos en mayúsculas sin repetir; los segmentos cubiertos
-/// son de <see cref="SegmentosConocidos"/>; meses y días mayores que cero.</para>
+/// son de <see cref="SegmentosConocidos"/>; meses y días mayores que cero. US9 (T0691) suma <c>provenance</c> opcional, como en el
+/// <see cref="Anexo1"/>.</para>
 /// </summary>
 public sealed class ReglaDePerdidaEsperada
 {
@@ -33,6 +34,21 @@ public sealed class ReglaDePerdidaEsperada
 
     public int DiasDeAvisoVoluntario { get; private init; }
 
+    /// <summary>De dónde salió cada dato y si ya se cotejó (US9, T0691; opcional, <c>provenance</c> como en el Anexo 1).</summary>
+    public IReadOnlyList<ProcedenciaDeTabla> Procedencia { get; private init; } = [];
+
+    /// <summary>
+    /// ¿La regla obliga a una entidad de este tipo (y, si es fondo de empleados, de esta categoría)? (US9, T0690, T0695; FR-018,
+    /// FR-105). El tipo tiene que estar entre los obligados; si la entidad trae categoría de fondo y la regla las distingue, también
+    /// la categoría. Sin tipo, no obliga: el perfil regulatorio sin registrar no se presume obligado (la activación lo exige aparte).
+    /// </summary>
+    public bool Obliga(string? tipoDeOrganizacion, string? categoriaDeFondo)
+    {
+        if (string.IsNullOrWhiteSpace(tipoDeOrganizacion) || !TiposObligados.Contains(tipoDeOrganizacion, StringComparer.Ordinal)) return false;
+        return string.IsNullOrWhiteSpace(categoriaDeFondo) || CategoriasDeFondoObligadas.Count == 0
+            || CategoriasDeFondoObligadas.Contains(categoriaDeFondo, StringComparer.Ordinal);
+    }
+
     public static ResultadoDeDocumento<ReglaDePerdidaEsperada> Leer(string contenido, short versionDeEsquema)
     {
         var errores = new List<ErrorDeDocumentoNormativo>();
@@ -48,6 +64,7 @@ public sealed class ReglaDePerdidaEsperada
         var dias = Anexo1.Entero(raiz, "voluntaryNoticeDays", "$", requerido: true, errores);
         if (meses == 0) errores.Add(new("$.historyMonths", "Los meses de historial son mayores que cero."));
         if (dias == 0) errores.Add(new("$.voluntaryNoticeDays", "Los días de aviso son mayores que cero."));
+        var procedencia = Anexo1.LeerProcedencia(raiz, errores);
 
         return errores.Count > 0
             ? new(null, errores)
@@ -58,6 +75,7 @@ public sealed class ReglaDePerdidaEsperada
                 SegmentosCubiertos = segmentos,
                 MesesDeHistorial = meses!.Value,
                 DiasDeAvisoVoluntario = dias!.Value,
+                Procedencia = procedencia,
             }, errores);
     }
 

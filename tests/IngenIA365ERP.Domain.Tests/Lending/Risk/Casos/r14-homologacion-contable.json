@@ -1,0 +1,30 @@
+{
+  // r14 (SC-021; T48): la calificación contable es la letra A–E y las subcategorías van a su letra (E1 y E2 son E), sea cual sea la
+  // causa: mora, arrastre o análisis.
+  "nombre": "r14-homologacion-contable",
+  "creditos": [
+    { "id": 1, "deudor": 1401, "segmento": "CONSUMO", "diasDeMora": 0 },
+    { "id": 2, "deudor": 1402, "segmento": "CONSUMO", "diasDeMora": 31 },
+    { "id": 3, "deudor": 1403, "segmento": "CONSUMO", "diasDeMora": 61 },
+    { "id": 4, "deudor": 1404, "segmento": "CONSUMO", "diasDeMora": 91 },
+    { "id": 5, "deudor": 1405, "segmento": "CONSUMO", "diasDeMora": 200 },
+    { "id": 6, "deudor": 1406, "segmento": "CONSUMO", "diasDeMora": 400 },
+    { "id": 7, "deudor": 1406, "segmento": "CONSUMO", "diasDeMora": 0 },
+    { "id": 8, "deudor": 1408, "segmento": "VIVIENDA", "diasDeMora": 0, "analisis": { "categoria": "E", "subcategoria": "E1" } },
+    { "id": 9, "deudor": 1409, "segmento": "COMERCIAL_PN", "diasDeMora": 500 }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "A", "causa": "Arrears", "contable": "A" },
+      { "id": 2, "categoria": "B", "causa": "Arrears", "contable": "B" },
+      { "id": 3, "categoria": "C", "causa": "Arrears", "contable": "C" },
+      { "id": 4, "categoria": "D", "causa": "Arrears", "contable": "D" },
+      { "id": 5, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "contable": "E" },
+      { "id": 6, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "contable": "E" },
+      // Arrastrado a E con 0 días: no cumple ninguna condición de E y toma la primera subcategoría.
+      { "id": 7, "categoria": "E", "subcategoria": "E1", "causa": "Drag", "contable": "E" },
+      { "id": 8, "categoria": "E", "subcategoria": "E1", "causa": "Analysis", "contable": "E" },
+      { "id": 9, "categoria": "E", "subcategoria": "None", "causa": "Arrears", "contable": "E" }
+    ]
+  }
+}

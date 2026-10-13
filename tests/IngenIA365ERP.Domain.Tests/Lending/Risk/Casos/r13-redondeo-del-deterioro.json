@@ -1,0 +1,40 @@
+{
+  // r13 (SC-023; pregunta E9): Riesgo.RedondeoDeterioro al centavo (defecto) y al peso, cada componente por separado, con el medio
+  // alejándose de cero. A mano:
+  //  1. microcrédito D 50 %: 777.777,77 × 0,5 = 388.888,885 → 388.888,89 al centavo; 388.889 al peso;
+  //  2. consumo B 1 %: 1.234.549,50 × 0,01 = 12.345,495 → 12.345,50; 12.345;
+  //  3. consumo C 10 % (suspendido): 3.333,33 × 0,1 = 333,333 → 333,33; 333. Intereses 1.000,50 → 1.000,50; 1.001. Otros 0,40 →
+  //     0,40; 0. Total 1.334,23 al centavo; 1.334 al peso;
+  //  4. comercial D 50 %: 1.000.001 × 0,5 = 500.000,5 → 500.000,50; 500.001.
+  "nombre": "r13-redondeo-del-deterioro",
+  "creditos": [
+    { "id": 1, "deudor": 1301, "segmento": "MICROCREDITO", "diasDeMora": 100, "saldos": { "capital": 777777.77 } },
+    { "id": 2, "deudor": 1302, "segmento": "CONSUMO", "diasDeMora": 45, "saldos": { "capital": 1234549.50 } },
+    { "id": 3, "deudor": 1303, "segmento": "CONSUMO", "diasDeMora": 75, "saldos": { "capital": 3333.33, "interesCorriente": 1000.50, "otros": 0.40 } },
+    { "id": 4, "deudor": 1304, "segmento": "COMERCIAL_PN", "diasDeMora": 200, "saldos": { "capital": 1000001 } }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "D", "causa": "Arrears", "deterioroCapital": 388888.89, "deterioroTotal": 388888.89 },
+      { "id": 2, "categoria": "B", "causa": "Arrears", "deterioroCapital": 12345.50, "deterioroTotal": 12345.50 },
+      { "id": 3, "categoria": "C", "causa": "Arrears", "deterioroCapital": 333.33, "deterioroIntereses": 1000.50, "deterioroOtros": 0.40, "deterioroTotal": 1334.23,
+        "explicacionContiene": [ "redondeo al centavo" ] },
+      { "id": 4, "categoria": "D", "causa": "Arrears", "deterioroCapital": 500000.50 }
+    ]
+  },
+  "variantes": [
+    {
+      "nombre": "al-peso",
+      "opciones": { "redondeo": "Peso" },
+      "esperado": {
+        "creditos": [
+          { "id": 1, "categoria": "D", "causa": "Arrears", "deterioroCapital": 388889, "deterioroTotal": 388889 },
+          { "id": 2, "categoria": "B", "causa": "Arrears", "deterioroCapital": 12345, "deterioroTotal": 12345 },
+          { "id": 3, "categoria": "C", "causa": "Arrears", "deterioroCapital": 333, "deterioroIntereses": 1001, "deterioroOtros": 0, "deterioroTotal": 1334,
+            "explicacionContiene": [ "redondeo al peso" ] },
+          { "id": 4, "categoria": "D", "causa": "Arrears", "deterioroCapital": 500001 }
+        ]
+      }
+    }
+  ]
+}

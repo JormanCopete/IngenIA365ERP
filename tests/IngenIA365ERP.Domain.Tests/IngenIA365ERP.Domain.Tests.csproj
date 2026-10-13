@@ -55,6 +55,10 @@
     <None Include="Lending\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 013, US2 (T0364): casos dorados del puntaje, calculados a mano con la hoja Lending\Scoring\Casos\puntaje.py. -->
     <None Include="Lending\Scoring\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, US9 (T0672): casos dorados de riesgo, calculados a mano y repasados con la hoja Lending\Risk\Casos\riesgo.py
+         (decimal de 40 digitos), sobre las normas de prueba de Lending\Risk\Normas. -->
+    <None Include="Lending\Risk\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Lending\Risk\Normas\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />

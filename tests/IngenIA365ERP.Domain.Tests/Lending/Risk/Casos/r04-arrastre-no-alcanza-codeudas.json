@@ -1,0 +1,18 @@
+{
+  // r04 (SC-021; FR-100): la persona 400 es deudora del crédito 1, de consumo, en D (100 días), y codeudora del crédito 2, de consumo,
+  // cuyo deudor es la persona 410 y está al día. La norma dice «includesCoDebts: false»: la mora de 400 arrastra su crédito 3 (deudor
+  // 400) a D, pero no el 2, que sigue en A.
+  "nombre": "r04-arrastre-no-alcanza-codeudas",
+  "creditos": [
+    { "id": 1, "deudor": 400, "segmento": "CONSUMO", "diasDeMora": 100 },
+    { "id": 2, "deudor": 410, "codeudores": [ 400 ], "segmento": "CONSUMO", "diasDeMora": 0 },
+    { "id": 3, "deudor": 400, "segmento": "CONSUMO", "diasDeMora": 0 }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "D", "causa": "Arrears" },
+      { "id": 2, "categoria": "A", "causa": "Arrears", "candidatas": [ "Arrears:A" ], "explicacionContiene": [ "las codeudas no cuentan" ] },
+      { "id": 3, "categoria": "D", "causa": "Drag", "candidatas": [ "Arrears:A", "Drag:D" ] }
+    ]
+  }
+}

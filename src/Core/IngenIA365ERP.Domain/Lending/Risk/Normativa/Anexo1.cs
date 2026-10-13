@@ -67,6 +67,18 @@ public sealed record ReglaDeReestructurados(RatingCategory CategoriaMinima, int 
 /// <summary>Deterioro general mínimo de un perfil.</summary>
 public sealed record DeterioroGeneralDePerfil(string Perfil, decimal FraccionMinima);
 
+/// <summary>Regla especial del crédito nuevo (US9, T0690): la categoría con la que nace un crédito que no tiene línea en el cierre anterior.</summary>
+public sealed record ReglaDeCreditoNuevo(RatingCategory Categoria);
+
+/// <summary>Insolvencia (FR-098, T0690): mientras se negocia la calificación se mantiene; si la negociación fracasa, pasa a <see cref="CategoriaSiFracasa"/>.</summary>
+public sealed record ReglaDeInsolvencia(RatingCategory CategoriaSiFracasa);
+
+/// <summary>
+/// De dónde se transcribió una tabla del documento y si ya se cotejó (US9, T0691; pregunta E8): <see cref="Verificada"/> falso es
+/// «pendiente de validar», que no bloquea y marca el cierre (pregunta E1).
+/// </summary>
+public sealed record ProcedenciaDeTabla(string Tabla, bool Verificada, string Fuente);
+
 /// <summary>
 /// Documento normativo <see cref="RegulatoryDocumentKind.SarcAnexo1"/> tipado (feature 013, T45, R2, R54, T0204; data-model parte 3
 /// §12.4): segmentos SARC, rangos de mora por categoría, porcentajes de deterioro por categoría y subcategoría con su condición tipada
@@ -80,7 +92,14 @@ public sealed record DeterioroGeneralDePerfil(string Perfil, decimal FraccionMin
 /// singleInstallment: [ { category, minDaysPastDue } ], drag: { fromCategory, withinSegment, includesCoDebts },
 /// contributions: { deductible, requiresNoLosses, requiresMinimumSolvency }, collateral: [ { nature, brackets: [ { fromMonths,
 /// toMonths?, admissibleFraction } ] } ], restructured: { minimumCategory, consecutivePaidInstallmentsToImprove },
-/// generalImpairment: [ { profile, minimumRate } ] }</c>.</para>
+/// generalImpairment: [ { profile, minimumRate } ] }</c>. US9 (T0690) suma tres propiedades opcionales: <c>newLoan: { category }</c>
+/// (regla del crédito nuevo), <c>insolvency: { failedCategory }</c> (FR-098) y <c>provenance: [ { table, verified, source } ]</c>
+/// (de dónde salió cada tabla y si se cotejó, T0691). Son opcionales para que una copia ya registrada del esquema 1 se siga leyendo:
+/// sin <c>newLoan</c> no hay candidata de crédito nuevo y sin <c>insolvency</c> el fracaso de la negociación sólo deja la mora.</para>
+///
+/// <para>Las consultas que usan los motores de US9 (<see cref="CategoriaPorMora"/>, <see cref="Porcentaje"/>,
+/// <see cref="FraccionAdmisible"/>, <see cref="DeterioroGeneralDe"/>) viven aquí para que la norma y la política efectiva
+/// (<c>PoliticaSarcEfectiva</c>, que devuelve otro <see cref="Anexo1"/>) se lean igual.</para>
 ///
 /// <para>Reglas de forma: segmentos conocidos (<see cref="SegmentosConocidos"/>) sin repetir; en cada uno las cinco categorías A–E
 /// en orden, la primera desde 0, cada una empieza el día siguiente a la anterior y sólo la última abierta (sin rangos cruzados ni
@@ -112,7 +131,81 @@ public sealed class Anexo1
 
     public IReadOnlyList<DeterioroGeneralDePerfil> DeterioroGeneral { get; private init; } = [];
 
+    /// <summary>La regla del crédito nuevo; nula si el documento no la trae.</summary>
+    public ReglaDeCreditoNuevo? CreditoNuevo { get; private init; }
+
+    /// <summary>La regla de insolvencia; nula si el documento no la trae.</summary>
+    public ReglaDeInsolvencia? Insolvencia { get; private init; }
+
+    /// <summary>De dónde salió cada tabla y si ya se cotejó (T0691).</summary>
+    public IReadOnlyList<ProcedenciaDeTabla> Procedencia { get; private init; } = [];
+
+    /// <summary>Las tablas «pendientes de validar»; sin procedencia declarada, todo el documento lo está (<c>*</c>).</summary>
+    public IReadOnlyList<string> TablasSinCotejar =>
+        Procedencia.Count == 0 ? ["*"] : Procedencia.Where(p => !p.Verificada).Select(p => p.Tabla).ToList();
+
+    /// <summary>El código del perfil que aplica a todo tipo de entidad que el documento no distingue.</summary>
+    public const string PerfilGeneral = "GENERAL";
+
     public SegmentoSarc? Segmento(string codigo) => Segmentos.FirstOrDefault(s => s.Codigo == codigo);
+
+    /// <summary>El segmento o una excepción que dice cuál falta: un crédito de un segmento que la norma no trae no se califica.</summary>
+    public SegmentoSarc SegmentoObligatorio(string codigo) =>
+        Segmento(codigo) ?? throw new InvalidOperationException($"El Anexo 1 vigente no trae el segmento SARC «{codigo}».");
+
+    /// <summary>La categoría que dan los días de mora en el segmento (US9, T0693): la del rango que los contiene.</summary>
+    public RatingCategory CategoriaPorMora(string segmento, int diasDeMora)
+    {
+        if (diasDeMora < 0) throw new ArgumentOutOfRangeException(nameof(diasDeMora), diasDeMora, "Los días de mora no son negativos.");
+        return SegmentoObligatorio(segmento).Categorias.Last(c => c.DiasDesde <= diasDeMora).Categoria;
+    }
+
+    /// <summary>
+    /// El porcentaje de deterioro que corresponde (US9, T0693, T0694): entre los de la categoría —y de la subcategoría, si se da—, el
+    /// primero cuya condición contiene los días de mora o los meses en E; si ninguna los contiene, el de la condición que empieza más
+    /// abajo (un crédito llevado a E por arrastre o por análisis sin días de E toma la primera subcategoría).
+    /// </summary>
+    public PorcentajeDeDeterioro Porcentaje(string segmento, RatingCategory categoria, RatingSubcategory? subcategoria, int diasDeMora, int? mesesEnE)
+    {
+        var deLaCategoria = SegmentoObligatorio(segmento).Porcentajes
+            .Where(p => p.Categoria == categoria && (subcategoria is null || p.Subcategoria == subcategoria)).ToList();
+        if (deLaCategoria.Count == 0)
+            throw new InvalidOperationException($"El Anexo 1 vigente no trae porcentaje de {categoria} {subcategoria} en {segmento}.");
+        var cumple = deLaCategoria.FirstOrDefault(p => p.Condicion is null
+            || p.Condicion.Contiene(p.Condicion.Criterio == CriterioDeCondicion.DaysPastDue ? diasDeMora : mesesEnE ?? 0));
+        return cumple ?? deLaCategoria.OrderBy(p => p.Condicion?.Desde ?? 0).First();
+    }
+
+    /// <summary>
+    /// La fracción admisible de una garantía por meses de mora (FR-103): la del tramo <c>[desde, hasta)</c> que contiene los meses.
+    /// Sin tabla para la naturaleza, cero: lo que la norma no admite no se descuenta.
+    /// </summary>
+    public decimal FraccionAdmisible(NaturalezaDeGarantia naturaleza, int mesesDeMora)
+    {
+        var tabla = Garantias.FirstOrDefault(g => g.Naturaleza == naturaleza);
+        var tramo = tabla?.Tramos.LastOrDefault(t => t.MesesDesde <= mesesDeMora);
+        return tramo is null || (tramo.MesesHasta is { } h && mesesDeMora >= h) ? 0m : tramo.FraccionAdmisible;
+    }
+
+    /// <summary>El deterioro general mínimo del perfil o, si el documento no lo distingue, el del perfil <see cref="PerfilGeneral"/>.</summary>
+    public DeterioroGeneralDePerfil? DeterioroGeneralDe(string? perfil) =>
+        DeterioroGeneral.FirstOrDefault(d => d.Perfil == perfil) ?? DeterioroGeneral.FirstOrDefault(d => d.Perfil == PerfilGeneral);
+
+    /// <summary>Una copia con las tablas que la política endurece (<c>PoliticaSarcEfectiva</c>); lo demás sigue a la norma.</summary>
+    internal Anexo1 ConTablas(IReadOnlyList<SegmentoSarc> segmentos, IReadOnlyList<GarantiaPorMeses> garantias,
+        IReadOnlyList<DeterioroGeneralDePerfil> general) => new()
+        {
+            Segmentos = segmentos,
+            PagoUnico = PagoUnico,
+            Arrastre = Arrastre,
+            Aportes = Aportes,
+            Garantias = garantias,
+            Reestructurados = Reestructurados,
+            DeterioroGeneral = general,
+            CreditoNuevo = CreditoNuevo,
+            Insolvencia = Insolvencia,
+            Procedencia = Procedencia,
+        };
 
     public static ResultadoDeDocumento<Anexo1> Leer(string contenido, short versionDeEsquema)
     {
@@ -184,6 +277,22 @@ public sealed class Anexo1
             if (perfil is not null && tasa is not null) general.Add(new(perfil, tasa.Value));
         }
 
+        ReglaDeCreditoNuevo? creditoNuevo = null;
+        if (raiz.TryGetProperty("newLoan", out var nuevo) && nuevo.ValueKind != JsonValueKind.Null)
+        {
+            if (nuevo.ValueKind != JsonValueKind.Object) errores.Add(new("$.newLoan", "Es un objeto."));
+            else if (Categoria(nuevo, "category", "$.newLoan", errores) is { } c) creditoNuevo = new(c);
+        }
+
+        ReglaDeInsolvencia? insolvencia = null;
+        if (raiz.TryGetProperty("insolvency", out var ins) && ins.ValueKind != JsonValueKind.Null)
+        {
+            if (ins.ValueKind != JsonValueKind.Object) errores.Add(new("$.insolvency", "Es un objeto."));
+            else if (Categoria(ins, "failedCategory", "$.insolvency", errores) is { } c) insolvencia = new(c);
+        }
+
+        var procedencia = LeerProcedencia(raiz, errores);
+
         if (errores.Count > 0 || reglaDeArrastre is null || reglaDeAportes is null || reglaDeReestructurados is null) return new(null, errores);
         return new(new Anexo1
         {
@@ -194,7 +303,34 @@ public sealed class Anexo1
             Garantias = garantias,
             Reestructurados = reglaDeReestructurados,
             DeterioroGeneral = general,
+            CreditoNuevo = creditoNuevo,
+            Insolvencia = insolvencia,
+            Procedencia = procedencia,
         }, errores);
+    }
+
+    /// <summary><c>provenance: [ { table, verified, source } ]</c>, opcional; tablas sin repetir.</summary>
+    internal static IReadOnlyList<ProcedenciaDeTabla> LeerProcedencia(JsonElement raiz, List<ErrorDeDocumentoNormativo> errores)
+    {
+        if (!raiz.TryGetProperty("provenance", out var v) || v.ValueKind == JsonValueKind.Null) return [];
+        var lista = LecturaDeDocumento.Arreglo(raiz, "provenance", "$", noVacio: false, errores);
+        var procedencia = new List<ProcedenciaDeTabla>();
+        for (var i = 0; i < lista.Count; i++)
+        {
+            var ruta = $"$.provenance[{i}]";
+            if (lista[i].ValueKind != JsonValueKind.Object)
+            {
+                errores.Add(new(ruta, "Cada procedencia es un objeto."));
+                continue;
+            }
+            var tabla = LecturaDeDocumento.Texto(lista[i], "table", ruta, requerido: true, errores);
+            var fuente = LecturaDeDocumento.Texto(lista[i], "source", ruta, requerido: true, errores);
+            var verificada = LecturaDeDocumento.Booleano(lista[i], "verified", ruta, false, errores);
+            if (tabla is null || fuente is null) continue;
+            if (procedencia.Any(p => p.Tabla == tabla)) errores.Add(new($"{ruta}.table", $"La tabla {tabla} está repetida."));
+            procedencia.Add(new(tabla, verificada, fuente));
+        }
+        return procedencia;
     }
 
     private static SegmentoSarc? LeerSegmento(JsonElement s, string ruta, List<ErrorDeDocumentoNormativo> errores)

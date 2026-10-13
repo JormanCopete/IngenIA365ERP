@@ -4,6 +4,11 @@
   // Admin, Order 6). TODO pendiente de cotejo con el texto oficial (verified = false, pregunta E8): mientras tanto la cooperativa ve
   // la alerta Cartera.NormativaPendienteDeValidar. Los porcentajes van como fracción (0,01 = 1 %). Un cambio de la norma es una
   // versión nueva del documento, nunca un cambio de programa.
+  //
+  // US9 (T0691, 2026-10-13): se completa el contenido con las reglas que usan los motores de calificación y deterioro (newLoan,
+  // insolvency) y con la procedencia de cada tabla ("provenance", al final): de dónde se transcribió y verified = false en TODAS.
+  // Ninguna cifra se cotejó todavía contra el texto oficial; la contadora las coteja (E8) y, mientras tanto, «pendiente de validar»
+  // no bloquea: marca el cierre (E1). Del Anexo 1, sólo la tabla de comercial persona jurídica viene como imagen en el PDF.
   "segments": [
     {
       "code": "COMERCIAL_PN",
@@ -134,5 +139,25 @@
   "restructured": { "minimumCategory": "B", "consecutivePaidInstallmentsToImprove": 3 },
   "generalImpairment": [
     { "profile": "GENERAL", "minimumRate": 0.01 }
+  ],
+  // Crédito nuevo: la categoría con la que nace un crédito sin línea en el cierre anterior (la peor del deudor la pone el arrastre).
+  "newLoan": { "category": "A" },
+  // Insolvencia (Leyes 1116 de 2006 y 1564 de 2012, FR-098): en negociación se mantiene la calificación; si fracasa, ésta.
+  "insolvency": { "failedCategory": "E" },
+  "provenance": [
+    { "table": "segments.COMERCIAL_PN", "verified": false, "source": "CBCF (Supersolidaria, CE 22 de 2020 y modificaciones), Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de la cartera comercial; transcripción de memoria del equipo, sin cotejar (E8)" },
+    { "table": "segments.COMERCIAL_PJ", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: tabla de comercial persona jurídica, que el PDF trae como imagen; transcripción del equipo, la coteja la contadora (E8)" },
+    { "table": "segments.CONSUMO", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de consumo con E1/E2 por días; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "segments.MICROCREDITO", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de microcrédito; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "segments.VIVIENDA", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de vivienda; E1/E2 por meses en E aproximados desde los tramos en días; sin cotejar (E8, D18: vivienda es K6b)" },
+    { "table": "singleInstallment", "verified": false, "source": "CBCF, Tít. IV Cap. II: regla especial de los créditos con pago único de capital; días y categorías propuestos por el equipo, sin cotejar (E8)" },
+    { "table": "newLoan", "verified": false, "source": "CBCF, Tít. IV Cap. II: calificación de créditos nuevos; propuesta del equipo (A), sin cotejar (E8)" },
+    { "table": "insolvency", "verified": false, "source": "Ley 1116 de 2006 y Ley 1564 de 2012 con CBCF Tít. IV Cap. II: la calificación se mantiene en la negociación; la categoría si fracasa (E) es propuesta del equipo, sin cotejar" },
+    { "table": "drag", "verified": false, "source": "CBCF, Tít. IV Cap. II: arrastre por modalidad desde B, sin codeudas (FR-100); sin cotejar" },
+    { "table": "contributions", "verified": false, "source": "CBCF, Tít. IV Cap. II: aportes deducibles sin pérdidas y con solvencia; no se aplica mientras rija D19; sin cotejar" },
+    { "table": "collateral.NonMortgage", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: porcentajes de las garantías no hipotecarias por meses de mora; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "collateral.Mortgage", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: porcentajes de las garantías hipotecarias por meses de mora; transcripción de memoria, sin cotejar (E8)" },
+    { "table": "restructured", "verified": false, "source": "CBCF, Tít. IV Cap. II: calificación de reestructurados (mínimo B, una categoría por cada 3 cuotas pagadas seguidas, FR-093); propuesta del equipo, sin cotejar" },
+    { "table": "generalImpairment", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: deterioro general mínimo del 1 % de la cartera bruta (perfil GENERAL); acotado por el límite DETERIORO_GENERAL_MINIMO; sin cotejar" }
   ]
 }

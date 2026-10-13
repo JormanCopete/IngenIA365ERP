@@ -22,10 +22,25 @@ public class ValidadorDeDocumentoNormativoDeCarteraTests
     private static readonly DateOnly Desde = new(2026, 1, 1);
 
     [Fact]
-    public void Hay_un_validador_por_clase_y_no_cubre_el_Anexo_2()
+    public void Hay_un_validador_por_clase_y_el_del_Anexo_2_rechaza_hasta_K6a()
     {
+        // US9 (T0691): el del Anexo 2 existe y rechaza todo contenido mientras la entrega desplegada no sea K6a.
         ValidadorDeDocumentoNormativoDeCartera.Todos.Select(v => v.Clase)
-            .Should().BeEquivalentTo([RegulatoryDocumentKind.SarcAnexo1, RegulatoryDocumentKind.ReglaDePerdidaEsperada]);
+            .Should().BeEquivalentTo([RegulatoryDocumentKind.SarcAnexo1, RegulatoryDocumentKind.ReglaDePerdidaEsperada, RegulatoryDocumentKind.SarcAnexo2]);
+        ValidadorDeDocumentoNormativoDeCartera.Anexo2.Validar("{}", 1).Should().ContainSingle(e => e.Mensaje.Contains("K6a"));
+    }
+
+    [Fact]
+    public void La_semilla_del_Anexo_1_trae_las_reglas_de_US9_y_todo_pendiente_de_validar()
+    {
+        // US9 (T0691; E8): crédito nuevo, insolvencia y la procedencia de cada tabla, ninguna cotejada todavía.
+        var anexo = Anexo1.Leer(Anexo1Semilla, 1).Documento!;
+        anexo.CreditoNuevo.Should().NotBeNull();
+        anexo.Insolvencia.Should().NotBeNull();
+        anexo.Procedencia.Should().NotBeEmpty().And.OnlyContain(p => !p.Verificada && p.Fuente.Length > 0);
+        anexo.Procedencia.Select(p => p.Tabla).Should().Contain(anexo.Segmentos.Select(s => "segments." + s.Codigo));
+        anexo.TablasSinCotejar.Should().HaveCount(anexo.Procedencia.Count);
+        ReglaDePerdidaEsperada.Leer(ReglaSemilla, 1).Documento!.Procedencia.Should().OnlyContain(p => !p.Verificada);
     }
 
     [Fact]

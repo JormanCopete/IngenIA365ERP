@@ -1,0 +1,51 @@
+{
+  // r01 (SC-021): rangos A–E de consumo, comercial y microcrédito, y de las productivas por el segmento SARC que les da el catálogo
+  // de modalidades (popular productivo → MICROCREDITO, productivo de mayor monto → COMERCIAL_PN, pregunta E4). Los tres primeros
+  // créditos traen cuotas: la altura de mora sale de la fecha exigible del calendario del art. 829 (domingos y festivos nacionales
+  // no son hábiles; el sábado sí) y cuenta desde ella, al corte del 30 de septiembre de 2026 (miércoles).
+  // A mano: 2026-08-30 es domingo → exigible el lunes 31 → 30 días → A (sin el calendario serían 31 y B); 2026-08-29 es sábado,
+  // hábil → 32 días → B; 2026-07-19 es domingo y el lunes 20 es festivo → exigible el martes 21 → 71 días → C (73 sin calendario).
+  // Cada crédito es de otro deudor: no hay arrastre.
+  "nombre": "r01-rangos-por-modalidad",
+  "corte": "2026-09-30",
+  "festivos": [ "2026-07-20", "2026-08-07", "2026-08-17" ],
+  "creditos": [
+    { "id": 1, "deudor": 101, "segmento": "CONSUMO", "cuotas": [ { "numero": 1, "vencimiento": "2026-08-30", "saldoVencido": 150000 }, { "numero": 2, "vencimiento": "2026-10-30", "saldoVencido": 0 } ] },
+    { "id": 2, "deudor": 102, "segmento": "CONSUMO", "cuotas": [ { "numero": 1, "vencimiento": "2026-08-29", "saldoVencido": 150000 } ] },
+    { "id": 3, "deudor": 103, "segmento": "CONSUMO", "cuotas": [ { "numero": 1, "vencimiento": "2026-07-19", "saldoVencido": 150000 }, { "numero": 2, "vencimiento": "2026-08-19", "saldoVencido": 150000 } ] },
+    { "id": 4, "deudor": 104, "segmento": "CONSUMO", "diasDeMora": 91 },
+    { "id": 5, "deudor": 105, "segmento": "CONSUMO", "diasDeMora": 181 },
+    { "id": 6, "deudor": 106, "segmento": "COMERCIAL_PN", "diasDeMora": 30 },
+    { "id": 7, "deudor": 107, "segmento": "COMERCIAL_PN", "diasDeMora": 31 },
+    { "id": 8, "deudor": 108, "segmento": "COMERCIAL_PN", "diasDeMora": 180 },
+    { "id": 9, "deudor": 109, "segmento": "COMERCIAL_PN", "diasDeMora": 181 },
+    { "id": 10, "deudor": 110, "segmento": "COMERCIAL_PN", "diasDeMora": 361 },
+    { "id": 11, "deudor": 111, "segmento": "MICROCREDITO", "diasDeMora": 60 },
+    { "id": 12, "deudor": 112, "segmento": "MICROCREDITO", "diasDeMora": 61 },
+    { "id": 13, "deudor": 113, "segmento": "MICROCREDITO", "diasDeMora": 120 },
+    { "id": 14, "deudor": 114, "segmento": "MICROCREDITO", "diasDeMora": 121 },
+    // Popular productivo rural → MICROCREDITO; productivo de mayor monto → COMERCIAL_PN.
+    { "id": 15, "deudor": 115, "segmento": "MICROCREDITO", "diasDeMora": 95 },
+    { "id": 16, "deudor": 116, "segmento": "COMERCIAL_PN", "diasDeMora": 95 }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "diasDeMora": 30, "categoriaPorMora": "A", "categoria": "A", "causa": "Arrears", "contable": "A" },
+      { "id": 2, "diasDeMora": 32, "categoriaPorMora": "B", "categoria": "B", "causa": "Arrears", "contable": "B" },
+      { "id": 3, "diasDeMora": 71, "categoriaPorMora": "C", "categoria": "C", "causa": "Arrears", "contable": "C" },
+      { "id": 4, "diasDeMora": 91, "categoriaPorMora": "D", "categoria": "D", "causa": "Arrears" },
+      { "id": 5, "diasDeMora": 181, "categoriaPorMora": "E", "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "contable": "E" },
+      { "id": 6, "categoriaPorMora": "A", "categoria": "A", "causa": "Arrears" },
+      { "id": 7, "categoriaPorMora": "B", "categoria": "B", "causa": "Arrears" },
+      { "id": 8, "categoriaPorMora": "C", "categoria": "C", "causa": "Arrears" },
+      { "id": 9, "categoriaPorMora": "D", "categoria": "D", "causa": "Arrears" },
+      { "id": 10, "categoriaPorMora": "E", "categoria": "E", "causa": "Arrears" },
+      { "id": 11, "categoriaPorMora": "B", "categoria": "B", "causa": "Arrears" },
+      { "id": 12, "categoriaPorMora": "C", "categoria": "C", "causa": "Arrears" },
+      { "id": 13, "categoriaPorMora": "D", "categoria": "D", "causa": "Arrears" },
+      { "id": 14, "categoriaPorMora": "E", "categoria": "E", "causa": "Arrears" },
+      { "id": 15, "categoriaPorMora": "D", "categoria": "D", "causa": "Arrears" },
+      { "id": 16, "categoriaPorMora": "C", "categoria": "C", "causa": "Arrears" }
+    ]
+  }
+}
