@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Payroll.Runs.CalculatePayrollRun;
 using IngenIA365ERP.Application.Tests.Payroll.Common;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
@@ -23,10 +24,19 @@ public class PayrollAccountingPosterTests
 
     private sealed record Calculada(NominaTestData D, PayrollRun Run, List<(PayrollRunEmployee RunEmployee, Employee Employee, IReadOnlyList<PayrollRunLine> Lines)> Empleados);
 
-    private static async Task<Calculada> Calcular(bool periodoContableAbierto = true)
+    private static async Task<Calculada> Calcular(bool periodoContableAbierto = true, bool conCuotasDeCartera = false)
     {
         var d = new NominaTestData();
         d.ConfigurarContabilidad(periodoContableAbierto);
+        if (conCuotasDeCartera)
+        {
+            // Dos cuotas de Ana: 150.000 cabe entera; 2.500.000 sólo en parte (lo no descontado no tiene asiento).
+            var persona = d.Db.People.Single(p => p.Id == d.Ana.PersonId).PublicId;
+            d.Obligaciones.AgregarCuota(new CuotaDeNominaDto(persona, new Guid("00000000-0000-0000-0000-00000000000a"), "A-1", "CONSUMO", 3,
+                new DateOnly(2026, 3, 31), 150_000m, 0m, 1));
+            d.Obligaciones.AgregarCuota(new CuotaDeNominaDto(persona, new Guid("00000000-0000-0000-0000-000000000001"), "B-1", "CONSUMO", 9,
+                new DateOnly(2026, 3, 31), 2_500_000m, 0m, 2));
+        }
         d.Db.CostCenters.Add(new CostCenter { LegacyCode = "02", Name = "Comercial", CreatedBy = "test" });
         var bruno = d.Empleado("Bruno", 3_000_000m, new DateTime(2024, 2, 1));
         bruno.CostCenterId = "02";
@@ -318,5 +328,40 @@ public class PayrollAccountingPosterTests
         var ok = await Contabilizar(c);
         ok.IsSuccess.Should().BeTrue(ok.Error.Message);
         ok.Value.Lines.Where(l => l.Description.StartsWith("Nómina SALUD_EMPLEADOR")).Should().OnlyContain(l => l.PersonId == null);
+    }
+
+    // ----------------------------------------------------------------- enmienda D-08 de la 010 (feature 013, T53, T0631; pregunta C1) --
+
+    [Fact]
+    public async Task DESC_CARTERA_contabiliza_debito_salarios_por_pagar_y_credito_la_cuenta_del_concepto_por_lo_descontado()
+    {
+        var c = await Calcular(conCuotasDeCartera: true);
+        var lineas = c.Empleados.SelectMany(e => e.Lines).Where(l => l.ConceptCode == "DESC_CARTERA").ToList();
+        lineas.Should().NotBeEmpty().And.OnlyContain(l => l.AffectsAccounting, "la cuota de Cartera contabiliza (enmienda D-08)");
+        (await c.D.Db.PayrollLoanDeductions.AnyAsync(x => x.NotDeductedAmount > 0m)).Should().BeTrue("la segunda cuota sólo cabe en parte");
+        var cuentas = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "DESC_CARTERA");
+
+        var r = await Contabilizar(c);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var asientos = r.Value.Lines.Where(a => a.Description == "Nómina DESC_CARTERA").ToList();
+        var descontado = lineas.Sum(l => l.Amount);
+        asientos.Where(a => a.Debit > 0).Sum(a => a.Debit).Should().Be(descontado, "sólo lo descontado; lo no descontado no tiene asiento");
+        asientos.Where(a => a.Credit > 0).Should().OnlyContain(a => a.AccountId == cuentas.CreditAccountId,
+            "el crédito va a la cuenta del concepto: el puente «recaudos por nómina para Cartera»");
+        asientos.Where(a => a.Credit > 0).Sum(a => a.Credit).Should().Be(descontado);
+    }
+
+    [Fact]
+    public async Task DESC_CARTERA_sin_cuentas_impide_contabilizar_y_lo_nombra()
+    {
+        var c = await Calcular(conCuotasDeCartera: true);
+        (await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "DESC_CARTERA")).IsDeleted = true;
+        await c.D.Db.SaveChangesAsync();
+
+        var r = await Contabilizar(c);
+
+        r.Error.Code.Should().Be("Payroll.ConceptWithoutAccounts");
+        r.Error.Message.Should().Contain("DESC_CARTERA");
     }
 }

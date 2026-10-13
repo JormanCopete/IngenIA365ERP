@@ -53,7 +53,7 @@ internal sealed class DesembolsoDePrueba : IDisposable
         Contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
             .Returns(ci => Task.FromResult(Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Open, ci.Arg<DateOnly>()))));
         Contabilidad.EvaluarAsync(Arg.Any<IReadOnlyList<MensajeContableDto>>(), Arg.Any<CancellationToken>())
-            .Returns(Result.Failure<ResultadoDeEvaluacionContableDto>(new Error(ContabilidadParaCarteraProvisional.CodigoEvaluacionNoDisponible, "no disponible")));
+            .Returns(Result.Success(new ResultadoDeEvaluacionContableDto(true, [], [])));
         Contrato.AplicarAsync(Arg.Any<SolicitudDeAplicacion>(), Arg.Any<CancellationToken>()).Returns(ci =>
         {
             var s = ci.Arg<SolicitudDeAplicacion>();

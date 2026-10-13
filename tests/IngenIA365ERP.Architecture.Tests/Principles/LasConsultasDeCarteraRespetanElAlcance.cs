@@ -74,6 +74,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // no incorporado— no es de ninguna oficina; el detalle responde el 404 del recibo) y las reservas de número por las de su crédito.
         "Core/IngenIA365ERP.Application/Lending/Integration/Comercial/MensajesRecibidos.cs",
         "Core/IngenIA365ERP.Application/Lending/Origination/Queries/ListLoanNumberReservationsQuery.cs",
+        // US7 (bloque B, T0658; parte de T0610): la conciliación contable por las oficinas del alcance (y una sucursal fuera de él es el 404), los
+        // hechos contables por la sucursal de su sobre y una parte por su oficina (fuera, Lending.AccountingFactPart.NotFound).
+        "Core/IngenIA365ERP.Application/Lending/Integration/Queries/LendingAccountingQueries.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>

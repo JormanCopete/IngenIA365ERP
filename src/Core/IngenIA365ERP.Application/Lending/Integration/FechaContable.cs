@@ -20,7 +20,9 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// la alerta <c>Contabilidad.PeriodoInexistente</c> para quien abre períodos; Contabilidad responde <c>Retry</c> hasta que exista (T36).</item>
 /// </list>
 /// Los cierres de Cartera (<c>LND_MonthlyCloses</c>) no existen hasta US9 (<c>CarteraRiesgo</c>): mientras tanto sólo decide Contabilidad. US9
-/// suma que un mes con cierre vigente de Cartera también se salta, sin cambiar la firma.
+/// (T0711) suma que un mes con cierre vigente de Cartera también se salta, sin cambiar la firma: el punto de extensión es el estado del mes
+/// (un mes con cierre de Cartera vigente cuenta como «cerrado» y se sigue al siguiente, con la misma búsqueda). US7 (T0656) lo completa con el
+/// adaptador real: también el primer mes abierto que todavía no existe se queda en él y alerta.
 /// </para>
 /// <para>
 /// Es una lectura en proceso sobre la misma base: si falla, falla la operación (Principio IX), sin fecha supuesta. (nuevo)
@@ -47,7 +49,15 @@ public sealed class FechaContable(IContabilidadParaCartera contabilidad, IAlerta
                 await AlertarAsync(fechaValor, ct);
                 return Result.Success(fechaValor);
             default:
-                if (e.FirstOpenMonthFrom is { } abierto) return Result.Success(abierto);
+                if (e.FirstOpenMonthFrom is { } abierto)
+                {
+                    // El «primer mes abierto» puede ser uno que todavía no existe (el ejercicio siguiente sin abrir): no se salta, la fecha
+                    // queda en él y se alerta, igual que con la fecha valor en un mes inexistente (T0656).
+                    var siguienteEstado = await contabilidad.EstadoDelPeriodoAsync(abierto, ct);
+                    if (siguienteEstado.IsFailure) return Result.Failure<DateOnly>(siguienteEstado.Error);
+                    if (siguienteEstado.Value.State == EstadoDePeriodoContable.NotFound) await AlertarAsync(abierto, ct);
+                    return Result.Success(abierto);
+                }
                 var siguiente = new DateOnly(fechaValor.Year, fechaValor.Month, 1).AddMonths(1);
                 await AlertarAsync(siguiente, ct);
                 return Result.Success(siguiente);

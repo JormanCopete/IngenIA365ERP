@@ -89,7 +89,7 @@ public sealed class ConsumoDeVentaACreditoTests : IAsyncLifetime
         c.GetProperty("plan").GetProperty("installmentCount").GetInt32().Should().Be(3);
         (recibo.Status, recibo.LoanId, recibo.ResponseMessagePublicId).Should().Be((InboundMessageStatus.Processed, (int?)credito.Id, (Guid?)creada.PublicId));
         var evaluacion = await _v.Db.LendingInboundMessageEvaluations.AsNoTracking().SingleAsync(e => e.InboundMessageId == recibo.Id);
-        (evaluacion.Outcome, evaluacion.CreditLineCode, evaluacion.PrevalidationOutcome).Should().Be((InboundEvaluationOutcome.Accepted, "CONLIB", "NotApplicable"));
+        (evaluacion.Outcome, evaluacion.CreditLineCode, evaluacion.PrevalidationOutcome).Should().Be((InboundEvaluationOutcome.Accepted, "CONLIB", "Postable"), "US7: la evaluación la responde el adaptador real (aquí, un doble que dice contabilizable)");
     }
 
     [Fact]

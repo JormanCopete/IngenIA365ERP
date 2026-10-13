@@ -99,7 +99,8 @@ public sealed class CicloDiarioDeCartera(
     IAlertas alertas,
     ParametrosDeLaTandaDeCartera tanda,
     IDateTimeService reloj,
-    ILogger<CicloDiarioDeCartera>? logger = null)
+    ILogger<CicloDiarioDeCartera>? logger = null,
+    MovimientoContingenteDeCartera? contingentes = null)
 {
     /// <summary>Créditos de la muestra de verificación del paso (8).</summary>
     public const int MuestraDeVerificacion = 20;
@@ -529,9 +530,18 @@ public sealed class CicloDiarioDeCartera(
             _logger.LogWarning("[Cartera.LibroDescuadrado] La muestra del ciclo {Fecha} encontró {N} diferencias del libro contra la reconstrucción.",
                 d, muestra.Diferencias.Count);
 
+        // T0659 (A3): lo que vence con el tiempo —aprobaciones y cupos rotativos— mueve sus contingentes; los emite el proceso.
+        if (contingentes is not null && await contingentes.VencimientosAsync(d, ct) is { IsFailure: true } contingente)
+            _logger.LogWarning("[Cartera.Contingentes] El ciclo {Fecha} no pudo poner al día los contingentes: {Codigo} {Mensaje}", d, contingente.Error.Code,
+                contingente.Error.Message);
+
+        // T0654, C09: toma las entregas InBatch sin lote de AccrualRun:{x} con x ≤ d (las de la causación de d y los hechos FinDeCausacion
+        // nacidos fuera de una corrida anterior, sellados con su día siguiente), en el mismo guardado con que termina la corrida.
         var alcance = EmisionDeCartera.AlcanceDeLoteDeCausacion(d);
         var entregas = await db.IntegrationMessageDeliveries
-            .Where(x => x.Destination == IntegrationDestinations.Accounting && x.Status == DeliveryStatus.InBatch && x.BatchId == null && x.BatchScopeKey == alcance)
+            .Where(x => x.Destination == IntegrationDestinations.Accounting && x.Status == DeliveryStatus.InBatch && x.BatchId == null
+                && x.BatchScopeKey != null && x.BatchScopeKey.StartsWith(ModoDePasoDeCartera.PrefijoDeCausacion)
+                && string.Compare(x.BatchScopeKey, alcance) <= 0)
             .OrderBy(x => x.MessageId).ToListAsync(ct);
         if (entregas.Count > 0)
         {
@@ -540,7 +550,7 @@ public sealed class CicloDiarioDeCartera(
                 BatchTrigger.LendingAccrualRun, actor, null, reloj.UtcNow);
             lote.MessageCount = entregas.Count;
             lote.CutoffMessageId = entregas[^1].MessageId;
-            lote.DateFrom = d;
+            lote.DateFrom = await db.IntegrationMessages.AsNoTracking().Where(m => m.Id == entregas[0].MessageId).Select(m => (DateOnly?)m.OperationDate).FirstOrDefaultAsync(ct) ?? d;
             lote.DateTo = d;
             db.IntegrationBatches.Add(lote);
             await db.SaveChangesAsync(ct);

@@ -122,7 +122,8 @@ public sealed class AssignCreditLimitCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<AssignCreditLimitCommand, Result<CreditLimitDto>>
+    IDateTimeService reloj,
+    Integration.MovimientoContingenteDeCartera? contingentes = null) : IRequestHandler<AssignCreditLimitCommand, Result<CreditLimitDto>>
 {
     public async Task<Result<CreditLimitDto>> Handle(AssignCreditLimitCommand request, CancellationToken ct)
     {
@@ -259,6 +260,8 @@ public sealed class AssignCreditLimitCommandHandler(
                 db.CreditLimits.Add(CreditLimit.NuevaVersion(persona.Id, request.Kind, linea?.Id, 0m, request.Origin, hasta.AddDays(1), numero + 1, reloj.UtcNow,
                     $"Fin de la vigencia del cupo otorgado: {request.Reason.Trim()}", usuario));
             if (radicacion is not null) intervenciones.Registrar(radicacion, ExpedienteDeCupo.Tipo, cupo.PublicId);
+            // T0659 (A3): el cupo rotativo otorgado de una vez mueve el contingente 913005 (C92); el que espera decisión, al decidirse.
+            if (contingentes is not null && await contingentes.CupoAsync(cupo, hoy, ct) is { IsFailure: true } contingente) return Falla(contingente.Error);
             await db.SaveChangesAsync(ct);
             return Result.Success(await ConsultasDeCupos.DtoAsync(db, cupo, hoy, ct, avisos));
         }, ct);

@@ -62,6 +62,10 @@ public class CasosDoradosTests
                 "lo no descontado de cada línea y su motivo");
             resultado.Lines.Should().OnlyContain(l => l.DeferredAmount == 0m || l.NotDeductedAmount == 0m, "lo no descontado de Cartera no se difiere");
         }
+        // Feature 013 (enmienda D-08 de la 010, T53, T0631; pregunta C1, rige «sí»): la cuota de Cartera contabiliza contra la cuenta del
+        // concepto DESC_CARTERA (el puente «recaudos por nómina para Cartera»), como cualquier descuento.
+        resultado.Lines.Where(l => l.Code.Equals("DESC_CARTERA", StringComparison.OrdinalIgnoreCase) && l.Amount != 0m)
+            .Should().OnlyContain(l => l.AffectsAccounting, "DESC_CARTERA contabiliza en la ordinaria (enmienda D-08)");
         if (caso.Esperado.OrdenDeAutorizadas is { } orden)
             resultado.Lines.Where(l => orden.Contains(l.Code, StringComparer.OrdinalIgnoreCase)).OrderBy(l => l.Order).Select(l => l.Code)
                 .Should().Equal(orden, "orden de las deducciones autorizadas: la cuota de Cartera va primera");

@@ -65,11 +65,11 @@ public class CasosDoradosDeLiquidacionTests
 
             resultado.Flags.Should().Be(e.Banderas, "banderas");
 
-            // Feature 013 (enmienda D-08, T53): cada descuento propuesto contabiliza salvo que el caso diga que lo contabiliza otro módulo.
+            // Feature 013 (enmienda D-08, T53, T0631, T0660): todo descuento propuesto contabiliza —DESC_CARTERA contra el puente «recaudos por
+            // nómina para Cartera»—; la regla ya no tiene excepción para «lo contabiliza otro módulo».
             foreach (var deuda in caso.Deudas.Where(d => (d.Aplicado ?? d.Propuesto) > 0m))
                 resultado.Lines.Where(l => l.Code.Equals(deuda.Concepto, StringComparison.OrdinalIgnoreCase))
-                    .Should().OnlyContain(l => l.AffectsAccounting == !deuda.ContabilizadaPorOtroModulo,
-                        $"la línea {deuda.Concepto} {(deuda.ContabilizadaPorOtroModulo ? "no" : "sí")} genera asiento (enmienda D-08 de la 010)");
+                    .Should().OnlyContain(l => l.AffectsAccounting, $"la línea {deuda.Concepto} genera asiento (enmienda D-08 de la 010)");
 
             foreach (var omitido in e.Omitidos)
             {

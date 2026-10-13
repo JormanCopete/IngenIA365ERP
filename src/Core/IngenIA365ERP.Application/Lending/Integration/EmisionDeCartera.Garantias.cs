@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
 using IngenIA365ERP.Domain.Enums.Integration;
+using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.EntityFrameworkCore;
 
@@ -80,5 +81,19 @@ public sealed partial class EmisionDeCartera
                 PersonPublicId: g.DeudorPublicId),
             clave, [contenido], modo.Value), ct);
         return mensajes[0];
+    }
+
+    /// <summary>
+    /// Un contingente de <see cref="MovimientoContingenteDeCartera"/> (T0659; §10.24): con el origen, la clave y el contenido que arma él, y el
+    /// modo de su tipo (<c>NoPasa</c> por defecto). Sin guardar.
+    /// </summary>
+    public async Task<Result<IntegrationMessage>> ContingenteAsync(OrigenDeEmision origen, string tipo, string clave, object contenido, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(origen);
+        ArgumentNullException.ThrowIfNull(contenido);
+        var modo = await modoDePaso.ResolverAsync(tipo, origen.OperationDate, emitidoPorElProceso: (await actorActual.ObtenerAsync(ct)).EsProceso, ct);
+        if (modo.IsFailure) return Result.Failure<IntegrationMessage>(modo.Error);
+        var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(origen, clave, [contenido], modo.Value), ct);
+        return Result.Success(mensajes[0]);
     }
 }

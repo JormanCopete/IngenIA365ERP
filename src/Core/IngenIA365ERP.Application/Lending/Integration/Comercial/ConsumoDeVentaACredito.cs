@@ -56,8 +56,9 @@ public sealed class ConsumoDeVentaACredito(
 
         // La validación previa contable, fuera del cerrojo: sólo advierte (T56, D9).
         var sucursal = await SucursalAsync(m, ct);
-        var previa = await validacionPrevia.EvaluarAsync(
-            [RequisitosDelDesembolso.HechoParaValidar(c.Linea, sim, c.Persona, sucursal, venta.Fecha, venta.Pago.Amount, 1, DisbursementForm.InKind)], ct);
+        var previa = (await validacionPrevia.DecidirAsync(
+            [RequisitosDelDesembolso.HechoParaValidar(c.Linea, sim, c.Persona, sucursal, venta.Fecha, venta.Pago.Amount, 1, DisbursementForm.InKind)],
+            OrigenDeValidacionPrevia.ConsumidorDeComercial, $"la venta {venta.NumeroDeFactura}", ct)).Resultado;
 
         await cerrojo.TomarSetupAsync(exclusivo: false, ct);
         await cerrojo.BloquearDeudoresAsync([c.Persona.Id], ModoDeEspera.Esperar, ct);

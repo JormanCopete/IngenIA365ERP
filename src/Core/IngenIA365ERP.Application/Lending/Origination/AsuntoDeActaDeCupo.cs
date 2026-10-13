@@ -18,7 +18,8 @@ namespace IngenIA365ERP.Application.Lending.Origination;
 /// (<c>Applicant</c>). Al cerrar revalida como la decisión individual (si falla, el cierre se revierte) y, con la decisión guardada, otorga el cupo.
 /// (nuevo)
 /// </summary>
-public sealed class AsuntoDeActaDeCupo(IApplicationDbContext db, EnrutamientoDeCupo enrutamiento, DecisionSobreCupo decisiones) : IAsuntoDeActa
+public sealed class AsuntoDeActaDeCupo(IApplicationDbContext db, EnrutamientoDeCupo enrutamiento, DecisionSobreCupo decisiones,
+    Integration.MovimientoContingenteDeCartera? contingentes = null) : IAsuntoDeActa
 {
     private readonly Dictionary<Guid, AprobacionRevalidada> _aprobaciones = [];
 
@@ -84,7 +85,10 @@ public sealed class AsuntoDeActaDeCupo(IApplicationDbContext db, EnrutamientoDeC
     {
         if (!_aprobaciones.TryGetValue(decision.Punto.SubjectPublicId, out var aprobacion)) return Result.Success();
         var cupo = await db.CreditLimits.AsNoTracking().FirstAsync(c => c.PublicId == decision.Punto.SubjectPublicId, ct);
-        await decisiones.OtorgarAsync(cupo, decision.Decision.Id, aprobacion with { Condiciones = aprobacion.Condiciones ?? decision.Condiciones }, ct);
+        var otorgado = await decisiones.OtorgarAsync(cupo, decision.Decision.Id, aprobacion with { Condiciones = aprobacion.Condiciones ?? decision.Condiciones }, ct);
+        // T0659 (A3): el cupo rotativo otorgado por el acta mueve el contingente 913005, en el guardado del cierre.
+        if (contingentes is not null && await contingentes.CupoAsync(otorgado, decision.Fecha, ct) is { IsFailure: true } contingente)
+            return Result.Failure(contingente.Error);
         return Result.Success();
     }
 

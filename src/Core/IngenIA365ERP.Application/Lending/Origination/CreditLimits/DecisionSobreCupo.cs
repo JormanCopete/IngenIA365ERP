@@ -33,7 +33,8 @@ public sealed class DecisionSobreCupo(
     ICerrojoDeCartera cerrojo,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IDecisionIndividual
+    IDateTimeService reloj,
+    Integration.MovimientoContingenteDeCartera? contingentes = null) : IDecisionIndividual
 {
     public string SubjectType => LendingDecisionSubjects.CreditLimit;
 
@@ -88,6 +89,8 @@ public sealed class DecisionSobreCupo(
             CreditLimit? otorgado = null;
             if (aprobacion is not null) otorgado = await OtorgarAsync(cupo, decision.Id, aprobacion, ct);
             intervenciones.Registrar(verificada.Value, ExpedienteDeCupo.Tipo, cupo.PublicId);
+            if (otorgado is not null && contingentes is not null && await contingentes.CupoAsync(otorgado, hoy, ct) is { IsFailure: true } contingente)
+                return Falla(contingente.Error);
             await db.SaveChangesAsync(ct);
             var final = otorgado ?? cupo;
             return Result.Success(new CreditDecisionResultDto(decision.PublicId, decision.Outcome,

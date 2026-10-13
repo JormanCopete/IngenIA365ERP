@@ -264,18 +264,15 @@ public sealed class RequisitosDelDesembolso(
         if (recogidas.Count > 0 && bruto - recogido <= 0m) bloqueosHallados.Add(ErroresDeDesembolso.NetoNoPositivo(bruto, recogido));
 
         // 8. Validación previa contable.
-        var prevalidacion = await validacionPrevia.EvaluarAsync(
-            [HechoParaValidar(linea, simulacion, personas[s.ApplicantPersonId], sucursal.IsSuccess ? sucursal.Value : Guid.Empty, fechaValor, bruto, tramo, e.Form)], ct);
-        var falta = await lector.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.ContabilidadFaltaDeRegla, fechaValor, ct: ct);
-        var bloquearSinRegla = falta.IsSuccess && string.Equals(falta.Value.Texto, Bloquear, StringComparison.OrdinalIgnoreCase);
-        if (prevalidacion.Outcome == PrevalidationOutcome.NotPostable)
-        {
-            if (bloquearSinRegla) bloqueosHallados.Add(ErroresDeDesembolso.NoContabilizable(prevalidacion.Errors));
-            else avisos.Add("Contabilidad no tiene regla para todo lo que registra este desembolso: queda marcado para que la contadora lo complete.");
-        }
-        else if (prevalidacion.Outcome == PrevalidationOutcome.NoResponse)
-            avisos.Add("Contabilidad no respondió a tiempo: el desembolso sigue y queda marcado para revisión.");
-        avisos.AddRange(prevalidacion.Warnings.Select(w => w.Message));
+        // Origen pantalla (T0655, §13.2): bloquea sólo con Contabilidad.FaltaDeRegla o .PoliticaSinRespuesta en «Bloquear»; la alerta la levanta
+        // el desembolso al confirmar (AlertarAsync), no la vista previa.
+        var decision = await validacionPrevia.DecidirAsync(
+            [HechoParaValidar(linea, simulacion, personas[s.ApplicantPersonId], sucursal.IsSuccess ? sucursal.Value : Guid.Empty, fechaValor, bruto, tramo, e.Form)],
+            OrigenDeValidacionPrevia.Pantalla, s.Number ?? s.PublicId.ToString("N"), alertar: false, ct);
+        var prevalidacion = decision.Resultado;
+        var bloquearSinRegla = decision.Bloqueo?.Code == ErroresDeValidacionPreviaDeCartera.CodigoNoContabilizable;
+        if (decision.Bloqueo is { } bloqueoContable) bloqueosHallados.Add(bloqueoContable);
+        avisos.AddRange(decision.Avisos);
 
         var huella = Huella(s, creditoId, tramo, bruto, fechaValor, e, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas, simulacion);
         return Result.Success(new RequisitosEvaluados
@@ -307,6 +304,10 @@ public sealed class RequisitosDelDesembolso(
             Huella = huella,
         });
     }
+
+    /// <summary>La alerta de un desembolso confirmado con la validación previa en <c>NotPostable</c> (T0655, §13.2).</summary>
+    public Task AlertarNoContabilizableAsync(RequisitosEvaluados r, string operacion, CancellationToken ct) =>
+        validacionPrevia.AlertarAsync(r.Prevalidacion, operacion, ct);
 
     /// <summary>La simulación de la solicitud sobre lo desembolsado, con las cuotas aprobadas y la fecha valor del tramo (D12).</summary>
     private async Task<Result<SimulacionCalculada>> SimularAsync(CreditApplication s, CreditLine linea, Person solicitante, decimal monto, int cuotas,

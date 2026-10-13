@@ -74,6 +74,19 @@ public static class ClavesDeLote
     /// <summary>Las tres granularidades de Cartera, en el orden del parámetro.</summary>
     public static IReadOnlyList<string> GranularidadesDeCartera { get; } = [GranularidadPorDia, GranularidadPorDiaYSucursal, GranularidadPorHecho];
 
+    /// <summary>
+    /// La <c>ScheduleKey</c> de Cartera <paramref name="scheduleKey"/> con el código corto <paramref name="codigoCorto"/> (feature 013, T0653, C01,
+    /// C06): un acompañante sella el disparador, la hora y la granularidad de su principal con su propio corto. Una clave que no es de Cartera
+    /// (no empieza por <see cref="PrefijoDeCartera"/>) o un corto vacío la dejan igual. (nuevo)
+    /// </summary>
+    public static string ConCodigoCortoDeCartera(string scheduleKey, string? codigoCorto)
+    {
+        ArgumentNullException.ThrowIfNull(scheduleKey);
+        if (string.IsNullOrWhiteSpace(codigoCorto) || !scheduleKey.StartsWith(PrefijoDeCartera, StringComparison.Ordinal)) return scheduleKey;
+        var separador = scheduleKey.IndexOf('|', StringComparison.Ordinal);
+        return separador < 0 ? scheduleKey : PrefijoDeCartera + codigoCorto + scheduleKey[separador..];
+    }
+
     /// <summary><c>BatchScopeKey</c> del disparador <c>CierreDeTurno</c>: <c>CashSession:{publicId}</c>.</summary>
     public static string SesionDeCaja(Guid cashSessionPublicId) => $"CashSession:{cashSessionPublicId:D}";
 

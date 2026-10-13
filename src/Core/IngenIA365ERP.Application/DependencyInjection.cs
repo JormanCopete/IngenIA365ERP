@@ -152,6 +152,10 @@ public static class DependencyInjection
              Domain.Enums.Parameters.ParameterScopeKind.PointOfSale, Domain.Enums.Parameters.ParameterScopeKind.CashRegister,
              Domain.Enums.Parameters.ParameterScopeKind.ThirdPartyKind],
             sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>()));
+        // Feature 013 (T0653): Cartera resuelve el ambito LendingFactType (Contabilidad.ModoDePaso y sus hermanas por tipo de hecho).
+        services.AddScoped(sp => new Common.Parameters.ResolutorDeAmbitoDeModulo(
+            Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Lending.Common.ResolutorDeAmbitoDeCartera.Ambitos,
+            new Lending.Common.ResolutorDeAmbitoDeCartera(sp.GetRequiredService<Common.Interfaces.IApplicationDbContext>())));
         services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoCompuesto>();
         services.AddScoped<Lending.Common.ReglasDeParametrosDeCartera>();
         services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => sp.GetRequiredService<Lending.Common.ReglasDeParametrosDeCartera>());
@@ -172,6 +176,8 @@ public static class DependencyInjection
         // Feature 013 (T0075, T0078; T16, T19): la vista de cada módulo en la bandeja (Inventario aquí; Cartera la agrega US7) y el
         // registro de participantes: su lector y su único escritor (agrega sin guardar). IAmbienteDeDespliegue lo pone la API.
         services.AddScoped<Common.Integration.IVistaDeBandejaDelModulo, Inventory.Integration.VistaDeBandejaDeInventario>();
+        // Feature 013 (US7, bloque B): la bandeja vista desde Cartera (alcance por oficina, modo de paso por tipo de hecho).
+        services.AddScoped<Common.Integration.IVistaDeBandejaDelModulo, Lending.Integration.VistaDeBandejaDeCartera>();
         services.AddScoped<Common.Integration.IRegistroDeIntegracion, Common.Integration.RegistroDeIntegracion>();
         services.AddScoped<Common.Integration.EscritorDelRegistroDeIntegracion>();
         AddCanalesExternos(services);
@@ -509,6 +515,12 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.FechaContable>();
         services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
+        // Feature 013, US7 (T0657, T0658): el puerto de las dimensiones de Cartera para Contabilidad (enmienda A1) y la conciliacion.
+        services.AddScoped<Lending.Integration.SaldosContablesDeCartera>();
+        services.AddScoped<Lending.Integration.ConciliacionContableDeCartera>();
+        // T0659 (A3): los tres contingentes (aprobado sin desembolsar, cupo rotativo; la garantía la emiten sus operaciones).
+        services.AddScoped<Lending.Integration.MovimientoContingenteDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IDimensionesDeCartera, Lending.Integration.DimensionesDeCartera>();
         services.AddScoped<Lending.Integration.CategoriaContableDeCartera>();
         services.AddScoped<Lending.Integration.EmisionDeCartera>();
         services.AddScoped<Lending.Activation.RequisitosDeActivacion>();

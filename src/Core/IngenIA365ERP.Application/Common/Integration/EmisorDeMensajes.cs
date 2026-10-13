@@ -125,7 +125,11 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
             };
             db.IntegrationMessages.Add(mensaje);
 
-            var entrega = NuevaEntrega(mensaje, contenido.Destino, contenido.Kind, modo, ahora);
+            // Feature 013 (T0653, C01, C06): en una unidad de Cartera cada contenido sella la clave del principal con su propio código corto.
+            var modoDelContenido = modo is { ScheduleKey: { } clave } && contenido.Tipo.CodigoCorto is { Length: > 0 } corto
+                ? modo with { ScheduleKey = ClavesDeLote.ConCodigoCortoDeCartera(clave, corto) }
+                : modo;
+            var entrega = NuevaEntrega(mensaje, contenido.Destino, contenido.Kind, modoDelContenido, ahora);
             db.IntegrationMessageDeliveries.Add(entrega);
 
             foreach (var objetivo in objetivos)

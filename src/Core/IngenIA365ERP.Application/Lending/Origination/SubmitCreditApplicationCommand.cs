@@ -310,7 +310,8 @@ public sealed class CancelCreditApplicationCommandHandler(
     IActorActual actorActual,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<CancelCreditApplicationCommand, Result>
+    IDateTimeService reloj,
+    Integration.MovimientoContingenteDeCartera? contingentes = null) : IRequestHandler<CancelCreditApplicationCommand, Result>
 {
     public async Task<Result> Handle(CancelCreditApplicationCommand request, CancellationToken ct)
     {
@@ -325,6 +326,9 @@ public sealed class CancelCreditApplicationCommandHandler(
 
         var prefijo = request.Kind == CancelCreditApplicationCommand.Desistimiento ? "Desistimiento" : "Anulación";
         s.Cancelar(usuario, reloj.UtcNow, $"{prefijo}: {request.Reason.Trim()}");
+        // T0659 (A3): desistir o anular una aprobada baja el contingente 9115 en el mismo guardado.
+        if (contingentes is not null && await contingentes.SolicitudAsync(s, reloj.HoyLocal, ct) is { IsFailure: true } contingente)
+            return Result.Failure(contingente.Error);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

@@ -27,8 +27,7 @@ public sealed record EmisionDeParte(
 public sealed partial class EmisionDeCartera
 {
     /// <summary>El <c>BatchScopeKey</c> de las entregas por lotes de la causación de un día: <c>AccrualRun:{aaaa-mm-dd}</c> (T56).</summary>
-    public static string AlcanceDeLoteDeCausacion(DateOnly fecha) =>
-        "AccrualRun:" + fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    public static string AlcanceDeLoteDeCausacion(DateOnly fecha) => ModoDePasoDeCartera.AlcanceDeCausacion(fecha);
 
     /// <summary>
     /// Un hecho de una parte (feature 013, US4, T0495): el masivo de la causación o de la corrección (<c>InteresCausado</c>, <c>MoraCausada</c>,
@@ -44,7 +43,9 @@ public sealed partial class EmisionDeCartera
         var modo = await modoDePaso.ResolverAsync(tipo, parte.FechaContable, emitidoPorElProceso: true, ct);
         if (modo.IsFailure) return Result.Failure<IntegrationMessage>(modo.Error);
         var sellado = modo.Value;
-        if (sellado is ModoDeEntrega.Sellado { Modo: DeliveryMode.Batch } lote && parte.FechaDeLaCausacion is { } dia)
+        // Las partes de la causación de d van en el lote de d (C09); un hecho con otro disparador (el cierre) conserva su alcance.
+        if (sellado is ModoDeEntrega.Sellado { Modo: DeliveryMode.Batch } lote && parte.FechaDeLaCausacion is { } dia
+            && ClavesDeLote.Leer(lote.ScheduleKey)?.Disparador == ClavesDeLote.FinDeCausacion)
             sellado = lote with { BatchScopeKey = AlcanceDeLoteDeCausacion(dia) };
 
         var clave = ClavesDeEvento.ConfirmacionPor(parte.CreditoPublicId ?? parte.PartePublicId);

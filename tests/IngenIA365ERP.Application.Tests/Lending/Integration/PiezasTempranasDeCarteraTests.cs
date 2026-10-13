@@ -150,7 +150,8 @@ public class PiezasTempranasDeCarteraTests
 
         (await Modo().ResolverAsync(PagoAplicadoV1.Type, fecha, default)).Value.Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.Online));
         (await Modo().ResolverAsync(InteresCausadoV1.Type, fecha, default)).Value.Should().Be(
-            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.ICA|FinDeCausacion||PorDia"));
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.ICA|FinDeCausacion||PorDia", "AccrualRun:2026-12-02"),
+            "US7 (T0653, C09): un hecho FinDeCausacion fuera de la corrida va al lote del día siguiente");
         (await Modo().ResolverAsync(CreditoAprobadoSinDesembolsarV1.Type, fecha, default)).Value.Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.NotPosted));
     }
 
@@ -174,10 +175,11 @@ public class PiezasTempranasDeCarteraTests
     private ValidacionPreviaContableDeCartera Validacion(IContabilidadParaCartera puerto) => new(puerto, new LectorDeParametros(_db), _reloj);
 
     [Fact]
-    public async Task Con_el_provisional_la_validacion_no_aplica_y_sin_hechos_tampoco()
+    public async Task Sin_hechos_no_aplica_y_el_provisional_ya_no_es_un_caso_aparte()
     {
-        (await Validacion(Provisional()).EvaluarAsync([Hecho()], default)).Outcome.Should().Be(PrevalidationOutcome.NotApplicable);
         (await Validacion(Provisional()).EvaluarAsync([], default)).Outcome.Should().Be(PrevalidationOutcome.NotApplicable);
+        (await Validacion(Provisional()).EvaluarAsync([Hecho()], default)).Outcome.Should().Be(PrevalidationOutcome.NoResponse,
+            "US7 (T0655): el adaptador real reemplaza al provisional y su «no disponible» ya no tiene trato propio");
     }
 
     [Fact]

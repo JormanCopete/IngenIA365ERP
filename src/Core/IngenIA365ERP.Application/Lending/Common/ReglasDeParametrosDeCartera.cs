@@ -23,6 +23,17 @@ public static class ErroresDeParametrosDeCartera
     /// </summary>
     public const string CodigoNoSoportadoTodavia = "Lending.Parameter.NotSupportedYet";
 
+    /// <summary>
+    /// <b>(nuevo; C111)</b>: <c>Contabilidad.ModoDePaso</c> y sus hermanas de lote en el ámbito <c>LendingFactType</c> de un acompañante que sólo
+    /// viaja con su principal (C01; contabilidad.md §10.1): sella el modo del principal.
+    /// </summary>
+    public const string CodigoAcompananteSinModo = "Lending.Parameter.CompanionHasNoMode";
+
+    /// <summary>C01: el acompañante no tiene modo propio (422).</summary>
+    public static Error AcompananteSinModo(string clave, string tipoDeHecho, string principal) => new ErrorConDatos(CodigoAcompananteSinModo,
+        $"«{tipoDeHecho}» viaja siempre con «{principal}» y pasa a contabilidad como él: configure «{clave}» en el tipo de hecho principal.",
+        new { key = clave, factType = tipoDeHecho, principal });
+
     /// <summary>T42: la vigencia es menos estricta que el límite legal vigente en su <c>ValidFrom</c> (422).</summary>
     public static Error MenosEstrictoQueLaLey(string clave, string valor, string codigoDeLimite, decimal limite, string fuente) =>
         new ErrorConDatos(CodigoMenosEstrictoQueLaLey,
@@ -70,9 +81,19 @@ public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacion
 {
     public string Modulo => ParametrosDeCartera.Modulo;
 
+    /// <summary>Las claves del modo de paso que un acompañante no tiene (C01): el modo, la granularidad, el disparador y la hora del lote.</summary>
+    public static IReadOnlySet<string> ClavesDelModoDePaso { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        ParametrosDeCartera.ContabilidadModoDePaso, ParametrosDeCartera.ContabilidadGranularidad,
+        ParametrosDeCartera.ContabilidadDisparadorDeLote, ParametrosDeCartera.ContabilidadHoraDeLote,
+    };
+
     public async Task<Result<DecisionDeReglasDeParametro>> EvaluarAsync(AltaDeParametro alta, CancellationToken ct)
     {
         var definicion = alta.Definicion;
+        if (alta.ScopeKind == ParameterScopeKind.LendingFactType && ClavesDelModoDePaso.Contains(definicion.Clave)
+            && alta.Ambito is { } ambito && Integration.ModoDePasoDeCartera.PrincipalDe(ambito.Code) is { } principal)
+            return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.AcompananteSinModo(definicion.Clave, ambito.Code, principal));
         if (definicion.Clave == ParametrosDeCartera.ContabilidadDiferirComisiones && alta.Valor == "true")
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.DiferirComisionesNoSoportado());
 

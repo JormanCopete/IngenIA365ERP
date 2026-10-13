@@ -33,10 +33,8 @@ public static class ProposedDeductionsRule
             exp.Step("Propuesto (saldo total o cuotas causadas, según la política)", d.ProposedAmount);
             if (d.AppliedAmount < d.ProposedAmount) exp.Step("Aplicado tras la validación de la responsable (bajado con motivo, auditado)", d.AppliedAmount);
             else exp.Step("Aplicado", d.AppliedAmount);
-            if (d.AccountedByOtherModule)
-                exp.Note("Origen", "Descuento contabilizado por otro módulo: se muestra para el neto y el comprobante, no genera asiento.");
             exp.Summary = $"{d.Description}: {Fmt.Money(d.AppliedAmount)}";
-            ctx.Add(LineFactory.Create(def, d.AppliedAmount, exp, affectsAccounting: !d.AccountedByOtherModule));
+            ctx.Add(LineFactory.Create(def, d.AppliedAmount, exp));
             aplicado += d.AppliedAmount;
         }
 

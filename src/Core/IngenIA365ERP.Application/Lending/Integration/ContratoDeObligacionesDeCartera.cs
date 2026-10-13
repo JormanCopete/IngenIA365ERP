@@ -429,7 +429,8 @@ public sealed class ContratoDeObligacionesDeCartera(
                 },
                 Amounts = [new ConceptAmountV1 { Concept = nameof(LoanConcept.Principal), Amount = 1m }],
             })).ToList();
-        var r = await validacionPrevia.EvaluarAsync(hechos, ct);
+        // Origen contrato (§13.2, A8): siempre advierte; un NotPostable se sella y alerta, nunca bloquea.
+        var r = await validacionPrevia.DecidirAsync(hechos, OrigenDeValidacionPrevia.Contrato, $"el lote de {recaudador.Class}", ct);
         return r.Outcome;
     }
 }

@@ -210,6 +210,7 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
             var emitidos = await emision.DesembolsoAsync(new DesembolsoAEmitir(hecho, operacion, r.Tramo, r.EsElUltimo, r.Forma, r.Beneficiario!.ComoPayee(),
                 r.Bruto, recogidas, orden, TramoDeDesembolso.Resumen(r, numeroDelPlan, planDelTramo), r.Prevalidacion.Outcome), ct);
             if (emitidos.IsFailure) return Falla(emitidos.Error);
+            await requisitos.AlertarNoContabilizableAsync(r, operacion.Number, ct);
 
             await db.SaveChangesAsync(ct);
             await auditoria.EmitirOperacionRegistradaAsync(operacion.PublicId, operacion.Number, nameof(LoanOperationKind.Disbursement),

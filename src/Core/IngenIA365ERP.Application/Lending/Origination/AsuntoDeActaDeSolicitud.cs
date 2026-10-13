@@ -32,7 +32,8 @@ public sealed class AsuntoDeActaDeSolicitud(
     ValidacionesDeOriginacion validaciones,
     EnrutamientoDeSolicitud enrutamiento,
     DecisionSobreSolicitud decisiones,
-    IDateTimeService reloj) : IAsuntoDeActa
+    IDateTimeService reloj,
+    Integration.MovimientoContingenteDeCartera? contingentes = null) : IAsuntoDeActa
 {
     private readonly Dictionary<int, AprobacionRevalidada> _aprobaciones = [];
 
@@ -98,11 +99,11 @@ public sealed class AsuntoDeActaDeSolicitud(
             case CreditDecisionOutcome.Deny:
                 if (s.Status == CreditApplicationStatus.Approved && await ReenrutarVencidaAsync(s, decision.Fecha, ct) is { } sinRuta1) return Result.Failure(sinRuta1);
                 s.Negar();
-                return Result.Success();
+                return await ContingenteAsync(s, decision.Fecha, ct);
             case CreditDecisionOutcome.Return:
                 if (s.Status == CreditApplicationStatus.Approved && await ReenrutarVencidaAsync(s, decision.Fecha, ct) is { } sinRuta2) return Result.Failure(sinRuta2);
                 s.Devolver();
-                return Result.Success();
+                return await ContingenteAsync(s, decision.Fecha, ct);
         }
 
         // Aprobar: las mismas revalidaciones que la decisión individual, sin escribir validaciones (el cierre no guarda hasta el final).
@@ -127,7 +128,15 @@ public sealed class AsuntoDeActaDeSolicitud(
         var vigencia = await decisiones.VigenciaAsync(s.CreditLineId, decision.Fecha, ct);
         if (vigencia.IsFailure) return Result.Failure(vigencia.Error);
         s.Aprobar(decision.Decision.Id, aprobacion.Monto, aprobacion.Condiciones ?? decision.Condiciones, vigencia.Value);
-        return Result.Success();
+        return await ContingenteAsync(s, decision.Fecha, ct);
+    }
+
+    /// <summary>T0659 (A3): el contingente 9115 de la solicitud, en el guardado del cierre del acta.</summary>
+    private async Task<Result> ContingenteAsync(CreditApplication s, DateOnly fecha, CancellationToken ct)
+    {
+        if (contingentes is null) return Result.Success();
+        var r = await contingentes.SolicitudAsync(s, fecha, ct);
+        return r.IsFailure ? Result.Failure(r.Error) : Result.Success();
     }
 
     /// <summary>Una aprobada que venció vuelve a <c>PendingDecision</c> antes de decidirla otra vez (C53), con el enrutamiento de hoy.</summary>

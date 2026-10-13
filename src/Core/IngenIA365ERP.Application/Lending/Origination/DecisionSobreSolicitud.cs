@@ -48,7 +48,8 @@ public sealed class DecisionSobreSolicitud(
     ICerrojoDeCartera cerrojo,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IDecisionIndividual
+    IDateTimeService reloj,
+    Integration.MovimientoContingenteDeCartera? contingentes = null) : IDecisionIndividual
 {
     public string SubjectType => LendingDecisionSubjects.CreditApplication;
 
@@ -143,6 +144,8 @@ public sealed class DecisionSobreSolicitud(
                     break;
             }
             intervenciones.Registrar(verificada.Value, SubmitCreditApplicationCommandHandler.Expediente, s.PublicId);
+            // T0659 (A3): el contingente 9115 sube al aprobar y baja si una aprobada vencida se niega o se devuelve, en el mismo guardado.
+            if (contingentes is not null && await contingentes.SolicitudAsync(s, hoy, ct) is { IsFailure: true } contingente) return Falla(contingente.Error);
             await db.SaveChangesAsync(ct);
             return Result.Success(new CreditDecisionResultDto(decision.PublicId, decision.Outcome, s.Status.ToString(), s.ApprovalValidUntil,
                 s.ApprovedAmount));

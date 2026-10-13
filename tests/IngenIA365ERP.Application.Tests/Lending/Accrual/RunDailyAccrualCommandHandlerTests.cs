@@ -172,6 +172,43 @@ public class RunDailyAccrualCommandHandlerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task El_lote_de_la_causacion_toma_tambien_los_alcances_anteriores_sin_lote_y_no_los_de_dias_siguientes()
+    {
+        // T0654, C09: el lote LendingAccrualRun del día d toma las entregas InBatch sin lote de AccrualRun:{x} con x ≤ d.
+        await _c.SembrarTiposDeHechoAsync();
+        var d = Hoy.AddDays(1);
+        IngenIA365ERP.Domain.Entities.Integration.IntegrationMessageDelivery Pendiente(string alcance)
+        {
+            var mensaje = new IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage
+            {
+                Type = AjusteDeCausacionPorFechaValorV1.Type, Version = 1, Kind = IntegrationMessageKind.Business, OriginModule = "CAR",
+                OriginKind = MessageOriginKind.Operation, OriginPublicId = Guid.NewGuid(), OriginNumber = "AJ", OriginEventKey = "Confirmation",
+                ChainRootPublicId = Guid.NewGuid(), OperationDate = Hoy, BranchPublicId = Guid.NewGuid(), Currency = "COP", ExchangeRate = 1m,
+                PayloadJson = "{}", PayloadSha256 = "x", OriginActorKind = ActorKind.Person, OriginUserName = "Ana", EmittedAt = DateTime.UtcNow,
+            };
+            var entrega = new IngenIA365ERP.Domain.Entities.Integration.IntegrationMessageDelivery
+            {
+                Message = mensaje, Destination = "Accounting", Mode = DeliveryMode.Batch, Status = DeliveryStatus.InBatch,
+                ScheduleKey = "CAR.AFV|FinDeCausacion||PorDia", BatchScopeKey = alcance,
+            };
+            _c.Db.IntegrationMessages.Add(mensaje);
+            _c.Db.IntegrationMessageDeliveries.Add(entrega);
+            return entrega;
+        }
+        var deAyer = Pendiente(EmisionDeCartera.AlcanceDeLoteDeCausacion(Hoy));
+        var deManana = Pendiente(EmisionDeCartera.AlcanceDeLoteDeCausacion(d.AddDays(1)));
+        await _c.Db.SaveChangesAsync();
+        _c.Db.ChangeTracker.Clear();
+
+        await _c.CausarHastaAsync(d);
+
+        var lote = await _c.Db.IntegrationBatches.SingleAsync(b => b.Trigger == BatchTrigger.LendingAccrualRun);
+        (await _c.Db.IntegrationMessageDeliveries.SingleAsync(x => x.Id == deAyer.Id)).BatchId.Should().Be(lote.Id, "AccrualRun:{d-1} ≤ d");
+        (await _c.Db.IntegrationMessageDeliveries.SingleAsync(x => x.Id == deManana.Id)).BatchId.Should().BeNull("AccrualRun:{d+1} es del lote siguiente");
+        (await _c.Db.IntegrationMessageDeliveries.Where(x => x.BatchId == lote.Id).CountAsync()).Should().Be(lote.MessageCount);
+    }
+
+    [Fact]
     public async Task El_ciclo_detecta_que_el_deudor_dejo_de_ser_empleado_y_emite_la_dimension_cambiada_por_lotes()
     {
         await _c.SembrarTiposDeHechoAsync();
