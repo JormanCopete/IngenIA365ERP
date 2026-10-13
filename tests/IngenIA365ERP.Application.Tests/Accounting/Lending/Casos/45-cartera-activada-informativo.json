@@ -1,0 +1,53 @@
+{
+  "descripcion": "Informativo (§7.4): deja su recibo Informational sin validar reglas ni generar comprobante.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "2026-11-01",
+      "publicId": "0d0d0196-0000-4000-8000-000000000196",
+      "operationDate": "2026-11-01"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0197-0000-4000-8000-000000000197",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-01T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0200-0000-4000-8000-000000000200",
+      "type": "CarteraActivada",
+      "kind": "Informational",
+      "originDocumentClass": "LendingActivation",
+      "payload": {
+        "activationDate": "2026-11-01",
+        "cutoffDate": "2026-10-31",
+        "migrationLoadPublicId": "ac700198-0000-4000-8000-000000000198",
+        "baseClosePublicId": "ac720199-0000-4000-8000-000000000199",
+        "loanCount": 812,
+        "principalTotal": 4512330000.0,
+        "activatedBy": {
+          "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+          "name": "Usuario de ensayo"
+        }
+      }
+    }
+  ],
+  "esperado": {
+    "sinComprobante": "Informational"
+  }
+}

@@ -162,6 +162,18 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string ArchivoDeDesembolsos = "LendingDisbursementFile";
 
+    /// <summary>
+    /// Feature 013, US7 (T0638, T59; contracts/contabilidad.md §4.4; data-model parte 3 §5.4): el soporte del patrimonio técnico o de la relación de
+    /// solvencia que registra el contador. Se sube <b>antes</b> de registrar el indicador (<c>RegisterRegulatoryIndicatorCommand</c> lo cita en
+    /// <c>SupportAttachmentPublicId</c>), así que el dueño es el <c>PublicId</c> que la pantalla reserva para el registro. Se lee con
+    /// <c>Accounting.RegulatoryIndicators.View</c>; se sube y se borra con <c>.Manage</c>; una vez registrado el indicador que lo cita (o el que lleva
+    /// ese <c>PublicId</c>) queda bloqueado (<c>Attachments.OwnerLocked</c>): es el soporte de un hecho de sólo inserción.
+    /// </summary>
+    public const string SoporteDeIndicadorRegulatorio = "RegulatoryIndicatorSupport";
+
+    private const string VerIndicadores = "Accounting.RegulatoryIndicators.View";
+    private const string AdministrarIndicadores = "Accounting.RegulatoryIndicators.Manage";
+
     private const string LeerGarantias = "Lending.Guarantees.Read";
     private const string AdministrarGarantias = "Lending.Guarantees.Manage";
 
@@ -216,6 +228,7 @@ public static class AdjuntosDeModulo
             SoporteTributarioDeLinea => VerLineas,
             DocumentoDeSolicitud => LeerSolicitudesDeCredito,
             DocumentoDeGarantia => LeerGarantias,
+            SoporteDeIndicadorRegulatorio => VerIndicadores,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -303,6 +316,11 @@ public static class AdjuntosDeModulo
             if (pagare is null) return new Error("Generic.NotFound", "Garantía no encontrada.");
             return pagare == Domain.Enums.Lending.PromissoryNoteStatus.Voided ? GarantiaBloqueada() : null;
         }
+        if (ownerEntityType == SoporteDeIndicadorRegulatorio)
+        {
+            if (!await permisos.HasPermissionAsync(AdministrarIndicadores, ct)) return new Error("Generic.NotFound", "Indicador no encontrado.");
+            return await IndicadorRegistradoAsync(db, ownerEntityPublicId, ct) ? IndicadorBloqueado() : null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -355,6 +373,13 @@ public static class AdjuntosDeModulo
             if (permisos is not null && !await permisos.HasPermissionAsync(AdministrarGarantias, ct))
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return await GarantiaBorrableAsync(db, ownerEntityPublicId, ct) ? null : GarantiaBloqueada();
+        }
+        // Feature 013 (T0638): el soporte de un indicador regulatorio se borra sólo antes de registrar el indicador que lo cita.
+        if (ownerEntityType == SoporteDeIndicadorRegulatorio)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(AdministrarIndicadores, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await IndicadorRegistradoAsync(db, ownerEntityPublicId, ct) ? IndicadorBloqueado() : null;
         }
         // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
         if (ownerEntityType == ProductoDeInventario)
@@ -413,6 +438,25 @@ public static class AdjuntosDeModulo
         return pagare is null
             || pagare.LoanId is null && pagare.Status is Domain.Enums.Lending.PromissoryNoteStatus.Created or Domain.Enums.Lending.PromissoryNoteStatus.PendingSignature;
     }
+
+    /// <summary>
+    /// Feature 013 (T0638): ¿ya hay un indicador regulatorio registrado con ese dueño —el que lleva ese <c>PublicId</c> o el que cita como soporte un
+    /// adjunto de ese dueño—? Registrado, el soporte se conserva con él.
+    /// </summary>
+    private static async Task<bool> IndicadorRegistradoAsync(IApplicationDbContext db, Guid dueno, CancellationToken ct)
+    {
+        if (await db.RegulatoryIndicators.AsNoTracking().AnyAsync(i => i.PublicId == dueno, ct)) return true;
+        var adjuntos = await db.Attachments.AsNoTracking()
+            .Where(a => a.OwnerEntityType == SoporteDeIndicadorRegulatorio && a.OwnerEntityPublicId == dueno)
+            .Select(a => a.PublicId).ToListAsync(ct);
+        return adjuntos.Count > 0
+            && await db.RegulatoryIndicators.AsNoTracking().AnyAsync(i => i.SupportAttachmentPublicId != null && adjuntos.Contains(i.SupportAttachmentPublicId.Value), ct);
+    }
+
+    /// <summary>El soporte de un indicador regulatorio ya registrado no se cambia ni se borra (T0638).</summary>
+    public static Error IndicadorBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es el soporte de un indicador regulatorio ya registrado: se conserva con el indicador y no se puede cambiar. Para corregirlo registre otro del mismo corte.",
+        new { ownerEntityType = SoporteDeIndicadorRegulatorio });
 
     /// <summary>El soporte de una garantía perfeccionada o decidida (o de un pagaré firmado) no se cambia ni se borra (T81).</summary>
     public static Error GarantiaBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,

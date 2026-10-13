@@ -1,0 +1,105 @@
+{
+  "descripcion": "Contingente: el cupo otorgado (C92: usarlo no lo mueve).",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CUP-000045",
+      "publicId": "0d0d0161-0000-4000-8000-000000000161",
+      "operationDate": "2026-11-08"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0162-0000-4000-8000-000000000162",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-08T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0164-0000-4000-8000-000000000164",
+      "type": "CupoRotativoOtorgado",
+      "kind": "Business",
+      "originDocumentClass": "CreditLimit",
+      "payload": {
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "loan": null,
+        "subject": {
+          "kind": "CreditLimit",
+          "publicId": "9a9a0163-0000-4000-8000-000000000163",
+          "number": "CUP-000045"
+        },
+        "valueDate": "2026-11-08",
+        "registeredAt": "2026-11-08T16:00:00Z",
+        "dimensions": null,
+        "creditLineCode": "LIB01",
+        "movement": "Granted",
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": null,
+            "amount": 5000000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "RevolvingLimit"
+          }
+        ],
+        "balanceAfter": 5000000.0,
+        "causeFact": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CN",
+    "fecha": "2026-11-08",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "ContraContingenteAcreedora",
+        "cuenta": "96050501",
+        "debito": 5000000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CupoRotativoOtorgado"
+          ],
+          "concepto": "Principal",
+          "creditos": []
+        }
+      },
+      {
+        "rol": "ContingenteAcreedora",
+        "cuenta": "91300501",
+        "debito": 0.0,
+        "credito": 5000000.0,
+        "tercero": "ana",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CupoRotativoOtorgado"
+          ],
+          "concepto": "Principal",
+          "creditos": []
+        }
+      }
+    ]
+  }
+}

@@ -5318,6 +5318,15 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Accounting.Period.LendingPending` | aviso (422 sin reconocimiento) | «Hay {n} hechos de Cartera de {mes} pendientes, en lote o rechazados. Reconózcalos para cerrar de todos modos.» | T57 |
 | `Accounting.Period.LendingLoadWillExpire` | aviso (422 sin reconocimiento) | «Cerrar {mes} impedirá activar la carga de Cartera con corte {corte}.» | T57 |
 | `Accounting.Document.LendingCorrectsWithNewVoucher` | 422 | «Los comprobantes de Cartera no se reversan aquí: se corrigen con un hecho nuevo desde Cartera.» | T55 |
+| `Accounting.LendingRule.DimensionRequired` **(nuevo, T0642, C111)** | 400 · 422 | «El rol {rol} exige la dimensión {dimensión}: indíquela (no admite «*»).» (`data: { operation, role, dimension }`) | T52 |
+| `Accounting.LendingRule.DimensionNotAllowed` **(nuevo, T0642, C111)** | 400 · 422 | «El rol {rol} no admite la dimensión {dimensión}: déjela en «*».» (también el hecho fijado en un rol que no es de resultado, C77) | T52 |
+| `Accounting.LendingRule.DimensionCodeUnknown` **(nuevo, T0642, C111)** | 422 | ««{código}» no es un valor de {dimensión} que Cartera conozca. Elija uno del catálogo de la matriz.» (línea, modalidad o sub-segmento que `IDimensionesDeCartera` no publica; sub-segmento de otra modalidad; concepto, clase o motivo que el rol no admite) | T52 |
+| `Accounting.LendingRule.NotFound` **(nuevo, T0642, C111)** | 404 | «No existe esa regla de la matriz de Cartera.» | T52 |
+| `Accounting.LendingRule.OperationUnknown` **(nuevo, T0642, C111)** | 400 · 422 | ««{hecho}» no es un hecho de Cartera que pase a Contabilidad. Elija uno del catálogo de la matriz o «*».» | T52 |
+| `Accounting.LendingRule.RoleNotInOperation` **(nuevo, T0642, C111)** | 400 · 422 | «El hecho {hecho} no usa el rol «{rol}». Admite: {roles}.» (o «no es un rol de la matriz de Cartera») | T52 |
+| `Accounting.LendingRule.ValidToInvalid` **(nuevo, T0642, C111)** | 422 | «La vigencia empieza el {desde}: no puede terminar el {hasta}.» | T52 |
+| `Accounting.LendingRule.NatureMismatch` **(nuevo, T0642, aviso)** | aviso al guardar (se guarda) | «La cuenta {cuenta} es de naturaleza {n} y el rol {rol} es de naturaleza {m}…» (§3.6; la completitud lo sigue listando) | T52 |
+| `Accounting.LendingRule.BridgeRequiresCrossDocument` · `.SummarizedAccrualPerLoan` **(nuevo, T0643, avisos de la completitud)** | aviso | puente cuya cuenta exige cruce; cuenta de la causación resumida que exige tercero o cruce (una línea por crédito, C5) | T52 |
 | `Payroll.Settlement.LoanProposalOutdated` | 422 | «Las obligaciones del empleado en Cartera cambiaron desde el cálculo. Recalcule la liquidación.» | T92 |
 | `Payroll.Settlement.LoanAmountsChanged` | 422 | «Cartera no pudo aplicar los descuentos tal como se calcularon ({detalle}). Recalcule o ajuste los descuentos.» | T92 |
 | `Payroll.Settlement.PortfolioUnavailable` | aviso (se conserva) | el actual | DE-04 |

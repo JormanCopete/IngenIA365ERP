@@ -346,6 +346,62 @@ public static class AccountingErrors
             $"Ya hay un lote en curso (lote {number}): espere a que termine.",
             new { batchPublicId, number });
 
+    // ---- Cartera por hechos: la matriz (feature 013, US7, T0641–T0643; contracts/contabilidad.md §3 y §23; api.md §23.7; data-model §10) ----
+
+    /// <summary>Sin regla vigente para un rol con importe (§3.3, paso 5): el consumo rechaza el hecho y la validación previa lo informa.</summary>
+    public static Error LendingRuleMissing(string operation, string role, object values, DateOnly date, IReadOnlyList<string> loans) =>
+        new ErrorConDatos("Accounting.LendingRule.Missing",
+            $"La matriz de Cartera no tiene regla vigente al {date:yyyy-MM-dd} para el hecho {operation} y el rol {role} con esas dimensiones. Configúrela en Contabilidad › Cartera › Matriz.",
+            new { operation, role, values, date, loans });
+
+    public static Error LendingRuleOverlaps(object existing) =>
+        new ErrorConDatos("Accounting.LendingRule.Overlaps",
+            "Ya hay una versión de esa regla vigente en esas fechas: para cambiar la cuenta agregue una versión en vez de otra regla.",
+            new { existing });
+
+    public static Error LendingRuleRetroactiveOverPosted(DateOnly lastPostedDate, string document) =>
+        new ErrorConDatos("Accounting.LendingRule.RetroactiveOverPosted",
+            $"La regla empezaría antes de hechos ya contabilizados ({lastPostedDate:yyyy-MM-dd}, {document}). Póngale una fecha posterior y corrija lo contabilizado con un comprobante manual.",
+            new { lastPostedDate, document });
+
+    public static Error LendingRuleDimensionRequired(string operation, string role, string dimension) =>
+        new ErrorConDatos("Accounting.LendingRule.DimensionRequired",
+            $"El rol {role} exige la dimensión {dimension}: indíquela (no admite «*»).",
+            new { operation, role, dimension });
+
+    public static Error LendingRuleDimensionNotAllowed(string operation, string role, string dimension) =>
+        new ErrorConDatos("Accounting.LendingRule.DimensionNotAllowed",
+            $"El rol {role} no admite la dimensión {dimension}: déjela en «*».",
+            new { operation, role, dimension });
+
+    public static Error LendingRuleDimensionCodeUnknown(string dimension, string code) =>
+        new ErrorConDatos("Accounting.LendingRule.DimensionCodeUnknown",
+            $"«{code}» no es un valor de {dimension} que Cartera conozca. Elija uno del catálogo de la matriz.",
+            new { dimension, code });
+
+    /// <summary>Feature 013, T0642: la regla pedida no existe (o está borrada). (nuevo)</summary>
+    public static readonly Error LendingRuleNotFound = new("Accounting.LendingRule.NotFound", "No existe esa regla de la matriz de Cartera.");
+
+    /// <summary>Feature 013, T0642: el hecho no es de <c>OperacionesDeCartera</c> ni <c>*</c>. (nuevo)</summary>
+    public static Error LendingRuleOperationUnknown(string operation) =>
+        new ErrorConDatos("Accounting.LendingRule.OperationUnknown",
+            $"«{operation}» no es un hecho de Cartera que pase a Contabilidad. Elija uno del catálogo de la matriz o «*».",
+            new { operation });
+
+    /// <summary>Feature 013, T0642: el rol no es de <c>RolesDeCuentaDeCartera</c> o el hecho fijado no lo usa. (nuevo)</summary>
+    public static Error LendingRuleRoleNotInOperation(string operation, string role, IReadOnlyList<string> roles) =>
+        new ErrorConDatos("Accounting.LendingRule.RoleNotInOperation",
+            roles.Count == 0
+                ? $"«{role}» no es un rol de la matriz de Cartera."
+                : $"El hecho {operation} no usa el rol «{role}». Admite: {string.Join(", ", roles)}.",
+            new { operation, role, roles });
+
+    /// <summary>Feature 013, T0642: una vigencia que termina antes de la víspera de su inicio. (nuevo)</summary>
+    public static Error LendingRuleValidToInvalid(DateOnly validFrom, DateOnly validTo) =>
+        new ErrorConDatos("Accounting.LendingRule.ValidToInvalid",
+            $"La vigencia empieza el {validFrom:yyyy-MM-dd}: no puede terminar el {validTo:yyyy-MM-dd}.",
+            new { validFrom, validTo });
+
     // ---- concurrencia ----
     public static readonly Error StaleRowVersion = Error.StaleRowVersion;
 

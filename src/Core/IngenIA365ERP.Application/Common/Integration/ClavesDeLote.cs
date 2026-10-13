@@ -47,6 +47,33 @@ public static class ClavesDeLote
     /// <summary>El disparador del cierre del período de inventario (<c>Contabilidad.DisparadorDeLote</c>; el lote lo crea <c>CloseInventoryPeriodCommand</c>). (nuevo, T522)</summary>
     public const string CierreDePeriodo = "CierreDePeriodo";
 
+    /// <summary>
+    /// El disparador de Cartera que agrupa lo resumido al terminar la causación del día (<c>Contabilidad.DisparadorDeLote</c> en el ámbito
+    /// <c>LendingFactType</c>; feature 013, T0635, C06, C09; contabilidad.md §10.2): el lote lo crea el guardado con que termina la corrida
+    /// <c>DailyCycle</c> (<c>BatchTrigger.LendingAccrualRun</c>). La hora va vacía. (nuevo)
+    /// </summary>
+    public const string FinDeCausacion = "FinDeCausacion";
+
+    /// <summary>
+    /// El disparador de Cartera del cierre mensual (feature 013, T0635, C06): el lote lo crea el cierre de Cartera
+    /// (<c>BatchTrigger.LendingMonthlyClose</c>) con alcance <c>LendingClose:{aaaa-mm}</c>. La hora va vacía. (nuevo)
+    /// </summary>
+    public const string CierreDeCartera = "CierreDeCartera";
+
+    /// <summary>
+    /// Granularidades de un lote de Cartera (<c>Contabilidad.GranularidadDeLote</c>; feature 013, T0635, C07, C09): un comprobante por
+    /// operación (<see cref="GranularidadPorHecho"/>), uno por día y tipo de comprobante con la sucursal en cada línea
+    /// (<see cref="GranularidadPorDia"/>, el defecto) o uno por día, tipo y sucursal (<see cref="GranularidadPorDiaYSucursal"/>). (nuevo)
+    /// </summary>
+    public const string GranularidadPorHecho = "PorHecho";
+
+    public const string GranularidadPorDia = "PorDia";
+
+    public const string GranularidadPorDiaYSucursal = "PorDiaYSucursal";
+
+    /// <summary>Las tres granularidades de Cartera, en el orden del parámetro.</summary>
+    public static IReadOnlyList<string> GranularidadesDeCartera { get; } = [GranularidadPorDia, GranularidadPorDiaYSucursal, GranularidadPorHecho];
+
     /// <summary><c>BatchScopeKey</c> del disparador <c>CierreDeTurno</c>: <c>CashSession:{publicId}</c>.</summary>
     public static string SesionDeCaja(Guid cashSessionPublicId) => $"CashSession:{cashSessionPublicId:D}";
 

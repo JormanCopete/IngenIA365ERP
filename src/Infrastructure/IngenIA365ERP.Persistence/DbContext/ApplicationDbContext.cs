@@ -425,6 +425,11 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<InventoryPostingRule> InventoryPostingRules => Set<InventoryPostingRule>();
     public DbSet<InventoryVoucherMapping> InventoryVoucherMappings => Set<InventoryVoucherMapping>();
     public DbSet<InventoryPosting> InventoryPostings => Set<InventoryPosting>();
+    // Feature 013, US7 (T0636): el lado contable de la integración con Cartera.
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule> LendingPostingRules => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping> LendingVoucherMappings => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting> LendingPostings => Set<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator> RegulatoryIndicators => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator>();
     // Feature 012 (T33, T34; T081): aprobaciones de plataforma y montos maximos por permiso (adelanto de T096).
     public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
     public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();

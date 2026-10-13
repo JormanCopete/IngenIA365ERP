@@ -181,6 +181,11 @@ public static class DependencyInjection
         services.AddScoped<Accounting.Inventory.Reglas.ResolutorDeReglas>();
         services.AddScoped<Accounting.Inventory.Reglas.ReglasDeLaMatriz>();
         services.AddScoped<Accounting.Inventory.Reglas.TiposDeComprobanteDeInventario>();
+        // Feature 013, US7 (T0641, T0642): la matriz contable de Cartera (resolución, reglas al guardar, tipos de comprobante). El puerto
+        // IDimensionesDeCartera lo implementa Cartera (DimensionesDeCartera, T0657).
+        services.AddScoped<Accounting.Lending.Reglas.ResolutorDeReglasDeCartera>();
+        services.AddScoped<Accounting.Lending.Reglas.ReglasDeLaMatrizDeCartera>();
+        services.AddScoped<Accounting.Lending.Reglas.TiposDeComprobanteDeCartera>();
         // Feature 012, I2 (T511-T517): el consumidor contable. Contabilidad es un destino de la bandeja (consume por
         // PostInventoryMessagesCommand y PostInventorySummaryGroupCommand, planea los lotes con AgrupadorDeResumidos) y el
         // adaptador IContabilidadParaInventario le da a Inventario sus cuatro consultas en proceso.

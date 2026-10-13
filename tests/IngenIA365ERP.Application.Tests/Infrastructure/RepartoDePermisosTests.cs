@@ -127,7 +127,9 @@ public class RepartoDePermisosTests
     {
         // Feature 009 (contracts/api.md §1): 30 códigos Accounting.*; la compuerta T046 los cuenta en SEC_Permissions.
         // Feature 012 (T115): +4 del lado contable del inventario (InventoryRules.View/Manage, InventoryBatches.View/Run).
-        AccountingPermissionCatalogSeeder.Catalog.Should().HaveCount(34);
+        // Feature 013 (T0638): +6 del lado contable de la cartera (LendingRules.View/Manage, LendingBatches.View/Run,
+        // RegulatoryIndicators.View/Manage).
+        AccountingPermissionCatalogSeeder.Catalog.Should().HaveCount(40);
         AccountingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => p.Resource.StartsWith("Accounting."));
     }
 

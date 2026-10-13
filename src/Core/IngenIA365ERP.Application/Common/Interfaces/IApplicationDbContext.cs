@@ -362,6 +362,12 @@ public interface IApplicationDbContext
     DbSet<InventoryPostingRule> InventoryPostingRules { get; }
     DbSet<InventoryVoucherMapping> InventoryVoucherMappings { get; }
     DbSet<InventoryPosting> InventoryPostings { get; }
+    // Feature 013, US7 (T0636; data-model parte 3 §5): el lado contable de la integración con Cartera (matriz, mapeo de tipos de
+    // comprobante, recibos e indicadores de la entidad). Migración IntegracionContableDeCartera. Cartera no los nombra (T51).
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule> LendingPostingRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping> LendingVoucherMappings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting> LendingPostings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator> RegulatoryIndicators { get; }
 
     // Feature 012 (T33, T34; T081-T085): aprobaciones de plataforma y montos maximos por permiso. Escriben solo
     // MotorDeAprobaciones (solicitudes y decisiones), SaveApprovalPolicyCommand y SetPermissionAmountLimitCommand;

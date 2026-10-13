@@ -1,0 +1,195 @@
+{
+  "descripcion": "DeterioroCalculado con GeneralImpairmentLineV1 (C93): el nivel va en kind y el movimiento en reasonCode; débito y crédito de una misma cuenta no se netean.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Close:1",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "CIE-202612-v1-0003",
+      "publicId": "0d0d0192-0000-4000-8000-000000000192",
+      "operationDate": "2026-12-31"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0193-0000-4000-8000-000000000193",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-12-31T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0195-0000-4000-8000-000000000195",
+      "type": "DeterioroCalculado",
+      "kind": "Business",
+      "originDocumentClass": "AccountingFactPart",
+      "payload": {
+        "runKind": "MonthlyClose",
+        "runPublicId": "0c0c0194-0000-4000-8000-000000000194",
+        "factDate": "2026-12-31",
+        "batchNumber": 1,
+        "partNumber": 1,
+        "closeVersion": 1,
+        "catchUpOperation": null,
+        "totals": [],
+        "lines": [],
+        "lineCount": 0,
+        "controlTotal": 0.0,
+        "year": 2026,
+        "month": 12,
+        "informationCutoffAt": "2026-12-31T23:00:00Z",
+        "generalImpairment": [
+          {
+            "kind": "General",
+            "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "modalityCode": "CONSUMO",
+            "subsegmentCode": null,
+            "riskSegment": "CONSUMO",
+            "impairmentModel": "ArrearsAnnex1",
+            "amount": 2105.4,
+            "reasonCode": "Increase"
+          },
+          {
+            "kind": "Additional",
+            "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "modalityCode": "CONSUMO",
+            "subsegmentCode": null,
+            "riskSegment": "CONSUMO",
+            "impairmentModel": "ArrearsAnnex1",
+            "amount": 500.0,
+            "reasonCode": "Increase"
+          },
+          {
+            "kind": "General",
+            "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+            "modalityCode": "CONSUMO",
+            "subsegmentCode": null,
+            "riskSegment": "CONSUMO",
+            "impairmentModel": "ArrearsAnnex1",
+            "amount": 300.0,
+            "reasonCode": "DecreasePriorYears"
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "PV",
+    "fecha": "2026-12-31",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "GastoDeterioro",
+        "cuenta": "51152901",
+        "debito": 2105.4,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "DeterioroCalculado"
+          ],
+          "concepto": null,
+          "creditos": []
+        }
+      },
+      {
+        "rol": "DeterioroGeneral",
+        "cuenta": "14680501",
+        "debito": 0.0,
+        "credito": 2105.4,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "DeterioroCalculado"
+          ],
+          "concepto": null,
+          "creditos": []
+        }
+      },
+      {
+        "rol": "GastoDeterioro",
+        "cuenta": "51156301",
+        "debito": 500.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "DeterioroCalculado"
+          ],
+          "concepto": null,
+          "creditos": []
+        }
+      },
+      {
+        "rol": "DeterioroGeneral",
+        "cuenta": "14681001",
+        "debito": 0.0,
+        "credito": 500.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "DeterioroCalculado"
+          ],
+          "concepto": null,
+          "creditos": []
+        }
+      },
+      {
+        "rol": "DeterioroGeneral",
+        "cuenta": "14680501",
+        "debito": 300.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "DeterioroCalculado"
+          ],
+          "concepto": null,
+          "creditos": []
+        }
+      },
+      {
+        "rol": "RecuperacionDeterioro",
+        "cuenta": "42252402",
+        "debito": 0.0,
+        "credito": 300.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "DeterioroCalculado"
+          ],
+          "concepto": null,
+          "creditos": []
+        }
+      }
+    ]
+  }
+}

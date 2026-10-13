@@ -227,14 +227,19 @@ public static class PerfilesSugeridos
                 "Lending.*.Read", "Lending.*.View", "Lending.Reports.*", "Lending.Reconciliation.View", "Lending.RegulatoryReports.Generate",
                 "Lending.CreditBureauFiles.Generate", "Lending.RegulatoryFiles.MarkUploaded", "Core.NationalValues.View",
                 "Core.NationalValues.Review", "Core.RegulatoryProfile.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+                // US7 (T0638; contabilidad.md §3.8, §15): la contadora diligencia la matriz, ordena los lotes y registra los indicadores.
+                "Accounting.LendingRules.View", "Accounting.LendingRules.Manage", "Accounting.LendingBatches.View", "Accounting.LendingBatches.Run",
+                "Accounting.RegulatoryIndicators.View", "Accounting.RegulatoryIndicators.Manage",
             ],
-            "Todas las oficinas y líneas. La matriz, los lotes y los indicadores (Accounting.Lending*, Accounting.RegulatoryIndicators.*) van en su rol contable."),
+            "Todas las oficinas y líneas; con la matriz, los lotes y los indicadores de la entidad del lado contable."),
 
         new("cartera.auditor", ModuloCartera, "Auditor (sólo lectura)",
             "Lee toda la Cartera, exporta informes y verifica la integridad del libro y de la auditoría; no escribe.",
             [
                 "Lending.*.Read", "Lending.*.View", "Lending.Reports.View", "Lending.Reports.Export", "Lending.Integrity.Verify",
                 "AuditLog.View", "AuditLog.Export", "AuditLog.VerifyIntegrity", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+                // US7 (T0638): lee la matriz, los lotes y los indicadores; no los cambia.
+                "Accounting.LendingRules.View", "Accounting.LendingBatches.View", "Accounting.RegulatoryIndicators.View",
             ],
             "Todas las oficinas y líneas, sin escritura."),
 

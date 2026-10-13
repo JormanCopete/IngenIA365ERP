@@ -153,6 +153,8 @@ public static class AuditEventTypes
     public const string AccountingInventoryBatchProcessed = "Accounting.Inventory.BatchProcessed";
     // Feature 012, T509 (api.md §26.1): la importación aplicada de la matriz de reglas de Inventario.
     public const string AccountingInventoryRulesImported = "Accounting.InventoryRules.Imported";
+    // Feature 013, T0643 (api.md §23.1): la importación aplicada de la matriz de reglas de Cartera.
+    public const string AccountingLendingRulesImported = "Accounting.LendingRules.Imported";
 
     // -------------------- Inventario (feature 012, T44, T181) --------------------
     // Eventos explicitos que no salen de un comando: la exportacion de una vista de

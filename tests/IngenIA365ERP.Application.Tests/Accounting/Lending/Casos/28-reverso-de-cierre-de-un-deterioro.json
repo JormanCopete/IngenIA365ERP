@@ -1,0 +1,176 @@
+{
+  "descripcion": "ReversoDeCierre: deshace la parte del deterioro con su movimiento en reasonCode, fechado como el cierre.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Reopen:1",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "REA-202611-v1-0002",
+      "publicId": "0d0d0126-0000-4000-8000-000000000126",
+      "operationDate": "2026-11-30"
+    },
+    "related": {
+      "publicId": "0d0d9996-0000-4000-8000-000000009996",
+      "number": "CIE-202611-v1-0002"
+    },
+    "chainRootPublicId": "0e0e0127-0000-4000-8000-000000000127",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-30T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0132-0000-4000-8000-000000000132",
+      "type": "ReversoDeCierre",
+      "kind": "Business",
+      "originDocumentClass": "AccountingFactPart",
+      "payload": {
+        "runKind": "CloseReopen",
+        "runPublicId": "0c0c0131-0000-4000-8000-000000000131",
+        "factDate": "2026-11-30",
+        "batchNumber": 1,
+        "partNumber": 1,
+        "closeVersion": 1,
+        "catchUpOperation": null,
+        "totals": [
+          {
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "C",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": null,
+                "amount": 1710000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": "Increase"
+              }
+            ],
+            "loanCount": 1
+          }
+        ],
+        "lines": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+              "loanNumber": "000123"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "C",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": null,
+                "amount": 1710000.0,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": "Increase"
+              }
+            ],
+            "valueDate": null
+          }
+        ],
+        "lineCount": 1,
+        "controlTotal": 1710000.0,
+        "reopeningPublicId": "5e6f0128-0000-4000-8000-000000000128",
+        "reason": "Calificación por análisis registrada tarde",
+        "reversedPart": {
+          "messageId": "0a0a0129-0000-4000-8000-000000000129",
+          "type": "DeterioroCalculado",
+          "originPublicId": "0b0b0130-0000-4000-8000-000000000130",
+          "number": "CIE-202611-v1-0002"
+        },
+        "reversedType": "DeterioroCalculado"
+      },
+      "relatedDocumentClass": "AccountingFactPart"
+    }
+  ],
+  "esperado": {
+    "tipo": "PV",
+    "fecha": "2026-11-30",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "DeterioroIndividual",
+        "cuenta": "14451501",
+        "debito": 1710000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "ReversoDeCierre"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "GastoDeterioro",
+        "cuenta": "51150501",
+        "debito": 0.0,
+        "credito": 1710000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "ReversoDeCierre"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

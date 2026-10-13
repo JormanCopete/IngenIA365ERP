@@ -1,0 +1,373 @@
+{
+  "descripcion": "C93: PagoAplicado + AnticipoRecibido + CobroDeInteresEnSuspenso + SaldoAFavorReconocido (abono sin preferencia) salen en un solo RC.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "PAG-000990",
+      "publicId": "0d0d0019-0000-4000-8000-000000000019",
+      "operationDate": "2026-11-21"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0020-0000-4000-8000-000000000020",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-21T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0022-0000-4000-8000-000000000022",
+      "type": "PagoAplicado",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+          "loanNumber": "000200"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-21",
+        "registeredAt": "2026-11-21T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "D",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": 8,
+            "amount": 50000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "rulesVersion": "LND-2026.1",
+        "collector": {
+          "collectorCode": "REC",
+          "collectorClass": "Receipts",
+          "idempotencyKey": "REC:c0de0021-0000-4000-8000-000000000021",
+          "meansClass": "Cash",
+          "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+          "receipt": {
+            "number": "R-0001",
+            "date": "2026-11-21",
+            "officePublicId": null,
+            "meansReference": null,
+            "documentKind": null
+          }
+        },
+        "modality": "PastDue",
+        "amountReceived": 180000.0,
+        "surplus": 0.0,
+        "reallocations": [],
+        "prepaymentChoice": null,
+        "newPlan": null,
+        "paidOff": false,
+        "finalityUntil": null,
+        "simulationId": null,
+        "deductionFileLinePublicId": null,
+        "insuranceClaimPublicId": null
+      }
+    },
+    {
+      "messageId": "0f0f0023-0000-4000-8000-000000000023",
+      "type": "CobroDeInteresEnSuspenso",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+          "loanNumber": "000200"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-21",
+        "registeredAt": "2026-11-21T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "D",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "CurrentInterestInSuspense",
+            "installmentNumber": 8,
+            "amount": 90000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1"
+      }
+    },
+    {
+      "messageId": "0f0f0024-0000-4000-8000-000000000024",
+      "type": "AnticipoRecibido",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+          "loanNumber": "000200"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-21",
+        "registeredAt": "2026-11-21T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "D",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Advance",
+            "installmentNumber": 9,
+            "amount": 30000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1"
+      }
+    },
+    {
+      "messageId": "0f0f0025-0000-4000-8000-000000000025",
+      "type": "SaldoAFavorReconocido",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+          "loanNumber": "000200"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-21",
+        "registeredAt": "2026-11-21T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "D",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "CreditBalance",
+            "installmentNumber": null,
+            "amount": 10000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "cause": "NoPrepaymentPreference",
+        "causeFact": null
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "RC",
+    "fecha": "2026-11-21",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "11059501",
+        "debito": 180000.0,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado",
+            "CobroDeInteresEnSuspenso",
+            "AnticipoRecibido",
+            "SaldoAFavorReconocido"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14421701",
+        "debito": 0.0,
+        "credito": 50000.0,
+        "tercero": "luis",
+        "cruce": "PG 000200",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "Ingreso",
+        "cuenta": "41502503",
+        "debito": 0.0,
+        "credito": 90000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroDeInteresEnSuspenso"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "ContraOrdenContingente",
+        "cuenta": "86050501",
+        "debito": 90000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroDeInteresEnSuspenso"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "SuspensoEnOrden",
+        "cuenta": "81150501",
+        "debito": 0.0,
+        "credito": 90000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroDeInteresEnSuspenso"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "Anticipo",
+        "cuenta": "27500501",
+        "debito": 0.0,
+        "credito": 30000.0,
+        "tercero": "luis",
+        "cruce": "PG 000200",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "AnticipoRecibido"
+          ],
+          "concepto": "Advance",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "SaldoAFavor",
+        "cuenta": "27500502",
+        "debito": 0.0,
+        "credito": 10000.0,
+        "tercero": "luis",
+        "cruce": "PG 000200",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "SaldoAFavorReconocido"
+          ],
+          "concepto": "CreditBalance",
+          "creditos": [
+            "000200"
+          ]
+        }
+      }
+    ]
+  }
+}

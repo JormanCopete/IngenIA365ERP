@@ -84,6 +84,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<InventoryPostingRule> InventoryPostingRules => Set<InventoryPostingRule>();
     public DbSet<InventoryVoucherMapping> InventoryVoucherMappings => Set<InventoryVoucherMapping>();
     public DbSet<InventoryPosting> InventoryPostings => Set<InventoryPosting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule> LendingPostingRules => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping> LendingVoucherMappings => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting> LendingPostings => Set<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator> RegulatoryIndicators => Set<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator>();
     // Feature 012 (T33, T34): aprobaciones y montos maximos por permiso.
     public DbSet<ApprovalPolicy> ApprovalPolicies => Set<ApprovalPolicy>();
     public DbSet<ApprovalPolicyLevel> ApprovalPolicyLevels => Set<ApprovalPolicyLevel>();
@@ -764,6 +768,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<InventoryPostingRule>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<InventoryVoucherMapping>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<InventoryPosting>(b => b.Ignore("RowVersion"));
+        // Feature 013, US7 (T0636): el lado contable de Cartera.
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingPostingRule>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Lending.LendingVoucherMapping>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Transactions.LendingPosting>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Accounting.Lending.RegulatoryIndicator>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<IntegrationMessageDependency>(b =>
         {
             b.Ignore("RowVersion");

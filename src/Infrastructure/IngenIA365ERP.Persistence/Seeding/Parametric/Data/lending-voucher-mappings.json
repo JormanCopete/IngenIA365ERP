@@ -1,0 +1,40 @@
+[
+  // Feature 013, US7 (T0637, T54; contracts/contabilidad.md §5; data-model parte 3 §5.2; C79): el tipo de comprobante y el
+  // documento cruce por defecto de cada hecho de Cartera que pasa a Contabilidad. Una fila por hecho (collectorClass nulo = toda la
+  // operación) y las excepciones de lo que recauda Nómina (DN). El cruce PG (pagaré) lleva el número del crédito; los roles de
+  // Comercial cruzan contra la factura (FV) en el constructor, no aquí. Todo «pendiente de validar» por la contadora (C6): la semilla
+  // deja ValidatedAt nulo. Los informativos no tienen comprobante y no tienen fila.
+  { "operation": "CreditoDesembolsado", "collectorClass": null, "voucherTypeCode": "DS", "crossDocumentTypeCode": "PG" },
+  { "operation": "DesembolsoReversado", "collectorClass": null, "voucherTypeCode": "DS", "crossDocumentTypeCode": "PG" },
+  { "operation": "CreditoAjustadoDesdeComercial", "collectorClass": null, "voucherTypeCode": "DS", "crossDocumentTypeCode": "PG" },
+  { "operation": "PagoAplicado", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "PagoReversado", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "AnticipoRecibido", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "AnticipoAplicado", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "CobroDeInteresEnSuspenso", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "SaldoAFavorReconocido", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "SaldoAFavorResuelto", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "RecuperacionDeCastigada", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "CobroProvisionalIncorporado", "collectorClass": null, "voucherTypeCode": "RC", "crossDocumentTypeCode": "PG" },
+  { "operation": "PagoAplicado", "collectorClass": "Payroll", "voucherTypeCode": "DN", "crossDocumentTypeCode": "PG" },
+  { "operation": "PagoReversado", "collectorClass": "Payroll", "voucherTypeCode": "DN", "crossDocumentTypeCode": "PG" },
+  { "operation": "RecuperacionDeCastigada", "collectorClass": "Payroll", "voucherTypeCode": "DN", "crossDocumentTypeCode": "PG" },
+  { "operation": "InteresCausado", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
+  { "operation": "MoraCausada", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
+  { "operation": "SeguroCausado", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
+  { "operation": "AjusteDeCausacionPorFechaValor", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
+  { "operation": "GastoDeCobranzaCausado", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
+  { "operation": "DeterioroCalculado", "collectorClass": null, "voucherTypeCode": "PV", "crossDocumentTypeCode": "PG" },
+  { "operation": "CarteraReclasificadaPorCalificacion", "collectorClass": null, "voucherTypeCode": "PV", "crossDocumentTypeCode": "PG" },
+  { "operation": "ReversoDeCierre", "collectorClass": null, "voucherTypeCode": "PV", "crossDocumentTypeCode": "PG" },
+  { "operation": "CreditoCastigado", "collectorClass": null, "voucherTypeCode": "PV", "crossDocumentTypeCode": "PG" },
+  { "operation": "DimensionContableCambiada", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  { "operation": "CreditoReestructurado", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  { "operation": "CreditoModificado", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  { "operation": "CreditoNovado", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  { "operation": "CondonacionAprobada", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  // A3 (C15): los contingentes, que nacen NoPasa. Salen si el dueño rechaza A3.
+  { "operation": "CreditoAprobadoSinDesembolsar", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  { "operation": "CupoRotativoOtorgado", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  { "operation": "GarantiaConstituida", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" }
+]

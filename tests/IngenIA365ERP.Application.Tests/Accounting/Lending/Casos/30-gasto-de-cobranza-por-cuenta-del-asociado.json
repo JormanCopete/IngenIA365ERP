@@ -1,0 +1,123 @@
+{
+  "descripcion": "GastoDeCobranzaCausado por cuenta del asociado: pago por cuenta contra la cuenta por pagar al tercero del cargo.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "GCO-000124",
+      "publicId": "0d0d0137-0000-4000-8000-000000000137",
+      "operationDate": "2027-03-11"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0138-0000-4000-8000-000000000138",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2027-03-11T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0140-0000-4000-8000-000000000140",
+      "type": "GastoDeCobranzaCausado",
+      "kind": "Business",
+      "originDocumentClass": "LoanCharge",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2027-03-11",
+        "registeredAt": "2027-03-11T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": null,
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "CollectionFee",
+            "installmentNumber": null,
+            "amount": 50000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": true,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1",
+        "noticeDebtorMessagePublicId": "6a7c0139-0000-4000-8000-000000000139",
+        "stageCode": "JURIDICA",
+        "payeePersonPublicId": "a1b2c3d4-0000-4000-8000-0000000000d8"
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CA",
+    "fecha": "2027-03-11",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "PagoPorCuentaDelAsociado",
+        "cuenta": "14440502",
+        "debito": 50000.0,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "GastoDeCobranzaCausado"
+          ],
+          "concepto": "CollectionFee",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "CuentaPorPagarATercero",
+        "cuenta": "24409501",
+        "debito": 0.0,
+        "credito": 50000.0,
+        "tercero": "abogado",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "GastoDeCobranzaCausado"
+          ],
+          "concepto": "CollectionFee",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

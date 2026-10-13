@@ -1,0 +1,216 @@
+{
+  "descripcion": "§24 ejemplo 9 (cobro): el suspenso cobrado va al ingreso y cancela la orden; el pago no trae importes propios.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "PAG-000991",
+      "publicId": "0d0d0057-0000-4000-8000-000000000057",
+      "operationDate": "2026-11-22"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0058-0000-4000-8000-000000000058",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-22T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0060-0000-4000-8000-000000000060",
+      "type": "PagoAplicado",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+          "loanNumber": "000200"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-22",
+        "registeredAt": "2026-11-22T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "D",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [],
+        "rulesVersion": "LND-2026.1",
+        "collector": {
+          "collectorCode": "REC",
+          "collectorClass": "Receipts",
+          "idempotencyKey": "REC:c0de0059-0000-4000-8000-000000000059",
+          "meansClass": "Cash",
+          "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+          "receipt": {
+            "number": "R-0001",
+            "date": "2026-11-22",
+            "officePublicId": null,
+            "meansReference": null,
+            "documentKind": null
+          }
+        },
+        "modality": "PastDue",
+        "amountReceived": 90000.0,
+        "surplus": 0.0,
+        "reallocations": [],
+        "prepaymentChoice": null,
+        "newPlan": null,
+        "paidOff": false,
+        "finalityUntil": null,
+        "simulationId": null,
+        "deductionFileLinePublicId": null,
+        "insuranceClaimPublicId": null
+      }
+    },
+    {
+      "messageId": "0f0f0061-0000-4000-8000-000000000061",
+      "type": "CobroDeInteresEnSuspenso",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000200",
+          "loanNumber": "000200"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000003",
+        "valueDate": "2026-11-22",
+        "registeredAt": "2026-11-22T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "COM01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "SinLibranza",
+          "riskCategory": "D",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "CurrentInterestInSuspense",
+            "installmentNumber": 6,
+            "amount": 90000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "original": null,
+        "rulesVersion": "LND-2026.1"
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "RC",
+    "fecha": "2026-11-22",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "11059501",
+        "debito": 90000.0,
+        "credito": 0.0,
+        "tercero": "luis",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroDeInteresEnSuspenso"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "Ingreso",
+        "cuenta": "41502503",
+        "debito": 0.0,
+        "credito": 90000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroDeInteresEnSuspenso"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "ContraOrdenContingente",
+        "cuenta": "86050501",
+        "debito": 90000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroDeInteresEnSuspenso"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      },
+      {
+        "rol": "SuspensoEnOrden",
+        "cuenta": "81150501",
+        "debito": 0.0,
+        "credito": 90000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CobroDeInteresEnSuspenso"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000200"
+          ]
+        }
+      }
+    ]
+  }
+}
