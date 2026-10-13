@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Accounting.Lending.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;

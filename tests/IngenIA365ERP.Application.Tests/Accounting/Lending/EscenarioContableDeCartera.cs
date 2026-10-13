@@ -3,8 +3,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using IngenIA365ERP.Application.Accounting.Lending.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
 using IngenIA365ERP.Application.Accounting.Posting;
+using IngenIA365ERP.Application.Accounting.Reports;
+using IngenIA365ERP.Application.Common.Alerts;
+using IngenIA365ERP.Application.Common.Execution;
+using IngenIA365ERP.Application.Common.Interfaces.Audit;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
@@ -13,6 +19,9 @@ using IngenIA365ERP.Application.Tests.Accounting.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Lending;
 using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Entities.Integration;
+using IngenIA365ERP.Domain.Entities.Integration.Transactions;
+using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Persistence.Seeding.Parametric;
@@ -52,8 +61,17 @@ public sealed class EscenarioContableDeCartera
     public Dictionary<string, Branch> Sucursales { get; } = new(StringComparer.Ordinal);
     public IReadOnlyList<LendingPostingRule> Matriz => D.Db.LendingPostingRules.ToList();
 
+    /// <summary>El actor del consumo: el proceso de integración (T0647; como en la 012).</summary>
+    public IActorActual ActorActual { get; } = Substitute.For<IActorActual>();
+    public IAuditAppendOnlyWriter Auditoria { get; } = Substitute.For<IAuditAppendOnlyWriter>();
+    public IAlertas Alertas { get; } = Substitute.For<IAlertas>();
+    public AccountingAuditEmitter Emisor { get; }
+
     public EscenarioContableDeCartera()
     {
+        ActorActual.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Actor.ProcesoDeIntegracion("Mensaje:1"));
+        Emisor = new AccountingAuditEmitter(Auditoria, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
+
         var escenario = JsonNode.Parse(File.ReadAllText(Path.Combine(Carpeta, "escenario.json")))!.AsObject();
 
         D.Principal.PublicId = Guid.Parse((string)escenario["sucursales"]!["principal"]!);
@@ -101,6 +119,114 @@ public sealed class EscenarioContableDeCartera
     }
 
     public ChartOfAccount Cuenta(string codigo) => Cuentas[codigo];
+
+    // ----------------------------------------------------------------------------------------------- consumidor --
+
+    public ConsumoDeCartera Consumo() => new(D.Db, ActorActual, D.Clock, Emisor, Alertas);
+
+    public PostLendingFactsCommandHandler PorUnidad() => new(D.Db, new MensajesEntrantes(D.Db), Consumo(), D.Poster,
+        new ResolutorDeReglasDeCartera(D.Db), new TiposDeComprobanteDeCartera(D.Db), D.Clock);
+
+    public PostLendingSummaryGroupCommandHandler Resumido() => new(D.Db, new MensajesEntrantes(D.Db), Consumo(), D.Poster,
+        new ResolutorDeReglasDeCartera(D.Db), new TiposDeComprobanteDeCartera(D.Db), D.Clock);
+
+    /// <summary>Los catálogos del constructor para estas unidades (matriz del rango de sus fechas, mapeos y personas).</summary>
+    public Task<CatalogosDeCartera> CatalogosAsync(params IReadOnlyList<MensajeEntrante>[] unidades) =>
+        CatalogosDeCartera.CargarAsync(D.Db, new ResolutorDeReglasDeCartera(D.Db), new TiposDeComprobanteDeCartera(D.Db),
+            unidades.Select(u => (IReadOnlyList<HechoDeCartera>)u.Select(HechoDeCartera.De).ToList()), D.Clock.TodayUtc, default);
+
+    /// <summary>
+    /// Escribe el hecho en la bandeja con su entrega a Contabilidad, como lo habría dejado el emisor de Cartera: la clase de origen como texto
+    /// (T10), el usuario de origen nulo si lo originó el proceso (T11), la clave de horario y el alcance del lote si se dan.
+    /// </summary>
+    public IntegrationMessage Emitir(MensajeEntrante m, DeliveryStatus estado = DeliveryStatus.Pending, IntegrationBatch? lote = null, string? horario = null,
+        short? version = null, string? moneda = null, string? alcance = null)
+    {
+        var s = m.Envelope;
+        var payload = Encoding.UTF8.GetString(OpcionesDeMensajes.Serializar(m.Payload!));
+        var mensaje = new IntegrationMessage
+        {
+            PublicId = s.MessageId,
+            Type = s.Type,
+            Version = version ?? (short)s.Version,
+            Kind = s.Kind,
+            OriginModule = s.OriginModule,
+            OriginKind = s.Origin.Kind,
+            OriginPublicId = s.Origin.PublicId,
+            OriginDocumentClass = m.OriginDocumentClassText,
+            OriginNumber = s.Origin.Number,
+            OriginEventKey = s.OriginEventKey,
+            RelatedPublicId = s.Related?.PublicId,
+            RelatedDocumentClass = m.RelatedDocumentClassText,
+            RelatedNumber = s.Related?.Number,
+            ChainRootPublicId = s.ChainRootPublicId,
+            OperationDate = s.Origin.OperationDate,
+            BranchPublicId = s.BranchPublicId,
+            PersonPublicId = s.PersonPublicId,
+            Currency = moneda ?? s.Currency,
+            ExchangeRate = s.ExchangeRate,
+            PayloadJson = payload,
+            PayloadSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(payload))),
+            PrevalidationOutcome = PrevalidationOutcome.Postable,
+            OriginActorKind = s.OriginUser.CentralUserId is null ? ActorKind.Process : ActorKind.Person,
+            OriginUserCentralId = s.OriginUser.CentralUserId,
+            OriginUserName = s.OriginUser.Name,
+            EmittedAt = ContabilidadTestData.Ahora,
+            CreatedBy = "test",
+        };
+        D.Db.IntegrationMessages.Add(mensaje);
+        D.Db.SaveChanges();
+        D.Db.IntegrationMessageDeliveries.Add(new IntegrationMessageDelivery
+        {
+            MessageId = mensaje.Id,
+            Destination = IntegrationDestinations.Accounting,
+            Mode = estado == DeliveryStatus.InBatch ? DeliveryMode.Batch : DeliveryMode.Online,
+            Status = estado,
+            ScheduleKey = horario,
+            BatchScopeKey = alcance,
+            BatchId = lote?.Id,
+            CreatedBy = "test",
+        });
+        D.Db.SaveChanges();
+        return mensaje;
+    }
+
+    public IReadOnlyList<IntegrationMessage> Emitir(IReadOnlyList<MensajeEntrante> unidad, DeliveryStatus estado = DeliveryStatus.Pending,
+        IntegrationBatch? lote = null, string? horario = null) => unidad.Select(m => Emitir(m, estado, lote, horario)).ToList();
+
+    public IntegrationBatch Lote(long numero = 1, BatchTrigger disparador = BatchTrigger.LendingAccrualRun)
+    {
+        var lote = new IntegrationBatch
+        {
+            Number = numero, Destination = IntegrationDestinations.Accounting, Trigger = disparador, RequestedByKind = ActorKind.Process,
+            RequestedByName = Actor.NombreDelProceso, RequestedAt = ContabilidadTestData.Ahora, CreatedBy = "test",
+        };
+        lote.Iniciar(ContabilidadTestData.Ahora);
+        D.Db.IntegrationBatches.Add(lote);
+        D.Db.SaveChanges();
+        return lote;
+    }
+
+    /// <summary>La <c>ScheduleKey</c> de Cartera de un hecho (C06): <c>CAR.{corto}|{disparador}||{granularidad}</c>.</summary>
+    public static string Horario(string tipo, string granularidad = ClavesDeLote.GranularidadPorDia, string disparador = ClavesDeLote.FinDeCausacion) =>
+        ClavesDeLote.Horario(ClavesDeLote.PrefijoDeCartera + OperacionesDeCartera.Buscar(tipo)!.Corto, disparador, null, granularidad);
+
+    /// <summary>Una unidad con otros <c>messageId</c>, otro origen y, si se da, otra fecha contable (para armar varias partes de un día).</summary>
+    public static IReadOnlyList<MensajeEntrante> Copia(IReadOnlyList<MensajeEntrante> unidad, Guid? origen = null, DateOnly? fecha = null)
+    {
+        var o = origen ?? Guid.NewGuid();
+        return unidad.Select(m => m with
+        {
+            Envelope = m.Envelope with
+            {
+                MessageId = Guid.NewGuid(),
+                Origin = m.Envelope.Origin with { PublicId = o, OperationDate = fecha ?? m.Envelope.Origin.OperationDate },
+            },
+        }).ToList();
+    }
+
+    /// <summary>La unidad de un caso por su nombre (<c>Casos/{nombre}.json</c>).</summary>
+    public static IReadOnlyList<MensajeEntrante> UnidadDe(string nombre) => Unidad(Caso(nombre));
 
     /// <summary>Abre los meses <c>aaaa-mm</c> (creando el ejercicio si falta).</summary>
     private void AbrirMeses(IReadOnlyList<string> meses)

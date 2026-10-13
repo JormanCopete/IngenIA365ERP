@@ -402,6 +402,88 @@ public static class AccountingErrors
             $"La vigencia empieza el {validFrom:yyyy-MM-dd}: no puede terminar el {validTo:yyyy-MM-dd}.",
             new { validFrom, validTo });
 
+    // ---- Cartera por hechos: el consumidor, las correcciones, el cierre y los indicadores (feature 013, US7, T0646–T0652;
+    //      contracts/contabilidad.md §7, §9, §12, §15 y §23) ----
+
+    /// <summary>El hecho no cuadra o trae importes con más de dos decimales (§7.1, paso 7): defecto de quien lo emitió, no de la matriz.</summary>
+    public static Error LendingFactUnbalanced(decimal difference) =>
+        new ErrorConDatos("Accounting.LendingFact.Unbalanced",
+            $"El hecho de Cartera no cuadra o trae importes con más de dos decimales (diferencia {difference:N2}): es un defecto de quien lo emitió, no de la matriz. Repórtelo a soporte.",
+            new { difference });
+
+    public static Error LendingFactCurrencyNotSupported(string currency, decimal exchangeRate) =>
+        new ErrorConDatos("Accounting.LendingFact.CurrencyNotSupported",
+            $"Contabilidad sólo recibe de Cartera pesos colombianos con tasa 1; el hecho viene en {currency} con tasa {exchangeRate:0.######}.",
+            new { currency, exchangeRate });
+
+    public static Error LendingFactWaitingForOriginal(Guid originalMessageId) =>
+        new ErrorConDatos("Accounting.LendingFact.WaitingForOriginal",
+            "El hecho original de Cartera todavía no está contabilizado: éste se reintenta cuando lo esté.",
+            new { originalMessageId });
+
+    /// <summary>
+    /// Lo de Cartera no se reversa por el contrato (T55, §9): cada reverso (del pago, del desembolso, del cierre) llega como un comprobante
+    /// nuevo de su propio hecho. <c>data.origin</c> nombra lo que lo originó.
+    /// </summary>
+    public static Error DocumentLendingCorrectsWithNewVoucher(string module, string? sourceType, Guid? sourcePublicId) =>
+        new ErrorConDatos("Accounting.Document.LendingCorrectsWithNewVoucher",
+            "Lo que viene de Cartera no se reversa: se corrige en Cartera (reverso del pago, del desembolso o reapertura del cierre) y llega como comprobante nuevo.",
+            new { origin = new { module, moduleName = ModuloContable.Nombre(module), sourceType, sourcePublicId } });
+
+    /// <summary>
+    /// El mensaje que <c>ReverseDocumentCommand</c> da a un comprobante de Cartera (§9): el código de siempre, <c>ModuleOwned</c>, con lo que hay
+    /// que hacer; en un resumido, cuántos créditos reúne.
+    /// </summary>
+    public static string MensajeDeComprobanteDeCartera(int? creditosDelResumido) =>
+        "Este comprobante lo generó Cartera: se corrige en Cartera (reverso del pago, del desembolso o reapertura del cierre) y llega como comprobante nuevo."
+        + (creditosDelResumido is { } n
+            ? n == 1 ? " Es un comprobante resumido y reúne 1 crédito." : $" Es un comprobante resumido y reúne {n} créditos."
+            : string.Empty);
+
+    /// <summary>Cierre contable de un mes que Cartera, activada, no cerró (§12, a): bloqueo sin reconocimiento.</summary>
+    public static Error PeriodLendingNotClosed(string month, DateOnly activationDate, object? lastLendingClose) =>
+        new ErrorConDatos("Accounting.Period.LendingNotClosed",
+            $"Cartera está activa desde el {activationDate:yyyy-MM-dd} y todavía no cerró {month}: ciérrelo primero en Cartera › Cierres y vuelva a intentarlo.",
+            new { month, activationDate, lastLendingClose });
+
+    /// <summary>Cierre del mes con hechos de Cartera sin procesar y sin reconocerlos (§12, b): es un aviso, no un bloqueo.</summary>
+    public static Error PeriodLendingPending(int pending, int inBatch, int rejected, DateOnly? oldestOperationDate, IReadOnlyList<string> types) =>
+        new ErrorConDatos("Accounting.Period.LendingPending",
+            $"Hay {pending + inBatch + rejected} hecho(s) de Cartera fechados en el mes que Contabilidad aún no recibe ({pending} pendiente(s), {inBatch} en lote, {rejected} rechazado(s)). "
+            + "Procéselos ahora o cierre de todos modos: lo que siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes.",
+            new { pending, inBatch, rejected, oldestOperationDate, types });
+
+    /// <summary>Cerrar el mes deja sin poder activar la carga de Cartera ya aplicada (§12, c; FR-142): aviso reconocible.</summary>
+    public static Error PeriodLendingLoadWillExpire(DateOnly cutoffDate, Guid loadPublicId) =>
+        new ErrorConDatos("Accounting.Period.LendingLoadWillExpire",
+            $"La carga de Cartera con corte al {cutoffDate:yyyy-MM-dd} todavía no se activó: si cierra este mes, esa carga ya no podrá activarse y habrá que cargarla de nuevo. Active Cartera primero o cierre de todos modos.",
+            new { cutoffDate, loadPublicId });
+
+    public static Error LendingBatchAlreadyRunning(Guid batchPublicId, long number) =>
+        new ErrorConDatos("Accounting.LendingBatch.AlreadyRunning",
+            $"Ya hay un lote de Cartera en curso (lote {number}): espere a que termine.",
+            new { batchPublicId, number });
+
+    public static readonly Error LendingBatchNotFound = new("Accounting.LendingBatch.NotFound", "No existe ese lote de Cartera.");
+
+    /// <summary>Feature 013, T0649 (§15): el indicador regulatorio se registra con su soporte (el formato o el certificado).</summary>
+    public static readonly Error RegulatoryIndicatorSupportRequired = new("Accounting.RegulatoryIndicator.SupportRequired",
+        "Adjunte el soporte del indicador (el formato de patrimonio técnico o el certificado) antes de registrarlo.");
+
+    public static readonly Error RegulatoryIndicatorSupportInvalid = new("Accounting.RegulatoryIndicator.SupportInvalid",
+        "El soporte no existe o no es un adjunto de indicador regulatorio: súbalo de nuevo desde la pantalla de indicadores.");
+
+    public static readonly Error RegulatoryIndicatorNotFound = new("Accounting.RegulatoryIndicator.NotFound", "No existe ese indicador regulatorio.");
+
+    /// <summary>Corregir es registrar otro del <b>mismo corte y tipo</b> (§4.4); uno ya reemplazado no se vuelve a reemplazar.</summary>
+    public static readonly Error RegulatoryIndicatorSupersedesInvalid = new("Accounting.RegulatoryIndicator.SupersedesInvalid",
+        "Sólo se corrige un indicador vigente del mismo tipo y del mismo corte: elija el que reemplaza en la lista.");
+
+    public static Error RegulatoryIndicatorAlreadyRegistered(DateOnly cutoffDate) =>
+        new ErrorConDatos("Accounting.RegulatoryIndicator.AlreadyRegistered",
+            $"Ya hay un indicador de ese tipo con corte al {cutoffDate:yyyy-MM-dd}: para corregirlo, registre el nuevo indicando cuál reemplaza.",
+            new { cutoffDate });
+
     // ---- concurrencia ----
     public static readonly Error StaleRowVersion = Error.StaleRowVersion;
 

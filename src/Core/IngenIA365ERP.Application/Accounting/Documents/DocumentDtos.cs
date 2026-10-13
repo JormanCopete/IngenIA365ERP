@@ -126,6 +126,10 @@ public static class EnlacesDeOrigen
         Posting.OrigenesDeInventario.Documento => $"/inventario/documentos/{sourcePublicId}",
         Posting.OrigenesDeInventario.LoteResumido => $"/contabilidad/inventario/lotes/{sourcePublicId}",
         Posting.OrigenesDeInventario.Producto => $"/inventario/productos/{sourcePublicId}",
+        // Feature 013 (T0651, contracts/contabilidad.md §7.3): el comprobante de una unidad lleva al hecho en la bandeja de Cartera; el
+        // resumido, a su lote en Contabilidad.
+        Lending.Reglas.OrigenesDeCartera.Documento => $"/cartera/bandeja-de-mensajes?origen={sourcePublicId}",
+        Lending.Reglas.OrigenesDeCartera.LoteResumido => $"/contabilidad/cartera/lotes/{sourcePublicId}",
         _ => null,
     };
 }

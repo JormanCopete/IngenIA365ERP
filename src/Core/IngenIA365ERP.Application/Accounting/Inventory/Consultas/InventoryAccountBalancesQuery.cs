@@ -93,26 +93,10 @@ public sealed class InventoryAccountBalancesQueryHandler(IApplicationDbContext d
         return Result.Success<IReadOnlyList<ConjuntoDeCuentasDto>>(conjuntos.OrderBy(c => c.AccountingGroupCodes[0], StringComparer.Ordinal).ToList());
     }
 
-    /// <summary>Los componentes conexos del grafo grupo ↔ cuenta (unión por rango), cada uno con sus reglas.</summary>
-    public static IReadOnlyList<IReadOnlyList<InventoryPostingRule>> Componentes(IReadOnlyList<InventoryPostingRule> reglas)
-    {
-        var padre = new Dictionary<string, string>(StringComparer.Ordinal);
-        string Raiz(string x)
-        {
-            if (!padre.TryGetValue(x, out var p)) { padre[x] = x; return x; }
-            if (p == x) return x;
-            var r = Raiz(p);
-            padre[x] = r;
-            return r;
-        }
-        foreach (var r in reglas)
-        {
-            var grupo = Raiz("G:" + r.AccountingGroupCode!.ToUpperInvariant());
-            var cuenta = Raiz("A:" + r.AccountId);
-            if (grupo != cuenta) padre[cuenta] = grupo;
-        }
-        return reglas.GroupBy(r => Raiz("G:" + r.AccountingGroupCode!.ToUpperInvariant()))
-            .Select(g => (IReadOnlyList<InventoryPostingRule>)g.ToList())
-            .ToList();
-    }
+    /// <summary>
+    /// Los componentes conexos del grafo grupo ↔ cuenta, cada uno con sus reglas. Desde la 013 (T0644) la unión-búsqueda vive en
+    /// <see cref="Integration.ConjuntosDeCuentas"/>, generalizada; aquí la combinación es el grupo contable.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<InventoryPostingRule>> Componentes(IReadOnlyList<InventoryPostingRule> reglas) =>
+        Integration.ConjuntosDeCuentas.Componentes(reglas, r => r.AccountingGroupCode!.ToUpperInvariant(), r => r.AccountId);
 }

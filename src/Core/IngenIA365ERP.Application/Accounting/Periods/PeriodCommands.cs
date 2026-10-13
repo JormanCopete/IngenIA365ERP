@@ -101,7 +101,18 @@ public sealed class OpenFiscalYearCommandHandler(IApplicationDbContext db, IDate
 /// <c>Accounting.Period.InventoryPending</c> salvo que venga <paramref name="AcknowledgeInventoryPending"/>, que cierra
 /// igual y queda auditado (es un aviso, no un bloqueo; molde de <c>GeneratePilaCommand.AcknowledgeWarnings</c>).
 /// </summary>
-public sealed record ClosePeriodCommand(int Year, int Month, bool AcknowledgeInventoryPending = false) : IRequest<Result>;
+/// <summary>
+/// Cierra el mes. Feature 013 (T0652, contracts/contabilidad.md §12, T57, FR-146): además de los borradores y el aviso de Inventario,
+/// Contabilidad no cierra un mes que Cartera, activada, no cerró (<c>Accounting.Period.LendingNotClosed</c>, sin reconocimiento), avisa de los
+/// hechos de Cartera pendientes en el mes (<see cref="AcknowledgeLendingPending"/>) y de la carga de Cartera que el cierre dejaría sin activar
+/// (<see cref="AcknowledgeLendingLoad"/>). Todo se lee de los recibos <c>ACC_LendingPostings</c> y de las entregas, nunca de <c>LND_</c>.
+/// </summary>
+public sealed record ClosePeriodCommand(
+    int Year,
+    int Month,
+    bool AcknowledgeInventoryPending = false,
+    bool AcknowledgeLendingPending = false,
+    bool AcknowledgeLendingLoad = false) : IRequest<Result>;
 
 public sealed class ClosePeriodCommandValidator : AbstractValidator<ClosePeriodCommand>
 {
@@ -136,17 +147,35 @@ public sealed class ClosePeriodCommandHandler(IApplicationDbContext db, IDateTim
             return Result.Failure(AccountingErrors.PeriodInventoryPending(inventario.Pending, inventario.InBatch, inventario.Rejected,
                 inventario.OldestOperationDate, inventario.Types));
 
+        // Feature 013 (§12): (a) Cartera activada sin el cierre vigente del mes bloquea; (b) y (c) son avisos que se reconocen.
+        var cartera = await CarteraEnElCierre.EvaluarAsync(db, periodo.StartDate, periodo.EndDate, ct);
+        if (cartera.Bloqueo is { } bloqueo) return Result.Failure(bloqueo);
+        if (cartera.Pendientes.HayPendientes && !request.AcknowledgeLendingPending)
+            return Result.Failure(AccountingErrors.PeriodLendingPending(cartera.Pendientes.Pending, cartera.Pendientes.InBatch, cartera.Pendientes.Rejected,
+                cartera.Pendientes.OldestOperationDate, cartera.Pendientes.Types));
+        if (cartera.CargaQueVence is { } carga && !request.AcknowledgeLendingLoad)
+            return Result.Failure(AccountingErrors.PeriodLendingLoadWillExpire(carga.CutoffDate, carga.LoadPublicId));
+
         periodo.Status = PeriodStatus.Closed;
         periodo.ClosedAt = clock.UtcNow;
         periodo.ClosedBy = user.UserName ?? "system";
         periodo.UpdatedAt = periodo.ClosedAt;
         periodo.UpdatedBy = periodo.ClosedBy;
         await db.SaveChangesAsync(ct);
-        object despues = inventario.HayPendientes
+        object despues = inventario.HayPendientes || cartera.Pendientes.HayPendientes || cartera.CargaQueVence is not null
             ? new
             {
-                status = "Closed", request.Year, request.Month, inventoryPendingAcknowledged = true,
-                inventoryPending = new { pending = inventario.Pending, inBatch = inventario.InBatch, rejected = inventario.Rejected, oldestOperationDate = inventario.OldestOperationDate, types = inventario.Types },
+                status = "Closed", request.Year, request.Month,
+                inventoryPendingAcknowledged = inventario.HayPendientes,
+                inventoryPending = inventario.HayPendientes
+                    ? new { pending = inventario.Pending, inBatch = inventario.InBatch, rejected = inventario.Rejected, oldestOperationDate = inventario.OldestOperationDate, types = inventario.Types }
+                    : null,
+                lendingPendingAcknowledged = cartera.Pendientes.HayPendientes,
+                lendingPending = cartera.Pendientes.HayPendientes
+                    ? new { pending = cartera.Pendientes.Pending, inBatch = cartera.Pendientes.InBatch, rejected = cartera.Pendientes.Rejected, oldestOperationDate = cartera.Pendientes.OldestOperationDate, types = cartera.Pendientes.Types }
+                    : null,
+                lendingLoadAcknowledged = cartera.CargaQueVence is not null,
+                lendingLoad = cartera.CargaQueVence is { } c ? new { cutoffDate = c.CutoffDate, loadPublicId = c.LoadPublicId } : null,
             }
             : new { status = "Closed", request.Year, request.Month };
         await audit.EmitAsync("Accounting.Period.Closed", nameof(AccountingPeriod), periodo.PublicId, new { status = "Open" }, despues, ct);

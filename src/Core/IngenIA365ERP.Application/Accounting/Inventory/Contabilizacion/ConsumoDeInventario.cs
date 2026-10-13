@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using IngenIA365ERP.Application.Accounting.Integration;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Common.Execution;
@@ -20,7 +21,8 @@ namespace IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 /// existente, original sin contabilizar), los recibos de <c>ACC_InventoryPostings</c>, la traducción de un fallo a un rechazo con
 /// las líneas del documento (FR-074) y la colisión del índice único del recibo. No guarda: guarda el comando, en un solo
 /// <c>SaveChangesAsync</c>. Lee las entregas de la plataforma sólo para saber si un original sigue pendiente; nunca las escribe
-/// (T11). (nuevo)
+/// (T11). Desde la 013 (T0644) la versión, la moneda, el original pendiente y la colisión los resuelve <see cref="RecibosDeContabilidad"/>,
+/// común con Cartera, con los mismos resultados. (nuevo)
 /// </summary>
 public sealed class ConsumoDeInventario(IApplicationDbContext db, IActorActual actorActual, IDateTimeService reloj, AccountingAuditEmitter auditoria)
 {
@@ -30,12 +32,7 @@ public sealed class ConsumoDeInventario(IApplicationDbContext db, IActorActual a
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>¿El choque es contra el recibo único de un mensaje? (molde <c>PersonFactory.EsColisionDeDocumento</c>).</summary>
-    public static bool EsColisionDelRecibo(DbUpdateException ex)
-    {
-        for (Exception? actual = ex; actual is not null; actual = actual.InnerException)
-            if (actual.Message.Contains(IndiceUnicoDelRecibo, StringComparison.OrdinalIgnoreCase)) return true;
-        return false;
-    }
+    public static bool EsColisionDelRecibo(DbUpdateException ex) => RecibosDeContabilidad.EsColision(ex, IndiceUnicoDelRecibo);
 
     /// <summary>
     /// Pasos 2 a 5: un resultado si la unidad no sigue (versión no aceptada o moneda distinta → <c>Rejected</c>; recibo existente
@@ -43,13 +40,8 @@ public sealed class ConsumoDeInventario(IApplicationDbContext db, IActorActual a
     /// </summary>
     public async Task<ResultadoDeConsumo?> RevisarAsync(IReadOnlyList<MensajeEntrante> unidad, CancellationToken ct)
     {
-        foreach (var m in unidad)
-        {
-            if (!VersionesAceptadas.Acepta(m.Type, m.Version))
-                return Rechazo(ErroresDeIntegracion.VersionNoAceptada(m.Type, m.Version));
-            if (!string.Equals(m.Envelope.Currency, "COP", StringComparison.Ordinal) || m.Envelope.ExchangeRate != 1m)
-                return Rechazo(AccountingErrors.InventoryMessageCurrencyNotSupported(m.Envelope.Currency, m.Envelope.ExchangeRate));
-        }
+        if (RecibosDeContabilidad.RevisarVersionYMoneda(unidad, ModulosDeOrigen.Inventario, AccountingErrors.InventoryMessageCurrencyNotSupported) is { } rechazo)
+            return rechazo;
 
         if (await YaProcesadoAsync(unidad.Select(m => m.MessageId).ToList(), ct) is { } ya) return ya;
 
@@ -61,14 +53,7 @@ public sealed class ConsumoDeInventario(IApplicationDbContext db, IActorActual a
             var faltan = originales.Except(contabilizados).ToList();
             if (faltan.Count > 0)
             {
-                var pendiente = await (
-                        from d in db.IntegrationMessageDeliveries.AsNoTracking()
-                        join mm in db.IntegrationMessages.AsNoTracking() on d.MessageId equals mm.Id
-                        where faltan.Contains(mm.OriginPublicId) && d.Destination == IntegrationDestinations.Accounting
-                              && (d.Status == DeliveryStatus.Pending || d.Status == DeliveryStatus.InBatch || d.Status == DeliveryStatus.Rejected)
-                        orderby mm.Id
-                        select (Guid?)mm.PublicId)
-                    .FirstOrDefaultAsync(ct);
+                var pendiente = await RecibosDeContabilidad.OriginalPendienteAsync(db, faltan, ct);
                 if (pendiente is { } original)
                 {
                     var error = AccountingErrors.InventoryMessageWaitingForOriginal(original);
@@ -207,8 +192,7 @@ public sealed class ConsumoDeInventario(IApplicationDbContext db, IActorActual a
         }
     }
 
-    public static ResultadoDeConsumo.Rejected Rechazo(Error error) =>
-        new(error.Code, error.Message, error is ErrorConDatos conDatos ? JsonSerializer.Serialize(conDatos.Data, Json) : null);
+    public static ResultadoDeConsumo.Rejected Rechazo(Error error) => RecibosDeContabilidad.Rechazo(error);
 
     private static MotivoSinComprobante? MotivoDe(string? motivo) => motivo switch
     {

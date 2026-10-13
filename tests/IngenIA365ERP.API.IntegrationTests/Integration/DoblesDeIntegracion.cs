@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using IngenIA365ERP.Application.Accounting.Inventory;
+using IngenIA365ERP.Application.Accounting.Integration;
 using IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;

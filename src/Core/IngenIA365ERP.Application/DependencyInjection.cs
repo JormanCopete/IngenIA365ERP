@@ -185,12 +185,14 @@ public static class DependencyInjection
         // IDimensionesDeCartera lo implementa Cartera (DimensionesDeCartera, T0657).
         services.AddScoped<Accounting.Lending.Reglas.ResolutorDeReglasDeCartera>();
         services.AddScoped<Accounting.Lending.Reglas.ReglasDeLaMatrizDeCartera>();
-        services.AddScoped<Accounting.Lending.Reglas.TiposDeComprobanteDeCartera>();
+        services.AddScoped<Accounting.Lending.Contabilizacion.TiposDeComprobanteDeCartera>();
         // Feature 012, I2 (T511-T517): el consumidor contable. Contabilidad es un destino de la bandeja (consume por
         // PostInventoryMessagesCommand y PostInventorySummaryGroupCommand, planea los lotes con AgrupadorDeResumidos) y el
         // adaptador IContabilidadParaInventario le da a Inventario sus cuatro consultas en proceso.
         services.AddScoped<Accounting.Inventory.Contabilizacion.ConsumoDeInventario>();
-        services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+        // Feature 013, US7 (T0645, T0647): el mismo destino reparte por módulo; lo común del consumidor de Cartera.
+        services.AddScoped<Accounting.Lending.Contabilizacion.ConsumoDeCartera>();
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Integration.DestinoContabilidad>();
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaInventario, Accounting.Inventory.ContabilidadParaInventario>();
         services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
         // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
@@ -502,7 +504,8 @@ public static class DependencyInjection
         // Feature 013 (T0227-T0229, T0233; C106, C107): el puerto de Contabilidad para Cartera en su forma provisional (US7 registra el
         // adaptador real ContabilidadParaCartera con la misma firma), las piezas tempranas de la integración contable de Cartera, su
         // único emisor y los requisitos de la activación. Los dobles de prueba (TesoreriaDePrueba) los registra la API, nunca aquí.
-        services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Common.Integration.Accounting.ContabilidadParaCarteraProvisional>();
+        // Feature 013, T0650: el adaptador real (Application/Accounting/Lending) reemplaza al provisional de la fase 3, con la misma firma (C106).
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Accounting.Lending.ContabilidadParaCartera>();
         services.AddScoped<Lending.Integration.FechaContable>();
         services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();

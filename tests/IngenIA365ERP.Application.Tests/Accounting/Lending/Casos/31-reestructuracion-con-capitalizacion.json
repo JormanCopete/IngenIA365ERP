@@ -1,5 +1,5 @@
 {
-  "descripcion": "CreditoReestructurado (K3): los intereses capitalizados van a capital contra el ingreso diferido; el traslado a «reestructurado» no cambia de cuenta.",
+  "descripcion": "CreditoReestructurado (K3, contabilidad.md §2.1): lo causado que se capitaliza pasa de InteresPorCobrar a capital; lo suspendido que se capitaliza va contra el ingreso diferido y su orden contingente se cancela. El traslado a «reestructurado» no cambia de cuenta.",
   "sobre": {
     "version": 1,
     "kind": "Business",
@@ -65,6 +65,14 @@
             "uvrAmount": null,
             "onBehalfOfAssociate": false,
             "reasonCode": "Capitalizacion"
+          },
+          {
+            "concept": "CurrentInterestInSuspense",
+            "installmentNumber": null,
+            "amount": 20000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": "Capitalizacion"
           }
         ],
         "original": null,
@@ -124,8 +132,27 @@
       {
         "rol": "Capital",
         "cuenta": "14421501",
-        "debito": 96400.0,
+        "debito": 116400.0,
         "credito": 0.0,
+        "tercero": "luis",
+        "cruce": "PG 000250",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14431501",
+        "debito": 0.0,
+        "credito": 96400.0,
         "tercero": "luis",
         "cruce": "PG 000250",
         "sucursal": "principal",
@@ -144,7 +171,7 @@
         "rol": "IngresoDiferido",
         "cuenta": "27959501",
         "debito": 0.0,
-        "credito": 96400.0,
+        "credito": 20000.0,
         "tercero": "luis",
         "cruce": "PG 000250",
         "sucursal": "principal",
@@ -153,12 +180,59 @@
           "hechos": [
             "CreditoReestructurado"
           ],
-          "concepto": "CurrentInterest",
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "ContraOrdenContingente",
+        "cuenta": "86050501",
+        "debito": 20000.0,
+        "credito": 0.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": "CurrentInterestInSuspense",
+          "creditos": [
+            "000250"
+          ]
+        }
+      },
+      {
+        "rol": "SuspensoEnOrden",
+        "cuenta": "81150501",
+        "debito": 0.0,
+        "credito": 20000.0,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "CreditoReestructurado"
+          ],
+          "concepto": "CurrentInterestInSuspense",
           "creditos": [
             "000250"
           ]
         }
       }
     ]
-  }
+  },
+  "matrizExtra": [
+    {
+      "rol": "SuspensoEnOrden",
+      "cuenta": "81150501",
+      "modalidad": "CONSUMO",
+      "categoria": "C",
+      "concepto": "CurrentInterestInSuspense"
+    }
+  ]
 }

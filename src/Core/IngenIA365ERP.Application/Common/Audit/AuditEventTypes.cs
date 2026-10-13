@@ -155,6 +155,11 @@ public static class AuditEventTypes
     public const string AccountingInventoryRulesImported = "Accounting.InventoryRules.Imported";
     // Feature 013, T0643 (api.md §23.1): la importación aplicada de la matriz de reglas de Cartera.
     public const string AccountingLendingRulesImported = "Accounting.LendingRules.Imported";
+    // Feature 013, T0651 (contracts/contabilidad.md §22): el consumo de los hechos de Cartera y el registro de los indicadores regulatorios.
+    public const string AccountingLendingPosted = "Accounting.Lending.Posted";
+    public const string AccountingLendingRejected = "Accounting.Lending.Rejected";
+    public const string AccountingLendingBatchProcessed = "Accounting.Lending.BatchProcessed";
+    public const string AccountingRegulatoryIndicatorRegistered = "Accounting.RegulatoryIndicator.Registered";
 
     // -------------------- Inventario (feature 012, T44, T181) --------------------
     // Eventos explicitos que no salen de un comando: la exportacion de una vista de

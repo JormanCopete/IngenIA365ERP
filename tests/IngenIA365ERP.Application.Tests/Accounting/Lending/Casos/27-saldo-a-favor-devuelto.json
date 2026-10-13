@@ -127,7 +127,7 @@
           "hechos": [
             "SaldoAFavorResuelto"
           ],
-          "concepto": "CreditBalance",
+          "concepto": null,
           "creditos": [
             "000123"
           ]

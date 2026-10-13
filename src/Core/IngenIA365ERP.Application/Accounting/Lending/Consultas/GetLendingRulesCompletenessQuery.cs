@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Accounts;
+using IngenIA365ERP.Application.Accounting.Lending.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Integration;

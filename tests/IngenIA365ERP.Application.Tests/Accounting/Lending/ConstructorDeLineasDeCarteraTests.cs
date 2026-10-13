@@ -1,6 +1,8 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
+using IngenIA365ERP.Application.Accounting.Lending.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
+using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -26,7 +28,7 @@ namespace IngenIA365ERP.Application.Tests.Accounting.Lending;
 /// </para>
 ///
 /// <para>
-/// <b>Lo que agrega T0646</b> (molde <c>ConstructorDeLineasDeInventarioTests.El_caso_dorado_da_el_comprobante_esperado</c>): una teoría sobre
+/// <b>Lo que agregó T0646</b> (molde <c>ConstructorDeLineasDeInventarioTests.El_caso_dorado_da_el_comprobante_esperado</c>): una teoría sobre
 /// <see cref="Casos"/> que construya la unidad (<see cref="EscenarioContableDeCartera.Unidad"/>, con <c>matrizExtra</c> si la trae) contra el
 /// escenario y compare con <c>esperado</c>: sin fallos; tipo, fecha (= <c>origin.operationDate</c>), <c>Kind = Regular</c>, origen
 /// <c>("CAR", esperado.origen, origin.publicId)</c>, <c>RegistradoPor</c> (nulo si <c>originUser.centralUserId</c> es nulo, C23); las líneas
@@ -118,6 +120,75 @@ public class ConstructorDeLineasDeCarteraTests
 
         var validacion = await e.D.Poster.ValidarAsync(e.ComprobanteEsperado(caso), default);
         validacion.Errores.Select(x => $"línea {x.LineNumber} {x.AccountCode}: {x.Code} {x.Message}").Should().BeEmpty($"{nombre}: el contrato de la 009 lo acepta");
+    }
+
+    /// <summary>
+    /// T0646: el constructor arma, contra el escenario y la <c>matrizExtra</c> del caso, exactamente el comprobante esperado —tipo, fecha
+    /// contable, <c>Regular</c>, origen <c>("CAR", LendingIssuedDocument, origin.publicId)</c>, «registrado por» el usuario de origen o nulo si lo
+    /// originó el proceso (C23)— con sus líneas como conjunto (cuenta, lado, importe, tercero, sucursal, centro y cruce) y el mapa de cada una
+    /// (rol, hechos, concepto y créditos); o el recibo sin comprobante del caso.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Casos))]
+    public async Task El_caso_dorado_da_el_comprobante_esperado(string nombre)
+    {
+        var e = new EscenarioContableDeCartera();
+        var caso = EscenarioContableDeCartera.Caso(nombre);
+        if (caso["matrizExtra"] is JsonArray extra) e.AgregarReglas(extra);
+        var unidad = EscenarioContableDeCartera.Unidad(caso);
+        var hechos = unidad.Select(HechoDeCartera.De).ToList();
+        var esperado = caso["esperado"]!.AsObject();
+
+        if ((string?)esperado["sinComprobante"] == LendingPosting.SinComprobanteInformativo)
+        {
+            ConstructorDeLineasDeCartera.EsInformativa(hechos).Should().BeTrue(nombre);
+            return;
+        }
+
+        var catalogos = await CatalogosDeCartera.CargarAsync(e.D.Db, new ResolutorDeReglasDeCartera(e.D.Db), new TiposDeComprobanteDeCartera(e.D.Db),
+            [hechos], e.D.Clock.TodayUtc, default);
+        var c = ConstructorDeLineasDeCartera.Construir(hechos, catalogos);
+        c.Fallos.Select(f => $"{f.FactType} {f.Role}: {f.Error.Code} {f.Error.Message}").Should().BeEmpty(nombre);
+
+        if ((string?)esperado["sinComprobante"] is { } motivo)
+        {
+            c.SinLineas.Should().BeTrue(nombre);
+            c.SinComprobante.Should().Be(motivo, nombre);
+            return;
+        }
+
+        var r = c.Request!;
+        var sobre = unidad[0].Envelope;
+        r.VoucherTypeCode.Should().Be((string)esperado["tipo"]!, nombre);
+        r.Date.Should().Be(sobre.Origin.OperationDate, "la fecha del comprobante es la fecha contable del hecho, nunca la de hoy (§7.3)");
+        r.Kind.Should().Be(Domain.Enums.Accounting.DocumentKind.Regular);
+        r.Origin.Should().Be(new AccountingOrigin("CAR", (string)esperado["origen"]!, sobre.Origin.PublicId));
+        if (sobre.OriginUser.CentralUserId is { } central)
+            r.RegistradoPor.Should().Be(new UsuarioDeOrigen(central, sobre.OriginUser.Name));
+        else
+            r.RegistradoPor.Should().BeNull("lo originó el proceso: el comprobante dice «Proceso de integración» (C23)");
+
+        var lineasEsperadas = esperado["lineas"]!.AsArray().Select(l => l!.AsObject()).ToList();
+        static string Clave(PostingLine l) =>
+            string.Join('|', l.AccountCode, l.Debit.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                l.Credit.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture), l.PersonId, l.BranchId, l.CostCenterId, l.CrossDocumentType,
+                l.CrossDocumentNumber);
+        r.Lines.Select(Clave).Should().BeEquivalentTo(lineasEsperadas.Select(l => Clave(e.Linea(l))), nombre);
+
+        var mapa = r.Lines.Select((l, i) => (Clave: Clave(l), Mapa: c.Mapa[i])).ToDictionary(x => x.Clave, x => x.Mapa);
+        foreach (var l in lineasEsperadas)
+        {
+            var m = mapa[Clave(e.Linea(l))];
+            var de = $"{nombre}: {(string)l["rol"]!} {(string)l["cuenta"]!}";
+            m.Rol.Should().Be((string)l["rol"]!, de);
+            m.AccountCode.Should().Be((string)l["cuenta"]!, de);
+            m.Hechos.Should().BeEquivalentTo(l["mapa"]!["hechos"]!.AsArray().Select(h => (string)h!), de);
+            m.Concepto.Should().Be((string?)l["mapa"]!["concepto"], de);
+            m.Creditos.Should().BeEquivalentTo(l["mapa"]!["creditos"]!.AsArray().Select(h => (string)h!), de);
+        }
+
+        var validacion = await e.D.Poster.ValidarAsync(r, default);
+        validacion.Errores.Should().BeEmpty($"{nombre}: lo que arma el constructor lo acepta el contrato de la 009");
     }
 
     /// <summary>La clase del recaudador del hecho principal (la del sobre del pago o la de sus dimensiones), para el mapeo <c>DN</c>.</summary>

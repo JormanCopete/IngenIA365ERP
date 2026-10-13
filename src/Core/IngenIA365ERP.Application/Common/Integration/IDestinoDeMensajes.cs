@@ -99,6 +99,12 @@ public enum MotivoSinComprobante
     /// o fechada hasta el corte sin conciliación): deja su recibo, no una obligación.
     /// </summary>
     NotIncorporated = 3,
+
+    /// <summary>
+    /// Feature 013 (C21; contracts/contabilidad.md §7.1 paso 8): las dos puntas de un traslado de Cartera resolvieron la misma cuenta,
+    /// sucursal, tercero y cruce: deja su recibo, no su comprobante.
+    /// </summary>
+    SameAccounts = 4,
 }
 
 /// <summary>
@@ -156,12 +162,16 @@ public static class ReferenciasDeResultado
     /// <summary>Feature 013 (C21): la venta o el ajuste que Cartera no incorporó.</summary>
     public const string NoIncorporada = "no incorporada";
 
+    /// <summary>Feature 013 (C21): el traslado de Cartera cuyas dos puntas resolvieron las mismas cuentas.</summary>
+    public const string MismasCuentas = "sin comprobante (mismas cuentas)";
+
     public static string De(Guid? comprobante, MotivoSinComprobante? sinComprobante) => comprobante is { } id
         ? id.ToString("D")
         : sinComprobante switch
         {
             MotivoSinComprobante.ZeroValue => ValorCero,
             MotivoSinComprobante.NotIncorporated => NoIncorporada,
+            MotivoSinComprobante.SameAccounts => MismasCuentas,
             _ => Informativo,
         };
 
@@ -171,6 +181,7 @@ public static class ReferenciasDeResultado
         Informativo => MotivoSinComprobante.Informational,
         ValorCero => MotivoSinComprobante.ZeroValue,
         NoIncorporada => MotivoSinComprobante.NotIncorporated,
+        MismasCuentas => MotivoSinComprobante.SameAccounts,
         _ => null,
     };
 }

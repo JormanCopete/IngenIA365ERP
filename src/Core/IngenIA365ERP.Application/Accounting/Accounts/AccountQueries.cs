@@ -202,6 +202,23 @@ public sealed class ListInvalidParameterizationsQueryHandler(IApplicationDbConte
             lista.Add(new ParametrizacionInvalidaDto(inventario, "Matriz de contabilización", $"{dimensiones} (desde {r.ValidFrom:yyyy-MM-dd})", cuenta?.Code, $"La cuenta {reparo}."));
         }
 
+        // Feature 013 (T0651, contracts/contabilidad.md §3.7): lo mismo con la matriz de Cartera (las reglas sin cierre cuya cuenta dejó de
+        // servir para Cartera).
+        var cartera = ModuloContable.Nombre(ModuloContable.Cartera);
+        var reglasDeCartera = await db.LendingPostingRules.AsNoTracking().Where(r => !r.IsDeleted && r.ValidTo == null)
+            .OrderBy(r => r.Operation).ThenBy(r => r.Role).ThenBy(r => r.ValidFrom)
+            .Select(r => new { r.Operation, r.Role, r.DimensionKey, r.ValidFrom, r.AccountId })
+            .ToListAsync(ct);
+        var idsDeCartera = reglasDeCartera.Select(r => r.AccountId).Distinct().ToList();
+        var cuentasDeCartera = await db.ChartOfAccounts.AsNoTracking().Where(c => idsDeCartera.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+        foreach (var r in reglasDeCartera)
+        {
+            var cuenta = cuentasDeCartera.GetValueOrDefault(r.AccountId);
+            var reparo = cuenta is null || cuenta.IsDeleted ? "la cuenta no existe" : AccountEligibility.Reparo(cuenta, ModuloContable.Cartera);
+            if (reparo is null) continue;
+            lista.Add(new ParametrizacionInvalidaDto(cartera, "Matriz de Cartera", $"{r.DimensionKey} (desde {r.ValidFrom:yyyy-MM-dd})", cuenta?.Code, $"La cuenta {reparo}."));
+        }
+
         return Result.Success<IReadOnlyList<ParametrizacionInvalidaDto>>(lista);
     }
 }

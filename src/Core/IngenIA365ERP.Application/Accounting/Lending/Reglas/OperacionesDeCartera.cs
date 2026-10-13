@@ -126,9 +126,11 @@ public static class OperacionesDeCartera
             EntregaDelHecho.K1, Ninguno, PorPartes: true, HeredaElModo: true),
         new(GastoDeCobranzaCausadoV1.Type, "GCO", false, [R.CargoPorCobrar, R.PagoPorCuentaDelAsociado], [R.Ingreso, R.CuentaPorPagarATercero],
             EnLinea, null, "CA", EntregaDelHecho.K4, Ninguno),
-        new(CreditoReestructuradoV1.Type, "REE", false, RolesDeTraslado, [.. RolesDeTraslado], EnLinea, null, "CN", EntregaDelHecho.K3, Ninguno),
-        new(CreditoModificadoV1.Type, "MOD", false, RolesDeTraslado, RolesDeTraslado, EnLinea, null, "CN", EntregaDelHecho.K3, Ninguno),
-        new(CreditoNovadoV1.Type, "NOV", false, RolesDeTraslado, RolesDeTraslado, EnLinea, null, "CN", EntregaDelHecho.K3, Ninguno),
+        // Las novedades trasladan saldos y capitalizan: lo causado contra su rol de saldo, lo suspendido contra el ingreso diferido y su orden
+        // contingente se cancela (T0646; contabilidad.md §2.1).
+        new(CreditoReestructuradoV1.Type, "REE", false, [.. RolesDeTraslado, R.ContraOrdenContingente], RolesDeTraslado, EnLinea, null, "CN", EntregaDelHecho.K3, Ninguno),
+        new(CreditoModificadoV1.Type, "MOD", false, [.. RolesDeTraslado, R.ContraOrdenContingente], RolesDeTraslado, EnLinea, null, "CN", EntregaDelHecho.K3, Ninguno),
+        new(CreditoNovadoV1.Type, "NOV", false, [.. RolesDeTraslado, R.ContraOrdenContingente], RolesDeTraslado, EnLinea, null, "CN", EntregaDelHecho.K3, Ninguno),
         new(CondonacionAprobadaV1.Type, "CON", false, [R.DeterioroIndividual, R.GastoDeCastigoOCondonacion, R.ContraOrdenContingente],
             [.. ConceptosDeLaCuota, R.SuspensoEnOrden], EnLinea, null, "CN", EntregaDelHecho.K3, Ninguno),
         new(CreditoCastigadoV1.Type, "CAS", false,

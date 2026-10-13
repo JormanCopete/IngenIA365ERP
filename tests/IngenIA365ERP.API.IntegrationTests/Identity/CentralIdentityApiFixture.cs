@@ -207,9 +207,9 @@ public class CentralIdentityApiFixture : IAsyncLifetime
                 services.AddScoped<IngenIA365ERP.Application.Common.Integration.Accounting.ContabilidadParaCarteraProvisional>();
                 services.RemoveAll<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaCartera>();
                 services.AddScoped<IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaCartera, Integration.ContabilidadParaCarteraConDoble>();
-                services.AddScoped<IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion.DestinoContabilidad>();
+                services.AddScoped<IngenIA365ERP.Application.Accounting.Integration.DestinoContabilidad>();
                 var destinos = services.Where(d => d.ServiceType == typeof(IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes)
-                    && d.ImplementationType == typeof(IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion.DestinoContabilidad)).ToList();
+                    && d.ImplementationType == typeof(IngenIA365ERP.Application.Accounting.Integration.DestinoContabilidad)).ToList();
                 foreach (var d in destinos) services.Remove(d);
                 services.AddScoped<IngenIA365ERP.Application.Common.Integration.IDestinoDeMensajes, Integration.DestinoContabilidadConDoble>();
 

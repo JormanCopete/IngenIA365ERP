@@ -53,6 +53,7 @@ public sealed class CloseIntegrationBatchCommandHandler(IApplicationDbContext db
                 d.Message!.PublicId,
                 d.Message.OriginPublicId,
                 d.Message.OriginNumber,
+                d.Message.OriginModule,
                 d.ResultReference,
                 d.ResultVoucherTypeCode,
                 d.ResultVoucherNumber,
@@ -95,7 +96,10 @@ public sealed class CloseIntegrationBatchCommandHandler(IApplicationDbContext db
 
         if (lote.Destination == IntegrationDestinations.Accounting)
         {
-            await auditoria.EmitirLoteDeInventarioProcesadoAsync(lote.PublicId, new
+            // Feature 013 (T0651, §22): un lote de hechos de Cartera deja Accounting.Lending.BatchProcessed; lo demás, el de Inventario de siempre.
+            var deCartera = entregas.Count > 0 && entregas.All(e => e.OriginModule == ModulosDeOrigen.Cartera);
+            Func<Guid, object, CancellationToken, Task> emitir = deCartera ? auditoria.EmitirLoteDeCarteraProcesadoAsync : auditoria.EmitirLoteDeInventarioProcesadoAsync;
+            await emitir(lote.PublicId, new
             {
                 number = lote.Number,
                 trigger = lote.Trigger.ToString(),
