@@ -2809,7 +2809,8 @@ completitud vacía en la cooperativa de ensayo.
   nacionales, Nómina, Inventario, Ventas, Integración, Contabilidad y Base de datos: PostgreSQL 287 pasan y 10 omitidas con motivo (también
   después del último arreglo del resumido); SQL Server 287 y 10 omitidas antes del último arreglo (la clave por crédito del constructor y del
   resumido) —la repetición final se cayó por infraestructura: el disco C: quedó sin espacio (`docker_data.vhdx` de Docker Desktop en 59,6 GB) y
-  Docker dejó de responder; queda repetir en SQL Server con espacio libre—. Regresión completa en PostgreSQL (antes de ese último arreglo): 540 pasan y 12 omitidas. Siete
+  Docker dejó de responder—; repetida el 2026-10-13 tras limpiar Docker (caché de compilación, imágenes huérfanas, contenedores de prueba
+  detenidos y volúmenes anónimos): SQL Server 287 pasan y 10 omitidas, 0 fallan, con el último arreglo incluido. Regresión completa en PostgreSQL (antes de ese último arreglo): 540 pasan y 12 omitidas. Siete
   defectos del producto corregidos con prueba unitaria (anotados en T0632 y T0633). Abierto para fases siguientes: la página de cierres de Cartera
   (`/cartera/cierres`, fase 12) a la que remite `Accounting.Period.LendingNotClosed`; `Integration.SendNotApplicable.ModeStillNotPosted` trae
   `data.documentTypeCodes` también para Cartera; la completitud no trae «quién corrige» (lo arma la pantalla con §13.3); el lote no filtra por
