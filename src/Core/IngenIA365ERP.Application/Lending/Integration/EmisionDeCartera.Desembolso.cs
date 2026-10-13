@@ -112,7 +112,7 @@ public sealed partial class EmisionDeCartera
         ArgumentNullException.ThrowIfNull(d);
         var h = d.Hecho;
         var op = d.Operacion;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var neto = d.Bruto - d.Recogidas.Sum(r => r.Amount);
         var contenido = new CreditoDesembolsadoV1
         {
@@ -195,7 +195,7 @@ public sealed partial class EmisionDeCartera
     {
         ArgumentNullException.ThrowIfNull(r);
         var h = r.Hecho;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var original = await HechoOriginalAsync(r.Desembolso.PublicId, CreditoDesembolsadoV1.Type, r.Desembolso.Number, ct);
         var contenido = new DesembolsoReversadoV1
         {
@@ -263,7 +263,7 @@ public sealed partial class EmisionDeCartera
             .Select(f => (Guid?)f.PublicId).FirstOrDefaultAsync(ct);
         if (tipo is not { } tipoDeHecho) return null;
 
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var contenido = new CreditoAprobadoSinDesembolsarV1
         {
             DebtorPersonPublicId = h.DeudorPublicId,

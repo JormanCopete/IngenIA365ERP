@@ -58,7 +58,7 @@ public sealed partial class EmisionDeCartera
     {
         ArgumentNullException.ThrowIfNull(h);
         ArgumentNullException.ThrowIfNull(op);
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var contenido = new CreditoDesembolsadoV1
         {
             Loan = h.Referencia,
@@ -95,7 +95,7 @@ public sealed partial class EmisionDeCartera
         ArgumentNullException.ThrowIfNull(a);
         var h = a.Hecho;
         var op = a.Ajuste;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var dimensiones = Dimensiones(h, categoria);
         var registrado = new DateTimeOffset(DateTime.SpecifyKind(op.RegisteredAt, DateTimeKind.Utc));
         var original = await HechoOriginalAsync(a.Desembolso.PublicId, CreditoDesembolsadoV1.Type, a.Desembolso.Number, ct);
@@ -152,7 +152,7 @@ public sealed partial class EmisionDeCartera
         ArgumentNullException.ThrowIfNull(c);
         var h = c.Hecho;
         var op = c.Operacion;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var contenido = new CobroProvisionalIncorporadoV1
         {
             Loan = h.Referencia,

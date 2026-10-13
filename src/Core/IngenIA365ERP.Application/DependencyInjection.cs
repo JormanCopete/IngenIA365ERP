@@ -542,6 +542,25 @@ public static class DependencyInjection
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Accrual.EjecutorDeLaCorreccionDeValorNacional>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Accrual.EfectoDeReplicacionCorreccionDeValorNacional>();
         services.AddScoped<Lending.Processes.Tareas.MarcaDeTareaDiariaDeCartera>();
+        // Feature 013, US9 (bloque 12B, T0699–T0711): el riesgo y los cierres. El contexto (norma, política efectiva, parámetros, indicadores,
+        // perfil y modelo por segmento), la carga en bloque, la calificación informativa (también la del ciclo), los requisitos, el cierre mensual y
+        // su reapertura con sus ejecutores, el cierre base, la política SARC con su asunto de acta, la obligación sobrevenida (alta del perfil y
+        // réplica) y la calificación contable vigente (ya registrada arriba).
+        services.AddScoped<Lending.Risk.LectorDeIndicadoresDeLaEntidad>();
+        services.AddScoped<Lending.Risk.PoliticaSarcVigente>();
+        services.AddScoped<Lending.Risk.LectorDelContextoDeRiesgo>();
+        services.AddScoped<Lending.Risk.CargadorDeRiesgo>();
+        services.AddScoped<Lending.Risk.CalificacionInformativa>();
+        services.AddScoped<Lending.Risk.CalificacionDelCiclo>();
+        services.AddScoped<Lending.Risk.RequisitosDelCierreMensual>();
+        services.AddScoped<Lending.Risk.CierreMensualDeCartera>();
+        services.AddScoped<Lending.Risk.ReaperturaDelCierre>();
+        services.AddScoped<Lending.Risk.CierreBase>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDelCierreMensual>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDeLaReapertura>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.AsuntoDeActaPoliticaSarc>();
+        services.AddScoped<Core.RegulatoryProfile.IEvaluadorDeObligacionDePerdidaEsperada, Lending.Risk.EvaluadorDeObligacionDePerdidaEsperada>();
+        services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Risk.EfectoDeReplicacionObligacionSobrevenida>();
         // Feature 013, US3 (bloque 7C, T0449) y US6 (T0586): Cartera como destino de la bandeja: ResultadoDelGiro v1 y la familia de Comercial
         // (VentaACreditoRegistrada y AjusteDeVentaACredito en toda versión, C16). El destino Lending cuenta cuando su consumidor acepta todo lo que la
         // fila CAR adopta (RegistroDeIntegracion.ImplementacionDisponible): desde US6 acepta lo que la semilla adopta y el despachador le entrega.

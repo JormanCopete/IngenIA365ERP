@@ -70,11 +70,38 @@ public class LaCarteraNoTieneValoresLegalesFijos
         "Core/IngenIA365ERP.Domain/Lending/Replay",
         // US5 (T0533–T0535): la prelación, el aplicador de pagos y el tope del prepago (las veces del SMMLV llegan por parámetro).
         "Core/IngenIA365ERP.Domain/Lending/Payments",
+        // US9 (T0674): los motores de calificación y deterioro, la política efectiva, el selector y el historial de mora: rangos, porcentajes,
+        // tramos de garantía y meses de historial llegan en el Anexo 1, la política y la regla de pérdida esperada, nunca como número.
+        "Core/IngenIA365ERP.Domain/Lending/Risk",
     ];
 
     private static readonly Regex SieteODiez = new(@"(?<![\w.])(7|10)(?:[mM])?(?![\w.])", RegexOptions.Compiled);
 
     private static readonly Regex Cadena = new("\\$?@?\"(?:[^\"\\\\]|\\\\.)*\"", RegexOptions.Compiled);
+
+    /// <summary>
+    /// US9 (T0674): los lectores del esquema de la norma (<c>Domain/Lending/Risk/Normativa</c>) leen la forma de los documentos y la validan
+    /// (fracciones entre 0 y 1, rangos contiguos, tramos de garantía); no traen ningún valor de la norma, que llega en el contenido replicado. Se
+    /// exceptúan por archivo, con su motivo, sólo si algún día necesitan un número del esquema; hoy no necesitan ninguno.
+    /// </summary>
+    private static readonly Dictionary<string, string> ExentosDeNormativa = new(StringComparer.Ordinal);
+
+    [Fact]
+    public void El_riesgo_esta_en_las_dos_reglas_y_la_normativa_sin_exenciones_que_sobren()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var decimales = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => ReglaSobreFuente.Relativo(root, a)).ToList();
+        var delMotor = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor).Select(a => ReglaSobreFuente.Relativo(root, a)).ToList();
+        foreach (var pieza in new[] { "MotorDeCalificacion.cs", "MotorDeDeterioroIndividual.cs", "MotorDeDeterioroGeneral.cs", "PoliticaSarcEfectiva.cs",
+                     "SelectorDeModeloDeDeterioro.cs", "HistorialDeMora.cs", "MovimientosDelDeterioro.cs", "DeterioroPorConcepto.cs", "Normativa/Anexo1.cs",
+                     "Normativa/PoliticaSarc.cs", "Normativa/ReglaDePerdidaEsperada.cs" })
+        {
+            Assert.Contains(decimales, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));
+            Assert.Contains(delMotor, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));
+        }
+        Assert.All(ExentosDeNormativa, e => Assert.False(string.IsNullOrWhiteSpace(e.Value), $"{e.Key}: exento sin motivo"));
+        Assert.All(ExentosDeNormativa.Keys, k => Assert.Contains("Domain/Lending/Risk/Normativa/", k, StringComparison.Ordinal));
+    }
 
     [Fact]
     public void El_motor_no_escribe_los_dias_de_la_semana_ni_de_la_decada()
@@ -91,6 +118,7 @@ public class LaCarteraNoTieneValoresLegalesFijos
         foreach (var archivo in archivos)
         {
             var relativo = ReglaSobreFuente.Relativo(root, archivo);
+            if (ExentosDeNormativa.ContainsKey(relativo)) continue;
             var lineas = File.ReadAllLines(archivo);
             for (var i = 0; i < lineas.Length; i++)
             {

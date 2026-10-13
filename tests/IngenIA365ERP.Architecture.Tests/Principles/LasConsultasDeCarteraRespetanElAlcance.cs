@@ -77,6 +77,13 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US7 (bloque B, T0658; parte de T0610): la conciliación contable por las oficinas del alcance (y una sucursal fuera de él es el 404), los
         // hechos contables por la sucursal de su sobre y una parte por su oficina (fuera, Lending.AccountingFactPart.NotFound).
         "Core/IngenIA365ERP.Application/Lending/Integration/Queries/LendingAccountingQueries.cs",
+        // US9 (bloque 12B, T0674): la calificación informativa y la de un crédito (la lista por oficina y línea; el crédito por CreditoEnAlcance), las
+        // calificaciones por análisis (por la oficina y la línea de su crédito), las líneas y el reporte de cambios de un cierre (PorOficinaYLinea),
+        // el cuadre del cierre (la conciliación con el alcance de oficinas) y la completitud del historial de mora (los créditos del alcance).
+        "Core/IngenIA365ERP.Application/Lending/Risk/RatingQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/AnalysisRatingCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/MonthlyCloseQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/ImpairmentModelQueries.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
@@ -133,6 +140,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US7: el catálogo sembrado de tipos de hecho (LND_FactTypes), de la cooperativa y sin deudores.
         ["ListLendingFactTypesQuery"] = "catálogo de la cooperativa: los tipos de hecho no tienen oficina ni deudores",
         ["ListTestCollectorReversalsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): ve lo que recibe el recaudador, no una oficina",
+        // US9 (bloque 12B): lo de toda la cooperativa, sin datos de deudores.
+        ["GetRiskPolicyQuery"] = "la política SARC es del consejo y la norma es nacional: celdas y versiones, sin deudores ni oficina (Parameters.View)",
+        ["GetMonthlyCloseReadinessQuery"] = "los requisitos del cierre son de toda la cooperativa: conteos y estados, sin deudores (MonthlyClose.Execute)",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

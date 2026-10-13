@@ -456,6 +456,14 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRunError> LendingProcessRunErrors { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.InsolvencyProceeding> InsolvencyProceedings { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.InsuranceClaim> InsuranceClaims { get; }
+    // Feature 013, US9 (T0697): riesgo y cierres (CarteraRiesgo).
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose> MonthlyCloses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan> MonthlyCloseLoans { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment> MonthlyCloseGeneralImpairments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening> MonthlyCloseReopenings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry> LoanArrearsHistory { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating> AnalysisRatings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion> RiskPolicyVersions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan> Loans { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl> LoanControls { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty> LoanParties { get; }

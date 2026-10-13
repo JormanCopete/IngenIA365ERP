@@ -82,7 +82,7 @@ internal sealed class DesembolsoDePrueba : IDisposable
     // ------------------------------------------------------------------------------------------------------------ piezas --
 
     public ReglasDeParametrosDeCartera Parametros() => O.Parametros();
-    public FechaContable FechaContable() => new(Contabilidad, Alertas);
+    public FechaContable FechaContable() => new(Contabilidad, Alertas, Db);
     public EmisorDeMensajes Emisor() => new(Db, G.Actor, G.Reloj);
     public EmisionDeCartera Emision() => new(Db, Emisor(), FechaContable(), new ModoDePasoDeCartera(Db, Contabilidad), G.Actor);
     public IMotorDeCreditoEnDesembolso MotorDelCredito() => Motor ?? new MotorDeCreditoEnDesembolso(Db, Cargador(), PuestaAlDia());

@@ -233,6 +233,10 @@ public class LosHechosInmutablesNoSeModifican
         ["MigrationLoadDifference"] = ["AcceptedAt", "AcceptedByUserId", "AcceptanceReason", "SessionItemId"],
         ["ProvisionalCollection"] = ["LoanId", "OperationId", "AppliedAt", "MessagePublicId"], ["LendingActivation"] = [],
         ["ConnectedGroup"] = ["EndedAt", "EndReason"], ["ConnectedGroupMember"] = ["EndedAt"],
+        // US9 (T0674; data-model §23, R61): el cierre, sus líneas, su general, su reapertura y el historial de mora no admiten ninguna escritura
+        // después de insertarse; la versión de la política sólo su validación con el punto de acta (C52).
+        ["MonthlyClose"] = [], ["MonthlyCloseLoan"] = [], ["MonthlyCloseGeneralImpairment"] = [], ["MonthlyCloseReopening"] = [],
+        ["LoanArrearsHistoryEntry"] = [], ["RiskPolicyVersion"] = ["ValidatedAt", "ValidatedByUserId", "SessionItemId"],
     };
 
     [Fact]
@@ -370,6 +374,42 @@ public class LosHechosInmutablesNoSeModifican
             .ToList();
         foreach (var conjunto in new[] { "LoanTransactions", "LoanDailyPositions", "AccountingFactParts", "LoanTermsVersions", "RepaymentScheduleVersions",
                      "RepaymentInstallments" })
+            Assert.Contains(conjunto, conjuntos);
+    }
+
+    /// <summary>
+    /// US9 (T0674; data-model §23; R61): los hechos del riesgo y los cierres están en <see cref="HechosDeCartera"/> con su escritura única —ninguna,
+    /// salvo la validación de la política—, viven en <c>Entities/Lending/Risk</c> y sus conjuntos son de hechos; la calificación por análisis no es
+    /// hecho (se levanta una vez) y el cierre no tiene estado guardado ni <c>SupersededAt</c>: su estado se deriva de la reapertura.
+    /// </summary>
+    [Fact]
+    public void Los_hechos_del_riesgo_y_los_cierres_estan_en_la_lista()
+    {
+        var esperados = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["MonthlyClose"] = [], ["MonthlyCloseLoan"] = [], ["MonthlyCloseGeneralImpairment"] = [], ["MonthlyCloseReopening"] = [],
+            ["LoanArrearsHistoryEntry"] = [], ["RiskPolicyVersion"] = ["ValidatedAt", "ValidatedByUserId", "SessionItemId"],
+        };
+        var tipos = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes();
+        foreach (var (nombre, unicas) in esperados)
+        {
+            Assert.True(HechosDeCartera.TryGetValue(nombre, out var declaradas), $"{nombre} no está en HechosDeCartera (T0674).");
+            Assert.Equal(unicas, declaradas);
+            Assert.Contains(tipos, t => t.Name == nombre && t.Namespace == "IngenIA365ERP.Domain.Entities.Lending.Risk");
+        }
+        Assert.False(typeof(IngenIA365ERP.Domain.Common.IHechoInmutable).IsAssignableFrom(typeof(IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating)),
+            "La calificación por análisis no es hecho: se levanta (data-model §23.6).");
+        var cierre = typeof(IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose);
+        foreach (var prohibida in new[] { "Status", "SupersededAt", "ReopenedAt" })
+            Assert.True(cierre.GetProperty(prohibida) is null, $"MonthlyClose no guarda {prohibida}: el estado se deriva de la reapertura (R61).");
+
+        var conjuntos = typeof(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext).GetProperties()
+            .Where(p => p.PropertyType.IsGenericType
+                && typeof(IngenIA365ERP.Domain.Common.IHechoInmutable).IsAssignableFrom(p.PropertyType.GetGenericArguments()[0]))
+            .Select(p => p.Name)
+            .ToList();
+        foreach (var conjunto in new[] { "MonthlyCloses", "MonthlyCloseLoans", "MonthlyCloseGeneralImpairments", "MonthlyCloseReopenings",
+                     "LoanArrearsHistory", "RiskPolicyVersions" })
             Assert.Contains(conjunto, conjuntos);
     }
 

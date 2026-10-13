@@ -204,13 +204,14 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
         var versiones = await db.LoanTermsVersions.AsNoTracking().Where(v => ids.Contains(v.LoanId))
             .Select(v => new { v.LoanId, v.VersionNumber, v.EffectiveValueDate, v.ModalityCode, v.SubsegmentCode, v.RestructuringCount })
             .ToListAsync(ct);
-        var categoria = new CategoriaContableDeCartera();
+        // US9 (T0702): la categoría del saldo al corte es la del último cierre vigente hasta ese día, incluido el que se fecha en él.
+        var categorias = await new CategoriaContableDeCartera(db).AlCorteAsync(ids, corte, ct);
         var resultado = new Dictionary<int, DimensionesDeCreditoDeCartera>(datos.Count);
         foreach (var d in datos)
         {
             var delCredito = versiones.Where(v => v.LoanId == d.Id).OrderBy(v => v.VersionNumber).ToList();
             var vigente = delCredito.LastOrDefault(v => v.EffectiveValueDate <= corte) ?? delCredito.FirstOrDefault();
-            var cat = await categoria.VigenteAsync(d.Id, corte, ct);
+            var cat = categorias[d.Id];
             resultado[d.Id] = new DimensionesDeCreditoDeCartera(d.Linea, vigente?.ModalityCode, vigente?.SubsegmentCode, cat.Category, d.IsEmployee,
                 (vigente?.RestructuringCount ?? 0) > 0, d.Sucursal, d.BranchId);
         }

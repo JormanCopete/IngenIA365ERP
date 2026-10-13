@@ -100,7 +100,8 @@ public sealed class CicloDiarioDeCartera(
     ParametrosDeLaTandaDeCartera tanda,
     IDateTimeService reloj,
     ILogger<CicloDiarioDeCartera>? logger = null,
-    MovimientoContingenteDeCartera? contingentes = null)
+    MovimientoContingenteDeCartera? contingentes = null,
+    Risk.CalificacionDelCiclo? calificacion = null)
 {
     /// <summary>Créditos de la muestra de verificación del paso (8).</summary>
     public const int MuestraDeVerificacion = 20;
@@ -310,24 +311,30 @@ public sealed class CicloDiarioDeCartera(
                 .Select(f => RegistroDeCartera.FilaDeCausacion(c.Control.LoanId, f, corrida.Id, null, x.Dia, ahora, masivas.Value.Mensaje(c.Control.LoanId, x.Dia, f.Concepto)))
                 .ToList()))).ToList());
 
-        // Las posiciones de cada día causado.
+        // Las posiciones de cada día causado, con la calificación informativa del día (US9, T0701: el mismo motor del cierre).
         var ultimas = await PosicionesDeCartera.UltimasAsync(db, causados.Select(c => c.Control.LoanId).ToList(), fechas[0], fechas[^1], ct);
+        var calificaciones = calificacion is null
+            ? new Dictionary<(int, DateOnly), Risk.CalificacionDiaria>()
+            : await calificacion.CalificarAsync(causados.SelectMany(c => c.Dias.Select(x => new Risk.DiaParaCalificar(c.Cargado.Credito, c.Cargado.Vigentes, x.Dia, x.Estado)))
+                .ToList(), ct);
         foreach (var c in causados)
             foreach (var x in c.Dias)
             {
                 var u = ultimas.GetValueOrDefault((c.Control.LoanId, x.Dia));
-                registro.PosicionVersionada(c.Control, x.Estado, c.Cargado.Credito, c.Cargado.Vigentes, u.Version, u.Huella, ahora);
+                registro.PosicionVersionada(c.Control, x.Estado, c.Cargado.Credito, c.Cargado.Vigentes, u.Version, u.Huella, ahora,
+                    calificacion: calificaciones.GetValueOrDefault((c.Control.LoanId, x.Dia)));
             }
 
-        // (4) Suspensión y reanudación: un hecho por crédito y transición.
+        // (4) Suspensión y reanudación: un hecho por crédito y transición. US9 (T0702): con la categoría contable vigente de cada crédito.
         corrida.CurrentStep = PasosDelCiclo.Suspension;
+        var categorias = await new CategoriaContableDeCartera(db).VigentesAsync(causados.Select(c => c.Control.LoanId).ToList(), d, ct);
         var hechos = new List<HechoPorCredito>();
         foreach (var c in causados)
             foreach (var x in c.Dias.Where(x => x.Transicion is not null))
             {
                 var dd = datos[c.Control.LoanId];
                 var (tipo, contenido) = PosicionesDeCartera.HechoDeTransicion(dd, x.Transicion!, x.Estado, ahora,
-                    EmisionDeCartera.Dimensiones(dd.Hecho(x.Dia), CategoriaContableVigente.DeCreditoNuevo));
+                    EmisionDeCartera.Dimensiones(dd.Hecho(x.Dia), categorias[c.Control.LoanId]));
                 hechos.Add(new HechoPorCredito(tipo, dd, x.Dia, contenido));
             }
 
@@ -338,7 +345,7 @@ public sealed class CicloDiarioDeCartera(
         var anticipos = new List<HechoPorCredito>();
         foreach (var c in causados)
             foreach (var x in c.Dias)
-                if (AnticiposAlVencer.Hecho(datos[c.Control.LoanId], x, ahora, fuentes[c.Control.LoanId]) is { } anticipo)
+                if (AnticiposAlVencer.Hecho(datos[c.Control.LoanId], x, ahora, fuentes[c.Control.LoanId], categorias[c.Control.LoanId]) is { } anticipo)
                     anticipos.Add(anticipo);
         if (anticipos.Count > 0)
         {

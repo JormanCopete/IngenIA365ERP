@@ -56,6 +56,16 @@ public sealed record ExpectedLossEvaluationDto(bool? Obligated, IReadOnlyList<st
     public static ExpectedLossEvaluationDto NoEvaluada { get; } = new(null, [], null, SinEvaluar);
 }
 
+/// <summary>
+/// El gancho con que el alta del perfil evalúa la obligación de pérdida esperada (feature 013, US9, T0710; T50, D28). Lo implementa Cartera
+/// (<c>EvaluadorDeObligacionDePerdidaEsperada</c>); Core no conoce Cartera: sin implementación registrada, la evaluación queda «sin evaluar».
+/// </summary>
+public interface IEvaluadorDeObligacionDePerdidaEsperada
+{
+    /// <summary>Evalúa con la versión ya guardada y, si corresponde, levanta las alertas de la obligación sobrevenida.</summary>
+    Task<ExpectedLossEvaluationDto> EvaluarAsync(RegulatoryProfileVersion version, CancellationToken ct);
+}
+
 /// <summary>Lo que responde el alta: la versión, si el grupo NIIF difiere del de la contabilidad y la evaluación de obligación.</summary>
 public sealed record RegulatoryProfileVersionCreatedDto(
     Guid VersionPublicId,
@@ -75,7 +85,8 @@ public sealed record RegulatoryProfileVersionCreatedDto(
 /// <item>sin grupo NIIF se propone el de <c>AccountingSetup.NiifGroup</c>; si difieren, alerta <c>Contabilidad.GrupoNiifDistinto</c>
 /// (pregunta E3).</item>
 /// </list>
-/// La evaluación de la obligación sobrevenida (D28) la conecta US9; hasta entonces responde «sin evaluar».
+/// La evaluación de la obligación sobrevenida (D28) la conecta US9 por <see cref="IEvaluadorDeObligacionDePerdidaEsperada"/>; sin ella responde
+/// «sin evaluar».
 /// </summary>
 public sealed record AddRegulatoryProfileVersionCommand(
     string OrganizationTypeCode,
@@ -120,7 +131,8 @@ public sealed class AddRegulatoryProfileVersionCommandHandler(
     IActorActual actor,
     IDateTimeService reloj,
     IAlertas alertas,
-    ILogger<AddRegulatoryProfileVersionCommandHandler>? logger = null)
+    ILogger<AddRegulatoryProfileVersionCommandHandler>? logger = null,
+    IEvaluadorDeObligacionDePerdidaEsperada? obligacion = null)
     : IRequestHandler<AddRegulatoryProfileVersionCommand, Result<RegulatoryProfileVersionCreatedDto>>
 {
     private readonly ILogger _log = logger ?? NullLogger<AddRegulatoryProfileVersionCommandHandler>.Instance;
@@ -203,7 +215,9 @@ public sealed class AddRegulatoryProfileVersionCommandHandler(
                     AlertasDelPerfilRegulatorio.GrupoNiifDistinto, alerta.Error.Code, alerta.Error.Message);
         }
 
-        return Result.Success(new RegulatoryProfileVersionCreatedDto(version.PublicId, distinto, grupoContable, ExpectedLossEvaluationDto.NoEvaluada));
+        // US9 (T0710, T50): la obligación de pérdida esperada con la regla vigente y, si Cartera está activada, sus alertas.
+        var evaluacion = obligacion is null ? ExpectedLossEvaluationDto.NoEvaluada : await obligacion.EvaluarAsync(version, ct);
+        return Result.Success(new RegulatoryProfileVersionCreatedDto(version.PublicId, distinto, grupoContable, evaluacion));
     }
 }
 

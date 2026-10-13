@@ -86,6 +86,29 @@ public class ElMotorDeCarteraEsDecimal
             Assert.Contains(archivos, a => a.EndsWith(pieza, StringComparison.Ordinal));
     }
 
+    /// <summary>US9 (T0674): los motores del riesgo, la política efectiva, el selector, el historial y los movimientos del deterioro.</summary>
+    private static readonly string[] PiezasDeUS9 =
+    [
+        Path.Combine("Risk", "MotorDeCalificacion.cs"),
+        Path.Combine("Risk", "MotorDeDeterioroIndividual.cs"),
+        Path.Combine("Risk", "MotorDeDeterioroGeneral.cs"),
+        Path.Combine("Risk", "PoliticaSarcEfectiva.cs"),
+        Path.Combine("Risk", "SelectorDeModeloDeDeterioro.cs"),
+        Path.Combine("Risk", "HistorialDeMora.cs"),
+        Path.Combine("Risk", "MovimientosDelDeterioro.cs"),
+        Path.Combine("Risk", "DeterioroPorConcepto.cs"),
+        Path.Combine("Normativa", "Anexo1.cs"),
+        Path.Combine("Normativa", "PoliticaSarc.cs"),
+    ];
+
+    [Fact]
+    public void La_regla_mira_los_motores_del_riesgo()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        foreach (var pieza in PiezasDeUS9)
+            Assert.Contains(archivos, a => a.EndsWith(pieza, StringComparison.Ordinal));
+    }
+
     [Fact]
     public void El_motor_no_usa_coma_flotante()
     {

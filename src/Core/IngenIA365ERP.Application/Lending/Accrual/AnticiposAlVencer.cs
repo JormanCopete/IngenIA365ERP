@@ -35,7 +35,8 @@ public static class AnticiposAlVencer
     /// El <c>AnticipoAplicado</c> de un crédito y un día, o nulo si ese día no venció una cuota cubierta. <c>amounts</c> = lo que el anticipo cubrió
     /// por concepto y cuota (positivo); <c>advanceSources</c> = los <c>AnticipoRecibido</c> de los pagos del crédito.
     /// </summary>
-    public static HechoPorCredito? Hecho(DatosDeHecho datos, DiaCausado dia, DateTime registradoEn, IReadOnlyList<OriginalFactRefV1> fuentes)
+    public static HechoPorCredito? Hecho(DatosDeHecho datos, DiaCausado dia, DateTime registradoEn, IReadOnlyList<OriginalFactRefV1> fuentes,
+        CategoriaContableVigente? categoria = null)
     {
         ArgumentNullException.ThrowIfNull(datos);
         var aplicaciones = dia.Estado.AnticiposAplicados.Where(a => a.Fecha == dia.Dia && a.Lineas.Count > 0).ToList();
@@ -50,7 +51,7 @@ public static class AnticiposAlVencer
             DebtorPersonPublicId = datos.DeudorPublicId,
             ValueDate = dia.Dia,
             RegisteredAt = new DateTimeOffset(DateTime.SpecifyKind(registradoEn, DateTimeKind.Utc)),
-            Dimensions = EmisionDeCartera.Dimensiones(datos.Hecho(dia.Dia), CategoriaContableVigente.DeCreditoNuevo),
+            Dimensions = EmisionDeCartera.Dimensiones(datos.Hecho(dia.Dia), categoria ?? CategoriaContableVigente.DeCreditoNuevo),
             Amounts = montos,
             RulesVersion = datos.Condiciones.RulesVersion,
             InstallmentNumber = aplicaciones.Min(a => a.Cuota),

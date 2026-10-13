@@ -13,7 +13,11 @@ using Microsoft.Extensions.DependencyInjection;
 namespace IngenIA365ERP.Application.Lending.Processes.Tareas;
 
 /// <summary>Lo que levantó una pasada de la vigilancia. (nuevo)</summary>
-public sealed record VigilanciaRealizada(bool CicloDeAyerSinTerminar, int CreditosSinCausar, IReadOnlyList<string> TareasSinCorrer);
+public sealed record VigilanciaRealizada(bool CicloDeAyerSinTerminar, int CreditosSinCausar, IReadOnlyList<string> TareasSinCorrer)
+{
+    /// <summary>US9 (T0707): el mes anterior quedó sin cierre de Cartera pasado <c>Riesgo.DiaLimiteCierre</c>.</summary>
+    public string? CierrePendiente { get; init; }
+}
 
 /// <summary>
 /// La vigilancia de los procesos de Cartera (feature 013, US4, T0502; DT §2.13, data-model §22.5; SC-020): sin ruta, la corre la tarea
@@ -25,7 +29,8 @@ public sealed record VigilanciaRealizada(bool CicloDeAyerSinTerminar, int Credit
 /// <item><c>Cartera.TareaDiariaNoCorrio</c> por cada tarea diaria registrada de una entrega vigente cuya última marca
 /// (<see cref="MarcaDeTareaDiariaDeCartera"/>) es anterior a ayer (<c>…:{tarea}:{fecha}</c>).</item>
 /// </list>
-/// Idempotente por el <c>DedupKey</c>: repetir suma la ocurrencia. <c>Cartera.CierreMensualPendiente</c> la suma US9. (nuevo)
+/// Idempotente por el <c>DedupKey</c>: repetir suma la ocurrencia. US9 (T0707; pregunta E6) suma <c>Cartera.CierreMensualPendiente</c> si, pasado el
+/// día <c>Riesgo.DiaLimiteCierre</c>, el mes anterior (con Cartera ya activada en él) no tiene cierre vigente (<c>…:{aaaa-mm}</c>). (nuevo)
 /// </summary>
 public sealed record WatchLendingProcessesCommand : IRequest<Result<VigilanciaRealizada>>;
 
@@ -35,7 +40,8 @@ public sealed class WatchLendingProcessesCommandHandler(
     IApplicationDbContext db,
     IAlertas alertas,
     IDateTimeService reloj,
-    IEnumerable<ITareaProgramada> tareas) : IRequestHandler<WatchLendingProcessesCommand, Result<VigilanciaRealizada>>
+    IEnumerable<ITareaProgramada> tareas,
+    IngenIA365ERP.Application.Common.Parameters.ILectorDeParametros? parametros = null) : IRequestHandler<WatchLendingProcessesCommand, Result<VigilanciaRealizada>>
 {
     /// <summary>Hasta esta hora local no se espera que lo de ayer esté terminado.</summary>
     public static readonly TimeOnly Tolerancia = TareasDeCartera.HoraDeInicio;
@@ -102,7 +108,25 @@ public sealed class WatchLendingProcessesCommandHandler(
                     DedupKey: $"{TiposDeAlerta.TareaDiariaNoCorrio}:{t.Nombre}:{ayer:yyyy-MM-dd}", ModuloDeOrigen: Modulo), ct);
             }
         }
-        return Result.Success(new VigilanciaRealizada(cicloSinTerminar, conError.Select(c => c.Id).Distinct().Count(), sinCorrer));
+        // US9 (T0707): el cierre del mes anterior, pasado el día límite.
+        string? cierrePendiente = null;
+        var limite = await Risk.RunScheduledMonthlyCloseCommandHandler.DiaLimiteAsync(parametros ?? new IngenIA365ERP.Application.Common.Parameters.LectorDeParametros(db), hoy, ct);
+        var anterior = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(-1);
+        var finDelAnterior = Domain.Entities.Lending.Risk.MonthlyClose.UltimoDiaDe(anterior.Year, anterior.Month);
+        if (hoy.Day > limite && activada <= finDelAnterior
+            && !await Risk.RequisitosDelCierreMensual.MesConCierreVigenteAsync(db, anterior.Year, anterior.Month, ct))
+        {
+            cierrePendiente = Risk.ErroresDeRiesgo.Mes(anterior.Year, anterior.Month);
+            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.CierreMensualPendiente, $"Falta el cierre de Cartera de {cierrePendiente}",
+                $"Pasó el día {limite} y Cartera no ha cerrado {cierrePendiente}. Ordene el cierre desde «Cierres»: Contabilidad no cierra el mes mientras "
+                + "Cartera no lo haya cerrado.",
+                DedupKey: $"{TiposDeAlerta.CierreMensualPendiente}:{cierrePendiente}", ModuloDeOrigen: Modulo), ct);
+        }
+
+        return Result.Success(new VigilanciaRealizada(cicloSinTerminar, conError.Select(c => c.Id).Distinct().Count(), sinCorrer)
+        {
+            CierrePendiente = cierrePendiente,
+        });
     }
 }
 

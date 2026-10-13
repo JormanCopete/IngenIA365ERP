@@ -49,7 +49,7 @@ public sealed record MensajeEmitidoDto(string Type, Guid MessagePublicId);
 /// <c>ActivationId</c> y <c>ActivatedAt</c> (una sola vez), la carga <c>Activated</c>, el destino <c>Lending</c> habilitado en el registro
 /// por <see cref="EscritorDelRegistroDeIntegracion"/> en la misma transacción (C60) y <c>CarteraActivada</c> por <see cref="EmisionDeCartera"/>.</item>
 /// </list>
-/// US9 cablea el cierre base (T0708); US8 completa los
+/// US9 cablea el cierre base (T0708, <c>CierreBase</c>: con la carga vacía nace sin líneas); US8 completa los
 /// requisitos, el nacimiento de créditos por tandas de 1.000 con <c>ChangeTracker.Clear()</c> y los cobros provisionales (C60, C62). (nuevo)
 /// </summary>
 public sealed record ActivateLendingCommand(
@@ -80,7 +80,8 @@ public sealed class ActivateLendingCommandHandler(
     EmisionDeCartera emision,
     PuntoDeActaCerrado puntoDeActa,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<ActivateLendingCommand, Result<LendingActivationDto>>
+    IDateTimeService reloj,
+    Risk.CierreBase? cierreBase = null) : IRequestHandler<ActivateLendingCommand, Result<LendingActivationDto>>
 {
     /// <summary>El código del destino de Cartera que siembra <c>PlataformaParaCartera</c> inhabilitado (C35).</summary>
     public const string CodigoDelDestinoDeCartera = "CAR";
@@ -107,7 +108,9 @@ public sealed class ActivateLendingCommandHandler(
 
             var ahora = reloj.UtcNow;
             var activacionPublicId = Guid.NewGuid();
-            var mensaje = await emision.ActivacionAsync(activacionPublicId, request.ActivationDate, carga, cierreBase: null, capitalTotal: 0m, ct);
+            // US9 (T0708, C107): el cierre base nace con la activación; su PublicId va en CarteraActivada.
+            Guid? basePublicId = cierreBase is null ? null : Guid.NewGuid();
+            var mensaje = await emision.ActivacionAsync(activacionPublicId, request.ActivationDate, carga, cierreBase: basePublicId, capitalTotal: 0m, ct);
             if (mensaje.IsFailure) return Result.Failure<LendingActivationDto>(mensaje.Error);
 
             var activacion = new LendingActivation
@@ -153,7 +156,13 @@ public sealed class ActivateLendingCommandHandler(
             setup.ActivatedAt = ahora;
             await db.SaveChangesAsync(ct);
 
-            return Result.Success(new LendingActivationDto(activacion.PublicId, activacion.ActivationDate, 0, 0, null, 0, 0, 0, 0,
+            if (cierreBase is not null)
+            {
+                var creado = await cierreBase.CrearAsync(activacion, carga, basePublicId!.Value, usuario, ct);
+                if (creado.IsFailure) return Result.Failure<LendingActivationDto>(creado.Error);
+            }
+
+            return Result.Success(new LendingActivationDto(activacion.PublicId, activacion.ActivationDate, 0, 0, basePublicId, 0, 0, 0, 0,
                 [new MensajeEmitidoDto(mensaje.Value.Type, mensaje.Value.PublicId)]));
         }, ct);
     }

@@ -72,8 +72,12 @@ public sealed class ValidacionDeConcentracion(
     ExposicionConsolidadaDelDeudor exposicion,
     GrupoConectadoDelDeudor grupos,
     IAlertas alertas,
-    AlertasDiferidas? diferidas = null)
+    AlertasDiferidas? diferidas = null,
+    Risk.LectorDeIndicadoresDeLaEntidad? indicadores = null)
 {
+    /// <summary>US9 (T0703): el lector único de los indicadores con su vigencia (C33); la validación ya no lee el puerto por su cuenta.</summary>
+    private readonly Risk.LectorDeIndicadoresDeLaEntidad _indicadores = indicadores ?? new Risk.LectorDeIndicadoresDeLaEntidad(contabilidad, parametros);
+
     /// <summary>
     /// Mide la concentración. Falla sólo si no se puede medir (sin patrimonio técnico vigente, sin el límite legal); excedida, lo dice el
     /// resultado (<see cref="ResultadoDeConcentracion.Error"/>).
@@ -123,12 +127,9 @@ public sealed class ValidacionDeConcentracion(
     /// <summary>El patrimonio técnico vigente a la fecha y su corte, o el error con la alerta al contador.</summary>
     private async Task<Result<(decimal Patrimonio, DateOnly Corte)>> PatrimonioTecnicoAsync(DateOnly fecha, CancellationToken ct)
     {
-        var indicadores = await contabilidad.IndicadoresDeLaEntidadAsync(fecha, ct);
-        var meses = await parametros.LeerAsync(ParametrosDeCartera.ContabilidadIndicadoresVigenciaMeses, fecha, ct: ct);
-        var vigencia = meses.IsSuccess && meses.Value.Valor is int m ? m : (int?)null;
-        var tecnico = indicadores.IsSuccess ? indicadores.Value.TechnicalCapital : null;
-        var vigente = tecnico is { } t && t.Value > 0m && t.CutoffDate <= fecha && (vigencia is not { } v || t.CutoffDate >= fecha.AddMonths(-v));
-        if (vigente) return Result.Success((tecnico!.Value, tecnico.CutoffDate));
+        var leidos = await _indicadores.LeerAsync(fecha, ct);
+        var tecnico = leidos.PatrimonioTecnico;
+        if (leidos.PatrimonioTecnicoVigente) return Result.Success((tecnico!.Value, tecnico.CutoffDate));
 
         await AlertarAsync(new AlertaALevantar(TiposDeAlerta.PatrimonioTecnicoNoDisponible, "Patrimonio técnico no disponible",
             $"Al {ErroresDeOriginacion.Fecha(fecha)} no hay un patrimonio técnico vigente registrado en Contabilidad" +

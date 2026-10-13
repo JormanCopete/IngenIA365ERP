@@ -13,7 +13,8 @@ namespace IngenIA365ERP.Application.Lending.Processes;
 /// <summary>
 /// <c>POST /api/lending/process-runs/{id}/retry</c> (feature 013, US4, T0499; api.md §16.4, <c>Lending.Processes.Run</c>): con motivo, vuelve a
 /// encolar una corrida <c>Failed</c> o <c>CompletedWithErrors</c> (202). Retoma desde la marca de agua de cada crédito: el cursor vuelve al principio,
-/// R se toma de nuevo y la cuenta de fallidos empieza de cero; los errores anteriores quedan, y los resuelve el intento que tenga éxito. Otro estado
+/// R se toma de nuevo (salvo en el cierre mensual, que conserva su R y retoma las líneas que faltan) y la cuenta de fallidos empieza de cero; los
+/// errores anteriores quedan, y los resuelve el intento que tenga éxito. Otro estado
 /// → <c>Lending.ProcessRun.NotRetryable</c>. (nuevo)
 /// </summary>
 public sealed record RetryLendingProcessRunCommand(Guid ProcessRunPublicId, string Reason) : IRequest<Result<ProcessRunRequestedDto>>, IOperacionIdempotente
@@ -47,7 +48,8 @@ public sealed class RetryLendingProcessRunCommandHandler(IApplicationDbContext d
         corrida.RetryCount += 1;
         corrida.Reason = request.Reason.Trim();
         corrida.CursorLoanId = null;
-        corrida.InformationCutoffAt = null;
+        // US9 (T0705): el cierre conserva su R y su marca de agua: sus líneas ya guardadas valen y la tanda retoma sólo las que faltan.
+        if (corrida.Kind != LendingProcessKind.MonthlyClose) corrida.InformationCutoffAt = null;
         corrida.FailedLoans = 0;
         corrida.FinishedAt = null;
         corrida.CurrentStep = null;

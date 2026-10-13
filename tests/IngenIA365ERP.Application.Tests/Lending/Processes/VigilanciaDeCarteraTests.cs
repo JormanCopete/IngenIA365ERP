@@ -178,4 +178,30 @@ public class VigilanciaDeCarteraTests : IDisposable
         new VigilanciaDeCartera().DebeCorrer(new DateTimeOffset(2026, 12, 10, 8, 0, 0, TimeSpan.FromHours(-5)),
             new DateTimeOffset(2026, 12, 10, 7, 30, 0, TimeSpan.FromHours(-5))).Should().BeFalse("cada hora");
     }
+
+    /// <summary>
+    /// US9 (T0685, T0707; pregunta E6): pasado <c>Riesgo.DiaLimiteCierre</c> (10 por defecto) sin cierre vigente del mes anterior, alerta
+    /// <c>Cartera.CierreMensualPendiente</c> con el mes; hasta el día límite no, ni con el cierre hecho, ni por un mes anterior a la activación.
+    /// </summary>
+    [Fact]
+    public async Task Pasado_el_dia_limite_sin_cierre_del_mes_anterior_alerta_CierreMensualPendiente()
+    {
+        A(new DateOnly(2027, 1, 10), new TimeOnly(7, 0));
+        (await VigilarAsync()).Value.CierrePendiente.Should().BeNull("el día límite todavía es plazo");
+
+        A(new DateOnly(2027, 1, 11), new TimeOnly(7, 0));
+        var r = await VigilarAsync();
+
+        r.Value.CierrePendiente.Should().Be("2026-12");
+        _levantadas.Should().ContainSingle(a => a.TypeCode == TiposDeAlerta.CierreMensualPendiente)
+            .Which.DedupKey.Should().Be($"{TiposDeAlerta.CierreMensualPendiente}:2026-12");
+
+        _db.MonthlyCloses.Add(new Domain.Entities.Lending.Risk.MonthlyClose
+        {
+            Kind = MonthlyCloseKind.Monthly, PeriodYear = 2026, PeriodMonth = 12, Version = 1, CloseDate = new DateOnly(2026, 12, 31),
+            InformationCutoffAt = DateTime.UtcNow, LinesSha256 = new string('0', 64), OrderedAt = DateTime.UtcNow, ClosedAt = DateTime.UtcNow,
+        });
+        _db.SaveChanges();
+        (await VigilarAsync()).Value.CierrePendiente.Should().BeNull("con el cierre de diciembre hecho");
+    }
 }

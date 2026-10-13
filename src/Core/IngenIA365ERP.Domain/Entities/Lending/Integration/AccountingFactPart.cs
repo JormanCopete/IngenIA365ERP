@@ -7,8 +7,8 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Integration;
 /// <c>LND_AccountingFactParts</c> (feature 013, C.3; data-model §22.3; FR-125, FR-128, FR-130; T12, T14, T47, T56): parte de una
 /// tanda de hechos contables, el <b>origen</b> de su mensaje en la bandeja (nunca el crédito). Una parte = fuente × fecha ×
 /// sucursal contable × tipo de hecho × tanda. Hecho de sólo inserción (<see cref="IHechoInmutable"/>) sin diff de auditoría
-/// (C46; el evento resumen es el de la corrida). <see cref="MonthlyCloseId"/> y <see cref="MonthlyCloseReopeningId"/> no llevan
-/// FK hasta <c>CarteraRiesgo</c> (C66).
+/// (C46; el evento resumen es el de la corrida). <see cref="MonthlyCloseId"/> y <see cref="MonthlyCloseReopeningId"/> llevan
+/// FK desde <c>CarteraRiesgo</c> (C66).
 /// </summary>
 [SinDiffDeAuditoria]
 public class AccountingFactPart : AuditableEntity, IHechoInmutable
@@ -24,10 +24,10 @@ public class AccountingFactPart : AuditableEntity, IHechoInmutable
     /// <summary><c>LoanCatchUp</c>: la operación que pidió poner al día el crédito.</summary>
     public long? TriggerOperationId { get; init; }
 
-    /// <summary>Partes del cierre (T47). Sin FK hasta <c>CarteraRiesgo</c> (C66).</summary>
+    /// <summary>Partes del cierre (T47). FK desde <c>CarteraRiesgo</c> (C66).</summary>
     public int? MonthlyCloseId { get; init; }
 
-    /// <summary>Partes del reverso de cierre. Sin FK hasta <c>CarteraRiesgo</c> (C66).</summary>
+    /// <summary>Partes del reverso de cierre. FK desde <c>CarteraRiesgo</c> (C66).</summary>
     public int? MonthlyCloseReopeningId { get; init; }
 
     /// <summary>La parte del cierre que revierte: el <c>Related</c> del mensaje (T12).</summary>

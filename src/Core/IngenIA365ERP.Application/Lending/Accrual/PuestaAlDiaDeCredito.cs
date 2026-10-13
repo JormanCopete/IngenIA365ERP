@@ -183,7 +183,7 @@ public sealed class PuestaAlDiaDeCredito(
             var dd = datos[p.Control.LoanId];
             foreach (var t in p.Dias.Where(d => d.Transicion is not null).GroupBy(d => d.Transicion!.Clase).Select(g => g.Last()))
             {
-                var categoria = await new Integration.CategoriaContableDeCartera().VigenteAsync(p.Control.LoanId, t.Dia, ct);
+                var categoria = await new Integration.CategoriaContableDeCartera(db).VigenteAsync(p.Control.LoanId, t.Dia, ct);
                 var (tipo, contenido) = PosicionesDeCartera.HechoDeTransicion(dd, t.Transicion!, t.Estado, ahora,
                     Integration.EmisionDeCartera.Dimensiones(dd.Hecho(t.Dia), categoria));
                 hechos.Add(new HechoPorCredito(tipo, dd, t.Dia, contenido));

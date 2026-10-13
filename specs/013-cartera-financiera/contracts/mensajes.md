@@ -1127,6 +1127,7 @@ movimiento en `reasonCode` (C22).
 | `reason` | string | sí | Motivo de la reapertura |
 | `reversedPart` | `OriginalFactRefV1` | sí | El mensaje y la parte del cierre que revierte |
 | `reversedType` | string | sí | `CarteraReclasificadaPorCalificacion` o `DeterioroCalculado` |
+| `generalImpairment` **(nuevo, US9 bloque 12B)** | [`GeneralImpairmentLineV1`] | no | Sólo al revertir un `DeterioroCalculado` que traía general: el general y el adicional de la parte revertida, para que el reverso los deshaga también (sin esto la reapertura dejaba el general contabilizado). Opcional y aditivo: los consumidores que no lo conocen siguen leyendo el mensaje |
 
 ```json
 { "runKind": "CloseReopen", "runPublicId": "4d5e6f7a-8b9c-4d0e-8f1a-2b3c4d5e6f91", "catchUpOperation": null, "factDate": "2026-12-31", "batchNumber": 3, "partNumber": 7, "closeVersion": 1, "reopeningPublicId": "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a91", "reason": "Calificación por análisis registrada tarde", "reversedPart": { "messageId": "9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c81", "type": "DeterioroCalculado", "originPublicId": "6f7a8b9c-0d1e-4f2a-8b3c-4d5e6f7a8b81", "number": "CIE-202612-v1-0007" }, "reversedType": "DeterioroCalculado", "totals": [], "lines": [], "lineCount": 0, "controlTotal": 0.00 }

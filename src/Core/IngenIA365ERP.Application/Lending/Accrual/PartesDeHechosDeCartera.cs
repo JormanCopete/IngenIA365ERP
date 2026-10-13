@@ -149,13 +149,16 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         {
             var dia = porDia ? g.Key.Dia : g.Max(x => x.Linea.Dia);
             var fechaDelSobre = origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch ? origen.Corrida?.AffectedTo ?? dia : dia;
+            // US9 (T0711): la causación del día se fecha en su día aunque Cartera ya haya cerrado el mes (no ocurre: el cierre exige la causación al
+            // día); lo demás salta los meses cerrados por Cartera.
             var contable = await fechaContable.CalcularAsync(origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch
-                ? origen.FechaDeRegistro ?? dia : dia, ct);
+                ? origen.FechaDeRegistro ?? dia : dia, conCierreDeCartera: origen.Fuente != AccountingFactPartSource.DailyCycleBatch, ct);
             if (contable.IsFailure) return Result.Failure<PartesEmitidas>(contable.Error);
             var tanda = origen.Fuente == AccountingFactPartSource.LoanCatchUp ? 1 : origen.Tanda(dia);
             var numeroDeParte = SiguienteParte(origen, ref ordinal);
             var datosDelPrimero = g.First().Linea.Datos;
-            var categoria = await new CategoriaContableDeCartera().VigenteAsync(datosDelPrimero.Credito.Id, contable.Value, ct);
+            // US9 (T0702): la categoría contable vigente de cada crédito de la parte (antes, la del primero para todos).
+            var categorias = await new CategoriaContableDeCartera(db).VigentesAsync(g.Select(x => x.Linea.Datos.Credito.Id).Distinct().ToList(), contable.Value, ct);
 
             // Una línea por crédito (o por crédito y día valor fuera del ciclo diario).
             var lineasDelHecho = g.GroupBy(x => (x.Linea.Datos.Credito.Id, Dia: porDia ? DateOnly.MinValue : x.Linea.Dia))
@@ -163,7 +166,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                 .Select(l =>
                 {
                     var d = l.First().Linea.Datos;
-                    var dims = EmisionDeCartera.Dimensiones(d.Hecho(contable.Value), categoria);
+                    var dims = EmisionDeCartera.Dimensiones(d.Hecho(contable.Value), categorias[d.Credito.Id]);
                     var seguro = g.Key.Tipo == SeguroCausadoV1.Type;
                     return new LoanFactLineV1
                     {

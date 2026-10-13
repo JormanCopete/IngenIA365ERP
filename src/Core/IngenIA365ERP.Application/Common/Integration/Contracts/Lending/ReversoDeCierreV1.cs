@@ -50,4 +50,11 @@ public sealed record ReversoDeCierreV1
 
     /// <summary>Σ de los valores de las líneas, igual a Σ de los totales.</summary>
     public decimal ControlTotal { get; init; }
+
+    /// <summary>
+    /// US9 (bloque 12B): sólo al revertir un <c>DeterioroCalculado</c>, el general y el adicional de la parte revertida, con su movimiento, para que
+    /// la reapertura deshaga la parte entera (antes sólo viajaban las líneas por crédito y el general quedaba contabilizado dos veces al volver a
+    /// cerrar). Opcional: un reverso de una reclasificación no lo lleva.
+    /// </summary>
+    public IReadOnlyList<GeneralImpairmentLineV1>? GeneralImpairment { get; init; }
 }

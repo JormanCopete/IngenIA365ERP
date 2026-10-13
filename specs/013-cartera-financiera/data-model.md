@@ -2562,7 +2562,8 @@ transacción de la activación) y nunca cambia: su estado se deriva (`MonthlyClo
 | `ClosedAt` | datetime | no | instante de la transacción final |
 
 Índices: `UK_LND_MonthlyCloses_Period (Kind, PeriodYear, PeriodMonth, Version)`; `UK_LND_MonthlyCloses_Base (Kind)`
-filtrado `[Kind] = 1 AND [IsDeleted] = 0` (un solo base por cooperativa); `(CloseDate)`.
+filtrado `[Kind] = 1` (un solo base por cooperativa; sin `IsDeleted` en el filtro porque el cierre es un hecho y nunca se borra
+—enmienda del bloque 12B—); `(CloseDate)`.
 
 **Precondiciones de la orden** (T47; códigos **(nuevos)** salvo el último): cierre anterior vigente
 (`Lending.MonthlyClose.PreviousMissing`); el mes no tiene ya una versión vigente (`Lending.MonthlyClose.AlreadyClosed`);
@@ -5165,6 +5166,20 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.MonthlyClose.AccountingPeriodClosed` **(fijado aquí)** | 422 | «Contabilidad ya cerró {mes}: el cierre de Cartera de ese mes no se puede hacer ni reabrir.» | cerrar o reabrir (D12) | T47 |
 | `Lending.MonthlyClose.ReplicationUnavailable` **(fijado aquí)** | 422 | «No se pudieron sincronizar los valores nacionales con la central. Reintente en unos minutos.» | pregunta B7 | T39 |
 | `Lending.MonthlyClose.NotLast` **(fijado aquí)** | 422 | «Sólo se puede reabrir el último cierre.» | D12 | T47 |
+| `Lending.MonthlyClose.AlreadyClosed` **(nuevo, US9 bloque 12B, C111)** | 422 | «{mes} ya tiene un cierre vigente (versión {n}). Para volver a cerrarlo, reábralo primero.» (`data: { year, month, version, monthlyClosePublicId }`) | ordenar el cierre de un mes con versión vigente | T47 |
+| `Lending.MonthlyClose.MonthNotEnded` **(nuevo, US9 bloque 12B, C111)** | 422 | «{mes} todavía no termina (hoy es {hoy}): se cierra desde el día siguiente a su último día.» | ordenar o preparar el cierre de un mes en curso | T47 |
+| `Lending.MonthlyClose.BaseNotReopenable` **(nuevo, US9 bloque 12B, C111)** | 422 | «El cierre base de la activación no se reabre: es el saldo inicial de Cartera.» | reabrir el base | C58 |
+| `Lending.MonthlyClose.NotFound` **(nuevo, US9 bloque 12B, C111)** | 404 | «El cierre de Cartera no existe.» | consultas y reapertura | T47 |
+| `Lending.MonthlyClose.RegulationMissing` **(nuevo, US9 bloque 12B, C111)** | error de la corrida · 422 | «No se puede calificar ni deteriorar: {detalle}» | sin Anexo 1 vigente o sin catálogo al corte | T45 |
+| `Lending.MonthlyClose.LinesIncomplete` **(nuevo, US9 bloque 12B, C111)** | error de la corrida | «{n} créditos no tienen su línea del cierre: reintente la corrida para calcularlos antes de cerrar.» (`data.missingLoans`) | paso final con créditos sin línea | T47 |
+| `Lending.MonthlyClose.BaseAlreadyExists` **(nuevo, US9 bloque 12B, C111)** | 422 | «La cooperativa ya tiene su cierre base.» | `CreateBaseCloseCommand` con un base vigente | T49, C60 |
+| `Lending.RiskPolicy.RetroactiveValidFrom` **(nuevo, US9 bloque 12B, C111)** | 422 | «La política no puede regir desde el {desde}, antes de hoy ({hoy}): registre una que rija desde hoy o después.» | `AddRiskPolicyVersionCommand` | T45 |
+| `Lending.RiskPolicy.NotFound` **(nuevo, US9 bloque 12B, C111)** | 404 | «La versión de la política SARC no existe.» | validar | T45 |
+| `Lending.RiskPolicy.AlreadyValidated` **(nuevo, US9 bloque 12B, C111)** | 422 | «La versión {n} de la política SARC ya está validada.» | validar dos veces (`[EscrituraUnica]`) | T45 |
+| `Lending.AnalysisRating.NotWorse` **(nuevo, US9 bloque 12B, C111)** | 422 | «La calificación por análisis ({propuesta}) no es peor que la que dan las reglas ({reglas}): el análisis sólo puede empeorarla.» (`data: { ruleCategory, proposed }`) | `SetAnalysisRatingCommand` | FR-099 |
+| `Lending.AnalysisRating.AlreadyActive` **(nuevo, US9 bloque 12B, C111)** | 422 | «El crédito ya tiene una calificación por análisis vigente: levántela antes de poner otra.» (`data.analysisRatingPublicId`) | una vigente por crédito | FR-101 |
+| `Lending.AnalysisRating.NotActive` **(nuevo, US9 bloque 12B, C111)** | 422 | «La calificación por análisis ya se levantó o no está vigente.» | levantar una levantada | FR-101 |
+| `Lending.AnalysisRating.NotFound` **(nuevo, US9 bloque 12B, C111)** | 404 | «La calificación por análisis no existe.» | levantar | FR-101 |
 | `Lending.Segregation.Conflict` | 422 | «No puede {accion}: ya intervino en este expediente como {accionPrevia}.» | FR-005 | T66 |
 | `Lending.Security.UserWithoutPerson` | 422 | «Su usuario no está vinculado a una persona del maestro. Pida al administrador vincularlo en Usuarios.» | radicar, decidir, votar, desembolsar | T66 |
 | `Lending.Session.VoterExcluded` | 422 | «{persona} no puede votar este punto: {motivo}.» | radicador o interesado | T64 |

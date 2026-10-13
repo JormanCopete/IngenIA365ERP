@@ -195,7 +195,8 @@ public sealed class ConductorDeCorridasDeCartera(
             BatchNumber = corrida.BatchCount + 1,
             AttemptNumber = corrida.RetryCount + 1,
             Step = PasoDeLaCorrida,
-            ErrorCode = ex.GetType().Name,
+            // US9 (bloque 12B): una regla de Cartera que detiene la corrida (requisitos del cierre) se anota con su código.
+            ErrorCode = ex is Domain.Lending.ReglaDeCarteraException regla ? regla.Codigo : ex.GetType().Name,
             ErrorMessage = mensaje.Length > LargoDelMensaje ? mensaje[..LargoDelMensaje] : mensaje,
             OccurredAt = ahora,
         });

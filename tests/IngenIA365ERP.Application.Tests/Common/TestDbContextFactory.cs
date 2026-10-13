@@ -450,6 +450,13 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote> PromissoryNotes => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult> ScreeningResults => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink> LoanPayrollLinks => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose> MonthlyCloses => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan> MonthlyCloseLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment> MonthlyCloseGeneralImpairments => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening> MonthlyCloseReopenings => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry> LoanArrearsHistory => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating> AnalysisRatings => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion> RiskPolicyVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition> LoanDailyPositions => Set<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>();
@@ -574,6 +581,16 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Transactions.LoanTransaction>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan>(b => b.Ignore(x => x.EnlaceValido));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating>(b => b.Ignore(x => x.Vigente));
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion>(b => b.Ignore(x => x.Status));
 
         modelBuilder.Entity<User>(b =>
         {

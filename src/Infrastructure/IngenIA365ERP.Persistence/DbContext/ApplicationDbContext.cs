@@ -554,6 +554,14 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRunError> LendingProcessRunErrors => Set<IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRunError>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.InsolvencyProceeding> InsolvencyProceedings => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.InsolvencyProceeding>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.InsuranceClaim> InsuranceClaims => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.InsuranceClaim>();
+    // Feature 013, US9 (T0697): riesgo y cierres (CarteraRiesgo).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose> MonthlyCloses => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan> MonthlyCloseLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment> MonthlyCloseGeneralImpairments => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening> MonthlyCloseReopenings => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry> LoanArrearsHistory => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating> AnalysisRatings => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion> RiskPolicyVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan> Loans => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl> LoanControls => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty> LoanParties => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty>();

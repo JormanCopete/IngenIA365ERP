@@ -203,6 +203,30 @@ public class ProcesadorDeCarteraTests
         (await c.Db.LendingProcessRuns.SingleAsync(r => r.Id == correccion.Id)).Status.Should().Be(LendingProcessRunStatus.Completed);
     }
 
+    /// <summary>
+    /// US9 (T0685; data-model §22.1, C59): el cierre mensual y la reapertura van al final del orden, después de la corrección y del ciclo, una corrida
+    /// a la vez y nunca cruzadas con la causación; los dos tienen ejecutor registrado en la aplicación.
+    /// </summary>
+    [Fact]
+    public async Task El_cierre_y_la_reapertura_van_despues_de_la_causacion_una_a_la_vez()
+    {
+        var c = Activada("C");
+        Corrida(c, LendingProcessKind.CloseReopen, minutosAtras: 40);
+        Corrida(c, LendingProcessKind.MonthlyClose, minutosAtras: 30);
+        Corrida(c, LendingProcessKind.DailyCycle);
+        var conducidas = new List<LendingProcessKind>();
+        AvanceDeCorrida Anotar(LendingProcessRun r) { conducidas.Add(r.Kind); return AvanceDeCorrida.Terminada; }
+        var (pasada, _) = Pasada([c], new EjecutorDePrueba(LendingProcessKind.MonthlyClose, Anotar), new EjecutorDePrueba(LendingProcessKind.CloseReopen, Anotar),
+            new EjecutorDePrueba(LendingProcessKind.DailyCycle, Anotar));
+
+        await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+
+        conducidas.Should().Equal([LendingProcessKind.DailyCycle, LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen]);
+        ConductorDeCorridasDeCartera.Clases.TakeLast(2).Should().Equal(LendingProcessKind.MonthlyClose, LendingProcessKind.CloseReopen);
+        typeof(Application.Lending.Risk.EjecutorDelCierreMensual).Should().Implement<IEjecutorDeCorridaDeCartera>();
+        typeof(Application.Lending.Risk.EjecutorDeLaReapertura).Should().Implement<IEjecutorDeCorridaDeCartera>();
+    }
+
     [Fact]
     public async Task Una_excepcion_del_ejecutor_deja_la_corrida_Failed_con_su_error_y_sigue_con_la_siguiente_cooperativa()
     {

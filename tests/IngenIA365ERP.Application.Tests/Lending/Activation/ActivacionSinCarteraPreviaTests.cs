@@ -126,8 +126,9 @@ public class ActivacionSinCarteraPreviaTests
 
     private ApplyMigrationLoadCommandHandler Aplicar() => new(_db, Emision(), new LectorDeParametros(_db), _actor, _reloj);
 
-    private ActivateLendingCommandHandler Activar() =>
-        new(_db, _cerrojo, Requisitos(), new EscritorDelRegistroDeIntegracion(_db, _ambiente, _actor, _reloj), Emision(), new PuntoDeActaCerrado(_db), _actor, _reloj);
+    private ActivateLendingCommandHandler Activar(bool conCierreBase = false) =>
+        new(_db, _cerrojo, Requisitos(), new EscritorDelRegistroDeIntegracion(_db, _ambiente, _actor, _reloj), Emision(), new PuntoDeActaCerrado(_db), _actor, _reloj,
+            conCierreBase ? new IngenIA365ERP.Application.Lending.Risk.CierreBase(_db, new IngenIA365ERP.Application.Common.NationalValues.LectorDeDocumentoNormativo(_db), _reloj) : null);
 
     private async Task<MigrationLoadDto> CargaAplicadaAsync()
     {
@@ -315,6 +316,33 @@ public class ActivacionSinCarteraPreviaTests
         var segunda = await Activar().Handle(Orden(carga.PublicId, punto), default);
         segunda.Error.Code.Should().Be("Lending.Activation.AlreadyActivated");
         (await _db.LendingActivations.CountAsync()).Should().Be(1);
+    }
+
+    /// <summary>
+    /// US9 (T0679, T0708; C107, T49): con la carga vacía la activación crea el cierre base sin líneas, fechado al corte y enlazado a la activación,
+    /// y lo nombra en <c>CarteraActivada</c>: el primer cierre mensual tiene así su <c>PreviousClose</c>. Sin hechos ni partes.
+    /// </summary>
+    [Fact]
+    public async Task Activar_crea_el_cierre_base_sin_lineas_y_lo_nombra_en_CarteraActivada()
+    {
+        RegistrarDobles();
+        var carga = await CargaAplicadaAsync();
+
+        var r = await Activar(conCierreBase: true).Handle(Orden(carga.PublicId, Acta(carga.PublicId)), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var activacion = await _db.LendingActivations.AsNoTracking().SingleAsync();
+        var cierre = await _db.MonthlyCloses.AsNoTracking().SingleAsync();
+        cierre.Should().BeEquivalentTo(new
+        {
+            Kind = MonthlyCloseKind.Base, PeriodYear = (short)Corte.Year, PeriodMonth = (byte)Corte.Month, Version = 1, CloseDate = Corte,
+            ActivationId = (int?)activacion.Id, ProcessRunId = (int?)null, PreviousCloseId = (int?)null, LoanCount = 0, TotalIndividualImpairment = 0m,
+        }, o => o.ExcludingMissingMembers());
+        r.Value.BaseClosePublicId.Should().Be(cierre.PublicId);
+        (await _db.MonthlyCloseLoans.CountAsync()).Should().Be(0);
+        (await _db.AccountingFactParts.CountAsync()).Should().Be(0, "el base no emite hechos (FR-140)");
+        var activada = await _db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == CarteraActivadaV1.Type);
+        activada.PayloadJson.Should().Contain($"\"baseClosePublicId\":\"{cierre.PublicId:D}\"");
     }
 
     [Fact]

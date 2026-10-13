@@ -117,7 +117,7 @@ public sealed partial class EmisionDeCartera
         ArgumentNullException.ThrowIfNull(p);
         var h = p.Hecho;
         var op = p.Operacion;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var dimensiones = Dimensiones(h, categoria) with { CollectorClass = p.Recaudador.Class.ToString() };
         var registrado = new DateTimeOffset(DateTime.SpecifyKind(op.RegisteredAt, DateTimeKind.Utc));
 
@@ -198,7 +198,7 @@ public sealed partial class EmisionDeCartera
     {
         ArgumentNullException.ThrowIfNull(r);
         var h = r.Hecho;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var dimensiones = Dimensiones(h, categoria) with { CollectorClass = r.Recaudador.CollectorClass };
         var original = await HechoOriginalAsync(r.Pago.PublicId, PagoAplicadoV1.Type, r.Pago.Number, ct);
         var principal = new PagoReversadoV1
@@ -266,7 +266,7 @@ public sealed partial class EmisionDeCartera
         var tipo = await db.LendingFactTypes.AsNoTracking().Where(f => f.Code == CausacionReanudadaV1.Type && !f.IsDeleted)
             .Select(f => (Guid?)f.PublicId).FirstOrDefaultAsync(ct);
         if (tipo is not { } tipoDeHecho) return null;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var contenido = new CausacionReanudadaV1
         {
             Loan = h.Referencia,
@@ -301,7 +301,7 @@ public sealed partial class EmisionDeCartera
     {
         ArgumentNullException.ThrowIfNull(r);
         var h = r.Hecho;
-        var categoria = await new CategoriaContableDeCartera().VigenteAsync(h.Credito.Id, h.FechaContable, ct);
+        var categoria = await new CategoriaContableDeCartera(db).VigenteAsync(h.Credito.Id, h.FechaContable, ct);
         var contenido = new SaldoAFavorResueltoV1
         {
             Loan = h.Referencia,

@@ -13,6 +13,9 @@ namespace IngenIA365ERP.Application.Tests.Lending.Common;
 /// <c>UK_{Tabla}_PublicId</c>, filtro de borrado lógico y FK <c>Restrict</c>; ninguna FK sale hacia Contabilidad, Comercial, Nómina
 /// ni Ahorros; los hechos de alto volumen son <c>bigint</c>; ningún nombre de índice pasa de 63 caracteres; los únicos de hechos y
 /// controles no filtran por borrado; las marcas H y <c>[SinDiffDeAuditoria]</c> son exactamente las fijadas.
+///
+/// <para>US9 (bloque 12B, T0697): suma las siete tablas de <c>CarteraRiesgo</c> (data-model §23.1–§23.6, §23.10) con sus marcas, y las FK de
+/// <c>LND_AccountingFactParts</c> hacia el cierre y su reapertura, que la base dejó sin crear (C66).</para>
 /// </summary>
 public class ModeloDeCarteraNucleoTests
 {
@@ -49,6 +52,9 @@ public class ModeloDeCarteraNucleoTests
         "LND_MigrationRelatedParties", "LND_MigrationChargedOff", "LND_MigrationSales", "LND_MigrationArrearsHistory",
         // Grupo conectado (C112)
         "LND_ConnectedGroups", "LND_ConnectedGroupMembers",
+        // Riesgo y cierres (US9, CarteraRiesgo)
+        "LND_RiskPolicyVersions", "LND_MonthlyCloses", "LND_MonthlyCloseLoans", "LND_MonthlyCloseGeneralImpairments", "LND_MonthlyCloseReopenings",
+        "LND_LoanArrearsHistory", "LND_AnalysisRatings",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -71,12 +77,14 @@ public class ModeloDeCarteraNucleoTests
         "DisbursementOrderResult", "DisbursementFile", "DisbursementFileLine", "InstallmentNonDeduction",
         "LendingInboundMessageEvaluation", "AccountingFactPart", "DebtorMessage", "DebtorMessageEvent", "PriorNotice",
         "IssuedLendingDocument", "IssuedDocumentLoan", "IssuedDocumentEvent", "MigrationLoadDifference", "ProvisionalCollection",
-        "LendingActivation", .. Preparacion,
+        "LendingActivation", "MonthlyClose", "MonthlyCloseLoan", "MonthlyCloseGeneralImpairment", "MonthlyCloseReopening", "LoanArrearsHistoryEntry",
+        "RiskPolicyVersion", .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
     private static readonly string[] SinDiff =
-        ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", .. Preparacion];
+        ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
+            .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
@@ -101,7 +109,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(93, "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112)");
+        Tablas.Should().HaveCount(100, "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9)");
     }
 
     [Theory]
@@ -182,7 +190,7 @@ public class ModeloDeCarteraNucleoTests
 
     [Theory]
     [MemberData(nameof(Motores))]
-    public void La_activacion_y_el_setup_no_forman_ciclo_y_el_cierre_no_tiene_FK_todavia(bool postgres)
+    public void La_activacion_y_el_setup_no_forman_ciclo_y_las_partes_apuntan_al_cierre(bool postgres)
     {
         var modelo = Modelo(postgres);
         var setup = modelo.FindEntityType(typeof(Domain.Entities.Lending.Configuration.LendingSetup))!;
@@ -192,8 +200,9 @@ public class ModeloDeCarteraNucleoTests
 
         var partes = modelo.FindEntityType(typeof(Domain.Entities.Lending.Integration.AccountingFactPart))!;
         partes.FindProperty("MonthlyCloseId").Should().NotBeNull();
-        partes.GetForeignKeys().SelectMany(fk => fk.Properties).Select(p => p.Name)
-            .Should().NotContain(["MonthlyCloseId", "MonthlyCloseReopeningId"], "las FK hacia el riesgo las crea CarteraRiesgo (C66)");
+        // US9 (T0697, C66): CarteraRiesgo crea las FK hacia el cierre y su reapertura.
+        partes.GetForeignKeys().Should().Contain(fk => fk.Properties.Single().Name == "MonthlyCloseId" && fk.PrincipalEntityType.GetTableName() == "LND_MonthlyCloses")
+            .And.Contain(fk => fk.Properties.Single().Name == "MonthlyCloseReopeningId" && fk.PrincipalEntityType.GetTableName() == "LND_MonthlyCloseReopenings");
     }
 
     private static IModel Modelo(bool postgres)

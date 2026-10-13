@@ -7,6 +7,8 @@ using IngenIA365ERP.Application.Accounting.Lending;
 using IngenIA365ERP.Application.Accounting.Lending.Consultas;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
+using IngenIA365ERP.Domain.Entities.Lending.Risk;
+using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using MediatR;
 using NSubstitute;
@@ -174,5 +176,77 @@ public sealed class FechaContableTests
         var calcular = () => fecha.CalcularAsync(Valor, default);
 
         await calcular.Should().ThrowAsync<InvalidOperationException>("Principio IX: sin fecha supuesta, la operación falla entera");
+    }
+
+    // --------------------------------------------------------------------------------------- mitad de Cartera (US9, T0675, T0711) --
+
+    /// <summary>Un cierre de Cartera del mes en la base de pruebas; reabierto si <paramref name="reabierto"/>.</summary>
+    private static MonthlyClose Cierre(TestApplicationDbContext db, int anio, int mes, MonthlyCloseKind clase = MonthlyCloseKind.Monthly, bool reabierto = false)
+    {
+        var fin = MonthlyClose.UltimoDiaDe(anio, mes);
+        var cierre = new MonthlyClose
+        {
+            Kind = clase, PeriodYear = (short)anio, PeriodMonth = (byte)mes, Version = 1, CloseDate = fin, InformationCutoffAt = DateTime.UtcNow,
+            DocumentsUsedJson = "[]", ModelBySegmentJson = "[]", TotalsJson = "{}", LinesSha256 = new string('0', 64), OrderedAt = DateTime.UtcNow,
+            ClosedAt = DateTime.UtcNow,
+        };
+        db.MonthlyCloses.Add(cierre);
+        db.SaveChanges();
+        if (reabierto)
+        {
+            db.MonthlyCloseReopenings.Add(new MonthlyCloseReopening { MonthlyCloseId = cierre.Id, ProcessRunId = 1, Reason = "Ajuste", ReopenedByUserId = 1, ReopenedAt = DateTime.UtcNow });
+            db.SaveChanges();
+        }
+        return cierre;
+    }
+
+    [Fact]
+    public async Task Un_mes_que_Cartera_ya_cerro_se_salta_al_primer_dia_del_siguiente_sin_cierre()
+    {
+        Estado(true, EstadoDePeriodoContable.Open);
+        using var db = TestDbContextFactory.Create();
+        Cierre(db, 2026, 12);
+        Cierre(db, 2027, 1);
+
+        var fecha = await new FechaContable(_contabilidad, _alertas, db).CalcularAsync(Valor, default);
+
+        fecha.Value.Should().Be(new DateOnly(2027, 2, 1), "diciembre y enero tienen cierre de Cartera vigente (T36, FR-078)");
+    }
+
+    [Fact]
+    public async Task Un_cierre_reabierto_o_el_base_no_cuentan()
+    {
+        Estado(true, EstadoDePeriodoContable.Open);
+        using var db = TestDbContextFactory.Create();
+        Cierre(db, 2026, 12, reabierto: true);
+        Cierre(db, 2026, 12, MonthlyCloseKind.Base);
+
+        (await new FechaContable(_contabilidad, _alertas, db).CalcularAsync(Valor, default)).Value.Should().Be(Valor);
+    }
+
+    [Fact]
+    public async Task La_causacion_y_los_hechos_del_cierre_no_saltan_el_mes_cerrado_por_Cartera()
+    {
+        Estado(true, EstadoDePeriodoContable.Open);
+        using var db = TestDbContextFactory.Create();
+        Cierre(db, 2026, 12);
+
+        (await new FechaContable(_contabilidad, _alertas, db).CalcularAsync(Valor, conCierreDeCartera: false, default)).Value.Should().Be(Valor);
+    }
+
+    [Fact]
+    public async Task Si_Contabilidad_lleva_la_fecha_a_un_mes_que_Cartera_cerro_se_vuelve_a_mirar()
+    {
+        _contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(ci =>
+        {
+            var f = ci.Arg<DateOnly>();
+            return f.Month == 12 && f.Year == 2026
+                ? Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Closed, new DateOnly(2027, 1, 1)))
+                : Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Open, f));
+        });
+        using var db = TestDbContextFactory.Create();
+        Cierre(db, 2027, 1);
+
+        (await new FechaContable(_contabilidad, _alertas, db).CalcularAsync(Valor, default)).Value.Should().Be(new DateOnly(2027, 2, 1));
     }
 }

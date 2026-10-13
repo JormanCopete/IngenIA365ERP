@@ -1,7 +1,10 @@
 using System.Globalization;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Enums.Lending;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Integration;
 
@@ -27,14 +30,58 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// <para>
 /// Es una lectura en proceso sobre la misma base: si falla, falla la operación (Principio IX), sin fecha supuesta. (nuevo)
 /// </para>
+/// <para>
+/// US9 (T0711; T36, §8, FR-078, FR-080): la mitad de Cartera. Mientras el mes de la fecha tenga un <b>cierre mensual de Cartera vigente</b> (no
+/// reabierto), la fecha pasa al primer día del mes siguiente, y así hasta un mes sin cierre; después decide Contabilidad como siempre (y si
+/// Contabilidad la corre a un mes que Cartera ya cerró, se vuelve a mirar). El cierre base no cuenta: el primer cierre mensual tras la activación
+/// todavía no se hizo. La causación del día y los hechos del propio cierre (último día del mes) nunca saltan: piden la fecha con
+/// <c>conCierreDeCartera = false</c>.
+/// </para>
 /// </summary>
-public sealed class FechaContable(IContabilidadParaCartera contabilidad, IAlertas? alertas = null)
+public sealed class FechaContable(IContabilidadParaCartera contabilidad, IAlertas? alertas = null, IApplicationDbContext? db = null)
 {
     /// <summary>El permiso de quien abre períodos contables: el destinatario de la alerta de período inexistente.</summary>
     public const string PermisoDePeriodos = "Accounting.Periods.CloseYear";
 
-    /// <summary>La fecha contable de un hecho con fecha valor <paramref name="fechaValor"/>.</summary>
-    public async Task<Result<DateOnly>> CalcularAsync(DateOnly fechaValor, CancellationToken ct)
+    /// <summary>Cuántos meses seguidos se recorren a lo sumo buscando uno sin cierre (una cooperativa nunca tiene tantos cerrados adelante).</summary>
+    private const int MesesComoMaximo = 120;
+
+    /// <summary>La fecha contable de un hecho con fecha valor <paramref name="fechaValor"/>: salta los meses que Cartera ya cerró.</summary>
+    public Task<Result<DateOnly>> CalcularAsync(DateOnly fechaValor, CancellationToken ct) => CalcularAsync(fechaValor, conCierreDeCartera: true, ct);
+
+    /// <summary>
+    /// La fecha contable con o sin la mitad de Cartera: <paramref name="conCierreDeCartera"/> falso para la causación del día y los hechos del
+    /// cierre y su reapertura, que se fechan en su día aunque el mes ya tenga su cierre.
+    /// </summary>
+    public async Task<Result<DateOnly>> CalcularAsync(DateOnly fechaValor, bool conCierreDeCartera, CancellationToken ct)
+    {
+        var fecha = fechaValor;
+        for (var i = 0; i < MesesComoMaximo; i++)
+        {
+            if (conCierreDeCartera && db is not null && await MesCerradoPorCarteraAsync(fecha, ct))
+            {
+                fecha = new DateOnly(fecha.Year, fecha.Month, 1).AddMonths(1);
+                continue;
+            }
+            var contable = await DeContabilidadAsync(fecha, ct);
+            if (contable.IsFailure || contable.Value == fecha || !conCierreDeCartera || db is null) return contable;
+            fecha = contable.Value;
+        }
+        return Result.Success(fecha);
+    }
+
+    /// <summary>¿El mes de <paramref name="fecha"/> tiene un cierre mensual de Cartera vigente (no reabierto)?</summary>
+    public async Task<bool> MesCerradoPorCarteraAsync(DateOnly fecha, CancellationToken ct)
+    {
+        if (db is null) return false;
+        var anio = (short)fecha.Year;
+        var mes = (byte)fecha.Month;
+        return await db.MonthlyCloses.AsNoTracking().AnyAsync(c => !c.IsDeleted && c.Kind == MonthlyCloseKind.Monthly && c.PeriodYear == anio
+            && c.PeriodMonth == mes && !db.MonthlyCloseReopenings.Any(r => r.MonthlyCloseId == c.Id && !r.IsDeleted), ct);
+    }
+
+    /// <summary>La mitad contable (la de US3 y US7): el mes abierto, el primero abierto desde él o el inexistente con su alerta.</summary>
+    private async Task<Result<DateOnly>> DeContabilidadAsync(DateOnly fechaValor, CancellationToken ct)
     {
         var estado = await contabilidad.EstadoDelPeriodoAsync(fechaValor, ct);
         if (estado.IsFailure) return Result.Failure<DateOnly>(estado.Error);

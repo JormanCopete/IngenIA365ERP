@@ -99,6 +99,8 @@ public sealed class CorreccionDeValorNacional(
 
             var hechos = new List<HechoPorCredito>();
             var filas = new List<LoanTransaction>();
+            // US9 (T0702): la categoría contable vigente de cada crédito a la fecha contable del ajuste.
+            var categorias = await new CategoriaContableDeCartera(db).VigentesAsync(conAjuste.Select(c => c.Cargado.Credito.Id).ToList(), contable.Value, ct);
             foreach (var (cargado, diferencias) in conAjuste)
             {
                 var loanId = cargado.Credito.Id;
@@ -112,7 +114,7 @@ public sealed class CorreccionDeValorNacional(
                     {
                         Loan = dd.Referencia, DebtorPersonPublicId = dd.DeudorPublicId, ValueDate = aFavor[^1].Dia,
                         RegisteredAt = new DateTimeOffset(DateTime.SpecifyKind(ahora, DateTimeKind.Utc)),
-                        Dimensions = EmisionDeCartera.Dimensiones(dd.Hecho(contable.Value), CategoriaContableVigente.DeCreditoNuevo),
+                        Dimensions = EmisionDeCartera.Dimensiones(dd.Hecho(contable.Value), categorias[loanId]),
                         Amounts = [new ConceptAmountV1 { Concept = nameof(LoanConcept.CreditBalance), Amount = aFavor.Sum(x => x.Diferencia) }],
                         RulesVersion = dd.Condiciones.RulesVersion, Cause = PartesDeHechosDeCartera.CausaPorCorreccion,
                     }));

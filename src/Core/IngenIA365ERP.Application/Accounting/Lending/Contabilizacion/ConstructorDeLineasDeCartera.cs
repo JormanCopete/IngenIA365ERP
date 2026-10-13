@@ -641,7 +641,7 @@ public static class ConstructorDeLineasDeCartera
             // El espejo de la parte del cierre, con las dimensiones vigentes que trae cada línea y la matriz de su fecha (§9, §11.4).
             _invertirTodo = true;
             if (x.ReversedType == CarteraReclasificadaPorCalificacionV1.Type) Reclasificacion(x.Lines);
-            else Deterioro(x.Lines, null);
+            else Deterioro(x.Lines, x.GeneralImpairment);
             _invertirTodo = false;
         }
 

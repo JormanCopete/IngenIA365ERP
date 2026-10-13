@@ -161,6 +161,14 @@ public class LosComandosDeCarteraLlevanClave
         // US6 (bloque 10B, T0577): confirmar por excepción una validación fallida y marcar no reprocesable un recibo.
         typeof(IngenIA365ERP.Application.Lending.Loans.Commands.ConfirmValidationFailureCommand),
         typeof(IngenIA365ERP.Application.Lending.Integration.Comercial.MarkLendingInboundMessageNotRetryableCommand),
+        // US9 (bloque 12B, T0674): ordenar y reabrir el cierre (202), poner y levantar la calificación por análisis, y registrar y validar la
+        // política SARC. RiskEndpoints.cs se suma a Archivos con sus rutas (bloque 12C).
+        typeof(IngenIA365ERP.Application.Lending.Risk.OrderMonthlyCloseCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.ReopenMonthlyCloseCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.SetAnalysisRatingCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.LiftAnalysisRatingCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.AddRiskPolicyVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.ValidateRiskPolicyVersionCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

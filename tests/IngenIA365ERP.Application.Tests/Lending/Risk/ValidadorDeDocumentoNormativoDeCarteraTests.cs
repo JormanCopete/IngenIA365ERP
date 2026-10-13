@@ -64,6 +64,10 @@ public class ValidadorDeDocumentoNormativoDeCarteraTests
     [InlineData("\"rate\": 0.10 }", "\"rate\": 10 }", "porcentaje fuera de 0..1")]
     [InlineData("\"code\": \"MICROCREDITO\"", "\"code\": \"LEASING\"", "segmento desconocido")]
     [InlineData("\"admissibleFraction\": 0.50 }", "\"admissibleFraction\": 1.5 }", "fracción de garantía fuera de 0..1")]
+    // US9 (T0684): huecos entre categorías, subcategorías tipadas y tramos de garantía.
+    [InlineData("{ \"category\": \"B\", \"minDaysPastDue\": 31,", "{ \"category\": \"B\", \"minDaysPastDue\": 40,", "hueco entre A (hasta 30) y B")]
+    [InlineData("\"subcategory\": \"E1\"", "\"subcategory\": \"E9\"", "subcategoría que no existe")]
+    [InlineData("{ \"fromMonths\": 12, \"toMonths\": 24,", "{ \"fromMonths\": 14, \"toMonths\": 24,", "hueco entre tramos de garantía")]
     public void El_Anexo_1_que_rompe_la_forma_se_rechaza(string original, string roto, string porque)
     {
         Anexo1Semilla.Should().Contain(original);

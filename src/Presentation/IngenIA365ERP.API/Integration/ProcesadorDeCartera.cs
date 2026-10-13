@@ -20,6 +20,11 @@ namespace IngenIA365ERP.API.Integration;
 /// orden de data-model §22.1, crea el <c>DailyCycle</c> siguiente sólo con el anterior <c>Completed</c> o <c>CompletedWithErrors</c>,
 /// conduce las tandas desde <c>CursorLoanId</c> —la tanda que falla al guardar se reintenta crédito por crédito— y renueva
 /// <c>lending.process</c> entre tandas; la corrida cierra con <c>TotalsJson</c> y <c>ResultSha256</c> como evento resumen.</para>
+///
+/// <para>US9 (bloque 12B, T0707): el cierre mensual y su reapertura ya tienen ejecutor (<c>EjecutorDelCierreMensual</c>,
+/// <c>EjecutorDeLaReapertura</c>). El conductor los toma al final del orden de §22.1, uno a la vez y nunca a la par de la causación (una sola
+/// corrida <c>Running</c> por cooperativa); el cierre anota <c>CurrentStep</c> 1 (líneas por tandas) y 2 (transacción final) y se reintenta con
+/// <c>POST /api/lending/process-runs/{id}/retry</c>, que conserva R y retoma las líneas que faltan.</para>
 /// </summary>
 public sealed class ProcesadorDeCartera(
     PasadaDeCartera pasada,

@@ -276,6 +276,10 @@ try
     // Feature 013, US4 (T0502; DT §2.13): la vigilancia de los procesos de Cartera cada hora (ciclo de ayer, créditos sin causar, tareas diarias).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Processes.Tareas.VigilanciaDeCartera>();
+    // Feature 013, US9 (T0707; pregunta E6): cartera.cierre-programado una vez al dia; sale si Cartera no esta activada o el parametro
+    // Riesgo.CierreProgramado esta apagado (el defecto: el cierre es manual y la vigilancia alerta pasado el dia limite).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Risk.TareaDeCierreProgramado>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

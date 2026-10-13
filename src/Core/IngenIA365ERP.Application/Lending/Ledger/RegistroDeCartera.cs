@@ -447,10 +447,10 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
     /// <summary>
     /// La posición del día de un crédito armada desde su reconstrucción (data-model §6.1): saldos por concepto, capital vencido, altura de mora,
     /// suspensión, usura topada, tasa del día y la huella como <c>InputsSha256</c>. La versión la decide quien llama
-    /// (<see cref="PosicionVersionada"/>). La calificación diaria queda vacía hasta US9.
+    /// (<see cref="PosicionVersionada"/>). US9 (T0701): con la calificación informativa del día si el ciclo la calculó.
     /// </summary>
     public static LoanDailyPosition Posicion(EstadoDelCredito estado, Loan credito, LoanTermsVersion condiciones, int version, DateTime registradoEn,
-        LoanStatus? estadoDelCredito = null)
+        LoanStatus? estadoDelCredito = null, Risk.CalificacionDiaria? calificacion = null)
     {
         ArgumentNullException.ThrowIfNull(estado);
         ArgumentNullException.ThrowIfNull(credito);
@@ -486,6 +486,9 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             UsuryCapped = estado.UsuraTopada,
             AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA,
             InputsSha256 = estado.Huella,
+            // US9 (T0701): la copia de la calificación informativa del día (la calcula el ciclo con el mismo motor del cierre).
+            DailyRating = calificacion?.Categoria,
+            DailyRatingSubcategory = calificacion?.Subcategoria,
         };
     }
 
@@ -494,11 +497,11 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
     /// cambió (<paramref name="ultimaHuella"/>), con <c>Version</c> = la última + 1. Nunca sobrescribe. La agrega y devuelve; nula si no cambió.
     /// </summary>
     public LoanDailyPosition? PosicionVersionada(LoanControl control, EstadoDelCredito estado, Loan credito, LoanTermsVersion condiciones,
-        int ultimaVersion, string? ultimaHuella, DateTime registradoEn, LoanStatus? estadoDelCredito = null)
+        int ultimaVersion, string? ultimaHuella, DateTime registradoEn, LoanStatus? estadoDelCredito = null, Risk.CalificacionDiaria? calificacion = null)
     {
         ArgumentNullException.ThrowIfNull(estado);
         if (ultimaVersion > 0 && string.Equals(ultimaHuella, estado.Huella, StringComparison.Ordinal)) return null;
-        var posicion = Posicion(estado, credito, condiciones, ultimaVersion + 1, registradoEn, estadoDelCredito);
+        var posicion = Posicion(estado, credito, condiciones, ultimaVersion + 1, registradoEn, estadoDelCredito, calificacion);
         RegistrarPosicion(control, posicion);
         return posicion;
     }
