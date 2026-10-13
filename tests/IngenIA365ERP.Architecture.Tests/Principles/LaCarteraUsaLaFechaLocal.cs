@@ -102,6 +102,22 @@ public class LaCarteraUsaLaFechaLocal
         ReglaSobreFuente.SinInfracciones(infracciones, "La reconstrucción de Cartera no recibe R por parámetro (T24)");
     }
 
+    /// <summary>
+    /// US5 (T0526, T9): las reglas de fecha valor y el contrato de obligaciones están en el recorrido de la regla y miden «hoy» con la fecha local
+    /// (<c>HoyLocal</c>), nunca con la UTC: una fecha valor de las siete de la noche en Bogotá ya es mañana en UTC.
+    /// </summary>
+    [Fact]
+    public void Las_reglas_de_fecha_valor_y_el_contrato_usan_la_fecha_local()
+    {
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        foreach (var nombre in new[] { Path.Combine("Payments", "ReglasDeFechaValor.cs"), Path.Combine("Integration", "ContratoDeObligacionesDeCartera.cs") })
+        {
+            var archivo = archivos.SingleOrDefault(a => a.EndsWith(nombre, StringComparison.Ordinal));
+            Assert.True(archivo is not null, $"{nombre} no está en el recorrido de la regla.");
+            Assert.Contains("HoyLocal", FuenteSinComentarios.Leer(archivo!), StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public void Cartera_no_lee_el_reloj_por_su_cuenta()
     {

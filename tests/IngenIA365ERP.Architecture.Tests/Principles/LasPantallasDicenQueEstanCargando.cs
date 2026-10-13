@@ -48,6 +48,8 @@ public class LasPantallasDicenQueEstanCargando
         "Cartera/Aprobaciones.razor",
         "Cartera/Cupos.razor",
         "Cartera/Vinculados.razor",
+        // US5 (T0526, T0563): la caja de prueba con el recaudador y la tesorería de prueba.
+        "Cartera/DoblesDePrueba.razor",
     ];
 
     [Fact]

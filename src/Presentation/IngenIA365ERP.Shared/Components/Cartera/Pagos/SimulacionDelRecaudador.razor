@@ -1,0 +1,47 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, US5 (T0563): la simulación que el contrato le devuelve al recaudador: lo aplicado, el anticipo, el saldo a favor y el excedente,
+   la distribución, los saldos después, el plan nuevo y, en el abono extraordinario sin elección, las dos alternativas (con AlElegir, la
+   pantalla toma la huella de la elegida para aplicar en forma interactiva). Sólo muestra: no carga nada. *@
+<div class="kpi-grid">
+    <div class="kpi-card"><span class="kpi-label">@TextosDePagos.Modalidad(Simulacion.Modality)</span><span class="kpi-value">@TextosDeCreditos.Pesos(Simulacion.Amount)</span></div>
+    <div class="kpi-card"><span class="kpi-label">Aplicado</span><span class="kpi-value">@TextosDeCreditos.Pesos(Simulacion.AppliedAmount)</span></div>
+    <div class="kpi-card"><span class="kpi-label">Anticipo</span><span class="kpi-value">@TextosDeCreditos.Pesos(Simulacion.AdvanceAmount)</span></div>
+    <div class="kpi-card"><span class="kpi-label">Saldo a favor</span><span class="kpi-value">@TextosDeCreditos.Pesos(Simulacion.CreditBalanceAmount)</span></div>
+    <div class="kpi-card"><span class="kpi-label">Excedente</span><span class="kpi-value">@TextosDeCreditos.Pesos(Simulacion.Surplus)</span></div>
+</div>
+@foreach (var aviso in Simulacion.Notices) { <p class="aviso aviso-alerta">@aviso</p> }
+@if (Simulacion.Choice is { } eleccion) { <p class="texto-apoyo">Elección: @TextosDePagos.Eleccion(eleccion).</p> }
+<DistribucionDelContrato Lineas="@Simulacion.Distribution" />
+<p class="texto-apoyo">Después: capital @TextosDeCreditos.Pesos(Simulacion.BalancesAfter.Principal) · vencido @TextosDeCreditos.Pesos(Simulacion.BalancesAfter.PastDue)
+    · para cancelar @TextosDeCreditos.Pesos(Simulacion.BalancesAfter.PayoffAmount) · mora @Simulacion.BalancesAfter.DaysPastDue días.</p>
+@if (Simulacion.Alternatives.Count > 0)
+{
+    <div class="rejilla-tarjetas">
+        @foreach (var a in Simulacion.Alternatives)
+        {
+            var alternativa = a;
+            <div class="info-card">
+                <h4>@TextosDePagos.Eleccion(alternativa.Choice)</h4>
+                @if (alternativa.NewPlan is { } plan)
+                {
+                    <p>@plan.InstallmentCount cuotas de @TextosDeCreditos.Pesos(plan.InstallmentAmount)</p>
+                    <PlanDelPago Cuotas="@plan.Installments" />
+                }
+                @if (AlElegir.HasDelegate)
+                {
+                    <SfButton CssClass="e-outline e-small" OnClick="@(() => AlElegir.InvokeAsync(alternativa))">Elegir esta</SfButton>
+                }
+            </div>
+        }
+    </div>
+}
+else if (Simulacion.NewPlan is { } plan)
+{
+    <p class="texto-apoyo">Plan después del pago: @plan.InstallmentCount cuotas de @TextosDeCreditos.Pesos(plan.InstallmentAmount).</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public SimulacionDelContratoDto Simulacion { get; set; } = default!;
+    [Parameter] public EventCallback<SimulacionDelContratoDto> AlElegir { get; set; }
+}

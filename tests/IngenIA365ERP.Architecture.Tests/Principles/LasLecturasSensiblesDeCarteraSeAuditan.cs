@@ -90,6 +90,22 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
         Assert.Contains(AuditEventTypes.LendingRelatedPartyViewed, ListaCerrada);
     }
 
+    /// <summary>
+    /// US5 (T0526, C28): las dos lecturas del contrato de obligaciones (listar y simular) se auditan con su evento —<c>Lending.ObligationContract.Listed</c>
+    /// y <c>.Simulated</c>, con D, R y la huella— por el contexto aparte de <c>AuditoriaDeEscriturasDeCartera.LecturaAsync</c>. No son de la lista
+    /// cerrada de la pantalla: las hace un recaudador, no una persona mirando un expediente.
+    /// </summary>
+    [Fact]
+    public void Las_lecturas_del_contrato_de_obligaciones_se_auditan()
+    {
+        var texto = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Lending", "Integration",
+            "ContratoDeObligacionesDeCartera.cs"));
+        Assert.Matches(@"ListarAsync\([\s\S]*?auditoria\.LecturaAsync\(AuditEventTypes\.LendingObligationContractListed", texto);
+        Assert.Matches(@"SimularAsync\([\s\S]*?auditoria\.LecturaAsync\(AuditEventTypes\.LendingObligationContractSimulated", texto);
+        Assert.Equal("Lending.ObligationContract.Listed", AuditEventTypes.LendingObligationContractListed);
+        Assert.Equal("Lending.ObligationContract.Simulated", AuditEventTypes.LendingObligationContractSimulated);
+    }
+
     [Fact]
     public void Cada_lectura_de_esta_fase_llama_a_su_metodo_del_emisor()
     {

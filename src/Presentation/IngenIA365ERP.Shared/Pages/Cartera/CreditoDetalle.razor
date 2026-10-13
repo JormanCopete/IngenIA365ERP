@@ -2,6 +2,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Globalization
 @using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Components.Cartera.Pagos
 @inject CreditosClient Creditos
 @inject GarantiasClient Garantias
 @inject DesembolsosClient Desembolsos
@@ -14,7 +15,9 @@
    carga y leída al abrirla: resumen; liquidación a una fecha D «con la información hasta» R (Lending.Payoffs.Read, lectura auditada) con su
    explicación de días, base y tasa; estado de cuenta; el plan con sus versiones; las operaciones con su comprobante de aplicación; el libro
    (sólo lectura); y las garantías, el pagaré y las órdenes de giro. Liquidar no escribe nada: la misma (D, R) da siempre lo mismo y la huella lo
-   muestra. Fuera del alcance de oficina o línea el crédito no existe (el mismo 404). *@
+   muestra. Fuera del alcance de oficina o línea el crédito no existe (el mismo 404).
+   US5 (T0562): la pestaña «Simular pago» (Lending.Payments.Simulate; siete modalidades, sin aplicar: el pago entra por el recaudador), la
+   «Preferencia de abono» del deudor (Ley 2032) y, en el comprobante de un pago no reversado, su reverso con vista previa. *@
 <PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -31,6 +34,12 @@
             if (p == Pestana.Liquidacion)
             {
                 <PermissionGate Required="Lending.Payoffs.Read">
+                    <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+                </PermissionGate>
+            }
+            else if (p == Pestana.Simular)
+            {
+                <PermissionGate Required="Lending.Payments.Simulate">
                     <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
                 </PermissionGate>
             }
@@ -228,7 +237,7 @@
         <IndicadorDeCarga Cargando="@_cargaOperaciones.Activa">
             <div class="tabla-desplazable">
                 <table class="data-grid">
-                    <thead><tr><th>Número</th><th>Clase</th><th>Fecha valor</th><th>Fecha contable</th><th>Registrada</th><th class="numero">Valor</th><th>Quién</th></tr></thead>
+                    <thead><tr><th>Número</th><th>Clase</th><th>Fecha valor</th><th>Fecha contable</th><th>Registrada</th><th class="numero">Valor</th><th>Quién</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var o in _operaciones)
                         {
@@ -237,6 +246,14 @@
                                 <td>@operacion.Number</td><td>@TextosDeCreditos.ClaseDeOperacion(operacion.Kind)@(operacion.ReversedBy is not null ? " (reversada)" : "")</td>
                                 <td>@TextosDeCreditos.Fecha(operacion.ValueDate)</td><td>@TextosDeCreditos.Fecha(operacion.AccountingDate)</td>
                                 <td>@TextosDeCreditos.Instante(operacion.RegisteredAt)</td><td class="numero">@TextosDeCreditos.Pesos(operacion.Amount)</td><td>@operacion.Actor</td>
+                                <td>
+                                    @if (operacion.Kind == "Payment" && operacion.ReversedBy is null && TextosDePagos.QuienReversa(operacion.Collector?.Class) is null)
+                                    {
+                                        <PermissionGate Required="Lending.Payments.Reverse">
+                                            <span @onclick:stopPropagation="true"><SfButton CssClass="e-flat e-small" OnClick="@(() => VerComprobanteAsync(operacion.PublicId))">Reversar…</SfButton></span>
+                                        </PermissionGate>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -258,13 +275,42 @@
                             }
                         </tbody>
                     </table>
+                    @if (k.Operation.Collector is { } recaudador)
+                    {
+                        <p class="texto-apoyo">Recaudó: @TextosDePagos.ClaseDeRecaudador(recaudador.Class)@(recaudador.Code is { } codigo ? $" ({codigo})" : "")
+                            @if (k.Operation.MeansClass is { } medio) { <span> · medio: @TextosDePagos.ClaseDeMedio(medio)</span> }</p>
+                    }
+                    @if (k.Receipt is { } recibo)
+                    {
+                        <p class="texto-apoyo">
+                            @if (recibo.Modality is { } modalidad) { <span>@TextosDePagos.Modalidad(modalidad)</span> }
+                            @if (recibo.PrepaymentChoice is { } eleccion) { <span> · @TextosDePagos.Eleccion(eleccion)@(recibo.ChoiceFromPreference == true ? " (por la preferencia del deudor)" : "")</span> }
+                            @if (recibo.ReceiptNumber is { } numero) { <span> · recibo @numero@(recibo.ReceiptDate is { } fr ? $" del {TextosDeCreditos.Fecha(fr)}" : "")</span> }
+                            @if (recibo.ReceiptMeansReference is { } referencia) { <span> · referencia @referencia</span> }
+                            @if (recibo.Excess is > 0m) { <span> · excedente @TextosDeCreditos.Pesos(recibo.Excess.Value)</span> }
+                            @if (recibo.FinalityDate is { } firme) { <span> · en firme desde el @TextosDeCreditos.Fecha(firme)</span> }
+                        </p>
+                        @if (recibo.Reason is { } motivo) { <p class="texto-apoyo">Motivo: @motivo</p> }
+                    }
                     @if (k.Messages.Count > 0)
                     {
                         <p class="texto-tenue">Hechos emitidos: @string.Join(", ", k.Messages.Select(m => $"{m.Type} ({TextosDeCreditos.EstadoDeMensaje(m.Status)})"))</p>
                     }
                 </div>
+                @if (k.Operation.Kind == "Payment")
+                {
+                    <ReversoDePago CreditoId="@Id" Operacion="@k.Operation" Reversado="@AlReversarAsync" />
+                }
             }
         </IndicadorDeCarga>
+    }
+    else if (_pestana == Pestana.Simular)
+    {
+        <SimuladorDePago CreditoId="@Id" />
+    }
+    else if (_pestana == Pestana.Preferencia)
+    {
+        <PreferenciaDePrepago CreditoId="@Id" />
     }
     else if (_pestana == Pestana.Libro)
     {
@@ -334,12 +380,13 @@
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Libro, Garantias }
+    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias }
 
     private static readonly (Pestana, string)[] Pestanas =
     [
         (Pestana.Resumen, "Resumen"), (Pestana.Liquidacion, "Liquidación"), (Pestana.Estado, "Estado de cuenta"), (Pestana.Plan, "Plan de pagos"),
-        (Pestana.Operaciones, "Operaciones"), (Pestana.Libro, "Libro"), (Pestana.Garantias, "Garantías y giro"),
+        (Pestana.Operaciones, "Operaciones"), (Pestana.Simular, "Simular pago"), (Pestana.Preferencia, "Preferencia de abono"), (Pestana.Libro, "Libro"),
+        (Pestana.Garantias, "Garantías y giro"),
     ];
 
     private readonly EstadoDeCarga _cargaResumen = new(), _cargaLiquidacion = new(), _cargaEstado = new(), _cargaPlan = new(), _cargaOperaciones = new(),
@@ -432,6 +479,20 @@
         var r = await Creditos.OperacionAsync(Id, operacion);
         if (!r.IsSuccess) { _comprobante = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el comprobante."); return; }
         _comprobante = r.Value;
+    }
+
+    /// <summary>
+    /// Tras un reverso cambian las operaciones, el libro, el estado de cuenta y el plan: se vuelven a leer las operaciones con el comprobante del
+    /// pago reversado, y las otras pestañas se leen otra vez al abrirlas.
+    /// </summary>
+    private async Task AlReversarAsync(PagoReversadoDto reverso)
+    {
+        _leidas.RemoveWhere(p => p is Pestana.Estado or Pestana.Plan or Pestana.Libro);
+        _liquidacion = null;
+        _versiones = [];
+        var pago = _comprobante?.Operation.PublicId;
+        await CargarOperacionesAsync();
+        if (pago is { } id) await VerComprobanteAsync(id);
     }
 
     private async Task CargarLibroAsync(int pagina)

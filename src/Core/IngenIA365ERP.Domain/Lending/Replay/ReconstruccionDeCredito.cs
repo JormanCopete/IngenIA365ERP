@@ -755,6 +755,9 @@ public static class ReconstruccionDeCredito
                 ?? (operacion.Monto is { } monto ? new ContenidoDePago(PaymentModality.FreeAmount, monto) : null)
                 ?? throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoOperacionNoSoportada,
                     "El pago no trae su decisión (modalidad y valor): la reconstrucción no lo puede redistribuir.", "operation", operacion.Id));
+            // Un pago que volvió entero al recaudador como excedente (D5: la cuota ya estaba pagada por otro medio) deja la operación como
+            // constancia y nada en el crédito. Fase 9: la reconstrucción lo distribuía por cero y la aprobación de la nómina terminaba en un 500.
+            if (pago.Valor <= 0m) return;
             var estado = contexto.Instantanea(operacion.FechaValor);
             var solicitud = new SolicitudDeDistribucion(pago.Modalidad, pago.Valor, operacion.FechaValor) { Eleccion = pago.Eleccion, Cuota = pago.Cuota };
             var prelacion = contexto.Condiciones.Prelacion;

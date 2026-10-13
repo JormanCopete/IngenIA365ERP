@@ -144,6 +144,32 @@ public sealed class ElReversoEnlazaCadaFilaConSuOriginalTests
         return (conPagos, libro, hasta, v1);
     }
 
+    /// <summary>
+    /// Fase 9 (defecto hallado por la e2e de Nómina): un pago que Cartera devolvió entero como excedente (D5) queda con un valor tomado de cero; la
+    /// reconstrucción lo deja como constancia sin tocar el crédito, en vez de distribuir cero y lanzar.
+    /// </summary>
+    [Fact]
+    public void Un_pago_devuelto_entero_como_excedente_no_mueve_el_credito()
+    {
+        var (entrada, _, hasta, _) = LibroConDosPagos();
+        var v = entrada.Operaciones[^1].FechaValor.AddDays(1);
+        var conDevuelto = entrada with
+        {
+            Operaciones =
+            [
+                .. entrada.Operaciones,
+                new EntradaDeOperacion("P3", LoanOperationKind.Payment, v, CreditosDePrueba.Instante(v), 4)
+                    { Contenido = new ContenidoDePago(PaymentModality.CycleInstallment, 0m) },
+            ],
+        };
+
+        var con = MotorDeCartera.Reconstruir(conDevuelto, hasta, entrada.Operaciones[0].FechaValor);
+        var sin = MotorDeCartera.Reconstruir(entrada, hasta, entrada.Operaciones[0].FechaValor);
+
+        con.Libro.Movimientos.Should().BeEquivalentTo(sin.Libro.Movimientos, o => o.WithStrictOrdering());
+        con.Libro.Movimientos.Should().NotContain(m => m.OperacionId == "P3");
+    }
+
     [Fact]
     public void El_reverso_de_un_pago_espeja_cada_fila_propia_del_pago_y_nada_mas()
     {

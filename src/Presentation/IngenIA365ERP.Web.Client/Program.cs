@@ -134,6 +134,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesem
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
+// Feature 013, US5 (T0561): pagos por pantalla (simular, reversar, preferencia del deudor).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.PagosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();
 // Feature 009: cliente tipado de contabilidad (mismo molde que NominaClient).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.ContabilidadClient>();

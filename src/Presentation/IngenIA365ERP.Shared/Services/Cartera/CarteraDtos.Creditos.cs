@@ -107,9 +107,9 @@ public sealed record DistribucionDeOperacionDto(int? Installment, string Concept
 
 public sealed record MensajeDeOperacionDto(string Type, Guid MessagePublicId, string Status);
 
-/// <summary>El comprobante de aplicación: la operación, su distribución y sus mensajes (FR-077).</summary>
+/// <summary>El comprobante de aplicación: la operación, su distribución, sus mensajes y, en un pago o su reverso, el recibo (FR-077; US5).</summary>
 public sealed record ComprobanteDeOperacionDto(OperacionDelCreditoDto Operation, IReadOnlyList<DistribucionDeOperacionDto> Distribution,
-    IReadOnlyList<MensajeDeOperacionDto> Messages);
+    IReadOnlyList<MensajeDeOperacionDto> Messages, ReciboDeOperacionDto? Receipt = null);
 
 /// <summary>Una fila del libro (sólo lectura).</summary>
 public sealed record FilaDelLibroDto(

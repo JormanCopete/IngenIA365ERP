@@ -33,4 +33,32 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
             ReglaSobreFuente.ArchivosEn(Carpetas), Prohibidos, relativo => Exentos.Contains(relativo));
         ReglaSobreFuente.SinInfracciones(infracciones, "Alguien escribe el libro de Cartera fuera de RegistroDeCartera (FR-001)");
     }
+
+    /// <summary>
+    /// US5 (T0526, C45): el contrato de obligaciones, la aplicación, el reverso, la resolución de saldos y el cambio de preferencia
+    /// (<c>Application/Lending/Payments</c> y <c>Application/Lending/Integration</c>) están dentro del recorrido de la regla y escriben la operación,
+    /// el libro y el plan por <c>RegistroDeCartera</c>.
+    /// </summary>
+    [Fact]
+    public void Los_pagos_y_el_contrato_escriben_el_libro_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        string[] escritores =
+        [
+            "Core/IngenIA365ERP.Application/Lending/Payments/AplicacionDePagos.cs",
+            "Core/IngenIA365ERP.Application/Lending/Payments/ReversionDePago.cs",
+            "Core/IngenIA365ERP.Application/Lending/Payments/ResolucionDeSaldoAFavor.cs",
+            "Core/IngenIA365ERP.Application/Lending/Payments/Commands/ChangePrepaymentPreferenceCommand.cs",
+        ];
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(escritores).ToList();
+        Assert.Equal(escritores.Length, nombrados.Count);
+        var infracciones = new List<string>();
+        foreach (var archivo in nombrados)
+        {
+            if (!recorridos.Contains(archivo)) infracciones.Add($"{archivo}: fuera del recorrido de la regla");
+            if (!FuenteSinComentarios.Leer(archivo).Contains("RegistroDeCartera", StringComparison.Ordinal)) infracciones.Add($"{archivo}: no escribe por RegistroDeCartera");
+        }
+        Assert.Contains(recorridos, a => a.EndsWith(Path.Combine("Integration", "ContratoDeObligacionesDeCartera.cs"), StringComparison.Ordinal));
+        ReglaSobreFuente.SinInfracciones(infracciones, "Los pagos de Cartera no escriben el libro por RegistroDeCartera (C45)");
+    }
 }

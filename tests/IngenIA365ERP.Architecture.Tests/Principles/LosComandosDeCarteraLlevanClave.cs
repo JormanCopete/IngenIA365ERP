@@ -51,6 +51,8 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/TestDoublesEndpoints.cs",
         // US4 (bloque 8C, T0506): ordenar y reintentar corridas. IntegrityEndpoints no está: su única ruta es una consulta por POST.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/ProcessRunsEndpoints.cs",
+        // US5 (bloque 9C, T0558): el reverso por pantalla y la preferencia; la simulación y la vista previa del reverso son consultas por POST.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PaymentsEndpoints.cs",
     ];
 
     /// <summary>
@@ -62,7 +64,9 @@ public class LosComandosDeCarteraLlevanClave
     private static readonly string[] ConsultasPorPost =
         ["\"/preview\"", "/usury-check\"", "\"/schedule\"", "\"/schedule/pdf\"", "/download-link\"", "/disbursement-preview\"", "/refresh\"",
             // US4 (bloque 8C): verificar el libro (api.md §16.5: no corrige nada).
-            "\"/verify\""];
+            "\"/verify\"",
+            // US5 (bloque 9C): simular un pago, la vista previa de su reverso y la simulación del recaudador de prueba (no escriben).
+            "/payment-simulations\"", "/reversal-preview\"", "\"/collector/simulations\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -155,6 +159,28 @@ public class LosComandosDeCarteraLlevanClave
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);
+
+    /// <summary>
+    /// US5 (T0526, T21): el contrato de obligaciones no es una escritura de pantalla: su clave es la de negocio del recaudador (<c>NOM:</c>,
+    /// <c>TST:</c>, <c>CAR:</c>…) y la idempotencia la resuelve el contrato por <c>(CollectorCode, IdempotencyKey)</c>. Ni sus solicitudes ni su
+    /// implementación son <c>IOperacionIdempotente</c>, que exigiría la <c>Idempotency-Key</c> de pantalla.
+    /// </summary>
+    [Fact]
+    public void Los_metodos_del_contrato_no_son_operaciones_idempotentes_de_pantalla()
+    {
+        var idempotente = typeof(IngenIA365ERP.Application.Common.Behaviors.IOperacionIdempotente);
+        Type[] delContrato =
+        [
+            typeof(IngenIA365ERP.Application.Common.Integration.Lending.SolicitudDeAplicacion),
+            typeof(IngenIA365ERP.Application.Common.Integration.Lending.SolicitudDeReverso),
+            typeof(IngenIA365ERP.Application.Common.Integration.Lending.SolicitudDeResolucion),
+            typeof(IngenIA365ERP.Application.Common.Integration.Lending.SolicitudDeSimulacion),
+            typeof(IngenIA365ERP.Application.Common.Integration.Lending.SolicitudDeListado),
+            typeof(IngenIA365ERP.Application.Lending.Integration.ContratoDeObligacionesDeCartera),
+        ];
+        var infractores = delContrato.Where(idempotente.IsAssignableFrom).Select(t => t.Name).ToList();
+        ReglaSobreFuente.SinInfracciones(infractores, "El contrato de obligaciones usa la clave de pantalla en vez de la de negocio (T21)");
+    }
 
     [Fact]
     public void Cada_escritura_de_Cartera_exige_la_clave_salvo_las_consultas_por_POST()

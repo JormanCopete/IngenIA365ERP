@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,7 +12,9 @@ namespace IngenIA365ERP.Application.Lending.Loans;
 /// <c>GET /api/lending/loans/{id}/operations/{operationId}</c> (feature 013, US4, T0504; api.md §8.1, <c>Lending.Loans.Read</c>; FR-077): el
 /// <b>comprobante de aplicación</b> de una operación: la operación, su distribución por cuota y concepto (las filas del libro que escribió) y sus
 /// mensajes —los que la tienen por origen y los de las partes de la puesta al día que pidió— con el estado de su entrega.
-/// <c>Lending.LoanOperation.NotFound</c> si no es del crédito. (nuevo)
+/// <c>Lending.LoanOperation.NotFound</c> si no es del crédito. US5 (T0560): en un pago, una resolución o un reverso, también el recibo del recaudador como
+/// referencia, la modalidad y la elección, el excedente, la firmeza y el motivo (<see cref="OperationReceiptDto"/>); clase de medio, pagador,
+/// <c>reverses</c>/<c>reversedBy</c> van en la operación. (nuevo)
 /// </summary>
 public sealed record GetLoanOperationQuery(Guid LoanPublicId, Guid OperationPublicId) : IRequest<Result<LoanOperationDetailDto>>;
 
@@ -44,9 +47,13 @@ public sealed class GetLoanOperationQueryHandler(IApplicationDbContext db, IAlca
             .ToListAsync(ct);
 
         var dto = (await OperacionesDelCredito.DtosAsync(db, [op], ct))[0];
+        var recibo = op.Kind is LoanOperationKind.Payment or LoanOperationKind.PaymentReversal or LoanOperationKind.CreditBalanceResolution
+            ? new OperationReceiptDto(op.IdempotencyKey, op.PaymentModality?.ToString(), op.PrepaymentChoice?.ToString(), op.ChoiceFromPreference, op.ExcessAmount,
+                op.FinalityDate, op.ReceiptNumber, op.ReceiptDate, op.ReceiptMeansReference, op.Reason, op.PrevalidationOutcome)
+            : null;
         return Result.Success(new LoanOperationDetailDto(dto,
             distribucion.OrderBy(d => d.InstallmentNumber ?? 0).ThenBy(d => (int)d.Concept)
                 .Select(d => new OperationDistributionDto(d.InstallmentNumber, d.Concept.ToString(), d.Monto)).ToList(),
-            mensajes.Select(m => new OperationMessageDto(m.Type, m.PublicId, m.Estado ?? string.Empty)).ToList()));
+            mensajes.Select(m => new OperationMessageDto(m.Type, m.PublicId, m.Estado ?? string.Empty)).ToList(), recibo));
     }
 }

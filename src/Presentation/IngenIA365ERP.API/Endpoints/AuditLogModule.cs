@@ -88,6 +88,8 @@ public sealed class AuditLogModule : ICarterModule
             // Feature 012 (T423): ?modules=Inventory,Approvals&result=Rejected.
             Modules = string.IsNullOrWhiteSpace(q.Modules) ? null : q.Modules.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             Outcome = q.Result,
+            // Feature 013 (T0560, A11): ?operationKey= junta el intento y el hecho del contrato de obligaciones.
+            OperationKey = q.OperationKey,
         }, ct);
 
     private static async Task<IResult> ExportCsvAsync(
@@ -147,7 +149,8 @@ public sealed record AuditQueryParams(
     int? Page = null,
     int? PageSize = null,
     string? Modules = null,
-    string? Result = null);
+    string? Result = null,
+    string? OperationKey = null);
 
 public sealed record AuditExportParams(
     string? UserId,

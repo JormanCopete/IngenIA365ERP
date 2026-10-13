@@ -59,6 +59,21 @@ public sealed class RecaudoPorNomina(IContratoDeObligaciones contrato)
     /// <summary>La clave de un pago de Nómina (interfaces §3.10, T21): la versión aprobada de la corrida y la obligación.</summary>
     public static string Clave(Guid runPublicId, Guid obligationPublicId) => $"NOM:{runPublicId:N}:{obligationPublicId:N}";
 
+    /// <summary>El largo del número del recibo que el contrato admite (<c>LND_LoanOperations.ReceiptNumber</c>, varchar(40)).</summary>
+    public const int LargoDelRecibo = 40;
+
+    /// <summary>
+    /// El recibo con su número dentro de los 40 caracteres que admite el contrato (feature 013, fase 9: con la descripción del período en el número,
+    /// «Nómina Primera quincena de noviembre de 2026 v1» pasaba de 40, el contrato rechazaba el lote entero por forma y la nómina se aprobaba sin
+    /// recaudar nada; en el reverso, la base respondía un 500).
+    /// </summary>
+    public static ReferenciaDeRecibo Recibo(ReferenciaDeRecibo recibo)
+    {
+        ArgumentNullException.ThrowIfNull(recibo);
+        var numero = recibo.Number.Trim();
+        return numero.Length <= LargoDelRecibo ? recibo with { Number = numero } : recibo with { Number = numero[..LargoDelRecibo].TrimEnd() };
+    }
+
     /// <summary>Aplica el lote. Sin pagos ni no descontados no llama a Cartera.</summary>
     public async Task<ResultadoDelLoteDeNomina> AplicarAsync(LoteDeNomina lote, CancellationToken ct)
     {
@@ -72,7 +87,7 @@ public sealed class RecaudoPorNomina(IContratoDeObligaciones contrato)
             FormaDeAplicacion.NonInteractive,
             pagos.Select(p => new PagoAAplicar(
                 Clave(lote.RunPublicId, p.ObligationPublicId), p.ObligationPublicId, p.Modalidad, p.Valor, lote.FechaValor,
-                ClaseDeMedioDeRecaudo.OwnPayrollDeduction, p.PagadorPublicId, lote.Recibo)).ToList(),
+                ClaseDeMedioDeRecaudo.OwnPayrollDeduction, p.PagadorPublicId, Recibo(lote.Recibo))).ToList(),
             noDescontados.Select(n => new NoDescontado(
                 Clave(lote.RunPublicId, n.ObligationPublicId), n.ObligationPublicId, null, n.Esperado, n.NoDescontado,
                 n.Motivo, n.Detalle, n.FilaPublicId)).ToList());
@@ -89,7 +104,7 @@ public sealed class RecaudoPorNomina(IContratoDeObligaciones contrato)
     /// <summary>Reversa el pago que Nómina aplicó por esa obligación en esa versión de la corrida.</summary>
     public Task<RespuestaDelContratoDto<ComprobanteDeReversoDto>> ReversarAsync(
         Guid runPublicId, Guid obligationPublicId, string motivo, ReferenciaDeRecibo? recibo, CancellationToken ct) =>
-        contrato.ReversarAsync(new SolicitudDeReverso(Recaudador.Nomina, Clave(runPublicId, obligationPublicId), motivo, recibo), ct);
+        contrato.ReversarAsync(new SolicitudDeReverso(Recaudador.Nomina, Clave(runPublicId, obligationPublicId), motivo, recibo is null ? null : Recibo(recibo)), ct);
 
     /// <summary>
     /// Simula un pago de valor libre sin escribir (DE-06): el ajuste de un descuento de la definitiva muestra el saldo exacto que

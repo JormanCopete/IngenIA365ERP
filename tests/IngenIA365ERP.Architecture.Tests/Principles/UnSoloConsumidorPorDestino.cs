@@ -21,6 +21,10 @@ public class UnSoloConsumidorPorDestino
         IntegrationDestinations.Accounting,
         // US3 (bloque 7C, T0428): DestinoCartera; el de Treasury es el doble (TesoreriaDePrueba) hasta que exista Tesorería.
         IntegrationDestinations.Lending,
+        // US5 (T0526): los dobles ocupan el destino del real hasta que exista: TesoreriaDePrueba el de Treasury y RecaudadorDePrueba el de
+        // Receipts (sólo fuera de producción; en producción esos destinos no tienen consumidor hasta que lleguen Tesorería y Recaudo).
+        IntegrationDestinations.Treasury,
+        IntegrationDestinations.Receipts,
     ];
 
     private static IReadOnlyList<string> TodosLosDestinos() => typeof(IntegrationDestinations)

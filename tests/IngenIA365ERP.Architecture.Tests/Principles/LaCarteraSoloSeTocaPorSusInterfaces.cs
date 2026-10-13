@@ -48,6 +48,10 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         // US3 (bloque 7C, T0428): el desembolso, su reverso, las garantías, el pagaré y el archivo de desembolsos. La recogida paga por
         // IContratoDeObligaciones; la cuenta de origen llega por IContabilidadParaCartera; el formato y el motor del archivo son de Common.
         "Core/IngenIA365ERP.Application/Lending/Disbursements",
+        // US5 (T0526): los pagos (aplicar, reversar, resolver, preferencia) y el contrato real con sus dobles. Nómina llega sólo por
+        // IContratoDeObligaciones / IConsultaDeObligaciones; Contabilidad por IContabilidadParaCartera; la mensajería y el registro son de Common.
+        "Core/IngenIA365ERP.Application/Lending/Payments",
+        "Core/IngenIA365ERP.Application/Lending/Integration",
     ];
 
     /// <summary>Espacios de otros módulos que el ArchUnit revisa (los de <see cref="CarpetasDeOtrosModulos"/>).</summary>
@@ -143,6 +147,20 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
             .Select(t => t.FullName)
             .ToList();
         Assert.True(ajenos.Count == 0, "Implementan un puerto de Cartera fuera de su espacio: " + string.Join(", ", ajenos));
+    }
+
+    /// <summary>
+    /// US5 (T0526): las implementaciones reales son las de Cartera —<c>ContratoDeObligacionesDeCartera</c> y <c>ObligacionesDeCartera</c>— y
+    /// <c>DependencyInjection</c> registra ellas, no los provisionales «sin activar» de la fase 3.
+    /// </summary>
+    [Fact]
+    public void Las_implementaciones_reales_del_contrato_y_la_consulta_son_de_Cartera()
+    {
+        Assert.True(typeof(IContratoDeObligaciones).IsAssignableFrom(typeof(IngenIA365ERP.Application.Lending.Integration.ContratoDeObligacionesDeCartera)));
+        Assert.True(typeof(IConsultaDeObligaciones).IsAssignableFrom(typeof(IngenIA365ERP.Application.Lending.Integration.ObligacionesDeCartera)));
+        var di = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
+        Assert.Matches(@"IContratoDeObligaciones,\s*[\w.]*ContratoDeObligacionesDeCartera>", di);
+        Assert.Matches(@"IConsultaDeObligaciones,\s*[\w.]*ObligacionesDeCartera>", di);
     }
 
     [Theory]

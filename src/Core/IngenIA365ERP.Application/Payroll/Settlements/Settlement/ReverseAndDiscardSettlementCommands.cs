@@ -80,7 +80,7 @@ public sealed class ReverseSettlementCommandHandler(
                 pagos.Clear();
 
                 // --- los recaudos de Cartera se reversan por el contrato, todo o nada (R105) ---
-                var recibo = new ReferenciaDeRecibo($"Reversión de la liquidación definitiva v{corrida.Version}", clock.HoyLocal, null, null, "Liquidacion");
+                var recibo = new ReferenciaDeRecibo($"Reversión liquidación definitiva v{corrida.Version}", clock.HoyLocal, null, null, "Liquidacion");
                 foreach (var d in terminacion.Deductions.Where(d => !d.IsDeleted && d.Status == SettlementDeductionStatus.Applied
                                                                     && d.Kind == SettlementDeductionKind.CooperativeLoan && d.AppliedAmount > 0m
                                                                     && d.ObligationPublicId is not null && d.CarteraTransactionPublicId is not null)

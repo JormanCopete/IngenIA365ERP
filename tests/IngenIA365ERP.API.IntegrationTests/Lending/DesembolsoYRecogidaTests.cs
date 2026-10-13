@@ -30,9 +30,10 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <item>el archivo de desembolsos con <c>CSV-DESEMBOLSOS</c>: SHA-256, enlace firmado auditado, anulación antes de resultados y
 /// <c>HasResults</c> después.</item>
 /// </list>
-/// <b>Pendiente de la fase 9 (US5)</b>: la recogida de créditos propios (US3-3, US3-4) y el recogido que vuelve a <c>Active</c> al anular (C11)
-/// pagan y reversan por <c>IContratoDeObligaciones</c>, que hasta el contrato real responde «Cartera no activada» a todo; sus casos se suman a
-/// esta clase con el contrato (notas de coordinación de tasks.md). (nuevo)
+/// Con el contrato real de obligaciones (fase 9, US5, T0527): la recogida de un crédito propio al día paga por el contrato (<c>OwnLoanPayoff</c>,
+/// clave <c>CAR:</c>) y deja el comprobante, el neto, el enlace y <c>PagoAplicado</c> (US3-3); la de uno en mora responde
+/// <c>Lending.Payoff.RequiresRestructuring</c>, también en la vista previa (US3-4); y anular el crédito nuevo tras el giro rechazado reversa la
+/// recogida por el contrato y el recogido vuelve a <c>Active</c> con <c>PagoReversado</c> (US3-6, C11). (nuevo)
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
@@ -214,6 +215,100 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
 
         var otraVez = await CarteraE2E.ConClaveAsync(http, esc.Usuarios.Jefe.Token, HttpMethod.Post, $"{Creditos}/{credito}/void", new { reason = "Otra vez" });
         await InventarioE2E.FallaAsync(otraVez, "Lending.Loan.NotPendingDisbursement");
+    }
+
+    /// <summary>Radica con <c>asesor.o1</c> una solicitud que autoriza recoger <paramref name="recoger"/> y la aprueba con <c>analista</c>.</summary>
+    private static async Task<Guid> AprobadaConRecogidaAsync(HttpClient http, Escenario esc, Guid persona, decimal monto, Guid recoger)
+    {
+        var asesor = esc.Usuarios.AsesorO1.Token;
+        var radicada = await OriginacionE2E.RadicarAsync(http, asesor, new
+        {
+            applicantPersonPublicId = persona, officePublicId = esc.Usuarios.O1.AgenciaPublicId, creditLinePublicId = esc.Originacion.Origen,
+            purpose = "Libre inversión con recogida (e2e)", amount = monto, installments = 36, periodicity = "Monthly", amortizationSystem = "LevelPayment",
+            paymentForm = "Cashier", prepaymentPreference = "ReduceTerm",
+            applicantCapacity = new { monthlyIncome = 40_000_000m, monthlyExpenses = 2_000_000m, externalInstallments = 0m },
+            ownLoanPayoffs = new[] { new { loanPublicId = recoger, mode = "Full" } },
+        });
+        var id = radicada.GetProperty("publicId").GetGuid();
+        var (_, huella) = await OriginacionE2E.EnrutamientoAsync(http, asesor, id);
+        var aprobada = await OriginacionE2E.DecidirAsync(http, esc.Usuarios.Analista.Token, "applications", id, "Approve", huella);
+        aprobada.StatusCode.Should().Be(HttpStatusCode.Created, await aprobada.Content.ReadAsStringAsync());
+        return id;
+    }
+
+    [Fact]
+    public async Task La_recogida_de_un_credito_al_dia_paga_por_el_contrato_y_anular_el_nuevo_lo_devuelve_a_vivo()
+    {
+        var esc = await EscenarioAsync(fx);
+        using var http = fx.CreateClient();
+        var jefe = esc.Usuarios.Jefe.Token;
+        var (persona, _) = await DeudorAsync(http, esc.Coop.TokenAdmin, "Recogida");
+        var (anterior, _) = await AprobadaAsync(http, esc, persona, 1_000_000m);
+        var recogido = (await DesembolsarAsync(http, esc, Desembolso(esc, anterior, persona))).GetProperty("loanPublicId").GetGuid();
+
+        // US3-3: la recogida del crédito al día, el mismo día: lo que cuesta cancelarlo sale del bruto.
+        var solicitud = await AprobadaConRecogidaAsync(http, esc, persona, 3_000_000m, recogido);
+        var cuerpo = Desembolso(esc, solicitud, persona);
+        cuerpo["ownLoanPayoffs"] = new[] { new { loanPublicId = recogido, mode = "Full" } };
+        var previa = await CarteraE2E.ExitoAsync(http, jefe, HttpMethod.Post, $"/api/lending/applications/{solicitud}/disbursement-preview", cuerpo);
+        var enPrevia = previa.GetProperty("payoffs").EnumerateArray().Single();
+        enPrevia.GetProperty("requiresRestructuring").GetBoolean().Should().BeFalse();
+        var aCancelar = enPrevia.GetProperty("toPayOff").GetDecimal();
+        aCancelar.Should().BePositive();
+
+        var hecho = await DesembolsarAsync(http, esc, cuerpo);
+        var recogida = hecho.GetProperty("payoffs").EnumerateArray().Single();
+        recogida.GetProperty("loanPublicId").GetGuid().Should().Be(recogido);
+        recogida.GetProperty("applied").GetDecimal().Should().Be(aCancelar);
+        hecho.GetProperty("netToDisburse").GetDecimal().Should().Be(3_000_000m - aCancelar, "el neto descuenta lo recogido");
+        hecho.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("type").GetString())
+            .Should().Contain(["CreditoDesembolsado", "OrdenDeGiroEmitida"]);
+        (await PagosE2E.EstadoAsync(fx, esc, recogido)).Should().Be(LoanStatus.PaidOff);
+        var pago = (await PagosE2E.OperacionesAsync(fx, esc, recogido)).Single(o => o.Clase == LoanOperationKind.Payment);
+        pago.Clave.Should().StartWith("CAR:", "la recogida paga por el contrato como OwnLoanPayoff (T91)");
+        pago.PublicId.Should().Be(recogida.GetProperty("receiptOperationPublicId").GetGuid());
+        (await PagosE2E.MensajesAsync(fx, esc, pago.PublicId)).Should().Contain("PagoAplicado");
+
+        // US3-6, C11: el giro rechazado deja el nuevo pendiente; anularlo reversa la recogida y el recogido vuelve a estar vivo.
+        var nuevo = hecho.GetProperty("loanPublicId").GetGuid();
+        var mensaje = await ResultadoDelGiroAsync(http, esc, hecho.GetProperty("order").GetProperty("publicId").GetGuid(), "Rejected");
+        (await ConsumirAsync(fx, esc, mensaje)).Should().BeOfType<ResultadoDeConsumo.Processed>();
+        var anulado = await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Creditos}/{nuevo}/void", new { reason = "El deudor desistió (e2e)" });
+        anulado.StatusCode.Should().Be(HttpStatusCode.OK, await anulado.Content.ReadAsStringAsync());
+        (await PagosE2E.EstadoAsync(fx, esc, nuevo)).Should().Be(LoanStatus.Voided);
+        (await PagosE2E.EstadoAsync(fx, esc, recogido)).Should().Be(LoanStatus.Active, "anular el crédito reversa sus recogidas (C11)");
+        var operaciones = await PagosE2E.OperacionesAsync(fx, esc, recogido);
+        operaciones.Single(o => o.Clave == pago.Clave).ReversadaPor.Should().NotBeNull();
+        var reverso = operaciones.Single(o => o.Clase == LoanOperationKind.PaymentReversal);
+        reverso.Clave.Should().Be($"{pago.Clave}:reverso");
+        (await PagosE2E.MensajesAsync(fx, esc, reverso.PublicId)).Should().Contain("PagoReversado");
+    }
+
+    [Fact]
+    public async Task La_recogida_de_un_credito_en_mora_es_una_reestructuracion()
+    {
+        var esc = await EscenarioAsync(fx);
+        using var http = fx.CreateClient();
+        var (persona, _) = await DeudorAsync(http, esc.Coop.TokenAdmin, "RecogidaEnMora");
+        var (anterior, _) = await AprobadaAsync(http, esc, persona, 1_000_000m);
+        var enMora = (await DesembolsarAsync(http, esc, Desembolso(esc, anterior, persona))).GetProperty("loanPublicId").GetGuid();
+        var vence = (await PagosE2E.CuotaAsync(http, esc.Usuarios.Jefe.Token, enMora)).Vence;
+
+        using (CausacionE2E.RelojEn(fx, vence.AddDays(3)))
+        {
+            var solicitud = await AprobadaConRecogidaAsync(http, esc, persona, 3_000_000m, enMora);
+            var cuerpo = Desembolso(esc, solicitud, persona);
+            cuerpo["ownLoanPayoffs"] = new[] { new { loanPublicId = enMora, mode = "Full" } };
+            var previa = await CarteraE2E.ExitoAsync(http, esc.Usuarios.Jefe.Token, HttpMethod.Post, $"/api/lending/applications/{solicitud}/disbursement-preview", cuerpo);
+            var recogida = previa.GetProperty("payoffs").EnumerateArray().Single();
+            recogida.GetProperty("requiresRestructuring").GetBoolean().Should().BeTrue();
+            recogida.GetProperty("daysPastDue").GetInt32().Should().Be(3);
+
+            var rechazado = await CarteraE2E.ConClaveAsync(http, esc.Usuarios.Jefe.Token, HttpMethod.Post, Desembolsos, cuerpo);
+            var error = await InventarioE2E.FallaAsync(rechazado, "Lending.Payoff.RequiresRestructuring");
+            error.GetProperty("data").GetProperty("loans").EnumerateArray().Should().Contain(l => l.GetProperty("loanPublicId").GetGuid() == enMora);
+            (await PagosE2E.EstadoAsync(fx, esc, enMora)).Should().Be(LoanStatus.Active);
+        }
     }
 
     [Fact]

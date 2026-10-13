@@ -132,6 +132,8 @@ public sealed class SolicitudDeReversoValidator : AbstractValidator<SolicitudDeR
         RuleFor(x => x.Collector).NotNull().SetValidator(new RecaudadorValidator());
         RuleFor(x => x.PaymentIdempotencyKey).NotEmpty().MaximumLength(GramaticaDeClaves.LargoMaximo).WithErrorCode("PaymentIdempotencyKey");
         RuleFor(x => x.Reason).NotEmpty().WithErrorCode("Reason").WithMessage("Diga por qué se reversa el pago.").MaximumLength(500);
+        // Fase 9: el número del recibo cabe en LND_LoanOperations.ReceiptNumber (40); sin esta regla la base respondía un 500.
+        RuleFor(x => x.Receipt!.Number).NotEmpty().MaximumLength(40).When(x => x.Receipt is not null).WithErrorCode("ReceiptNumber");
     }
 }
 
@@ -150,6 +152,7 @@ public sealed class SolicitudDeResolucionValidator : AbstractValidator<Solicitud
         RuleFor(x => x.Amount).Must(a => decimal.Round(a, 2) == a).WithErrorCode("AmountPrecision");
         RuleFor(x => x.Form).IsInEnum().WithErrorCode("Form");
         RuleFor(x => x.Receipt).NotNull().WithErrorCode("Receipt");
+        RuleFor(x => x.Receipt.Number).NotEmpty().MaximumLength(40).When(x => x.Receipt is not null).WithErrorCode("ReceiptNumber");
         RuleFor(x => x.TargetObligationPublicId).NotNull().NotEqual(Guid.Empty).When(x => x.Form == FormaDeResolucion.ApplyToOtherObligation)
             .WithErrorCode("TargetObligationPublicId").WithMessage("Diga a qué obligación se aplica el saldo.");
         RuleFor(x => x.TargetModality).NotNull().IsInEnum().When(x => x.Form == FormaDeResolucion.ApplyToOtherObligation)

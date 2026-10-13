@@ -17,6 +17,10 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// la misma respuesta y <c>Idempotent-Replayed: true</c> en las repeticiones; la misma clave con otro cuerpo → <c>Operation.KeyReused</c>;</item>
 /// <item>el mismo <c>ResultadoDelGiro</c> consumido dos veces (el reproceso desde la bandeja) no reversa dos veces;</item>
 /// <item>el archivo de desembolsos generado dos veces con la misma clave es el mismo archivo.</item>
+/// <item>US5 (T0530), en la cooperativa «pagos»: el pago, el reverso y la resolución de un saldo por el contrato, tres veces con la misma clave de
+/// negocio <c>TST:</c> → una operación y <c>AlreadyApplied</c> con el comprobante original; la misma clave con otro valor (u otro motivo en el
+/// reverso, cuya clave es <c>{clave}:reverso</c>) → <c>Lending.Contract.KeyReused</c>; las rutas de pantalla (la preferencia y el reverso)
+/// repiten con <c>Idempotent-Replayed: true</c> (SC-010).</item>
 /// </list>
 /// La crea esta fase; US5, US6 y US8 le suman sus casos (pago, reverso, reserva, mensaje, carga). (nuevo)
 /// </summary>
@@ -118,5 +122,95 @@ public sealed class IdempotenciaDeCarteraTests(CentralIdentityApiFixture fx)
         dos.GetProperty("sha256").GetString().Should().Be(uno.GetProperty("sha256").GetString());
         (await EnLaBaseAsync(fx, esc, db => db.DisbursementFiles.AsNoTracking().CountAsync(f => f.PublicId == uno.GetProperty("publicId").GetGuid())))
             .Should().Be(1);
+    }
+
+    [Fact]
+    public async Task El_pago_el_reverso_y_la_resolucion_tres_veces_con_la_misma_clave_de_negocio_quedan_una_vez()
+    {
+        var esc = await EscenarioAsync(fx, "pagos");
+        using var http = fx.CreateClient();
+        var u = esc.Usuarios;
+        var (_, persona, d) = await CreditoDesembolsadoAsync(http, esc, "ClaveDeNegocio", 2_000_000m);
+        var credito = d.GetProperty("loanPublicId").GetGuid();
+        var hoy = esc.Hoy.AddDays(1);
+
+        using (CausacionE2E.RelojEn(fx, hoy))
+        {
+            // El pago: tres veces la misma clave TST (cada envío con su propia Idempotency-Key de pantalla): una operación, el mismo comprobante.
+            var clave = PagosE2E.Clave();
+            var pago = PagosE2E.Pago(credito, persona, "FreeAmount", 60_000m, hoy, clave);
+            var respuestas = new List<System.Text.Json.JsonElement>();
+            for (var i = 0; i < 3; i++) respuestas.Add(await PagosE2E.AplicarUnoAsync(http, u, pago));
+            respuestas.Select(PagosE2E.Resultado).Should().Equal(PagosE2E.Aplicado, PagosE2E.YaAplicado, PagosE2E.YaAplicado);
+            respuestas.Select(r => r.GetProperty("value").GetProperty("number").GetString()).Distinct().Should().ContainSingle("el comprobante original");
+            (await PagosE2E.OperacionesAsync(fx, esc, credito)).Count(o => o.Clave == clave).Should().Be(1, "una clave, un pago (SC-010)");
+            var reusada = PagosE2E.Pago(credito, persona, "FreeAmount", 61_000m, hoy, clave);
+            PagosE2E.Rechazada(await PagosE2E.AplicarUnoAsync(http, u, reusada), "Lending.Contract.KeyReused");
+
+            // El reverso por la clave del pago ({clave}:reverso): repetido, el mismo; con otro motivo, la clave ya se usó.
+            var r1 = await PagosE2E.ReversarPorClaveAsync(http, u, clave, "Pago duplicado en caja (e2e)");
+            var r2 = await PagosE2E.ReversarPorClaveAsync(http, u, clave, "Pago duplicado en caja (e2e)");
+            PagosE2E.Resultado(r1).Should().Be(PagosE2E.Aplicado, r1.ToString());
+            PagosE2E.Resultado(r2).Should().Be(PagosE2E.YaAplicado, r2.ToString());
+            r2.GetProperty("value").GetProperty("number").GetString().Should().Be(r1.GetProperty("value").GetProperty("number").GetString());
+            PagosE2E.Rechazada(await PagosE2E.ReversarPorClaveAsync(http, u, clave, "Otro motivo (e2e)"), "Lending.Contract.KeyReused");
+            (await PagosE2E.OperacionesAsync(fx, esc, credito)).Count(o => o.Clase == LoanOperationKind.PaymentReversal).Should().Be(1);
+
+            // La resolución de un anticipo devuelto por el recaudador: tres veces, una; otro valor con la misma clave, KeyReused.
+            await PagosE2E.AplicadoAsync(http, u, PagosE2E.Pago(credito, persona, "Advance", 200_000m, hoy));
+            var claveDeResolucion = PagosE2E.Clave();
+            object Resolucion(decimal valor) => new
+            {
+                obligationPublicId = credito, kind = "RefundThroughCollector", idempotencyKey = claveDeResolucion, amount = valor, concept = "Advance",
+            };
+            var resoluciones = new List<System.Text.Json.JsonElement>();
+            for (var i = 0; i < 3; i++) resoluciones.Add(await PagosE2E.ResolverAsync(http, u, Resolucion(50_000m)));
+            resoluciones.Select(PagosE2E.Resultado).Should().Equal(PagosE2E.Aplicado, PagosE2E.YaAplicado, PagosE2E.YaAplicado);
+            PagosE2E.Rechazada(await PagosE2E.ResolverAsync(http, u, Resolucion(60_000m)), "Lending.Contract.KeyReused");
+            (await PagosE2E.OperacionesAsync(fx, esc, credito)).Count(o => o.Clase == LoanOperationKind.CreditBalanceResolution).Should().Be(1);
+            (await PagosE2E.ObligacionAsync(http, u, persona, credito)).GetProperty("advance").GetDecimal().Should().Be(150_000m);
+        }
+    }
+
+    [Fact]
+    public async Task La_preferencia_y_el_reverso_por_pantalla_repiten_con_la_misma_clave()
+    {
+        var esc = await EscenarioAsync(fx, "pagos");
+        using var http = fx.CreateClient();
+        var u = esc.Usuarios;
+        var jefe = u.Jefe.Token;
+        var (_, persona, d) = await CreditoDesembolsadoAsync(http, esc, "PantallaRepetida", 2_000_000m);
+        var credito = d.GetProperty("loanPublicId").GetGuid();
+        var hoy = esc.Hoy.AddDays(1);
+
+        // La preferencia: tres veces la misma Idempotency-Key → una versión y las repeticiones con Idempotent-Replayed.
+        var clave = Guid.NewGuid();
+        var cuerpo = new { choice = "ReduceInstallment", reason = "El deudor prefiere bajar la cuota (e2e)" };
+        var antes = (await CarteraE2E.GetAsync(http, jefe, $"{Creditos}/{credito}/prepayment-preference")).GetProperty("history").GetArrayLength();
+        var envios = new List<HttpResponseMessage>();
+        for (var i = 0; i < 3; i++) envios.Add(await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Creditos}/{credito}/prepayment-preference", cuerpo, clave));
+        envios.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.Created);
+        envios.Skip(1).Should().OnlyContain(r => Repetida(r));
+        (await CarteraE2E.GetAsync(http, jefe, $"{Creditos}/{credito}/prepayment-preference")).GetProperty("history").GetArrayLength().Should().Be(antes + 1);
+        var otraCarga = await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Creditos}/{credito}/prepayment-preference",
+            new { choice = "ReduceTerm", reason = "Otra" }, clave);
+        await InventarioE2E.FallaAsync(otraCarga, "Operation.KeyReused");
+
+        // El reverso por pantalla: dos veces la misma Idempotency-Key → un reverso, la misma respuesta.
+        using (CausacionE2E.RelojEn(fx, hoy))
+        {
+            var pago = await PagosE2E.AplicadoAsync(http, u, PagosE2E.Pago(credito, persona, "FreeAmount", 70_000m, hoy));
+            var operacion = pago.GetProperty("operationPublicId").GetGuid();
+            var previa = await CarteraE2E.ExitoAsync(http, jefe, HttpMethod.Post, $"{Creditos}/{credito}/operations/{operacion}/reversal-preview", new { });
+            var reverso = new { reason = "Error de caja (e2e)", expectedPreviewSha256 = previa.GetProperty("previewSha256").GetString() };
+            var claveDeReverso = Guid.NewGuid();
+            var uno = await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Creditos}/{credito}/operations/{operacion}/reverse", reverso, claveDeReverso);
+            var dos = await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"{Creditos}/{credito}/operations/{operacion}/reverse", reverso, claveDeReverso);
+            uno.StatusCode.Should().Be(HttpStatusCode.Created, await uno.Content.ReadAsStringAsync());
+            dos.StatusCode.Should().Be(HttpStatusCode.Created, await dos.Content.ReadAsStringAsync());
+            Repetida(dos).Should().BeTrue();
+            (await dos.Content.ReadAsStringAsync()).Should().Be(await uno.Content.ReadAsStringAsync());
+            (await PagosE2E.OperacionesAsync(fx, esc, credito)).Count(o => o.Clase == LoanOperationKind.PaymentReversal).Should().Be(1);
+        }
     }
 }

@@ -1,0 +1,22 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 013, US5 (T0562, T0563): el plan que quedaría después de un pago, cuota a cuota. Lo usan el simulador del crédito (los dos planes
+   del abono extraordinario lado a lado) y el recaudador de prueba. Sólo muestra: no carga nada. *@
+<div class="tabla-desplazable">
+    <table class="data-grid">
+        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Otros</th><th class="numero">Total</th></tr></thead>
+        <tbody>
+            @foreach (var q in Cuotas)
+            {
+                <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td>
+                    <td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td><td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td>
+                    <td class="numero">@TextosDeCreditos.Pesos(q.Other)</td><td class="numero">@TextosDeCreditos.Pesos(q.Total)</td></tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (Cuotas.Count == 0) { <p class="texto-tenue">Sin cuotas pendientes.</p> }
+
+@code {
+    [Parameter] public IReadOnlyList<CuotaDelPlanNuevoDto> Cuotas { get; set; } = [];
+}

@@ -117,8 +117,27 @@ public sealed record OperationDistributionDto(int? Installment, string Concept, 
 /// <summary>Un mensaje que dejó la operación. (nuevo)</summary>
 public sealed record OperationMessageDto(string Type, Guid MessagePublicId, string Status);
 
-/// <summary>El comprobante de aplicación: la operación, su distribución y sus mensajes (FR-077). (nuevo)</summary>
-public sealed record LoanOperationDetailDto(LoanOperationDto Operation, IReadOnlyList<OperationDistributionDto> Distribution, IReadOnlyList<OperationMessageDto> Messages);
+/// <summary>
+/// Lo que el pago (o su reverso) trae además de la operación (feature 013, US5, T0560; FR-077, FR-082): la clave del recaudador, la modalidad, la
+/// elección del abono y si salió de la preferencia, el excedente devuelto al recaudador, la fecha en que queda en firme, el recibo como referencia
+/// (número, fecha y referencia del medio), el motivo de un reverso y la validación previa contable sellada. (nuevo)
+/// </summary>
+public sealed record OperationReceiptDto(
+    string? IdempotencyKey,
+    string? Modality,
+    string? PrepaymentChoice,
+    bool? ChoiceFromPreference,
+    decimal? Excess,
+    DateOnly? FinalityDate,
+    string? ReceiptNumber,
+    DateOnly? ReceiptDate,
+    string? ReceiptMeansReference,
+    string? Reason,
+    string? PrevalidationOutcome);
+
+/// <summary>El comprobante de aplicación: la operación, su distribución, sus mensajes y, en un pago o su reverso, el recibo (FR-077). (nuevo)</summary>
+public sealed record LoanOperationDetailDto(LoanOperationDto Operation, IReadOnlyList<OperationDistributionDto> Distribution, IReadOnlyList<OperationMessageDto> Messages,
+    OperationReceiptDto? Receipt = null);
 
 /// <summary>Una fila del libro (sólo lectura). (nuevo)</summary>
 public sealed record LoanTransactionDto(

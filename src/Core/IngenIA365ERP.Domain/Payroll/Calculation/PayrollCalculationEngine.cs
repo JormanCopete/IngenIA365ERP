@@ -247,7 +247,12 @@ public sealed class PayrollCalculationEngine
                 disponible = Math.Max(0m, disponible - line.RawAmount);
                 netoDisponible = Math.Max(0m, netoDisponible - line.RawAmount);
                 Add(line);
-                line.NotDeductedAmount = Math.Max(0m, Round(esperado, rounding) - line.Amount);
+                // Feature 013 (fase 9, defecto hallado por NominaRecaudaPorElContratoTests): la cuota que cabe entera se descuenta al centavo, aunque
+                // la política redondee al peso: redondeada hacia arriba, Cartera recibía unos centavos de más, los devolvía como excedente y la
+                // aprobación avisaba «no aplicado» cada mes. El neto se sigue redondeando al peso con el ajuste de redondeo. La que no cabe sigue
+                // la política (lo que se descuenta del tope, al peso; casos dorados cartera-02 y cartera-03).
+                if (line.NotDeductedReason is null) line.Amount = Math.Round(line.RawAmount, 2, MidpointRounding.AwayFromZero);
+                line.NotDeductedAmount = Math.Max(0m, (line.NotDeductedReason is null ? Math.Round(esperado, 2, MidpointRounding.AwayFromZero) : Round(esperado, rounding)) - line.Amount);
                 if (line.NotDeductedAmount == 0m) line.NotDeductedReason = null;
                 else line.Explanation.Summary = $"{line.Explanation.Summary} · no descontado {Fmt.Money(line.NotDeductedAmount)} ({line.NotDeductedReason})";
                 continue;
@@ -320,7 +325,10 @@ public sealed class PayrollCalculationEngine
                 exp.Step("Suma de líneas redondeadas (devengos − deducciones)", totalDevengos - totalDeducciones);
                 exp.Step("Diferencia imputada al ajuste", ajuste);
                 exp.Summary = $"Ajuste por redondeo: {Fmt.Money(ajuste)}";
-                Add(LineFactory.Create(ajusteDef, ajuste, exp));
+                var lineaDeAjuste = LineFactory.Create(ajusteDef, ajuste, exp);
+                Add(lineaDeAjuste);
+                // El ajuste lleva lo que haga falta para cuadrar el neto, centavos incluidos (la cuota de Cartera va al centavo).
+                lineaDeAjuste.Amount = ajuste;
                 totalDevengos += ajuste;
             }
             else

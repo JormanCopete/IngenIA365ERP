@@ -1,0 +1,162 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject PagosClient Pagos
+@inject INotificationService Notification
+
+@* Feature 013, US5 (T0562; FR-080, FR-081, FR-013; contracts/api.md §10): reversa un pago desde Cartera (un cheque devuelto, un error de caja) en
+   tres pasos: (1) el motivo, (2) la vista previa —lo que se restituye por concepto, cada pago posterior con lo que cubría antes y lo que
+   cubriría después, los documentos que se anularían y si se avisa al recaudador—, (3) confirmar con la huella de esa vista previa
+   (expectedPreviewSha256): si el crédito cambió entretanto, la vista previa se vuelve a mostrar en vez de reversar otra cosa. Un pago de
+   Nómina, de Aportes o una recogida no se ofrece: lo reversa su recaudador (la regla es del servidor). *@
+<PermissionGate Required="Lending.Payments.Reverse" MostrarAviso="true">
+    <div class="info-card">
+        <h4>Reversar el pago @Operacion.Number</h4>
+        @if (_resultado is { } hecho)
+        {
+            <p class="aviso aviso-ok" role="status">Pago reversado con la operación @hecho.Number@(hecho.Reopened ? "; el crédito volvió a quedar vigente" : "").</p>
+            @if (hecho.Reallocations.Count > 0) { <p class="texto-apoyo">Pagos redistribuidos: @string.Join(", ", hecho.Reallocations).</p> }
+            @if (hecho.Messages.Count > 0) { <p class="texto-tenue">Hechos emitidos: @string.Join(", ", hecho.Messages.Select(m => TextosDePagos.Hecho(m.Type))).</p> }
+        }
+        else if (Operacion.ReversedBy is not null)
+        {
+            <p class="texto-apoyo">Este pago ya fue reversado: un pago tiene a lo sumo un reverso.</p>
+        }
+        else if (TextosDePagos.QuienReversa(Operacion.Collector?.Class) is { } quien)
+        {
+            <p class="aviso aviso-info">@quien</p>
+        }
+        else
+        {
+            <div class="guia-de-pasos">
+                <div class="paso @(_vista is null ? "paso-activo" : "paso-hecho")"><span class="paso-numero">1</span><span>Diga por qué se reversa.</span></div>
+                <div class="paso @(_vista is not null ? "paso-activo" : "")"><span class="paso-numero">2</span><span>Revise lo que cambiaría.</span></div>
+                <div class="paso"><span class="paso-numero">3</span><span>Confirme el reverso.</span></div>
+            </div>
+            <label class="campo campo-ancho">Motivo *
+                <input class="e-input" maxlength="500" value="@_motivo" @onchange="@(e => CambiarMotivo(e.Value?.ToString()))" placeholder="Cheque devuelto, error de caja…" />
+            </label>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" Disabled="@(_carga.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@VerVistaPreviaAsync">Ver lo que cambiaría</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Preparando la vista previa…">
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                @if (_vista is { } v)
+                {
+                    <div class="info-card">
+                        <h4>Lo que se restituye</h4>
+                        <table class="data-grid">
+                            <thead><tr><th>Concepto</th><th class="numero">Valor</th></tr></thead>
+                            <tbody>
+                                @foreach (var (concepto, valor) in v.Reversal.ByConcept.Where(x => x.Value != 0m))
+                                {
+                                    <tr><td>@TextosDeCreditos.Concepto(concepto)</td><td class="numero">@TextosDeCreditos.Pesos(valor)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (v.Reallocations.Count > 0)
+                    {
+                        <div class="info-card">
+                            <h4>Pagos posteriores que se redistribuyen</h4>
+                            <p class="texto-apoyo">Cada pago conserva su fecha valor; cambia lo que cubre.</p>
+                            @foreach (var re in v.Reallocations)
+                            {
+                                <p><strong>Pago @re.Number</strong></p>
+                                <div class="rejilla-tarjetas">
+                                    <div class="info-card"><h4>Antes</h4><Distribucion Lineas="@re.Before" /></div>
+                                    <div class="info-card"><h4>Después</h4><Distribucion Lineas="@re.After" /></div>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (v.DocumentsToVoid.Count > 0)
+                    {
+                        <div class="info-card">
+                            <h4>Documentos que se anularían</h4>
+                            <ul>@foreach (var d in v.DocumentsToVoid) { <li>@d.Number (@d.Kind)</li> }</ul>
+                        </div>
+                    }
+                    @if (v.RatingNow is not null || v.RatingAfter is not null)
+                    {
+                        <p class="texto-apoyo">Calificación informativa: hoy @(v.RatingNow ?? "—"), después del reverso @(v.RatingAfter ?? "—").</p>
+                    }
+                    @if (v.Reopens) { <p class="aviso aviso-alerta">El crédito estaba cancelado: con el reverso vuelve a quedar vigente.</p> }
+                    @if (v.NotifiesCollector) { <p class="texto-apoyo">Se avisará al recaudador que recibió el pago.</p> }
+                    <div class="toolbar">
+                        <SfButton CssClass="e-danger" Disabled="@_carga.Activa" OnClick="@ConfirmarAsync">Confirmar el reverso</SfButton>
+                        <SfButton CssClass="e-outline" Disabled="@_carga.Activa" OnClick="@(() => _vista = null)">Volver</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        }
+    </div>
+</PermissionGate>
+
+@code {
+    public const string CodigoVistaPreviaCambiada = "Lending.Reversal.PreviewChanged";
+
+    [Parameter, EditorRequired] public Guid CreditoId { get; set; }
+    [Parameter, EditorRequired] public OperacionDelCreditoDto Operacion { get; set; } = default!;
+    [Parameter] public EventCallback<PagoReversadoDto> Reversado { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private Guid _operacionVista;
+    private string? _motivo, _error;
+    private VistaPreviaDeReversoDto? _vista;
+    private PagoReversadoDto? _resultado;
+    private ClaveDeOperacion _clave = new();
+
+    protected override void OnParametersSet()
+    {
+        if (Operacion.PublicId == _operacionVista) return;
+        // Otra operación es otra operación de reverso: otra clave y el formulario limpio.
+        _operacionVista = Operacion.PublicId;
+        _motivo = null;
+        _error = null;
+        _vista = null;
+        _resultado = null;
+        _clave = new ClaveDeOperacion();
+    }
+
+    private void CambiarMotivo(string? motivo)
+    {
+        _motivo = motivo;
+        _vista = null; // la vista previa se ve con el motivo que se va a confirmar
+    }
+
+    private async Task VerVistaPreviaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Pagos.VistaPreviaDelReversoAsync(CreditoId, Operacion.PublicId, _motivo);
+        if (!r.IsSuccess) { _vista = null; _error = r.ErrorMessage ?? "No se pudo preparar la vista previa del reverso."; return; }
+        _vista = r.Value;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_vista is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var r = await Pagos.ReversarAsync(CreditoId, Operacion.PublicId, new ReversoDePagoRequest(_motivo.Trim(), _vista.PreviewSha256), _clave);
+        if (!r.IsSuccess)
+        {
+            if (r.ErrorCode == CodigoVistaPreviaCambiada)
+            {
+                // El crédito cambió desde la vista previa: se muestra la nueva y la persona vuelve a confirmar.
+                var nueva = await Pagos.VistaPreviaDelReversoAsync(CreditoId, Operacion.PublicId, _motivo);
+                _vista = nueva.IsSuccess ? nueva.Value : null;
+                _error = "El crédito cambió desde la vista previa. Revise lo que cambiaría ahora y confirme otra vez.";
+                return;
+            }
+            _error = r.ErrorMessage ?? "No se pudo reversar el pago.";
+            return;
+        }
+        _resultado = r.Value;
+        _vista = null;
+        await Notification.SuccessAsync($"Pago {Operacion.Number} reversado.");
+        if (_resultado is not null) await Reversado.InvokeAsync(_resultado);
+    }
+}

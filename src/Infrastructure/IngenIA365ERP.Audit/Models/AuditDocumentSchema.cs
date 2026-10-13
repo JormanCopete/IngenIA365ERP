@@ -207,6 +207,12 @@ public static class AuditDocumentSchema
             partes.Add(Igual(Action, Heredado.Action, ResultadoRechazado));
         else if (string.Equals(q.Outcome, ResultadoAceptado, StringComparison.OrdinalIgnoreCase))
             partes.Add(f.And(f.Ne(Action, ResultadoRechazado), f.Ne(Heredado.Action, ResultadoRechazado)));
+        // Feature 013 (T0560, A11): la clave de la operación, sola o dentro de la lista separada por coma que deja el contrato de obligaciones.
+        if (!string.IsNullOrWhiteSpace(q.OperationKey))
+        {
+            var clave = new BsonRegularExpression($"(^|,){System.Text.RegularExpressions.Regex.Escape(q.OperationKey.Trim())}(,|$)");
+            partes.Add(f.Or(f.Regex($"{Metadata}.OperationKey", clave), f.Regex($"{Heredado.Metadata}.OperationKey", clave)));
+        }
 
         return partes.Count == 0 ? f.Empty : f.And(partes);
     }

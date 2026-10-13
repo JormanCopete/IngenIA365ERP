@@ -298,7 +298,7 @@ public sealed class ApprovePayrollRunCommandHandler(
         var filaEmpleado = empleados.ToDictionary(e => e.Id);
         Guid Pagador(PayrollLoanDeduction f) => personas[filaEmpleado[f.PayrollRunEmployeeId].EmployeeId];
         var recibo = new ReferenciaDeRecibo(
-            $"Nómina {period.Description ?? period.StartDate.ToString("MMMM yyyy")} v{run.Version}", clock.HoyLocal, null, null, "NM");
+            $"Nómina {period.StartDate:dd/MM/yyyy}-{period.EndDate:dd/MM/yyyy} v{run.Version}", clock.HoyLocal, null, null, "NM");
         var lote = new LoteDeNomina(run.PublicId, recibo, DateOnly.FromDateTime(period.EndDate),
             filas.Where(f => f.DeductedAmount > 0m)
                 .Select(f => new PagoDeNomina(f.ObligationPublicId, Pagador(f), ModalidadDePago.CycleInstallment, f.DeductedAmount)).ToList(),

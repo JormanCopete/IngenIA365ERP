@@ -1,5 +1,7 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -13,7 +15,10 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// <c>DoblesDePruebaDeCartera</c> registra <see cref="TesoreriaDePrueba"/>—; en producción no existen (404). Todas con
 /// <c>Lending.TestDoubles.Operate</c>: <c>GET /</c> dice qué dobles hay (la pantalla y el menú lo preguntan), la tesorería de prueba lista
 /// las órdenes y anulaciones recibidas y emite el <c>ResultadoDelGiro</c> de una orden como <c>TES</c> (con <c>Idempotency-Key</c>), con la
-/// persona que prueba como usuario de origen. US5 suma el recaudador de prueba. (nuevo)
+/// persona que prueba como usuario de origen. US5 (T0559) suma el recaudador de prueba (<c>/collector/*</c>): lista y simula por el contrato,
+/// aplica un lote en forma interactiva o no interactiva, reversa por la clave del pago, resuelve saldos y muestra los <c>PagoReversadoPorCartera</c>
+/// recibidos; las escrituras con <c>Idempotency-Key</c> de pantalla, aparte de la clave de negocio <c>TST:{guid:N}</c> que la pantalla propone y deja
+/// repetir (C35). Si la guarda no registró el recaudador, sus rutas responden el 404 genérico. (nuevo)
 /// </summary>
 public class TestDoublesEndpoints : ICarterModule
 {
@@ -27,7 +32,8 @@ public class TestDoublesEndpoints : ICarterModule
 
         var dobles = LendingGroup.Grupo(app, "/test-doubles", "Cartera Dobles de prueba");
 
-        dobles.MapGet("/", () => Results.Ok(new DoblesDisponiblesDto(Treasury: true, Collector: false)))
+        dobles.MapGet("/", (IEnumerable<IDestinoDeMensajes> destinos) =>
+                Results.Ok(new DoblesDisponiblesDto(Treasury: true, Collector: RecaudadorDePruebaRegistrado.Esta(destinos))))
             .WithName("Lending_TestDoubles_Available")
             .RequirePermission(Operar);
 
@@ -46,6 +52,46 @@ public class TestDoublesEndpoints : ICarterModule
             .WithName("Lending_TestDoubles_TreasuryResult")
             .ConClaveDeOperacion()
             .RequirePermission(Operar);
+
+        // US5 (T0559): el recaudador de prueba, recaudador TST, clase Test.
+        dobles.MapGet("/collector/obligations", async (Guid personPublicId, bool? includeCoDebtor, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListTestCollectorObligationsQuery(personPublicId, includeCoDebtor ?? false), ct))
+            .WithName("Lending_TestDoubles_CollectorObligations")
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/simulations", async (SimulacionRequest body, IDateTimeService reloj, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SimulateTestCollectorPaymentQuery(body.ObligationPublicId, body.Modality ?? ModalidadDePago.FreeAmount,
+                    body.Amount ?? 0m, body.ValueDate ?? reloj.HoyLocal, body.PrepaymentChoice, body.InstallmentNumber, body.PaymentIdempotencyKeyToReverse), ct))
+            .WithName("Lending_TestDoubles_CollectorSimulate")
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/payments", async (PagosRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApplyTestCollectorPaymentCommand(body.Items ?? [], body.Interactive) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_TestDoubles_CollectorPayments")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/payments/{key}/reverse", async (string key, ReversoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ReverseTestCollectorPaymentCommand(Uri.UnescapeDataString(key), body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_TestDoubles_CollectorReverse")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/credit-balances/resolve", async (ResolucionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ResolveTestCollectorCreditBalanceCommand(body.ObligationPublicId, body.Kind ?? FormaDeResolucion.RefundThroughCollector,
+                    body.IdempotencyKey ?? $"TST:{Guid.NewGuid():N}", body.Amount, body.Concept ?? ConceptoDeObligacion.CreditBalance,
+                    body.TargetObligationPublicId, body.TargetModality, body.PrepaymentChoice) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_TestDoubles_CollectorResolve")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
+        dobles.MapGet("/collector/reversals", async (ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListTestCollectorReversalsQuery(), ct))
+            .WithName("Lending_TestDoubles_CollectorReversals")
+            .RequirePermission(Operar);
     }
 
     /// <summary>Si las rutas se publican: pedidas por configuración y fuera de producción (la guarda que registra los dobles).</summary>
@@ -60,4 +106,25 @@ public class TestDoublesEndpoints : ICarterModule
     /// fecha (hoy si no viene), el valor (el neto de la orden si no viene; otro valor prueba <c>InvalidResult</c>), el motivo y el cheque.
     /// </summary>
     public sealed record ResultadoRequest(string? Outcome, string? Reference, DateOnly? Date, decimal? Amount, string? Reason, string? CheckNumber);
+
+    /// <summary>
+    /// La simulación del recaudador (§20): la obligación, la modalidad, el valor, la fecha valor (hoy si no viene), la elección y la cuota; con la clave
+    /// de un pago, la redistribución de su reverso (C38).
+    /// </summary>
+    public sealed record SimulacionRequest(Guid ObligationPublicId, ModalidadDePago? Modality, decimal? Amount, DateOnly? ValueDate,
+        EleccionDeAbono? PrepaymentChoice, int? InstallmentNumber, string? PaymentIdempotencyKeyToReverse);
+
+    /// <summary>Un lote de pagos (§20): los ítems del contrato con su clave <c>TST:</c> y la forma.</summary>
+    public sealed record PagosRequest(IReadOnlyList<PagoAAplicar>? Items, bool Interactive);
+
+    /// <summary>El motivo del reverso por la clave del pago.</summary>
+    public sealed record ReversoRequest(string? Reason);
+
+    /// <summary>
+    /// La resolución de un saldo (§20, contradicción 6: los valores de <see cref="FormaDeResolucion"/>): la obligación, la forma, la clave (una
+    /// <c>TST:</c> nueva si no viene), el valor (todo lo disponible si no viene), el concepto (saldo a favor o anticipo) y, al aplicarlo, la
+    /// obligación destino, su modalidad y la elección del abono.
+    /// </summary>
+    public sealed record ResolucionRequest(Guid ObligationPublicId, FormaDeResolucion? Kind, string? IdempotencyKey, decimal? Amount,
+        ConceptoDeObligacion? Concept, Guid? TargetObligationPublicId, ModalidadDePago? TargetModality, EleccionDeAbono? PrepaymentChoice);
 }
