@@ -166,7 +166,39 @@ public class CreditoEnLaVentaTests
         pedida.Amount.Should().Be(120_000m);
         pedida.PersonPublicId.Should().Be(c.AsociadoX.PublicId);
         pedida.CreditLineCode.Should().Be("CONSUMO");
+        pedida.ConsultationEvidence.Should().Be("evt-cupo-1", "T0599, C31: la evidencia de la consulta viaja con la reserva");
         cartera.Consultas.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task La_reserva_repetida_que_Cartera_responde_Used_deja_el_mismo_numero()
+    {
+        // T0575 (US6-2): la misma clave y huella responde el mismo número aunque la reserva ya se haya usado.
+        var (c, _) = await CrearAsync();
+        var reserva = ReservasDeCarteraDePrueba.Reservada("CR-0002003") with { Status = EstadosDeReserva.Used };
+        c.Reservas.RespuestaDeReserva = reserva;
+        var venta = await VentaAsync(c);
+
+        var r = await c.ConfirmarAsync(venta);
+
+        r.Value.Status.Should().Be(DocumentStatus.Confirmed);
+        var pago = Pago(c, venta);
+        pago.ReservedLoanNumber.Should().Be("CR-0002003");
+        pago.ReservationPublicId.Should().Be(reserva.ReservationPublicId);
+    }
+
+    [Fact]
+    public async Task La_reserva_que_responde_NotEnabled_deja_la_venta_validada_sin_numero()
+    {
+        // T0575: Cartera se desactivó entre la consulta y la reserva: la venta sigue sin número, como D26.
+        var (c, _) = await CrearAsync();
+        c.Reservas.RespuestaDeReserva = ReservasDeCarteraNoHabilitada.NoHabilitada;
+        var venta = await VentaAsync(c);
+
+        var r = await c.ConfirmarAsync(venta);
+
+        r.Value.Status.Should().Be(DocumentStatus.Confirmed);
+        Pago(c, venta).ReservedLoanNumber.Should().BeNull();
     }
 
     [Theory]

@@ -163,6 +163,49 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Matches(@"IConsultaDeObligaciones,\s*[\w.]*ObligacionesDeCartera>", di);
     }
 
+    /// <summary>
+    /// US6 (T0577, T0582, T0584): las implementaciones reales de las consultas y las reservas son de Cartera, viven en
+    /// <c>Application/Lending/Integration</c> y <c>DependencyInjection</c> las registra en lugar de los provisionales «no habilitada».
+    /// </summary>
+    [Fact]
+    public void Las_consultas_y_las_reservas_reales_son_de_Cartera()
+    {
+        var consultas = typeof(IngenIA365ERP.Application.Lending.Integration.ConsultasDeCartera);
+        var reservas = typeof(IngenIA365ERP.Application.Lending.Integration.ReservasDeCartera);
+        Assert.True(typeof(IConsultasDeCartera).IsAssignableFrom(consultas));
+        Assert.True(typeof(IReservasDeCartera).IsAssignableFrom(reservas));
+        Assert.Equal("IngenIA365ERP.Application.Lending.Integration", consultas.Namespace);
+        Assert.Equal("IngenIA365ERP.Application.Lending.Integration", reservas.Namespace);
+        var di = FuenteSinComentarios.Leer(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "DependencyInjection.cs"));
+        Assert.Matches(@"IConsultasDeCartera,\s*[\w.]*ConsultasDeCartera>", di);
+        Assert.Matches(@"IReservasDeCartera,\s*[\w.]*ReservasDeCartera>", di);
+    }
+
+    /// <summary>
+    /// US6 (T0577; FR-008, C34): Cartera no lee tablas de Comercial —la venta la conoce por el contenido del mensaje—: ningún tipo de
+    /// <c>Application.Lending</c> usa entidades de <c>Domain.Entities.Inventory</c> y ningún archivo de Cartera consulta un <c>DbSet</c> de Comercial.
+    /// </summary>
+    [Fact]
+    public void Cartera_no_lee_tablas_de_Comercial()
+    {
+        const BindingFlags Todo = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        var aplicacion = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly;
+        var infractores = aplicacion.GetTypes()
+            .Where(t => (t.Namespace ?? string.Empty).StartsWith("IngenIA365ERP.Application.Lending", StringComparison.Ordinal))
+            .SelectMany(t => t.GetFields(Todo).Select(f => f.FieldType)
+                .Concat(t.GetMethods(Todo).SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType)))
+                .Where(x => (x.Namespace ?? string.Empty).StartsWith("IngenIA365ERP.Domain.Entities.Inventory", StringComparison.Ordinal))
+                .Select(x => $"{t.FullName} → {x.Name}"))
+            .Distinct()
+            .ToList();
+        Assert.True(infractores.Count == 0, "Cartera usa entidades de Comercial (FR-008): " + string.Join(", ", infractores));
+
+        var fuentes = ReglaSobreFuente.ArchivosEn(CarpetasDeCartera)
+            .Where(a => Regex.IsMatch(FuenteSinComentarios.Leer(a), @"\bdb\.(DocumentPayments|InventoryDocuments|LendingObligationResponses|DocumentLines)\b"))
+            .ToList();
+        Assert.True(fuentes.Count == 0, "Cartera lee tablas INV_: " + string.Join(", ", fuentes));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

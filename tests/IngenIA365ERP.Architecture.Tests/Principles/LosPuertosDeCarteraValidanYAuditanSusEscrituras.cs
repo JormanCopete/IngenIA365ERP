@@ -20,7 +20,12 @@ public class LosPuertosDeCarteraValidanYAuditanSusEscrituras
     [
         // US5 (T0547): las cinco operaciones reales del contrato de obligaciones.
         "Core/IngenIA365ERP.Application/Lending/Integration/ContratoDeObligacionesDeCartera.cs",
+        // US6 (T0577, T0584): reservar y liberar el número de una venta a crédito.
+        "Core/IngenIA365ERP.Application/Lending/Integration/ReservasDeCartera.cs",
     ];
+
+    /// <summary>Las escrituras de las reservas (US6): cada una escribe su intento antes de pasar por su validador explícito.</summary>
+    private static readonly string[] EscriturasDeLasReservas = ["ReservarAsync", "LiberarAsync"];
 
     private static readonly Regex Valida = new(@"\bValidateAsync\(|\bValidar\w*\(", RegexOptions.Compiled);
 
@@ -46,7 +51,7 @@ public class LosPuertosDeCarteraValidanYAuditanSusEscrituras
     [Fact]
     public void Cada_escritura_del_contrato_escribe_el_intento_valida_y_deja_el_hecho()
     {
-        var archivo = ReglaSobreFuente.ArchivosNombrados(Archivos).Single();
+        var archivo = ReglaSobreFuente.ArchivosNombrados(Archivos).Single(a => a.EndsWith("ContratoDeObligacionesDeCartera.cs", StringComparison.Ordinal));
         var texto = FuenteSinComentarios.Leer(archivo);
         var infracciones = new List<string>();
         foreach (var metodo in EscriturasDelContrato)
@@ -64,6 +69,30 @@ public class LosPuertosDeCarteraValidanYAuditanSusEscrituras
         // El rechazo de lote también deja su hecho (…Rejected), y la validación de forma es la de FluentValidation.
         Assert.Contains("validador.ValidateAsync(", texto, StringComparison.Ordinal);
         ReglaSobreFuente.SinInfracciones(infracciones, "Una escritura del contrato de obligaciones no valida o no audita (T101, T68)");
+    }
+
+    /// <summary>
+    /// US6 (T0577; T22, T68): <c>ReservarAsync</c> y <c>LiberarAsync</c> escriben el intento (en su contexto aparte) antes de pasar por su validador
+    /// explícito, y el archivo deja el hecho (<c>Reserved</c>, <c>Released</c>) por <c>HechoAsync</c>.
+    /// </summary>
+    [Fact]
+    public void Reservar_y_liberar_escriben_el_intento_validan_y_dejan_el_hecho()
+    {
+        var archivo = ReglaSobreFuente.ArchivosNombrados(Archivos).Single(a => a.EndsWith("ReservasDeCartera.cs", StringComparison.Ordinal));
+        var texto = FuenteSinComentarios.Leer(archivo);
+        var infracciones = new List<string>();
+        foreach (var metodo in EscriturasDeLasReservas)
+        {
+            var cuerpo = CuerpoDe(texto, metodo);
+            if (cuerpo is null) { infracciones.Add($"{metodo}: no está"); continue; }
+            var intento = cuerpo.IndexOf("auditoria.IntentoAsync(", StringComparison.Ordinal);
+            var validador = Regex.Match(cuerpo, @"validador\w*\.ValidateAsync\(");
+            if (intento < 0) infracciones.Add($"{metodo}: no escribe el intento");
+            if (!validador.Success) infracciones.Add($"{metodo}: no pasa por su validador");
+            else if (intento >= 0 && intento > validador.Index) infracciones.Add($"{metodo}: valida antes de escribir el intento");
+        }
+        if (Regex.Matches(texto, @"auditoria\.HechoAsync\(").Count < 2) infracciones.Add("las reservas no dejan el hecho de reservar y el de liberar");
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una escritura de las reservas de número no valida o no audita (T22, T68)");
     }
 
     /// <summary>El cuerpo de un método público del archivo: desde su firma hasta la siguiente firma pública (o el final).</summary>

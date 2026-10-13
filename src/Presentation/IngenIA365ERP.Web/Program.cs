@@ -122,6 +122,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesem
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
+// Feature 013, US6 (T0601): los recibos de lo que llega a Cartera (bandeja de mensajes).
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.MensajesRecibidosClient>();
 // Feature 013, US5 (T0561): pagos por pantalla (simular, reversar, preferencia del deudor).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.PagosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.IImpresionDeDocumentos, IngenIA365ERP.Shared.Services.ImpresionEnElNavegador>();

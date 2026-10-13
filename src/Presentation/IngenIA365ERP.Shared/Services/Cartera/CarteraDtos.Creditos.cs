@@ -70,7 +70,14 @@ public sealed record CreditoDto(
     IReadOnlyList<GarantiaDelCreditoDto> Collaterals,
     Guid? PromissoryNote,
     IReadOnlyList<BloqueoDelDeudorDto> Blocks,
-    string? InvoiceReference);
+    string? InvoiceReference)
+{
+    /// <summary>US6 (T0603): la validación fallida de la venta que lo originó (código, motivo y confirmación por excepción); nula si no la tuvo.</summary>
+    public ValidacionFallidaDelCreditoDto? ValidationFailure { get; init; }
+}
+
+/// <summary>La validación fallida de la obligación de una venta (FR-052, B8).</summary>
+public sealed record ValidacionFallidaDelCreditoDto(string Code, string? Reason, DateTime? ConfirmedByExceptionAt);
 
 /// <summary>Una cuota del plan guardado.</summary>
 public sealed record CuotaDelPlanDto(int Number, DateOnly PeriodStart, DateOnly DueDate, DateOnly ExigibleDate, decimal OpeningPrincipal,

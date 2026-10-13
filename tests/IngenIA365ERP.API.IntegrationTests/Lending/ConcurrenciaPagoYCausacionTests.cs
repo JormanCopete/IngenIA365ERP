@@ -154,4 +154,30 @@ public sealed class ConcurrenciaPagoYCausacionTests(CentralIdentityApiFixture fx
     private static void SinDuplicados(List<(DateOnly Dia, LoanConcept Concepto, int? Cuota, LoanTransactionKind Clase, decimal Valor)> filas) =>
         filas.Where(f => f.Clase == LoanTransactionKind.Accrual).GroupBy(f => (f.Dia, f.Concepto, f.Cuota)).Where(g => g.Count() > 1)
             .Select(g => g.Key).Should().BeEmpty("ningún día, concepto y cuota se causa dos veces (SC-020)");
+
+    /// <summary>
+    /// US6 (T0579; T34, C24): dos confirmaciones simultáneas de ventas a crédito del mismo asociado, cada una dentro del cupo y las dos juntas no: el
+    /// cerrojo del deudor en la reserva deja pasar una y la otra responde <c>Inventory.Credit.QuotaExceeded</c> sin número ni venta confirmada.
+    /// </summary>
+    [Fact]
+    public async Task Dos_ventas_a_credito_simultaneas_del_mismo_asociado_no_se_pasan_del_cupo()
+    {
+        var esc = await VentasConCarteraE2E.EscenarioAsync(fx);
+        using var http = fx.CreateClient();
+        var camila = await VentasConCarteraE2E.AsociadoAsync(http, esc.Admin, "Camila", "72100009");
+        var cupo = await OriginacionE2E.OtorgarCupoAsync(http, esc.Admin, camila, 150_000m, esc.Hoy, "Revolving");
+        cupo.StatusCode.Should().Be(System.Net.HttpStatusCode.Created, await cupo.Content.ReadAsStringAsync());
+        var sesion2 = await IngenIA365ERP.API.IntegrationTests.Ventas.EscenarioDeVentas.SesionAsync(http, esc.Ventas.Cajero2.Token, esc.Ventas.Caja2);
+
+        var cobros = await Task.WhenAll(
+            VentasConCarteraE2E.CobrarACreditoAsync(http, esc.Ventas, esc.Cajero, esc.Sesion, camila, 1, VentasConCarteraE2E.Credito(esc.Ventas, 100_000m)),
+            VentasConCarteraE2E.CobrarACreditoAsync(fx.CreateClient(), esc.Ventas, esc.Ventas.Cajero2.Token, sesion2, camila, 1,
+                VentasConCarteraE2E.Credito(esc.Ventas, 100_000m)));
+
+        var textos = new List<string>();
+        foreach (var c in cobros) textos.Add($"{(int)c.Cobro.StatusCode}: {await c.Cobro.Content.ReadAsStringAsync()}");
+        cobros.Count(c => c.Cobro.StatusCode == System.Net.HttpStatusCode.OK).Should().Be(1, string.Join(" | ", textos));
+        var negada = cobros.Single(c => c.Cobro.StatusCode != System.Net.HttpStatusCode.OK);
+        await IngenIA365ERP.API.IntegrationTests.Inventory.InventarioE2E.FallaAsync(negada.Cobro, "Inventory.Credit.QuotaExceeded");
+    }
 }

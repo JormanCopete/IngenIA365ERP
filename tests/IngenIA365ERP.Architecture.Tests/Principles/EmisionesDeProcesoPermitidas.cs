@@ -65,6 +65,37 @@ public class EmisionesDeProcesoPermitidas
         Assert.Contains(CatalogoDeMensajes.Todos, t => t.OriginModule == ModulosDeOrigen.Inventario);
     }
 
+    /// <summary>
+    /// US6 (T0577; T11, mensajes.md §15.2): lo que nace del consumo de una venta o un ajuste de Comercial —<c>ObligacionCreada</c>,
+    /// <c>ObligacionRechazada</c>, <c>CreditoDesembolsado</c> en especie y <c>CreditoAjustadoDesdeComercial</c>— lo emite el proceso de integración con
+    /// <b>el usuario de Comercial</b> como usuario de origen: cada solicitud de emisión de esos archivos lleva <c>UsuarioDeOrigen</c>. Las dos respuestas
+    /// admiten proceso; el desembolso y el ajuste no (los origina la persona que vendió, que viaja como usuario de origen).
+    /// </summary>
+    [Fact]
+    public void Lo_que_nace_del_consumo_de_Comercial_lleva_el_usuario_de_origen()
+    {
+        Assert.True(CatalogoDeMensajes.Todos.Single(t => t.Type == "ObligacionCreada").AdmiteProceso);
+        Assert.True(CatalogoDeMensajes.Todos.Single(t => t.Type == "ObligacionRechazada").AdmiteProceso);
+        Assert.False(CatalogoDeMensajes.Todos.Single(t => t.Type == "CreditoAjustadoDesdeComercial").AdmiteProceso);
+        string[] archivos =
+        [
+            "Core/IngenIA365ERP.Application/Lending/Integration/EmisionDeCartera.Comercial.cs",
+            "Core/IngenIA365ERP.Application/Lending/Integration/Comercial/RespuestasAComercial.cs",
+        ];
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(archivos).ToList();
+        Assert.Equal(archivos.Length, nombrados.Count);
+        var infracciones = new List<string>();
+        foreach (var archivo in nombrados)
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            var solicitudes = System.Text.RegularExpressions.Regex.Matches(texto, @"new SolicitudDeEmision\(").Count;
+            var conUsuario = System.Text.RegularExpressions.Regex.Matches(texto, @"UsuarioDeOrigen:\s").Count;
+            if (solicitudes == 0) infracciones.Add($"{Path.GetFileName(archivo)}: no emite");
+            else if (conUsuario < solicitudes) infracciones.Add($"{Path.GetFileName(archivo)}: {solicitudes} emisiones y sólo {conUsuario} con el usuario de origen");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Un hecho nacido del consumo de Comercial sale sin el usuario de Comercial (T11)");
+    }
+
     [Fact]
     public void La_marca_se_declara_en_el_catalogo_de_Cartera()
     {

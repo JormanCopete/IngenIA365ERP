@@ -58,6 +58,9 @@ public sealed class GetLoanQueryHandler(IApplicationDbContext db, IAlcanceDeCart
             new LoanMarksDto((condiciones?.RestructuringCount ?? 0) > 0, condiciones?.RestructuringCount ?? 0, c.ValidationFailureCode is not null && c.ConfirmedByExceptionAt is null,
                 posicion?.IsSuspended ?? false, posicion?.UsuryCapped ?? false),
             new LoanLinksDto(solicitud, origen, c.OriginLinkKind?.ToString()),
-            garantias, pagare, bloqueos, c.SourceInvoiceNumber));
+            garantias, pagare, bloqueos, c.SourceInvoiceNumber)
+        {
+            ValidationFailure = c.ValidationFailureCode is { } codigo ? new LoanValidationFailureDto(codigo, c.ValidationFailureReason, c.ConfirmedByExceptionAt) : null,
+        });
     }
 }

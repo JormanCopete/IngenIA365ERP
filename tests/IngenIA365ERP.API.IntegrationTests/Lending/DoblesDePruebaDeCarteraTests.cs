@@ -38,7 +38,8 @@ public sealed class DoblesDePruebaDeCarteraTests(CentralIdentityApiFixture fx)
         recibidas.EnumerateArray().Should().Contain(o => o.GetProperty("orderPublicId").GetGuid() == orden);
 
         var mensaje = await ResultadoDelGiroAsync(http, esc, orden, "Rejected");
-        (await ConsumirAsync(fx, esc, mensaje)).Should().BeOfType<Application.Common.Integration.ResultadoDeConsumo.Processed>();
+        // US6 (bloque 10B): el despachador entrega el resultado del giro a Cartera sin que nadie lo consuma a mano.
+        (await EntregarPorElDespachadorAsync(fx, esc, mensaje)).Should().Be(IngenIA365ERP.Domain.Enums.Integration.DeliveryStatus.Processed);
         (await EstadoAsync(fx, esc, credito)).Should().Be(LoanStatus.PendingDisbursement);
         (await EnLaBaseAsync(fx, esc, db => db.IntegrationMessages.AsNoTracking()
             .CountAsync(m => m.Type == "DesembolsoReversado" && m.RelatedPublicId == hecho.GetProperty("operationPublicId").GetGuid()))).Should().Be(1);

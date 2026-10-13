@@ -2,6 +2,7 @@ using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Parameters;
+using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Application.ElectronicInvoicing.Catalogs;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Core.Payments;
@@ -230,7 +231,11 @@ public sealed class CreditoEnLaVenta(
         foreach (var pago in aReservar)
         {
             var solicitud = new SolicitudDeReserva(ClaveDeReserva(pago.PublicId, pago.Amount), pago.PublicId, documento.PublicId, persona.PublicId,
-                pago.MeansClass, pago.Amount, documento.OperationDate, pago.CreditLineCode ?? pago.SuggestedCreditLineCode ?? string.Empty, canal);
+                pago.MeansClass, pago.Amount, documento.OperationDate, pago.CreditLineCode ?? pago.SuggestedCreditLineCode ?? string.Empty, canal)
+            {
+                // Feature 013 (T0599, C31): la evidencia de la consulta que precedió a la reserva viaja con ella.
+                ConsultationEvidence = pago.ConsultationEvidence,
+            };
             var r = await ReservarBajoPuntoDeGuardadoAsync(solicitud, ct);
             switch (r.Status)
             {
@@ -248,23 +253,13 @@ public sealed class CreditoEnLaVenta(
     }
 
     /// <summary>
-    /// La reserva bajo su punto de guardado (C25): en los dos motores, una falla técnica vuelve a él (en PostgreSQL, además, deja la
-    /// transacción utilizable) y responde <c>NoResponse</c>. Sin transacción en curso (InMemory, dobles) sólo captura la falla.
+    /// La reserva bajo su punto de guardado (C25; feature 013, T0599: por <see cref="PuntoDeGuardado"/>, el mismo que usa Cartera): una falla técnica
+    /// vuelve a él —en PostgreSQL, además, deja la transacción utilizable—, saca del seguimiento lo que la reserva dejó agregado y responde
+    /// <c>NoResponse</c>. Sin transacción en curso (InMemory, dobles) sólo captura la falla.
     /// </summary>
-    private async Task<ResultadoDeReservaDto> ReservarBajoPuntoDeGuardadoAsync(SolicitudDeReserva solicitud, CancellationToken ct)
-    {
-        var transaccion = (db as DbContext)?.Database.CurrentTransaction;
-        if (transaccion is not null) await transaccion.CreateSavepointAsync(PuntoDeGuardadoDeLaReserva, ct);
-        try
-        {
-            return await _reservas.ReservarAsync(solicitud, ct);
-        }
-        catch (Exception e) when (!ct.IsCancellationRequested && e is not OutOfMemoryException)
-        {
-            if (transaccion is not null) await transaccion.RollbackToSavepointAsync(PuntoDeGuardadoDeLaReserva, ct);
-            return new ResultadoDeReservaDto(EstadosDeReserva.NoResponse, null, null, null, EstadosDeReserva.NoResponse, e.Message);
-        }
-    }
+    private Task<ResultadoDeReservaDto> ReservarBajoPuntoDeGuardadoAsync(SolicitudDeReserva solicitud, CancellationToken ct) =>
+        PuntoDeGuardado.EjecutarAsync(db, PuntoDeGuardadoDeLaReserva, () => _reservas.ReservarAsync(solicitud, ct),
+            e => new ResultadoDeReservaDto(EstadosDeReserva.NoResponse, null, null, null, EstadosDeReserva.NoResponse, e.Message), ct);
 
     /// <summary>
     /// Libera la reserva de cada pago que la tenga, por su clave (T22: descartar un borrador de oficina o del POS). Una liberación que

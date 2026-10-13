@@ -25,8 +25,52 @@
                 <SfButton CssClass="e-outline" Disabled="@(_persona is null)" OnClick="@AbrirBloqueo">Registrar bloqueo o embargo</SfButton>
             </PermissionGate>
             <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPlantilla = !_mostrarPlantilla)">Saldos de aportes</SfButton>
+            <PermissionGate Required="Lending.NumberReservations.Read">
+                <SfButton CssClass="@(_mostrarReservas ? "e-primary" : "e-outline")" OnClick="@AlternarReservasAsync">Reservas de número</SfButton>
+            </PermissionGate>
         </div>
     </div>
+
+    @if (_mostrarReservas)
+    {
+        @* US6 (T0603; api.md §7.3; FR-057, T22): los números que Comercial reservó al confirmar ventas a crédito; una reserva vencida nunca se reasigna. *@
+        <div class="info-card">
+            <h4>Reservas de número de las ventas a crédito</h4>
+            <div class="toolbar">
+                <label class="campo">Estado
+                    <select class="e-input" @bind="_estadoReserva">
+                        <option value="">Todos</option>
+                        @foreach (var (valor, texto) in TextosDeIntegracion.EstadosDeReserva) { <option value="@valor">@texto</option> }
+                    </select>
+                </label>
+                <label class="campo">Número <input class="e-input" @bind="_numeroReserva" maxlength="20" /></label>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_cargaReservas.Activa" OnClick="@CargarReservasAsync">Buscar</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_cargaReservas.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Número</th><th>Estado</th><th class="numero">Valor</th><th>Persona</th><th>Pago de Comercial</th><th>Reservado</th><th>Vence</th><th>Crédito que lo usó</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in _reservas)
+                            {
+                                <tr>
+                                    <td>@r.LoanNumber</td>
+                                    <td>@TextosDeIntegracion.EstadoDeReserva(r.Status)@(r.ReleaseReason is { } motivo ? $" · {motivo}" : "")</td>
+                                    <td class="numero">@TextosDeOriginacion.Pesos(r.Amount)</td>
+                                    <td>@r.Person.Name</td>
+                                    <td><a href="@($"/ventas/documentos/{r.PaymentReference.SalesDocumentPublicId}")">Ver la venta</a></td>
+                                    <td>@r.ReservedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@r.ExpiresAt.ToString("dd/MM/yyyy")</td>
+                                    <td>@if (r.UsedByLoanPublicId is { } credito) { <a href="@($"/cartera/creditos/{credito}")">Ver el crédito</a> } else { <span>—</span> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_reservas.Count == 0) { <p class="texto-tenue">No hay reservas con esos filtros.</p> }
+            </IndicadorDeCarga>
+        </div>
+    }
 
     @if (_mostrarPlantilla)
     {
@@ -227,7 +271,26 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _cargaListas = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _cargaListas = new(), _guardado = new(), _cargaReservas = new();
+    private List<ReservaDeNumeroDto> _reservas = [];
+    private bool _mostrarReservas;
+    private string _estadoReserva = string.Empty;
+    private string? _numeroReserva;
+
+    private async Task AlternarReservasAsync()
+    {
+        _mostrarReservas = !_mostrarReservas;
+        if (_mostrarReservas && _reservas.Count == 0) await CargarReservasAsync();
+    }
+
+    private async Task CargarReservasAsync()
+    {
+        using var carga = _cargaReservas.Iniciar();
+        var r = await ClienteDeCupos.ReservasAsync(string.IsNullOrEmpty(_estadoReserva) ? null : _estadoReserva,
+            string.IsNullOrWhiteSpace(_numeroReserva) ? null : _numeroReserva.Trim());
+        if (!r.IsSuccess || r.Value is null) { _reservas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las reservas de número."); return; }
+        _reservas = [.. r.Value.Items];
+    }
     private PersonSearchPicker.PersonSearchItem? _persona;
     private DisponibleDto? _disponible;
     private List<CupoDto> _cupos = [];

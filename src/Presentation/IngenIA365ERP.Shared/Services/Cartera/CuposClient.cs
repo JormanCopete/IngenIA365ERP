@@ -19,8 +19,21 @@ public sealed class CuposClient(HttpClient http, CentralAuthClient auth)
     public const string RutaDeBloqueos = GobiernoDeCarteraClient.Base + "/blocks";
     public const string RutaDeSaldosDeAportes = GobiernoDeCarteraClient.Base + "/contribution-balances";
     public const string RutaDeGrupos = GobiernoDeCarteraClient.Base + "/connected-groups";
+    public const string RutaDeReservas = GobiernoDeCarteraClient.Base + "/number-reservations";
 
     private readonly InventarioClient _plantillas = new(http, auth);
+
+    // ------------------------------------------------------------------------------------------- reservas --
+
+    /// <summary>
+    /// Feature 013, US6 (T0601; api.md §7.3): las reservas de número que Comercial pidió al confirmar ventas a crédito, por estado
+    /// (<c>Reserved</c>, <c>Used</c>, <c>Released</c>, <c>Expired</c>), número y fechas. Sólo se consultan.
+    /// </summary>
+    public Task<ResultadoDeInventario<PaginaDeCarteraDto<ReservaDeNumeroDto>>> ReservasAsync(string? estado = null, string? numero = null, DateOnly? desde = null,
+        DateOnly? hasta = null, int pagina = 1, int tamano = 20, CancellationToken ct = default) =>
+        Enviar<PaginaDeCarteraDto<ReservaDeNumeroDto>>(HttpMethod.Get, ConQuery(RutaDeReservas, Query(
+            ("status", estado), ("number", numero), ("from", Texto(desde)), ("to", Texto(hasta)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))),
+            null, null, ct);
 
     // ------------------------------------------------------------------------------------------------ cupos --
 

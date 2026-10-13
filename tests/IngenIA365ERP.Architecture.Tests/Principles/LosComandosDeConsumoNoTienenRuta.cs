@@ -36,6 +36,11 @@ public class LosComandosDeConsumoNoTienenRuta
         "AlertDisbursementOrdersWithoutResultCommand",
         "SyncPromissoryNotesCommand",
         "AlertExpiringCollateralsCommand",
+        // US6 (T0577): el consumo de las ventas a crédito y sus ajustes (lo manda DestinoCartera), el de las respuestas de Cartera en Comercial (lo
+        // manda DestinoInventario) y el vencimiento de las reservas de número (lo manda cartera.reservas-vencidas).
+        "ConsumeCommercialCreditMessageCommand",
+        "ConsumeLendingObligationResponseCommand",
+        "ExpireLoanNumberReservationsCommand",
     ];
 
     [Fact]

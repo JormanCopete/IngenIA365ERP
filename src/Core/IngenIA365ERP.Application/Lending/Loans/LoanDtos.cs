@@ -80,7 +80,17 @@ public sealed record LoanDto(
     IReadOnlyList<LoanCollateralDto> Collaterals,
     Guid? PromissoryNote,
     IReadOnlyList<LoanBlockDto> Blocks,
-    string? InvoiceReference);
+    string? InvoiceReference)
+{
+    /// <summary>
+    /// Feature 013, US6 (T0603; FR-052, B8): la validación fallida de la venta que originó el crédito —código y motivo—, y si se confirmó por
+    /// excepción, cuándo. Nula si el crédito nunca tuvo la marca.
+    /// </summary>
+    public LoanValidationFailureDto? ValidationFailure { get; init; }
+}
+
+/// <summary>La validación fallida de la obligación de una venta (T0603): código, motivo y la confirmación por excepción si la hubo. (nuevo)</summary>
+public sealed record LoanValidationFailureDto(string Code, string? Reason, DateTime? ConfirmedByExceptionAt);
 
 /// <summary>Una cuota del plan guardado. (nuevo)</summary>
 public sealed record ScheduleInstallmentDto(int Number, DateOnly PeriodStart, DateOnly DueDate, DateOnly ExigibleDate, decimal OpeningPrincipal,

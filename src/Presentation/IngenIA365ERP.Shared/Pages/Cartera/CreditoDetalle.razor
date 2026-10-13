@@ -3,6 +3,7 @@
 @using System.Globalization
 @using IngenIA365ERP.Shared.Services.Cartera
 @using IngenIA365ERP.Shared.Components.Cartera.Pagos
+@using IngenIA365ERP.Shared.Services.Http
 @inject CreditosClient Creditos
 @inject GarantiasClient Garantias
 @inject DesembolsosClient Desembolsos
@@ -67,12 +68,31 @@
                     <p><strong>Deudor:</strong> @c.Debtor.Name
                         @if (c.CoDebtors.Count > 0) { <span> · <strong>Codeudores:</strong> @string.Join(", ", c.CoDebtors.Select(x => x.Name))</span> }</p>
                     <p><strong>Línea:</strong> @c.Line.Code · @c.Line.Name · <strong>Oficina:</strong> @c.Office.Name · <strong>Modalidad:</strong> @c.Modality@(c.Subsegment is { } s ? $" ({s})" : "")</p>
-                    <p><strong>Origen:</strong> @TextosDeCreditos.Origen(c.Origin)</p>
+                    <p><strong>Origen:</strong> @TextosDeCreditos.Origen(c.Origin)@(c.InvoiceReference is { } factura ? $" · factura de origen {factura}" : "")</p>
                     @if (c.Terms is { } t)
                     {
                         <p><strong>Tasa:</strong> @TextosDeCreditos.ClaseDeTasa(t.RateKind) @TextosDeCreditos.Porcentaje(t.EffectiveAnnual) EA
                             @if (t.IndexCode is { } indice) { <span>(@indice + @TextosDeCreditos.Porcentaje(t.Margin))</span> }
                             · <strong>Reglas de cálculo:</strong> @t.RulesVersion · <strong>Versión de condiciones:</strong> @t.Version</p>
+                    }
+                    @if (c.ValidationFailure is { } falla)
+                    {
+                        @* US6 (T0603; FR-052, B8): la obligación de una venta cuya validación falló: no se anula la venta y el deudor queda bloqueado para
+                           crédito nuevo hasta que alguien con atribución la confirme por excepción. *@
+                        @if (falla.ConfirmedByExceptionAt is { } confirmada)
+                        {
+                            <p class="aviso aviso-info">La validación de la venta falló (@(falla.Reason ?? "sin motivo")) y se confirmó por excepción el @confirmada.ToLocalTime().ToString("dd/MM/yyyy HH:mm").</p>
+                        }
+                        else
+                        {
+                            <div class="aviso aviso-alerta" role="alert">
+                                <p><strong>Validación fallida:</strong> @(falla.Reason ?? "la venta no cumplió las verificaciones de Cartera a su fecha.")</p>
+                                <p>El crédito existe y se causa y cobra como cualquier otro; el deudor no recibe crédito nuevo mientras no se confirme por excepción.</p>
+                                <PermissionGate Required="Lending.ValidationFailures.Confirm">
+                                    <SfButton CssClass="e-primary e-small" OnClick="@AbrirConfirmacion">Confirmar por excepción…</SfButton>
+                                </PermissionGate>
+                            </div>
+                        }
                     }
                     @{ var marcas = Marcas(c.Marks); }
                     @if (marcas.Count > 0) { <p><strong>Marcas:</strong> @string.Join(", ", marcas)</p> }
@@ -375,10 +395,56 @@
         </IndicadorDeCarga>
     }
 </div>
+
+<SfDialog @bind-Visible="_mostrarConfirmacion" Header="Confirmar por excepción" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">
+                    La obligación queda validada y se levanta el bloqueo del deudor. Si el valor supera su atribución, el crédito pasa a decisión de quien
+                    corresponda. Listas restrictivas, usura, autorización de datos y capacidad de pago no admiten excepción.
+                </p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_errorConfirmacion is not null) { <p class="aviso aviso-error" role="alert">@_errorConfirmacion</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarConfirmacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
     [Parameter] public Guid Id { get; set; }
+
+    // US6 (T0603): la confirmación por excepción de una validación fallida.
+    private readonly EstadoDeCarga _guardado = new();
+    private ClaveDeOperacion _claveConfirmacion = new();
+    private bool _mostrarConfirmacion;
+    private string? _motivo, _errorConfirmacion;
+
+    private void AbrirConfirmacion()
+    {
+        _motivo = _errorConfirmacion = null;
+        _claveConfirmacion = new ClaveDeOperacion();
+        _mostrarConfirmacion = true;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_c is not { } c || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _errorConfirmacion = null;
+        var r = await Creditos.ConfirmarValidacionFallidaAsync(c.PublicId, _motivo.Trim(), _claveConfirmacion);
+        if (!r.IsSuccess || r.Value is null) { _errorConfirmacion = r.ErrorMessage ?? "No se pudo confirmar por excepción."; return; }
+        _c = r.Value;
+        _mostrarConfirmacion = false;
+        await Notification.SuccessAsync(r.Value.ValidationFailure?.ConfirmedByExceptionAt is null
+            ? "La confirmación supera su atribución: el crédito pasó a decisión."
+            : "Validación confirmada por excepción: el bloqueo del deudor se levantó.");
+    }
 
     private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias }
 

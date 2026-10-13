@@ -42,6 +42,8 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/DoblesDePrueba.razor", "/cartera/dobles-de-prueba", "Lending.TestDoubles.Operate"),
         // Fase 8, US4 (T0510): los créditos; su detalle (/cartera/creditos/{id:guid}, T0509) se abre desde la lista.
         ("Pages/Cartera/Creditos.razor", "/cartera/creditos", "Lending.Loans.Read"),
+        // Fase 10, US6 (T0602): la bandeja de mensajes —los recibos y las corridas del proceso—.
+        ("Pages/Cartera/BandejaDeMensajes.razor", "/cartera/bandeja-de-mensajes", "Lending.Messages.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>

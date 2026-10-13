@@ -537,7 +537,30 @@ public sealed record CreditPaymentDto(
     string? SuggestedLineCode,
     bool PendingValidation,
     CreditOrigin? CreditOrigin,
-    CreditPaymentApprovalDto? Approval);
+    CreditPaymentApprovalDto? Approval)
+{
+    /// <summary>Feature 013 (T0598): el número reservado en Cartera al confirmar (nulo si no hubo reserva, D26).</summary>
+    public string? ReservedLoanNumber { get; init; }
+
+    /// <summary>Feature 013 (T0598, T18): la última respuesta de Cartera para este pago; nula mientras no llegue.</summary>
+    public LendingObligationResponseDto? LendingObligation { get; init; }
+}
+
+/// <summary>
+/// La última respuesta de Cartera a un pago de crédito (<c>INV_LendingObligationResponses</c>; feature 013, T0598): número y estado de la obligación, o el
+/// motivo del rechazo. <b>Nunca</b> saldos ni cuotas (enmienda de FR-062 de la 012). <c>Outcome</c> es <c>Created</c> o <c>Rejected</c>;
+/// <c>ValidationStatus</c>, <c>Validated</c>, <c>ValidationFailed</c>, <c>Migrated</c>, <c>CancelledBeforeCutoff</c> o <c>NotIncorporated</c>. (nuevo)
+/// </summary>
+public sealed record LendingObligationResponseDto(
+    string MessageType,
+    string Outcome,
+    Guid? ObligationPublicId,
+    string? ObligationNumber,
+    string? ValidationStatus,
+    string? ReasonCode,
+    string? Reason,
+    bool Retryable,
+    DateTime ReceivedAt);
 
 /// <summary><c>validation</c> de un mensaje a Cartera: <c>Pending</c>, <c>Validated</c> o <c>Failed</c> (§23.2). (nuevo)</summary>
 public sealed record LendingValidationDto(string Status, DateTime? EvaluatedAt, string? Reason);
@@ -597,6 +620,12 @@ public sealed class GetSalesDocumentCreditQueryHandler(
             .ToListAsync(ct);
         var disponible = await registro.DestinoHabilitadoAsync(IntegrationDestinations.Lending, reloj.HoyLocal, ct);
 
+        // Feature 013 (T0598): la última respuesta de Cartera por pago (DestinoInventario), sin saldos ni cuotas.
+        var idsDePago = pagos.Select(p => p.Id).ToList();
+        var respuestas = (await db.LendingObligationResponses.AsNoTracking().Where(r => idsDePago.Contains(r.DocumentPaymentId)).ToListAsync(ct))
+            .GroupBy(r => r.DocumentPaymentId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.ReceivedAt).ThenByDescending(r => r.Id).First());
+
         var lendingMessages = new List<LendingMessageDto>(mensajes.Count);
         foreach (var m in mensajes)
         {
@@ -613,7 +642,14 @@ public sealed class GetSalesDocumentCreditQueryHandler(
                 return new CreditPaymentDto(p.PublicId, p.MeansCode, p.MeansClass, p.Amount, p.InstallmentCount, p.CreditTermDays, p.InstallmentPeriodDays,
                     p.FirstDueDate, p.FinalDueDate, p.SuggestedCreditLineCode, p.PendingValidation, p.CreditOrigin,
                     solicitud is null ? null : new CreditPaymentApprovalDto(solicitud.PublicId, solicitud.Status.ToString(), aprobo?.DecidedByName,
-                        aprobo?.Level, aprobo?.DecidedAt));
+                        aprobo?.Level, aprobo?.DecidedAt))
+                {
+                    ReservedLoanNumber = p.ReservedLoanNumber,
+                    LendingObligation = respuestas.TryGetValue(p.Id, out var r)
+                        ? new LendingObligationResponseDto(r.MessageType, r.Outcome.ToString(), r.ObligationPublicId, r.ObligationNumber, r.ValidationStatus?.ToString(),
+                            r.ReasonCode, r.Reason, r.Retryable, r.ReceivedAt)
+                        : null,
+                };
             }).ToList(),
             pagos.Select(p => p.AccountsReceivableRecordedBy).FirstOrDefault(s => s is not null),
             lendingMessages));

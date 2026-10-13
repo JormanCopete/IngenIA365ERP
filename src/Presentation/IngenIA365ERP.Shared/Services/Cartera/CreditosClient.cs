@@ -1,3 +1,4 @@
+using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
 using IngenIA365ERP.Shared.Services.Security;
 using IngenIA365ERP.Shared.Services.Ventas;
@@ -66,6 +67,14 @@ public sealed class CreditosClient(HttpClient http, CentralAuthClient auth)
         ? (v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : DateTime.SpecifyKind(v, DateTimeKind.Utc))
             .ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", System.Globalization.CultureInfo.InvariantCulture)
         : null;
+
+    /// <summary>
+    /// Feature 013, US6 (T0601; api.md §8.2): confirma por excepción la obligación de una venta con validación fallida, con motivo y su
+    /// <see cref="ClaveDeOperacion"/>. Por encima de la atribución operativa el crédito pasa a decisión: la respuesta lo dice.
+    /// </summary>
+    public Task<ResultadoDeInventario<CreditoDto>> ConfirmarValidacionFallidaAsync(Guid credito, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<CreditoDto>(http, auth, HttpMethod.Post, $"{RutaDeCreditos}/{credito}/validation-failure/confirm", new MotivoDeCarteraRequest(motivo),
+            clave, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, CancellationToken ct) =>
         EnvioDeVentas.EnviarAsync<T>(http, auth, metodo, url, null, null, ct);

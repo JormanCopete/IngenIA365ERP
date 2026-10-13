@@ -57,7 +57,14 @@ public sealed record CreditDefaultsDto(short? MaxInstallments, short? TermDays, 
     short? DefaultInstallments);
 
 /// <summary><c>lending</c> (IC): lo que responde Cartera, nulo en el crédito provisional. (nuevo)</summary>
-public sealed record LendingStatusDto(string Status, decimal? AvailableQuota, IReadOnlyList<LineaDeCreditoDto> Lines, string? EvidenceId);
+public sealed record LendingStatusDto(string Status, decimal? AvailableQuota, IReadOnlyList<LineaDeCreditoDto> Lines, string? EvidenceId)
+{
+    /// <summary>Feature 013 (T0599, §5.1): si Cartera admite vender a crédito a la persona (estado y mora); con <c>false</c> la confirmación responde <c>LendingBlocked</c>.</summary>
+    public bool AllowsSale { get; init; } = true;
+
+    /// <summary>Feature 013 (T0599): el motivo del bloqueo en español, sin detalle de listas.</summary>
+    public string? BlockReason { get; init; }
+}
 
 /// <summary>La evaluación de §23.1. (nuevo)</summary>
 public sealed record SaleCreditEvaluationDto(
@@ -127,6 +134,8 @@ public sealed class EvaluateSaleCreditQueryHandler(
             new CreditApprovalDto(niveles.Select(n => new CreditApprovalLevelDto(n.Order, n.PermissionCode, n.Threshold)).ToList(), maximo),
             new CreditDefaultsDto(medio.MaxInstallments, medio.DefaultTermDays, medio.InstallmentPeriodDays, medio.SuggestedCreditLineCode,
                 CreditoEnLaVenta.MaximoDePlazo(medio), medio.DefaultInstallments),
-            estado is { LendingEnabled: true } ? new LendingStatusDto(estado.Status, estado.AvailableQuota, estado.Lines, estado.EvidenceId) : null));
+            estado is { LendingEnabled: true }
+                ? new LendingStatusDto(estado.Status, estado.AvailableQuota, estado.Lines, estado.EvidenceId) { AllowsSale = estado.AllowsSale, BlockReason = estado.BlockReason }
+                : null));
     }
 }

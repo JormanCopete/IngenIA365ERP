@@ -524,6 +524,9 @@ public static class DependencyInjection
         // (VentaACreditoRegistrada y AjusteDeVentaACredito en toda versión, C16). El destino Lending cuenta cuando su consumidor acepta todo lo que la
         // fila CAR adopta (RegistroDeIntegracion.ImplementacionDisponible): desde US6 acepta lo que la semilla adopta y el despachador le entrega.
         services.AddScoped<Common.Integration.IDestinoDeMensajes, Lending.Integration.DestinoCartera>();
+        // Feature 013, US6 (T0598; DT §2.9, CH9): Comercial como destino Inventory, el único; guarda ObligacionCreada y ObligacionRechazada v1 en
+        // INV_LendingObligationResponses (número y estado, nunca saldos). La fila INV del registro lo adopta desde la semilla.
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Inventory.Integration.DestinoInventario>();
         services.AddScoped<Lending.Disbursements.RequisitosDelDesembolso>();
         services.AddScoped<Lending.Disbursements.TramoDeDesembolso>();
         services.AddScoped<Lending.Disbursements.RecogidaEnElDesembolso>();

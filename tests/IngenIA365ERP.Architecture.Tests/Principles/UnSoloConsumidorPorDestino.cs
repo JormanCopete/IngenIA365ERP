@@ -25,6 +25,8 @@ public class UnSoloConsumidorPorDestino
         // Receipts (sólo fuera de producción; en producción esos destinos no tienen consumidor hasta que lleguen Tesorería y Recaudo).
         IntegrationDestinations.Treasury,
         IntegrationDestinations.Receipts,
+        // US6 (T0577, T0598; CH9): DestinoInventario, el de Comercial, que guarda ObligacionCreada y ObligacionRechazada.
+        IntegrationDestinations.Inventory,
     ];
 
     private static IReadOnlyList<string> TodosLosDestinos() => typeof(IntegrationDestinations)

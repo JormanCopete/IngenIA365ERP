@@ -21,7 +21,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Database;
 [Collection(InventarioCollection.Nombre)]
 public class PuntoDeGuardadoTests(CentralIdentityApiFixture fx)
 {
-    private const string Cooperativa = "punto-de-guardado";
+    private const string Cooperativa = "punto_guardado";
 
     private static OperationKey Fila(string marca) => new()
     {
@@ -53,8 +53,8 @@ public class PuntoDeGuardadoTests(CentralIdentityApiFixture fx)
     public async Task Una_falla_dentro_vuelve_al_punto_y_la_transaccion_de_afuera_sigue_utilizable()
     {
         var entrada = await EntradaAsync();
-        var afuera = $"Afuera-{Guid.NewGuid():N}"[..40];
-        var adentro = $"Adentro-{Guid.NewGuid():N}"[..40];
+        var afuera = $"Afuera-{Guid.NewGuid():N}";
+        var adentro = $"Adentro-{Guid.NewGuid():N}";
 
         var resultado = await EnLaCooperativaAsync(entrada, async s =>
         {
@@ -92,7 +92,7 @@ public class PuntoDeGuardadoTests(CentralIdentityApiFixture fx)
     public async Task Sin_falla_lo_del_punto_se_confirma_con_la_de_afuera()
     {
         var entrada = await EntradaAsync();
-        var marca = $"Punto-{Guid.NewGuid():N}"[..40];
+        var marca = $"Punto-{Guid.NewGuid():N}";
 
         await EnLaCooperativaAsync(entrada, async s =>
         {

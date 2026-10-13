@@ -134,6 +134,10 @@
             <PermissionGate Required="Lending.Loans.Read">
                 <NavLink href="/cartera/creditos" class="nav-subitem">Créditos</NavLink>
             </PermissionGate>
+            @* US6 (T0602): lo que llega a Cartera (ventas a crédito, ajustes, resultados del giro) y las corridas del proceso. *@
+            <PermissionGate Required="Lending.Messages.Read">
+                <NavLink href="/cartera/bandeja-de-mensajes" class="nav-subitem">Bandeja de mensajes</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">
                 <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>

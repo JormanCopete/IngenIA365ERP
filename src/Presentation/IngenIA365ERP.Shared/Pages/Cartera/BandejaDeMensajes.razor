@@ -1,0 +1,249 @@
+@page "/cartera/bandeja-de-mensajes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject MensajesRecibidosClient Recibidos
+@inject CorridasDeCarteraClient Corridas
+@inject INotificationService Notification
+
+<PageTitle>Bandeja de mensajes de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US6 (T0602; contracts/api.md §16.2, §16.4; T17, C95, C102): lo que llega a Cartera —las ventas a crédito y sus ajustes de Comercial y
+   los resultados del giro de Tesorería— con su estado, sus evaluaciones, el crédito que originó y la respuesta enviada a Comercial; un recibo
+   rechazado se marca no reprocesable con motivo (emite la obligación rechazada definitiva). La pestaña «Corridas del proceso» (pendiente desde US4)
+   lista las corridas del ciclo diario con su avance y sus errores, sin datos del deudor. La fase de US7 le suma los mensajes emitidos. *@
+<PermissionGate Required="Lending.Messages.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Bandeja de mensajes de Cartera</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Recibidos</SfButton>
+            <PermissionGate Required="Lending.Processes.View">
+                <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Corridas del proceso</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" @bind="_estado">
+                    <option value="">Todos</option>
+                    @foreach (var (valor, texto) in TextosDeIntegracion.EstadosDeRecibo) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+            <label class="campo">Tipo
+                <select class="e-input" @bind="_tipo">
+                    <option value="">Todos</option>
+                    @foreach (var (valor, texto) in TextosDeIntegracion.TiposDeMensaje) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" @onchange="@(e => _desde = LeerFecha(e.Value))" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" @onchange="@(e => _hasta = LeerFecha(e.Value))" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <p class="texto-apoyo">@_total recibo(s).</p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Recibido</th><th>Mensaje</th><th>Origen</th><th>Fecha de la operación</th><th>Estado</th><th>Crédito</th><th>Respuesta a Comercial</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _recibos)
+                        {
+                            var recibo = m;
+                            <tr>
+                                <td>@recibo.ReceivedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@TextosDeIntegracion.TipoDeMensaje(recibo.Type) <span class="texto-tenue">v@(recibo.Version)</span></td>
+                                <td>@TextosDeIntegracion.Modulo(recibo.OriginModule)@(recibo.OriginNumber is { } n ? $" · {n}" : "")</td>
+                                <td>@recibo.OperationDate.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    @TextosDeIntegracion.EstadoDeRecibo(recibo.Status)
+                                    @if (recibo.ValidationReason is { } motivo) { <br /><span class="texto-tenue">@motivo</span> }
+                                    @if (recibo.NotRetryableAt is { } cuando) { <br /><span class="aviso aviso-alerta">No reprocesable desde @cuando.ToLocalTime().ToString("dd/MM/yyyy HH:mm"): @recibo.NotRetryableReason</span> }
+                                </td>
+                                <td>@if (recibo.Loan is { } credito) { <a href="@($"/cartera/creditos/{credito.PublicId}")">@credito.Name</a> } else { <span>—</span> }</td>
+                                <td>@(recibo.Response is { } r ? TextosDeIntegracion.TipoDeMensaje(r.Type) : "—")</td>
+                                <td>
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => VerDetalleAsync(recibo.MessagePublicId))">Evaluaciones</SfButton>
+                                    @if (recibo.Status == "Rejected" && recibo.NotRetryableAt is null)
+                                    {
+                                        <PermissionGate Required="Lending.Messages.Reprocess">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirMarcar(recibo))">Marcar no reprocesable…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_recibos.Count == 0) { <p class="texto-tenue">No hay recibos con esos filtros.</p> }
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span class="texto-apoyo">Página @_pagina</span>
+                <SfButton CssClass="e-outline" Disabled="@(_pagina * Tamano >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        </IndicadorDeCarga>
+
+        @if (_verDetalle)
+        {
+            <div class="info-card">
+                <IndicadorDeCarga Cargando="@_cargaDetalle.Activa" Texto="Cargando el recibo…">
+                    @if (_detalle is { } d)
+                    {
+                        <h4>@TextosDeIntegracion.TipoDeMensaje(d.Receipt.Type) · @TextosDeIntegracion.EstadoDeRecibo(d.Receipt.Status)</h4>
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">#</th><th>Fecha</th><th>Resultado</th><th>Motivo</th><th>Línea</th><th>Reprocesable</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in d.Receipt.Evaluations)
+                                {
+                                    <tr>
+                                        <td class="numero">@e.Number</td>
+                                        <td>@e.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@TextosDeIntegracion.ResultadoDeEvaluacion(e.Outcome)</td>
+                                        <td>@(e.Reason ?? "—")</td>
+                                        <td>@(e.CreditLineCode ?? "—")</td>
+                                        <td>@(e.Retryable ? "Sí" : "No")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    <SfButton CssClass="e-outline" OnClick="@(() => _verDetalle = false)">Cerrar</SfButton>
+                </IndicadorDeCarga>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" @bind="_estadoCorrida">
+                    <option value="">Todos</option>
+                    @foreach (var (valor, texto) in TextosDeCreditos.EstadosDeCorrida) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_cargaCorridas.Activa" OnClick="@CargarCorridasAsync">Buscar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaCorridas.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Clase</th><th>Fecha</th><th>Estado</th><th class="numero">Avance</th><th>Pedida por</th><th>Inicio</th><th>Fin</th><th class="numero">Errores</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _corridas)
+                        {
+                            <tr>
+                                <td>@TextosDeCreditos.ClaseDeCorrida(c.Kind)</td>
+                                <td>@(c.Date?.ToString("dd/MM/yyyy") ?? c.Period ?? "—")</td>
+                                <td>@TextosDeCreditos.EstadoDeCorrida(c.Status)</td>
+                                <td class="numero">@c.Progress.Done / @c.Progress.Total</td>
+                                <td>@TextosDeCreditos.QuienPidio(c)</td>
+                                <td>@(c.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                                <td>@(c.FinishedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                                <td class="numero">@c.Errors</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_corridas.Count == 0) { <p class="texto-tenue">No hay corridas con esos filtros.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarMarcar" Header="Marcar no reprocesable" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <p class="texto-apoyo">
+                    El recibo deja de reprocesarse y Cartera responde a Comercial que la venta no tendrá obligación, con este motivo. No se puede deshacer.
+                </p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@MarcarAsync">Marcar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMarcar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int Tamano = 20;
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _cargaCorridas = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private int _pestana, _pagina = 1;
+    private long _total;
+    private string _estado = string.Empty, _tipo = string.Empty, _estadoCorrida = string.Empty;
+    private DateOnly? _desde, _hasta;
+    private List<MensajeRecibidoDto> _recibos = [];
+    private List<CorridaEnListaDto> _corridas = [];
+    private MensajeRecibidoDetalleDto? _detalle;
+    private MensajeRecibidoDto? _aMarcar;
+    private bool _verDetalle, _mostrarMarcar;
+    private string? _motivo, _error;
+
+    protected override Task OnInitializedAsync() => CargarAsync(1);
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (pestana == 1 && _corridas.Count == 0) await CargarCorridasAsync();
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        _pagina = Math.Max(1, pagina);
+        var r = await Recibidos.ListarAsync(Nulo(_estado), Nulo(_tipo), _desde, _hasta, _pagina, Tamano);
+        if (!r.IsSuccess || r.Value is null) { _recibos = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los recibos."); return; }
+        _recibos = [.. r.Value.Items];
+        _total = r.Value.TotalCount;
+    }
+
+    private async Task VerDetalleAsync(Guid mensaje)
+    {
+        _verDetalle = true;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Recibidos.DetalleAsync(mensaje);
+        if (!r.IsSuccess) { _detalle = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el recibo."); return; }
+        _detalle = r.Value;
+    }
+
+    private async Task CargarCorridasAsync()
+    {
+        using var carga = _cargaCorridas.Iniciar();
+        var r = await Corridas.ListarAsync(estado: Nulo(_estadoCorrida));
+        if (!r.IsSuccess || r.Value is null) { _corridas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las corridas."); return; }
+        _corridas = [.. r.Value.Items];
+    }
+
+    private void AbrirMarcar(MensajeRecibidoDto recibo)
+    {
+        _aMarcar = recibo;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMarcar = true;
+    }
+
+    private async Task MarcarAsync()
+    {
+        if (_aMarcar is not { } m || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Recibidos.MarcarNoReprocesableAsync(m.MessagePublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo marcar el recibo."; return; }
+        _mostrarMarcar = false;
+        await Notification.SuccessAsync("Recibo marcado no reprocesable: Comercial recibe la obligación rechazada.");
+        await CargarAsync(_pagina);
+    }
+
+    private static string? Nulo(string valor) => string.IsNullOrWhiteSpace(valor) ? null : valor;
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

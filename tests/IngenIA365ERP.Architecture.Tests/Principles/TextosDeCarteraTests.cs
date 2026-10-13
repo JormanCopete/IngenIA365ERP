@@ -18,6 +18,8 @@ public class TextosDeCarteraTests
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeOriginacion.cs",
         // US4 (T0508–T0510): los textos de los créditos, la liquidación, el libro y las corridas.
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeCreditos.cs",
+        // US6 (T0602, T0603): lo que llega a Cartera y las reservas de número (la pantalla nombra permisos en sus PermissionGate, como las demás).
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeIntegracion.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos =

@@ -53,6 +53,8 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/ProcessRunsEndpoints.cs",
         // US5 (bloque 9C, T0558): el reverso por pantalla y la preferencia; la simulación y la vista previa del reverso son consultas por POST.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PaymentsEndpoints.cs",
+        // US6 (bloque 10B, T0577, T0597): marcar no reprocesable un recibo (y la confirmación por excepción, en LoansEndpoints).
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/InboundMessagesEndpoints.cs",
     ];
 
     /// <summary>
@@ -156,6 +158,9 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ApplyTestCollectorPaymentCommand),
         typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ReverseTestCollectorPaymentCommand),
         typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ResolveTestCollectorCreditBalanceCommand),
+        // US6 (bloque 10B, T0577): confirmar por excepción una validación fallida y marcar no reprocesable un recibo.
+        typeof(IngenIA365ERP.Application.Lending.Loans.Commands.ConfirmValidationFailureCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.Comercial.MarkLendingInboundMessageNotRetryableCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

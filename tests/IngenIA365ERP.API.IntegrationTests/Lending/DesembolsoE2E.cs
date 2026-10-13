@@ -6,6 +6,7 @@ using IngenIA365ERP.API.IntegrationTests.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Lending.Integration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using static IngenIA365ERP.API.IntegrationTests.Lending.LineasE2E;
 using static IngenIA365ERP.API.IntegrationTests.Lending.OriginacionE2E;
@@ -193,6 +194,21 @@ public static class DesembolsoE2E
             new ConsumeTreasuryResultCommand([mensaje]));
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
         return r.Value;
+    }
+
+    /// <summary>
+    /// Desde US6 el destino <c>Lending</c> tiene consumidor y el despachador entrega el <c>ResultadoDelGiro</c> solo: unas pasadas sobre la cooperativa y
+    /// el estado en que quedó la entrega del mensaje a Cartera (<c>Processed</c> si se consumió). Las pruebas que necesitan ver la respuesta del
+    /// comando —el segundo consumo de un reproceso, <c>AlreadyProcessed</c>— siguen con <see cref="ConsumirAsync"/>.
+    /// </summary>
+    public static async Task<IngenIA365ERP.Domain.Enums.Integration.DeliveryStatus> EntregarPorElDespachadorAsync(CentralIdentityApiFixture fx, Escenario esc,
+        Guid mensaje)
+    {
+        await new ConductorDelDespachador(fx).PasadasAsync(esc.Coop.TenantPublicId, 2);
+        return await EnLaBaseAsync(fx, esc, db => (from m in db.IntegrationMessages.AsNoTracking()
+                                                   join d in db.IntegrationMessageDeliveries.AsNoTracking() on m.Id equals d.MessageId
+                                                   where m.PublicId == mensaje && d.Destination == IngenIA365ERP.Domain.Enums.Integration.IntegrationDestinations.Lending
+                                                   select d.Status).SingleAsync());
     }
 
     // ------------------------------------------------------------------------------------------ la base --

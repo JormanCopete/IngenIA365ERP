@@ -271,7 +271,18 @@ public sealed record AprobacionDelPagoDto(Guid ApprovalRequestPublicId, string S
 
 public sealed record PagoACreditoDto(Guid DocumentPaymentPublicId, string MeansCode, int MeansClass, decimal Amount, short? Installments, short? TermDays,
     short? PeriodicityDays, DateOnly? FirstDueDate, DateOnly? FinalDueDate, string? SuggestedLineCode, bool PendingValidation, int? CreditOrigin,
-    AprobacionDelPagoDto? Approval);
+    AprobacionDelPagoDto? Approval)
+{
+    /// <summary>Feature 013 (T0600): el número reservado en Cartera al confirmar; nulo si no hubo reserva.</summary>
+    public string? ReservedLoanNumber { get; init; }
+
+    /// <summary>Feature 013 (T0600): la última respuesta de Cartera para el pago; nula mientras no llegue.</summary>
+    public RespuestaDeCarteraDto? LendingObligation { get; init; }
+}
+
+/// <summary>La última respuesta de Cartera a un pago de crédito: número y estado de la obligación o el motivo del rechazo; nunca saldos ni cuotas.</summary>
+public sealed record RespuestaDeCarteraDto(string MessageType, string Outcome, Guid? ObligationPublicId, string? ObligationNumber, string? ValidationStatus,
+    string? ReasonCode, string? Reason, bool Retryable, DateTime ReceivedAt);
 
 public sealed record ValidacionDeCarteraDto(string Status, DateTime? EvaluatedAt, string? Reason);
 

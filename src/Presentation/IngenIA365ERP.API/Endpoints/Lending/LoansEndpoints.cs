@@ -22,6 +22,7 @@ public class LoansEndpoints : ICarterModule
     public const string AnularCredito = "Lending.Disbursements.Void";
     public const string LeerCreditos = "Lending.Loans.Read";
     public const string Liquidar = "Lending.Payoffs.Read";
+    public const string ConfirmarValidacionFallida = "Lending.ValidationFailures.Confirm";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -80,6 +81,17 @@ public class LoansEndpoints : ICarterModule
             .WithName("Lending_Loans_Void")
             .ConClaveDeOperacion()
             .RequirePermission(AnularCredito);
+
+        // US6 (T0597; api.md §8.2; FR-052, B8): confirmar por excepción la obligación de una venta con validación fallida. Por encima de la atribución
+        // operativa pasa a decisión (la confirma POST /{id}/validation-failure/decisions); listas, usura, autorización o capacidad no admiten excepción.
+        creditos.MapPost("/{id:guid}/validation-failure/confirm", async (Guid id, AnulacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Lending.Loans.Commands.ConfirmValidationFailureCommand(id, body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_Loans_ConfirmValidationFailure")
+            .ConClaveDeOperacion()
+            .RequirePermission(ConfirmarValidacionFallida);
     }
 
     /// <summary>

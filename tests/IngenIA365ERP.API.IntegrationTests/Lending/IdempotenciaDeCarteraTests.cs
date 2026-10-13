@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.EntityFrameworkCore;
 using static IngenIA365ERP.API.IntegrationTests.Lending.DesembolsoE2E;
+using IngenIA365ERP.Application.Common.Integration.Lending;
 
 namespace IngenIA365ERP.API.IntegrationTests.Lending;
 
@@ -212,5 +213,52 @@ public sealed class IdempotenciaDeCarteraTests(CentralIdentityApiFixture fx)
             (await dos.Content.ReadAsStringAsync()).Should().Be(await uno.Content.ReadAsStringAsync());
             (await PagosE2E.OperacionesAsync(fx, esc, credito)).Count(o => o.Clase == LoanOperationKind.PaymentReversal).Should().Be(1);
         }
+    }
+
+    /// <summary>
+    /// US6 (T0579; SC-010, T22): tres reservas con la misma clave y la misma huella dan un número; la misma clave con otra huella (desde otra venta) es
+    /// <c>Lending.Reservation.KeyReused</c>; y el mismo mensaje de venta entregado tres veces deja un crédito y la misma respuesta.
+    /// </summary>
+    [Fact]
+    public async Task Tres_reservas_con_la_misma_clave_dan_un_numero_y_tres_entregas_de_la_venta_un_credito()
+    {
+        var esc = await VentasConCarteraE2E.EscenarioAsync(fx);
+        var pago = Guid.NewGuid();
+        var documento = Guid.NewGuid();
+        var clave = IngenIA365ERP.Application.Inventory.Sales.CreditoEnLaVenta.ClaveDeReserva(pago, 120_000m);
+        SolicitudDeReserva Solicitud(Guid venta) => new(clave, pago, venta, esc.Ximena, IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass.AssociateCredit,
+            120_000m, esc.Hoy, VentasConCarteraE2E.Linea, "MOSTRADOR");
+
+        var reservas = new List<ResultadoDeReservaDto>();
+        for (var i = 0; i < 3; i++) reservas.Add(await VentasConCarteraE2E.EnLaTransaccionAsync(fx, esc, r => r.ReservarAsync(Solicitud(documento), default)));
+        reservas.Should().OnlyContain(r => r.Status == EstadosDeReserva.Reserved, string.Join("; ", reservas.Select(r => $"{r.Status} {r.Code} {r.Message}")));
+        reservas.Select(r => r.LoanNumber).Distinct().Should().ContainSingle("la misma clave y huella devuelven el mismo número");
+        // La clave lleva el monto (el validador exige que coincida); otra huella con la misma clave es la misma clave desde otra venta.
+        var otra = await VentasConCarteraE2E.EnLaTransaccionAsync(fx, esc, r => r.ReservarAsync(Solicitud(Guid.NewGuid()), default));
+        otra.Status.Should().Be(EstadosDeReserva.Rejected);
+        otra.Code.Should().Be("Lending.Reservation.KeyReused");
+        (await VentasConCarteraE2E.EnLaTransaccionAsync(fx, esc, r => r.LiberarAsync(new SolicitudDeLiberacion(clave, pago, "Prueba de idempotencia (e2e)"), default)))
+            .Status.Should().Be(EstadosDeReserva.Released);
+
+        // El mismo mensaje de venta tres veces: un crédito, la misma respuesta.
+        using var http = fx.CreateClient();
+        var (venta, cobro) = await VentasConCarteraE2E.CobrarACreditoAsync(http, esc.Ventas, esc.Cajero, esc.Sesion, esc.Ximena, 1,
+            VentasConCarteraE2E.Credito(esc.Ventas, 100_000m, cuotas: 1, plazo: 30));
+        cobro.StatusCode.Should().Be(HttpStatusCode.OK, await cobro.Content.ReadAsStringAsync());
+        var mensaje = (await VentasConCarteraE2E.CreditoDeLaVentaAsync(http, esc.Cajero, venta)).GetProperty("lendingMessages").EnumerateArray().Single()
+            .GetProperty("messagePublicId").GetGuid();
+        var conductor = new IngenIA365ERP.API.IntegrationTests.Integration.ConductorDelDespachador(fx);
+        var consumos = new List<ResultadoDeConsumo>();
+        for (var i = 0; i < 3; i++)
+        {
+            var r = await conductor.EnviarComoProcesoAsync(esc.TenantPublicId, $"Mensaje:{mensaje:N}",
+                new IngenIA365ERP.Application.Lending.Integration.Comercial.ConsumeCommercialCreditMessageCommand([mensaje]));
+            r.IsSuccess.Should().BeTrue();
+            consumos.Add(r.Value);
+        }
+        consumos[0].Should().BeOfType<ResultadoDeConsumo.Processed>();
+        consumos.Skip(1).Should().AllBeOfType<ResultadoDeConsumo.AlreadyProcessed>();
+        var numero = (await VentasConCarteraE2E.PagoACreditoAsync(http, esc.Cajero, venta)).GetProperty("reservedLoanNumber").GetString();
+        (await VentasConCarteraE2E.EnLaBaseAsync(fx, esc, db => db.Loans.AsNoTracking().CountAsync(l => l.Number == numero))).Should().Be(1);
     }
 }

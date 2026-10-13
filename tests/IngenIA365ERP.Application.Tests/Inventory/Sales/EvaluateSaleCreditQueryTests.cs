@@ -64,6 +64,26 @@ public class EvaluateSaleCreditQueryTests
     }
 
     [Fact]
+    public async Task Con_Cartera_activada_y_el_deudor_bloqueado_la_evaluacion_dice_que_no_admite_la_venta_y_por_que()
+    {
+        // T0575, T0599 (§5.1): Comercial ve en la evaluación lo que hará la confirmación (Inventory.Credit.LendingBlocked).
+        var c = await CreditoDePrueba.CrearAsync();
+        c.Cartera = new IngenIA365ERP.Application.Tests.Common.Integration.Lending.ConsultasDeCarteraDePrueba
+        {
+            Respuesta = IngenIA365ERP.Application.Tests.Common.Integration.Lending.ConsultasDeCarteraDePrueba.Activa() with
+            {
+                Status = EstadosCrediticios.Blocked, AllowsSale = false, BlockReason = "Validación fallida de una venta anterior",
+            },
+        };
+
+        var e = await EvaluarAsync(c, c.AsociadoX, c.CredAsoc);
+
+        e.Lending!.Status.Should().Be(EstadosCrediticios.Blocked);
+        e.Lending.AllowsSale.Should().BeFalse();
+        e.Lending.BlockReason.Should().Be("Validación fallida de una venta anterior");
+    }
+
+    [Fact]
     public async Task Sin_respuesta_de_Cartera_el_origen_es_LendingNoResponse()
     {
         var c = await CreditoDePrueba.CrearAsync();
