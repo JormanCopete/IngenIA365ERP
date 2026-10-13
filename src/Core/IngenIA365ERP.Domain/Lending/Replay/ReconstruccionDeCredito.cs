@@ -15,7 +15,8 @@ namespace IngenIA365ERP.Domain.Lending.Replay;
 /// Cómo interpreta la reconstrucción una clase de operación (US4, T0488): el punto de extensión por <see cref="LoanOperationKind"/>.
 /// US4 trae <c>Disbursement</c>, <c>OpeningBalance</c> y <c>RateReset</c> (<c>DisbursementReversal</c> se resuelve antes: la pareja
 /// reversada no entra); US5 (T0535) suma <c>Payment</c>, <c>ProvisionalCollection</c> y <c>CreditBalanceResolution</c> con
-/// <c>AplicadorDePagos</c> (<c>PaymentReversal</c> también se resuelve antes: el pago reversado no entra), y US6 <c>CommercialAdjustment</c>.
+/// <c>AplicadorDePagos</c> (<c>PaymentReversal</c> también se resuelve antes: el pago reversado no entra), y US6 (T0566) <c>CommercialAdjustment</c>
+/// (<see cref="InterpreteDeAjusteComercial"/>).
 /// </summary>
 public interface IInterpreteDeOperacion
 {
@@ -230,6 +231,8 @@ public static class ReconstruccionDeCredito
         [LoanOperationKind.Payment] = new InterpreteDePago(),
         [LoanOperationKind.ProvisionalCollection] = new InterpreteDePago(),
         [LoanOperationKind.CreditBalanceResolution] = new InterpreteDeResolucion(),
+        // US6 (T0566): los ajustes de una venta a crédito de Comercial (FR-054).
+        [LoanOperationKind.CommercialAdjustment] = new InterpreteDeAjusteComercial(),
     };
 
     /// <summary>Las tasas del día ya calculadas: la raíz de cada EA es cara y los créditos comparten tasas y usuras (memo puro).</summary>

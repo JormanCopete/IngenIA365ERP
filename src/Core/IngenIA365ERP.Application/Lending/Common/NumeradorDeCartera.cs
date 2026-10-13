@@ -106,6 +106,20 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         credito.Number = await AsignarAsync(LendingNumberKind.Loan, string.Empty, prefijo, ct);
     }
 
+    /// <summary>
+    /// US6 (T0590; FR-057, C20): el crédito que nace de una venta toma el número que el numerador asignó a su reserva (<c>LND_LoanNumberReservations</c>,
+    /// clase <c>Loan</c>): el número nunca se reasigna y la reserva sólo se usa una vez.
+    /// </summary>
+    public static void NumerarCreditoConSuReserva(Domain.Entities.Lending.Loans.Loan credito, Domain.Entities.Lending.Origination.LoanNumberReservation reserva)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(reserva);
+        if (!string.IsNullOrEmpty(credito.Number))
+            throw new InvalidOperationException($"El crédito {credito.PublicId} ya tiene número.");
+        credito.Number = reserva.Number;
+        credito.ReservationId = reserva.Id;
+    }
+
     /// <summary>El número de una orden de giro (feature 013, US3, T0444, T0446): clase <c>DisbursementOrder</c>, ámbito único.</summary>
     public async Task NumerarOrdenAsync(Domain.Entities.Lending.Operations.DisbursementOrder orden, string prefijo, CancellationToken ct = default)
     {

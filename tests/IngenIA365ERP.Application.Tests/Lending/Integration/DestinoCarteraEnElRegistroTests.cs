@@ -13,12 +13,11 @@ using NSubstitute;
 namespace IngenIA365ERP.Application.Tests.Lending.Integration;
 
 /// <summary>
-/// Feature 013, US3 (bloque 7C, T0449; T15, T16): <see cref="DestinoCartera"/> queda registrado en <c>AddApplication</c> sin cambiar lo que viaja de
-/// Comercial. El destino <c>Lending</c> cuenta sólo cuando su consumidor acepta <b>todo</b> lo que adopta la fila <c>CAR</c>
-/// (<c>RegistroDeIntegracion.ImplementacionDisponible</c>); la semilla la deja adoptando también la familia de Comercial
-/// (<c>VentaACreditoRegistrada</c> v1/v2, <c>AjusteDeVentaACredito</c> v1), que DestinoCartera no acepta hasta US6. Así las ventas a crédito
-/// siguen esperando —sin intentos ni rechazos por versión— y el <c>ResultadoDelGiro</c> también, hasta que la cooperativa adopte sólo lo que
-/// Cartera acepta o US6 traiga su familia. (nuevo)
+/// Feature 013, US3 (bloque 7C, T0449; T15, T16) y US6 (bloque 10A, T0586; C16): <see cref="DestinoCartera"/> queda registrado en <c>AddApplication</c>. El
+/// destino <c>Lending</c> cuenta sólo cuando su consumidor acepta <b>todo</b> lo que adopta la fila <c>CAR</c>
+/// (<c>RegistroDeIntegracion.ImplementacionDisponible</c>). Desde US6 acepta la familia de Comercial en toda versión (<c>VentaACreditoRegistrada</c>,
+/// <c>AjusteDeVentaACredito</c>) además del <c>ResultadoDelGiro</c> v1: con la fila de la semilla el destino cuenta y el despachador le entrega las
+/// ventas a crédito y el resultado del giro; lo que todavía no acepta (los descuentos de pagaduría de K2) lo deja esperando. (nuevo)
 /// </summary>
 public class DestinoCarteraEnElRegistroTests
 {
@@ -46,25 +45,35 @@ public class DestinoCarteraEnElRegistroTests
     }
 
     [Fact]
-    public void Acepta_el_resultado_del_giro_y_todavia_no_la_familia_de_Comercial()
+    public void Acepta_el_resultado_del_giro_y_la_familia_de_Comercial_en_toda_version()
     {
         _destino.Destino.Should().Be(IntegrationDestinations.Lending);
         _destino.Acepta("ResultadoDelGiro", 1).Should().BeTrue();
         _destino.Acepta("ResultadoDelGiro", 2).Should().BeFalse();
-        _destino.Acepta("VentaACreditoRegistrada", 1).Should().BeFalse("la familia de Comercial llega con US6");
-        _destino.Acepta("VentaACreditoRegistrada", 2).Should().BeFalse();
-        _destino.Acepta("AjusteDeVentaACredito", 1).Should().BeFalse();
+        _destino.Acepta("VentaACreditoRegistrada", 1).Should().BeTrue();
+        _destino.Acepta("VentaACreditoRegistrada", 2).Should().BeTrue();
+        _destino.Acepta("VentaACreditoRegistrada", 7).Should().BeTrue("una versión desconocida la responde el consumidor, no el despachador (C16)");
+        _destino.Acepta("AjusteDeVentaACredito", 1).Should().BeTrue();
+        _destino.Acepta("EnvioDeDescuentosConfirmado", 1).Should().BeFalse("llega con K2");
     }
 
     [Fact]
-    public async Task Con_la_fila_CAR_de_la_semilla_el_destino_no_cuenta_y_lo_de_Comercial_sigue_esperando()
+    public async Task Con_la_fila_CAR_de_la_semilla_el_destino_cuenta_y_le_llega_lo_de_Comercial()
     {
         SembrarCar(("VentaACreditoRegistrada", 1), ("VentaACreditoRegistrada", 2), ("AjusteDeVentaACredito", 1), ("ResultadoDelGiro", 1));
 
-        (await Registro().DestinoHabilitadoAsync(IntegrationDestinations.Lending, Hoy, default)).Should().BeFalse(
-            "el consumidor no acepta todo lo que la fila adopta: el despachador no le entrega nada");
+        (await Registro().DestinoHabilitadoAsync(IntegrationDestinations.Lending, Hoy, default)).Should().BeTrue(
+            "el consumidor acepta todo lo que la fila adopta: el despachador le entrega las ventas a crédito y el resultado del giro");
         var fila = await _db.IntegrationParticipants.Include(p => p.Adoptions).SingleAsync();
-        Registro().ImplementacionDisponible(fila, Hoy).Should().BeFalse();
+        Registro().ImplementacionDisponible(fila, Hoy).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Si_la_fila_adopta_algo_que_Cartera_todavia_no_acepta_el_destino_no_cuenta()
+    {
+        SembrarCar(("VentaACreditoRegistrada", 2), ("EnvioDeDescuentosConfirmado", 1));
+
+        (await Registro().DestinoHabilitadoAsync(IntegrationDestinations.Lending, Hoy, default)).Should().BeFalse();
     }
 
     [Fact]

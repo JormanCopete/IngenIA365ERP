@@ -70,6 +70,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Payments/Queries/SimulateLoanPaymentQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Payments/Queries/PreviewLoanPaymentReversalQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Payments/Queries/GetPrepaymentPreferenceQuery.cs",
+        // US6 (bloque 10A, T0595, T0596): los recibos de lo que llega a Cartera por la oficina y la línea de su crédito (uno sin crédito —rechazado o
+        // no incorporado— no es de ninguna oficina; el detalle responde el 404 del recibo) y las reservas de número por las de su crédito.
+        "Core/IngenIA365ERP.Application/Lending/Integration/Comercial/MensajesRecibidos.cs",
+        "Core/IngenIA365ERP.Application/Lending/Origination/Queries/ListLoanNumberReservationsQuery.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>

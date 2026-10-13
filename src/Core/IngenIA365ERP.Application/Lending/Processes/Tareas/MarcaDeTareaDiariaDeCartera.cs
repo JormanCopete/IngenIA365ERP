@@ -26,7 +26,7 @@ public sealed class MarcaDeTareaDiariaDeCartera(IApplicationDbContext db, IDateT
     /// <summary>Las tareas diarias de Cartera (DT §2.13): las de K1 y, desde K2, las de la libranza (que la llaman al crearse).</summary>
     public static IReadOnlyList<TareaDiariaDeCartera> Diarias { get; } =
     [
-        new("cartera.reservas-vencidas", EntregaDeCartera.K1),
+        new(Origination.Tareas.TareaDeReservasVencidas.NombreDeLaTarea, EntregaDeCartera.K1),
         new(TareaDeGirosSinResultado.NombreDeLaTarea, EntregaDeCartera.K1),
         new("cartera.cierre-programado", EntregaDeCartera.K1),
         new(TareaDeGarantiasPorVencer.NombreDeLaTarea, EntregaDeCartera.K1),

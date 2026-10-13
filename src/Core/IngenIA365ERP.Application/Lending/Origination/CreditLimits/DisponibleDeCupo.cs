@@ -57,8 +57,29 @@ public sealed class DisponibleDeCupo(IApplicationDbContext db, VersionVigenteDeL
             : new DisponibleDeCupoCalculado(true, aplicable.Limite, aplicable.Consumido, aplicable.Disponible, aplicable.Cupo.PublicId);
     }
 
+    /// <summary>
+    /// US6 (T0581; FR-058, C54): el cupo que aplica a una venta a crédito de Comercial y su disponible —el de la línea si lo hay; si no, el rotativo
+    /// de la línea; si no, el rotativo general (línea nula, para toda línea comercial aplicable); si no, el consolidado—; nulo si la persona no
+    /// tiene cupo que aplique. <paramref name="sinElPago"/> deja fuera la reserva de ese pago de Comercial: la evaluación de una venta la mide
+    /// «sin contarla» (FR-051). Lo usan <c>ConsultasDeCartera</c>, <c>ReservasDeCartera</c> y la evaluación de la venta.
+    /// </summary>
+    public async Task<DisponibleDeUnCupo?> ParaVentaAsync(int personId, int? creditLineId, DateOnly fecha, CancellationToken ct, Guid? sinElPago = null)
+    {
+        var d = await DetalleAsync(personId, fecha, ct, sinElPago);
+        return (creditLineId is { } linea ? d.PorLinea.FirstOrDefault(c => c.Cupo.CreditLineId == linea) : null)
+               ?? (creditLineId is { } l2 ? d.Rotativos.FirstOrDefault(c => c.Cupo.CreditLineId == l2) : null)
+               ?? d.Rotativos.FirstOrDefault(c => c.Cupo.CreditLineId is null)
+               ?? d.Consolidado;
+    }
+
     /// <summary>Los disponibles de los cupos de la persona que rigen a la fecha (los que están en cero no cuentan).</summary>
-    public async Task<DisponibilidadDeCupos> DetalleAsync(int personId, DateOnly fecha, CancellationToken ct)
+    public async Task<DisponibilidadDeCupos> DetalleAsync(int personId, DateOnly fecha, CancellationToken ct) => await DetalleAsync(personId, fecha, ct, null);
+
+    /// <summary>
+    /// Los disponibles de los cupos de la persona que rigen a la fecha. US6 (T0581): el consolidado cuenta también el capital vivo de los créditos
+    /// donde la persona es codeudora (FR-058, «como deudor y como codeudor»); <paramref name="sinElPago"/> deja fuera la reserva de ese pago.
+    /// </summary>
+    public async Task<DisponibilidadDeCupos> DetalleAsync(int personId, DateOnly fecha, CancellationToken ct, Guid? sinElPago)
     {
         var todas = await VersionesDeCupo.DeAsync(db, [personId], ct);
         var vigentes = todas.GroupBy(v => (v.Kind, v.CreditLineId))
@@ -70,7 +91,12 @@ public sealed class DisponibleDeCupo(IApplicationDbContext db, VersionVigenteDeL
 
         var creditos = await db.Loans.AsNoTracking().Where(l => !l.IsDeleted && l.DebtorPersonId == personId && Vivos.Contains(l.Status))
             .Select(l => new { l.Id, l.CreditLineId, l.CreditLimitId }).ToListAsync(ct);
-        var ids = creditos.Select(c => c.Id).ToArray();
+        var comoCodeudor = await (from p in db.LoanParties.AsNoTracking()
+                                  join l in db.Loans.AsNoTracking() on p.LoanId equals l.Id
+                                  where p.PersonId == personId && p.Role == CreditPartyRole.CoDebtor && !p.IsDeleted && p.ReleasedOn == null
+                                        && p.ExtinguishedOn == null && !l.IsDeleted && l.DebtorPersonId != personId && Vivos.Contains(l.Status)
+                                  select l.Id).Distinct().ToListAsync(ct);
+        var ids = creditos.Select(c => c.Id).Concat(comoCodeudor).ToArray();
         var capital = ids.Length == 0
             ? new Dictionary<int, decimal>()
             : await db.LoanTransactions.AsNoTracking()
@@ -78,7 +104,8 @@ public sealed class DisponibleDeCupo(IApplicationDbContext db, VersionVigenteDeL
                 .GroupBy(t => t.LoanId).Select(g => new { g.Key, Capital = g.Sum(t => t.Amount) })
                 .ToDictionaryAsync(x => x.Key, x => Math.Max(0m, x.Capital), ct);
         var reservas = await db.LoanNumberReservations.AsNoTracking()
-            .Where(r => !r.IsDeleted && r.PersonId == personId && r.Status == LoanNumberReservationStatus.Reserved && r.ExpiresOn >= fecha)
+            .Where(r => !r.IsDeleted && r.PersonId == personId && r.Status == LoanNumberReservationStatus.Reserved && r.ExpiresOn >= fecha
+                        && (sinElPago == null || r.PaymentPublicId != sinElPago))
             .Select(r => new { r.Amount, r.CreditLineId, r.CreditLimitId }).ToListAsync(ct);
         var aprobadas = await db.CreditApplications.AsNoTracking()
             .Where(a => !a.IsDeleted && a.ApplicantPersonId == personId && a.Status == CreditApplicationStatus.Approved && a.Kind == ApplicationKind.Loan
@@ -90,7 +117,8 @@ public sealed class DisponibleDeCupo(IApplicationDbContext db, VersionVigenteDeL
             switch (cupo.Kind)
             {
                 case CreditLimitKind.Consolidated:
-                    return new(cupo, cupo.Amount, creditos.Sum(c => capital.GetValueOrDefault(c.Id)), reservas.Sum(r => r.Amount), aprobadas.Sum(a => a.Valor));
+                    return new(cupo, cupo.Amount, creditos.Sum(c => capital.GetValueOrDefault(c.Id)) + comoCodeudor.Sum(c => capital.GetValueOrDefault(c)),
+                        reservas.Sum(r => r.Amount), aprobadas.Sum(a => a.Valor));
                 case CreditLimitKind.ByLine:
                     return new(cupo, cupo.Amount, creditos.Where(c => c.CreditLineId == cupo.CreditLineId).Sum(c => capital.GetValueOrDefault(c.Id)),
                         reservas.Where(r => r.CreditLineId == cupo.CreditLineId).Sum(r => r.Amount),

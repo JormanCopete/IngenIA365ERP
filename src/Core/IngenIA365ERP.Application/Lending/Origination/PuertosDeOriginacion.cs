@@ -54,3 +54,15 @@ public interface IBloqueosDelDeudor
 {
     Task<IReadOnlyList<DebtorBlock>> VigentesAsync(IReadOnlyCollection<int> personIds, CancellationToken ct);
 }
+
+/// <summary>
+/// US6 (T0582; C31): la verificación de listas restrictivas de una <b>consulta</b> —la del cupo y estado que hace Comercial antes de vender—: consulta
+/// el canal vigente como <see cref="IConsultaDeListasDeCartera"/> pero <b>no escribe</b> <c>LND_ScreeningResults</c>, ni bloqueos ni alertas (una
+/// consulta no cambia el estado del negocio; el resultado se guarda en la reserva y al consumir la venta, que son operaciones). La implementa
+/// <c>ConsultaDeListasDeCartera</c>. (nuevo)
+/// </summary>
+public interface IVerificacionDeListas
+{
+    /// <summary>Si la persona coincide en listas (una coincidencia que cuenta y que el oficial no liberó con las mismas versiones).</summary>
+    Task<bool> CoincideAsync(int personId, CancellationToken ct);
+}

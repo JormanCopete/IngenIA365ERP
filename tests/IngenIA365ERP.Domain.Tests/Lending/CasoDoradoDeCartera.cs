@@ -333,8 +333,18 @@ public sealed class CasoDoradoDeCartera
                 new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v) { Eleccion = Eleccion, Cuota = Cuota },
             nameof(LoanOperationKind.CreditBalanceResolution) =>
                 new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m) { ComoAbonoACapital = ComoAbonoACapital, Eleccion = Eleccion },
+            // US6 (T0565): el ajuste de Comercial con su clase, su valor con signo y el recálculo del plan.
+            nameof(LoanOperationKind.CommercialAdjustment) => new ContenidoDeAjusteComercial(
+                ContenidoDeAjusteComercial.DeTexto(Clase) ?? throw new InvalidOperationException($"Clase de ajuste desconocida: {Clase}."), Valor ?? 0m)
+            {
+                Recalculo = Recalculo ?? PrepaymentChoice.ReduceInstallment,
+            },
             _ => null,
         };
+
+        // US6 (T0565): la clase del ajuste de Comercial (CreditNote, Return, DebitNote, Voiding, VoidingByDianRejection) y el recálculo.
+        public string? Clase { get; set; }
+        public PrepaymentChoice? Recalculo { get; set; }
 
         /// <summary>La solicitud del pago.</summary>
         public SolicitudDeDistribucion Solicitud() =>

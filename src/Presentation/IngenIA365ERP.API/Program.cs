@@ -269,6 +269,10 @@ try
         IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDePagares>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Disbursements.Tareas.TareaDeGarantiasPorVencer>();
+    // Feature 013, US6 (T0585; DT §2.13): cartera.reservas-vencidas una vez al dia (vence las reservas de numero sin usar; sale si Cartera no
+    // esta activada).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Origination.Tareas.TareaDeReservasVencidas>();
     // Feature 013, US4 (T0502; DT §2.13): la vigilancia de los procesos de Cartera cada hora (ciclo de ayer, créditos sin causar, tareas diarias).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Processes.Tareas.VigilanciaDeCartera>();

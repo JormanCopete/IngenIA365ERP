@@ -93,6 +93,12 @@ public enum MotivoSinComprobante
 
     /// <summary>Un documento cuyo valor contable es cero.</summary>
     ZeroValue = 2,
+
+    /// <summary>
+    /// Feature 013 (T17, C21; mensajes.md §14.4): Cartera recibió una venta o un ajuste que no se incorpora (aceptada sin migrar, fuera de Cartera,
+    /// o fechada hasta el corte sin conciliación): deja su recibo, no una obligación.
+    /// </summary>
+    NotIncorporated = 3,
 }
 
 /// <summary>
@@ -147,15 +153,24 @@ public static class ReferenciasDeResultado
 
     public const string ValorCero = "sin comprobante (valor cero)";
 
+    /// <summary>Feature 013 (C21): la venta o el ajuste que Cartera no incorporó.</summary>
+    public const string NoIncorporada = "no incorporada";
+
     public static string De(Guid? comprobante, MotivoSinComprobante? sinComprobante) => comprobante is { } id
         ? id.ToString("D")
-        : sinComprobante == MotivoSinComprobante.ZeroValue ? ValorCero : Informativo;
+        : sinComprobante switch
+        {
+            MotivoSinComprobante.ZeroValue => ValorCero,
+            MotivoSinComprobante.NotIncorporated => NoIncorporada,
+            _ => Informativo,
+        };
 
     /// <summary>El motivo de un recibo sin comprobante, o nulo si la referencia es un comprobante.</summary>
     public static MotivoSinComprobante? SinComprobante(string? referencia) => referencia switch
     {
         Informativo => MotivoSinComprobante.Informational,
         ValorCero => MotivoSinComprobante.ZeroValue,
+        NoIncorporada => MotivoSinComprobante.NotIncorporated,
         _ => null,
     };
 }

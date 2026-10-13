@@ -1174,8 +1174,74 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                         break
                     mover(v, "CreditBalanceSettled", concepto, c_, -t_)
                     queda -= t_
+        elif t == "CommercialAdjustment":
+            ajuste_comercial(o, v)
         else:
             raise ValueError(f"operacion {t} no soportada en K1")
+
+    # US6 (fase 10, T0565): el ajuste de una venta a credito de Comercial (FR-054), con el signo que manda Comercial.
+    def ajuste_comercial(o, v):
+        clase, monto = o["clase"], D(o["valor"])
+        snap = instantanea(v)
+        if clase in ("Voiding", "VoidingByDianRejection"):
+            for (cuota, concepto), x in sorted(snap["por"].items(), key=lambda kv: (kv[0][0] or 0, ORDEN[kv[0][1]])):
+                if concepto in COBRABLES and x != 0:
+                    mover(v, "CommercialAdjustment", concepto, cuota, -x)
+            aplicado = sum((d_["valor"] - d_["excedente"] for d_ in estado["pagos"].values()), D(0))
+            resuelto = -sum((f[4] for f in estado["libro"] if f[1] == "CreditBalanceSettled"), D(0))
+            saldo_a_favor = estado["apertura"].get(("CreditBalance", None), D(0))
+            for (concepto, cuota), x in sorted(((k, x) for k, x in estado["apertura"].items() if k[0] == "Advance" and x != 0),
+                                               key=lambda kv: kv[0][1] or 0):
+                mover(v, "CommercialAdjustment", concepto, cuota, -x)
+            reconocer = aplicado - resuelto - saldo_a_favor
+            if reconocer > 0:
+                mover(v, "CreditBalanceRecognized", "CreditBalance", None, reconocer)
+            return
+        p = estado["plan"]
+        if clase == "DebitNote":
+            assert monto > 0, "una nota debito sube el valor"
+            regenerar_con(v, monto, None)
+            estado["libro"].append((v, "CommercialAdjustment", "Principal", None, monto))
+            return
+        assert clase in ("CreditNote", "Return") and monto < 0, "una nota credito o una devolucion bajan el valor"
+        devuelto = -monto
+        pendiente = sum((pend(x) for x in p["cuotas"]), D(0))
+        bajado = min(devuelto, pendiente)
+        if bajado > 0 and pendiente > 0:
+            for (cuota, concepto), x in sorted(snap["por"].items(), key=lambda kv: (kv[0][0] or 0, ORDEN[kv[0][1]])):
+                if cuota is None or x <= 0 or concepto not in ("CurrentInterest", "CurrentInterestInSuspense"):
+                    continue
+                reverso = r.concepto(x * bajado / pendiente)
+                mover(v, "CommercialAdjustment", concepto, cuota, -min(reverso, x))
+        por_vencer = [x for x in p["cuotas"] if fecha(x["vencimiento"]) > v]
+        capital_por_vencer = sum((pend(x) for x in por_vencer), D(0))
+        a = min(bajado, capital_por_vencer)
+        if 0 < a < capital_por_vencer:
+            regenerar_con(v, -a, o.get("recalculo") or "ReduceInstallment")
+            estado["libro"].append((v, "CommercialAdjustment", "Principal", None, -a))
+        elif a > 0:
+            for x in por_vencer:
+                mover(v, "CommercialAdjustment", "Principal", x["numero"], -pend(x))
+        queda = bajado - a
+        for x in sorted((y for y in estado["plan"]["cuotas"] if fecha(y["vencimiento"]) <= v), key=lambda y: y["numero"]):
+            if queda <= 0:
+                break
+            t_ = min(queda, pend(x))
+            if t_ <= 0:
+                continue
+            mover(v, "CommercialAdjustment", "Principal", x["numero"], -t_)
+            queda -= t_
+        exceso = devuelto - bajado
+        if exceso > 0:
+            mover(v, "CreditBalanceRecognized", "CreditBalance", None, exceso)
+
+    def regenerar_con(v, cambio, eleccion):
+        p = estado["plan"]
+        ajustes = {x["numero"]: estado["apertura"][("Principal", x["numero"])] for x in p["cuotas"]
+                   if estado["apertura"].get(("Principal", x["numero"]), D(0)) != 0}
+        nuevo = regenerar(p, cond_json, v, None, cambio, eleccion, ajustes)
+        consolidar(p, v)
+        estado["plan"] = nuevo
 
     pendientes = list(ops)
     while pendientes and fecha(pendientes[0]["fechaValor"]) <= origen:

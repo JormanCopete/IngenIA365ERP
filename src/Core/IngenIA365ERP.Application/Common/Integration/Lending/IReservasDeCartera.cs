@@ -24,7 +24,14 @@ public sealed record SolicitudDeReserva(
     decimal Amount,
     DateOnly OperationDate,
     string CreditLineCode,
-    string? SalesChannelCode);
+    string? SalesChannelCode)
+{
+    /// <summary>
+    /// Feature 013 (T0584; C31): el <c>EvidenceId</c> de la consulta de cupo y estado que precedió a la reserva (la consulta verifica listas sin
+    /// escribir; la evidencia queda en la auditoría y en la reserva). Opcional: aditivo al contrato de la 012.
+    /// </summary>
+    public string? ConsultationEvidence { get; init; }
+}
 
 /// <summary>Pide liberar una reserva por su clave. (nuevo)</summary>
 public sealed record SolicitudDeLiberacion(string IdempotencyKey, Guid PaymentPublicId, string Reason);

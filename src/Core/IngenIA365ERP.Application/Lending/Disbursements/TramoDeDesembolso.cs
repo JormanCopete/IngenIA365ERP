@@ -127,22 +127,30 @@ public sealed class TramoDeDesembolso(
     /// La versión de condiciones con que nace el crédito (<c>Origination</c>; data-model §4.3): la versión de la línea, la tasa de la banda que
     /// casó, la efectiva con cargos, la sobretasa y la usura del día (T28), <c>Mora.SobreIntereses</c> sellado y la prelación de la línea.
     /// </summary>
-    public LoanTermsVersion Condiciones(Loan credito, LoanOperation operacion, RequisitosEvaluados r)
+    public LoanTermsVersion Condiciones(Loan credito, LoanOperation operacion, RequisitosEvaluados r) =>
+        Condiciones(credito, operacion, r.Simulacion, r.FechaValor, r.MoraSobreIntereses, TermsVersionCause.Origination);
+
+    /// <summary>
+    /// US6 (T0590): la versión de condiciones con que nace un crédito desde una simulación —la del desembolso (<c>Origination</c>) o la de una venta de
+    /// Comercial (<c>CommercialSale</c>)—. Misma forma que la del primer tramo.
+    /// </summary>
+    public LoanTermsVersion Condiciones(Loan credito, LoanOperation operacion, SimulacionCalculada simulacion, DateOnly fechaValor, bool moraSobreIntereses,
+        TermsVersionCause causa)
     {
-        var v = r.Simulacion.Version.Version;
-        var e = r.Simulacion.Entrada;
-        var plan = r.Simulacion.Plan;
-        var usura = r.Simulacion.Usura;
-        var seguros = r.Simulacion.Entrada.Seguros.Select(s => new { code = s.Codigo, @base = s.Base.ToString(), rate = s.Tarifa, periodicity = s.PeriodicidadDeCobro.ToString(), computes = s.Computa });
+        var v = simulacion.Version.Version;
+        var e = simulacion.Entrada;
+        var plan = simulacion.Plan;
+        var usura = simulacion.Usura;
+        var seguros = simulacion.Entrada.Seguros.Select(s => new { code = s.Codigo, @base = s.Base.ToString(), rate = s.Tarifa, periodicity = s.PeriodicidadDeCobro.ToString(), computes = s.Computa });
         var condiciones = new LoanTermsVersion
         {
             LoanId = credito.Id,
             Loan = credito.Id == 0 ? credito : null,
             VersionNumber = 1,
             Operation = operacion,
-            EffectiveValueDate = r.FechaValor,
+            EffectiveValueDate = fechaValor,
             RegisteredAt = operacion.RegisteredAt,
-            Cause = TermsVersionCause.Origination,
+            Cause = causa,
             RulesVersion = plan.RulesVersion,
             CreditLineVersionId = v.Id,
             ModalityCode = v.ModalityCode,
@@ -150,7 +158,7 @@ public sealed class TramoDeDesembolso(
             ForEmployees = v.ForEmployees,
             InterestTaxTreatment = v.InterestTaxTreatment,
             RateKind = v.RateKind,
-            AnnualRate = r.Simulacion.TasaPactada,
+            AnnualRate = simulacion.TasaPactada,
             IndexCode = v.IndexCode,
             IndexKey = v.IndexKey,
             Margin = v.Margin,
@@ -160,13 +168,13 @@ public sealed class TramoDeDesembolso(
             DefaultRateKind = v.DefaultRateKind,
             DefaultRate = v.DefaultRate,
             DefaultRateFactor = v.DefaultRateFactor,
-            DefaultOnInterestAllowed = r.MoraSobreIntereses,
+            DefaultOnInterestAllowed = moraSobreIntereses,
             DayCount = e.Convencion,
             RateEquivalence = e.Equivalencia,
             AmortizationSystem = e.Sistema,
             Periodicity = e.Periodicidad,
             Installments = e.Periodos,
-            TermMonths = r.Simulacion.PlazoMeses,
+            TermMonths = simulacion.PlazoMeses,
             FirstDueDate = plan.Cuotas[0].Vencimiento,
             PaymentDay = v.PaymentDay,
             GraceKind = e.Gracia == GraceKind.None ? null : e.Gracia,
@@ -187,7 +195,7 @@ public sealed class TramoDeDesembolso(
             ChargesSpread = usura.SobretasaDeCargos,
             UsuryValuePublicId = usura.UsuraPublicId,
             RestructuringCount = 0,
-            InputsSha256 = r.Simulacion.Huella,
+            InputsSha256 = simulacion.Huella,
         };
         registro.RegistrarVersionDeCondiciones(condiciones);
         return condiciones;
@@ -214,14 +222,19 @@ public sealed class TramoDeDesembolso(
     /// con su fecha exigible (art. 829, el siguiente hábil). Σ capital = lo desembolsado al centavo, o <c>Lending.Schedule.PrincipalMismatch</c>
     /// (SC-017).
     /// </summary>
-    public async Task<RepaymentScheduleVersion> PlanAsync(Loan credito, LoanTermsVersion condiciones, LoanOperation operacion, RequisitosEvaluados r,
-        int numeroDeVersion, PlanDePagos plan, CancellationToken ct)
+    public Task<RepaymentScheduleVersion> PlanAsync(Loan credito, LoanTermsVersion condiciones, LoanOperation operacion, RequisitosEvaluados r,
+        int numeroDeVersion, PlanDePagos plan, CancellationToken ct) =>
+        PlanAsync(credito, condiciones, operacion, r.FechaValor, r.Desembolsado, r.Simulacion.Huella, numeroDeVersion, plan, ct);
+
+    /// <summary>US6 (T0590): la versión del plan con lo desembolsado y la huella dados (la usa también el nacimiento de la obligación de una venta).</summary>
+    public async Task<RepaymentScheduleVersion> PlanAsync(Loan credito, LoanTermsVersion condiciones, LoanOperation operacion, DateOnly fechaValor,
+        decimal desembolsado, string huella, int numeroDeVersion, PlanDePagos plan, CancellationToken ct)
     {
-        if (plan.TotalCapital != r.Desembolsado)
+        if (plan.TotalCapital != desembolsado)
             throw new InvalidOperationException(
-                $"Lending.Schedule.PrincipalMismatch: el plan suma {plan.TotalCapital.ToString(CultureInfo.InvariantCulture)} de capital y lo desembolsado es {r.Desembolsado.ToString(CultureInfo.InvariantCulture)}.");
+                $"Lending.Schedule.PrincipalMismatch: el plan suma {plan.TotalCapital.ToString(CultureInfo.InvariantCulture)} de capital y lo desembolsado es {desembolsado.ToString(CultureInfo.InvariantCulture)}.");
         var ultima = plan.Cuotas[^1].Vencimiento;
-        var habiles = await calendario.ObtenerAsync(r.FechaValor, ultima.AddDays(30), DiasDeDescanso.SoloDomingo, ct: ct);
+        var habiles = await calendario.ObtenerAsync(fechaValor, ultima.AddDays(30), DiasDeDescanso.SoloDomingo, ct: ct);
         var version = new RepaymentScheduleVersion
         {
             LoanId = credito.Id,
@@ -230,13 +243,13 @@ public sealed class TramoDeDesembolso(
             TermsVersionId = condiciones.Id,
             TermsVersion = condiciones.Id == 0 ? condiciones : null,
             Operation = operacion,
-            EffectiveValueDate = r.FechaValor,
+            EffectiveValueDate = fechaValor,
             RegisteredAt = operacion.RegisteredAt,
-            PrincipalBase = r.Desembolsado,
+            PrincipalBase = desembolsado,
             FirstRegeneratedInstallment = plan.PrimeraCuotaRegenerada,
             InstallmentCount = plan.Cuotas.Count,
             RulesVersion = plan.RulesVersion,
-            InputsSha256 = r.Simulacion.Huella,
+            InputsSha256 = huella,
         };
         var cuotas = plan.Cuotas.Select(c => new RepaymentInstallment
         {
@@ -261,10 +274,14 @@ public sealed class TramoDeDesembolso(
     }
 
     /// <summary>El plan resumido del hecho (<c>LoanPlanSummaryV1</c>, mensajes.md §10.1).</summary>
-    public static LoanPlanSummaryV1 Resumen(RequisitosEvaluados r, int numeroDeVersion, PlanDePagos? regenerado = null)
+    public static LoanPlanSummaryV1 Resumen(RequisitosEvaluados r, int numeroDeVersion, PlanDePagos? regenerado = null) =>
+        Resumen(r.Simulacion, numeroDeVersion, regenerado);
+
+    /// <summary>US6 (T0593): el plan resumido de una simulación (también el de la obligación de una venta).</summary>
+    public static LoanPlanSummaryV1 Resumen(SimulacionCalculada simulacion, int numeroDeVersion, PlanDePagos? regenerado = null)
     {
-        var plan = regenerado ?? r.Simulacion.Plan;
-        var e = r.Simulacion.Entrada;
+        var plan = regenerado ?? simulacion.Plan;
+        var e = simulacion.Entrada;
         return new LoanPlanSummaryV1
         {
             ScheduleVersion = numeroDeVersion,
@@ -274,7 +291,7 @@ public sealed class TramoDeDesembolso(
             InstallmentAmount = plan.CuotaNivelada ?? plan.Cuotas[0].Total,
             FirstDueDate = plan.Cuotas[0].Vencimiento,
             FinalDueDate = plan.Cuotas[^1].Vencimiento,
-            AnnualEffectiveRate = r.Simulacion.TasaPactada,
+            AnnualEffectiveRate = simulacion.TasaPactada,
             DayCountConvention = e.Convencion.ToString(),
             RulesVersion = plan.RulesVersion,
         };

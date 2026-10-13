@@ -94,7 +94,15 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     public async Task<Result<SimulacionCalculada>> SimularAsync(CreditLine linea, ScheduleSimulationInput pedido, PerfilParaLaBanda perfil,
-        DateOnly hoy, CancellationToken ct)
+        DateOnly hoy, CancellationToken ct) => await SimularAsync(linea, pedido, perfil, hoy, validarRangos: true, ct);
+
+    /// <summary>
+    /// US6 (T0590): la misma simulación; con <paramref name="validarRangos"/> falso no mira la periodicidad, el sistema, el monto, las cuotas ni el plazo
+    /// contra la línea —la obligación de una venta de Comercial nace siempre (FR-050): que salga de los rangos lo dice la evaluación de la venta, no
+    /// impide crearla—. La línea tiene que estar activa y sin bloqueo por usura igual.
+    /// </summary>
+    public async Task<Result<SimulacionCalculada>> SimularAsync(CreditLine linea, ScheduleSimulationInput pedido, PerfilParaLaBanda perfil,
+        DateOnly hoy, bool validarRangos, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(linea);
         ArgumentNullException.ThrowIfNull(pedido);
@@ -113,15 +121,15 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
         var b = version.Borrador();
 
         var periodicidad = pedido.Periodicity ?? b.DefaultPeriodicity;
-        if (!b.Periodicities.Contains(periodicidad))
+        if (validarRangos && !b.Periodicities.Contains(periodicidad))
             return Falla(ErroresDeOriginacion.FueraDeRango("periodicity", null, null,
                 $"La línea no admite la periodicidad {periodicidad}. Admite: {string.Join(", ", b.Periodicities)}."));
         var sistema = periodicidad == RepaymentPeriodicity.SinglePayment ? AmortizationSystem.Bullet : pedido.AmortizationSystem ?? b.DefaultAmortizationSystem;
-        if (!b.AmortizationSystems.Contains(sistema))
+        if (validarRangos && !b.AmortizationSystems.Contains(sistema))
             return Falla(ErroresDeOriginacion.FueraDeRango("amortizationSystem", null, null,
                 $"La línea no admite el sistema de amortización {sistema}. Admite: {string.Join(", ", b.AmortizationSystems)}."));
 
-        if (pedido.Amount < b.MinAmount || pedido.Amount > b.MaxAmount)
+        if (validarRangos && (pedido.Amount < b.MinAmount || pedido.Amount > b.MaxAmount))
             return Falla(ErroresDeOriginacion.FueraDeRango("amount", b.MinAmount, b.MaxAmount,
                 $"El monto tiene que estar entre {ErroresDeOriginacion.Pesos(b.MinAmount)} y {ErroresDeOriginacion.Pesos(b.MaxAmount)}."));
 
@@ -129,10 +137,10 @@ public sealed class SimuladorDeCredito(IApplicationDbContext db, ReglasDeLineaDe
         var meses = PlazoEnMeses(cuotas, periodicidad, fecha, pedido.FirstDueDate);
         var minimo = PlanTipoDeLinea.Periodos(b.MinTermMonths, periodicidad);
         var maximo = Math.Min(PlanTipoDeLinea.Periodos(b.MaxTermMonths, periodicidad), b.MaxInstallments ?? int.MaxValue);
-        if (periodicidad != RepaymentPeriodicity.SinglePayment && (cuotas < minimo || cuotas > maximo))
+        if (validarRangos && periodicidad != RepaymentPeriodicity.SinglePayment && (cuotas < minimo || cuotas > maximo))
             return Falla(ErroresDeOriginacion.FueraDeRango("installments", minimo, maximo,
                 $"Con periodicidad {periodicidad} la línea admite de {minimo.ToString(Inv)} a {maximo.ToString(Inv)} cuotas."));
-        if (meses < b.MinTermMonths || meses > b.MaxTermMonths)
+        if (validarRangos && (meses < b.MinTermMonths || meses > b.MaxTermMonths))
             return Falla(ErroresDeOriginacion.FueraDeRango("installments", b.MinTermMonths, b.MaxTermMonths,
                 $"El plazo ({meses.ToString(Inv)} meses) tiene que estar entre {b.MinTermMonths.ToString(Inv)} y {b.MaxTermMonths.ToString(Inv)} meses."));
 

@@ -40,13 +40,28 @@ public sealed class ConsultaDeListasDeCartera(
     IAlertas alertas,
     IActorActual actorActual,
     IDateTimeService reloj,
-    TareasTrasElCommit? trasElCommit = null) : IConsultaDeListasDeCartera
+    TareasTrasElCommit? trasElCommit = null) : IConsultaDeListasDeCartera, IVerificacionDeListas
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<ConsultaDeListasRegistrada> ConsultarAsync(PedidoDeConsultaDeListas pedido, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(pedido);
+        var hoy = reloj.HoyLocal;
+        var (fila, cuenta, hallazgo) = await ResultadoAsync(pedido, ct);
+        if (!pedido.RegistrarSinHallazgo && !hallazgo) return new ConsultaDeListasRegistrada(fila, false, cuenta);
+        db.ScreeningResults.Add(fila);
+        if (hallazgo) await BloquearAsync(fila, hoy, ct);
+        return new ConsultaDeListasRegistrada(fila, hallazgo, cuenta);
+    }
+
+    /// <summary>US6 (T0582, C31): la misma consulta sin escribir nada (ni el resultado, ni el bloqueo, ni la alerta).</summary>
+    public async Task<bool> CoincideAsync(int personId, CancellationToken ct) =>
+        (await ResultadoAsync(new PedidoDeConsultaDeListas(personId, ScreeningContext.Sale), ct)).Hallazgo;
+
+    /// <summary>Consulta el canal vigente y arma la fila del resultado (sin agregarla): si cuenta como consulta y si es un hallazgo que bloquea.</summary>
+    private async Task<(ScreeningResult Fila, bool Cuenta, bool Hallazgo)> ResultadoAsync(PedidoDeConsultaDeListas pedido, CancellationToken ct)
+    {
         var hoy = reloj.HoyLocal;
         var ahora = reloj.UtcNow;
         var persona = await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == pedido.PersonId, ct);
@@ -96,11 +111,7 @@ public sealed class ConsultaDeListasDeCartera(
             fila.ReleaseReason = liberada.ReleaseReason;
             hallazgo = false;
         }
-
-        if (!pedido.RegistrarSinHallazgo && !hallazgo) return new ConsultaDeListasRegistrada(fila, false, cuenta);
-        db.ScreeningResults.Add(fila);
-        if (hallazgo) await BloquearAsync(fila, hoy, ct);
-        return new ConsultaDeListasRegistrada(fila, hallazgo, cuenta);
+        return (fila, cuenta, hallazgo);
     }
 
     /// <summary>El canal de listas vigente de la cooperativa (sin configuración, <c>CARGA-PROPIA</c>).</summary>

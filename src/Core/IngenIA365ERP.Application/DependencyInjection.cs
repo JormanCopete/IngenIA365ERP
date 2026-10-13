@@ -458,13 +458,27 @@ public static class DependencyInjection
         // I3 (T651-T656, US6): el crédito provisional. Mientras no exista el destino Lending ni fecha en Cartera.IntegracionHabilitadaDesde,
         // las consultas a Cartera responden CarteraNoHabilitada (la entrega IC, T661, registra la real). El crédito dentro del pago, su
         // aprobación (SourceType DocumentPayment, Subject ProvisionalCredit) y la marca de lo que se está aprobando en la petición.
-        services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Common.Integration.Lending.ConsultasDeCarteraNoHabilitada>();
+        // Feature 013, US6 (T0582, T0584): las consultas y las reservas de Cartera son ya las reales (Application/Lending/Integration); antes de
+        // activar Cartera responden lo mismo que las provisionales (CarteraNoHabilitada / NotEnabled), así que Comercial sigue con el crédito
+        // provisional hasta la activación (interfaces §5.3).
+        services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Lending.Integration.ConsultasDeCartera>();
         // Feature 013 (T0152, T85): los puertos que Cartera ofrece. US5 (bloque 9B, T0550): el contrato de obligaciones y la consulta de
         // obligaciones son ya los reales (Application/Lending/Integration), Scoped sobre el IApplicationDbContext del ámbito de quien llama; antes de
         // activar responden igual que los provisionales (interfaces §3.17). Las reservas siguen «no habilitadas» hasta US6.
         services.AddScoped<Common.Integration.Lending.IConsultaDeObligaciones, Lending.Integration.ObligacionesDeCartera>();
         services.AddScoped<Common.Integration.Lending.IContratoDeObligaciones, Lending.Integration.ContratoDeObligacionesDeCartera>();
-        services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Common.Integration.Lending.ReservasDeCarteraNoHabilitada>();
+        services.AddScoped<Common.Integration.Lending.IReservasDeCartera, Lending.Integration.ReservasDeCartera>();
+        // US6 (T0582–T0594): la verificación de listas sin escribir de la consulta, y el consumidor de Comercial con sus piezas (los validadores de
+        // la reserva, Integration/Reservas, los registra AddValidatorsFromAssembly).
+        services.AddScoped<Lending.Origination.IVerificacionDeListas>(sp => sp.GetRequiredService<Lending.Origination.ConsultaDeListasDeCartera>());
+        services.AddScoped<Lending.Integration.Comercial.RecibosDeCartera>();
+        services.AddScoped<Lending.Integration.Comercial.ConversionDeVentaACredito>();
+        services.AddScoped<Lending.Integration.Comercial.EvaluacionDeVentaACredito>();
+        services.AddScoped<Lending.Integration.Comercial.NacimientoDeObligacionDeVenta>();
+        services.AddScoped<Lending.Integration.Comercial.ConsumoDeVentaACredito>();
+        services.AddScoped<Lending.Integration.Comercial.AjusteDesdeComercial>();
+        services.AddScoped<Lending.Integration.Comercial.VentasAnterioresAlCorte>();
+        services.AddScoped<Lending.Migration.ConciliacionDeVentasDeLaCarga>();
         // US5 (bloque 9B, T0538–T0548): el núcleo de los pagos, sus reglas y su auditoría. Los validadores del contrato (Contrato/
         // ValidadoresDelContrato.cs) los registra AddValidatorsFromAssembly. Los cierres de Cartera (US9) y la vigencia de documentos (US13) nacen
         // vacíos y sus historias los reemplazan.
@@ -506,10 +520,9 @@ public static class DependencyInjection
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Accrual.EjecutorDeLaCorreccionDeValorNacional>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Accrual.EfectoDeReplicacionCorreccionDeValorNacional>();
         services.AddScoped<Lending.Processes.Tareas.MarcaDeTareaDiariaDeCartera>();
-        // Feature 013, US3 (bloque 7C, T0449): Cartera como destino de la bandeja (ResultadoDelGiro v1; US6 suma la familia de Comercial). No
-        // cambia lo que viaja de Comercial: el destino Lending sólo cuenta cuando su consumidor acepta todo lo que la fila CAR adopta
-        // (RegistroDeIntegracion.ImplementacionDisponible), y la semilla la deja adoptando VentaACreditoRegistrada y AjusteDeVentaACredito: hasta
-        // US6 lo de Lending sigue esperando, sin intentos ni rechazos, igual que sin consumidor.
+        // Feature 013, US3 (bloque 7C, T0449) y US6 (T0586): Cartera como destino de la bandeja: ResultadoDelGiro v1 y la familia de Comercial
+        // (VentaACreditoRegistrada y AjusteDeVentaACredito en toda versión, C16). El destino Lending cuenta cuando su consumidor acepta todo lo que la
+        // fila CAR adopta (RegistroDeIntegracion.ImplementacionDisponible): desde US6 acepta lo que la semilla adopta y el despachador le entrega.
         services.AddScoped<Common.Integration.IDestinoDeMensajes, Lending.Integration.DestinoCartera>();
         services.AddScoped<Lending.Disbursements.RequisitosDelDesembolso>();
         services.AddScoped<Lending.Disbursements.TramoDeDesembolso>();

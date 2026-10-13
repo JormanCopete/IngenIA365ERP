@@ -55,7 +55,7 @@ public sealed class GetLoanQueryHandler(IApplicationDbContext db, IAlcanceDeCart
             c.PublicId, c.Number, c.Status.ToString(), c.Origin.ToString(), personas[c.DebtorPersonId], codeudores.Select(p => personas[p]).ToList(),
             oficinas[c.BranchId], lineas[c.CreditLineId], pactadas?.ModalityCode ?? string.Empty, pactadas?.SubsegmentCode, terminos,
             new LoanAmountsDto(c.ApprovedAmount, desembolsado.Monto, desembolsado.Tramos),
-            new LoanMarksDto((condiciones?.RestructuringCount ?? 0) > 0, condiciones?.RestructuringCount ?? 0, c.ValidationFailureCode is not null,
+            new LoanMarksDto((condiciones?.RestructuringCount ?? 0) > 0, condiciones?.RestructuringCount ?? 0, c.ValidationFailureCode is not null && c.ConfirmedByExceptionAt is null,
                 posicion?.IsSuspended ?? false, posicion?.UsuryCapped ?? false),
             new LoanLinksDto(solicitud, origen, c.OriginLinkKind?.ToString()),
             garantias, pagare, bloqueos, c.SourceInvoiceNumber));

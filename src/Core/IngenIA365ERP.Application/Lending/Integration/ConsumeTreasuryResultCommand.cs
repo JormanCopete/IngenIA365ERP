@@ -179,10 +179,25 @@ public sealed class ConsumeTreasuryResultCommandHandler(
     };
 }
 
-/// <summary>Las versiones que acepta el destino <c>Lending</c> (mensajes.md §15.1): en K1, <c>ResultadoDelGiro</c> v1; US6 suma las de Comercial. (nuevo)</summary>
+/// <summary>
+/// Las versiones que acepta el destino <c>Lending</c> (mensajes.md §15.1; C16): <b>toda</b> versión de <c>VentaACreditoRegistrada</c> y
+/// <c>AjusteDeVentaACredito</c> —así una versión desconocida no se rechaza en el despachador sin respuesta: el consumidor deja su evaluación y la
+/// responde como no convertible— (US6, T0586) y <c>ResultadoDelGiro</c> v1 (US3). Lo demás, <c>Rejected</c> con <c>Integration.VersionNotAccepted</c>
+/// en el despachador. (nuevo)
+/// </summary>
 public static class VersionesAceptadasDeCartera
 {
     private static readonly HashSet<(string Type, int Version)> Aceptadas = [(ResultadoDelGiroV1.Type, 1)];
 
-    public static bool Acepta(string type, int version) => Aceptadas.Contains((type, version));
+    /// <summary>Las familias de Comercial: se aceptan en toda versión (C16).</summary>
+    private static readonly HashSet<string> FamiliasDeComercial =
+    [
+        IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.VentaACreditoRegistradaV1.Type,
+        IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AjusteDeVentaACreditoV1.Type,
+    ];
+
+    public static bool Acepta(string type, int version) => Aceptadas.Contains((type, version)) || (version >= 1 && FamiliasDeComercial.Contains(type));
+
+    /// <summary>¿Es un mensaje de la familia de Comercial (lo consume <c>ConsumeCommercialCreditMessageCommand</c>)?</summary>
+    public static bool EsDeComercial(string type) => FamiliasDeComercial.Contains(type);
 }

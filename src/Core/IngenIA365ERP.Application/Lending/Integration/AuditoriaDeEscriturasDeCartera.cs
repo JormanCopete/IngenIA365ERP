@@ -87,6 +87,55 @@ public sealed class AuditoriaDeEscriturasDeCartera(IServiceProvider servicios, I
         }
     }
 
+    /// <summary>
+    /// US6 (T0584): el intento de una escritura de un puerto que no es del contrato —la reserva y la liberación del número
+    /// (<c>Lending.NumberReservation.Attempted</c>)— por un contexto aparte, antes de validar, con la clave y el detalle de la petición.
+    /// </summary>
+    public Task<Guid?> IntentoAsync(string evento, string entidad, string clave, object detalle, CancellationToken ct) =>
+        AparteAsync(new AuditLogCommand
+        {
+            Action = evento,
+            EntityType = entidad,
+            EntityId = clave,
+            Module = ModuloDeAuditoria.Lending,
+            NewValues = detalle,
+            Metadata = new Dictionary<string, string> { ["OperationKey"] = clave },
+        }, ct);
+
+    /// <summary>
+    /// US6 (T0584): el hecho de una escritura de un puerto que no es del contrato (<c>Lending.NumberReservation.Reserved</c> / <c>.Released</c>) en
+    /// <c>COR_AuditOutbox</c> dentro de la unidad de trabajo de quien llama, sin guardar.
+    /// </summary>
+    public async Task<Guid?> HechoAsync(string evento, string entidad, string clave, object detalle, CancellationToken ct)
+    {
+        try
+        {
+            var comando = new AuditLogCommand
+            {
+                Action = evento,
+                EntityType = entidad,
+                EntityId = clave,
+                Module = ModuloDeAuditoria.Lending,
+                NewValues = detalle,
+                Metadata = new Dictionary<string, string> { ["OperationKey"] = clave },
+            };
+            var contexto = await AuditoriaEncadenada.ContextoAsync(servicios, servicios.GetService<ICurrentUserService>(), null, ct, ModuloDeAuditoria.Lending);
+            if (AuditoriaEncadenada.Flujo(contexto.TenantId) is not { } flujo)
+            {
+                await servicios.GetRequiredService<IAuditService>().LogAsync(AuditoriaEncadenada.ParaMongo(contexto, comando), ct);
+                return null;
+            }
+            var entrada = AuditoriaEncadenada.Entrada(flujo, AuditoriaEncadenada.Evento(contexto, comando));
+            db.AuditOutbox.Add(entrada);
+            return entrada.EventId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "[Cartera.EscrituraSinAuditar] El hecho {Evento} de la clave {Clave} no se pudo auditar.", evento, clave);
+            return null;
+        }
+    }
+
     private async Task<Guid?> AparteAsync(AuditLogCommand comando, CancellationToken ct)
     {
         try

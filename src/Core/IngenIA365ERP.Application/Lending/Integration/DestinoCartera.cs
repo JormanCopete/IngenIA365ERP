@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+using IngenIA365ERP.Application.Lending.Integration.Comercial;
 using IngenIA365ERP.Domain.Enums.Integration;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -7,16 +8,16 @@ using Microsoft.Extensions.Logging;
 namespace IngenIA365ERP.Application.Lending.Integration;
 
 /// <summary>
-/// Cartera como destino de la bandeja (feature 013, US3, T0449; T17; mensajes.md §15.1): <c>Destino = Lending</c>, un comando sin ruta por familia
-/// —en K1 <see cref="ConsumeTreasuryResultCommand"/> para <c>ResultadoDelGiro</c> v1; US6 suma la familia de Comercial—, una unidad por trabajo
-/// (Cartera no resume) y sin comprobantes (totales en cero). Nunca lanza: una excepción es <c>Retry</c>; un fallo del comando, <c>Rejected</c>.
-/// Corre por <c>IEjecutorEnCooperativa</c> con el actor «Proceso de integración» y nunca usa los permisos del usuario de origen (I-2).
+/// Cartera como destino de la bandeja (feature 013, US3, T0449; US6, T0586; T17; mensajes.md §15.1): <c>Destino = Lending</c>, un comando sin ruta por
+/// familia —<see cref="ConsumeTreasuryResultCommand"/> para <c>ResultadoDelGiro</c> v1 y <see cref="ConsumeCommercialCreditMessageCommand"/> para
+/// <c>VentaACreditoRegistrada</c> y <c>AjusteDeVentaACredito</c> en toda versión (C16)—, una unidad por trabajo (Cartera no resume) y sin comprobantes
+/// (totales en cero). Lee sólo por <see cref="IMensajesEntrantes"/> (en sus comandos). Nunca lanza: una excepción es <c>Retry</c>; un fallo del comando,
+/// <c>Rejected</c>. Corre por <c>IEjecutorEnCooperativa</c> con el actor «Proceso de integración» y nunca usa los permisos del usuario de origen (I-2).
 ///
 /// <para>
-/// <b>Registro</b> (bloque 7C): en <c>AddApplication</c>. El destino <c>Lending</c> sólo cuenta cuando este consumidor acepta todo lo que adopta la
-/// fila <c>CAR</c> del registro (<c>RegistroDeIntegracion.ImplementacionDisponible</c>); la semilla la deja adoptando también
-/// <c>VentaACreditoRegistrada</c> v1/v2 y <c>AjusteDeVentaACredito</c> v1, que llegan con US6. Hasta entonces el despachador no le entrega nada
-/// —ni las ventas a crédito de Comercial, que siguen esperando sin intentos ni rechazos, ni el <c>ResultadoDelGiro</c>—. (nuevo)
+/// <b>Registro</b> (bloque 7C): en <c>AddApplication</c>. El destino <c>Lending</c> cuenta cuando este consumidor acepta todo lo que adopta la fila
+/// <c>CAR</c> del registro (<c>RegistroDeIntegracion.ImplementacionDisponible</c>): desde US6 acepta la familia de Comercial que la semilla le adopta,
+/// así que el despachador ya le entrega las ventas a crédito, sus ajustes y el <c>ResultadoDelGiro</c>. (nuevo)
 /// </para>
 /// </summary>
 public sealed class DestinoCartera(ISender sender, ILogger<DestinoCartera> logger) : IDestinoDeMensajes
@@ -33,7 +34,7 @@ public sealed class DestinoCartera(ISender sender, ILogger<DestinoCartera> logge
         {
             try
             {
-                var r = await sender.Send(new ConsumeTreasuryResultCommand(unidad.MessagePublicIds), ct);
+                var r = await sender.Send(ComandoDe(unidad), ct);
                 resultados.Add(new ResultadoDeUnidad(unidad, r.IsSuccess ? r.Value : new ResultadoDeConsumo.Rejected(r.Error.Code, r.Error.Message)));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -48,6 +49,15 @@ public sealed class DestinoCartera(ISender sender, ILogger<DestinoCartera> logge
         }
         return resultados;
     }
+
+    /// <summary>
+    /// El comando de la familia de la unidad: lo de Comercial (<c>INV</c>) a <see cref="ConsumeCommercialCreditMessageCommand"/>; lo de Tesorería, a
+    /// <see cref="ConsumeTreasuryResultCommand"/>. El tipo exacto lo valida cada comando al leer.
+    /// </summary>
+    private static IRequest<IngenIA365ERP.Application.Common.Models.Result<ResultadoDeConsumo>> ComandoDe(UnidadDeConsumo unidad) =>
+        unidad.OriginModule == ModulosDeOrigen.Inventario
+            ? new ConsumeCommercialCreditMessageCommand(unidad.MessagePublicIds)
+            : new ConsumeTreasuryResultCommand(unidad.MessagePublicIds);
 
     /// <summary>Una unidad por (módulo, origen, clave de evento): Cartera no resume.</summary>
     public IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas)

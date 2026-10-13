@@ -106,6 +106,10 @@ internal sealed class GobiernoDePrueba : IDisposable
         _actor = new Actor(ActorKind.Person, usuario.Id, usuario.PublicId, usuario.CentralUserId, usuario.Username, usuario.Email,
             ExecutionChannel.Web, "POST /api/lending", "10.0.0.7", null);
 
+    /// <summary>Feature 013, US6 (bloque 10A): actúa el proceso de integración (el consumo de la bandeja corre así, I-2).</summary>
+    public void ActuarComoProceso() =>
+        _actor = new Actor(ActorKind.Process, null, null, null, IngenIA365ERP.Application.Common.Execution.Actor.NombreDelProceso, null, ExecutionChannel.Process, "Mensaje:prueba", null, null);
+
     public void Conceder(params string[] permisos)
     {
         _permisos.Clear();

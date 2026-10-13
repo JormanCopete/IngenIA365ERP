@@ -270,12 +270,14 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             Contenido = Contenido(o),
         };
 
-    /// <summary>La decisión de un pago, de un cobro provisional o de una resolución de saldo (US5); nula en las demás clases.</summary>
+    /// <summary>La decisión de un pago, de un cobro provisional o de una resolución de saldo (US5) o de un ajuste de Comercial (US6); nula en las demás.</summary>
     private static object? Contenido(LoanOperation o) => o.Kind switch
     {
         LoanOperationKind.Payment or LoanOperationKind.ProvisionalCollection => Payments.DecisionDePago.ContenidoDe(o)
             ?? (o.Kind == LoanOperationKind.ProvisionalCollection ? new Domain.Lending.Payments.ContenidoDePago(PaymentModality.FreeAmount, o.Amount) : null),
         LoanOperationKind.CreditBalanceResolution => Payments.DecisionDeResolucion.Leer(o.Payload)?.Contenido(),
+        // US6 (T0591): el ajuste de Comercial con su clase, su valor con signo y el recálculo sellado.
+        LoanOperationKind.CommercialAdjustment => Integration.Comercial.DecisionDeAjusteComercial.Leer(o.Payload)?.Contenido(),
         _ => null,
     };
 

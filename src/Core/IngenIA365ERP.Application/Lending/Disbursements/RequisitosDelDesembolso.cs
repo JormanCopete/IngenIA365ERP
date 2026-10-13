@@ -455,7 +455,7 @@ public sealed class RequisitosDelDesembolso(
     }
 
     /// <summary>El hecho como se emitiría, para la validación previa (FR-127, T56).</summary>
-    private static MensajeContableDto HechoParaValidar(CreditLine linea, SimulacionCalculada sim, Person deudor, Guid sucursal,
+    public static MensajeContableDto HechoParaValidar(CreditLine linea, SimulacionCalculada sim, Person deudor, Guid sucursal,
         DateOnly fecha, decimal bruto, int tramo, DisbursementForm forma)
     {
         var sobre = new IntegrationEnvelopeV1
