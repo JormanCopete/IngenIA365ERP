@@ -94,6 +94,13 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirArchivoDeDesembolsosDescargadoAsync(Guid filePublicId, string numero, string sha256, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingDisbursementFileDownloaded, "DisbursementFile", filePublicId, new { number = numero, sha256 }, ct);
 
+    /// <summary>
+    /// US8 (T0752): la activación de Cartera, en su transacción, con los requisitos evaluados, lo que nació y las huellas del cuadre, la conciliación y
+    /// los cobros provisionales. No es una lectura sensible: no va en <see cref="LecturasSensibles"/>.
+    /// </summary>
+    public Task<Guid?> EmitirActivacionRegistradaAsync(Guid activationPublicId, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingActivationRegistered, "LendingActivation", activationPublicId, detalle, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try

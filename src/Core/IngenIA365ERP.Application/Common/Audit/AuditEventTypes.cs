@@ -240,6 +240,9 @@ public static class AuditEventTypes
     // US3 (T0444, T23): la distribución completa por cuota y concepto de una operación del libro (desembolso, reverso); no es lectura.
     public const string LendingOperationRegistered = "Lending.Operation.Registered";
 
+    // US8 (T0752): la activación de Cartera con sus requisitos, conteos y huellas; no es lectura.
+    public const string LendingActivationRegistered = "Lending.Activation.Registered";
+
     // US3 (T0454, bloque 7B): la emisión del enlace de descarga de un archivo de desembolsos (adaptadores §6.2: «enlace firmado de 60 s, auditado»).
     public const string LendingDisbursementFileDownloaded = "Lending.DisbursementFile.Downloaded";
 

@@ -46,8 +46,20 @@ public sealed class ConciliacionDeVentasDeMigracion(IApplicationDbContext db, Co
     {
         var conciliada = await clasificador.ConciliarAsync(carga, version, ct);
         if (conciliada.IsFailure) return Result.Failure<ConciliacionRegistrada>(conciliada.Error);
+        return Result.Success(await RegistrarAsync(carga, version, conciliada.Value, ct));
+    }
 
-        var conDiferencia = conciliada.Value.Filas
+    /// <summary>
+    /// Sólo clasifica (US8, T0752): las filas de la versión quedan en el contexto sin guardar y sin diferencias. La activación compara su huella con
+    /// la aceptada y, si no cambió, las suelta; si cambió, las registra con <see cref="RegistrarAsync"/>.
+    /// </summary>
+    public Task<Result<ConciliacionDeVentas>> ClasificarAsync(MigrationLoad carga, int version, CancellationToken ct) =>
+        clasificador.ConciliarAsync(carga, version, ct);
+
+    /// <summary>Hace nacer las diferencias de las filas ya clasificadas y calcula la huella; guarda una vez si hay diferencias (para enlazarlas).</summary>
+    public async Task<ConciliacionRegistrada> RegistrarAsync(MigrationLoad carga, int version, ConciliacionDeVentas conciliada, CancellationToken ct)
+    {
+        var conDiferencia = conciliada.Filas
             .Where(f => f.Outcome is SaleReconciliationOutcome.NotMigratedWithBalance or SaleReconciliationOutcome.OutsideLendingD29)
             .Select(f => (Fila: f, Diferencia: Diferencia(carga, version, f)))
             .ToList();
@@ -57,7 +69,7 @@ public sealed class ConciliacionDeVentasDeMigracion(IApplicationDbContext db, Co
             await db.SaveChangesAsync(ct);
             foreach (var (fila, diferencia) in conDiferencia) fila.DifferenceId = diferencia.Id;
         }
-        return Result.Success(new ConciliacionRegistrada(conciliada.Value, Huella(conciliada.Value.Filas)));
+        return new ConciliacionRegistrada(conciliada, Huella(conciliada.Filas));
     }
 
     /// <summary>La diferencia de una venta: no migrada con saldo o fuera de Cartera, por su pago (una por venta).</summary>

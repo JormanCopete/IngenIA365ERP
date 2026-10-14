@@ -163,6 +163,13 @@ public static class AdjuntosDeModulo
     public const string ArchivoDeDesembolsos = "LendingDisbursementFile";
 
     /// <summary>
+    /// Feature 013, US8 (T0748, C62; plantillas.md §6): el archivo de cobros provisionales tal como se revisó antes de activar Cartera. El dueño es la
+    /// carga aplicada (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>); la activación lo vuelve a leer y lo valida en su transacción. Lo genera Cartera:
+    /// se lee con <c>Lending.Activation.Execute</c>, no recibe subidas y no se borra.
+    /// </summary>
+    public const string CobrosProvisionales = "LendingProvisionalCollections";
+
+    /// <summary>
     /// Feature 013, US7 (T0638, T59; contracts/contabilidad.md §4.4; data-model parte 3 §5.4): el soporte del patrimonio técnico o de la relación de
     /// solvencia que registra el contador. Se sube <b>antes</b> de registrar el indicador (<c>RegisterRegulatoryIndicatorCommand</c> lo cita en
     /// <c>SupportAttachmentPublicId</c>), así que el dueño es el <c>PublicId</c> que la pantalla reserva para el registro. Se lee con
@@ -204,6 +211,7 @@ public static class AdjuntosDeModulo
         [InformeDeCentrales] = new("Lending.CreditBureau.ReadReports", Borrable: false, "el informe de una consulta a centrales de riesgo"),
         [SimulacionEnviada] = new("Lending.DebtorMessages.Read", Borrable: false, "la simulación enviada a la persona"),
         [ArchivoDeDesembolsos] = new("Lending.DisbursementFiles.Generate", Borrable: false, "el archivo de desembolsos de crédito que se entregó al banco"),
+        [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>

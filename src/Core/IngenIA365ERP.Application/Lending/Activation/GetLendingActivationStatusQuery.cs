@@ -10,7 +10,8 @@ namespace IngenIA365ERP.Application.Lending.Activation;
 
 /// <summary>
 /// El estado de la activación (api.md §19.3, <c>ActivationReadinessDto</c>): si Cartera está activada y desde cuándo, la carga vigente
-/// (la aplicada, o el borrador), la fecha que correspondería (corte + 1), el plazo y los requisitos con su estado. (nuevo)
+/// (la aplicada, o el borrador), la fecha que correspondería (corte + 1), el plazo, los requisitos con su estado y quién los corrige, los avisos que
+/// no bloquean y la marca «modelo obligatorio no disponible» de una cooperativa obligada fuera de producción (US8, T0747). (nuevo)
 /// </summary>
 public sealed record ActivationReadinessDto(
     string Status,
@@ -21,7 +22,9 @@ public sealed record ActivationReadinessDto(
     DateOnly? ExpectedActivationDate,
     DateOnly? ActivationDeadline,
     bool IsProductionEnvironment,
-    IReadOnlyList<RequisitoDeActivacionDto> Requirements);
+    IReadOnlyList<RequisitoDeActivacionDto> Requirements,
+    IReadOnlyList<AvisoDeActivacionDto>? Warnings = null,
+    bool ObligatoryModelUnavailable = false);
 
 /// <summary>La carga que se activaría. (nuevo)</summary>
 public sealed record ActivationLoadDto(Guid PublicId, int Number, DateOnly CutoffDate, MigrationLoadStatus Status);
@@ -63,9 +66,9 @@ public sealed class GetLendingActivationStatusQueryHandler(
         var carga = await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Applied && !l.IsDeleted).FirstOrDefaultAsync(ct)
             ?? await db.MigrationLoads.AsNoTracking().Where(l => l.Status == MigrationLoadStatus.Draft && !l.IsDeleted).FirstOrDefaultAsync(ct);
         var esperada = carga?.CutoffDate.AddDays(1);
-        var lista = await requisitos.EvaluarAsync(carga, esperada ?? hoy, hoy, ct);
+        var evaluacion = await requisitos.EvaluarConAvisosAsync(carga, esperada ?? hoy, hoy, ct);
         return Result.Success(new ActivationReadinessDto(SinActivar, null, null, null,
             carga is null ? null : new ActivationLoadDto(carga.PublicId, carga.Number, carga.CutoffDate, carga.Status),
-            esperada, carga?.ActivationDeadline, requisitos.EsProduccion, lista));
+            esperada, carga?.ActivationDeadline, requisitos.EsProduccion, evaluacion.Requisitos, evaluacion.Avisos, evaluacion.ObligatoryModelUnavailable));
     }
 }

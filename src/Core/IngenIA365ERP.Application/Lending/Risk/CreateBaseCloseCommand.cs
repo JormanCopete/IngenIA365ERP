@@ -205,9 +205,13 @@ public sealed class CierreBase(IApplicationDbContext db, INormativaVigente norma
 }
 
 /// <summary>
-/// El cierre base de una activación (feature 013, US9, T0708; C60). <b>Sin ruta</b>: la activación llama a <see cref="CierreBase"/> dentro de su
-/// transacción; este comando lo deja disponible para US8 (las tandas de la carga) y para las pruebas. Exige que la activación exista y que la
-/// cooperativa no tenga ya su base (<c>Lending.MonthlyClose.BaseAlreadyExists</c>). (nuevo)
+/// El cierre base de una activación (feature 013, US9, T0708; US8, T0749; C60, C66; data-model §23.1, §32.1). <b>Sin ruta</b>: la activación llama a
+/// <see cref="CierreBase"/> dentro de su transacción, después de que nacen los créditos de todas las tandas de la carga; este comando lo deja disponible
+/// para las pruebas y para un reintento de soporte. Exige que la activación exista, que la cooperativa no tenga ya su base
+/// (<c>Lending.MonthlyClose.BaseAlreadyExists</c>) y, con el puerto de transacción registrado, una transacción en curso de quien lo llama
+/// (<c>Lending.Contract.TransactionRequired</c>): no abre ni confirma la suya. El base va fechado al <b>corte</b> (no tiene que ser fin de mes), con
+/// <c>ActivationId</c>, sus líneas desde <c>risk-data</c>, el general sumado por dimensión y el historial migrado (origen <c>Migration</c>); sin
+/// hechos ni <c>CierreDeCarteraRealizado</c>, y nunca se reabre. (nuevo)
 /// </summary>
 public sealed record CreateBaseCloseCommand(Guid ActivationPublicId) : IRequest<Result<Guid>>;
 
@@ -216,10 +220,12 @@ public sealed class CreateBaseCloseCommandValidator : AbstractValidator<CreateBa
     public CreateBaseCloseCommandValidator() => RuleFor(x => x.ActivationPublicId).NotEmpty();
 }
 
-public sealed class CreateBaseCloseCommandHandler(IApplicationDbContext db, CierreBase cierreBase) : IRequestHandler<CreateBaseCloseCommand, Result<Guid>>
+public sealed class CreateBaseCloseCommandHandler(IApplicationDbContext db, CierreBase cierreBase, Integration.ITransaccionDelRecaudador? transaccion = null)
+    : IRequestHandler<CreateBaseCloseCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(CreateBaseCloseCommand request, CancellationToken ct)
     {
+        if (transaccion is not null && !transaccion.HayEnCurso()) return Result.Failure<Guid>(Payments.ErroresDePagos.TransaccionRequerida());
         var activacion = await db.LendingActivations.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == request.ActivationPublicId && !a.IsDeleted, ct);
         if (activacion is null) return Result.Failure<Guid>(new Error("Lending.Activation.NotFound", "La activación no existe."));
         var carga = await db.MigrationLoads.AsNoTracking().FirstAsync(l => l.Id == activacion.MigrationLoadId, ct);

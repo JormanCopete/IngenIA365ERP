@@ -211,11 +211,15 @@ public sealed class ContratoDeObligacionesDeCartera(
         };
 
         await BloquearAsync(pagos.Select(p => p.ObligationPublicId).Concat(noDescontados.Select(n => n.ObligationPublicId)).ToList(), ct);
+        var corte = await CorteAsync(ct);
 
         var respuestas = new List<RespuestaDelContratoDto<ComprobanteDeAplicacionDto>>(pagos.Count);
         foreach (var pago in pagos)
         {
-            var r = await aplicacion.AplicarAsync(new PagoEnCurso(solicitud.Collector, solicitud.Form, pago, validacion) { Avisos = avisos }, ct);
+            // US8 (T0753, FR-142): lo pagado hasta el corte de la migración debía venir en la carga; desde el día siguiente entra con su fecha valor.
+            var r = corte is { } diaDelCorte && pago.ValueDate <= diaDelCorte
+                ? Result.Failure<PagoAplicado>(Migration.ErroresDeMigracion.AntesDelCorte(pago.ValueDate, diaDelCorte))
+                : await aplicacion.AplicarAsync(new PagoEnCurso(solicitud.Collector, solicitud.Form, pago, validacion) { Avisos = avisos }, ct);
             if (r.IsSuccess)
             {
                 var c = r.Value.Comprobante;
@@ -353,6 +357,11 @@ public sealed class ContratoDeObligacionesDeCartera(
 
     private static Error Invalida(FluentValidation.Results.ValidationResult r) =>
         ErroresDePagos.Validacion(r.Errors.Select(e => (JsonNamingPolicy.CamelCase.ConvertName(e.PropertyName), e.ErrorCode, e.ErrorMessage)).ToList());
+
+    /// <summary>El corte de la carga activada (la víspera de la activación, data-model §30.1); nulo sin activar.</summary>
+    private async Task<DateOnly?> CorteAsync(CancellationToken ct) =>
+        (await db.LendingSetups.AsNoTracking().Where(s => s.Id == LendingSetup.IdDeLaFilaUnica).Select(s => s.ActivationDate).FirstOrDefaultAsync(ct))
+        ?.AddDays(-1);
 
     private Task<bool> ActivadaAsync(CancellationToken ct) =>
         db.LendingSetups.AsNoTracking().AnyAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica && s.ActivationDate != null, ct);

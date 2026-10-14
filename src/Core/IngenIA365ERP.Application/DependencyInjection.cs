@@ -532,6 +532,11 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.CategoriaContableDeCartera>();
         services.AddScoped<Lending.Integration.EmisionDeCartera>();
         services.AddScoped<Lending.Activation.RequisitosDeActivacion>();
+        // US8 (bloque 13B, T0748–T0752): la activación con cartera previa.
+        services.AddScoped<Lending.Activation.RecalculoDelCuadreDeActivacion>();
+        services.AddScoped<Lending.Activation.ValidacionDeCobrosProvisionales>();
+        services.AddScoped<Lending.Activation.NacimientoDeCreditosMigrados>();
+        services.AddScoped<Lending.Activation.NacimientoDeLoDelDeudorMigrado>();
         // Feature 013, US4 (bloque 8B): la carga de la reconstrucción, las series regulatorias, las partes de hechos, la puesta al día y el ciclo
         // diario. IMotorDeCreditoEnDesembolso (el punto de extensión de la fase 7) ya es el motor real.
         services.AddScoped<Lending.Engine.ISeriesRegulatorias, Lending.Engine.SeriesRegulatoriasDeCartera>();

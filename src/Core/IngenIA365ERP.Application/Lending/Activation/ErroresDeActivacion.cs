@@ -15,6 +15,7 @@ public static class ErroresDeActivacion
     public const string CodigoCargaNoEncontrada = "Lending.MigrationLoad.NotFound";
     public const string CodigoCargaNoBorrador = "Lending.Migration.LoadNotDraft";
     public const string CodigoSinUsuario = "Lending.Actor.Unauthorized";
+    public const string CodigoObligacionEnCeroImposible = "Lending.Activation.ZeroObligationNotPossible";
 
     public static Error YaActivada(DateOnly fecha) =>
         new ErrorConDatos(CodigoYaActivada,
@@ -40,4 +41,13 @@ public static class ErroresDeActivacion
 
     public static Error SinUsuario() =>
         new(CodigoSinUsuario, "No se pudo identificar a la persona que hace la operación en esta cooperativa.");
+
+    /// <summary>
+    /// US8 (T0752, C111): una venta cancelada antes del corte no puede nacer como obligación en cero: no hay línea (ni la de la carga ni una de origen
+    /// comercial por defecto para el tipo de deudor) o la venta no nombra a una persona del maestro.
+    /// </summary>
+    public static Error ObligacionEnCeroImposible(string factura, string motivo) =>
+        new ErrorConDatos(CodigoObligacionEnCeroImposible,
+            $"La venta {factura} cancelada antes del corte no puede nacer en Cartera como obligación en cero: {motivo}. Corríjalo y vuelva a activar.",
+            new { invoice = factura });
 }

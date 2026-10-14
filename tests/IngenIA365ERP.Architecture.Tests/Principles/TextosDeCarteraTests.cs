@@ -70,6 +70,12 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Migration/ConciliacionDeVentasDeMigracion.cs",
         "Core/IngenIA365ERP.Application/Lending/Migration/CargaVigenteDeCartera.cs",
         "Core/IngenIA365ERP.Application/Lending/Imports/DefinicionesDeMigracion.cs",
+        // US8 (bloque 13B, T0747–T0752): los requisitos, los cobros provisionales, el nacimiento de lo del deudor y la activación.
+        "Core/IngenIA365ERP.Application/Lending/Activation/RequisitosDeActivacion.cs",
+        "Core/IngenIA365ERP.Application/Lending/Activation/ValidacionDeCobrosProvisionales.cs",
+        "Core/IngenIA365ERP.Application/Lending/Activation/ReviewProvisionalCollectionsCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Activation/NacimientoDeLoDelDeudorMigrado.cs",
+        "Core/IngenIA365ERP.Application/Lending/Activation/ActivateLendingCommand.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

@@ -41,7 +41,72 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
     {
         ArgumentNullException.ThrowIfNull(ambito);
         ArgumentNullException.ThrowIfNull(prefijo);
+        var secuencia = await SecuenciaAsync(clase, ambito, prefijo, ct);
 
+        while (true)
+        {
+            var numero = Formatear(secuencia.Prefix, secuencia.NextValue, secuencia.MinDigits);
+            secuencia.NextValue = secuencia.NextValue + 1;
+            if (numero.Length > LargoMaximo)
+                throw new InvalidOperationException($"El número {numero} de {clase} pasa de {LargoMaximo} caracteres.");
+            if (!await ExisteAsync(clase, numero, ct)) return numero;
+        }
+    }
+
+    /// <summary>
+    /// Feature 013, US8 (T0750): <paramref name="cantidad"/> comprobantes seguidos de una clase de operación para una tanda de la activación, con
+    /// una consulta de existencia por tanda (no una por número): los que ya existen se saltan como en <see cref="AsignarAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> NumerosDeOperacionAsync(LoanOperationKind clase, string prefijo, int cantidad, CancellationToken ct = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(cantidad);
+        var numeros = new List<string>(cantidad);
+        if (cantidad == 0) return numeros;
+        var secuencia = await SecuenciaAsync(LendingNumberKind.Operation, clase.ToString(), prefijo, ct);
+        while (numeros.Count < cantidad)
+        {
+            var faltan = cantidad - numeros.Count;
+            var candidatos = new List<string>(faltan);
+            for (var i = 0; i < faltan; i++)
+            {
+                var numero = Formatear(secuencia.Prefix, secuencia.NextValue, secuencia.MinDigits);
+                secuencia.NextValue = secuencia.NextValue + 1;
+                if (numero.Length > LargoMaximo)
+                    throw new InvalidOperationException($"El número {numero} de {LendingNumberKind.Operation} pasa de {LargoMaximo} caracteres.");
+                candidatos.Add(numero);
+            }
+            var existentes = (await db.LoanOperations.IgnoreQueryFilters().Where(o => candidatos.Contains(o.Number)).Select(o => o.Number).ToListAsync(ct))
+                .ToHashSet(StringComparer.Ordinal);
+            numeros.AddRange(candidatos.Where(c => !existentes.Contains(c)));
+        }
+        return numeros;
+    }
+
+    /// <summary>
+    /// Feature 013, US8 (T0752; FR-057): después de la activación con cartera previa, el consecutivo de créditos arranca por encima del mayor número
+    /// <b>numérico</b> migrado (sin el prefijo de la fila, si lo trae): así un crédito nuevo nunca choca con uno migrado. Un número con letras no
+    /// cuenta (el numerador igual lo salta si existe). No baja nunca el consecutivo.
+    /// </summary>
+    public async Task LlevarCreditosPorEncimaDeAsync(IEnumerable<string> numerosMigrados, string prefijo, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(numerosMigrados);
+        var secuencia = await SecuenciaAsync(LendingNumberKind.Loan, string.Empty, prefijo, ct);
+        long mayor = 0;
+        foreach (var numero in numerosMigrados)
+        {
+            var sinPrefijo = secuencia.Prefix.Length > 0 && numero.StartsWith(secuencia.Prefix, StringComparison.OrdinalIgnoreCase)
+                ? numero[secuencia.Prefix.Length..]
+                : numero;
+            if (sinPrefijo.Length > 0 && sinPrefijo.All(char.IsAsciiDigit)
+                && long.TryParse(sinPrefijo, NumberStyles.None, CultureInfo.InvariantCulture, out var valor) && valor > mayor)
+                mayor = valor;
+        }
+        if (mayor >= secuencia.NextValue) secuencia.NextValue = mayor + 1;
+    }
+
+    /// <summary>La fila de numeración de (clase, ámbito), bloqueada si viene de la base; agregada con el prefijo pedido si no existe.</summary>
+    private async Task<LendingNumberSequence> SecuenciaAsync(LendingNumberKind clase, string ambito, string prefijo, CancellationToken ct)
+    {
         // Una fila ya seguida en esta unidad de trabajo (agregada por otra operación de la tanda, o ya bloqueada antes): se sigue
         // con ella, que lleva el NextValue al día y, si venía de la base, el candado tomado.
         var secuencia = db.LendingNumberSequences.Local.FirstOrDefault(s => s.Kind == clase && s.ScopeKey == ambito);
@@ -63,15 +128,7 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
                 secuencia = await db.LendingNumberSequences.FirstAsync(s => s.Id == id.Value, ct);
             }
         }
-
-        while (true)
-        {
-            var numero = Formatear(secuencia.Prefix, secuencia.NextValue, secuencia.MinDigits);
-            secuencia.NextValue = secuencia.NextValue + 1;
-            if (numero.Length > LargoMaximo)
-                throw new InvalidOperationException($"El número {numero} de {clase} pasa de {LargoMaximo} caracteres.");
-            if (!await ExisteAsync(clase, numero, ct)) return numero;
-        }
+        return secuencia;
     }
 
     /// <summary>El radicado de una solicitud que se envía a análisis (nunca un borrador, data-model §2.1).</summary>
