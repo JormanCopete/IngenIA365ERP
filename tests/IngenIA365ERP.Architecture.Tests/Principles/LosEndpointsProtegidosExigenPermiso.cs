@@ -176,6 +176,8 @@ public class LosEndpointsProtegidosExigenPermiso
         Assert.Contains(Path.Combine("Endpoints", "Accounting", "LendingIntegrationEndpoints.cs"), archivos);
         Assert.Contains(Path.Combine("Endpoints", "Lending", "AccountingIntegrationEndpoints.cs"), archivos);
         Assert.Contains(Path.Combine("Endpoints", "Lending", "LendingMessagesEndpoints.cs"), archivos);
+        // US13 (bloque 14B, T0768): los documentos al deudor y su verificación (Lending.Documents.*), sin ruta anónima (D21).
+        Assert.Contains(Path.Combine("Endpoints", "Lending", "DocumentsEndpoints.cs"), archivos);
     }
 
     [Theory]

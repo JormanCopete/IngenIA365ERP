@@ -1,0 +1,101 @@
+@page "/cartera/verificar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject CarteraClient Cartera
+@inject NavigationManager Navegacion
+
+<PageTitle>Verificar documento - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US13 (T0793; FR-132, D21; contracts/api.md §15): la verificación de un documento al deudor por su código. El QR del PDF abre esta
+   página con ?codigo=XXXX-XXXX-XXXX-XXXX; sin sesión, el ingreso con ?returnUrl= devuelve aquí. Sólo la usan personas de la cooperativa con
+   Lending.Documents.Verify —no hay verificación anónima—, y un código de otra cooperativa o inexistente no corresponde a ningún documento de esta.
+   Muestra si es auténtico, su estado (vigente, sujeto a firmeza o anulado con el motivo y la fecha), clase, número, fecha, el titular con el
+   documento enmascarado y los datos esenciales. Cada verificación queda en la auditoría. *@
+<PermissionGate Required="Lending.Documents.Verify" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Verificar documento</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Lending.Documents.Read">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/documentos"))">Documentos</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo campo-ancho">Código de verificación
+            <input class="e-input" @bind="_codigo" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="40"
+                   @onkeyup="@(e => { if (e.Key == "Enter") _ = VerificarAsync(); })" />
+        </label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || string.IsNullOrWhiteSpace(_codigo))" OnClick="@VerificarAsync">Verificar</SfButton>
+    </div>
+    <p class="texto-tenue">Se admiten minúsculas, espacios y guiones; la I y la L se leen como 1 y la O como 0.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Verificando…">
+        @if (_error is not null)
+        {
+            <p class="aviso aviso-error" role="alert">@_error</p>
+        }
+        @if (_verificado is { } v)
+        {
+            <div class="info-card">
+                <h4>@TextosDeDocumentos.Clase(v.Kind) @v.Number</h4>
+                <p>
+                    <span class="aviso aviso-ok">Documento auténtico de esta cooperativa</span>
+                    <span class="aviso @TextosDeDocumentos.AvisoDeEstado(v.Status)">@TextosDeDocumentos.Estado(v.Status)</span>
+                </p>
+                @if (v.Voided is { } anulacion)
+                {
+                    <p class="aviso aviso-error">Anulado el @TextosDeDocumentos.Momento(anulacion.At): @anulacion.Reason</p>
+                }
+                <p>Emitido el @TextosDeDocumentos.Momento(v.IssuedAt) a nombre de <strong>@v.Holder.FullName</strong> (documento @v.Holder.DocumentNumberMasked).</p>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Dato</th><th>Valor</th></tr></thead>
+                        <tbody>
+                            @foreach (var (rotulo, valor) in TextosDeDocumentos.DatosEsenciales(v.EssentialData))
+                            {
+                                <tr><td>@rotulo</td><td>@valor</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private const string NoEncontrado = "Lending.Document.NotFound";
+
+    [SupplyParameterFromQuery(Name = "codigo")] public string? CodigoInicial { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private string? _codigo, _error;
+    private DocumentoVerificadoDto? _verificado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(CodigoInicial)) return;
+        _codigo = CodigoInicial;
+        await VerificarAsync();
+    }
+
+    private async Task VerificarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_codigo)) return;
+        using var carga = _carga.Iniciar();
+        _error = null;
+        _verificado = null;
+        var r = await Cartera.VerificarDocumentoAsync(_codigo);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == NoEncontrado
+                ? "El código no corresponde a un documento de esta cooperativa."
+                : r.ErrorMessage ?? "No se pudo verificar el código.";
+            return;
+        }
+        _verificado = r.Value;
+    }
+}

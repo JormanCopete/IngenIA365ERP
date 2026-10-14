@@ -1,0 +1,61 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Components.Shared
+@inject CarteraClient Cartera
+
+@* Feature 013, US13 (T0781; pregunta I6 de DT §5, rige la propuesta por defecto «imagen de firma y logotipo como adjuntos opcionales»): el
+   logotipo y la imagen de la firma que llevan los documentos al deudor. Son adjuntos de la configuración de Cartera; subir otro reemplaza el
+   vigente (la emisión toma siempre el último) y el anterior se puede borrar. Un documento ya emitido conserva su PDF con la imagen que tenía.
+   Sin imágenes, el PDF lleva sólo el nombre y el cargo del firmante (parámetros Documentos.Firmante.*), el código y el QR. Ver y bajar exige
+   Lending.Documents.Read; subir y borrar, Lending.Parameters.Manage. *@
+<div class="info-card">
+    <h4>Imágenes de los documentos al deudor</h4>
+    <p class="texto-apoyo">Opcionales, en JPEG o PNG. El nombre y el cargo del firmante son los parámetros Documentos.Firmante.Nombre y Documentos.Firmante.Cargo.</p>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_error is not null) { <p class="aviso aviso-error">@_error</p> }
+        @if (_imagenes is { } i)
+        {
+            <h5>Logotipo</h5>
+            <p class="texto-tenue">@(i.Logo is { } logo ? $"Vigente: {logo.FileName}, subido el {logo.UploadedAt.ToLocalTime():dd/MM/yyyy HH:mm}." : "Sin logotipo: el membrete lleva sólo el nombre y el NIT.")</p>
+            <PermissionGate Required="Lending.Parameters.Manage">
+                <SubirSoporte OwnerEntityType="@i.LogoOwnerType" OwnerEntityPublicId="@i.SetupPublicId" Admitidos="@TiposDeImagen" Accept=".png,.jpg,.jpeg"
+                              Rotulo="Subir logotipo" Ayuda="JPEG o PNG" MaxBytes="@MaxBytes" OnSubido="@CargarAsync" />
+            </PermissionGate>
+            <PermissionGate Required="Lending.Documents.Read">
+                <AttachmentList @key="@($"logo-{_version}")" OwnerEntityType="@i.LogoOwnerType" OwnerEntityPublicId="@i.SetupPublicId" />
+            </PermissionGate>
+
+            <h5>Imagen de la firma</h5>
+            <p class="texto-tenue">@(i.Signature is { } firma ? $"Vigente: {firma.FileName}, subida el {firma.UploadedAt.ToLocalTime():dd/MM/yyyy HH:mm}." : "Sin imagen de la firma: el documento lleva la línea de firma con el nombre y el cargo.")</p>
+            <PermissionGate Required="Lending.Parameters.Manage">
+                <SubirSoporte OwnerEntityType="@i.SignatureOwnerType" OwnerEntityPublicId="@i.SetupPublicId" Admitidos="@TiposDeImagen" Accept=".png,.jpg,.jpeg"
+                              Rotulo="Subir imagen de la firma" Ayuda="JPEG o PNG" MaxBytes="@MaxBytes" OnSubido="@CargarAsync" />
+            </PermissionGate>
+            <PermissionGate Required="Lending.Documents.Read">
+                <AttachmentList @key="@($"firma-{_version}")" OwnerEntityType="@i.SignatureOwnerType" OwnerEntityPublicId="@i.SetupPublicId" />
+            </PermissionGate>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    /// <summary>Un logotipo o una firma no necesitan más de 2 MB; el tope real lo aplica el servidor.</summary>
+    private const long MaxBytes = 2L * 1024 * 1024;
+
+    private static readonly IReadOnlySet<string> TiposDeImagen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png" };
+
+    private readonly EstadoDeCarga _carga = new();
+    private ImagenesDeDocumentosDto? _imagenes;
+    private string? _error;
+    private int _version;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cartera.ImagenesDeDocumentosAsync();
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudieron leer las imágenes de los documentos.";
+        _imagenes = r.IsSuccess ? r.Value : null;
+        _version++;
+    }
+}

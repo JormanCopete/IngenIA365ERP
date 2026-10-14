@@ -57,6 +57,9 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // Fase 13, US8 (T0759–T0761): la puesta en marcha —la carga de migración y la activación—.
         ("Pages/Cartera/Migracion.razor", "/cartera/migracion", "Lending.Migration.Load"),
         ("Pages/Cartera/Activacion.razor", "/cartera/activacion", "Lending.Activation.Execute"),
+        // Fase 14, US13 (T0792, T0793): los documentos al deudor y la verificación de su código (el QR la abre con sesión iniciada).
+        ("Pages/Cartera/Documentos.razor", "/cartera/documentos", "Lending.Documents.Read"),
+        ("Pages/Cartera/Verificar.razor", "/cartera/verificar", "Lending.Documents.Verify"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>

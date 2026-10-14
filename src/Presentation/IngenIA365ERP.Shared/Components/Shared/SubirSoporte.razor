@@ -20,10 +20,10 @@
         else
         {
             <div class="toolbar">
-                <label class="boton boton-secundario" for="@_idDelInput">Agregar soporte</label>
-                <input type="file" id="@_idDelInput" hidden accept="@TiposDeSoporte.Extensiones"
+                <label class="boton boton-secundario" for="@_idDelInput">@Rotulo</label>
+                <input type="file" id="@_idDelInput" hidden accept="@(Accept ?? TiposDeSoporte.Extensiones)"
                        disabled="@_subiendo.Activa" @onchange="ElegidoAsync" />
-                <span class="muted">PDF, imagen, Word, Excel o texto; hasta @Legible(MaxBytes).</span>
+                <span class="muted">@(Ayuda ?? "PDF, imagen, Word, Excel o texto"); hasta @Legible(MaxBytes).</span>
             </div>
         }
         @if (_mensaje is not null)
@@ -39,6 +39,15 @@
 
     /// <summary>Para avisar antes de subir; el tope real lo aplica el servidor.</summary>
     [Parameter] public long MaxBytes { get; set; } = TiposDeSoporte.MaxBytesPorDefecto;
+
+    /// <summary>
+    /// Feature 013, US13 (T0781): los tipos que admite este dueño, el <c>accept</c> del selector, el rótulo del botón y la ayuda; nulos, los de un
+    /// soporte (PDF, imagen, Word, Excel o texto). El logotipo y la imagen de la firma de Cartera sólo admiten JPEG o PNG.
+    /// </summary>
+    [Parameter] public IReadOnlySet<string>? Admitidos { get; set; }
+    [Parameter] public string? Accept { get; set; }
+    [Parameter] public string Rotulo { get; set; } = "Agregar soporte";
+    [Parameter] public string? Ayuda { get; set; }
 
     /// <summary>Se dispara al terminar una subida, bien o mal: la lista de soportes se recarga.</summary>
     [Parameter] public EventCallback OnSubido { get; set; }
@@ -74,7 +83,7 @@
 
         var problema = archivo.Size == 0 ? "El archivo está vacío."
             : archivo.Size > MaxBytes ? $"«{archivo.Name}» pesa {Legible(archivo.Size)}; el máximo es {Legible(MaxBytes)}."
-            : !TiposDeSoporte.Admitidos.Contains(archivo.Type) ? $"«{archivo.Name}» no es de un tipo admitido como soporte."
+            : !(Admitidos ?? TiposDeSoporte.Admitidos).Contains(archivo.Type) ? $"«{archivo.Name}» no es de un tipo admitido aquí."
             : null;
         if (problema is not null)
         {

@@ -57,6 +57,8 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/InboundMessagesEndpoints.cs",
         // US9 (bloque 12C, T0712): la política SARC, la calificación por análisis y la orden y la reapertura del cierre mensual.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs",
+        // US13 (bloque 14B, T0790): emitir, enviar y anular un documento; el enlace del PDF guardado (reimprimir) es "/download-link", sin clave.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DocumentsEndpoints.cs",
     ];
 
     /// <summary>
@@ -181,7 +183,8 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Activation.ReviewProvisionalCollectionsCommand),
         typeof(IngenIA365ERP.Application.Lending.Activation.ActivateLendingCommand),
         // US13 (bloque 14A, T0784–T0786): emitir, enviar y anular un documento. El enlace de descarga (reimprimir) es una lectura por POST sin clave,
-        // como el del archivo de desembolsos (ConsultasPorPost "/download-link"); T0768 lo lista y queda anotado para el bloque 14B.
+        // como el del archivo de desembolsos (ConsultasPorPost "/download-link"): repetirlo emite otro enlace del mismo PDF y cada uno se audita
+        // como reimpresión (decisión del bloque 14B, T0768 ajustada).
         typeof(IngenIA365ERP.Application.Lending.Documents.IssueLendingDocumentCommand),
         typeof(IngenIA365ERP.Application.Lending.Documents.SendLendingDocumentCommand),
         typeof(IngenIA365ERP.Application.Lending.Documents.VoidLendingDocumentCommand),

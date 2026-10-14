@@ -629,6 +629,21 @@ public static class ManualCatalogo
             ["Una carga aplicada con las diferencias aceptadas.", "Permiso Lending.Activation.Execute."],
             ["cartera-migracion"], [], TipoDeTema.Proceso));
 
+        // ------------------------------------------------------ Cartera: documentos al deudor --
+        // Feature 013, US13 (T0793): el plan de pagos, el paz y salvo y el certificado de saldo con su código de verificación. El detalle, en
+        // docs/manual/cartera-documentos-al-deudor.md.
+        t.Add(Proceso("cartera-documentos", "Documentos al deudor y su verificación", Modulos.Cartera, "/cartera/documentos",
+            "Emitir en un paso el plan de pagos, el paz y salvo de una obligación o general y el certificado de saldo, con número, código de verificación y QR; reimprimir el mismo PDF, enviarlo por correo, anularlo y verificar un código.",
+            [
+                P("Cartera → Documentos", "Lista de documentos emitidos por crédito o deudor, clase, estado y fecha. El estado se calcula: vigente, sujeto a firmeza hasta la fecha que dice o anulado. Desde el expediente del crédito, el botón «Documentos» abre esta pantalla con el crédito elegido.", "/cartera/documentos", "Abrir Documentos"),
+                P("Emitir", "Elegí la clase, el crédito y el titular (deudor o codeudor), la fecha de corte si es un certificado de saldo, y si se descarga o se envía al correo del titular. Se confirma una vez. El paz y salvo se niega si queda saldo o si hay una venta a crédito en reproceso, y dice cuáles."),
+                P("Reimprimir, enviar y anular", "Desde el detalle: «Descargar PDF» baja el mismo archivo que se emitió (idéntico); «Enviar por correo» lo pone en la cola de mensajes al deudor; «Anular» pide motivo. Reversar el pago o el desembolso que respaldaba un documento lo anula solo."),
+                P("Verificar un código", "Cartera → Verificar documento, o el QR del PDF con sesión iniciada: dice si el documento es auténtico, su estado y sus datos esenciales. Sólo verifican usuarios de la cooperativa.", "/cartera/verificar", "Abrir Verificar documento"),
+            ],
+            ["documentos", "paz y salvo", "plan de pagos", "certificado de saldo", "codigo de verificacion", "qr", "verificar", "reimprimir", "anular documento", "firmeza"],
+            ["Cartera activada.", "Firmante configurado en los parámetros (Documentos.Firmante.Nombre y .Cargo).", "Permisos Lending.Documents.Read, .Issue, .Reprint, .Void y .Verify según la acción."],
+            ["cartera-activacion"], ["/cartera/verificar"], TipoDeTema.Proceso));
+
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.
         // Los temas del crédito heredado se retiraron con sus pantallas; la Cartera nueva trae los suyos en Modulos.Cartera.

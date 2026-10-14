@@ -253,6 +253,7 @@ public sealed class ConsumoDeVentaACreditoTests : IAsyncLifetime
         r.Should().BeOfType<ResultadoDeConsumo.Rejected>().Which.Code.Should().Be(ErroresDeVentasACredito.CodigoPersonaInexistente);
         var recibo = await _v.Db.LendingInboundMessages.AsNoTracking().SingleAsync();
         (recibo.Status, recibo.NotRetryableAt, recibo.ResponseMessagePublicId).Should().Be((InboundMessageStatus.Rejected, (DateTime?)null, (Guid?)null));
+        recibo.PersonId.Should().BeNull("el comprador no existe en la cooperativa");
         var evaluacion = await _v.Db.LendingInboundMessageEvaluations.AsNoTracking().SingleAsync();
         (evaluacion.Outcome, evaluacion.Retryable).Should().Be((InboundEvaluationOutcome.NotConvertible, true));
         (await _v.MensajesAsync(ObligacionRechazadaV1.Type)).Should().BeEmpty("no convertible no responde mientras sea reprocesable (C95)");
@@ -270,6 +271,7 @@ public sealed class ConsumoDeVentaACreditoTests : IAsyncLifetime
 
         var recibo = await _v.Db.LendingInboundMessages.AsNoTracking().SingleAsync();
         recibo.EvaluationCount.Should().Be(2);
+        recibo.PersonId.Should().Be(_v.Ana.Id, "el recibo no convertible lleva al comprador: niega su paz y salvo general mientras siga en reproceso (US13-4)");
         (await _v.Db.LendingInboundMessageEvaluations.CountAsync()).Should().Be(2);
         (await _v.MensajesAsync(ObligacionRechazadaV1.Type)).Should().BeEmpty("un reproceso que vuelve a fallar sigue sin respuesta (C102)");
     }

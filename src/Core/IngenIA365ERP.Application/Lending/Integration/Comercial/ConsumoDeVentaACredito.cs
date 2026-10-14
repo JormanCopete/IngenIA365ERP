@@ -98,16 +98,25 @@ public sealed class ConsumoDeVentaACredito(
 
     /// <summary>
     /// Lo no convertible (FR-053, C95): el recibo queda <c>Rejected</c> y reprocesable con su evaluación, sin respuesta a Comercial —la venta se informa
-    /// <c>Pending</c> con su motivo, C40— hasta que una persona lo marque no reprocesable (C102).
+    /// <c>Pending</c> con su motivo, C40— hasta que una persona lo marque no reprocesable (C102). El recibo lleva al comprador si existe en la
+    /// cooperativa aunque la venta no se convierta: mientras siga en reproceso niega su paz y salvo general, que lo busca por la persona (US13-4,
+    /// FR-143; hasta el bloque 14B el recibo de una venta no convertible quedaba sin persona y el general se emitía).
     /// </summary>
     public async Task<ResultadoDeConsumo> NoConvertibleAsync(MensajeEntrante m, LendingInboundMessage recibo, Error error, string? linea, CancellationToken ct)
     {
         recibo.Status = InboundMessageStatus.Rejected;
+        recibo.PersonId ??= await CompradorAsync(m, ct);
         var datos = error is ErrorConDatos d ? System.Text.Json.JsonSerializer.Serialize(d.Data, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) : null;
         await recibos.AnotarAsync(recibo, m, new EvaluacionAAnotar(InboundEvaluationOutcome.NotConvertible, linea,
             $"[{{\"check\":\"Conversion\",\"passed\":false,\"code\":\"{error.Code}\"}}]", error.Code, error.Message, true, null), ct);
         return new ResultadoDeConsumo.Rejected(error.Code, error.Message, datos);
     }
+
+    /// <summary>El comprador de la venta (la persona del sobre), si existe en la cooperativa.</summary>
+    private async Task<int?> CompradorAsync(MensajeEntrante m, CancellationToken ct) =>
+        m.Envelope.PersonPublicId is { } p
+            ? await db.People.AsNoTracking().Where(x => x.PublicId == p && !x.IsDeleted).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct)
+            : null;
 
     /// <summary>La sucursal de la venta si existe en la cooperativa; si no, la principal.</summary>
     private async Task<Guid> SucursalAsync(MensajeEntrante m, CancellationToken ct) =>

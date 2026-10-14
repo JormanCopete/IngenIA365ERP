@@ -133,4 +133,34 @@ public class LaCarteraNoTieneValoresLegalesFijos
         }
         ReglaSobreFuente.SinInfracciones(infracciones, "El motor de Cartera escribe 7 o 10 como literal (CH39)");
     }
+
+    /// <summary>
+    /// US13 (T0768; adaptadores-y-archivos.md §8.5): los documentos al deudor no fijan los días de firmeza del paz y salvo ni ningún otro plazo: la
+    /// firmeza sale del parámetro <c>Pagos.FirmezaDiasPorClaseDeMedio</c> por <c>FirmezaDelPago</c> y el calendario hábil. Las carpetas de los
+    /// documentos están en el recorrido de los literales decimales, y en ellas ningún <c>AddDays</c> lleva otro número que el día siguiente.
+    /// </summary>
+    [Fact]
+    public void Los_documentos_al_deudor_no_fijan_dias_de_firmeza()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var decimales = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => ReglaSobreFuente.Relativo(root, a)).ToList();
+        Assert.Contains(decimales, a => a.EndsWith("Domain/Lending/Documents/VigenciaDeDocumentos.cs", StringComparison.Ordinal));
+        Assert.Contains(decimales, a => a.EndsWith("Domain/Lending/Documents/EstadoDeDocumentoEmitido.cs", StringComparison.Ordinal));
+        Assert.Contains(decimales, a => a.EndsWith("Application/Lending/Documents/ConstructorDeDocumentosDeCartera.cs", StringComparison.Ordinal));
+
+        var plazoFijo = new Regex(@"AddDays\(\s*(?!1\s*\))\d+\s*\)", RegexOptions.Compiled);
+        var infracciones = new List<string>();
+        foreach (var archivo in ReglaSobreFuente.ArchivosEn(["Core/IngenIA365ERP.Domain/Lending/Documents", "Core/IngenIA365ERP.Application/Lending/Documents"]))
+        {
+            var relativo = ReglaSobreFuente.Relativo(root, archivo);
+            var lineas = File.ReadAllLines(archivo);
+            for (var i = 0; i < lineas.Length; i++)
+            {
+                var linea = lineas[i].Trim();
+                if (ReglaSobreFuente.EsComentario(linea)) continue;
+                if (plazoFijo.IsMatch(linea)) infracciones.Add($"{relativo}:{i + 1}: plazo en días fijo en el código");
+            }
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Los documentos al deudor fijan un plazo en días: sale de un parámetro con vigencia");
+    }
 }

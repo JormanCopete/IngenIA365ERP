@@ -24,6 +24,10 @@
     <div class="page-header">
         <h3>Crédito @(_c?.Number)</h3>
         <div class="toolbar">
+            @* US13 (T0792): los documentos del crédito y el diálogo de emitir con el crédito elegido. *@
+            <PermissionGate Required="Lending.Documents.Read">
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/documentos?credito={Id}&emitir=true"))">Documentos</SfButton>
+            </PermissionGate>
             <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/creditos"))">Volver</SfButton>
         </div>
     </div>

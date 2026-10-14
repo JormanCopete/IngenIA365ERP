@@ -99,6 +99,9 @@ public class TodoEnlaceDelMenuTieneSuPagina
     // US8 (bloque 13C, T0728): la puesta en marcha —la carga de migración y la activación—.
     [InlineData("/cartera/migracion", true)]
     [InlineData("/cartera/activacion", true)]
+    // US13 (bloque 14B, T0768): los documentos al deudor y la verificación de su código.
+    [InlineData("/cartera/documentos", true)]
+    [InlineData("/cartera/verificar", true)]
     public void Las_pantallas_de_la_integracion_contable_de_Cartera_tienen_su_pagina(string ruta, bool enElMenu)
     {
         var shared = Shared();

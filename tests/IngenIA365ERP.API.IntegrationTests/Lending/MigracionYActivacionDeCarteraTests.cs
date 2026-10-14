@@ -281,6 +281,14 @@ public sealed class MigracionYActivacionDeCarteraTests(CentralIdentityApiFixture
             noMigrada.ValueKind.Should().Be(JsonValueKind.Object, "Comercial recibió la respuesta de la venta no migrada");
             noMigrada.GetProperty("outcome").GetString().Should().Be("Rejected", noMigrada.ToString());
             noMigrada.GetProperty("retryable").GetBoolean().Should().BeFalse();
+
+            // US13 (T0769, US13-4): el paz y salvo general del cliente de la venta marcada fuera de Cartera no se niega por ella: se emite y la
+            // menciona como venta que no hace parte de Cartera (la nota queda en el documento y en su PDF).
+            await DocumentosE2E.FirmanteAsync(fx, tenant, admin, corte.AddDays(1));
+            var general = await DocumentosE2E.EmitidoAsync(http, admin, DocumentosE2E.Pedido("GeneralClearance", clientes[3].Persona, null));
+            var detalleDelGeneral = await CarteraE2E.GetAsync(http, admin, $"{DocumentosE2E.Documentos}/{general.GetProperty("documentPublicId").GetGuid()}");
+            detalleDelGeneral.GetProperty("outsideLendingNote").GetString().Should().Contain(s4, "la venta aceptada sin migrar queda mencionada (FR-143)");
+            detalleDelGeneral.GetProperty("document").GetProperty("kind").GetString().Should().Be("GeneralClearance");
         }
     }
 

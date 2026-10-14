@@ -14,6 +14,7 @@ using IngenIA365ERP.Application.Lending.Collections;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Settlement;
 using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Documents;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
@@ -108,7 +109,8 @@ public sealed class IssueLendingDocumentCommandHandler(
     IActorActual actorActual,
     IDateTimeService reloj,
     IOptions<IdentityEmailOptions>? aplicacion = null,
-    IAmbienteDeDespliegue? ambiente = null) : IRequestHandler<IssueLendingDocumentCommand, Result<IssuedLendingDocumentDto>>
+    IAmbienteDeDespliegue? ambiente = null,
+    IAttachmentCipher? cifrado = null) : IRequestHandler<IssueLendingDocumentCommand, Result<IssuedLendingDocumentDto>>
 {
     /// <summary>Cuántas veces se genera otro código ante una colisión antes de rendirse (80 bits: no debería pasar nunca).</summary>
     public const int IntentosDeCodigo = 5;
@@ -278,10 +280,32 @@ public sealed class IssueLendingDocumentCommandHandler(
         if (pruebas) todas.Add(EncabezadoDeDocumentoDeCartera.MarcaDePruebas);
         todas.AddRange(leyendas);
         var desfase = reloj.AhoraLocal.Offset;
+        var (logotipo, logotipoId) = await ImagenVigenteAsync(AdjuntosDeModulo.LogotipoDeCartera, ct);
+        var (firma, firmaId) = await ImagenVigenteAsync(AdjuntosDeModulo.ImagenDeFirmaDeCartera, ct);
         return new EncabezadoDeDocumentoDeCartera(clase, ModelosDeDocumentoDeCartera.Titulo(clase), numero,
             new DateTimeOffset(DateTime.SpecifyKind(emision, DateTimeKind.Utc)).ToOffset(desfase), cooperativa?.Name ?? "Cooperativa", nit,
             ReferenciasDeGobierno.Nombre(titular), titular.IdType, titular.TaxId, firmante.Nombre, firmante.Cargo, formateado,
-            ModelosDeDocumentoDeCartera.UrlDeVerificacion(aplicacion?.Value.BaseUrl ?? string.Empty, formateado), pruebas, todas);
+            ModelosDeDocumentoDeCartera.UrlDeVerificacion(aplicacion?.Value.BaseUrl ?? string.Empty, formateado), pruebas, todas)
+        {
+            Logotipo = logotipo,
+            LogotipoPublicId = logotipoId,
+            ImagenDeFirma = firma,
+            ImagenDeFirmaPublicId = firmaId,
+        };
+    }
+
+    /// <summary>
+    /// El logotipo o la imagen de la firma vigentes (T0781, I6): el último adjunto disponible de ese dueño —subir otro lo reemplaza—, leído y comprobado
+    /// contra su SHA-256. Sin imagen, o si no se puede leer, el PDF va sin ella (sólo nombre, cargo, código y QR): una imagen que falta no impide emitir.
+    /// </summary>
+    private async Task<(byte[]? Bytes, Guid? PublicId)> ImagenVigenteAsync(string tipo, CancellationToken ct)
+    {
+        var vigente = await db.Attachments.AsNoTracking()
+            .Where(a => a.OwnerEntityType == tipo && a.Status == EstadoDeAdjunto.Available && !a.IsDeleted)
+            .OrderByDescending(a => a.Id).Select(a => (Guid?)a.PublicId).FirstOrDefaultAsync(ct);
+        if (vigente is not { } id) return (null, null);
+        var leido = await ContenidoDeAdjunto.LeerAsync(db, store, cifrado, id, ct);
+        return leido is null ? (null, null) : (leido.Bytes, id);
     }
 
     /// <summary>¿La persona es deudora o codeudora vigente del crédito?</summary>

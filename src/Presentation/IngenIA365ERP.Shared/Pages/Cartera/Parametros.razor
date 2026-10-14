@@ -19,9 +19,10 @@
     <div class="page-header">
         <h3>Parámetros de Cartera</h3>
         <div class="toolbar">
-            <SfButton CssClass="@(_riesgo ? "e-outline" : "e-primary")" OnClick="@(() => _riesgo = false)">Parámetros</SfButton>
-            <SfButton CssClass="@(_riesgo ? "e-primary" : "e-outline")" OnClick="@(() => _riesgo = true)">Riesgo</SfButton>
-            @if (!_riesgo)
+            <SfButton CssClass="@(!_riesgo && !_documentos ? "e-primary" : "e-outline")" OnClick="@(() => { _riesgo = false; _documentos = false; })">Parámetros</SfButton>
+            <SfButton CssClass="@(_riesgo ? "e-primary" : "e-outline")" OnClick="@(() => { _riesgo = true; _documentos = false; })">Riesgo</SfButton>
+            <SfButton CssClass="@(_documentos ? "e-primary" : "e-outline")" OnClick="@(() => { _documentos = true; _riesgo = false; })">Documentos</SfButton>
+            @if (!_riesgo && !_documentos)
             {
                 <input type="search" class="e-input" placeholder="Buscar clave…" @bind="_buscar" @bind:event="oninput" />
                 <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
@@ -33,6 +34,11 @@
     @if (_riesgo)
     {
         <PoliticaSarc />
+    }
+    else if (_documentos)
+    {
+        @* US13 (T0781): el logotipo y la imagen de la firma de los documentos al deudor (pregunta I6, propuesta por defecto). *@
+        <ImagenesDeDocumentos />
     }
     else
     {
@@ -186,7 +192,7 @@
     private List<ParametroDeCarteraDto> _parametros = [];
     private ParametroDeCarteraDto? _elegido, _editado;
     private List<VigenciaDeParametroDto> _vigencias = [];
-    private bool _mostrarNueva, _riesgo;
+    private bool _mostrarNueva, _riesgo, _documentos;
     private string _buscar = string.Empty;
     private string? _valor, _motivo, _fuente, _error;
     private Guid? _ambitoId;

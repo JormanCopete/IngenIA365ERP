@@ -490,6 +490,8 @@ try
     builder.Services.AddScoped<IngenIA365ERP.Application.Lending.Sessions.IActaDeSesionEnPdf, IngenIA365ERP.Application.Lending.Sessions.ActaDeSesionGuardada>();
     // Feature 013, US2 (T0389): la simulación de crédito en PDF (descarga y envío a la persona simulada), sin número ni código.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Origination.IRenderizadorDeSimulacion, IngenIA365ERP.API.Reports.SimulacionDeCreditoPdfRenderer>();
+    // Feature 013, US13 (T0789): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) con su código y QR; sin él la emisión no resuelve.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Documents.IDocumentoDeCarteraRenderer, IngenIA365ERP.API.Reports.DocumentoDeCarteraPdfRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 

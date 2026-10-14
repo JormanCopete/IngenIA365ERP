@@ -313,6 +313,44 @@ public sealed class IssueLendingDocumentCommandHandlerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task El_logotipo_y_la_firma_vigentes_van_en_el_encabezado_y_sin_ellos_el_pdf_sale_igual()
+    {
+        // Sin imágenes: el encabezado no lleva ninguna (T0781, I6).
+        await _d.EmitidoAsync(DocumentosDePrueba.Pedido(IssuedDocumentKind.PaymentPlan, _d.Ana.PublicId, _d.Credito.PublicId));
+        _d.Pintados.Single().Encabezado.Logotipo.Should().BeNull();
+        _d.Pintados.Single().Encabezado.ImagenDeFirma.Should().BeNull();
+
+        // Un logotipo reemplazado por otro y una firma: van los vigentes, leídos del almacén.
+        var setup = await _d.Db.LendingSetups.SingleAsync();
+        await ImagenAsync(AdjuntosDeModulo.LogotipoDeCartera, setup.PublicId, [1, 2, 3]);
+        var logotipo = await ImagenAsync(AdjuntosDeModulo.LogotipoDeCartera, setup.PublicId, [4, 5, 6]);
+        var firma = await ImagenAsync(AdjuntosDeModulo.ImagenDeFirmaDeCartera, setup.PublicId, [7, 8, 9]);
+
+        await _d.EmitidoAsync(DocumentosDePrueba.Pedido(IssuedDocumentKind.PaymentPlan, _d.Ana.PublicId, _d.Credito.PublicId));
+
+        var encabezado = _d.Pintados[^1].Encabezado;
+        encabezado.Logotipo.Should().Equal(4, 5, 6);
+        encabezado.LogotipoPublicId.Should().Be(logotipo);
+        encabezado.ImagenDeFirma.Should().Equal(7, 8, 9);
+        encabezado.ImagenDeFirmaPublicId.Should().Be(firma);
+    }
+
+    private async Task<Guid> ImagenAsync(string tipo, Guid dueno, byte[] contenido)
+    {
+        var adjunto = new Domain.Entities.Core.Attachment
+        {
+            TenantId = 1, OwnerEntityType = tipo, OwnerEntityPublicId = dueno, FileName = "imagen.png", ContentType = "image/png",
+            SizeBytes = contenido.LongLength, Sha256Hex = Convert.ToHexString(SHA256.HashData(contenido)).ToLowerInvariant(),
+            StoragePath = $"1/2026/12/{Guid.NewGuid():N}.bin", Format = Domain.Enums.Core.FormatoDeAdjunto.Direct,
+            Status = Domain.Enums.Core.EstadoDeAdjunto.Available, CreatedBy = "test",
+        };
+        _d.Db.Attachments.Add(adjunto);
+        await _d.Db.SaveChangesAsync();
+        _d.Contenidos[adjunto.StoragePath] = contenido;
+        return adjunto.PublicId;
+    }
+
+    [Fact]
     public async Task Una_colision_del_codigo_se_regenera_antes_de_guardar()
     {
         _d.CodigosAEntregar.Enqueue("7K2MQ9XD4HTPB1RW");

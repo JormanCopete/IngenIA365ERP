@@ -1473,6 +1473,7 @@ en K5.
 | `POST /{id}/send` | Documents.Issue | `SendLendingDocumentCommand` | `{ recipientPersonPublicId? }` → 201 `{ debtorMessagePublicId }` (propósito `DocumentDelivery`, exento de ventanas si lo pidió el titular, I3) | `Lending.Document.VoidedCannotReissue`, `Lending.DebtorMessage.ChannelNotAuthorized` | K1 |
 | `POST /{id}/void` | Documents.Void | `VoidLendingDocumentCommand` | `{ reason }` → 204 | `Lending.Document.AlreadyVoided` | K1 |
 | `GET /verify/{code}` | Documents.Verify | `VerifyLendingDocumentQuery` | → `{ authentic, status, kind, number, issuedAt, holder { fullName, documentNumberMasked }, essentialData, voidedReason? }`; auditado `Lending.Document.Verified` | `Lending.Document.NotFound` (código inexistente, con el mensaje «el código no corresponde a un documento de esta cooperativa») | K1 |
+| `GET /images` | Parameters.View | `GetLendingDocumentImagesQuery` | → `{ setupPublicId, logoOwnerType, signatureOwnerType, logo?, signature? }` (`{ attachmentPublicId, fileName, contentType, uploadedAt }`): el dueño de los adjuntos `LendingLogo` y `LendingSignatureImage` (la fila única de `LND_Setup`) y la imagen vigente de cada uno, para su carga en `/cartera/parametros` (I6, propuesta por defecto; bloque 14B). La subida va por `POST /api/attachments/uploads` con `Lending.Parameters.Manage` | | K1 |
 
 - **Paz y salvo** (FR-131): sólo con saldo cero y sujeto a firmeza (D23); el general certifica sólo las
   obligaciones de Cartera, se niega si hay un mensaje de venta en reproceso (y dice la factura), menciona las

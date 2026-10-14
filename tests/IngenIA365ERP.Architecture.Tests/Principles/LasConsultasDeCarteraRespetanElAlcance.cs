@@ -98,6 +98,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListGoverningBodiesQuery"] = "catálogo de la cooperativa: los órganos no tienen oficina",
         ["GetGoverningBodyQuery"] = "catálogo de la cooperativa: los órganos no tienen oficina",
         ["ListLendingTemplatesQuery"] = "registro de plantillas vacías: no trae datos",
+        // US13 (bloque 14B, T0781): el logotipo y la firma de los documentos son de la cooperativa, no de una oficina.
+        ["GetLendingDocumentImagesQuery"] = "configuración de la cooperativa: el logotipo y la imagen de la firma no tienen oficina",
         ["GetLendingTemplateQuery"] = "definición de una plantilla vacía: no trae datos",
         ["ListMessageTemplatesQuery"] = "plantillas de mensaje: textos de la cooperativa, sin deudores",
         ["GetMessageTemplateHistoryQuery"] = "plantillas de mensaje: textos de la cooperativa, sin deudores",
