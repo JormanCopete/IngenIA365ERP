@@ -20,7 +20,9 @@ public class MigrationRelatedPartyRowConfiguration : IEntityTypeConfiguration<Mi
         builder.Property(e => e.RowNumber).IsRequired();
         builder.Property(e => e.Basis).HasConversion<int>().IsRequired();
         builder.Property(e => e.ValidFrom).IsRequired();
-        builder.Property(e => e.SupportReference).HasMaxLength(200);
+        builder.Property(e => e.KinshipKind).HasConversion<int?>();
+        builder.Property(e => e.ContributionPercentage).Fraccion();
+        builder.Property(e => e.SupportReference).HasMaxLength(200).IsRequired();
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);

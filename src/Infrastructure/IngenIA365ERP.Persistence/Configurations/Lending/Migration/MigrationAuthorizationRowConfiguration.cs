@@ -21,9 +21,11 @@ public class MigrationAuthorizationRowConfiguration : IEntityTypeConfiguration<M
         builder.Property(e => e.Purpose).HasMaxLength(30).IsRequired();
         builder.Property(e => e.ContactChannel).HasMaxLength(30);
         builder.Property(e => e.AuthorizedOn).IsRequired();
-        builder.Property(e => e.PolicyVersionText).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.Status).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.PolicyVersionText).HasMaxLength(30);
         builder.Property(e => e.EvidenceReference).HasMaxLength(200);
         builder.Property(e => e.HasEvidence).IsRequired();
+        builder.Property(e => e.ObtainedThrough).HasMaxLength(60);
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);

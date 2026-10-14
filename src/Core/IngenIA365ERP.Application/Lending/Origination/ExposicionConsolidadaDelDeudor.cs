@@ -33,7 +33,8 @@ public sealed record ExposicionDelDeudor(
 /// crédito vivo (<c>PendingDisbursement</c> o <c>Active</c>) es la suma de sus filas de capital en <c>LND_LoanTransactions</c> (sin las de
 /// control), nunca un saldo guardado; como codeudor cuentan los créditos donde la persona sigue obligada (no liberada ni extinguida a la fecha);
 /// las reservas <c>Reserved</c> que no han vencido y las solicitudes <c>Approved</c> vigentes (con el monto aprobado) suman como deudor. US8 le
-/// suma la carga aplicada antes de activar (FR-142). Es la pieza por persona que <c>GrupoConectadoDelDeudor</c> suma miembro a miembro. Sólo
+/// suma la carga aplicada antes de activar (FR-142, T0746: <see cref="Migration.CargaVigenteDeCartera"/>, el capital al corte como deudor y como
+/// codeudor; sus créditos llevan el Id de la fila de la carga en negativo). Es la pieza por persona que <c>GrupoConectadoDelDeudor</c> suma miembro a miembro. Sólo
 /// lee, en una consulta por fuente. (nuevo)
 /// </summary>
 public sealed class ExposicionConsolidadaDelDeudor(IApplicationDbContext db)
@@ -84,6 +85,9 @@ public sealed class ExposicionConsolidadaDelDeudor(IApplicationDbContext db)
             .Select(a => new { a.ApplicantPersonId, Valor = a.ApprovedAmount ?? a.RequestedAmount })
             .ToListAsync(ct);
 
+        // US8 (T0746, FR-142): antes de activar, la carga aplicada suma como si sus créditos hubieran nacido (LoanId negativo: la fila de la carga).
+        var migrados = await new Migration.CargaVigenteDeCartera(db).ExposicionAsync(ids, ct);
+
         var resultado = new Dictionary<int, ExposicionDelDeudor>();
         foreach (var persona in ids)
         {
@@ -91,7 +95,9 @@ public sealed class ExposicionConsolidadaDelDeudor(IApplicationDbContext db)
                 .Select(c => new CreditoEnLaExposicion(c.Id, c.Number, c.DebtorPersonId, Math.Max(0m, capital.GetValueOrDefault(c.Id)), false));
             var respaldados = codeudas.Where(c => c.PersonId == persona && c.DebtorPersonId != persona)
                 .Select(c => new CreditoEnLaExposicion(c.Id, c.Number, c.DebtorPersonId, Math.Max(0m, capital.GetValueOrDefault(c.Id)), true));
-            var lista = propios.Concat(respaldados).OrderBy(c => c.Number, StringComparer.Ordinal).ToList();
+            var deLaCarga = (migrados.GetValueOrDefault(persona) ?? [])
+                .Select(m => new CreditoEnLaExposicion(-m.MigrationLoanRowId, m.Number, m.DebtorPersonId, Math.Max(0m, m.Capital), m.ComoCodeudor));
+            var lista = propios.Concat(respaldados).Concat(deLaCarga).OrderBy(c => c.Number, StringComparer.Ordinal).ToList();
             resultado[persona] = new ExposicionDelDeudor(persona,
                 lista.Where(c => !c.ComoCodeudor).Sum(c => c.Capital),
                 lista.Where(c => c.ComoCodeudor).Sum(c => c.Capital),

@@ -37,7 +37,7 @@ public sealed partial class EmisionDeCartera(
     /// <c>CargaDeCarteraAplicada</c>: origen la carga, número <c>CORTE-{aaaammdd}-{n}</c>, fecha la de aplicación. Sin guardar.
     /// </summary>
     public async Task<Result<IntegrationMessage>> CargaAplicadaAsync(
-        MigrationLoad carga, Guid? reemplazada, DateOnly fechaDeAplicacion, int diferencias, CancellationToken ct)
+        MigrationLoad carga, Guid? reemplazada, DateOnly fechaDeAplicacion, int diferencias, CancellationToken ct, decimal capitalTotal = 0m)
     {
         ArgumentNullException.ThrowIfNull(carga);
         var contenido = new CargaDeCarteraAplicadaV1
@@ -46,7 +46,7 @@ public sealed partial class EmisionDeCartera(
             CutoffDate = carga.CutoffDate,
             ReplacesLoadPublicId = reemplazada,
             LoanCount = carga.LoanCount,
-            PrincipalTotal = 0m,
+            PrincipalTotal = capitalTotal,
             DifferencesCount = diferencias,
             AppliedBy = await UsuarioAsync(ct),
         };

@@ -22,23 +22,23 @@ public class MigrationLoanRowConfiguration : IEntityTypeConfiguration<MigrationL
         builder.Property(e => e.SourceLoanNumber).HasMaxLength(30).IsRequired();
         builder.Property(e => e.CreditLineCode).HasMaxLength(10).IsRequired();
         builder.Property(e => e.OfficePublicId).IsRequired();
-        builder.Property(e => e.InvoiceNumber).HasMaxLength(30);
+        builder.Property(e => e.InvoiceNumber).HasMaxLength(40);
         builder.Property(e => e.DisbursementDate).IsRequired();
         builder.Property(e => e.OriginalAmount).Monto().IsRequired();
         builder.Property(e => e.TermsJson).IsRequired();
         builder.Property(e => e.PrepaymentChoice).HasConversion<int?>();
         builder.Property(e => e.RepaymentChannel).HasConversion<int>().IsRequired();
         builder.Property(e => e.EmployeeIdAtPaymaster).HasMaxLength(30);
-        builder.Property(e => e.PromissoryNoteKind).HasConversion<int?>();
-        builder.Property(e => e.PromissoryNoteNumber).HasMaxLength(30);
-        builder.Property(e => e.CustodianChannelCode).HasMaxLength(20);
-        builder.Property(e => e.ExternalNoteId).HasMaxLength(60);
-        builder.Property(e => e.CollectionStageCode).HasMaxLength(20);
+        builder.Property(e => e.CollectionStageCode).HasMaxLength(30);
+        builder.Property(e => e.InLegalCollection).IsRequired();
+        builder.Property(e => e.Notes).HasMaxLength(400);
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditLine>().WithMany().HasForeignKey(e => e.CreditLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PaymasterPersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.AdvisorPersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.LawyerPersonId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.MigrationLoadPartId, e.RowNumber }).IsUnique()
             .HasDatabaseName("UK_LND_MigrationLoans_Part_Row");

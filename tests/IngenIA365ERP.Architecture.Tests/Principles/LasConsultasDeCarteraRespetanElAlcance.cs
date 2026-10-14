@@ -109,6 +109,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // Migración y activación (fase 3): de toda la cooperativa, con Lending.Migration.Load o Lending.Activation.Execute.
         ["ListMigrationLoadsQuery"] = "la carga de migración es de toda la cooperativa",
         ["GetMigrationLoadQuery"] = "la carga de migración es de toda la cooperativa",
+        // US8 (bloque 13A): el cuadre y la conciliación de ventas de la carga son de toda la cooperativa (el cuadre sin datos de deudores, C85).
+        ["GetMigrationBalanceCheckQuery"] = "el cuadre de la carga es de toda la cooperativa y no trae datos de deudores",
+        ["GetMigrationSalesReconciliationQuery"] = "la conciliación de ventas de la carga es de toda la cooperativa",
         ["GetLendingActivationStatusQuery"] = "la activación es de toda la cooperativa",
         // US1 (T0341): lo nacional y lo de la cooperativa que no es de una línea.
         ["ListModalitiesQuery"] = "documento nacional CatalogoDeModalidades: sin oficina ni línea",

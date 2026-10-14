@@ -18,7 +18,10 @@ public class MigrationBureauReportRowConfiguration : IEntityTypeConfiguration<Mi
         builder.Property(e => e.RowNumber).IsRequired();
         builder.Property(e => e.SourceLoanNumber).HasMaxLength(30).IsRequired();
         builder.Property(e => e.BureauCode).HasMaxLength(20).IsRequired();
-        builder.Property(e => e.LastReportedStatus).HasMaxLength(40).IsRequired();
+        builder.Property(e => e.LastReportedYear).IsRequired();
+        builder.Property(e => e.LastReportedMonth).IsRequired();
+        builder.Property(e => e.LastReportedStatus).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.IsNegative).IsRequired();
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
 

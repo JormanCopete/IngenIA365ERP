@@ -10,9 +10,11 @@ namespace IngenIA365ERP.Application.Tests.Lending.Risk;
 
 /// <summary>
 /// Feature 013, US9, T0679 (T49, C60, C107; data-model §23.1–§23.5): el cierre base de la activación nace al corte con <c>Kind = Base</c>, versión
-/// 1 y <c>ActivationId</c>; sus líneas salen de las filas <c>LOAN</c> de <c>LND_MigrationRiskData</c> enlazadas al cierre (no a una corrida), con los
-/// saldos migrados por concepto; el general de las filas <c>GENERAL</c>; el historial de mora con origen <c>Migration</c>. Sin hechos ni partes
-/// (FR-140) y uno solo por cooperativa (<c>BaseAlreadyExists</c>).
+/// 1 y <c>ActivationId</c>; sus líneas salen de las filas de <c>LND_MigrationRiskData</c> —una por crédito desde US8 (T0734, plantillas.md §5.3.4)—
+/// enlazadas al cierre (no a una corrida), con los saldos migrados por concepto; el general es la suma del <c>deterioroGeneral</c> de cada crédito
+/// por la dimensión del crédito (oficina, modalidad, sub-segmento); los meses en E salen de la fecha de ingreso a E y el corte; las tandas
+/// reemplazadas no cuentan; el historial de mora con origen <c>Migration</c>. Sin hechos ni partes (FR-140) y uno solo por cooperativa
+/// (<c>BaseAlreadyExists</c>).
 /// </summary>
 public class CreateBaseCloseCommandHandlerTests : IAsyncLifetime
 {
@@ -26,18 +28,22 @@ public class CreateBaseCloseCommandHandlerTests : IAsyncLifetime
         var carga = new MigrationLoad { Number = 1, CutoffDate = corte, Status = MigrationLoadStatus.Applied, CreatedByUserId = _c.Jefe.Id };
         _c.Db.MigrationLoads.Add(carga);
         await _c.Db.SaveChangesAsync();
-        var parte = new MigrationLoadPart { MigrationLoadId = carga.Id, PartKey = "RiskData", BatchNumber = 1, FileName = "riesgo.xlsx", FileSha256 = new string('a', 64), ImportedByUserId = _c.Jefe.Id, ImportedAt = _c.G.UtcNow };
+        var parte = new MigrationLoadPart { MigrationLoadId = carga.Id, PartKey = "risk-data", BatchNumber = 1, FileName = "riesgo.xlsx", FileSha256 = new string('a', 64), ImportedByUserId = _c.Jefe.Id, ImportedAt = _c.G.UtcNow };
         _c.Db.MigrationLoadParts.Add(parte);
         await _c.Db.SaveChangesAsync();
 
         var credito = await _c.Db.Loans.SingleAsync(l => l.Id == _c.Credito.Id);
         credito.MigrationLoadId = carga.Id;
-        var sucursal = await _c.Db.Branches.IgnoreQueryFilters().SingleAsync(b => b.Id == credito.BranchId);
+        var reemplazada = new MigrationLoadPart { MigrationLoadId = carga.Id, PartKey = "risk-data", BatchNumber = 2, FileName = "riesgo-viejo.xlsx",
+            FileSha256 = new string('b', 64), ImportedByUserId = _c.Jefe.Id, ImportedAt = _c.G.UtcNow, Status = MigrationPartStatus.Superseded };
+        _c.Db.MigrationLoadParts.Add(reemplazada);
+        await _c.Db.SaveChangesAsync();
         _c.Db.MigrationRiskDataRows.AddRange(
-            new MigrationRiskDataRow { MigrationLoadPartId = parte.Id, RowNumber = 2, RecordKind = CierreBase.RegistroDeCredito, SourceLoanNumber = credito.Number,
-                DaysPastDue = 45, Rating = RatingCategory.B, PrincipalImpairment = 30_000m, InterestImpairment = 1_000m, ImpairmentPercentage = 0.01m },
-            new MigrationRiskDataRow { MigrationLoadPartId = parte.Id, RowNumber = 3, RecordKind = CierreBase.RegistroGeneral, OfficePublicId = sucursal.TenantBranchPublicId ?? sucursal.PublicId,
-                ModalityCode = "CONSUMO", SubsegmentCode = "SinLibranza", GeneralImpairment = 25_000m });
+            new MigrationRiskDataRow { MigrationLoadPartId = parte.Id, RowNumber = 2, SourceLoanNumber = credito.Number, DaysPastDue = 45, Rating = RatingCategory.B,
+                Cause = RatingCause.Arrears, PrincipalImpairment = 30_000m, InterestImpairment = 1_000m, GeneralImpairment = 25_000m },
+            // Una tanda reemplazada conserva sus filas pero no cuenta (C64).
+            new MigrationRiskDataRow { MigrationLoadPartId = reemplazada.Id, RowNumber = 2, SourceLoanNumber = credito.Number, DaysPastDue = 400, Rating = RatingCategory.E,
+                PrincipalImpairment = 2_900_000m, GeneralImpairment = 99_000m, EnteredEOn = new DateOnly(2025, 1, 1) });
         _c.Db.MigrationBalanceRows.AddRange(
             new MigrationBalanceRow { MigrationLoadPartId = parte.Id, RowNumber = 2, SourceLoanNumber = credito.Number, Concept = LoanConcept.Principal, Amount = 2_900_000m },
             new MigrationBalanceRow { MigrationLoadPartId = parte.Id, RowNumber = 3, SourceLoanNumber = credito.Number, Concept = LoanConcept.CurrentInterest, Amount = 40_000m });
@@ -76,11 +82,13 @@ public class CreateBaseCloseCommandHandlerTests : IAsyncLifetime
         {
             MonthlyCloseId = (int?)cierre.Id, ProcessRunId = (int?)null, LoanId = _c.Credito.Id, FinalRating = RatingCategory.B, ArrearsRating = RatingCategory.B,
             DaysPastDueAtClose = 45, PrincipalBalance = 2_900_000m, CurrentInterestBalance = 40_000m, PrincipalImpairment = 30_000m,
-            InterestImpairment = 1_000m, TotalImpairment = 31_000m, RatingCause = RatingCause.Arrears,
+            InterestImpairment = 1_000m, TotalImpairment = 31_000m, RatingCause = RatingCause.Arrears, MonthsInE = (int?)null,
         }, o => o.ExcludingMissingMembers());
 
+        // El general: la parte del crédito, por la dimensión del crédito (su oficina, su modalidad y su sub-segmento).
         var general = await _c.Db.MonthlyCloseGeneralImpairments.AsNoTracking().SingleAsync();
-        (general.MonthlyCloseId, general.ModalityCode, general.TotalAmount, general.Delta).Should().Be((cierre.Id, "CONSUMO", 25_000m, 25_000m));
+        (general.MonthlyCloseId, general.BranchId, general.ModalityCode, general.SubsegmentCode, general.TotalAmount, general.Delta).Should()
+            .Be((cierre.Id, linea.BranchId, linea.ModalityCode, linea.SubsegmentCode, 25_000m, 25_000m));
 
         var historial = await _c.Db.LoanArrearsHistory.AsNoTracking().SingleAsync();
         (historial.LoanId, historial.PeriodMonth, historial.MaxDaysPastDue, historial.Origin).Should()
@@ -88,6 +96,15 @@ public class CreateBaseCloseCommandHandlerTests : IAsyncLifetime
 
         (await _c.Db.AccountingFactParts.CountAsync()).Should().Be(0, "el base no emite hechos: Contabilidad ya tenía esos saldos (FR-140)");
     }
+
+    [Theory]
+    [InlineData("2026-05-31", "2026-11-30", 6)]
+    [InlineData("2026-06-15", "2026-11-30", 5)]
+    [InlineData("2026-11-30", "2026-11-30", 0)]
+    [InlineData(null, "2026-11-30", 0)]
+    public void Los_meses_en_E_salen_de_la_fecha_de_ingreso_y_el_corte(string? ingreso, string corte, int meses) =>
+        CierreBase.MesesEnE(ingreso is null ? null : DateOnly.Parse(ingreso, System.Globalization.CultureInfo.InvariantCulture),
+            DateOnly.Parse(corte, System.Globalization.CultureInfo.InvariantCulture)).Should().Be(meses);
 
     [Fact]
     public async Task Un_segundo_base_responde_BaseAlreadyExists()

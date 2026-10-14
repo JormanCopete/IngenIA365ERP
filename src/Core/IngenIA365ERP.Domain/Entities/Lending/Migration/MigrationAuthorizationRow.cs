@@ -25,9 +25,16 @@ public class MigrationAuthorizationRow : AuditableEntity, IHechoInmutable
 
     public DateOnly AuthorizedOn { get; init; }
 
-    public string PolicyVersionText { get; init; } = string.Empty;
+    /// <summary><c>Accepted</c> (por defecto) o <c>Revoked</c> (<c>estado</c>).</summary>
+    public string Status { get; init; } = "Accepted";
+
+    /// <summary>Versión de la política con esa finalidad (<c>versionDelTexto</c>); nula = sin versión.</summary>
+    public string? PolicyVersionText { get; init; }
 
     public string? EvidenceReference { get; init; }
 
     public bool HasEvidence { get; init; }
+
+    /// <summary>Cómo se obtuvo (<c>canalDeObtencion</c>).</summary>
+    public string? ObtainedThrough { get; init; }
 }

@@ -19,10 +19,12 @@ public class MigrationPriorNoticeRowConfiguration : IEntityTypeConfiguration<Mig
         builder.Property(e => e.RowNumber).IsRequired();
         builder.Property(e => e.SourceLoanNumber).HasMaxLength(30).IsRequired();
         builder.Property(e => e.EpisodeStartDate).IsRequired();
-        builder.Property(e => e.CommunicationNumber).HasMaxLength(40).IsRequired();
-        builder.Property(e => e.SentOn).IsRequired();
-        builder.Property(e => e.Channel).HasMaxLength(30).IsRequired();
-        builder.Property(e => e.EvidenceReference).HasMaxLength(200);
+        builder.Property(e => e.RequiredCommunications).IsRequired();
+        builder.Property(e => e.FirstSentOn).IsRequired();
+        builder.Property(e => e.FirstChannel).HasConversion<int>().IsRequired();
+        builder.Property(e => e.FirstReference).HasMaxLength(100);
+        builder.Property(e => e.SecondChannel).HasConversion<int?>();
+        builder.Property(e => e.SecondReference).HasMaxLength(100);
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
 

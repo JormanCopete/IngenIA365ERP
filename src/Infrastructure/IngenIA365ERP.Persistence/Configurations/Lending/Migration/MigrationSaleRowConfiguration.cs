@@ -16,17 +16,19 @@ public class MigrationSaleRowConfiguration : IEntityTypeConfiguration<MigrationS
     public void Configure(EntityTypeBuilder<MigrationSaleRow> builder)
     {
         builder.ComoEntidadDeCartera(Tabla);
-        builder.ToTable(t => t.HasCheckConstraint("CK_LND_MigrationSales_BalanceAtCutoff", "[BalanceAtCutoff] = 0"));
+        builder.ToTable(t => t.HasCheckConstraint("CK_LND_MigrationSales_BalanceAtCutoff", "[BalanceAtCutoff] >= 0"));
 
         builder.Property(e => e.RowNumber).IsRequired();
-        builder.Property(e => e.InvoiceNumber).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.InvoiceNumber).HasMaxLength(40).IsRequired();
         builder.Property(e => e.SaleDate).IsRequired();
         builder.Property(e => e.OriginalAmount).Monto().IsRequired();
         builder.Property(e => e.ExternalCollections).Monto().IsRequired();
         builder.Property(e => e.AdjustmentsAmount).Monto().IsRequired();
         builder.Property(e => e.BalanceAtCutoff).Monto().IsRequired();
         builder.Property(e => e.CreditLineCode).HasMaxLength(10);
-        builder.Property(e => e.CancellationReason).HasMaxLength(500).IsRequired();
+        builder.Property(e => e.Outcome).HasConversion<int>().IsRequired();
+        builder.Property(e => e.SourceLoanNumber).HasMaxLength(30);
+        builder.Property(e => e.CollectionsReference).HasMaxLength(400);
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);

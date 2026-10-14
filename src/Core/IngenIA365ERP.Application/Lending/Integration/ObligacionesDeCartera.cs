@@ -185,20 +185,9 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
         db.LendingSetups.AsNoTracking().AnyAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica && s.ActivationDate != null, ct);
 
     /// <summary>Las personas (deudoras o codeudoras) de la carga aplicada vigente que no se ha activado (C26).</summary>
-    private async Task<HashSet<int>> MigradasAsync(IReadOnlyCollection<int> personas, CancellationToken ct)
-    {
-        if (personas.Count == 0) return [];
-        var ids = personas.ToList();
-        var carga = await db.MigrationLoads.AsNoTracking().Where(m => m.Status == MigrationLoadStatus.Applied && !m.IsDeleted)
-            .OrderByDescending(m => m.AppliedAt).Select(m => (int?)m.Id).FirstOrDefaultAsync(ct);
-        if (carga is null) return [];
-        var partes = db.MigrationLoadParts.AsNoTracking().Where(p => p.MigrationLoadId == carga.Value).Select(p => p.Id);
-        var deudores = await db.MigrationLoanRows.AsNoTracking().Where(r => partes.Contains(r.MigrationLoadPartId) && ids.Contains(r.PersonId))
-            .Select(r => r.PersonId).ToListAsync(ct);
-        var codeudores = await db.MigrationCoDebtorRows.AsNoTracking().Where(r => partes.Contains(r.MigrationLoadPartId) && ids.Contains(r.CoDebtorPersonId))
-            .Select(r => r.CoDebtorPersonId).ToListAsync(ct);
-        return [.. deudores, .. codeudores];
-    }
+    private async Task<HashSet<int>> MigradasAsync(IReadOnlyCollection<int> personas, CancellationToken ct) =>
+        // US8 (T0746): el lector único de la carga aplicada (tandas vivas, deudores de vivos y castigados, codeudores; nada después de activar).
+        [.. await new Migration.CargaVigenteDeCartera(db).PersonasAsync(personas, ct)];
 
     private sealed record VinculoVigente(RepaymentChannel RepaymentChannel, DateOnly? LibranzaDate, Guid? PaymasterPersonPublicId);
 }

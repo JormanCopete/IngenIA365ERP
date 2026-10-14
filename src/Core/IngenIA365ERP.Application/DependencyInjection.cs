@@ -494,6 +494,11 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.Comercial.AjusteDesdeComercial>();
         services.AddScoped<Lending.Integration.Comercial.VentasAnterioresAlCorte>();
         services.AddScoped<Lending.Migration.ConciliacionDeVentasDeLaCarga>();
+        // US8 (bloque 13A, T0738–T0746): la carga de la migración —cuadre, conciliación, la carga vigente antes de activar y la revalidación de cupos—.
+        services.AddScoped<Lending.Migration.CuadreDeMigracion>();
+        services.AddScoped<Lending.Migration.ConciliacionDeVentasDeMigracion>();
+        services.AddScoped<Lending.Migration.CargaVigenteDeCartera>();
+        services.AddScoped<Lending.Migration.RevalidacionDeCuposMigrados>();
         // US5 (bloque 9B, T0538–T0548): el núcleo de los pagos, sus reglas y su auditoría. Los validadores del contrato (Contrato/
         // ValidadoresDelContrato.cs) los registra AddValidatorsFromAssembly. Los cierres de Cartera (US9) y la vigencia de documentos (US13) nacen
         // vacíos y sus historias los reemplazan.

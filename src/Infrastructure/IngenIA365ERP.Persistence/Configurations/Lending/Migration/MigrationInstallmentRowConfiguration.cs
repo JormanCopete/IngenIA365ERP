@@ -21,9 +21,11 @@ public class MigrationInstallmentRowConfiguration : IEntityTypeConfiguration<Mig
         builder.Property(e => e.InstallmentNumber).IsRequired();
         builder.Property(e => e.DueDate).IsRequired();
         builder.Property(e => e.Principal).Monto().IsRequired();
-        builder.Property(e => e.Interest).Monto().IsRequired();
+        builder.Property(e => e.CurrentInterest).Monto().IsRequired();
+        builder.Property(e => e.DefaultInterest).Monto().IsRequired();
         builder.Property(e => e.Insurance).Monto().IsRequired();
         builder.Property(e => e.OtherCharges).Monto().IsRequired();
+        builder.Property(e => e.ProjectedInterest).Monto();
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
 

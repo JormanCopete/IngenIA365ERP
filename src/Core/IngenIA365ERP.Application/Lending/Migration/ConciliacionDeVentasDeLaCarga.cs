@@ -49,10 +49,13 @@ public sealed class ConciliacionDeVentasDeLaCarga(IApplicationDbContext db, IMen
         var todos = await PendientesAsync(DateOnly.MaxValue, ct);
         if (todos.IsFailure) return Result.Failure<ConciliacionDeVentas>(todos.Error);
 
-        var partes = db.MigrationLoadParts.AsNoTracking().Where(p => p.MigrationLoadId == carga.Id && !p.IsDeleted).Select(p => p.Id);
+        // Sólo las tandas vivas (una reemplazada conserva sus filas y deja de contar, C64); de la parte sales, las canceladas antes del corte.
+        var partes = db.MigrationLoadParts.AsNoTracking()
+            .Where(p => p.MigrationLoadId == carga.Id && p.Status == MigrationPartStatus.Imported && !p.IsDeleted).Select(p => p.Id);
         var creditos = await db.MigrationLoanRows.AsNoTracking().Where(r => partes.Contains(r.MigrationLoadPartId) && r.InvoiceNumber != null)
             .Select(r => new { r.Id, r.InvoiceNumber }).ToListAsync(ct);
-        var canceladas = await db.MigrationSaleRows.AsNoTracking().Where(r => partes.Contains(r.MigrationLoadPartId))
+        var canceladas = await db.MigrationSaleRows.AsNoTracking()
+            .Where(r => partes.Contains(r.MigrationLoadPartId) && r.Outcome == SaleReconciliationOutcome.CancelledBeforeCutoff)
             .Select(r => new { r.Id, r.InvoiceNumber }).ToListAsync(ct);
         var anteriores = await db.MigrationSaleReconciliations.AsNoTracking()
             .Where(r => r.MigrationLoadId == carga.Id && r.CheckVersion < checkVersion && r.MarkedFromList && !r.IsDeleted)

@@ -61,4 +61,18 @@ public class MigrationLoadDifference : AuditableEntity, IHechoInmutable
     /// <summary>Punto de acta que respalda la aceptación (D17, T64).</summary>
     [EscrituraUnica]
     public int? SessionItemId { get; set; }
+
+    /// <summary>Ya aceptada (con motivo y punto de acta).</summary>
+    public bool Aceptada => AcceptedAt is not null;
+
+    /// <summary>La aceptación (D17, T0744): una sola vez, con motivo y el punto de sesión que la aprueba.</summary>
+    public void Aceptar(int usuario, string motivo, int puntoDeActa, DateTime ahora)
+    {
+        if (Aceptada) throw new InvalidOperationException("La diferencia ya está aceptada.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        AcceptedAt = ahora;
+        AcceptedByUserId = usuario;
+        AcceptanceReason = motivo.Trim();
+        SessionItemId = puntoDeActa;
+    }
 }

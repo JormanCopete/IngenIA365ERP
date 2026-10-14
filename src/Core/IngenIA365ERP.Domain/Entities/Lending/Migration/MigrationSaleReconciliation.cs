@@ -58,4 +58,25 @@ public class MigrationSaleReconciliation : AuditableEntity
 
     /// <summary>Escrito al activar: el crédito migrado o la obligación en cero de la cancelada.</summary>
     public int? ResultingLoanId { get; set; }
+
+    /// <summary>Pendiente: ni migrada ni cancelada por la carga (se puede marcar desde la lista).</summary>
+    public bool Pendiente => MigrationLoanRowId is null && MigrationSaleRowId is null;
+
+    /// <summary>
+    /// La marca desde la lista (T0742; api.md §19.2): <c>CancelledBeforeCutoff</c> o <c>OutsideLendingD29</c>, con motivo, sólo con la carga
+    /// <c>Applied</c> y sobre una venta pendiente.
+    /// </summary>
+    public void Marcar(SaleReconciliationOutcome clase, string motivo, int usuario, DateTime ahora, MigrationLoadStatus estadoDeLaCarga)
+    {
+        if (estadoDeLaCarga != MigrationLoadStatus.Applied) throw new InvalidOperationException("Sólo se marcan ventas de una carga aplicada.");
+        if (!Pendiente) throw new InvalidOperationException("La venta no está pendiente.");
+        if (clase is not (SaleReconciliationOutcome.CancelledBeforeCutoff or SaleReconciliationOutcome.OutsideLendingD29))
+            throw new ArgumentOutOfRangeException(nameof(clase), clase, "Desde la lista sólo se marca cancelada antes del corte o fuera de Cartera.");
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        Outcome = clase;
+        MarkedFromList = true;
+        MarkReason = motivo.Trim();
+        MarkedByUserId = usuario;
+        MarkedAt = ahora;
+    }
 }

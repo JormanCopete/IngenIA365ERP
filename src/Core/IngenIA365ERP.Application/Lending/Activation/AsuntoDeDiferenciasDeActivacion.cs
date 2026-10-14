@@ -36,9 +36,19 @@ public sealed class AsuntoDeDiferenciasDeActivacion(IApplicationDbContext db) : 
             .Texto("balanceCheckSha256", carga.BalanceCheckSha256)
             .Texto("salesReconciliationSha256", carga.SalesReconciliationSha256)
             .Calcular();
+        // US8 (T0744): lo que el órgano aprueba —las diferencias vigentes del cuadre y de la conciliación, las ventas que quedan fuera de Cartera— y
+        // lo que el acta declara (vivienda fuera hasta una entrega posterior; el plan migrado se conserva y el interés lo causa el motor desde el corte, D5).
+        var vigentes = carga.CurrentCheckVersion == 0 ? []
+            : await Migration.ConciliacionDeVentasDeMigracion.VigentesAsync(db, carga, carga.CurrentCheckVersion, ct);
+        var delCuadre = vigentes.Where(d => d.Kind == MigrationDifferenceKind.BalanceCheck).ToList();
+        var fuera = vigentes.Count(d => d.Kind == MigrationDifferenceKind.SaleOutsideLending);
+        var sinMigrar = vigentes.Count(d => d.Kind == MigrationDifferenceKind.SaleNotMigrated);
+        var resumen = string.Create(CultureInfo.InvariantCulture,
+            $"Cuadre: {delCuadre.Count} diferencias por {delCuadre.Sum(d => d.Difference):N2}. Ventas no migradas con saldo: {sinMigrar}; fuera de Cartera: {fuera}. {carga.LoanCount} créditos y {carga.ChargedOffCount} castigados al corte.")
+            + " El acta declara que los créditos de vivienda quedan fuera hasta una entrega posterior y que el plan migrado se conserva: el interés lo causa el motor desde el corte.";
         return Result.Success(new AsuntoDeActa(
             string.Create(CultureInfo.InvariantCulture, $"Diferencias y activación de la carga de migración {carga.Number} (corte {carga.CutoffDate:yyyy-MM-dd})"),
-            carga.Description,
+            string.IsNullOrWhiteSpace(carga.Description) ? resumen : $"{carga.Description}. {resumen}",
             carga.Status == MigrationLoadStatus.Applied,
             carga.Status.ToString(),
             new ExpedienteDeCartera(ClaseDeExpediente, carga.PublicId),

@@ -6,7 +6,8 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Migration;
 /// <summary>
 /// <c>LND_MigrationLoans</c> (feature 013, K1; data-model §29.3, parte <c>loans</c>): fila de preparación de un crédito de origen.
 /// Hecho (<see cref="IHechoInmutable"/>, C46 sin diff de auditoría): una tanda reemplazada conserva sus filas. Al activar nace
-/// el crédito (origen <c>Migration</c>) con condiciones, plan, controles, pagaré, vínculo de pagaduría y preferencia.
+/// el crédito (origen <c>Migration</c>) con condiciones, plan, controles, vínculo de pagaduría y preferencia. Las columnas siguen a la
+/// plantilla (plantillas.md §5.3.1).
 /// </summary>
 [SinDiffDeAuditoria]
 public class MigrationLoanRow : AuditableEntity, IHechoInmutable
@@ -36,7 +37,8 @@ public class MigrationLoanRow : AuditableEntity, IHechoInmutable
 
     /// <summary>
     /// JSON de las condiciones: tasa o índice y margen, mora, sistema, periodicidad, plazo, convención, equivalencia, redondeo,
-    /// prelación, seguros y gracia.
+    /// prelación, seguros y gracia (las columnas de condiciones de la plantilla, plantillas.md §5.3.1). El pagaré viaja en la
+    /// parte <c>collaterals</c>.
     /// </summary>
     public string TermsJson { get; init; } = "{}";
 
@@ -51,13 +53,18 @@ public class MigrationLoanRow : AuditableEntity, IHechoInmutable
 
     public DateOnly? LibranzaDate { get; init; }
 
-    public PromissoryNoteKind? PromissoryNoteKind { get; init; }
-
-    public string? PromissoryNoteNumber { get; init; }
-
-    public string? CustodianChannelCode { get; init; }
-
-    public string? ExternalNoteId { get; init; }
-
+    /// <summary>Etapa de cobranza del sistema de origen (<c>etapaDeCobranza</c>); se registra al desplegar K4 (C64).</summary>
     public string? CollectionStageCode { get; init; }
+
+    /// <summary>Asesor de la colocación (<c>asesor</c>, FR-133); una persona del maestro.</summary>
+    public int? AdvisorPersonId { get; init; }
+
+    /// <summary>El crédito está en cobro jurídico (<c>enJuridico</c>).</summary>
+    public bool InLegalCollection { get; init; }
+
+    /// <summary>Abogado a cargo del cobro jurídico (<c>abogado</c>); una persona del maestro.</summary>
+    public int? LawyerPersonId { get; init; }
+
+    /// <summary>Notas libres de la fila (<c>notas</c>, hasta 400).</summary>
+    public string? Notes { get; init; }
 }

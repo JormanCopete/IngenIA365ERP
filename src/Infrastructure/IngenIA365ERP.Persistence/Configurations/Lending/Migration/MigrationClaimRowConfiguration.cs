@@ -20,9 +20,10 @@ public class MigrationClaimRowConfiguration : IEntityTypeConfiguration<Migration
         builder.Property(e => e.RowNumber).IsRequired();
         builder.Property(e => e.Kind).HasConversion<int>().IsRequired();
         builder.Property(e => e.ReceivedOn).IsRequired();
-        builder.Property(e => e.SourceLoanNumber).HasMaxLength(30);
-        builder.Property(e => e.BureauCode).HasMaxLength(20);
-        builder.Property(e => e.Description).HasMaxLength(1000).IsRequired();
+        builder.Property(e => e.SourceLoanNumber).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.BureauCode).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.IsExtended).IsRequired();
+        builder.Property(e => e.Description).HasMaxLength(400);
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);

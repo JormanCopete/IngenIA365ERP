@@ -23,6 +23,7 @@ public class MigrationCreditLimitRowConfiguration : IEntityTypeConfiguration<Mig
         builder.Property(e => e.Amount).Monto().IsRequired();
         builder.Property(e => e.ValidFrom).IsRequired();
         builder.Property(e => e.Reason).HasMaxLength(300).IsRequired();
+        builder.Property(e => e.PrepaymentChoice).HasConversion<int?>();
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);

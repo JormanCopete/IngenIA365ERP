@@ -485,12 +485,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_LND_AccountingFactParts_MonthlyCloseReopeningId",
-                schema: "dbo",
-                table: "LND_AccountingFactParts",
-                column: "MonthlyCloseReopeningId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_LND_AnalysisRatings_LiftedByUserId",
                 schema: "dbo",
                 table: "LND_AnalysisRatings",
@@ -801,11 +795,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
             migrationBuilder.DropTable(
                 name: "LND_RiskPolicyVersions",
                 schema: "dbo");
-
-            migrationBuilder.DropIndex(
-                name: "IX_LND_AccountingFactParts_MonthlyCloseReopeningId",
-                schema: "dbo",
-                table: "LND_AccountingFactParts");
         }
     }
 }

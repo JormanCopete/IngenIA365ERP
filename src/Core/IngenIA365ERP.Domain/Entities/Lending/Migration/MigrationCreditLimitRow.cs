@@ -19,7 +19,7 @@ public class MigrationCreditLimitRow : AuditableEntity, IHechoInmutable
 
     public CreditLimitKind LimitKind { get; init; }
 
-    /// <summary>Sólo en el cupo por línea.</summary>
+    /// <summary>Con <c>ByLine</c> y <c>Revolving</c>.</summary>
     public string? CreditLineCode { get; init; }
 
     public decimal Amount { get; init; }
@@ -29,4 +29,7 @@ public class MigrationCreditLimitRow : AuditableEntity, IHechoInmutable
     public DateOnly? ValidTo { get; init; }
 
     public string Reason { get; init; } = string.Empty;
+
+    /// <summary>La heredan los créditos de las compras (<c>preferenciaDeAbono</c>, FR-049).</summary>
+    public PrepaymentChoice? PrepaymentChoice { get; init; }
 }

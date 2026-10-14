@@ -24,7 +24,8 @@ public class MigrationChargedOffRowConfiguration : IEntityTypeConfiguration<Migr
         builder.Property(e => e.PrincipalBalance).Monto().IsRequired();
         builder.Property(e => e.InterestBalance).Monto().IsRequired();
         builder.Property(e => e.OtherBalance).Monto().IsRequired();
-        builder.Property(e => e.HistoricalApprovalReference).HasMaxLength(200);
+        builder.Property(e => e.OfficePublicId).IsRequired();
+        builder.Property(e => e.HistoricalApprovalReference).HasMaxLength(200).IsRequired();
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);

@@ -29,10 +29,15 @@ public sealed record MigrationLoadDto(
     bool SalesReconciled,
     int LoanCount,
     MigrationDifferencesDto Differences,
-    DateTime? ActivatedAt);
+    DateTime? ActivatedAt,
+    IReadOnlyList<LoPrevalecidoDto>? ManualPrevails = null);
 
-/// <summary>Una parte de la carga con sus filas y su huella (api.md §19.1). (nuevo)</summary>
-public sealed record MigrationLoadPartDto(string Part, int Rows, string? Sha256, DateTime? ImportedAt);
+/// <summary>
+/// Una tanda (un archivo) de una parte de la carga con sus filas y su huella (api.md §19.1; C64): <c>Batch</c> es el consecutivo dentro de la parte
+/// y <c>Status</c> dice si cuenta (<c>Imported</c>) o la reemplazó otra (<c>Superseded</c>). (nuevo)
+/// </summary>
+public sealed record MigrationLoadPartDto(string Part, int Rows, string? Sha256, DateTime? ImportedAt, int Batch = 1, string? FileName = null,
+    MigrationPartStatus Status = MigrationPartStatus.Imported);
 
 /// <summary>Las diferencias de cuadre y conciliación de la carga: pendientes y aceptadas. (nuevo)</summary>
 public sealed record MigrationDifferencesDto(int Pending, int Accepted);
@@ -147,17 +152,36 @@ internal static class ConsultasDeCargas
         var partes = await db.MigrationLoadParts.AsNoTracking()
             .Where(p => p.MigrationLoadId == carga.Id && !p.IsDeleted)
             .OrderBy(p => p.PartKey).ThenBy(p => p.BatchNumber)
-            .Select(p => new MigrationLoadPartDto(p.PartKey, p.RowCount, p.FileSha256, p.ImportedAt))
+            .Select(p => new MigrationLoadPartDto(p.PartKey, p.RowCount, p.FileSha256, p.ImportedAt, p.BatchNumber, p.FileName, p.Status))
             .ToListAsync(ct);
-        var diferencias = await db.MigrationLoadDifferences.AsNoTracking()
-            .Where(d => d.MigrationLoadId == carga.Id && !d.IsDeleted)
-            .Select(d => d.AcceptedAt)
-            .ToListAsync(ct);
+        // Las diferencias de la versión vigente del cuadre que todavía cuentan (US8: una venta marcada deja sin efecto la suya anterior).
+        var diferencias = carga.CurrentCheckVersion == 0 ? []
+            : (await ConciliacionDeVentasDeMigracion.VigentesAsync(db, carga, carga.CurrentCheckVersion, ct)).Select(d => d.AcceptedAt).ToList();
+        var prevalece = LoPrevaleciente(carga.ValidationSummaryJson);
         var aplicadaPor = carga.AppliedByUserId is { } id
             ? await db.Users.AsNoTracking().Where(u => u.Id == id).Select(u => u.Username).FirstOrDefaultAsync(ct)
             : null;
         return new MigrationLoadDto(carga.PublicId, carga.Number, carga.CutoffDate, carga.Status, carga.Description, partes, carga.AppliedAt,
             aplicadaPor, carga.ActivationDeadline, carga.IsBalanced, carga.SalesReconciled, carga.LoanCount,
-            new MigrationDifferencesDto(diferencias.Count(a => a is null), diferencias.Count(a => a is not null)), carga.ActivatedAt);
+            new MigrationDifferencesDto(diferencias.Count(a => a is null), diferencias.Count(a => a is not null)), carga.ActivatedAt, prevalece);
+    }
+
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    /// <summary>Lo registrado a mano que prevalece, del resumen de la aplicación (<c>manualPrevails</c>).</summary>
+    private static IReadOnlyList<LoPrevalecidoDto> LoPrevaleciente(string? resumen)
+    {
+        if (string.IsNullOrWhiteSpace(resumen)) return [];
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(resumen);
+            return doc.RootElement.TryGetProperty("manualPrevails", out var lista) && lista.ValueKind == System.Text.Json.JsonValueKind.Array
+                ? System.Text.Json.JsonSerializer.Deserialize<List<LoPrevalecidoDto>>(lista, Json) ?? []
+                : [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
     }
 }

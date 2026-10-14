@@ -23,7 +23,7 @@ public class MigrationRestructuringRowConfiguration : IEntityTypeConfiguration<M
         builder.Property(e => e.LastRestructuredOn).IsRequired();
         builder.Property(e => e.RatingAtRestructuring).HasConversion<int>().IsRequired();
         builder.Property(e => e.ConsecutivePaidInstallments).IsRequired();
-        builder.Property(e => e.PredecessorLoanNumbers).HasMaxLength(300);
+        builder.Property(e => e.PredecessorLoanNumber).HasMaxLength(30);
 
         builder.HasOne<MigrationLoadPart>().WithMany().HasForeignKey(e => e.MigrationLoadPartId).OnDelete(DeleteBehavior.Restrict);
 

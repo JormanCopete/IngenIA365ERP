@@ -34,4 +34,30 @@ public class MigrationLoadPart : AuditableEntity
 
     /// <summary>JSON: avisos de la revisión previa (los errores impiden importar).</summary>
     public string? ReviewSummaryJson { get; set; }
+
+    /// <summary>Una tanda viva cuenta en la carga; una reemplazada conserva sus filas y deja de contar.</summary>
+    public bool Viva => Status == MigrationPartStatus.Imported && !IsDeleted;
+
+    /// <summary>Una tanda nueva de la parte (T0740): la siguiente de <paramref name="anteriores"/> tandas de la misma parte.</summary>
+    public static MigrationLoadPart Nueva(int carga, string parte, int anteriores, string archivo, string huella, int filas, int usuario, DateTime ahora,
+        string? resumenJson) => new()
+    {
+        MigrationLoadId = carga,
+        PartKey = parte,
+        BatchNumber = anteriores + 1,
+        Status = MigrationPartStatus.Imported,
+        FileName = archivo.Length <= 260 ? archivo : archivo[..260],
+        FileSha256 = huella,
+        RowCount = filas,
+        ImportedByUserId = usuario,
+        ImportedAt = ahora,
+        ReviewSummaryJson = resumenJson,
+    };
+
+    /// <summary><c>replace=true</c>: la tanda pasa a <c>Superseded</c> (sus filas se conservan y dejan de contar).</summary>
+    public void Reemplazar()
+    {
+        if (Status != MigrationPartStatus.Imported) throw new InvalidOperationException("La tanda ya fue reemplazada.");
+        Status = MigrationPartStatus.Superseded;
+    }
 }

@@ -61,6 +61,15 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Origination/CreditLimits/ContributionBalanceCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Adapters/BureauQueryCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Attributions/RecordCreditDecisionCommand.cs",
+        // US8 (bloque 13A, T0745): la carga de la migración, sus plantillas, cuadres, conciliación y aceptación.
+        "Core/IngenIA365ERP.Application/Lending/Migration/MigrationErrors.cs",
+        "Core/IngenIA365ERP.Application/Lending/Activation/ErroresDeActivacion.cs",
+        "Core/IngenIA365ERP.Application/Lending/Migration/ImportMigrationPartCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Migration/ApplyMigrationLoadCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Migration/AcceptMigrationDifferencesCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Migration/ConciliacionDeVentasDeMigracion.cs",
+        "Core/IngenIA365ERP.Application/Lending/Migration/CargaVigenteDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Imports/DefinicionesDeMigracion.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

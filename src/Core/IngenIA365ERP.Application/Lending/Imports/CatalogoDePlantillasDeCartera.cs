@@ -30,7 +30,8 @@ public sealed record PlantillaDeCartera(
 /// El registro de plantillas de importación de Cartera (feature 013, T0302, T82; plantillas.md §0.1, §0.7, §0.8): lo que
 /// <c>GET /api/lending/templates</c> devuelve y las <see cref="DefinicionDePlantilla"/> de las claves <c>lending.*</c> (módulo de auditoría
 /// <c>Lending</c>). US17 construye <c>lending.related-parties</c> (§2); US1 y US2 suman <c>lending.credit-lines</c> y
-/// <c>lending.contribution-balances</c>, US8 las partes de la migración y los cobros provisionales. Las plantillas de plataforma
+/// <c>lending.contribution-balances</c>, US8 las 17 partes de la migración (<see cref="DefinicionesDeMigracion"/>, una fila del registro) y los
+/// cobros provisionales. Las plantillas de plataforma
 /// (listas restrictivas, valores nacionales) no están: viven en sus pantallas. <b>Ninguna plantilla crea personas.</b> (nuevo)
 /// </summary>
 public static class CatalogoDePlantillasDeCartera
@@ -338,17 +339,33 @@ public static class CatalogoDePlantillasDeCartera
         new(SaldosDeAportesClave, "Saldos de aportes y ahorro permanente", "Los saldos que alimentan el cupo por múltiplo de aportes.",
             ["Datos"], "/api/lending/contribution-balances", "Lending.Templates.View", "Lending.CreditLimits.Assign", EntregaDeCartera.K1, PersonalData: true,
             SaldosDeAportes),
-        new("lending.migration", "Migración por partes", "La cartera vigente al corte, parte por parte, para revisar, aplicar y activar.",
-            ["Datos"], "/api/lending/migration/loads", "Lending.Templates.View", "Lending.Migration.Load", EntregaDeCartera.K1, PersonalData: true),
-        new("lending.provisional-collections", "Cobros provisionales", "Lo cobrado por fuera de Cartera entre el corte y la activación, por factura.",
-            ["Datos"], "/api/lending/activation/provisional-collections", "Lending.Templates.View", "Lending.Activation.Execute", EntregaDeCartera.K1,
-            PersonalData: false),
+        new(MigracionClave, "Migración por partes", "La cartera vigente al corte, parte por parte, para revisar, aplicar y activar.",
+            ["Datos"], "/api/lending/migration/loads", "Lending.Templates.View", DefinicionesDeMigracion.PermisoDeImportacion, EntregaDeCartera.K1,
+            PersonalData: true),
+        new(DefinicionesDeMigracion.CobrosProvisionalesClave, "Cobros provisionales", "Lo cobrado por fuera de Cartera entre el corte y la activación, por factura.",
+            ["Datos"], "/api/lending/activation/provisional-collections", "Lending.Templates.View", DefinicionesDeMigracion.PermisoDeCobrosProvisionales,
+            EntregaDeCartera.K1, PersonalData: false, DefinicionesDeMigracion.CobrosProvisionales),
         new("lending.arrears-history", "Historial de mora complementario", "Los meses de mora que faltan para la pérdida esperada.",
             ["Datos"], "/api/lending/risk/arrears-history", "Lending.Templates.View", "Lending.ArrearsHistory.Import", EntregaDeCartera.K6a, PersonalData: true),
         new("lending.payroll-agreements", "Convenios de pagaduría", "Pagadurías, convenios, contactos y códigos de respuesta.",
             ["Convenios", "Contactos", "CodigosDeRespuesta"], "/api/lending/payroll-agreements", "Lending.PayrollAgreements.View",
             "Lending.PayrollAgreements.Manage", EntregaDeCartera.K2, PersonalData: false),
     ];
+
+    /// <summary>La fila del registro de las 17 partes de la migración: cada parte es <c>lending.migration.{parte}</c> (US8, T0737).</summary>
+    public const string MigracionClave = "lending.migration";
+
+    /// <summary>
+    /// La definición de cualquier clave de Cartera: las del registro y las 17 partes <c>lending.migration.{parte}</c>
+    /// (<see cref="DefinicionesDeMigracion"/>); nula si no existe o todavía no está construida.
+    /// </summary>
+    public static DefinicionDePlantilla? DefinicionPorClave(string? clave) =>
+        clave?.Trim().StartsWith(DefinicionesDeMigracion.PrefijoDeClave, StringComparison.OrdinalIgnoreCase) == true
+            ? DefinicionesDeMigracion.Buscar(clave)?.Definicion
+            : Buscar(clave)?.Definicion;
+
+    /// <summary>Si la plantilla ya se descarga: tiene definición, o es la de la migración (que se descarga parte por parte).</summary>
+    public static bool Construida(PlantillaDeCartera p) => p.Definicion is not null || p.Key == MigracionClave;
 
     /// <summary>La plantilla por clave (sin distinguir mayúsculas), o nula.</summary>
     public static PlantillaDeCartera? Buscar(string? clave) =>
@@ -391,7 +408,7 @@ public sealed class ListLendingTemplatesQueryHandler(ICurrentUserPermissions per
 
         IReadOnlyList<LendingTemplateDto> lista = CatalogoDePlantillasDeCartera.Todas.Select(p =>
         {
-            var descarga = CatalogoDePlantillasDeCartera.Disponible(p) && p.Definicion is not null && Tiene(p.DownloadPermission);
+            var descarga = CatalogoDePlantillasDeCartera.Disponible(p) && CatalogoDePlantillasDeCartera.Construida(p) && Tiene(p.DownloadPermission);
             return new LendingTemplateDto(p.Key, p.Name, p.Description, p.Sheets, p.Route, p.ImportPermission, p.AvailableFrom, p.PersonalData,
                 descarga, descarga && Tiene(p.ImportPermission));
         }).ToList();
@@ -415,8 +432,11 @@ public sealed class GetLendingTemplateQueryHandler : IRequestHandler<GetLendingT
 {
     public Task<Result<DefinicionDePlantilla>> Handle(GetLendingTemplateQuery request, CancellationToken ct)
     {
-        var plantilla = CatalogoDePlantillasDeCartera.Buscar(request.TemplateKey);
-        return Task.FromResult(plantilla is { Definicion: { } definicion } && CatalogoDePlantillasDeCartera.Disponible(plantilla)
+        // Las 17 partes de la migración (lending.migration.{parte}) son de la fila «lending.migration» del registro (K1).
+        var esParte = request.TemplateKey.Trim().StartsWith(DefinicionesDeMigracion.PrefijoDeClave, StringComparison.OrdinalIgnoreCase);
+        var plantilla = CatalogoDePlantillasDeCartera.Buscar(esParte ? CatalogoDePlantillasDeCartera.MigracionClave : request.TemplateKey);
+        var definicion = CatalogoDePlantillasDeCartera.DefinicionPorClave(request.TemplateKey);
+        return Task.FromResult(plantilla is not null && definicion is not null && CatalogoDePlantillasDeCartera.Disponible(plantilla)
             ? Result.Success(definicion)
             : Result.Failure<DefinicionDePlantilla>(ErroresDeGobierno.PlantillaInexistente()));
     }

@@ -69,7 +69,7 @@ public sealed class ConciliacionDeVentasDeLaCargaTests : IAsyncLifetime
         _v.Db.MigrationLoanRows.Add(new MigrationLoanRow { MigrationLoadPartId = loans.Id, RowNumber = 1, SourceLoanNumber = "S-1", PersonId = _v.Ana.Id,
             CreditLineCode = "CONLIB", InvoiceNumber = "PV01-MIG", DisbursementDate = migrada.Fecha, OriginalAmount = 600_000m });
         _v.Db.MigrationSaleRows.Add(new MigrationSaleRow { MigrationLoadPartId = sales.Id, RowNumber = 1, InvoiceNumber = "PV01-CAN", PersonId = _v.Ana.Id,
-            SaleDate = cancelada.Fecha, OriginalAmount = 600_000m, CancellationReason = "Pagada antes del corte" });
+            SaleDate = cancelada.Fecha, OriginalAmount = 600_000m, ExternalCollections = 600_000m, Outcome = SaleReconciliationOutcome.CancelledBeforeCutoff });
         _v.Db.MigrationSaleReconciliations.Add(new MigrationSaleReconciliation
         {
             MigrationLoadId = _carga.Id, CheckVersion = 1, MessagePublicId = Guid.NewGuid(), SaleDocumentPublicId = marcada.Documento, InvoiceNumber = "PV01-D29",

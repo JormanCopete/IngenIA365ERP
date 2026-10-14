@@ -14,7 +14,6 @@ public static class ErroresDeActivacion
     public const string CodigoFaltanRequisitos = "Lending.Activation.RequirementsMissing";
     public const string CodigoCargaNoEncontrada = "Lending.MigrationLoad.NotFound";
     public const string CodigoCargaNoBorrador = "Lending.Migration.LoadNotDraft";
-    public const string CodigoPartesNoSoportadas = "Lending.Migration.PartsNotSupported";
     public const string CodigoSinUsuario = "Lending.Actor.Unauthorized";
 
     public static Error YaActivada(DateOnly fecha) =>
@@ -38,11 +37,6 @@ public static class ErroresDeActivacion
 
     public static Error CargaNoBorrador() =>
         new(CodigoCargaNoBorrador, "Esta carga ya fue aplicada o reemplazada y no se puede cambiar. Cree una carga nueva.");
-
-    /// <summary>Hasta US8 sólo se aplica una carga sin partes (C107): la cartera vigente se migra con la historia de migración.</summary>
-    public static Error PartesNoSoportadas() =>
-        new(CodigoPartesNoSoportadas,
-            "Esta versión sólo aplica una carga sin partes (activación sin cartera previa). La migración de cartera vigente llega con su historia.");
 
     public static Error SinUsuario() =>
         new(CodigoSinUsuario, "No se pudo identificar a la persona que hace la operación en esta cooperativa.");

@@ -28,6 +28,6 @@ public class MigrationRestructuringRow : AuditableEntity, IHechoInmutable
 
     public int ConsecutivePaidInstallments { get; init; }
 
-    /// <summary>Números de origen de los créditos antecesores, separados por coma.</summary>
-    public string? PredecessorLoanNumbers { get; init; }
+    /// <summary>El crédito del que nació (<c>creditoAnterior</c>); lo sigue el historial de mora (T49) aunque no esté en la carga.</summary>
+    public string? PredecessorLoanNumber { get; init; }
 }

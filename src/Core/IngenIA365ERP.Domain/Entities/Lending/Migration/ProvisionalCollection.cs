@@ -37,4 +37,16 @@ public class ProvisionalCollection : AuditableEntity, IHechoInmutable
     /// <summary><c>CobroProvisionalIncorporado</c> (bandeja, sin FK).</summary>
     [EscrituraUnica]
     public Guid? MessagePublicId { get; set; }
+
+    public bool Aplicado => AppliedAt is not null;
+
+    /// <summary>La aplicación sobre la obligación de su venta (C62): una sola vez, con la operación y el mensaje que emitió.</summary>
+    public void Aplicar(int credito, long operacion, Guid mensaje, DateTime ahora)
+    {
+        if (Aplicado) throw new InvalidOperationException("El cobro provisional ya se aplicó.");
+        LoanId = credito;
+        OperationId = operacion;
+        MessagePublicId = mensaje;
+        AppliedAt = ahora;
+    }
 }

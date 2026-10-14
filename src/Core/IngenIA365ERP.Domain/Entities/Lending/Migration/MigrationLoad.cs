@@ -65,4 +65,53 @@ public class MigrationLoad : AuditableEntity
     public DateTime? ReplacedAt { get; set; }
 
     public DateTime? ActivatedAt { get; set; }
+
+    // ------------------------------------------------------------------------------------------------- comportamiento (US8) --
+
+    /// <summary>Sólo un borrador recibe partes y se aplica (<c>Lending.Migration.LoadNotDraft</c>).</summary>
+    public bool EsBorrador => Status == MigrationLoadStatus.Draft;
+
+    /// <summary>
+    /// La deja <c>Applied</c> (T0743): quién y cuándo, el plazo de la activación, los conteos y los totales. El cuadre y la conciliación se sellan
+    /// aparte (<see cref="SellarCuadre"/>, <see cref="SellarConciliacion"/>). Sólo desde un borrador.
+    /// </summary>
+    public void Aplicar(int usuario, DateTime ahora, DateOnly plazo, int creditos, int castigados, int personas, string totalesJson, string resumenJson)
+    {
+        if (!EsBorrador) throw new InvalidOperationException("Sólo se aplica una carga en borrador.");
+        Status = MigrationLoadStatus.Applied;
+        AppliedByUserId = usuario;
+        AppliedAt = ahora;
+        ActivationDeadline = plazo;
+        LoanCount = creditos;
+        ChargedOffCount = castigados;
+        PersonCount = personas;
+        TotalsJson = totalesJson;
+        ValidationSummaryJson = resumenJson;
+    }
+
+    /// <summary>La deja <c>Replaced</c> por otra (la reemplazada no se borra y queda como ensayo, FR-142).</summary>
+    public void Reemplazar(int? porCarga, DateTime ahora)
+    {
+        if (Status is not (MigrationLoadStatus.Draft or MigrationLoadStatus.Applied))
+            throw new InvalidOperationException("Sólo se reemplaza un borrador o una carga aplicada.");
+        Status = MigrationLoadStatus.Replaced;
+        ReplacedAt = ahora;
+        if (porCarga is not null) ReplacedByLoadId = porCarga;
+    }
+
+    /// <summary>Sella la versión del cuadre con su instantánea y su huella; <paramref name="cuadrada"/>: sin diferencias o todas aceptadas.</summary>
+    public void SellarCuadre(int version, string instantaneaJson, string huella, bool cuadrada)
+    {
+        CurrentCheckVersion = version;
+        BalanceCheckJson = instantaneaJson;
+        BalanceCheckSha256 = huella;
+        IsBalanced = cuadrada;
+    }
+
+    /// <summary>Sella la huella de la conciliación de ventas de la versión vigente; <paramref name="conciliada"/>: sin diferencias o todas aceptadas.</summary>
+    public void SellarConciliacion(string huella, bool conciliada)
+    {
+        SalesReconciliationSha256 = huella;
+        SalesReconciled = conciliada;
+    }
 }
