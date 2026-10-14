@@ -63,6 +63,8 @@ public class LasPantallasDicenQueEstanCargando
         // US8 (bloque 13C, T0728): la carga de migración y la activación.
         "Cartera/Migracion.razor",
         "Cartera/Activacion.razor",
+        // US15 (T0799): el centro de informes de Cartera (no usa SfGrid: pinta TablaDeReporte).
+        "Cartera/Informes.razor",
     ];
 
     [Fact]

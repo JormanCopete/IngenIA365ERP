@@ -643,6 +643,11 @@ public static class ManualCatalogo
             ["documentos", "paz y salvo", "plan de pagos", "certificado de saldo", "codigo de verificacion", "qr", "verificar", "reimprimir", "anular documento", "firmeza"],
             ["Cartera activada.", "Firmante configurado en los parámetros (Documentos.Firmante.Nombre y .Cargo).", "Permisos Lending.Documents.Read, .Issue, .Reprint, .Void y .Verify según la acción."],
             ["cartera-activacion"], ["/cartera/verificar"], TipoDeTema.Proceso));
+        // Feature 013, US15 (T0800): el centro de informes de Cartera.
+        t.Add(Consulta("/cartera/informes", "Informes de cartera", Modulos.Cartera,
+            "Cartera por edades, colocación, recaudo, movimientos de un crédito, usura, mensajes al deudor y conciliación de la migración, exportables a Excel, PDF y Word.",
+            "Elegí el informe, el rango o la fecha de corte, la sucursal y la línea (sólo las de su alcance traen filas) y los filtros propios del informe.",
+            "cartera por edades", "colocacion", "recaudo", "movimientos", "usura", "mensajes al deudor", "conciliacion de la migracion"));
 
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.

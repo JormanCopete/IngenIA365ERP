@@ -87,7 +87,53 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US13 (bloque 14A, T0785): la lista y el detalle de documentos emitidos filtran por los créditos que cubren (DocumentosEmitidos.Visibles).
         // La verificación no mira la oficina: devuelve sólo los datos esenciales a una persona de la cooperativa (D21).
         "Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentQueries.cs",
+        // US15 (bloque 14C, T0773, T0797): las siete vistas de K1 del centro de informes leen los créditos por AmbitoDeInformeDeCartera, que
+        // aplica PorOficinaYLinea en la consulta; los mensajes por ProyeccionDeMensajesAlDeudor.ConAlcance; la conciliación de la migración, de
+        // toda la cooperativa, sólo con el alcance total (si no, vacía).
+        "Core/IngenIA365ERP.Application/Lending/Reports/AmbitoDeInformeDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/AgingReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PlacementReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ReceiptsReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/TransactionsReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/UsuryReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/DebtorMessagesReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/MigrationReconciliationReportQuery.cs",
     ];
+
+    /// <summary>
+    /// US15 (T0773, DT §2.25): toda consulta del centro de informes de Cartera (<c>Application/Lending/Reports</c>) y la del tablero
+    /// (<c>GetLendingDashboardQuery</c>, de K5: mientras no exista, la regla queda preparada) recibe <see cref="IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeCartera"/>
+    /// en su handler y lee el alcance (<c>ObtenerAsync</c> o el ámbito de informe, que lo lee); ninguna se exceptúa: una vista sin alcance mostraría
+    /// otra oficina.
+    /// </summary>
+    [Fact]
+    public void Las_consultas_del_centro_de_informes_y_del_tablero_piden_el_alcance_en_su_handler()
+    {
+        var raiz = RepoPath.FindRepoRoot();
+        var lending = Path.Combine(raiz, "src", "Core", "IngenIA365ERP.Application", "Lending");
+        var archivos = Directory.Exists(Path.Combine(lending, "Reports"))
+            ? Directory.EnumerateFiles(Path.Combine(lending, "Reports"), "*.cs", SearchOption.AllDirectories).ToList()
+            : [];
+        archivos.AddRange(Directory.EnumerateFiles(lending, "*.cs", SearchOption.AllDirectories)
+            .Where(a => FuenteSinComentarios.Leer(a).Contains("record GetLendingDashboardQuery", StringComparison.Ordinal)));
+
+        var infracciones = new List<string>();
+        var consultas = 0;
+        foreach (var archivo in archivos.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var texto = FuenteSinComentarios.Leer(archivo);
+            foreach (Match m in Consulta.Matches(texto))
+            {
+                consultas++;
+                var nombre = m.Groups[1].Value;
+                if (Exceptuadas.ContainsKey(nombre)) infracciones.Add($"{nombre}: una vista del centro de informes no se exceptúa del alcance");
+                if (!Regex.IsMatch(texto, $@"class {nombre}Handler\([^)]*IAlcanceDeCartera[^)]*\)[\s\S]*?(\.ObtenerAsync\(|AmbitoDeInformeDeCartera\.LeerAsync\()"))
+                    infracciones.Add($"{Path.GetRelativePath(raiz, archivo)}: {nombre}Handler no recibe IAlcanceDeCartera ni lee el alcance");
+            }
+        }
+        Assert.True(consultas >= 7, $"Se esperaban al menos las siete vistas de K1 en Application/Lending/Reports y se encontraron {consultas}.");
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una consulta del centro de informes de Cartera no aplica el alcance (FR-004, SC-015)");
+    }
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>
     private static readonly Dictionary<string, string> Exceptuadas = new(StringComparer.Ordinal)

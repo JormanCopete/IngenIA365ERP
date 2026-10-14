@@ -71,9 +71,22 @@ public class ElEspacioLendingEsSoloCartera
         foreach (var carpeta in HandlersConservados)
         {
             Assert.True(Directory.Exists(Path.Combine(savings, carpeta)), $"Falta Application/Savings/{carpeta} (T0185).");
+            // US15 (T0795): Application/Lending/Reports vuelve a tener código, pero es el centro de informes de la Cartera nueva (DT §2.15:
+            // /api/reports/lending queda sólo para ella); lo que se fija es que ninguna consulta conservada de Savings/Reports quede ahí.
+            if (carpeta == "Reports") continue;
             Assert.False(Directory.Exists(Path.Combine(lending, carpeta)) && Directory.EnumerateFiles(Path.Combine(lending, carpeta), "*.cs", SearchOption.AllDirectories).Any(),
                 $"Application/Lending/{carpeta} sigue con código: lo conservado vive en Savings.");
         }
+        var conservadasDeInformes = Directory.EnumerateFiles(Path.Combine(savings, "Reports"), "*.cs", SearchOption.AllDirectories)
+            .SelectMany(a => Regex.Matches(FuenteSinComentarios.Leer(a), @"\b(?:record|class)\s+(\w+)").Select(m => m.Groups[1].Value))
+            .ToHashSet(StringComparer.Ordinal);
+        if (Directory.Exists(Path.Combine(lending, "Reports")))
+            foreach (var archivo in Directory.EnumerateFiles(Path.Combine(lending, "Reports"), "*.cs", SearchOption.AllDirectories))
+            {
+                var definidas = Regex.Matches(FuenteSinComentarios.Leer(archivo), @"\b(?:record|class)\s+(\w+)").Select(m => m.Groups[1].Value);
+                var repetidas = definidas.Where(conservadasDeInformes.Contains).ToList();
+                Assert.True(repetidas.Count == 0, $"Application/Lending/Reports/{Path.GetFileName(archivo)} define lo conservado: {string.Join(", ", repetidas)}.");
+            }
 
         var tipos = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes()
             .Where(t => (t.Namespace ?? string.Empty).StartsWith("IngenIA365ERP.Application.Savings", StringComparison.Ordinal));
@@ -124,12 +137,23 @@ public class ElEspacioLendingEsSoloCartera
         Assert.Contains("\"/person-portfolio/{personId:guid}\"", informes, StringComparison.Ordinal);
         Assert.Contains("\"/savings-statement/{accountId:guid}/pdf\"", informes, StringComparison.Ordinal);
 
-        // Ningún archivo publica una familia conservada bajo /api/lending, ni nada bajo /api/reports/lending.
+        // Ningún archivo publica una familia conservada bajo /api/lending, ni nada bajo /api/reports/lending salvo el centro de informes de la
+        // Cartera nueva (US15, T0796: LendingReportsEndpoints.cs, DT §2.15), que no publica nada de lo conservado.
+        var centroDeInformes = Path.Combine(endpoints, "Reports", "LendingReportsEndpoints.cs");
         var prohibidos = FamiliasConservadas
             .Select(f => (new Regex($@"""/api/lending/{Regex.Escape(f)}\b", RegexOptions.Compiled), $"publica /api/lending/{f}"))
             .Append((new Regex(@"""/api/reports/lending\b", RegexOptions.Compiled), "publica /api/reports/lending"))
             .ToList();
-        var infracciones = ReglaSobreFuente.Infracciones(ReglaSobreFuente.ArchivosEn(["Presentation/IngenIA365ERP.API"]), prohibidos);
+        var infracciones = ReglaSobreFuente.Infracciones(
+            ReglaSobreFuente.ArchivosEn(["Presentation/IngenIA365ERP.API"])
+                .Where(a => !string.Equals(Path.GetFullPath(a), Path.GetFullPath(centroDeInformes), StringComparison.OrdinalIgnoreCase)),
+            prohibidos);
         ReglaSobreFuente.SinInfracciones(infracciones, "Lo conservado vuelve a /api/lending (api.md §25)");
+        if (File.Exists(centroDeInformes))
+        {
+            var centro = FuenteSinComentarios.Leer(centroDeInformes);
+            foreach (var conservado in new[] { "person-portfolio", "savings-statement", "aging/pdf", "loan-statement" })
+                Assert.DoesNotContain(conservado, centro, StringComparison.Ordinal);
+        }
     }
 }

@@ -60,6 +60,8 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // Fase 14, US13 (T0792, T0793): los documentos al deudor y la verificación de su código (el QR la abre con sesión iniciada).
         ("Pages/Cartera/Documentos.razor", "/cartera/documentos", "Lending.Documents.Read"),
         ("Pages/Cartera/Verificar.razor", "/cartera/verificar", "Lending.Documents.Verify"),
+        // Fase 14, US15 (T0800): el centro de informes de Cartera (las siete vistas de K1).
+        ("Pages/Cartera/Informes.razor", "/cartera/informes", "Lending.Reports.View"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>

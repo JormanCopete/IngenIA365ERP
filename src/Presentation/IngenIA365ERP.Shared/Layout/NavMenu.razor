@@ -167,6 +167,10 @@
             <PermissionGate Required="Lending.Ratings.Read">
                 <NavLink href="/cartera/cierres" class="nav-subitem">Cierres del mes</NavLink>
             </PermissionGate>
+            @* US15 (T0800): el centro de informes de Cartera (edades, colocación, recaudo, movimientos, usura, mensajes y migración en K1). *@
+            <PermissionGate Required="Lending.Reports.View">
+                <NavLink href="/cartera/informes" class="nav-subitem">Informes de cartera</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">
                 <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>

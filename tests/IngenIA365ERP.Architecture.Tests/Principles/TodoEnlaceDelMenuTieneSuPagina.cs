@@ -102,6 +102,8 @@ public class TodoEnlaceDelMenuTieneSuPagina
     // US13 (bloque 14B, T0768): los documentos al deudor y la verificación de su código.
     [InlineData("/cartera/documentos", true)]
     [InlineData("/cartera/verificar", true)]
+    // US15 (T0800): el centro de informes de Cartera; las tarjetas de Cartera del Centro de Reportes llevan a él con ?vista=.
+    [InlineData("/cartera/informes", true)]
     public void Las_pantallas_de_la_integracion_contable_de_Cartera_tienen_su_pagina(string ruta, bool enElMenu)
     {
         var shared = Shared();

@@ -131,6 +131,75 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         ReglaSobreFuente.SinInfracciones(infracciones, "Un DTO de una ruta View trae datos personales (C84)");
     }
 
+    /// <summary>
+    /// US15 (T0773, C84; api.md §17): el centro de informes se abre con <c>Lending.Reports.View</c>, así que toda vista que trae datos del
+    /// deudor (nombre, documento, crédito) declara <c>PersonalData</c> y exige además <c>Lending.Loans.Read</c> —que no es un <c>View</c>— para
+    /// consultarla; sin la marca, las columnas visibles no nombran a nadie (las agregadas: colocación y recaudo).
+    /// </summary>
+    [Fact]
+    public void Las_vistas_de_informes_con_datos_del_deudor_exigen_Loans_Read()
+    {
+        var vistas = typeof(IngenIA365ERP.Application.Lending.Reports.VistaDeInformeDeCartera).Assembly.GetTypes()
+            .Where(t => t.Namespace?.StartsWith("IngenIA365ERP.Application.Lending.Reports", StringComparison.Ordinal) == true)
+            .SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.Static))
+            .Where(f => f.FieldType == typeof(IngenIA365ERP.Application.Lending.Reports.VistaDeInformeDeCartera))
+            .Select(f => (Tipo: f.DeclaringType!, Vista: (IngenIA365ERP.Application.Lending.Reports.VistaDeInformeDeCartera)f.GetValue(null)!))
+            .ToList();
+        Assert.True(vistas.Count >= 7, $"Se esperaban al menos las siete vistas de K1 y hay {vistas.Count}.");
+
+        var infracciones = new List<string>();
+        foreach (var (tipo, vista) in vistas)
+        {
+            if (vista.PersonalData && vista.RequiredPermission != "Lending.Loans.Read")
+                infracciones.Add($"{vista.Key}: trae datos del deudor y no exige Lending.Loans.Read");
+            if (vista.RequiredPermission?.EndsWith(".View", StringComparison.Ordinal) == true)
+                infracciones.Add($"{vista.Key}: su permiso adicional es un View");
+            if (vista.PersonalData) continue;
+            var columnas = tipo.GetField("Columnas", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                as IReadOnlyList<IngenIA365ERP.Application.Common.Reports.ColumnaExportable> ?? [];
+            foreach (var c in columnas.Where(c => !c.EsOculta && Regex.IsMatch(c.Nombre, "^(Deudor|Documento|Cliente|Destinatario|Crédito|Titular)$", RegexOptions.IgnoreCase)))
+                infracciones.Add($"{vista.Key}: sin PersonalData muestra la columna «{c.Nombre}»");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Una vista del centro de informes de Cartera trae datos del deudor sin pedirlos (C84)");
+    }
+
+    /// <summary>
+    /// US15 (T0773, DT §2.25): el DTO del tablero (<c>LendingDashboardDto</c>, ruta <c>Lending.Dashboard.View</c>) no expone persona, documento ni
+    /// crédito —sólo fichas con cifras y su enlace—. El tablero es de K5: mientras el tipo no exista la regla queda preparada y no falla; en cuanto
+    /// aparezca, se revisa con sus tipos anidados.
+    /// </summary>
+    [Fact]
+    public void El_DTO_del_tablero_no_expone_persona_documento_ni_credito()
+    {
+        var tablero = typeof(IngenIA365ERP.Application.Lending.Reports.VistaDeInformeDeCartera).Assembly.GetTypes()
+            .FirstOrDefault(t => t.Name == "LendingDashboardDto");
+        if (tablero is null) return;
+
+        var infracciones = new List<string>();
+        Revisar(tablero, tablero.Name, [], infracciones);
+        RevisarIdentificadores(tablero, tablero.Name, [], infracciones);
+        ReglaSobreFuente.SinInfracciones(infracciones, "El DTO del tablero de Cartera expone datos del deudor (DT §2.25)");
+    }
+
+    private static readonly Regex IdentificadorDeDeudor = new(@"(Person|Persona|Debtor|Deudor|Loan|Credito|Crédito|Holder|Titular)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static void RevisarIdentificadores(Type tipo, string camino, HashSet<Type> vistos, List<string> infracciones)
+    {
+        tipo = Nullable.GetUnderlyingType(tipo) ?? tipo;
+        if (tipo.IsGenericType && typeof(System.Collections.IEnumerable).IsAssignableFrom(tipo))
+        {
+            foreach (var a in tipo.GetGenericArguments()) RevisarIdentificadores(a, camino, vistos, infracciones);
+            return;
+        }
+        if (tipo.IsArray) { RevisarIdentificadores(tipo.GetElementType()!, camino, vistos, infracciones); return; }
+        if (tipo.Namespace?.StartsWith("IngenIA365ERP", StringComparison.Ordinal) != true || tipo.IsEnum || !vistos.Add(tipo)) return;
+        foreach (var p in tipo.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (IdentificadorDeDeudor.IsMatch(p.Name)) infracciones.Add($"{camino}.{p.Name}");
+            RevisarIdentificadores(p.PropertyType, $"{camino}.{p.Name}", vistos, infracciones);
+        }
+    }
+
     private static void Revisar(Type tipo, string camino, HashSet<Type> vistos, List<string> infracciones)
     {
         tipo = Nullable.GetUnderlyingType(tipo) ?? tipo;

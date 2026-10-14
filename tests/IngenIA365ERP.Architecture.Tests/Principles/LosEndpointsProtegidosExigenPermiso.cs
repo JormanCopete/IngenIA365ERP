@@ -323,6 +323,40 @@ public class LosEndpointsProtegidosExigenPermiso
     }
 
     [Fact]
+    public void Las_vistas_de_cartera_exigen_ver_y_exportar()
+    {
+        // Feature 013, US15 (T0773; contracts/api.md §17, DT §2.25): toda vista de /api/reports/lending se publica con MapVistaDeCartera —una
+        // ruta por vista—, que pone Lending.Reports.View y, al exportar, Lending.Reports.Export, más Lending.Loans.Read para consultar y
+        // Lending.Reports.ExportPersonalData para exportar en las vistas con datos del deudor (C84), y audita Lending.Report.Exported. Además del
+        // registro de vistas, sólo esa extensión puede llamar a MapGet; las rutas heredadas (aging/pdf, loan-statement) no vuelven.
+        var archivo = Path.Combine(Api, "Endpoints", "Reports", "LendingReportsEndpoints.cs");
+        Assert.True(File.Exists(archivo), $"No existe {archivo}.");
+
+        var tramos = Tramos(File.ReadAllText(archivo));
+        Assert.True(tramos.Count == 2,
+            $"LendingReportsEndpoints.cs publica {tramos.Count} rutas con .Map*(: sólo el registro de vistas (GET /) y la de " +
+            "MapVistaDeCartera. Registrá cada vista con group.MapVistaDeCartera(…).");
+        Assert.All(tramos, t => Assert.Contains(".RequirePermission(", t, StringComparison.Ordinal));
+        Assert.Contains(".RequirePermission(PermisoDeVer)", tramos[1], StringComparison.Ordinal);
+        Assert.Contains(".RequirePermissionWhenExporting(PermisoDeExportar)", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("EmitirExportacionAsync", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("PermisoDeDatosPersonales", tramos[1], StringComparison.Ordinal);
+        Assert.Contains("RequiredPermission", tramos[1], StringComparison.Ordinal);
+
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("PermisoDeVer = \"Lending.Reports.View\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("PermisoDeExportar = \"Lending.Reports.Export\"", fuente, StringComparison.Ordinal);
+        Assert.Contains("PermisoDeDatosPersonales = \"Lending.Reports.ExportPersonalData\"", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain("aging/pdf", fuente, StringComparison.Ordinal);
+        Assert.DoesNotContain("loan-statement", fuente, StringComparison.Ordinal);
+
+        // Una ruta por vista: cada MapVistaDeCartera del registro nombra una vista distinta (las siete de K1, como mínimo).
+        var vistas = Regex.Matches(fuente, @"\.MapVistaDeCartera\((\w+)\.Vista").Select(m => m.Groups[1].Value).ToList();
+        Assert.True(vistas.Count >= 7, $"Se esperaban al menos las siete vistas de K1 y hay {vistas.Count}.");
+        Assert.Equal(vistas.Count, vistas.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
     public void Las_rutas_de_la_integracion_contable_de_inventario_entran_al_recorrido()
     {
         // Feature 012, T447 (US7, I2): el lado contable (/api/accounting/inventory) y la bandeja de Inventario
