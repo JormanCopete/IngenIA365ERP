@@ -56,6 +56,19 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirDocumentoVerificadoAsync(Guid documentPublicId, bool valido, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingDocumentVerified, "IssuedLendingDocument", documentPublicId, new { valid = valido }, ct);
 
+    /// <summary>
+    /// US13 (T0784): la emisión de un documento al deudor, con su clase, número, entrega y el SHA-256 del PDF guardado. La emisión muestra los datos
+    /// del titular y sus saldos, así que además de la auditoría del comando cuenta como lectura (nota 10 de PG); no va en la lista cerrada de
+    /// <see cref="LecturasSensibles"/> de research §13, que es de las lecturas sin escritura.
+    /// </summary>
+    public Task<Guid?> EmitirDocumentoEmitidoAsync(Guid documentPublicId, string clase, string numero, string entrega, string sha256, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingDocumentIssued, "IssuedLendingDocument", documentPublicId,
+            new { kind = clase, number = numero, delivery = entrega, sha256 }, ct);
+
+    /// <summary>US13 (T0785): la anulación manual de un documento, con su motivo. La automática la deja el reverso que la causa.</summary>
+    public Task<Guid?> EmitirDocumentoAnuladoAsync(Guid documentPublicId, string numero, string motivo, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingDocumentVoided, "IssuedLendingDocument", documentPublicId, new { number = numero, reason = motivo }, ct);
+
     /// <summary>La exportación de una vista de <c>/api/reports/lending</c>: cuál, con qué filtros, en qué formato y cuántas filas.</summary>
     public Task<Guid?> EmitirExportacionAsync(string vista, object filtros, string formato, int filas, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingReportExported, "LendingReport", null, new { vista, filtros, formato, filas }, ct);

@@ -23,25 +23,26 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Lending.Payments;
 
 /// <summary>
-/// El punto de enganche para anular los documentos emitidos (paz y salvo, certificados) cuyo corte es igual o posterior al pago reversado
-/// (feature 013, US5, T0543; FR-080; <c>VigenciaDeDocumentos</c>). Vacío hasta la fase de US13, que lo conecta. (nuevo)
+/// El punto de enganche para anular los documentos emitidos (paz y salvo, certificados) cuyo corte de información (<c>InformationCutoff</c>) es igual
+/// o posterior al <b>registro</b> de la operación reversada (feature 013, US5, T0543; FR-080; <c>VigenciaDeDocumentos</c>). US13 (T0787) lo conecta
+/// con <c>AnulacionDeDocumentosPorReverso</c>, que también llama el reverso del desembolso. (nuevo)
 /// </summary>
 public interface IVigenciaDeDocumentosDeCartera
 {
-    /// <summary>Los documentos del crédito que dejan de valer desde <paramref name="desde"/> (en la vista previa, sin anular).</summary>
-    Task<IReadOnlyList<(Guid PublicId, string Kind, string Number)>> AfectadosAsync(int loanId, DateOnly desde, CancellationToken ct);
+    /// <summary>Los documentos del crédito que dejan de valer si se reversa <paramref name="reversada"/> (en la vista previa, sin anular).</summary>
+    Task<IReadOnlyList<(Guid PublicId, string Kind, string Number)>> AfectadosAsync(int loanId, LoanOperation reversada, CancellationToken ct);
 
-    /// <summary>Anula esos documentos con la operación de reverso; devuelve sus <c>PublicId</c>.</summary>
-    Task<IReadOnlyList<Guid>> AnularAsync(int loanId, DateOnly desde, LoanOperation reverso, CancellationToken ct);
+    /// <summary>Anula esos documentos con la operación de reverso, sin guardar; devuelve sus <c>PublicId</c>.</summary>
+    Task<IReadOnlyList<Guid>> AnularAsync(int loanId, LoanOperation reversada, LoanOperation reverso, CancellationToken ct);
 }
 
-/// <summary>Sin documentos que anular (hasta US13). (nuevo)</summary>
+/// <summary>Sin documentos que anular: el esqueleto de la fase de pagos, que desde US13 queda sólo para las pruebas que no los miran. (nuevo)</summary>
 public sealed class SinDocumentosQueAnular : IVigenciaDeDocumentosDeCartera
 {
-    public Task<IReadOnlyList<(Guid PublicId, string Kind, string Number)>> AfectadosAsync(int loanId, DateOnly desde, CancellationToken ct) =>
+    public Task<IReadOnlyList<(Guid PublicId, string Kind, string Number)>> AfectadosAsync(int loanId, LoanOperation reversada, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<(Guid, string, string)>>([]);
 
-    public Task<IReadOnlyList<Guid>> AnularAsync(int loanId, DateOnly desde, LoanOperation reverso, CancellationToken ct) =>
+    public Task<IReadOnlyList<Guid>> AnularAsync(int loanId, LoanOperation reversada, LoanOperation reverso, CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Guid>>([]);
 }
 
@@ -85,7 +86,8 @@ public sealed record ReversoRegistrado(LoanOperation Reverso, ComprobanteDeRever
 /// <item>el crédito vuelve a <c>Active</c> si el pago lo había cancelado; el plan, a la versión que deja la reconstrucción si el pago (o un posterior)
 /// lo había regenerado;</item>
 /// <item>la emisión de <c>PagoReversado</c> (hereda el modo del pago, C08) y, si lo inició Cartera, <c>PagoReversadoPorCartera</c>;</item>
-/// <item>el enganche de <see cref="IVigenciaDeDocumentosDeCartera"/> (vacío hasta US13).</item>
+/// <item>el enganche de <see cref="IVigenciaDeDocumentosDeCartera"/> (US13: anula, en la misma unidad de trabajo, los documentos emitidos
+/// desde el registro del pago).</item>
 /// </list>
 /// (nuevo)
 /// </summary>
@@ -130,7 +132,7 @@ public sealed class ReversionDePago(
         var calculo = await CalcularAsync(pago, null, ct);
         if (calculo.IsFailure) return Result.Failure<VistaDelReverso>(calculo.Error);
         var c = calculo.Value;
-        var afectados = await documentos.AfectadosAsync(c.Credito.Id, pago.ValueDate, ct);
+        var afectados = await documentos.AfectadosAsync(c.Credito.Id, pago, ct);
         return Result.Success(Vista(c, pago, afectados));
     }
 
@@ -251,7 +253,7 @@ public sealed class ReversionDePago(
         await db.SaveChangesAsync(ct);
 
         pago.ReversedByOperationId = reverso.Id;
-        var anulados = await documentos.AnularAsync(credito.Id, pago.ValueDate, reverso, ct);
+        var anulados = await documentos.AnularAsync(credito.Id, pago, reverso, ct);
         var dia = efecto.Hasta;
         var ultimas = await PosicionesDeCartera.UltimasAsync(db, [credito.Id], dia, dia, ct);
         var ultima = ultimas.GetValueOrDefault((credito.Id, dia));

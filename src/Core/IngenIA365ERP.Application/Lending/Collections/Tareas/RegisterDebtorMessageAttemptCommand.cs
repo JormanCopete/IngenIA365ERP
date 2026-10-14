@@ -49,7 +49,8 @@ public enum PasoDeDespacho
 /// <item><term><c>Rejected</c>, <c>InvalidData</c>, <c>NotFound</c></term><description><c>Failed</c>.</description></item>
 /// </list>
 /// Todo <c>Failed</c> levanta <c>Cartera.MensajeAlDeudorFallido</c> al jefe de cartera (quien tiene <c>Lending.DebtorMessages.Send</c>, con el
-/// alcance de la oficina y la línea del crédito). El evento lo escribe <see cref="ColaDeMensajesAlDeudor"/>. (nuevo)
+/// alcance de la oficina y la línea del crédito). El evento lo escribe <see cref="ColaDeMensajesAlDeudor"/>. Un <c>Sent</c> de la entrega de un documento
+/// emitido le agrega al documento el evento <c>Delivered</c> (US13, T0786). (nuevo)
 /// </summary>
 public sealed record RegisterDebtorMessageAttemptCommand(Guid DebtorMessagePublicId, int Attempt, PasoDeDespacho Paso)
     : IRequest<Result<DebtorMessageEventKind>>
@@ -130,7 +131,9 @@ public sealed class RegisterDebtorMessageAttemptCommandHandler(
         }
 
         var evento = await EventoAsync(request, mensaje, ultimo, ct);
-        await cola.RegistrarAsync(mensaje, evento, ct);
+        var nuevoEvento = await cola.RegistrarAsync(mensaje, evento, ct);
+        // US13 (T0786): el mensaje de un documento emitido que queda enviado deja el evento Delivered en el documento, en la misma unidad de trabajo.
+        await Documents.EntregaDeDocumentosDeCartera.RegistrarEntregaSiCorresponde(db, mensaje, nuevoEvento, ct);
         await db.SaveChangesAsync(ct);
 
         if (evento.Kind == DebtorMessageEventKind.Failed) await AlertarAsync(mensaje, evento, ct);

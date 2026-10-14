@@ -76,6 +76,12 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Activation/ReviewProvisionalCollectionsCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Activation/NacimientoDeLoDelDeudorMigrado.cs",
         "Core/IngenIA365ERP.Application/Lending/Activation/ActivateLendingCommand.cs",
+        // US13 (bloque 14A, T0788): los documentos al deudor, sus leyendas y lo que dice la entrega por correo.
+        "Core/IngenIA365ERP.Application/Lending/Documents/DocumentErrors.cs",
+        "Core/IngenIA365ERP.Application/Lending/Documents/IDocumentoDeCarteraRenderer.cs",
+        "Core/IngenIA365ERP.Application/Lending/Documents/ConstructorDeDocumentosDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Documents/SendLendingDocumentCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Documents/AnulacionDeDocumentosPorReverso.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

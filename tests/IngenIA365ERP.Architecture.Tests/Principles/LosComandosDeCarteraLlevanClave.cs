@@ -180,6 +180,11 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Migration.AcceptMigrationDifferencesCommand),
         typeof(IngenIA365ERP.Application.Lending.Activation.ReviewProvisionalCollectionsCommand),
         typeof(IngenIA365ERP.Application.Lending.Activation.ActivateLendingCommand),
+        // US13 (bloque 14A, T0784–T0786): emitir, enviar y anular un documento. El enlace de descarga (reimprimir) es una lectura por POST sin clave,
+        // como el del archivo de desembolsos (ConsultasPorPost "/download-link"); T0768 lo lista y queda anotado para el bloque 14B.
+        typeof(IngenIA365ERP.Application.Lending.Documents.IssueLendingDocumentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Documents.SendLendingDocumentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Documents.VoidLendingDocumentCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

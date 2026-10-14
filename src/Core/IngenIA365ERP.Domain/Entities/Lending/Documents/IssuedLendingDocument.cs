@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Documents;
 
 namespace IngenIA365ERP.Domain.Entities.Lending.Documents;
 
@@ -8,9 +9,25 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Documents;
 /// número y código de verificación (plan de pagos, paz y salvo, certificado de saldo…). Hecho de sólo inserción
 /// (<see cref="IHechoInmutable"/>): reimprimir es descargar el mismo PDF; el estado (<c>IssuedDocumentStatus</c>) se calcula con
 /// sus eventos y <see cref="FinalityUntil"/>. La identificación del titular se copia tal como se emitió (I-1).
+///
+/// <para>US13 (T0776): el estado a una fecha lo da <see cref="EstadoA"/> (<see cref="EstadoDeDocumentoEmitido"/>); los largos de las copias selladas
+/// están en las constantes, para que quien arma el documento recorte antes de guardar y no al revés.</para>
 /// </summary>
 public class IssuedLendingDocument : AuditableEntity, IHechoInmutable
 {
+    /// <summary>Largo del nombre del titular (<c>nvarchar(300)</c>).</summary>
+    public const int LargoDelNombre = 300;
+
+    /// <summary>Largo del tipo y del número de identificación copiados (<c>nvarchar(10)</c>, <c>nvarchar(30)</c>).</summary>
+    public const int LargoDelTipoDeDocumento = 10;
+    public const int LargoDelDocumento = 30;
+
+    /// <summary>Largo de la nota de ventas fuera de Cartera (<c>nvarchar(1000)</c>).</summary>
+    public const int LargoDeLaNota = 1000;
+
+    /// <summary>Largo del nombre y del cargo del firmante (<c>nvarchar(150)</c>).</summary>
+    public const int LargoDelFirmante = 150;
+
     public IssuedDocumentKind Kind { get; init; }
 
     /// <summary>Prefijo por clase + <c>NextValue</c> de <c>LND_NumberSequences</c>; único.</summary>
@@ -75,4 +92,8 @@ public class IssuedLendingDocument : AuditableEntity, IHechoInmutable
     public DateTime IssuedAt { get; init; }
 
     public DocumentDeliveryMode DeliveryMode { get; init; }
+
+    /// <summary>El estado calculado a <paramref name="hoy"/> (data-model §27.1): anulado si <paramref name="anulado"/>, sujeto a firmeza mientras
+    /// hoy &lt; <see cref="FinalityUntil"/>, vigente en otro caso.</summary>
+    public IssuedDocumentStatus EstadoA(bool anulado, DateOnly hoy) => EstadoDeDocumentoEmitido.Calcular(anulado, FinalityUntil, hoy);
 }

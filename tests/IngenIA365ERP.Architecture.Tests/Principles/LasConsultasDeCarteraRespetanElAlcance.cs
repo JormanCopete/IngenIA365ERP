@@ -84,6 +84,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Risk/AnalysisRatingCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Risk/MonthlyCloseQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Risk/ImpairmentModelQueries.cs",
+        // US13 (bloque 14A, T0785): la lista y el detalle de documentos emitidos filtran por los créditos que cubren (DocumentosEmitidos.Visibles).
+        // La verificación no mira la oficina: devuelve sólo los datos esenciales a una persona de la cooperativa (D21).
+        "Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentQueries.cs",
     ];
 
     /// <summary>Consultas de <c>Application/Lending</c> que no filtran por oficina ni línea, con el motivo.</summary>

@@ -178,6 +178,33 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeIndicadorRegulatorio = "RegulatoryIndicatorSupport";
 
+    /// <summary>
+    /// Feature 013, US13 (T0780, T81; adaptadores-y-archivos.md §8.10, §9): el PDF de un documento emitido de Cartera (plan de pagos, paz y salvo,
+    /// certificado de saldo) tal como se emitió, con su SHA-256 en <c>LND_IssuedDocuments.ContentSha256</c>. El dueño es el documento
+    /// (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Lo genera Cartera: se lee con <c>Lending.Documents.Read</c>, no recibe subidas, no se borra
+    /// —reimprimir es descargar este mismo archivo—, se guarda <c>Direct</c> y <c>Available</c> desde el servidor y, como nunca se borra, nunca pasa por
+    /// la papelera de 90 días.
+    /// </summary>
+    public const string DocumentoEmitidoDeCartera = "LendingIssuedDocument";
+
+    /// <summary>
+    /// Feature 013, US13 (T0781; pregunta I6 de DT §5, rige la propuesta por defecto; C90, C101): el logotipo de la cooperativa en los documentos de
+    /// Cartera. El dueño es la configuración de Cartera (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> de la fila única de <c>LND_Setup</c>). Se lee
+    /// con <c>Lending.Documents.Read</c>; se sube y se reemplaza con <c>Lending.Parameters.Manage</c> (como el firmante, que es parámetro), sólo JPEG o
+    /// PNG; se borra sólo cuando ya lo reemplazó otro, y un documento emitido conserva su PDF con el logotipo que tenía.
+    /// </summary>
+    public const string LogotipoDeCartera = "LendingLogo";
+
+    /// <summary>Feature 013, US13 (T0781, I6): la imagen de la firma de los documentos de Cartera; las mismas reglas que <see cref="LogotipoDeCartera"/>.</summary>
+    public const string ImagenDeFirmaDeCartera = "LendingSignatureImage";
+
+    /// <summary>Los tipos de archivo de la imagen del logotipo y de la firma.</summary>
+    public static readonly IReadOnlySet<string> TiposDeImagenDeCartera =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png" };
+
+    private const string LeerDocumentosDeCartera = "Lending.Documents.Read";
+    private const string AdministrarParametrosDeCartera = "Lending.Parameters.Manage";
+
     private const string VerIndicadores = "Accounting.RegulatoryIndicators.View";
     private const string AdministrarIndicadores = "Accounting.RegulatoryIndicators.Manage";
 
@@ -212,6 +239,7 @@ public static class AdjuntosDeModulo
         [SimulacionEnviada] = new("Lending.DebtorMessages.Read", Borrable: false, "la simulación enviada a la persona"),
         [ArchivoDeDesembolsos] = new("Lending.DisbursementFiles.Generate", Borrable: false, "el archivo de desembolsos de crédito que se entregó al banco"),
         [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
+        [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
@@ -237,6 +265,7 @@ public static class AdjuntosDeModulo
             DocumentoDeSolicitud => LeerSolicitudesDeCredito,
             DocumentoDeGarantia => LeerGarantias,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
+            LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -329,6 +358,15 @@ public static class AdjuntosDeModulo
             if (!await permisos.HasPermissionAsync(AdministrarIndicadores, ct)) return new Error("Generic.NotFound", "Indicador no encontrado.");
             return await IndicadorRegistradoAsync(db, ownerEntityPublicId, ct) ? IndicadorBloqueado() : null;
         }
+        if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
+        {
+            if (contentType is not null && !TiposDeImagenDeCartera.Contains(contentType))
+                return new Error(AttachmentErrorCodes.Validation_MimeTypeNotAllowed, "El logotipo y la imagen de la firma van en JPEG o PNG.");
+            if (!await permisos.HasPermissionAsync(AdministrarParametrosDeCartera, ct)
+                || !await db.LendingSetups.AnyAsync(x => x.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Configuración de Cartera no encontrada.");
+            return null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -345,7 +383,8 @@ public static class AdjuntosDeModulo
     /// el comprobante ya no existe —un borrador descartado antes de esta regla—, no hay nada que proteger.
     /// </summary>
     public static async Task<Error?> PuedeBorrarAsync(
-        IApplicationDbContext db, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct, IPermissionChecker? permisos = null)
+        IApplicationDbContext db, string? ownerEntityType, Guid ownerEntityPublicId, CancellationToken ct, IPermissionChecker? permisos = null,
+        Guid? attachmentPublicId = null)
     {
         if (De(ownerEntityType) is { Borrable: false } regla)
             return NoBorrable(regla);
@@ -388,6 +427,14 @@ public static class AdjuntosDeModulo
             if (permisos is not null && !await permisos.HasPermissionAsync(AdministrarIndicadores, ct))
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return await IndicadorRegistradoAsync(db, ownerEntityPublicId, ct) ? IndicadorBloqueado() : null;
+        }
+        // Feature 013, US13 (T0781, I6): el logotipo y la imagen de la firma se borran sólo cuando ya los reemplazó otro, y con el permiso de los
+        // parámetros de Cartera. Un documento emitido no se toca: su PDF ya los lleva.
+        if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(AdministrarParametrosDeCartera, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return attachmentPublicId is { } adjunto && await ImagenReemplazadaAsync(db, ownerEntityType, adjunto, ct) ? null : ImagenVigente(ownerEntityType);
         }
         // La imagen de un producto la borra quien administra el catálogo (T221); el borrado queda auditado por el comando.
         if (ownerEntityType == ProductoDeInventario)
@@ -460,6 +507,25 @@ public static class AdjuntosDeModulo
         return adjuntos.Count > 0
             && await db.RegulatoryIndicators.AsNoTracking().AnyAsync(i => i.SupportAttachmentPublicId != null && adjuntos.Contains(i.SupportAttachmentPublicId.Value), ct);
     }
+
+    /// <summary>
+    /// Feature 013, US13 (T0781): ¿<paramref name="adjunto"/> ya fue reemplazado? La imagen vigente de un tipo es la última disponible (la de mayor
+    /// Id); la que se quiere borrar tiene que ser anterior. Una imagen que sigue vigente no se borra: se reemplaza subiendo otra. Sin decir cuál
+    /// adjunto (la lista por dueño), la respuesta es la conservadora: no se borra.
+    /// </summary>
+    private static async Task<bool> ImagenReemplazadaAsync(IApplicationDbContext db, string tipo, Guid adjunto, CancellationToken ct)
+    {
+        var vigente = await db.Attachments.AsNoTracking()
+            .Where(a => a.OwnerEntityType == tipo && a.Status == Domain.Enums.Core.EstadoDeAdjunto.Available && !a.IsDeleted)
+            .OrderByDescending(a => a.Id).Select(a => (long?)a.Id).FirstOrDefaultAsync(ct);
+        var este = await db.Attachments.AsNoTracking().Where(a => a.PublicId == adjunto && a.OwnerEntityType == tipo)
+            .Select(a => (long?)a.Id).FirstOrDefaultAsync(ct);
+        return vigente is { } idVigente && este is { } id && id < idVigente;
+    }
+
+    /// <summary>La imagen vigente del logotipo o de la firma no se borra: se reemplaza subiendo otra (T0781).</summary>
+    public static Error ImagenVigente(string tipo) => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es la imagen vigente de los documentos de Cartera: no se borra, se reemplaza subiendo otra.", new { ownerEntityType = tipo });
 
     /// <summary>El soporte de un indicador regulatorio ya registrado no se cambia ni se borra (T0638).</summary>
     public static Error IndicadorBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,

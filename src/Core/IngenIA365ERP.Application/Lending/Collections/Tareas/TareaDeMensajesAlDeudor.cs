@@ -1,6 +1,8 @@
+using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.ExternalChannels;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Messaging;
 using IngenIA365ERP.Application.Lending.Adapters;
 using IngenIA365ERP.Domain.Entities.Lending.Collections;
@@ -26,7 +28,9 @@ namespace IngenIA365ERP.Application.Lending.Collections.Tareas;
 /// <item>lee el destino del maestro <b>ahora</b> (C57) y pregunta a la guardia por <c>RealDelivery</c>: el simulado en producción no sale y
 /// queda <c>Simulated</c>;</item>
 /// <item>llama <c>EnviarAsync</c> del adaptador <b>sellado</b> (<see cref="ICanalesDeMensajeria"/>; el correo de la plataforma y <c>SIMULADO</c>
-/// en K1, SMS y WhatsApp reales con K4) y registra el resultado por <see cref="RegisterDebtorMessageAttemptCommand"/>.</item>
+/// en K1, SMS y WhatsApp reales con K4) y registra el resultado por <see cref="RegisterDebtorMessageAttemptCommand"/>. Si el mensaje cita un
+/// adjunto (<c>AttachmentPublicId</c>: el PDF de un documento emitido o de una simulación) y el canal admite adjuntos, lo lee del almacén y lo
+/// adjunta (US13, T0786); si no se puede leer, el envío cuenta como «canal no disponible» y se reintenta: un documento no sale sin su PDF.</item>
 /// </list>
 /// Escribe sólo por comandos. Un mensaje que falla de forma inesperada se anota en el log y no detiene a los demás. Singleton. (nuevo)
 /// </summary>
@@ -42,6 +46,9 @@ public sealed class TareaDeMensajesAlDeudor : ITareaProgramada
 
     /// <summary>Cuánto espera un canal caído antes de reintentar (desde ahí se busca la ventana permitida siguiente).</summary>
     public static readonly TimeSpan EsperaTrasCanalCaido = TimeSpan.FromMinutes(5);
+
+    /// <summary>El tipo del artefacto que viaja como adjunto del mensaje (el PDF citado en <c>AttachmentPublicId</c>).</summary>
+    public const string TipoDeAdjunto = "Adjunto";
 
     public string Nombre => NombreDeLaTarea;
 
@@ -161,7 +168,17 @@ public sealed class TareaDeMensajesAlDeudor : ITareaProgramada
             var proveedor = mensaje.TemplateId is { } plantilla
                 ? await _db.NotificationTemplates.AsNoTracking().Where(t => t.Id == plantilla).Select(t => t.ProviderTemplateId).FirstOrDefaultAsync(ct)
                 : null;
-            return await canal.EnviarAsync(new MensajeSaliente(mensaje.PublicId, destino, mensaje.Subject, mensaje.RenderedBody, proveedor, null, [],
+            IReadOnlyList<ArtefactoExterno> adjuntos = [];
+            if (mensaje.AttachmentPublicId is { } adjunto && canal.Capacidades.AdmiteAdjuntos)
+            {
+                var leido = await ContenidoDeAdjunto.LeerAsync(_db, servicios.GetRequiredService<IBlobStore>(), servicios.GetService<IAttachmentCipher>(),
+                    adjunto, ct);
+                if (leido is null)
+                    return ResultadoExterno<EnvioDeMensaje>.Sin(ExternalOutcome.ChannelUnavailable, mensaje.ChannelCode,
+                        CodigosDeCanalExterno.EsSimulado(mensaje.ChannelCode), "No se pudo leer el archivo adjunto del mensaje.");
+                adjuntos = [new ArtefactoExterno(TipoDeAdjunto, leido.NombreDeArchivo, leido.ContentType, leido.Bytes)];
+            }
+            return await canal.EnviarAsync(new MensajeSaliente(mensaje.PublicId, destino, mensaje.Subject, mensaje.RenderedBody, proveedor, null, adjuntos,
                 documento), contexto, ct);
         }
 

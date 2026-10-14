@@ -194,6 +194,15 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         AsignarAsync(LendingNumberKind.Operation, clase.ToString(), prefijo, ct);
 
     /// <summary>
+    /// El número de un documento emitido (feature 013, US13, T0779, T0784): clase <c>IssuedDocument</c> con ámbito = la clase del documento y el
+    /// prefijo de <see cref="Documents.PrefijosDeDocumentosDeCartera"/> (<c>PP-</c>, <c>PS-</c>, <c>PSG-</c>, <c>CS-</c>…). El documento es un hecho de
+    /// sólo inserción: el número se pide al final, antes de armarlo, y nace en su inicializador.
+    /// </summary>
+    public Task<string> NumeroDeDocumentoAsync(IssuedDocumentKind clase, CancellationToken ct = default) =>
+        AsignarAsync(LendingNumberKind.IssuedDocument, Documents.PrefijosDeDocumentosDeCartera.Ambito(clase),
+            Documents.PrefijosDeDocumentosDeCartera.De(clase), ct);
+
+    /// <summary>
     /// El consecutivo de una carga de migración (feature 013, T0232; data-model §29.1: <c>Number</c> entero, único). No tiene fila en
     /// <c>LND_NumberSequences</c> (<c>LendingNumberKind</c> no la nombra): es el mayor de <c>LND_MigrationLoads</c>, borradas incluidas, más
     /// uno; el índice único es la defensa ante dos cargas a la vez.

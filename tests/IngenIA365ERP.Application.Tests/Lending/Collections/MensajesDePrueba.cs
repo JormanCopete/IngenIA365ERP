@@ -114,6 +114,7 @@ internal sealed class MensajesDePrueba : IDisposable
     public ICredencialesDeCanalExterno Credenciales { get; } = Substitute.For<ICredencialesDeCanalExterno>();
     public ICurrentTenantService Tenant { get; } = Substitute.For<ICurrentTenantService>();
     public IAlertas Alertas { get; } = Substitute.For<IAlertas>();
+    public Application.Common.Interfaces.Storage.IBlobStore Almacen { get; } = Substitute.For<Application.Common.Interfaces.Storage.IBlobStore>();
     public CanalesExternosOptions Opciones { get; } = new() { AmbienteDePruebas = true };
     public List<DateOnly> Festivos { get; } = [];
 
@@ -213,9 +214,9 @@ internal sealed class MensajesDePrueba : IDisposable
         Db.SaveChanges();
     }
 
-    public CanalDePrueba Canal(string codigo, MessageChannel[] canales, bool consultaEntrega)
+    public CanalDePrueba Canal(string codigo, MessageChannel[] canales, bool consultaEntrega, bool admiteAdjuntos = false)
     {
-        var canal = new CanalDePrueba(codigo, canales, consultaEntrega);
+        var canal = new CanalDePrueba(codigo, canales, consultaEntrega, admiteAdjuntos);
         _canales[codigo] = canal;
         return canal;
     }
@@ -255,6 +256,7 @@ internal sealed class MensajesDePrueba : IDisposable
             .AddSingleton(Credenciales)
             .AddSingleton(Tenant)
             .AddSingleton(new GuardiaDeCanalesExternos(Options.Create(Opciones)))
+            .AddSingleton(Almacen)
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .AddSingleton(typeof(ILogger<>), typeof(NullLogger<>))
             .BuildServiceProvider();
@@ -313,11 +315,11 @@ internal sealed class MensajesDePrueba : IDisposable
 /// Un canal de mensajería de prueba: responde lo que la prueba encole (por defecto <c>Ok</c>), recuerda lo que envió y contesta la consulta
 /// de entrega con <see cref="Entrega"/>. Simulado si su código es <c>SIMULADO</c>. (nuevo)
 /// </summary>
-internal sealed class CanalDePrueba(string codigo, MessageChannel[] canales, bool consultaEntrega) : ICanalDeMensajeria
+internal sealed class CanalDePrueba(string codigo, MessageChannel[] canales, bool consultaEntrega, bool admiteAdjuntos = false) : ICanalDeMensajeria
 {
     public string ChannelCode { get; } = codigo;
 
-    public CapacidadesDeMensajeria Capacidades { get; } = new(canales.ToHashSet(), false, false, null, consultaEntrega);
+    public CapacidadesDeMensajeria Capacidades { get; } = new(canales.ToHashSet(), admiteAdjuntos, false, null, consultaEntrega);
 
     public Queue<ExternalOutcome> Respuestas { get; } = new();
     public List<MensajeSaliente> Enviados { get; } = [];

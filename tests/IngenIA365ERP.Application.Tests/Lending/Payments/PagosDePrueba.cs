@@ -90,7 +90,7 @@ internal sealed class PagosDePrueba : IDisposable
     public ICierresDeCartera Cierres { get; } = Substitute.For<ICierresDeCartera>();
     public DateOnly? CerradoHasta { get; set; }
     public IAvisoDeAbonoConPreferencia Aviso { get; } = Substitute.For<IAvisoDeAbonoConPreferencia>();
-    public IVigenciaDeDocumentosDeCartera Documentos { get; } = new SinDocumentosQueAnular();
+    public IVigenciaDeDocumentosDeCartera Documentos => new Application.Lending.Documents.AnulacionDeDocumentosPorReverso(Db);
 
     public void Dispose() => C.Dispose();
 

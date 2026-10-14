@@ -33,6 +33,7 @@ public sealed record ReversoRegistrado(LoanOperation Reverso, IReadOnlyList<Inte
 /// causación (C101); con varios, sólo el capital y la diferencia de causación desde la fecha valor del tramo como <c>AccrualAdjustment</c>
 /// (<see cref="IMotorDeCreditoEnDesembolso.ConciliarCausacionAsync"/>, C49);</item>
 /// <item>el crédito <c>PendingDisbursement</c> si no le queda otro tramo vivo;</item>
+/// <item>la anulación de los documentos emitidos desde el registro del desembolso (<see cref="Payments.IVigenciaDeDocumentosDeCartera"/>, US13);</item>
 /// <item><c>DesembolsoReversado</c> con <c>cause</c>, <c>loanStatusAfter</c> y <c>payoffReversals</c> (vacía: las recogidas se conservan mientras el
 /// crédito espera el giro nuevo, C11), que hereda el modo del desembolso (C08), con su acompañante <c>AjusteDeCausacionPorFechaValor</c> si hubo
 /// diferencia.</item>
@@ -47,7 +48,8 @@ public sealed class ReversoDeDesembolso(
     IMotorDeCreditoEnDesembolso motor,
     EmisionDeCartera emision,
     FechaContable fechaContable,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Payments.IVigenciaDeDocumentosDeCartera documentos)
 {
     public const string CausaRechazada = nameof(DisbursementOrderStatus.Rejected);
     public const string CausaChequeNoCobrado = nameof(DisbursementOrderStatus.CheckNotCashed);
@@ -133,6 +135,8 @@ public sealed class ReversoDeDesembolso(
         }
         await db.SaveChangesAsync(ct);
         desembolso.ReversedByOperationId = reverso.Id;
+        // US13 (T0787): los documentos emitidos desde el registro del desembolso quedan anulados en la misma unidad de trabajo.
+        await documentos.AnularAsync(credito.Id, desembolso, reverso, ct);
 
         var sucursal = await emision.SucursalContableAsync(credito.BranchId, ct);
         if (sucursal.IsFailure) return Result.Failure<ReversoRegistrado>(sucursal.Error);

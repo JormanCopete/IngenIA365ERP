@@ -33,6 +33,10 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
         // US4 (T0480): la liquidación y el estado de cuenta (lo que cuesta cancelar).
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs",
+        // US13 (bloque 14A, T0784, T0785): la verificación, la reimpresión y la emisión (nota 10 de PG).
+        "Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Documents/IssueLendingDocumentCommand.cs",
     ];
 
     /// <summary>Cada lectura sensible: su archivo, su consulta y el método de <see cref="LendingAuditEmitter"/> que la audita.</summary>
@@ -56,6 +60,13 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
             nameof(LendingAuditEmitter.EmitirLiquidacionVistaAsync)),
         ("Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs", "GetLoanStatementQuery",
             nameof(LendingAuditEmitter.EmitirLiquidacionVistaAsync)),
+        // US13 (bloque 14A): Lending.Document.Verified, Lending.Document.Reprinted y la emisión (Lending.Document.Issued, fuera de la lista cerrada).
+        ("Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentQueries.cs", "VerifyLendingDocumentQuery",
+            nameof(LendingAuditEmitter.EmitirDocumentoVerificadoAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentCommands.cs", "IssueLendingDocumentDownloadLinkCommand",
+            nameof(LendingAuditEmitter.EmitirDocumentoReimpresoAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Documents/IssueLendingDocumentCommand.cs", "IssueLendingDocumentCommand",
+            nameof(LendingAuditEmitter.EmitirDocumentoEmitidoAsync)),
     ];
 
     /// <summary>La lista cerrada de research §13 y C89 (los diez eventos de T0256).</summary>

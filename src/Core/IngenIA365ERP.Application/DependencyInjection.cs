@@ -507,7 +507,12 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.Contrato.NoDescontadosDelLote>();
         // US9 (bloque 12C): los cierres de Cartera ya existen; el esqueleto SinCierresDeCartera queda sólo para las pruebas.
         services.TryAddScoped<Lending.Payments.ICierresDeCartera, Lending.Risk.CierresDeCarteraVigentes>();
-        services.TryAddScoped<Lending.Payments.IVigenciaDeDocumentosDeCartera, Lending.Payments.SinDocumentosQueAnular>();
+        // US13 (T0787): la anulación de documentos por reverso ya existe; el esqueleto SinDocumentosQueAnular queda sólo para las pruebas.
+        services.TryAddScoped<Lending.Payments.IVigenciaDeDocumentosDeCartera, Lending.Documents.AnulacionDeDocumentosPorReverso>();
+        // US13 (bloque 14A, T0782–T0786): los documentos al deudor. El renderizador del PDF (IDocumentoDeCarteraRenderer) lo registra la API (T0789).
+        services.AddScoped<Lending.Documents.ConstructorDeDocumentosDeCartera>();
+        services.AddScoped<Lending.Documents.EntregaDeDocumentosDeCartera>();
+        services.AddSingleton<Lending.Documents.IGeneradorDeCodigosDeVerificacion, Lending.Documents.GeneradorDeCodigosDeVerificacion>();
         services.AddScoped<Lending.Payments.IAvisoDeAbonoConPreferencia, Lending.Payments.AvisoDeAbonoPorMensajeria>();
         services.AddScoped<Lending.Payments.ReglasDeFechaValor>();
         services.AddScoped<Lending.Payments.FirmezaDelPago>();

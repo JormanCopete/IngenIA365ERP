@@ -243,6 +243,11 @@ public static class AuditEventTypes
     // US8 (T0752): la activación de Cartera con sus requisitos, conteos y huellas; no es lectura.
     public const string LendingActivationRegistered = "Lending.Activation.Registered";
 
+    // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
+    // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.
+    public const string LendingDocumentIssued = "Lending.Document.Issued";
+    public const string LendingDocumentVoided = "Lending.Document.Voided";
+
     // US3 (T0454, bloque 7B): la emisión del enlace de descarga de un archivo de desembolsos (adaptadores §6.2: «enlace firmado de 60 s, auditado»).
     public const string LendingDisbursementFileDownloaded = "Lending.DisbursementFile.Downloaded";
 

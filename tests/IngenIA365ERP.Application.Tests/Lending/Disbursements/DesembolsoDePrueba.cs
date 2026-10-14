@@ -101,7 +101,8 @@ internal sealed class DesembolsoDePrueba : IDisposable
     public RegistroDeCartera Registro() => new(Db);
     public NumeradorDeCartera Numerador() => new(Db, O.Cerrojo);
     public TramoDeDesembolso Tramos() => new(Db, Registro(), Numerador(), Parametros(), new CalendarioDeDiasHabiles(Db), G.Actor, G.Reloj, Cargador());
-    public ReversoDeDesembolso Reverso() => new(Db, Registro(), Numerador(), MotorDelCredito(), Emision(), FechaContable(), G.Reloj);
+    public ReversoDeDesembolso Reverso() => new(Db, Registro(), Numerador(), MotorDelCredito(), Emision(), FechaContable(), G.Reloj,
+        new Application.Lending.Documents.AnulacionDeDocumentosPorReverso(Db));
 
     public ExecuteLoanDisbursementCommandHandler Desembolsar() =>
         new(Db, Requisitos(), Tramos(), O.Cerrojo, Registro(), Numerador(), new RecogidaEnElDesembolso(Contrato), MotorDelCredito(), Emision(),
