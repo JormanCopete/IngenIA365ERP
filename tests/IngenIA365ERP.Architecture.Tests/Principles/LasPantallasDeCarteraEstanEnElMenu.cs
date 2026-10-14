@@ -52,6 +52,8 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Contabilidad/Cartera/Completitud.razor", "/contabilidad/cartera/completitud", "Accounting.LendingRules.View"),
         ("Pages/Contabilidad/Cartera/Lotes.razor", "/contabilidad/cartera/lotes", "Accounting.LendingBatches.View"),
         ("Pages/Contabilidad/IndicadoresRegulatorios.razor", "/contabilidad/indicadores-regulatorios", "Accounting.RegulatoryIndicators.View"),
+        // Fase 12, US9 (T0714, T0715): los cierres de Cartera con la calificación informativa (a ella remite Accounting.Period.LendingNotClosed).
+        ("Pages/Cartera/Cierres.razor", "/cartera/cierres", "Lending.Ratings.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
@@ -65,7 +67,28 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/CreditoDetalle.razor", "/cartera/creditos/{Id:guid}", "Lending.Loans.Read"),
         // US7 (T0611): el detalle de un lote de Cartera se abre desde Lotes y desde el origen de un comprobante.
         ("Pages/Contabilidad/Cartera/Lote.razor", "/contabilidad/cartera/lotes/{Id:guid}", "Accounting.LendingBatches.View"),
+        // US9 (T0714): el detalle de un cierre se abre desde Cierres y desde la calificación del crédito.
+        ("Pages/Cartera/Cierre.razor", "/cartera/cierres/{Id:guid}", "Lending.Ratings.Read"),
     ];
+
+    /// <summary>
+    /// US9 (T0715): la política SARC vive en la pestaña «Riesgo» de Parámetros y la calificación en la del crédito; los dos componentes cargan con
+    /// su indicador y escriben detrás de su permiso. Contabilidad remite a Cierres cuando Cartera no cerró el mes.
+    /// </summary>
+    [Fact]
+    public void La_politica_y_la_calificacion_del_credito_estan_en_sus_pantallas()
+    {
+        var politica = File.ReadAllText(Path.Combine(Shared, "Components", "Cartera", "PoliticaSarc.razor"));
+        var calificacion = File.ReadAllText(Path.Combine(Shared, "Components", "Cartera", "CalificacionDelCredito.razor"));
+        Assert.Contains("<IndicadorDeCarga", politica, StringComparison.Ordinal);
+        Assert.Contains("Required=\"Lending.RiskPolicy.Manage\"", politica, StringComparison.Ordinal);
+        Assert.Contains("Required=\"Lending.RiskPolicy.Validate\"", politica, StringComparison.Ordinal);
+        Assert.Contains("<IndicadorDeCarga", calificacion, StringComparison.Ordinal);
+        Assert.Contains("Required=\"Lending.Ratings.Override\"", calificacion, StringComparison.Ordinal);
+        Assert.Contains("<PoliticaSarc", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "Parametros.razor")), StringComparison.Ordinal);
+        Assert.Contains("<CalificacionDelCredito", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "CreditoDetalle.razor")), StringComparison.Ordinal);
+        Assert.Contains("href=\"/cartera/cierres\"", File.ReadAllText(Path.Combine(Shared, "Pages", "Contabilidad", "Periodos.razor")), StringComparison.Ordinal);
+    }
 
     [Fact]
     public void Cada_detalle_existe_protegido_y_con_indicador()

@@ -19,10 +19,23 @@
     <div class="page-header">
         <h3>Parámetros de Cartera</h3>
         <div class="toolbar">
-            <input type="search" class="e-input" placeholder="Buscar clave…" @bind="_buscar" @bind:event="oninput" />
-            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <SfButton CssClass="@(_riesgo ? "e-outline" : "e-primary")" OnClick="@(() => _riesgo = false)">Parámetros</SfButton>
+            <SfButton CssClass="@(_riesgo ? "e-primary" : "e-outline")" OnClick="@(() => _riesgo = true)">Riesgo</SfButton>
+            @if (!_riesgo)
+            {
+                <input type="search" class="e-input" placeholder="Buscar clave…" @bind="_buscar" @bind:event="oninput" />
+                <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            }
         </div>
     </div>
+
+    @* US9 (T0715): la pestaña «Riesgo» —la norma, la política SARC del consejo y la efectiva celda a celda, con sus versiones—. *@
+    @if (_riesgo)
+    {
+        <PoliticaSarc />
+    }
+    else
+    {
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
         @foreach (var grupo in Grupos)
@@ -81,6 +94,7 @@
         }
         @if (_parametros.Count == 0) { <p class="texto-tenue">Sin parámetros que mostrar.</p> }
     </IndicadorDeCarga>
+    }
 
     @if (_elegido is { } elegido)
     {
@@ -172,7 +186,7 @@
     private List<ParametroDeCarteraDto> _parametros = [];
     private ParametroDeCarteraDto? _elegido, _editado;
     private List<VigenciaDeParametroDto> _vigencias = [];
-    private bool _mostrarNueva;
+    private bool _mostrarNueva, _riesgo;
     private string _buscar = string.Empty;
     private string? _valor, _motivo, _fuente, _error;
     private Guid? _ambitoId;

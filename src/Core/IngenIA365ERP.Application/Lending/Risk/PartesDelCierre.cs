@@ -102,9 +102,10 @@ public static class PartesDelCierre
 
     /// <summary>
     /// Los importes de la reclasificación de un crédito que cambió de letra (§11.2): cada saldo con categoría al corte y el deterioro individual
-    /// de cada concepto que traía del cierre anterior (el saldo vigente), éste con <c>reasonCode = Individual</c>.
+    /// de cada concepto que traía del cierre anterior (el saldo vigente), éste con <c>reasonCode = Individual</c>. Sin línea anterior (un crédito
+    /// nacido después del último cierre) no hay deterioro que mover: sólo los saldos.
     /// </summary>
-    public static IReadOnlyList<ConceptAmountV1> Reclasificacion(MonthlyCloseLoan nueva, MonthlyCloseLoan anterior)
+    public static IReadOnlyList<ConceptAmountV1> Reclasificacion(MonthlyCloseLoan nueva, MonthlyCloseLoan? anterior)
     {
         var saldos = Saldos(nueva);
         var importes = new List<ConceptAmountV1>();

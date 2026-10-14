@@ -38,6 +38,12 @@
                     <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
                 </PermissionGate>
             }
+            else if (p == Pestana.Calificacion)
+            {
+                <PermissionGate Required="Lending.Ratings.Read">
+                    <SfButton CssClass="@(_pestana == p ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(p))">@titulo</SfButton>
+                </PermissionGate>
+            }
             else if (p == Pestana.Simular)
             {
                 <PermissionGate Required="Lending.Payments.Simulate">
@@ -394,6 +400,13 @@
             </div>
         </IndicadorDeCarga>
     }
+    else if (_pestana == Pestana.Calificacion)
+    {
+        @* US9 (T0715): la informativa del día, la oficial del último cierre y la calificación por análisis. *@
+        <PermissionGate Required="Lending.Ratings.Read" MostrarAviso="true">
+            <CalificacionDelCredito CreditoId="@Id" />
+        </PermissionGate>
+    }
 </div>
 
 <SfDialog @bind-Visible="_mostrarConfirmacion" Header="Confirmar por excepción" Width="560px" IsModal="true" ShowCloseIcon="true">
@@ -446,13 +459,13 @@
             : "Validación confirmada por excepción: el bloqueo del deudor se levantó.");
     }
 
-    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias }
+    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias, Calificacion }
 
     private static readonly (Pestana, string)[] Pestanas =
     [
         (Pestana.Resumen, "Resumen"), (Pestana.Liquidacion, "Liquidación"), (Pestana.Estado, "Estado de cuenta"), (Pestana.Plan, "Plan de pagos"),
         (Pestana.Operaciones, "Operaciones"), (Pestana.Simular, "Simular pago"), (Pestana.Preferencia, "Preferencia de abono"), (Pestana.Libro, "Libro"),
-        (Pestana.Garantias, "Garantías y giro"),
+        (Pestana.Garantias, "Garantías y giro"), (Pestana.Calificacion, "Calificación"),
     ];
 
     private readonly EstadoDeCarga _cargaResumen = new(), _cargaLiquidacion = new(), _cargaEstado = new(), _cargaPlan = new(), _cargaOperaciones = new(),

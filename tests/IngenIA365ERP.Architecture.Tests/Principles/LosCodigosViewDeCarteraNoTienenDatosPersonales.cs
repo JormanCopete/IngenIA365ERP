@@ -58,6 +58,14 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         ("GET /api/lending/accounting/fact-parts/{id}", "Lending.Messages.Read", "AccountingIntegrationEndpoints.cs"),
         ("GET /api/lending/messages", "Lending.Messages.Read", "LendingMessagesEndpoints.cs"),
         ("GET /api/lending/messages/{id}", "Lending.Messages.Read", "LendingMessagesEndpoints.cs"),
+        // US9 (bloque 12C, T0712; api.md §12.2, §12.3): la calificación informativa, el análisis, las líneas y el reporte de cambios del cierre y la
+        // calificación de un crédito nombran al deudor: van con Ratings.Read. La política (Parameters.View) y el cuadre del cierre
+        // (Reconciliation.View) no traen deudores (sus DTO están abajo).
+        ("GET /api/lending/risk/ratings", "Lending.Ratings.Read", "RiskEndpoints.cs"),
+        ("GET /api/lending/risk/analysis-ratings", "Lending.Ratings.Read", "RiskEndpoints.cs"),
+        ("GET /api/lending/risk/monthly-closes/{id}/loans", "Lending.Ratings.Read", "RiskEndpoints.cs"),
+        ("GET /api/lending/risk/monthly-closes/{id}/changes", "Lending.Ratings.Read", "RiskEndpoints.cs"),
+        ("GET /api/lending/loans/{id}/rating", "Lending.Ratings.Read", "RiskEndpoints.cs"),
     ];
 
     /// <summary>Los DTO que devuelven las rutas <c>.View</c> de esta fase (se recorren con sus tipos anidados).</summary>
@@ -71,7 +79,15 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         typeof(MessageTemplateVersionDto), typeof(MessageTemplatePreviewDto),
         // T0610: la conciliación contable (Reconciliation.View): conjuntos de cuentas, cifras y hechos sin deudor.
         typeof(IngenIA365ERP.Application.Lending.Integration.ConciliacionContableDto),
+        // US9 (bloque 12C): la política SARC efectiva (Parameters.View), con la norma, las celdas y las versiones.
+        typeof(IngenIA365ERP.Application.Lending.Risk.RiskPolicyDto),
     ];
+
+    /// <summary>
+    /// Nombres que el patrón atrapa sin ser datos de una persona: <c>RiskPolicyNormDto.DocumentPublicId</c> es el documento normativo (el Anexo 1
+    /// registrado en la central), no el documento de identidad de nadie (US9, bloque 12C).
+    /// </summary>
+    private static readonly HashSet<string> NoSonPersonales = new(StringComparer.Ordinal) { "RiskPolicyNormDto.DocumentPublicId" };
 
     private static readonly Regex PropiedadPersonal = new(
         @"(Document|TaxId|Identification|Email|Mail|Phone|Mobile|Celular|Telefono|Address|Direccion|BirthDate)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -125,7 +141,7 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
 
         foreach (var p in tipo.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            if (PropiedadPersonal.IsMatch(p.Name)) infracciones.Add($"{camino}.{p.Name}");
+            if (PropiedadPersonal.IsMatch(p.Name) && !NoSonPersonales.Contains($"{tipo.Name}.{p.Name}")) infracciones.Add($"{camino}.{p.Name}");
             Revisar(p.PropertyType, $"{camino}.{p.Name}", vistos, infracciones);
         }
     }

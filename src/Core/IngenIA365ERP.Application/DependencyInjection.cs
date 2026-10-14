@@ -500,7 +500,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.ITransaccionDelRecaudador, Lending.Integration.TransaccionDelRecaudador>();
         services.AddScoped<Lending.Integration.AuditoriaDeEscriturasDeCartera>();
         services.AddScoped<Lending.Integration.Contrato.NoDescontadosDelLote>();
-        services.TryAddScoped<Lending.Payments.ICierresDeCartera, Lending.Payments.SinCierresDeCartera>();
+        // US9 (bloque 12C): los cierres de Cartera ya existen; el esqueleto SinCierresDeCartera queda sólo para las pruebas.
+        services.TryAddScoped<Lending.Payments.ICierresDeCartera, Lending.Risk.CierresDeCarteraVigentes>();
         services.TryAddScoped<Lending.Payments.IVigenciaDeDocumentosDeCartera, Lending.Payments.SinDocumentosQueAnular>();
         services.AddScoped<Lending.Payments.IAvisoDeAbonoConPreferencia, Lending.Payments.AvisoDeAbonoPorMensajeria>();
         services.AddScoped<Lending.Payments.ReglasDeFechaValor>();

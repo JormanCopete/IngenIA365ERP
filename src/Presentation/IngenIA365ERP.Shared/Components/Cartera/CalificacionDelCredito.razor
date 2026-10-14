@@ -1,0 +1,143 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject RiesgoClient Riesgo
+@inject INotificationService Notification
+
+@* Feature 013, US9 (T0715; contracts/api.md §12.2; FR-099, FR-101, T46): la pestaña «Calificación» de /cartera/creditos/{id}. La informativa del
+   día (el mismo cálculo del cierre; no se guarda) con sus candidatas y su explicación, la oficial del último cierre vigente y la calificación
+   por análisis vigente. Poner una por análisis (Lending.Ratings.Override) pide categoría y motivo, y sólo se acepta peor que la de las reglas;
+   levantarla pide motivo. *@
+<IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calificando…">
+    @if (_c is { } c)
+    {
+        <div class="kpi-grid">
+            <div class="kpi-card"><span class="kpi-value">@TextosDeRiesgo.Categoria(c.Category, c.Subcategory)</span><span class="kpi-label">@c.Label al @c.Date.ToString("dd/MM/yyyy")</span></div>
+            <div class="kpi-card"><span class="kpi-value">@c.AccountingCategory</span><span class="kpi-label">Contable</span></div>
+            <div class="kpi-card"><span class="kpi-value">@c.DaysPastDue</span><span class="kpi-label">Días de mora</span></div>
+            <div class="kpi-card"><span class="kpi-value">@(c.Official is { } o ? TextosDeRiesgo.Categoria(o.Category, o.Subcategory) : "—")</span><span class="kpi-label">Oficial (último cierre)</span></div>
+        </div>
+        <p>Causa: @TextosDeRiesgo.Causa(c.Cause).</p>
+        @if (c.Official is { } oficial)
+        {
+            <p class="texto-tenue">
+                Oficial del cierre <a href="@($"/cartera/cierres/{oficial.MonthlyClosePublicId}")">@(oficial.Kind == "Base" ? "base" : $"{TextosDeRiesgo.Mes(oficial.Month)} {oficial.Year}")</a>
+                (versión @oficial.Version): @TextosDeRiesgo.Causa(oficial.Cause).ToLowerInvariant(), deterioro @oficial.TotalImpairment.ToString("N2").
+            </p>
+        }
+
+        <h4>Candidatas</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Categoría</th><th>Causa</th><th>Detalle</th></tr></thead>
+                <tbody>
+                    @foreach (var k in c.Candidates)
+                    {
+                        <tr><td>@k.Category</td><td>@TextosDeRiesgo.Causa(k.Cause)</td><td>@k.Detail</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (c.Explanation.Count > 0)
+        {
+            <ul class="texto-tenue">@foreach (var e in c.Explanation) { <li>@e</li> }</ul>
+        }
+
+        <h4>Calificación por análisis</h4>
+        @if (c.Analysis is { LiftedAt: null } analisis)
+        {
+            <p>
+                @TextosDeRiesgo.Categoria(analisis.Category, analisis.Subcategory) desde el @analisis.Since.ToString("dd/MM/yyyy"): @analisis.Reason
+            </p>
+            <PermissionGate Required="Lending.Ratings.Override">
+                <div class="toolbar">
+                    <label class="campo">Motivo para levantarla <input class="e-input" @bind="_motivoLevantar" maxlength="500" /></label>
+                    <SfButton CssClass="e-outline" Disabled="@(string.IsNullOrWhiteSpace(_motivoLevantar) || _guardado.Activa)" OnClick="@(() => LevantarAsync(analisis.PublicId))">Levantar</SfButton>
+                </div>
+            </PermissionGate>
+        }
+        else
+        {
+            <p class="texto-tenue">Sin calificación por análisis vigente.</p>
+            <PermissionGate Required="Lending.Ratings.Override">
+                <div class="toolbar">
+                    <label class="campo">Categoría
+                        <select class="e-input" @bind="_categoria">
+                            @foreach (var k in TextosDeRiesgo.Categorias) { <option value="@k">@k</option> }
+                        </select>
+                    </label>
+                    @if (_categoria == "E")
+                    {
+                        <label class="campo">Subcategoría
+                            <select class="e-input" @bind="_subcategoria">
+                                <option value="">—</option>
+                                <option value="E1">E1</option>
+                                <option value="E2">E2</option>
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Motivo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivo) || _guardado.Activa)" OnClick="@CalificarAsync">Calificar por análisis</SfButton>
+                </div>
+                <p class="texto-tenue">El análisis sólo puede llevar el crédito a una categoría peor que la que dan las reglas; el cierre la toma tal como esté vigente.</p>
+            </PermissionGate>
+        }
+        @if (_error is { } error) { <p class="aviso aviso-alerta">@error</p> }
+    }
+    else if (_errorDeCarga is { } e)
+    {
+        <p class="aviso aviso-alerta">@e</p>
+    }
+</IndicadorDeCarga>
+
+@code {
+    [Parameter, EditorRequired] public Guid CreditoId { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private CalificacionDelCreditoDto? _c;
+    private string _categoria = "C", _subcategoria = string.Empty;
+    private string? _motivo, _motivoLevantar, _error, _errorDeCarga;
+    private ClaveDeOperacion _clave = new(), _claveLevantar = new();
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Riesgo.DelCreditoAsync(CreditoId);
+        _c = r.IsSuccess ? r.Value : null;
+        _errorDeCarga = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo calificar el crédito.";
+    }
+
+    private async Task CalificarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Riesgo.CalificarPorAnalisisAsync(new NuevaCalificacionPorAnalisisRequest(CreditoId, _categoria,
+            _categoria == "E" && !string.IsNullOrWhiteSpace(_subcategoria) ? _subcategoria : null, _motivo.Trim()), _clave);
+        if (!r.IsSuccess)
+        {
+            var reglas = r.Dato<string>("ruleCategory");
+            _error = reglas is null ? r.ErrorMessage ?? "No se pudo calificar." : $"{r.ErrorMessage} Las reglas dan {reglas}: el análisis tiene que ser peor.";
+            return;
+        }
+        _clave = new ClaveDeOperacion();
+        _motivo = null;
+        await Notification.SuccessAsync("Calificación por análisis registrada.");
+        await CargarAsync();
+    }
+
+    private async Task LevantarAsync(Guid analisis)
+    {
+        if (string.IsNullOrWhiteSpace(_motivoLevantar)) return;
+        using var carga = _guardado.Iniciar();
+        _error = null;
+        var r = await Riesgo.LevantarAnalisisAsync(analisis, _motivoLevantar.Trim(), _claveLevantar);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo levantar la calificación."; return; }
+        _claveLevantar = new ClaveDeOperacion();
+        _motivoLevantar = null;
+        await Notification.SuccessAsync("Calificación por análisis levantada.");
+        await CargarAsync();
+    }
+}

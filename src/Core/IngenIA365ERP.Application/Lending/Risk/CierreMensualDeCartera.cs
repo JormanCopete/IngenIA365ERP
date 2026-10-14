@@ -263,6 +263,14 @@ public sealed class CierreMensualDeCartera(
             ? new Dictionary<int, MonthlyCloseLoan>()
             : await CategoriaContableDeCartera.LineasDe(db, anterior).ToDictionaryAsync(l => l.LoanId, ct);
         var liberados = lineasAnteriores.Values.Where(a => !conLinea.Contains(a.LoanId) && a.TotalImpairment != 0m).ToList();
+        // Un crédito sin línea en el cierre anterior (nació después, o el anterior es el base sin él) llevó en sus hechos la categoría contable
+        // vigente —la de crédito nuevo o, si es una novación, la del crédito anterior (§3.4)—: si el cierre lo deja en otra letra, sus saldos se
+        // reclasifican desde esa. Hasta el bloque 12C sólo se reclasificaba a quien tenía línea anterior, y los saldos de un crédito nuevo que el
+        // primer cierre llevaba a C quedaban en las cuentas de A (la conciliación por categoría no cuadraba).
+        var sinLineaAnterior = lineas.Where(l => !lineasAnteriores.ContainsKey(l.LoanId)).Select(l => l.LoanId).ToList();
+        IReadOnlyDictionary<int, CategoriaContableVigente> categoriasPrevias = sinLineaAnterior.Count == 0
+            ? new Dictionary<int, CategoriaContableVigente>()
+            : await new CategoriaContableDeCartera(db).VigentesAsync(sinLineaAnterior, fin, ct);
         var referencias = await PartesDelCierre.ReferenciasAsync(db, [.. lineas, .. liberados], ct);
         var usuario = corrida.RequestedByKind == ActorKind.Person && corrida.RequestedByCentralUserId is { } central
             ? new UserRefV1 { CentralUserId = central, Name = corrida.RequestedByName }
@@ -275,14 +283,18 @@ public sealed class CierreMensualDeCartera(
         {
             lineasAnteriores.TryGetValue(l.LoanId, out var previa);
             var nuevas = PartesDelCierre.Dimensiones(l, l.AccountingRating, referencias);
-            if (previa is not null && previa.AccountingRating != l.AccountingRating)
+            var categoriaPrevia = previa?.AccountingRating
+                                  ?? (categoriasPrevias.TryGetValue(l.LoanId, out var vigente) && Enum.TryParse<RatingCategory>(vigente.Category, out var deLosHechos)
+                                      ? (RatingCategory?)deLosHechos
+                                      : null);
+            if (categoriaPrevia is { } desde && desde != l.AccountingRating)
             {
                 var importes = PartesDelCierre.Reclasificacion(l, previa);
                 if (importes.Count > 0)
                     reclasificaciones.Add(new PartidaDelCierre(l.LoanId, l.BranchId, l.BatchNumber ?? 1, new LoanFactLineV1
                     {
                         Loan = referencias.Creditos[l.LoanId], DebtorPersonPublicId = referencias.Personas.GetValueOrDefault(l.PersonId), Dimensions = nuevas,
-                        PreviousDimensions = PartesDelCierre.Dimensiones(l, previa.AccountingRating, referencias), Amounts = importes,
+                        PreviousDimensions = PartesDelCierre.Dimensiones(l, desde, referencias), Amounts = importes,
                     }));
             }
             var movimientos = Movimientos(PartesDelCierre.Deterioro(previa), PartesDelCierre.Deterioro(l), historia.GetValueOrDefault(l.LoanId), regla);

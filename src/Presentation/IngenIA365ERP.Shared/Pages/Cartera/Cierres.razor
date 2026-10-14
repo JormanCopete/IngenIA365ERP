@@ -1,0 +1,352 @@
+@page "/cartera/cierres"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject RiesgoClient Riesgo
+@inject CorridasDeCarteraClient Corridas
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Cierres de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US9 (T0714; contracts/api.md §12.2, §12.3; T47–T49, C58): los cierres de Cartera —el base de la activación y los mensuales— con su
+   estado (cerrado o reabierto, derivado de la reapertura), sus marcas y sus totales; la preparación del cierre de un mes con cada requisito y su
+   detalle; ordenar el cierre (202: lo corre el proceso por tandas, y aquí se sigue la corrida) y reabrir el último cierre vigente con motivo
+   (202, antes del cierre contable del mes). La pestaña «Calificación informativa» es la del día con el mismo motor del cierre: no se guarda. Lo
+   que Contabilidad remite aquí cuando responde «Cartera no ha cerrado el mes». Leer exige Lending.Ratings.Read; ordenar,
+   Lending.MonthlyClose.Execute; reabrir, Lending.MonthlyClose.Reopen. *@
+<PermissionGate Required="Lending.Ratings.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cierres de Cartera</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Cierres</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Calificación informativa</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <PermissionGate Required="Lending.MonthlyClose.Execute">
+            <div class="info-card">
+                <h4>Cierre del mes</h4>
+                <div class="toolbar">
+                    <label class="campo">Año <input type="number" class="e-input" min="2000" max="2999" @bind="_anio" /></label>
+                    <label class="campo">Mes
+                        <select class="e-input" @bind="_mes">
+                            @for (var m = 1; m <= 12; m++) { var mes = m; <option value="@mes">@TextosDeRiesgo.Mes(mes)</option> }
+                        </select>
+                    </label>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_cargaPreparacion.Activa" OnClick="@PrepararAsync">Revisar requisitos</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaPreparacion.Activa" Texto="Revisando los requisitos…">
+                    @if (_preparacion is { } p)
+                    {
+                        @if (p.BlockedMessage is { } bloqueo)
+                        {
+                            <p class="aviso aviso-alerta">@bloqueo</p>
+                        }
+                        else
+                        {
+                            <div class="tabla-desplazable">
+                                <table class="data-grid">
+                                    <thead><tr><th>Requisito</th><th>Cumple</th><th>Detalle</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var r in p.Requirements)
+                                        {
+                                            <tr class="@(r.Met ? "" : "resaltada")">
+                                                <td>@TextosDeRiesgo.Requisito(r.Code)</td>
+                                                <td>@(r.Met ? "Sí" : "No")</td>
+                                                <td>@r.Detail</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                            @if (p.Ready)
+                            {
+                                <div class="toolbar">
+                                    <label class="campo">Motivo (opcional) <input class="e-input" @bind="_motivoDeOrden" maxlength="500" /></label>
+                                    <SfButton CssClass="e-primary" Disabled="@_cargaOrden.Activa" OnClick="@OrdenarAsync">Ordenar el cierre de @TextosDeRiesgo.Mes(p.Month) @p.Year (versión @p.Version)</SfButton>
+                                </div>
+                                <p class="texto-tenue">El proceso de Cartera corre el cierre por tandas: califica, deteriora y deja los hechos para Contabilidad. Encabezado y líneas no se editan; un error se corrige reabriendo.</p>
+                            }
+                        }
+                    }
+                </IndicadorDeCarga>
+                @if (_corrida is not null)
+                {
+                    <IndicadorDeCarga Cargando="@_cargaCorrida.Activa" Texto="Leyendo la corrida…">
+                        <p class="texto-apoyo">
+                            Corrida @TextosDeCreditos.ClaseDeCorrida(_corrida.Run.Kind).ToLowerInvariant(): @TextosDeCreditos.EstadoDeCorrida(_corrida.Run.Status).ToLowerInvariant()
+                            · @_corrida.Run.Progress.Done de @_corrida.Run.Progress.Total crédito(s)
+                            @if (_corrida.CurrentStep is { } paso) { <text> · paso @(paso == 1 ? "1 (líneas por tandas)" : "2 (transacción final)")</text> }
+                            @if (_corrida.Run.Errors > 0) { <text> · @_corrida.Run.Errors error(es)</text> }
+                        </p>
+                        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-refresh" OnClick="@SeguirCorridaAsync">Actualizar estado</SfButton>
+                        <a href="/cartera/bandeja-de-mensajes">Ver las corridas del proceso</a>
+                    </IndicadorDeCarga>
+                }
+            </div>
+        </PermissionGate>
+
+        <div class="toolbar">
+            <label class="campo">Año <input type="number" class="e-input" min="2000" max="2999" @bind="_anioDeLista" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th>Cierre</th><th>Clase</th><th>Versión</th><th>Estado</th><th>Información hasta</th><th class="numero">Créditos</th><th class="numero">Cartera bruta</th><th class="numero">Deterioro individual</th><th class="numero">Deterioro general</th><th>Marcas</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _cierres)
+                        {
+                            var cierre = c;
+                            <tr class="@(cierre.Status == "Reopened" ? "texto-tenue" : "")">
+                                <td><a href="@($"/cartera/cierres/{cierre.PublicId}")">@(cierre.Kind == "Base" ? cierre.CloseDate.ToString("dd/MM/yyyy") : $"{TextosDeRiesgo.Mes(cierre.Month)} {cierre.Year}")</a></td>
+                                <td>@TextosDeRiesgo.ClaseDeCierre(cierre.Kind)</td>
+                                <td>@cierre.Version</td>
+                                <td>@TextosDeRiesgo.EstadoDeCierre(cierre.Status)</td>
+                                <td>@cierre.InformationCutoffAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="numero">@cierre.Totals.Loans.ToString("N0")</td>
+                                <td class="numero">@cierre.Totals.GrossPortfolio.ToString("N2")</td>
+                                <td class="numero">@cierre.Totals.IndividualImpairment.ToString("N2")</td>
+                                <td class="numero">@cierre.Totals.GeneralImpairment.ToString("N2")</td>
+                                <td>@Marcas(cierre.Marks)</td>
+                                <td>
+                                    @if (cierre.PublicId == _ultimoVigente)
+                                    {
+                                        <PermissionGate Required="Lending.MonthlyClose.Reopen">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirReapertura(cierre))">Reabrir</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (_cierres.Count == 0 && !_carga.Activa) { <tr><td colspan="11" class="texto-tenue">Sin cierres en ese año. El cierre base nace con la activación de Cartera.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+            <p class="texto-tenue">Sólo el último cierre mensual vigente se reabre, y sólo mientras Contabilidad no haya cerrado su mes. Volver a cerrar crea la versión siguiente.</p>
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="campo">A la fecha <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
+            <label class="campo">Categoría
+                <select class="e-input" @bind="_categoria">
+                    <option value="">Todas</option>
+                    @foreach (var c in TextosDeRiesgo.Categorias) { <option value="@c">@c</option> }
+                </select>
+            </label>
+            <label class="campo">Causa
+                <select class="e-input" @bind="_causa">
+                    <option value="">Todas</option>
+                    @foreach (var (valor, texto) in TextosDeRiesgo.Causas) { <option value="@valor">@texto</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_cargaInformativa.Activa" OnClick="@(() => CargarInformativasAsync(1))">Calificar</SfButton>
+        </div>
+        <p class="aviso aviso-info">Calificación informativa: el mismo cálculo del cierre a la fecha elegida. No se guarda ni reemplaza la oficial del último cierre.</p>
+        <IndicadorDeCarga Cargando="@_cargaInformativa.Activa" Texto="Calificando…">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Crédito</th><th>Deudor</th><th>Modalidad</th><th class="numero">Días de mora</th><th>Informativa</th><th>Causa</th><th>Oficial (último cierre)</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _informativas)
+                        {
+                            <tr class="@(r.OfficialCategory is { } o && o != r.Category ? "resaltada" : "")">
+                                <td><a href="@($"/cartera/creditos/{r.LoanPublicId}")">@r.LoanNumber</a></td>
+                                <td>@r.Debtor.Name</td>
+                                <td>@r.Modality</td>
+                                <td class="numero">@r.DaysPastDue</td>
+                                <td>@TextosDeRiesgo.Categoria(r.Category, r.Subcategory)</td>
+                                <td>@TextosDeRiesgo.Causa(r.Cause)</td>
+                                <td>@(r.OfficialCategory ?? "—")</td>
+                            </tr>
+                        }
+                        @if (_informativas.Count == 0 && !_cargaInformativa.Activa) { <tr><td colspan="7" class="texto-tenue">Sin créditos vivos con estos filtros.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+            @if (_totalInformativas > TamanoDePagina)
+            {
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_paginaInformativa <= 1)" OnClick="@(() => CargarInformativasAsync(_paginaInformativa - 1))">Anterior</SfButton>
+                    <span>Página @_paginaInformativa de @((_totalInformativas + TamanoDePagina - 1) / TamanoDePagina)</span>
+                    <SfButton CssClass="e-outline" Disabled="@(_paginaInformativa * TamanoDePagina >= _totalInformativas)" OnClick="@(() => CargarInformativasAsync(_paginaInformativa + 1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarReapertura" Header="Reabrir el cierre" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaReapertura.Activa">
+                @if (_aReabrir is { } c)
+                {
+                    <p>Reabrir el cierre de @TextosDeRiesgo.Mes(c.Month) @c.Year (versión @c.Version) deja sus líneas como estaban y emite los reversos de sus hechos. Para volver a cerrarlo se ordena de nuevo y nace la versión @(c.Version + 1).</p>
+                    <label class="campo">Motivo <textarea class="e-input" rows="3" @bind="_motivoDeReapertura" maxlength="500"></textarea></label>
+                    <label class="campo">Punto del acta (opcional) <input class="e-input" @bind="_puntoDeActa" placeholder="Identificador del punto" /></label>
+                    @if (_errorDeReapertura is { } error) { <p class="aviso aviso-alerta">@error</p> }
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivoDeReapertura))" OnClick="@ReabrirAsync">Reabrir</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReapertura = false)">Cancelar</SfButton>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+
+    private readonly EstadoDeCarga _carga = new(), _cargaPreparacion = new(), _cargaOrden = new(), _cargaCorrida = new(), _cargaInformativa = new(),
+        _cargaReapertura = new();
+    private int _pestana;
+    private int _anio, _mes, _anioDeLista;
+    private List<CierreEnListaDto> _cierres = [];
+    private Guid? _ultimoVigente;
+    private PreparacionDelCierreDto? _preparacion;
+    private ClaveDeOperacion _claveDeOrden = new(), _claveDeReapertura = new();
+    private string? _motivoDeOrden, _motivoDeReapertura, _puntoDeActa, _errorDeReapertura;
+    private Guid? _corridaId;
+    private CorridaDto? _corrida;
+    private CierreEnListaDto? _aReabrir;
+    private bool _mostrarReapertura;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private string _categoria = string.Empty, _causa = string.Empty;
+    private List<CalificacionInformativaDto> _informativas = [];
+    private long _totalInformativas;
+    private int _paginaInformativa = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Por defecto, el mes anterior: el que se cierra al empezar el siguiente.
+        var anterior = DateTime.Today.AddMonths(-1);
+        (_anio, _mes, _anioDeLista) = (anterior.Year, anterior.Month, DateTime.Today.Year);
+        await CargarAsync();
+        if (await Permisos.TieneAsync("Lending.MonthlyClose.Execute")) await PrepararAsync();
+    }
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        if (pestana == 1 && _informativas.Count == 0) await CargarInformativasAsync(1);
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Riesgo.CierresAsync(_anioDeLista);
+        if (!r.IsSuccess) { _cierres = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los cierres."); return; }
+        _cierres = [.. r.Value ?? []];
+        // El último cierre mensual vigente es el único que se reabre (la API lo vuelve a comprobar).
+        var todos = await Riesgo.CierresAsync(null, "Monthly");
+        _ultimoVigente = todos.IsSuccess
+            ? (todos.Value ?? []).Where(c => c.Status == "Closed").OrderByDescending(c => c.CloseDate).ThenByDescending(c => c.Version).FirstOrDefault()?.PublicId
+            : null;
+    }
+
+    private async Task PrepararAsync()
+    {
+        using var carga = _cargaPreparacion.Iniciar();
+        var r = await Riesgo.PreparacionAsync(_anio, _mes);
+        _preparacion = r.IsSuccess ? r.Value : null;
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron revisar los requisitos.");
+    }
+
+    private async Task OrdenarAsync()
+    {
+        if (_preparacion is not { } p) return;
+        using var carga = _cargaOrden.Iniciar();
+        var r = await Riesgo.OrdenarCierreAsync(p.Year, p.Month, string.IsNullOrWhiteSpace(_motivoDeOrden) ? null : _motivoDeOrden.Trim(), _claveDeOrden);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            var enCurso = r.Dato<Guid?>("processRunPublicId");
+            if (enCurso is { } corrida) { _corridaId = corrida; await SeguirCorridaAsync(); }
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo ordenar el cierre.");
+            await PrepararAsync();
+            return;
+        }
+        _claveDeOrden = new ClaveDeOperacion();
+        _corridaId = r.Value.ProcessRunPublicId;
+        await Notification.SuccessAsync($"Cierre de {TextosDeRiesgo.Mes(p.Month)} {p.Year} ordenado: lo corre el proceso de Cartera.");
+        await SeguirCorridaAsync();
+        await PrepararAsync();
+    }
+
+    private async Task SeguirCorridaAsync()
+    {
+        if (_corridaId is not { } id) return;
+        using var carga = _cargaCorrida.Iniciar();
+        var r = await Corridas.CorridaAsync(id);
+        _corrida = r.IsSuccess ? r.Value : null;
+        if (_corrida?.Run.Status is "Completed" or "CompletedWithErrors") await CargarAsync();
+    }
+
+    private void AbrirReapertura(CierreEnListaDto cierre)
+    {
+        _aReabrir = cierre;
+        _motivoDeReapertura = _puntoDeActa = _errorDeReapertura = null;
+        _claveDeReapertura = new ClaveDeOperacion();
+        _mostrarReapertura = true;
+    }
+
+    private async Task ReabrirAsync()
+    {
+        if (_aReabrir is not { } c || string.IsNullOrWhiteSpace(_motivoDeReapertura)) return;
+        Guid? punto = null;
+        if (!string.IsNullOrWhiteSpace(_puntoDeActa))
+        {
+            if (!Guid.TryParse(_puntoDeActa.Trim(), out var g)) { _errorDeReapertura = "El punto del acta no es un identificador válido."; return; }
+            punto = g;
+        }
+        using var carga = _cargaReapertura.Iniciar();
+        _errorDeReapertura = null;
+        var r = await Riesgo.ReabrirAsync(c.PublicId, _motivoDeReapertura.Trim(), punto, _claveDeReapertura);
+        if (!r.IsSuccess || r.Value is null) { _errorDeReapertura = r.ErrorMessage ?? "No se pudo reabrir el cierre."; return; }
+        _mostrarReapertura = false;
+        _corridaId = r.Value.ProcessRunPublicId;
+        await Notification.SuccessAsync("Reapertura ordenada: el proceso de Cartera emite los reversos.");
+        await SeguirCorridaAsync();
+    }
+
+    private async Task CargarInformativasAsync(int pagina)
+    {
+        using var carga = _cargaInformativa.Iniciar();
+        var r = await Riesgo.InformativasAsync(_fecha, Vacio(_categoria), Vacio(_causa), pagina: pagina, tamano: TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _informativas = [];
+            _totalInformativas = 0;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calificar.");
+            return;
+        }
+        _paginaInformativa = pagina;
+        _informativas = [.. r.Value.Items];
+        _totalInformativas = r.Value.TotalCount;
+    }
+
+    private static string Marcas(MarcasDelCierreDto m)
+    {
+        var marcas = new List<string>();
+        if (m.ObligatoryModelUnavailable) marcas.Add("Modelo obligatorio no disponible");
+        if (m.UnvalidatedParameters) marcas.Add("Tablas pendientes de validar");
+        if (m.IncompleteHistory) marcas.Add("Historial incompleto");
+        return marcas.Count == 0 ? "—" : string.Join(" · ", marcas);
+    }
+
+    private static string? Vacio(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static DateOnly? LeerFecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+}

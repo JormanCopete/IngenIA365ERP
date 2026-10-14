@@ -61,6 +61,8 @@ public class ReopenMonthlyCloseCommandHandlerTests : IAsyncLifetime
 
         var reversos = await _c.Db.AccountingFactParts.AsNoTracking().Where(p => p.MonthlyCloseReopeningId == reapertura.Id).OrderBy(p => p.Id).ToListAsync();
         reversos.Select(p => p.ReversedPartId).Should().Equal(partesDelCierre.Select(p => (int?)p.Id));
+        reversos.Select(p => (p.ProcessRunId, p.BatchNumber, p.BranchId, p.FactType)).Should().OnlyHaveUniqueItems(
+            "UK_LND_AccountingFactParts_Batch: cada reverso es su propia parte de la corrida (la base en memoria no lo vigila; bloque 12C)");
         reversos.Should().OnlyContain(p => p.SourceKind == AccountingFactPartSource.CloseReopening && p.FactType == ReversoDeCierreV1.Type
             && p.OriginEventKey == "Reopen:1" && p.AccountingDate == CierreDePrueba.FinDeDiciembre);
 

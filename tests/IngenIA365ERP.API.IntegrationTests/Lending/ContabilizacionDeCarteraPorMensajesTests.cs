@@ -37,9 +37,17 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// Lo que esta prueba no recorre y cubren las de Application (anotado en tasks.md, T0632): el ajuste por fecha valor que entra en el lote del día
 /// siguiente (C09, <c>RunDailyAccrualCommandHandlerTests</c>), la dimensión contable que cambia cuando la persona deja de ser empleada (C8,
 /// <c>ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite</c>), la reclasificación de la cuenta por cobrar de Comercial (US7-6, caso dorado 03/04) y
-/// <c>Accounting.Period.LendingPending</c> (en una cooperativa activada cuya Cartera no cerró el mes el cierre contable responde antes
-/// <c>LendingNotClosed</c>, que es lo que se afirma aquí; el aviso lo fija <c>ClosePeriodConCarteraTests</c>). Los hechos <c>INV</c> del mismo host
+/// <c>Accounting.Period.LendingPending</c> (el aviso lo fija <c>ClosePeriodConCarteraTests</c>). Los hechos <c>INV</c> del mismo host
 /// los recorren las colecciones «Inventario e2e» y «Ventas». (nuevo)
+///
+/// <para>
+/// Fase 12 (T0687, US9, US7-4): hasta la fase 11 terminaba en <c>Accounting.Period.LendingNotClosed</c>; ahora, con los cierres de Cartera, sigue:
+/// una calificación por análisis lleva el crédito a C, el cierre del mes deja el lote <c>LendingMonthlyClose</c> con un <c>PV</c> que contabiliza la
+/// reclasificación A→C de capital e interés y el deterioro en delta frente al base, la conciliación al último día da cero, la reapertura deja un
+/// <c>PV</c> nuevo con los reversos en su propio lote, la versión 2 vuelve a cuadrar y Contabilidad cierra el mes. La reclasificación del
+/// deterioro y del suspenso (que piden un deterioro ya reconocido y más de 60 días de mora) la fijan <c>ExecuteMonthlyCloseCommandHandlerTests</c>
+/// y los casos dorados.
+/// </para>
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiFixture fx)
@@ -196,10 +204,76 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
         conciliacion.GetProperty("unexplainedTotal").GetDecimal().Should().Be(0m);
 
         // ------------------------------------- el mes no se cierra mientras Cartera, activada, no lo cierre (T57) --
-        var cierre = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/accounting/periods/{hoy.Year}/{hoy.Month}/close",
-            new { acknowledgeLendingPending = true, acknowledgeLendingLoad = true });
-        cierre.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, await cierre.Content.ReadAsStringAsync());
-        (await CarteraE2E.CodigoDeErrorAsync(cierre)).Should().Be("Accounting.Period.LendingNotClosed", "el bloqueo no se reconoce");
+        await CierreE2E.CerrarContabilidadAsync(http, admin, hoy.Year, hoy.Month, "Accounting.Period.LendingNotClosed");
+
+        // ------------------------------------------ el cierre de Cartera del mes: el PV con la reclasificación (T0687) --
+        // Fase 12 (US9, US7-4): una calificación por análisis lleva el crédito de A a C; el cierre reclasifica sus saldos y calcula su deterioro
+        // en delta frente al base, por partes que forman un lote LendingMonthlyClose con un comprobante PV.
+        // La matriz del ensayo da la misma cuenta a todas las categorías (la reclasificación quedaría «sin comprobante, mismas cuentas»): el capital
+        // de consumo en C de la línea ORIGEN va a una auxiliar propia, por una regla que gana por línea.
+        await ContabilidadE2E.CrearCuentaAsync(http, admin, "14410590", "Capital de consumo en C (e2e)", "144105", ["CNT", "CAR"]);
+        var capitalEnC = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, Reglas, new
+        {
+            operation = "*", role = "Capital", dimensions = new { modalityCode = "CONSUMO", riskCategory = "C", creditLineCode = "ORIGEN" },
+            accountPublicId = await ContabilidadE2E.CuentaAsync(http, admin, "14410590"), validFrom = new DateOnly(hoy.Year, hoy.Month, 1),
+            reason = "Capital de consumo en C en su propia cuenta (e2e)",
+        });
+        capitalEnC.StatusCode.Should().Be(HttpStatusCode.Created, await capitalEnC.Content.ReadAsStringAsync());
+        var analisis = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{CierreE2E.Riesgo}/analysis-ratings", new
+        {
+            loanPublicId = credito, category = "C", reason = "Reestructuración pedida por el deudor (e2e)",
+        });
+        analisis.StatusCode.Should().Be(HttpStatusCode.Created, await analisis.Content.ReadAsStringAsync());
+        var (anio, mes) = (hoy.Year, hoy.Month);
+        var finDelMes = new DateOnly(anio, mes, DateTime.DaysInMonth(anio, mes));
+        var diaDeCierre = finDelMes.AddDays(1) > diaDePago ? finDelMes.AddDays(1) : diaDePago;
+        var jefe = esc.Usuarios.Jefe.Token;
+        using (RelojEn(fx, diaDeCierre))
+        {
+            await CicloDeHoyAsync(fx, http, jefe, tenant);
+            await despachador.PasadasAsync(tenant, 3);
+            await CierreE2E.CorrerAsync(fx, http, jefe, tenant, await CierreE2E.OrdenarAsync(http, jefe, anio, mes));
+            var v1 = await CierreE2E.MensualAsync(http, jefe, anio, mes, version: 1);
+
+            var reclasificada = await DespacharHastaResolverAsync(despachador, tenant, http, admin, credito, "CarteraReclasificadaPorCalificacion", diaDeCierre);
+            Estado(reclasificada).Should().Be("Processed", reclasificada.ToString());
+            var recibosDelCierre = await CarteraE2E.GetAsync(http, admin, $"/api/accounting/lending/postings?message={reclasificada.GetProperty("messagePublicId").GetGuid()}");
+            reclasificada.GetProperty("voucher").GetProperty("voucherTypeCode").GetString().Should().Be("PV", $"{reclasificada} / {recibosDelCierre}");
+            reclasificada.GetProperty("accountingDate").GetString().Should().Be(finDelMes.ToString("yyyy-MM-dd"), "los hechos del cierre van al último día del mes");
+            var parte = await CarteraE2E.GetAsync(http, admin,
+                $"/api/lending/accounting/fact-parts/{reclasificada.GetProperty("part").GetProperty("partPublicId").GetGuid()}?pageSize=200");
+            var porConcepto = parte.GetProperty("loans").GetProperty("items").EnumerateArray()
+                .Single(l => l.GetProperty("loanPublicId").GetGuid() == credito).GetProperty("byConcept");
+            porConcepto.EnumerateObject().Select(c => c.Name).Should().Contain(["Principal", "CurrentInterest"],
+                "la reclasificación A→C mueve el capital y el interés del crédito (US7-4)");
+            var deterioro = await DespacharHastaResolverAsync(despachador, tenant, http, admin, credito, "DeterioroCalculado", diaDeCierre);
+            Estado(deterioro).Should().Be("Processed", deterioro.ToString());
+            deterioro.GetProperty("voucher").GetProperty("voucherTypeCode").GetString().Should().Be("PV");
+            deterioro.GetProperty("totals").GetDecimal().Should().BeGreaterThan(0m, "el deterioro en C se reconoce en delta frente al base (nada migrado)");
+            var lotesDelCierre = (await CarteraE2E.GetAsync(http, admin, "/api/accounting/lending/batches?trigger=LendingMonthlyClose&pageSize=50"))
+                .GetProperty("items").EnumerateArray().ToList();
+            lotesDelCierre.Should().NotBeEmpty("el cierre forma su lote LendingMonthlyClose").And.OnlyContain(l => l.GetProperty("trigger").GetInt32() == 8);
+            await ConciliacionEnCeroAsync(http, admin, v1, "al último día del mes cerrado (SC-006)");
+
+            // --------------------------------------- la reapertura: un PV nuevo con los reversos; Version + 1 vuelve a cuadrar --
+            await CierreE2E.CorrerAsync(fx, http, jefe, tenant, await CierreE2E.ReabrirAsync(http, admin, v1, "Análisis corregido (e2e)"));
+            var reverso = await DespacharHastaResolverAsync(despachador, tenant, http, admin, credito, "ReversoDeCierre", diaDeCierre);
+            Estado(reverso).Should().Be("Processed", reverso.ToString());
+            reverso.GetProperty("voucher").GetProperty("voucherTypeCode").GetString().Should().Be("PV");
+            (await ComprobanteDelHechoAsync(http, admin, reverso.GetProperty("messagePublicId").GetGuid()))
+                .Should().NotBe(await ComprobanteDelHechoAsync(http, admin, reclasificada.GetProperty("messagePublicId").GetGuid()),
+                    "la reapertura deja su propio comprobante; el del cierre queda intacto");
+            (await CarteraE2E.GetAsync(http, admin, "/api/accounting/lending/batches?trigger=LendingMonthlyClose&pageSize=50"))
+                .GetProperty("items").GetArrayLength().Should().BeGreaterThan(lotesDelCierre.Count, "la reapertura crea su propio lote");
+            await CierreE2E.CorrerAsync(fx, http, jefe, tenant, await CierreE2E.OrdenarAsync(http, jefe, anio, mes));
+            var v2 = await CierreE2E.MensualAsync(http, jefe, anio, mes, version: 2);
+            await despachador.PasadasAsync(tenant, 3);
+            await DespacharHastaResolverAsync(despachador, tenant, http, admin, credito, "CarteraReclasificadaPorCalificacion", diaDeCierre);
+            await ConciliacionEnCeroAsync(http, admin, v2, "tras volver a cerrar con la versión 2");
+
+            // ------------------------------------------ con el cierre de Cartera vigente, Contabilidad cierra el mes (T57) --
+            await CierreE2E.CerrarContabilidadAsync(http, admin, anio, mes, codigoEsperado: null);
+        }
 
         // ---------------------------------------------------------------------------------- el balance de prueba cuadra --
         var descuadre = await EnLaBaseAsync(fx, esc, db => db.JournalEntries.AsNoTracking().Where(j => j.IsPosted && !j.IsDeleted)
@@ -207,6 +281,15 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
         descuadre.Should().Be(0m, "ElBalanceDePruebaCuadra");
         var deCartera = await EnLaBaseAsync(fx, esc, db => db.AccountingDocuments.AsNoTracking().CountAsync(d => d.OriginModule == "CAR" && !d.IsDeleted));
         deCartera.Should().BeGreaterThanOrEqualTo(5, "DS, CA de dos días, RC y su reverso");
+    }
+
+    /// <summary>El cuadre del cierre con Contabilidad (<c>GET /risk/monthly-closes/{id}/reconciliation</c>): toda diferencia en cero, nada sin explicar.</summary>
+    private static async Task ConciliacionEnCeroAsync(HttpClient http, string token, Guid cierre, string cuando)
+    {
+        var cuadre = await CarteraE2E.GetAsync(http, token, $"{CierreE2E.Cierres}/{cierre}/reconciliation");
+        cuadre.GetProperty("sets").EnumerateArray().Should().NotBeEmpty();
+        cuadre.GetProperty("sets").EnumerateArray().Should().OnlyContain(c => c.GetProperty("difference").GetDecimal() == 0m, $"{cuando}: {cuadre}");
+        cuadre.GetProperty("unexplainedTotal").GetDecimal().Should().Be(0m, cuando);
     }
 
     private static Task<JsonElement> ParametroAsync(HttpClient http, string token, string clave, string valor, DateOnly desde) =>

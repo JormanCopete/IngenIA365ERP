@@ -37,6 +37,12 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// pasadas del despachador que corren <c>PostLendingSummaryGroupCommand</c>— y las líneas del comprobante resumido (~20.000 esperadas con 50.000
 /// créditos; la cuenta que exige tercero lleva una por crédito). Sólo se informa: no hay umbral fijado para el lote.
 /// </para>
+///
+/// <para>
+/// US9 (T0688): sobre la misma cartera, el cierre mensual del mes —causado hasta su último día— conducido tanda por tanda con
+/// <c>ExecuteMonthlyCloseCommand</c>: deja medidos el tiempo de cada tanda de líneas, el de la última (la transacción final con las partes y los
+/// mensajes), las líneas y partes del cierre y las líneas del <c>PV</c> resumido de su lote <c>LendingMonthlyClose</c>. Medido, sin umbral.
+/// </para>
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx, ITestOutputHelper salida)
@@ -140,6 +146,62 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         duplicados.Should().Be(0, "ningún día causado dos veces (SC-020)");
         var alDia = await EnLaBaseAsync(fx, tenant, db => db.LoanControls.AsNoTracking().CountAsync(c => c.LastAccruedDate == h.AddDays(3)));
         alDia.Should().Be(cuantos);
+
+        // US9 (T0688): el cierre mensual sobre la misma cartera, tanda por tanda como lo conduce el procesador: tiempo de cada tanda de líneas y de
+        // la transacción final, partes y mensajes, y las líneas del PV resumido del lote LendingMonthlyClose. Medido, sin umbral (quickstart §1.8).
+        var finDelMes = new DateOnly(h.Year, h.Month, DateTime.DaysInMonth(h.Year, h.Month));
+        var diaDeCierre = finDelMes.AddDays(1) > h.AddDays(3) ? finDelMes.AddDays(1) : h.AddDays(3);
+        jefe = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Jefe);
+        using (RelojEn(fx, diaDeCierre))
+        {
+            var puesta = Stopwatch.StartNew();
+            await CicloDeHoyAsync(fx, http, jefe, tenant);
+            salida.WriteLine($"Causación hasta el {diaDeCierre:yyyy-MM-dd} antes del cierre: {puesta.Elapsed.TotalSeconds:N0} s.");
+            jefe = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Jefe);
+            var cierre = await CierreE2E.OrdenarAsync(http, jefe, finDelMes.Year, finDelMes.Month);
+            var tiemposDelCierre = new List<double>();
+            var total = Stopwatch.StartNew();
+            for (var i = 0; i < 10_000; i++)
+            {
+                var tanda = Stopwatch.StartNew();
+                var avance = await CierreE2E.TandaDelCierreAsync(fx, tenant, cierre, tamano: 250);
+                tiemposDelCierre.Add(tanda.Elapsed.TotalMilliseconds);
+                if (avance == Application.Lending.Processes.AvanceDeCorrida.Terminada) break;
+            }
+            var final = tiemposDelCierre[^1];
+            var lineasDelCierre = tiemposDelCierre.Take(tiemposDelCierre.Count - 1).ToList();
+            salida.WriteLine($"Cierre mensual de {cuantos:N0} créditos: {total.Elapsed.TotalSeconds:N0} s en {tiemposDelCierre.Count:N0} tandas; " +
+                             $"tanda de líneas promedio {(lineasDelCierre.Count == 0 ? 0 : lineasDelCierre.Average()):N0} ms (p95 {P95(lineasDelCierre):N0} ms); " +
+                             $"última tanda con la transacción final {final:N0} ms.");
+            var delCierre = await EnLaBaseAsync(fx, tenant, async db =>
+            {
+                var run = await db.LendingProcessRuns.AsNoTracking().SingleAsync(r => r.PublicId == cierre);
+                var mensual = await db.MonthlyCloses.AsNoTracking().SingleAsync(c => c.ProcessRunId == run.Id);
+                var lineas = await db.MonthlyCloseLoans.AsNoTracking().CountAsync(l => l.ProcessRunId == run.Id);
+                var partes = await db.AccountingFactParts.AsNoTracking().Where(p => p.MonthlyCloseId == mensual.Id).ToListAsync();
+                return (run.Status, Lineas: lineas, Partes: partes.Count, Mensajes: partes.Sum(p => p.MessageCount), CreditosEnPartes: partes.Sum(p => p.LoanCount));
+            });
+            salida.WriteLine($"Cierre {delCierre.Status}: {delCierre.Lineas:N0} líneas; {delCierre.Partes:N0} partes con {delCierre.Mensajes:N0} mensajes y " +
+                             $"{delCierre.CreditosEnPartes:N0} créditos.");
+            delCierre.Status.Should().Be(Domain.Enums.Lending.LendingProcessRunStatus.Completed);
+            delCierre.Lineas.Should().Be(cuantos, "una línea por crédito vivo al cierre");
+
+            var loteDelCierre = Stopwatch.StartNew();
+            await despachador.PasadasAsync(tenant, 5);
+            var tiempoDelLoteDelCierre = loteDelCierre.Elapsed;
+            var pv = await EnLaBaseAsync(fx, tenant, async db =>
+            {
+                var lote = await db.IntegrationBatches.AsNoTracking()
+                    .Where(b => b.Trigger == Domain.Enums.Integration.BatchTrigger.LendingMonthlyClose).OrderByDescending(b => b.Id).FirstOrDefaultAsync();
+                if (lote is null) return (Estado: "sin lote", Comprobantes: 0, Lineas: 0);
+                var documentos = await db.LendingPostings.AsNoTracking().Where(p => p.BatchPublicId == lote.PublicId && p.AccountingDocumentId != null)
+                    .Select(p => p.AccountingDocumentId!.Value).Distinct().ToListAsync();
+                var lineas = await db.JournalEntries.AsNoTracking().CountAsync(j => documentos.Contains(j.DocumentId));
+                return (Estado: lote.Status.ToString(), Comprobantes: documentos.Count, Lineas: lineas);
+            });
+            salida.WriteLine($"Lote LendingMonthlyClose ({pv.Estado}): {tiempoDelLoteDelCierre.TotalSeconds:N0} s; {pv.Comprobantes:N0} comprobante(s) PV, " +
+                             $"{pv.Lineas:N0} líneas.");
+        }
     }
 
     /// <summary>Consulta sin parar, hasta que termine la pasada, el estado de cuenta y la lista de la otra cooperativa; anota cada tiempo.</summary>

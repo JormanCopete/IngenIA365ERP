@@ -166,6 +166,34 @@ public class ExecuteMonthlyCloseCommandHandlerTests : IAsyncLifetime
         det.Lines[0].Dimensions.RiskCategory.Should().Be("A", "el delta va en la categoría nueva (§11.3)");
     }
 
+    /// <summary>
+    /// Bloque 12C (defecto que destapó la e2e del cierre): un crédito sin línea en el cierre anterior —nació después del base— llevó en sus hechos
+    /// la categoría de crédito nuevo (A). Si el cierre lo deja en C (aquí, por análisis), sus saldos se reclasifican de A a C; antes no se emitía
+    /// nada y sus saldos quedaban en las cuentas de A.
+    /// </summary>
+    [Fact]
+    public async Task Un_credito_sin_linea_anterior_que_cambia_de_letra_reclasifica_desde_la_categoria_con_que_se_emitieron_sus_hechos()
+    {
+        _c.G.ActuarComo(_c.Jefe);
+        var analisis = await new SetAnalysisRatingCommandHandler(_c.Db, _c.Informativa(), _c.G.Alcance, _c.G.Auditoria, _c.G.Actor, _c.G.Reloj)
+            .Handle(new SetAnalysisRatingCommand(_c.Credito.PublicId, RatingCategory.C, null, "Deudor reportado en mora con otra entidad") { OperationKey = Guid.NewGuid() },
+                default);
+        analisis.IsSuccess.Should().BeTrue(analisis.IsFailure ? analisis.Error.Message : string.Empty);
+
+        var cierre = await _c.CerrarAsync(2026, 12);
+
+        var linea = await _c.Db.MonthlyCloseLoans.AsNoTracking().SingleAsync(l => l.ProcessRunId == cierre.ProcessRunId);
+        (linea.AccountingRating, linea.PreviousAccountingRating, linea.RatingCause).Should().Be((RatingCategory.C, (RatingCategory?)null, RatingCause.Analysis));
+        var mensaje = await _c.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == CarteraReclasificadaPorCalificacionV1.Type);
+        var rcl = JsonSerializer.Deserialize<CarteraReclasificadaPorCalificacionV1>(mensaje.PayloadJson!, OpcionesDeMensajes.Opciones)!;
+        var l = rcl.Lines.Should().ContainSingle().Subject;
+        (l.PreviousDimensions!.RiskCategory, l.Dimensions.RiskCategory).Should().Be(("A", "C"), "sus hechos salieron con la categoría de crédito nuevo");
+        l.Amounts.Should().Contain(a => a.Concept == "Principal" && a.Amount == 3_000_000m && a.ReasonCode == null);
+        l.Amounts.Should().NotContain(a => a.ReasonCode == PartesDelCierre.Individual, "sin línea anterior no hay deterioro reconocido que mover");
+        (await _c.Db.AccountingFactParts.AsNoTracking().Where(p => p.MonthlyCloseId == cierre.Id).OrderBy(p => p.Id).Select(p => p.FactType).FirstAsync())
+            .Should().Be(CarteraReclasificadaPorCalificacionV1.Type, "la reclasificación va antes que el deterioro (T48)");
+    }
+
     [Fact]
     public async Task Sin_cambio_de_letra_no_hay_reclasificacion_y_el_deterioro_igual_al_base_no_se_reconoce_otra_vez()
     {

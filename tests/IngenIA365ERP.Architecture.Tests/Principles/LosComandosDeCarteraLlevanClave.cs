@@ -55,6 +55,8 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PaymentsEndpoints.cs",
         // US6 (bloque 10B, T0577, T0597): marcar no reprocesable un recibo (y la confirmación por excepción, en LoansEndpoints).
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/InboundMessagesEndpoints.cs",
+        // US9 (bloque 12C, T0712): la política SARC, la calificación por análisis y la orden y la reapertura del cierre mensual.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs",
     ];
 
     /// <summary>

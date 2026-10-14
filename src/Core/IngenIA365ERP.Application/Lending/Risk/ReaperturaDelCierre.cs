@@ -195,7 +195,11 @@ public sealed class ReaperturaDelCierre(
                 PublicId = partePublicId,
                 SourceKind = AccountingFactPartSource.CloseReopening,
                 ProcessRunId = corrida.Id,
-                BatchNumber = original.BatchNumber,
+                // Una parte por parte revertida y todas del mismo tipo (ReversoDeCierre): la tanda de la fila es su número de parte en la
+                // corrida, porque el único (corrida, tanda, sucursal, tipo) no admite dos reversos de la misma tanda —la reclasificación y el
+                // deterioro de una tanda—. La tanda original viaja en el contenido (BatchNumber) y la parte original en ReversedPartId. Hasta
+                // el bloque 12C llevaba la tanda original y la reapertura fallaba al guardar en las dos bases (las pruebas en memoria no lo veían).
+                BatchNumber = corrida.PartCount,
                 MonthlyCloseReopeningId = reapertura.Id,
                 ReversedPartId = original.Id,
                 CloseVersion = version,

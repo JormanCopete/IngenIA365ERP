@@ -156,6 +156,10 @@
             <PermissionGate Required="Lending.Reconciliation.View" AnyOf="@(new[] { "Lending.Messages.Read" })">
                 <NavLink href="/cartera/conciliacion-contable" class="nav-subitem">Conciliación contable</NavLink>
             </PermissionGate>
+            @* US9 (T0715): los cierres del mes —calificación, deterioro, reapertura— y la calificación informativa. *@
+            <PermissionGate Required="Lending.Ratings.Read">
+                <NavLink href="/cartera/cierres" class="nav-subitem">Cierres del mes</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">
                 <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>
