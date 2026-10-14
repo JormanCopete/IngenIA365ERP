@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Activation;
@@ -497,6 +498,45 @@ public sealed class ActivateLendingCommandHandlerTests : IAsyncLifetime
         (await Db.DebtorBlocks.AsNoTracking().SingleAsync(b => b.Reason == DebtorBlockReason.LimitRevalidation)).PersonId.Should().Be(_a.O.Ana.Id);
         _a.O.L.Levantadas.Should().Contain(a => a.TypeCode == TiposDeAlerta.CupoPorRevalidar);
         (await Db.LendingActivations.AsNoTracking().SingleAsync()).CreditLimitsToRevalidate.Should().Be(1);
+    }
+
+    /// <summary>
+    /// US8 (bloque 13C): la activación deja el evento <c>Lending.Activation.Registered</c> del módulo <c>Lending</c> sobre la activación, con la carga,
+    /// el corte, la fecha, la versión del cuadre y sus huellas, el ambiente, los requisitos evaluados y lo que nació; una negativa no deja evento.
+    /// </summary>
+    [Fact]
+    public async Task La_activacion_deja_su_evento_de_auditoria_con_lo_que_nacio()
+    {
+        // Los eventos Lending.* van por COR_AuditOutbox, sellados (AuditoriaEncadenada): se leen de la bandeja de la base de la prueba.
+        async Task<List<AuditEventDocument>> EventosAsync() =>
+            [.. (await _a.G.Db.AuditOutbox.AsNoTracking().ToListAsync()).Select(f => AuditoriaEncadenada.LeerCarga(f.PayloadJson!))
+                .Where(e => e.Action == AuditEventTypes.LendingActivationRegistered)];
+
+        await _a.AceptarTodoAsync();
+        (await _a.ActivarAsync(_a.Orden(_a.Acta(), fecha: Corte.AddDays(2)))).Error.Code.Should().Be("Lending.Activation.CutoffInvalid");
+        (await EventosAsync()).Should().BeEmpty("una activación negada no se audita como registrada");
+
+        var r = await _a.ActivarAsync(_a.Orden(_a.Acta()));
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+
+        var evento = (await EventosAsync()).Should().ContainSingle().Subject;
+        evento.Action.Should().Be("Lending.Activation.Registered");
+        evento.Module.Should().Be("Lending");
+        evento.EntityType.Should().Be("LendingActivation");
+        evento.EntityPublicId.Should().Be(r.Value.ActivationPublicId.ToString());
+        var activacion = await Db.LendingActivations.AsNoTracking().SingleAsync();
+        using var json = JsonDocument.Parse(evento.NewValuesJson!);
+        var detalle = json.RootElement;
+        detalle.GetProperty("load").GetGuid().Should().Be(_a.Carga.PublicId);
+        detalle.GetProperty("cutoff").GetString().Should().Be(Corte.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+        detalle.GetProperty("activationDate").GetString().Should().Be(Corte.AddDays(1).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+        detalle.GetProperty("checkVersion").GetInt32().Should().Be(activacion.CheckVersion);
+        detalle.GetProperty("balanceCheckSha256").GetString().Should().Be(activacion.BalanceCheckSha256);
+        detalle.GetProperty("salesReconciliationSha256").GetString().Should().Be(activacion.SalesReconciliationSha256);
+        detalle.GetProperty("isProduction").GetBoolean().Should().BeFalse();
+        detalle.GetProperty("requirements").GetArrayLength().Should().BeGreaterThan(0);
+        detalle.GetProperty("provisionalCollections").GetInt32().Should().Be(0);
+        detalle.GetProperty("counts").ValueKind.Should().Be(JsonValueKind.Object);
     }
 
     private async Task<Result<LendingActivationDto>> ConClaveAsync(ActivateLendingCommand orden)

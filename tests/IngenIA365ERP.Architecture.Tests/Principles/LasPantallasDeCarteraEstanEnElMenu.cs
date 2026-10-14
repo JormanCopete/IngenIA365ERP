@@ -54,6 +54,9 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Contabilidad/IndicadoresRegulatorios.razor", "/contabilidad/indicadores-regulatorios", "Accounting.RegulatoryIndicators.View"),
         // Fase 12, US9 (T0714, T0715): los cierres de Cartera con la calificación informativa (a ella remite Accounting.Period.LendingNotClosed).
         ("Pages/Cartera/Cierres.razor", "/cartera/cierres", "Lending.Ratings.Read"),
+        // Fase 13, US8 (T0759–T0761): la puesta en marcha —la carga de migración y la activación—.
+        ("Pages/Cartera/Migracion.razor", "/cartera/migracion", "Lending.Migration.Load"),
+        ("Pages/Cartera/Activacion.razor", "/cartera/activacion", "Lending.Activation.Execute"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>

@@ -113,6 +113,7 @@ namespace IngenIA365ERP.App
             // Feature 013, US7 (T0663): el lado contable de la integración con Cartera y, desde Cartera, hechos, conciliación y emitidos.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableDeCarteraClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ConciliacionContableClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CarteraClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RiesgoClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();

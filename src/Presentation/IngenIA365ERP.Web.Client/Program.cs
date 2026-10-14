@@ -147,6 +147,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.Integracio
 // y, desde Cartera, los hechos contables, la conciliación y la bandeja de mensajes emitidos.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.IntegracionContableDeCarteraClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ConciliacionContableClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CarteraClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RiesgoClient>();
 // Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient>();

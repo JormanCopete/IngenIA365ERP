@@ -327,7 +327,8 @@ internal sealed class ActivacionConCarteraDePrueba : IDisposable
         D.Numerador(),
         D.Registro(),
         conRevalidacion ? new RevalidacionDeCuposMigrados(Db, new CargaVigenteDeCartera(Db), O.Revalidacion(), D.Alertas, G.Actor, G.Reloj) : null,
-        D.Alertas);
+        D.Alertas,
+        G.Auditoria);
 
     public ActivateLendingCommand Orden(Guid punto, DateOnly? fecha = null, Guid? cobros = null) =>
         new(Carga.PublicId, fecha ?? Activacion, cobros, punto, AcknowledgeWarnings: true, "Arranque de Cartera con la cartera migrada",

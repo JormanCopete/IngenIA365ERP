@@ -1,0 +1,294 @@
+@page "/cartera/activacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject CarteraClient Cartera
+@inject GobiernoDeCarteraClient Gobierno
+@inject NominaClient Nomina
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Activación de Cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US8 (T0760; quickstart §3.4; contracts/api.md §19.3; C60–C62): la activación de Cartera con Lending.Activation.Execute. La lista de
+   requisitos de ActivationReadinessDto con su estado y quién arregla cada uno (con enlace a su pantalla); los avisos que no bloquean; el de
+   DESC_CARTERA lo pregunta la pantalla a Nómina (GET /api/payroll/concept-definitions/DESC_CARTERA/accounts: el comando no lee PAY_) y se reconoce
+   con la casilla; lo que Comercial ajusta el mismo día; la revisión de los cobros provisionales (deja el adjunto que se pasa a la activación); el
+   punto del acta; la fecha propuesta —el día siguiente al corte, no editable— y el plazo; activar con confirmación (todo o nada). Después, el
+   resumen de lo nacido. *@
+<PermissionGate Required="Lending.Activation.Execute" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Activación de Cartera</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Revisando los requisitos…">
+        @if (_estado is { } e)
+        {
+            @if (e.ActivationDate is { } activada)
+            {
+                <p class="aviso aviso-ok">Cartera está activada desde el @activada.ToString("dd/MM/yyyy").</p>
+            }
+            else
+            {
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-value">@(e.CurrentLoad is { } c ? $"{c.Number} · {TextosDeMigracion.EstadoDeCarga(c.Status)}" : "Sin carga")</span><span class="kpi-label">Carga vigente</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@(e.CurrentLoad?.CutoffDate.ToString("dd/MM/yyyy") ?? "—")</span><span class="kpi-label">Corte</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@(e.ExpectedActivationDate?.ToString("dd/MM/yyyy") ?? "—")</span><span class="kpi-label">Fecha de activación</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@(e.ActivationDeadline?.ToString("dd/MM/yyyy") ?? "—")</span><span class="kpi-label">Plazo</span></div>
+                </div>
+                @if (!e.IsProductionEnvironment)
+                {
+                    <p class="aviso aviso-info">Ambiente de prueba: lo que sólo se exige en producción aparece como «no bloquea».</p>
+                }
+                @if (e.ObligatoryModelUnavailable)
+                {
+                    <p class="aviso aviso-alerta">La cooperativa está obligada al modelo de pérdida esperada y no está disponible: en producción no se activa.</p>
+                }
+
+                <h4>Requisitos</h4>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Requisito</th><th>Estado</th><th>Detalle</th><th>Quién lo arregla</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in e.Requirements)
+                            {
+                                <tr class="@(r.Met ? "" : "texto-alerta")">
+                                    <td>@TextosDeMigracion.Requisito(r.Code)</td>
+                                    <td>@TextosDeMigracion.EstadoDeRequisito(r.Status)</td>
+                                    <td>@r.Detail</td>
+                                    <td>@QuienArregla(r.WhoFixes)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (e.Warnings is { Count: > 0 } avisos)
+                {
+                    <h4>Avisos que no bloquean</h4>
+                    <ul>
+                        @foreach (var w in avisos) { <li><b>@TextosDeMigracion.Requisito(w.Code)</b>: @w.Detail @QuienArregla(w.WhoFixes)</li> }
+                    </ul>
+                }
+
+                <div class="info-card">
+                    <h4>Lo que Comercial ajusta el mismo día</h4>
+                    <ul>
+                        <li>La fecha de habilitación de las ventas a crédito con Cartera = la fecha de activación.</li>
+                        <li>La política para las ventas sin respuesta de Cartera.</li>
+                        <li>Quién registra la cuenta por cobrar de las ventas a crédito desde ese día.</li>
+                    </ul>
+                </div>
+
+                <div class="info-card">
+                    <h4>Descuento de Cartera en Nómina</h4>
+                    <IndicadorDeCarga Cargando="@_cargaNomina.Activa" Compacto="true">
+                        <p class="texto-apoyo">@_textoNomina</p>
+                    </IndicadorDeCarga>
+                    <label class="campo-check"><input type="checkbox" @bind="_reconoceNomina" /> Conozco cómo queda el concepto de descuento de Cartera en Nómina</label>
+                </div>
+
+                @if (e.CurrentLoad is { Status: 2 } carga)
+                {
+                    <div class="info-card">
+                        <h4>Cobros provisionales</h4>
+                        <p class="texto-apoyo">Si después del corte se recaudaron ventas a crédito, súbalas aquí: se revisan contra las ventas y quedan guardadas para la activación, que las vuelve a validar. No se aplican hasta que exista la obligación de su venta.</p>
+                        <IndicadorDeCarga Cargando="@_cobros.Activa" Texto="Revisando el archivo…">
+                            <div class="toolbar">
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@DescargarPlantillaAsync">Plantilla vacía</SfButton>
+                                <InputFile OnChange="@ElegirAsync" accept=".xlsx,.csv,.txt" />
+                                <SfButton CssClass="e-outline" IconCss="e-icons e-check" Disabled="@(_contenido is null || _cobros.Activa)" OnClick="@RevisarCobrosAsync">Revisar</SfButton>
+                            </div>
+                            @if (_revision is { } rv)
+                            {
+                                <p class="aviso aviso-ok">Revisado: @rv.Rows cobro(s) por @rv.Total.ToString("N2"). Se usarán en la activación.</p>
+                            }
+                            @if (_erroresDeCobros.Count > 0)
+                            {
+                                <table class="data-grid">
+                                    <thead><tr><th class="numero">Fila</th><th>Columna</th><th>Error</th></tr></thead>
+                                    <tbody>@foreach (var x in _erroresDeCobros) { <tr><td class="numero">@x.Row</td><td>@x.Column</td><td>@x.Message</td></tr> }</tbody>
+                                </table>
+                            }
+                        </IndicadorDeCarga>
+                    </div>
+
+                    <div class="info-card">
+                        <h4>Activar</h4>
+                        <div class="form-grid">
+                            <label class="campo">Fecha de activación <input class="e-input" value="@(e.ExpectedActivationDate?.ToString("dd/MM/yyyy"))" readonly /></label>
+                            <label class="campo campo-ancho">Punto del acta de activación *
+                                <select class="e-input" @bind="_punto">
+                                    <option value="">Elija el punto…</option>
+                                    @foreach (var p in _puntos) { <option value="@p.SessionItemPublicId">@($"{p.Session.Body.Name} · acta {p.Session.Number} · {p.Title}")</option> }
+                                </select>
+                            </label>
+                            <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="400" /></label>
+                            <label class="campo-check"><input type="checkbox" @bind="_reconoceAvisos" /> Revisé los avisos que no bloquean</label>
+                        </div>
+                        @if (_puntos.Count == 0)
+                        {
+                            <p class="texto-tenue">No hay puntos de actas cerradas sobre la carga @carga.Number. El acta declara la activación y las diferencias aceptadas (Actas y órganos).</p>
+                        }
+                        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                        @if (_faltantes.Count > 0)
+                        {
+                            <ul>@foreach (var f in _faltantes) { <li>@TextosDeMigracion.Requisito(f.Code): @f.Detail @QuienArregla(f.WhoFixes)</li> }</ul>
+                        }
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(!PuedeActivar)" OnClick="@(() => _confirmar = true)">Activar Cartera…</SfButton>
+                        </div>
+                    </div>
+                }
+            }
+        }
+    </IndicadorDeCarga>
+
+    @if (_resultado is { } res)
+    {
+        <div class="info-card">
+            <h4>Lo que nació con la activación del @res.ActivationDate.ToString("dd/MM/yyyy")</h4>
+            <ul>
+                <li>@res.Loans.ToString("N0") crédito(s) con @res.OpeningTransactions.ToString("N0") saldo(s) inicial(es).</li>
+                <li>@res.CreditLimits.ToString("N0") cupo(s); @res.RevalidatedLimits.ToString("N0") por revalidar.</li>
+                <li>@res.NonDeductionsMarked.ToString("N0") no aplicado(s) marcados.</li>
+                <li>@res.ProvisionalCollectionsStored.ToString("N0") cobro(s) sin obligación pendiente(s): se aplican cuando Comercial reciba la obligación de su venta.</li>
+                <li>Cierre base: @(res.BaseClosePublicId is null ? "sin créditos" : "registrado").</li>
+            </ul>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_confirmar" Header="Activar Cartera" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_activando.Activa" Texto="Activando: nacen los créditos y lo del deudor…">
+                <p>La activación no se deshace. Nacen en una sola operación los créditos de la carga, sus saldos, el cierre base, los cupos y lo del deudor; si algo falla, no queda nada.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_activando.Activa" OnClick="@ActivarAsync">Activar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _confirmar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaNomina = new(), _cobros = new(), _activando = new();
+    private ClaveDeOperacion _claveDeActivacion = new(), _claveDeCobros = new();
+    private EstadoDeActivacionDto? _estado;
+    private List<PuntoDeActaCerradaDto> _puntos = [];
+    private List<RequisitoDeActivacionDto> _faltantes = [];
+    private List<ErrorDeImportacionCarteraDto> _erroresDeCobros = [];
+    private RevisionDeCobrosProvisionalesDto? _revision;
+    private CarteraActivadaDto? _resultado;
+    private string? _error, _motivo, _punto, _archivo;
+    private string _textoNomina = "";
+    private byte[]? _contenido;
+    private bool _reconoceNomina, _reconoceAvisos, _confirmar;
+
+    private bool PuedeActivar => _estado?.ExpectedActivationDate is not null && Guid.TryParse(_punto, out _) && !string.IsNullOrWhiteSpace(_motivo)
+                                 && _reconoceNomina && (_estado.Warnings is not { Count: > 0 } || _reconoceAvisos);
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        await CargarEstadoAsync();
+        await PreguntarANominaAsync();
+    }
+
+    private async Task CargarEstadoAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cartera.EstadoDeActivacionAsync();
+        if (!r.IsSuccess) { _estado = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el estado de la activación."); return; }
+        _estado = r.Value;
+        _puntos = [];
+        if (_estado?.CurrentLoad is { } vigente)
+        {
+            var puntos = await Gobierno.PuntosDeActasCerradasAsync("ActivationDifferences", sujetoId: vigente.PublicId);
+            _puntos = puntos.IsSuccess ? [.. puntos.Value?.Items ?? []] : [];
+        }
+    }
+
+    /// <summary>El aviso de DESC_CARTERA lo pregunta la pantalla a Nómina; el comando de la activación no lee las tablas de Nómina.</summary>
+    private async Task PreguntarANominaAsync()
+    {
+        using var carga = _cargaNomina.Iniciar();
+        var r = await Nomina.ObtenerCuentasDeConceptoAsync("DESC_CARTERA");
+        _textoNomina = !r.IsSuccess
+            ? "No se pudieron consultar las cuentas del concepto DESC_CARTERA en Nómina; confírmelas con quien parametriza la nómina."
+            : r.Value is { Count: > 0 } cuentas
+                ? $"El concepto DESC_CARTERA tiene {cuentas.Count} fila(s) de cuentas: contabiliza contra el puente de recaudos por nómina para Cartera."
+                : "El concepto DESC_CARTERA no tiene cuentas: la nómina que descuente cuotas de Cartera no podrá contabilizar ese descuento.";
+    }
+
+    private static string QuienArregla(Services.Contabilidad.QuienCorrigeDto? quien) =>
+        quien is null ? "" : $"{quien.Module}{(quien.Page is null ? "" : $" ({quien.Page})")}{(quien.Permission is null ? "" : $", permiso {quien.Permission}")}";
+
+    private async Task DescargarPlantillaAsync()
+    {
+        var r = await Cartera.DescargarPlantillaDeCobrosAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task ElegirAsync(InputFileChangeEventArgs e)
+    {
+        _revision = null;
+        _erroresDeCobros = [];
+        _claveDeCobros = new ClaveDeOperacion();
+        const long maximo = 16L * 1024 * 1024;
+        if (e.File.Size > maximo) { _contenido = null; await Notification.WarningAsync("El archivo pesa más de 16 MB."); return; }
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(maximo).CopyToAsync(ms);
+        _archivo = e.File.Name;
+        _contenido = ms.ToArray();
+    }
+
+    private async Task RevisarCobrosAsync()
+    {
+        if (_contenido is null || _archivo is null) return;
+        using var carga = _cobros.Iniciar();
+        _erroresDeCobros = [];
+        var r = await Cartera.RevisarCobrosProvisionalesAsync(_archivo, _contenido, _claveDeCobros);
+        if (!r.IsSuccess)
+        {
+            _revision = null;
+            if (r.ComoImportacion() is { } revision)
+                _erroresDeCobros = [.. revision.Errors.Select(x => new ErrorDeImportacionCarteraDto(x.Row, x.Column, x.Code, x.Message))];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar el archivo.");
+            return;
+        }
+        _revision = r.Value;
+    }
+
+    private async Task ActivarAsync()
+    {
+        if (_estado is not { CurrentLoad: { } carga, ExpectedActivationDate: { } fecha } || !Guid.TryParse(_punto, out var punto) || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var estado = _activando.Iniciar();
+        _error = null;
+        _faltantes = [];
+        var r = await Cartera.ActivarAsync(new ActivarCarteraRequest(carga.PublicId, fecha, _revision?.StagedAttachmentPublicId, punto, _reconoceAvisos,
+            _motivo.Trim(), _reconoceNomina), _claveDeActivacion);
+        _confirmar = false;
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorMessage ?? "No se pudo activar Cartera.";
+            if (r.Data is { ValueKind: System.Text.Json.JsonValueKind.Object } d && d.TryGetProperty("missing", out var faltan))
+                _faltantes = System.Text.Json.JsonSerializer.Deserialize<List<RequisitoDeActivacionDto>>(faltan, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) ?? [];
+            return;
+        }
+        _resultado = r.Value;
+        _claveDeActivacion = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Cartera activada.");
+        await CargarAsync();
+    }
+}

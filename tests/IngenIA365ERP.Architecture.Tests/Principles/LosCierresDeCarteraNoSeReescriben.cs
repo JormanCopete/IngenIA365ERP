@@ -49,5 +49,8 @@ public class LosCierresDeCarteraNoSeReescriben
         var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
         foreach (var pieza in new[] { "CierreMensualDeCartera.cs", "ReaperturaDelCierre.cs", "CreateBaseCloseCommand.cs", "MonthlyCloseQueries.cs" })
             Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Risk", pieza), StringComparison.Ordinal));
+        // US8 (bloque 13C, T0728): la activación hace nacer el cierre base una sola vez, después de todas las tandas; también está en el recorrido.
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Activation", "ActivateLendingCommand.cs"), StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith(Path.Combine("Activation", "NacimientoDeCreditosMigrados.cs"), StringComparison.Ordinal));
     }
 }

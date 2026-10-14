@@ -81,6 +81,9 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         typeof(IngenIA365ERP.Application.Lending.Integration.ConciliacionContableDto),
         // US9 (bloque 12C): la política SARC efectiva (Parameters.View), con la norma, las celdas y las versiones.
         typeof(IngenIA365ERP.Application.Lending.Risk.RiskPolicyDto),
+        // US8 (bloque 13C, T0728): el cuadre de la carga de migración (Reconciliation.View): por concepto, modalidad, sub-segmento, categoría y
+        // conjunto de cuentas, sin documentos ni nombres.
+        typeof(IngenIA365ERP.Application.Lending.Migration.MigrationBalanceCheckDto),
     ];
 
     /// <summary>

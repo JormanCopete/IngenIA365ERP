@@ -6,6 +6,8 @@ using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.API.IntegrationTests.Payroll;
 using IngenIA365ERP.API.IntegrationTests.Ventas;
+using C = IngenIA365ERP.Application.Lending.Imports.DefinicionesDeMigracion.Columnas;
+using P = IngenIA365ERP.Application.Lending.Imports.DefinicionesDeMigracion.Partes;
 
 namespace IngenIA365ERP.API.IntegrationTests.Lending;
 
@@ -16,6 +18,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// calcula y aprueba sin descuentos ni filas de <c>PAY_PayrollLoanDeductions</c>; borrar a una persona sin nada funciona; una venta a
 /// crédito confirma como crédito provisional, sin número reservado, emite <c>VentaACreditoRegistrada</c> v2 y queda sin intentos ni
 /// alertas hacia <c>Lending</c> (el destino no está habilitado); y el detalle de la persona dice <c>NotActivated</c>.
+///
+/// <para>
+/// US8 (bloque 13C, T0730; T85, FR-142): con una carga de migración <b>aplicada sin activar</b> en una cooperativa aislada con nómina y contabilidad,
+/// la ordinaria y la definitiva con deudores de la carga exigen <c>acknowledgeLendingPendingActivation</c>
+/// (<c>Payroll.LendingPendingActivationAckRequired</c>) y aprueban con él; Personas no deja borrar al deudor ni al codeudor
+/// (<c>Person.HasActiveLoans</c>) y el detalle dice «migrada, sin activar» mientras el contrato sigue «Cartera no activada»; y Contabilidad, que
+/// recibió <c>CargaDeCarteraAplicada</c>, avisa <c>Accounting.Period.LendingLoadWillExpire</c> al cerrar el mes que contiene C+1.
+/// </para>
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public sealed class CarteraDesplegadaSinActivarTests(CentralIdentityApiFixture fx)
@@ -156,5 +166,153 @@ public sealed class CarteraDesplegadaSinActivarTests(CentralIdentityApiFixture f
             """SELECT COUNT(*) FROM dbo."COR_Alerts" WHERE "TypeCode" LIKE 'Integracion.%'""",
             "SELECT COUNT(*) FROM [dbo].[COR_Alerts] WHERE [TypeCode] LIKE 'Integracion.%'");
         alertas.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Con_una_carga_aplicada_sin_activar_Nomina_Personas_y_Contabilidad_lo_reconocen()
+    {
+        var hoy = CarteraE2E.Hoy(fx);
+        var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "carga_sin_activar", hoy.Year);
+        using var http = fx.CreateClient();
+        var admin = coop.TokenAdmin;
+        var sufijo = Interlocked.Increment(ref _sufijo);
+        await CarteraE2E.PersonaDelAdministradorAsync(http, coop);
+
+        // ------------------------------------------------------------------------- nómina mínima de la cooperativa --
+        await NominaMinimaAsync(http, admin);
+        var eps = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/health-insurance", new { code = $"EM{sufijo}", name = $"EPS carga {sufijo}", taxId = $"8013{sufijo:00000}", checkDigit = 1 });
+        var afp = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/pension-providers", new { code = $"AM{sufijo}", name = $"Fondo carga {sufijo}", taxId = $"8014{sufijo:00000}", checkDigit = 2 });
+        var epsId = (await NominaE2E.LeerAsync(eps)).GetGuid();
+        var afpId = (await NominaE2E.LeerAsync(afp)).GetGuid();
+        var planOrdinario = await PlanAsync(http, admin, $"MO{sufijo}", "Monthly");
+        var planDefinitiva = await PlanAsync(http, admin, $"MD{sufijo}", "Biweekly");
+        var (_, docOrdinario) = await EmpleadoAsync(http, admin, "Orlando", planOrdinario, epsId, afpId);
+        var (empleadoDefinitiva, docDefinitiva) = await EmpleadoAsync(http, admin, "Delia", planDefinitiva, epsId, afpId);
+        var (docBorrable, borrable) = await MigracionE2E.PersonaAsync(http, admin, "Bruno");
+        var (docCodeudor, codeudor) = await MigracionE2E.PersonaAsync(http, admin, "Camila");
+
+        // ------------------------------------------------------------------------------ la carga aplicada, sin activar --
+        await MigracionE2E.LineaAsync(fx, coop, hoy);
+        var oficina = await MigracionE2E.OficinaAsync(http, admin, coop.TenantPublicId, $"MS{sufijo}");
+        var carga = await MigracionE2E.CrearCargaAsync(http, admin, hoy, "Ensayo en producción sin activar (e2e)");
+        var creditos = new[] { ("SA-0001", docOrdinario), ("SA-0002", docDefinitiva), ("SA-0003", docBorrable) };
+        await MigracionE2E.CargarAsync(http, admin, carga, P.Loans,
+            creditos.Select(c => MigracionE2E.Credito(c.Item1, c.Item2, oficina, hoy.AddDays(-60), 1_200_000m, 12)));
+        await MigracionE2E.CargarAsync(http, admin, carga, P.Installments, creditos.SelectMany(c => MigracionE2E.Cuotas(c.Item1, hoy, 10, 100_000m)));
+        await MigracionE2E.CargarAsync(http, admin, carga, P.Balances, creditos.Select(c => MigracionE2E.Saldo(c.Item1, "Principal", 1_000_000m)));
+        await MigracionE2E.CargarAsync(http, admin, carga, P.RiskData, creditos.Select(c => MigracionE2E.Riesgo(c.Item1)));
+        await MigracionE2E.CargarAsync(http, admin, carga, P.CoDebtors, [MigracionE2E.Fila((C.NumeroDeCredito, "SA-0003"), (C.Codeudor, docCodeudor))]);
+        var aplicar = await MigracionE2E.AplicarAsync(http, admin, carga, "Carga de ensayo sin activar");
+        aplicar.StatusCode.Should().Be(HttpStatusCode.OK, await aplicar.Content.ReadAsStringAsync());
+
+        // ------------------------------------------------------------------------------------------------- Personas --
+        foreach (var persona in new[] { borrable, codeudor })
+        {
+            var borrar = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Delete, $"/api/core/people/{persona}", null);
+            borrar.IsSuccessStatusCode.Should().BeFalse(await borrar.Content.ReadAsStringAsync());
+            (await CarteraE2E.CodigoDeErrorAsync(borrar)).Should().Be("Person.HasActiveLoans", "un deudor o codeudor de la carga aplicada no se borra");
+        }
+        var detalle = await CarteraE2E.GetAsync(http, admin, $"/api/core/people/{borrable}/detail");
+        detalle.GetProperty("portfolioSummary").GetProperty("lendingStatus").GetString()
+            .Should().Be("MigratedNotActivated", "el contrato sigue «Cartera no activada» y la persona es deudora de la carga");
+
+        // ------------------------------------------------------------------------------------------ Nómina ordinaria --
+        var inicioDelMes = new DateOnly(hoy.Year, hoy.Month, 1);
+        var periodo = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/pay-periods", new
+        {
+            planPublicId = planOrdinario, startDate = inicioDelMes.ToDateTime(TimeOnly.MinValue), endDate = inicioDelMes.AddMonths(1).AddDays(-1).ToDateTime(TimeOnly.MinValue),
+            description = "Mes con carga sin activar", statusMessage = string.Empty,
+        });
+        periodo.StatusCode.Should().Be(HttpStatusCode.Created, await periodo.Content.ReadAsStringAsync());
+        var corrida = (await NominaE2E.CalcularAsync(http, admin, (await NominaE2E.LeerAsync(periodo)).GetGuid())).GetProperty("runPublicId").GetGuid();
+        var excepciones = await NominaE2E.ExcepcionesParaAsync(http, admin, corrida);
+        var sinReconocer = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/payroll/runs/{corrida}/approve", new
+        {
+            confirm = true, exceptions = excepciones, confirmEmpty = false, confirmWithoutSegregation = true,
+        });
+        sinReconocer.IsSuccessStatusCode.Should().BeFalse(await sinReconocer.Content.ReadAsStringAsync());
+        (await NominaE2E.CodigoDeErrorAsync(sinReconocer)).Should().Be("Payroll.LendingPendingActivationAckRequired");
+        var reconocida = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/payroll/runs/{corrida}/approve", new
+        {
+            confirm = true, exceptions = excepciones, confirmEmpty = false, confirmWithoutSegregation = true, acknowledgeLendingPendingActivation = true,
+        });
+        reconocida.StatusCode.Should().Be(HttpStatusCode.OK, await reconocida.Content.ReadAsStringAsync());
+
+        // ---------------------------------------------------------------------------------------- Nómina definitiva --
+        var inicioQuincena = new DateOnly(hoy.Year, hoy.Month, hoy.Day <= 15 ? 1 : 16);
+        var finQuincena = hoy.Day <= 15 ? new DateOnly(hoy.Year, hoy.Month, 15) : new DateOnly(hoy.Year, hoy.Month, DateTime.DaysInMonth(hoy.Year, hoy.Month));
+        var quincena = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/pay-periods", new
+        {
+            planPublicId = planDefinitiva, startDate = inicioQuincena.ToDateTime(TimeOnly.MinValue), endDate = finQuincena.ToDateTime(TimeOnly.MinValue),
+            description = "Quincena con carga sin activar", statusMessage = string.Empty,
+        });
+        quincena.StatusCode.Should().Be(HttpStatusCode.Created, await quincena.Content.ReadAsStringAsync());
+        var registro = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/settlements/terminations", new
+        {
+            employeePublicId = empleadoDefinitiva, terminationDate = hoy, reasonCode = "RENUNCIA", contractType = "Indefinite",
+        });
+        registro.StatusCode.Should().Be(HttpStatusCode.Created, await registro.Content.ReadAsStringAsync());
+        var definitiva = (await NominaE2E.LeerAsync(registro)).GetProperty("runPublicId").GetGuid();
+        var definitivaSinReconocer = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/payroll/settlements/terminations/{definitiva}/approve",
+            new { confirm = true, confirmWithoutSegregation = true });
+        definitivaSinReconocer.IsSuccessStatusCode.Should().BeFalse(await definitivaSinReconocer.Content.ReadAsStringAsync());
+        (await NominaE2E.CodigoDeErrorAsync(definitivaSinReconocer)).Should().Be("Payroll.LendingPendingActivationAckRequired");
+        var definitivaReconocida = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/payroll/settlements/terminations/{definitiva}/approve",
+            new { confirm = true, confirmWithoutSegregation = true, acknowledgeLendingPendingActivation = true });
+        definitivaReconocida.StatusCode.Should().Be(HttpStatusCode.OK, await definitivaReconocida.Content.ReadAsStringAsync());
+
+        // -------------------------------------------------------------------------------------------- Contabilidad --
+        await CarteraE2E.DespacharAsync(fx, coop.TenantPublicId, 3);
+        var mesDeC1 = hoy.AddDays(1);
+        var cierre = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/accounting/periods/{mesDeC1.Year}/{mesDeC1.Month}/close",
+            new { acknowledgeLendingPending = true, acknowledgeInventoryPending = true });
+        cierre.IsSuccessStatusCode.Should().BeFalse(await cierre.Content.ReadAsStringAsync());
+        (await CarteraE2E.CodigoDeErrorAsync(cierre)).Should().Be("Accounting.Period.LendingLoadWillExpire",
+            "Contabilidad recibió CargaDeCarteraAplicada y el mes contiene el día siguiente al corte");
+    }
+
+    /// <summary>Lo que la nómina necesita en una cooperativa aislada: centro de costo, dos auxiliares, cuentas por concepto y que quien calcula apruebe.</summary>
+    private static async Task NominaMinimaAsync(HttpClient http, string admin)
+    {
+        await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/core/cost-centers", new { name = "Administración", payrollType = 1, period = 1, payrollPeriodicity = 30 });
+        string[] modulos = ["CNT", "NOM"];
+        await ContabilidadE2E.CrearCuentaAsync(http, admin, NominaE2E.CuentaDebito, "Sueldos y salarios", "510503", modulos);
+        await ContabilidadE2E.CrearCuentaAsync(http, admin, NominaE2E.CuentaCredito, "Salarios por pagar", "271005", modulos);
+        foreach (var c in (await NominaE2E.GetAsync(http, admin, "/api/payroll/concept-definitions")).EnumerateArray())
+        {
+            var resp = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/payroll/concept-definitions/{c.GetProperty("code").GetString()}/accounts",
+                new { rows = new[] { new { costCenterPublicId = (Guid?)null, debitAccountCode = NominaE2E.CuentaDebito, creditAccountCode = NominaE2E.CuentaCredito } } });
+            resp.IsSuccessStatusCode.Should().BeTrue($"cuentas de {c.GetProperty("code").GetString()}: «{await resp.Content.ReadAsStringAsync()}»");
+        }
+        var vigencia = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/company-policies/AllowSameUserApproval/versions", new
+        {
+            value = "true", validFrom = new DateOnly(2000, 1, 1), reason = "Pruebas e2e: quien calcula aprueba con segunda confirmación", closePrevious = true,
+        });
+        vigencia.IsSuccessStatusCode.Should().BeTrue($"vigencia de AllowSameUserApproval: «{await vigencia.Content.ReadAsStringAsync()}»");
+    }
+
+    private static async Task<Guid> PlanAsync(HttpClient http, string admin, string codigo, string periodicidad)
+    {
+        var plan = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/plans", new { code = codigo, name = $"Plan {codigo}", periodicity = periodicidad });
+        plan.StatusCode.Should().Be(HttpStatusCode.Created, await plan.Content.ReadAsStringAsync());
+        return (await NominaE2E.LeerAsync(plan)).GetProperty("publicId").GetGuid();
+    }
+
+    /// <summary>Una persona empleada con su ficha en el plan, EPS y fondo; devuelve la ficha y el documento (el deudor de la carga).</summary>
+    private static async Task<(Guid Empleado, string Documento)> EmpleadoAsync(HttpClient http, string admin, string nombre, Guid plan, Guid eps, Guid afp)
+    {
+        var documento = MigracionE2E.Documento();
+        var persona = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/core/people", new
+        {
+            idType = "C", taxId = documento, firstName = nombre, lastName = "Carga", email = $"{nombre.ToLowerInvariant()}.{documento}@coop.nomina.test", isEmployee = true,
+        });
+        persona.StatusCode.Should().Be(HttpStatusCode.Created, await persona.Content.ReadAsStringAsync());
+        var empleado = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/payroll/employees", new
+        {
+            personPublicId = (await NominaE2E.LeerAsync(persona)).GetGuid(), baseSalary = 2_000_000m, contractType = 1, hireDate = new DateTime(2025, 1, 2),
+            payrollPlanPublicId = plan, healthInsurancePublicId = eps, pensionProviderPublicId = afp,
+        });
+        empleado.StatusCode.Should().Be(HttpStatusCode.Created, await empleado.Content.ReadAsStringAsync());
+        return ((await NominaE2E.LeerAsync(empleado)).GetGuid(), documento);
     }
 }

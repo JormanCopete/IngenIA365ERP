@@ -186,6 +186,14 @@
             <PermissionGate Required="Lending.Scopes.Manage">
                 <NavLink href="/cartera/alcances" class="nav-subitem">Alcance de usuarios</NavLink>
             </PermissionGate>
+            @* US8 (T0761): la puesta en marcha —la carga por partes con su cuadre y la activación con el acta—. *@
+            <span class="nav-subgroup-title">Puesta en marcha</span>
+            <PermissionGate Required="Lending.Migration.Load">
+                <NavLink href="/cartera/migracion" class="nav-subitem">Migración</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Activation.Execute">
+                <NavLink href="/cartera/activacion" class="nav-subitem">Activación</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@

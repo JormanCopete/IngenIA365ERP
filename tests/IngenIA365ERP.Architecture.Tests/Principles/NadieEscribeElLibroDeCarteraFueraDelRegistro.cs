@@ -61,4 +61,29 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
         Assert.Contains(recorridos, a => a.EndsWith(Path.Combine("Integration", "ContratoDeObligacionesDeCartera.cs"), StringComparison.Ordinal));
         ReglaSobreFuente.SinInfracciones(infracciones, "Los pagos de Cartera no escriben el libro por RegistroDeCartera (C45)");
     }
+
+    /// <summary>
+    /// US8 (bloque 13C, T0728): la activación escribe los saldos iniciales de los créditos migrados (operación <c>OpeningBalance</c>, transacciones por
+    /// concepto y cuota, plan y control) sólo por <c>RegistroDeCartera</c>; el nacimiento de los créditos y la activación están dentro del recorrido
+    /// de la regla.
+    /// </summary>
+    [Fact]
+    public void La_activacion_escribe_los_saldos_iniciales_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        string[] escritores =
+        [
+            "Core/IngenIA365ERP.Application/Lending/Activation/NacimientoDeCreditosMigrados.cs",
+            "Core/IngenIA365ERP.Application/Lending/Activation/ActivateLendingCommand.cs",
+        ];
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(escritores).ToList();
+        Assert.Equal(escritores.Length, nombrados.Count);
+        var infracciones = new List<string>();
+        foreach (var archivo in nombrados)
+        {
+            if (!recorridos.Contains(archivo)) infracciones.Add($"{archivo}: fuera del recorrido de la regla");
+            if (!FuenteSinComentarios.Leer(archivo).Contains("RegistroDeCartera", StringComparison.Ordinal)) infracciones.Add($"{archivo}: no escribe por RegistroDeCartera");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "La activación no escribe los saldos iniciales por RegistroDeCartera (FR-001)");
+    }
 }

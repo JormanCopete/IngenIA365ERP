@@ -191,21 +191,7 @@ public static class CarteraE2E
                 (await CodigoDeErrorAsync(inicio)).Should().Be("Accounting.Setup.AlreadyInitialized", "la activación exige la contabilidad iniciada");
         }
 
-        if (opciones.RegistrarDobles)
-        {
-            await RegistrarDobleAsync(http, admin, new
-            {
-                code = "TST", @class = "Test", role = "ObligationsCollector", destination = (string?)null, isEnabled = true, isTestDouble = true,
-                adoptions = new[] { new { contract = "ProveedorDeObligaciones", version = 1 } }, validFrom = corte,
-                reason = "Recaudador de prueba para las e2e de Cartera",
-            });
-            await RegistrarDobleAsync(http, admin, new
-            {
-                code = "TES", @class = "Test", role = "MessageDestination", destination = "Treasury", isEnabled = true, isTestDouble = true,
-                adoptions = new[] { new { contract = "OrdenDeGiroEmitida", version = 1 }, new { contract = "AnulacionDeOrdenDeGiro", version = 1 } },
-                validFrom = corte, reason = "Tesorería de prueba para las e2e de Cartera",
-            });
-        }
+        if (opciones.RegistrarDobles) await RegistrarDoblesAsync(http, admin, corte);
 
         var alta = await ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/migration/loads", new { cutoffDate = corte, notes = "Sin cartera que migrar (e2e)" });
         alta.StatusCode.Should().Be(HttpStatusCode.Created, $"crear la carga: «{await alta.Content.ReadAsStringAsync()}»");
@@ -224,6 +210,27 @@ public static class CarteraE2E
         var activacion = await LeerAsync(activar);
         return new CarteraActivadaE2E(DateOnly.Parse(activacion.GetProperty("activationDate").GetString()!, System.Globalization.CultureInfo.InvariantCulture),
             activacion.GetProperty("activationPublicId").GetGuid(), carga, punto);
+    }
+
+    /// <summary>
+    /// Los dobles <c>TST</c> (Recaudo, recaudador del contrato) y <c>TES</c> (destino <c>Treasury</c>) con <c>Class = Test</c>, vigentes desde
+    /// <paramref name="desde"/>, si no están ya (US8, T0729: la migración con cartera previa los registra igual que la activación de prueba).
+    /// </summary>
+    public static async Task RegistrarDoblesAsync(HttpClient http, string admin, DateOnly desde)
+    {
+        var corte = desde;
+        await RegistrarDobleAsync(http, admin, new
+        {
+            code = "TST", @class = "Test", role = "ObligationsCollector", destination = (string?)null, isEnabled = true, isTestDouble = true,
+            adoptions = new[] { new { contract = "ProveedorDeObligaciones", version = 1 } }, validFrom = corte,
+            reason = "Recaudador de prueba para las e2e de Cartera",
+        });
+        await RegistrarDobleAsync(http, admin, new
+        {
+            code = "TES", @class = "Test", role = "MessageDestination", destination = "Treasury", isEnabled = true, isTestDouble = true,
+            adoptions = new[] { new { contract = "OrdenDeGiroEmitida", version = 1 }, new { contract = "AnulacionDeOrdenDeGiro", version = 1 } },
+            validFrom = corte, reason = "Tesorería de prueba para las e2e de Cartera",
+        });
     }
 
     /// <summary>Registra un doble si no hay ya uno vigente con ese código (la cooperativa puede traerlo de una prueba anterior).</summary>

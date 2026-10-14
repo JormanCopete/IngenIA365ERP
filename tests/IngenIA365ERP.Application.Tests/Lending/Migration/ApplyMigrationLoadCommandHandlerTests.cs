@@ -118,6 +118,32 @@ public sealed class ApplyMigrationLoadCommandHandlerTests : IAsyncLifetime
             .Should().Be((1, 1_000_000m, 1));
     }
 
+    /// <summary>
+    /// Defecto del bloque 13C (lo destapó la e2e T0730): sin reglas en la matriz, la llave de una combinación sin regla omitía empleado, gracia,
+    /// reestructurado y clase de recaudador; dos créditos de la misma línea y oficina, uno de un empleado y otro no, daban la misma
+    /// <c>DimensionKey</c> y aplicar caía en el índice único <c>UK_LND_MigrationLoadDifferences_Load_Version_Dim</c> (500 en los dos motores).
+    /// </summary>
+    [Fact]
+    public async Task Sin_regla_dos_combinaciones_que_solo_difieren_en_el_empleado_tienen_su_propia_diferencia()
+    {
+        var beto = await _m.Db.People.SingleAsync(p => p.Id == _m.Beto.Id);
+        beto.IsEmployee = true;
+        await _m.Db.SaveChangesAsync();
+        _m.Db.ChangeTracker.Clear();
+        await _m.CreditoCompletoAsync("CR-1");
+        await _m.CreditoCompletoAsync("CR-2", deudor: "79000002");
+        _m.SinRegla = _ => true;
+
+        var r = await _m.AplicarAsync();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        var diferencias = await _m.Db.MigrationLoadDifferences.AsNoTracking().Where(d => d.Kind == MigrationDifferenceKind.BalanceCheck).ToListAsync();
+        diferencias.Select(d => d.DimensionKey).Should().OnlyHaveUniqueItems("el índice único de la versión no admite llaves repetidas");
+        diferencias.Where(d => d.DimensionKey.StartsWith("SinRegla|Capital|", StringComparison.Ordinal)).Should().HaveCount(2,
+            "el capital del empleado y el del que no lo es son dos combinaciones");
+        diferencias.Where(d => d.DimensionKey.StartsWith("SinRegla|Capital|", StringComparison.Ordinal)).Sum(d => d.LendingAmount).Should().Be(2_000_000m);
+    }
+
     [Fact]
     public async Task Una_carga_aplicada_nueva_deja_la_anterior_reemplazada_con_el_mismo_corte()
     {

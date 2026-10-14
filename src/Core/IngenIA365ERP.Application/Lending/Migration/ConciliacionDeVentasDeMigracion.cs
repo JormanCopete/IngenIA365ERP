@@ -114,6 +114,25 @@ public sealed class ConciliacionDeVentasDeMigracion(IApplicationDbContext db, Co
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// La lectura por carga, <b>sin escribir</b> (US8, T0757): las ventas de la versión vigente con su clasificación, sus marcas y si su diferencia
+    /// está aceptada, por fecha y factura. La usan <c>GET …/reconciliation</c> (paginada) y la vista <c>migration-reconciliation</c> (C109).
+    /// </summary>
+    public static IQueryable<MigrationSaleDto> Lectura(IApplicationDbContext db, MigrationLoad carga, SaleReconciliationOutcome? clasificacion = null)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(carga);
+        var consulta = db.MigrationSaleReconciliations.AsNoTracking()
+            .Where(r => r.MigrationLoadId == carga.Id && r.CheckVersion == carga.CurrentCheckVersion && !r.IsDeleted
+                        && (clasificacion == null || r.Outcome == clasificacion));
+        return from r in consulta
+               join d in db.MigrationLoadDifferences.AsNoTracking() on r.DifferenceId equals (int?)d.Id into ds
+               from d in ds.DefaultIfEmpty()
+               orderby r.SaleDate, r.InvoiceNumber
+               select new MigrationSaleDto(r.MessagePublicId, r.InvoiceNumber, r.SaleDate, r.Amount, r.Outcome, r.MarkedFromList, r.MarkReason,
+                   r.AdjustmentsUpToCutoff, r.AdjustmentsAfterCutoff, d == null ? null : d.PublicId, d != null && d.AcceptedAt != null);
+    }
+
     /// <summary>Recalcula <c>IsBalanced</c> y <c>SalesReconciled</c> de la carga con las diferencias vigentes (sin guardar).</summary>
     public static void Actualizar(MigrationLoad carga, IReadOnlyList<MigrationLoadDifference> vigentes)
     {
@@ -147,17 +166,9 @@ public sealed class GetMigrationSalesReconciliationQueryHandler(IApplicationDbCo
         var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
         if (carga is null) return Result.Failure<PagedResult<MigrationSaleDto>>(ErroresDeActivacion.CargaNoEncontrada(request.MigrationLoadPublicId));
 
-        var consulta = db.MigrationSaleReconciliations.AsNoTracking()
-            .Where(r => r.MigrationLoadId == carga.Id && r.CheckVersion == carga.CurrentCheckVersion && !r.IsDeleted
-                        && (request.Classification == null || r.Outcome == request.Classification));
+        var consulta = ConciliacionDeVentasDeMigracion.Lectura(db, carga, request.Classification);
         var total = await consulta.CountAsync(ct);
-        var filas = await (from r in consulta
-                           join d in db.MigrationLoadDifferences.AsNoTracking() on r.DifferenceId equals (int?)d.Id into ds
-                           from d in ds.DefaultIfEmpty()
-                           orderby r.SaleDate, r.InvoiceNumber
-                           select new MigrationSaleDto(r.MessagePublicId, r.InvoiceNumber, r.SaleDate, r.Amount, r.Outcome, r.MarkedFromList, r.MarkReason,
-                               r.AdjustmentsUpToCutoff, r.AdjustmentsAfterCutoff, d == null ? null : d.PublicId, d != null && d.AcceptedAt != null))
-            .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToListAsync(ct);
+        var filas = await consulta.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToListAsync(ct);
         return Result.Success(new PagedResult<MigrationSaleDto>(filas, request.Page, request.PageSize, total));
     }
 }

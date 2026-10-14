@@ -96,6 +96,9 @@ public class TodoEnlaceDelMenuTieneSuPagina
     [InlineData("/contabilidad/cartera/lotes/{Id:guid}", false)]
     [InlineData("/contabilidad/indicadores-regulatorios", true)]
     [InlineData("/cartera/conciliacion-contable", true)]
+    // US8 (bloque 13C, T0728): la puesta en marcha —la carga de migración y la activación—.
+    [InlineData("/cartera/migracion", true)]
+    [InlineData("/cartera/activacion", true)]
     public void Las_pantallas_de_la_integracion_contable_de_Cartera_tienen_su_pagina(string ruta, bool enElMenu)
     {
         var shared = Shared();

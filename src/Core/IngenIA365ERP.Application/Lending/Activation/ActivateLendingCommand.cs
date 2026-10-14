@@ -412,21 +412,53 @@ public sealed class ActivateLendingCommandHandler(
     /// <summary>
     /// Las cuotas de los créditos migrados con forma de pago <c>OwnPayroll</c> que vencen entre el día siguiente al corte y el registro de la
     /// activación (impagas: antes de activar no se aplicó nada). Las liquidaciones de nómina de esos días no descontaron Cartera.
+    /// <para>
+    /// US8 (bloque 13C, T0731): los números por nómina propia salen de las filas de la carga y los créditos y sus cuotas se buscan por tandas de
+    /// 1.000. Con 50.000 créditos recién guardados en la misma transacción (las tablas sin estadísticas), la consulta única que unía créditos,
+    /// vínculos, planes y ≈1,5 millones de cuotas —y aun la de créditos con vínculos— pasaba de los 30 s del comando en PostgreSQL, y la
+    /// estrategia de reintento repetía la activación entera tres veces.
+    /// </para>
     /// </summary>
     private async Task<IReadOnlyList<CuotaNoAplicada>> NoAplicadasAsync(MigrationLoad carga, DateOnly hoy, CancellationToken ct)
     {
         var desde = carga.CutoffDate.AddDays(1);
         if (hoy < desde) return [];
-        return await (from l in db.Loans.AsNoTracking()
-                      join v in db.LoanPayrollLinks.AsNoTracking() on l.Id equals v.LoanId
-                      join p in db.RepaymentScheduleVersions.AsNoTracking() on l.Id equals p.LoanId
-                      join i in db.RepaymentInstallments.AsNoTracking() on p.Id equals i.ScheduleVersionId
-                      where l.MigrationLoadId == carga.Id && l.Origin == LoanOrigin.Migration && l.Status == LoanStatus.Active
-                            && v.RepaymentChannel == RepaymentChannel.OwnPayroll && v.ValidTo == null && !v.IsDeleted
-                            && p.VersionNumber == 1 && i.DueDate >= desde && i.DueDate <= hoy
-                      orderby l.Id, i.InstallmentNumber
-                      select new CuotaNoAplicada(l.Id, l.PublicId, l.Number, l.BranchId, i.Id, i.InstallmentNumber, i.DueDate, i.Total))
+        // Los números por nómina propia salen de la carga (tablas de preparación, con estadísticas); los créditos se buscan por número.
+        var numeros = await (from r in db.MigrationLoanRows.AsNoTracking()
+                             join pt in db.MigrationLoadParts.AsNoTracking() on r.MigrationLoadPartId equals pt.Id
+                             where pt.MigrationLoadId == carga.Id && pt.Status == MigrationPartStatus.Imported && !pt.IsDeleted
+                                   && r.RepaymentChannel == RepaymentChannel.OwnPayroll
+                             select r.SourceLoanNumber)
             .ToListAsync(ct);
+        if (numeros.Count == 0) return [];
+        var creditos = new List<(int Id, Guid PublicId, string Number, int BranchId)>();
+        foreach (var tanda in numeros.Distinct(StringComparer.Ordinal).Chunk(1000))
+        {
+            var lote = tanda.ToList();
+            creditos.AddRange((await db.Loans.AsNoTracking()
+                    .Where(l => lote.Contains(l.Number) && l.MigrationLoadId == carga.Id && l.Origin == LoanOrigin.Migration && l.Status == LoanStatus.Active)
+                    .Select(l => new { l.Id, l.PublicId, l.Number, l.BranchId }).ToListAsync(ct))
+                .Select(l => (l.Id, l.PublicId, l.Number, l.BranchId)));
+        }
+        if (creditos.Count == 0) return [];
+
+        var resultado = new List<CuotaNoAplicada>();
+        foreach (var tanda in creditos.Chunk(1000))
+        {
+            var porCredito = tanda.ToDictionary(c => c.Id);
+            var ids = porCredito.Keys.ToList();
+            var cuotas = await (from p in db.RepaymentScheduleVersions.AsNoTracking()
+                                join i in db.RepaymentInstallments.AsNoTracking() on p.Id equals i.ScheduleVersionId
+                                where ids.Contains(p.LoanId) && p.VersionNumber == 1 && i.DueDate >= desde && i.DueDate <= hoy
+                                select new { p.LoanId, i.Id, i.InstallmentNumber, i.DueDate, i.Total })
+                .ToListAsync(ct);
+            resultado.AddRange(cuotas.Select(c =>
+            {
+                var l = porCredito[c.LoanId];
+                return new CuotaNoAplicada(l.Id, l.PublicId, l.Number, l.BranchId, c.Id, c.InstallmentNumber, c.DueDate, c.Total);
+            }));
+        }
+        return [.. resultado.OrderBy(c => c.LoanId).ThenBy(c => c.Cuota)];
     }
 
     private async Task RegistrarNoAplicadasAsync(LendingActivation activacion, IReadOnlyList<CuotaNoAplicada> cuotas, CancellationToken ct)

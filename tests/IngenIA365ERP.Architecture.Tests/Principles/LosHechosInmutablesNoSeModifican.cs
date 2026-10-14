@@ -413,6 +413,35 @@ public class LosHechosInmutablesNoSeModifican
             Assert.Contains(conjunto, conjuntos);
     }
 
+    /// <summary>
+    /// US8 (bloque 13C, T0728; data-model §29.3): las 17 filas de preparación de la carga (<c>Migration…Row</c>) son hechos sin ninguna escritura
+    /// después de insertarse —reemplazar una parte deja la tanda <c>Superseded</c> y conserva sus filas—; la diferencia, el cobro provisional y la
+    /// activación están en <see cref="HechosDeCartera"/> con su escritura única (aceptación con el acta; aplicación del cobro una vez; ninguna).
+    /// </summary>
+    [Fact]
+    public void Las_filas_de_la_carga_de_migracion_son_hechos_sin_escritura()
+    {
+        var hecho = typeof(IngenIA365ERP.Domain.Common.IHechoInmutable);
+        var filas = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.Namespace == "IngenIA365ERP.Domain.Entities.Lending.Migration"
+                && t.Name.StartsWith("Migration", StringComparison.Ordinal) && t.Name.EndsWith("Row", StringComparison.Ordinal))
+            .ToList();
+        Assert.Equal(17, filas.Count);
+        var infractores = new List<string>();
+        foreach (var tipo in filas)
+        {
+            if (!hecho.IsAssignableFrom(tipo)) infractores.Add($"{tipo.Name}: no es IHechoInmutable");
+            var conSet = tipo.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+                .Where(p => p.SetMethod is { IsPublic: true }
+                    && !p.SetMethod.ReturnParameter.GetRequiredCustomModifiers().Any(m => m.FullName == "System.Runtime.CompilerServices.IsExternalInit"))
+                .Select(p => p.Name).ToList();
+            if (conSet.Count > 0) infractores.Add($"{tipo.Name}: set público [{string.Join(", ", conSet)}]");
+        }
+        foreach (var nombre in new[] { "LendingActivation", "MigrationLoadDifference", "ProvisionalCollection" })
+            Assert.True(HechosDeCartera.ContainsKey(nombre), $"{nombre} no está en HechosDeCartera (T0728).");
+        Assert.True(infractores.Count == 0, "Filas de la carga de migración que se pueden modificar (Principio XI):\n  " + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void Application_no_borra_ni_actualiza_en_bloque_los_hechos_de_Cartera()
     {

@@ -85,6 +85,19 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    /// La lectura por carga, <b>sin escribir</b> ni preguntar a Contabilidad (US8, T0757): la instantánea guardada de la versión vigente con sus
+    /// diferencias y su aceptación. La usan <c>GET …/balance-check</c> y la vista <c>migration-reconciliation</c> del centro de informes (C109).
+    /// </summary>
+    public static async Task<MigrationBalanceCheckDto> LeerAsync(IApplicationDbContext db, MigrationLoad carga, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(db);
+        ArgumentNullException.ThrowIfNull(carga);
+        var filas = string.IsNullOrWhiteSpace(carga.BalanceCheckJson) ? [] : JsonSerializer.Deserialize<List<FilaDeCuadreDto>>(carga.BalanceCheckJson, Json) ?? [];
+        var diferencias = await ConsultasDeDiferencias.DeLaVersionAsync(db, carga, MigrationDifferenceKind.BalanceCheck, ct);
+        return new MigrationBalanceCheckDto(carga.PublicId, carga.CutoffDate, carga.CurrentCheckVersion, carga.IsBalanced, filas, diferencias);
+    }
+
     public async Task<Result<CuadreCalculado>> CalcularAsync(MigrationLoad carga, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(carga);
@@ -118,8 +131,7 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
         foreach (var i in mapeados.Value.UnresolvedCombinations)
         {
             var c = claves[i];
-            filas.Add(new FilaDeCuadreDto(
-                $"SinRegla|{c.Rol}|{c.Linea}|{c.Modalidad}|{c.Subsegmento}|{c.Categoria}|{c.Concepto}|{c.Motivo}|{c.Sucursal:N}", c.Rol, c.Concepto ?? c.Rol,
+            filas.Add(new FilaDeCuadreDto(LlaveSinRegla(c), c.Rol, c.Concepto ?? c.Rol,
                 c.Modalidad, c.Subsegmento, c.Categoria, [], combinaciones[c], 0m, combinaciones[c], Unresolved: true));
         }
 
@@ -154,6 +166,20 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
     public static CuadreCalculado Vacio() => new([], "[]", ApplyMigrationLoadCommandHandler.HuellaVacia);
 
     public static string Huella(string texto) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(texto)));
+
+    /// <summary>
+    /// La llave de una combinación que ninguna regla resuelve: <b>todas</b> sus dimensiones. Hasta el bloque 13C omitía empleado, gracia,
+    /// reestructurado y clase de recaudador, y dos créditos de la misma línea y oficina, uno de un empleado y otro no, daban la misma llave y
+    /// aplicar la carga caía en <c>UK_LND_MigrationLoadDifferences_Load_Version_Dim</c> (500).
+    /// </summary>
+    public static string LlaveSinRegla(ClaveDeSaldoDeCartera c)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        static string B(bool? v) => v is null ? string.Empty : v.Value ? "1" : "0";
+        var llave = $"SinRegla|{c.Rol}|{c.Linea}|{c.Modalidad}|{c.Subsegmento}|{c.Categoria}|{c.Concepto}|{B(c.Empleado)}|{B(c.Gracia)}|{B(c.Reestructurado)}|"
+                    + $"{c.ClaseDeRecaudador}|{c.Motivo}|{c.Sucursal:N}";
+        return llave.Length <= 300 ? llave : llave[..236] + "#" + Huella(llave);
+    }
 
     private static string Llave(string familia, IEnumerable<string> cuentas)
     {
@@ -251,8 +277,6 @@ public sealed class GetMigrationBalanceCheckQueryValidator : AbstractValidator<G
 public sealed class GetMigrationBalanceCheckQueryHandler(IApplicationDbContext db, IContabilidadParaCartera contabilidad)
     : IRequestHandler<GetMigrationBalanceCheckQuery, Result<MigrationBalanceCheckDto>>
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
     public async Task<Result<MigrationBalanceCheckDto>> Handle(GetMigrationBalanceCheckQuery request, CancellationToken ct)
     {
         var carga = await db.MigrationLoads.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.MigrationLoadPublicId && !l.IsDeleted, ct);
@@ -261,9 +285,7 @@ public sealed class GetMigrationBalanceCheckQueryHandler(IApplicationDbContext d
         if (estado.IsFailure) return Result.Failure<MigrationBalanceCheckDto>(estado.Error);
         if (!estado.Value.AccountingInitialized) return Result.Failure<MigrationBalanceCheckDto>(ErroresDeMigracion.SinContabilidad());
 
-        var filas = string.IsNullOrWhiteSpace(carga.BalanceCheckJson) ? [] : JsonSerializer.Deserialize<List<FilaDeCuadreDto>>(carga.BalanceCheckJson, Json) ?? [];
-        var diferencias = await ConsultasDeDiferencias.DeLaVersionAsync(db, carga, MigrationDifferenceKind.BalanceCheck, ct);
-        return Result.Success(new MigrationBalanceCheckDto(carga.PublicId, carga.CutoffDate, carga.CurrentCheckVersion, carga.IsBalanced, filas, diferencias));
+        return Result.Success(await CuadreDeMigracion.LeerAsync(db, carga, ct));
     }
 }
 

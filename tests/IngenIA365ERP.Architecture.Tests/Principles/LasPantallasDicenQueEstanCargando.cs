@@ -60,6 +60,9 @@ public class LasPantallasDicenQueEstanCargando
         "Contabilidad/Cartera/Lote.razor",
         "Contabilidad/IndicadoresRegulatorios.razor",
         "Contabilidad/Periodos.razor",
+        // US8 (bloque 13C, T0728): la carga de migración y la activación.
+        "Cartera/Migracion.razor",
+        "Cartera/Activacion.razor",
     ];
 
     [Fact]

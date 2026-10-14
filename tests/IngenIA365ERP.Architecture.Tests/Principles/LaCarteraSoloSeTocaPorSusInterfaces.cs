@@ -235,6 +235,36 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.True(fuentes.Count == 0, "Cartera lee tablas INV_: " + string.Join(", ", fuentes));
     }
 
+    /// <summary>
+    /// US8 (bloque 13C, T0728; C34): la migración y la activación no leen <c>PAY_</c> ni <c>INV_</c>. El aviso de <c>DESC_CARTERA</c> lo pregunta la
+    /// pantalla a Nómina (<c>GET /api/payroll/concept-definitions/DESC_CARTERA/accounts</c>); las ventas acumuladas llegan por la bandeja, sin
+    /// consumirlas. Ningún tipo de <c>Application.Lending.Activation</c> ni <c>.Migration</c> usa entidades de Nómina o de Comercial, y ningún archivo
+    /// de esas carpetas consulta sus conjuntos.
+    /// </summary>
+    [Fact]
+    public void La_activacion_no_lee_Nomina_ni_Comercial()
+    {
+        const BindingFlags Todo = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        string[] espacios = ["IngenIA365ERP.Application.Lending.Activation", "IngenIA365ERP.Application.Lending.Migration"];
+        var infractores = typeof(IngenIA365ERP.Application.DependencyInjection).Assembly.GetTypes()
+            .Where(t => espacios.Any(e => (t.Namespace ?? string.Empty).StartsWith(e, StringComparison.Ordinal)))
+            .SelectMany(t => t.GetFields(Todo).Select(f => f.FieldType)
+                .Concat(t.GetMethods(Todo).SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType)))
+                .Where(x => (x.Namespace ?? string.Empty).StartsWith("IngenIA365ERP.Domain.Entities.Payroll", StringComparison.Ordinal)
+                            || (x.Namespace ?? string.Empty).StartsWith("IngenIA365ERP.Domain.Entities.Inventory", StringComparison.Ordinal))
+                .Select(x => $"{t.FullName} → {x.Name}"))
+            .Distinct()
+            .ToList();
+        Assert.True(infractores.Count == 0, "La activación usa entidades de Nómina o de Comercial (C34): " + string.Join(", ", infractores));
+
+        var carpetas = new[] { "Core/IngenIA365ERP.Application/Lending/Activation", "Core/IngenIA365ERP.Application/Lending/Migration" };
+        var fuentes = ReglaSobreFuente.ArchivosEn(carpetas)
+            .Where(a => Regex.IsMatch(FuenteSinComentarios.Leer(a),
+                @"\bdb\.(Employees|Payroll\w*|PayPeriods|ConceptDefinition\w*|DocumentPayments|InventoryDocuments|LendingObligationResponses|DocumentLines)\b"))
+            .ToList();
+        Assert.True(fuentes.Count == 0, "La activación lee tablas PAY_ o INV_: " + string.Join(", ", fuentes));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

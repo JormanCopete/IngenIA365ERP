@@ -171,6 +171,15 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Risk.LiftAnalysisRatingCommand),
         typeof(IngenIA365ERP.Application.Lending.Risk.AddRiskPolicyVersionCommand),
         typeof(IngenIA365ERP.Application.Lending.Risk.ValidateRiskPolicyVersionCommand),
+        // US8 (bloque 13C, T0728): la carga de migración por partes, su aplicación, las marcas de ventas, la aceptación de diferencias, la
+        // revisión de cobros provisionales (deja el adjunto) y la activación.
+        typeof(IngenIA365ERP.Application.Lending.Migration.CreateMigrationLoadCommand),
+        typeof(IngenIA365ERP.Application.Lending.Migration.ImportMigrationPartCommand),
+        typeof(IngenIA365ERP.Application.Lending.Migration.ApplyMigrationLoadCommand),
+        typeof(IngenIA365ERP.Application.Lending.Migration.MarkMigrationSaleCommand),
+        typeof(IngenIA365ERP.Application.Lending.Migration.AcceptMigrationDifferencesCommand),
+        typeof(IngenIA365ERP.Application.Lending.Activation.ReviewProvisionalCollectionsCommand),
+        typeof(IngenIA365ERP.Application.Lending.Activation.ActivateLendingCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

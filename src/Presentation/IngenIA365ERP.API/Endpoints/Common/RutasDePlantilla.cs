@@ -119,11 +119,46 @@ public static class RutasDePlantilla
         Func<IRequest<Result<ImportResultDto>>, IFormCollection, IRequest<Result<ImportResultDto>>>? camposDelFormulario = null)
     {
         ArgumentNullException.ThrowIfNull(buscarDefinicion);
+        return grupo.MapPlantillaPorRuta(
+            _ => Result.Success(buscarDefinicion()),
+            _ => nombreDelLibro,
+            permisoDeDescarga, permisoDeImportacion, nombre, permisoDeDatosPersonales, eventoDeExportacion,
+            importar is null ? null : (_, modo, archivo, motivo, clave) => importar(modo, archivo, motivo, clave),
+            datos is null ? null : _ => datos(),
+            permisoDeExportacion, datosPersonales, camposDelFormulario);
+    }
+
+    /// <summary>
+    /// Feature 013 (US8, T0755; api.md §19.1): la forma generalizada, en la que la plantilla <b>sale de la ruta</b> (las 17 partes de la migración
+    /// bajo <c>/migration/loads/{id}/parts/{part}</c>). <paramref name="buscarDefinicion"/> recibe la petición y puede fallar (una parte desconocida es
+    /// <c>Lending.Template.NotFound</c>, con el sobre de error, tanto al descargar como al importar, antes de leer el archivo);
+    /// <paramref name="nombreDelLibro"/> e <paramref name="importar"/> también reciben la petición (el identificador de la carga, la parte y
+    /// <c>?replace=</c>). Las demás reglas —permisos, 16 MB, <c>Idempotency-Key</c>, la revisión en Excel— son las mismas.
+    /// </summary>
+    public static RouteGroupBuilder MapPlantillaPorRuta(
+        this RouteGroupBuilder grupo,
+        Func<HttpContext, Result<DefinicionDePlantilla>> buscarDefinicion,
+        Func<HttpContext, string> nombreDelLibro,
+        string permisoDeDescarga,
+        string? permisoDeImportacion,
+        string nombre,
+        string permisoDeDatosPersonales,
+        string eventoDeExportacion,
+        Func<HttpContext, ModoDeImportacion?, ArchivoDeImportacion, string?, Guid, IRequest<Result<ImportResultDto>>>? importar = null,
+        Func<HttpContext, IRequest<Result<DatosDePlantilla>>>? datos = null,
+        string? permisoDeExportacion = null,
+        bool datosPersonales = false,
+        Func<IRequest<Result<ImportResultDto>>, IFormCollection, IRequest<Result<ImportResultDto>>>? camposDelFormulario = null)
+    {
+        ArgumentNullException.ThrowIfNull(buscarDefinicion);
+        ArgumentNullException.ThrowIfNull(nombreDelLibro);
 
         grupo.MapGet("/template.xlsx", async ([FromQuery] bool? withData, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var definicion = buscarDefinicion();
-                var nombreBase = nombreDelLibro;
+                var buscada = buscarDefinicion(http);
+                if (buscada.IsFailure) return ErrorEnvelopeFilter.Translate(http, buscada);
+                var definicion = buscada.Value;
+                var nombreBase = nombreDelLibro(http);
                 if (withData != true)
                 {
                     var vacia = PlantillaDeImportacion.Xlsx(definicion, nombreBase);
@@ -135,7 +170,7 @@ public static class RutasDePlantilla
                     || (datosPersonales && !await PermissionAuthorizationFilter.TieneAsync(http, permisoDeDatosPersonales)))
                     return PermissionAuthorizationFilter.NotFoundEnvelope(http);
 
-                var existentes = await sender.Send(datos(), ct);
+                var existentes = await sender.Send(datos(http), ct);
                 if (existentes.IsFailure) return ErrorEnvelopeFilter.Translate(http, existentes);
 
                 await AuditoriaEncadenada.RegistrarAsync(http.RequestServices, new AuditLogCommand
@@ -156,6 +191,8 @@ public static class RutasDePlantilla
 
         grupo.MapPost("/import", async (HttpContext http, ISender sender, CancellationToken ct) =>
             {
+                var parte = buscarDefinicion(http);
+                if (parte.IsFailure) return ErrorEnvelopeFilter.Translate(http, parte);
                 if (!http.Request.HasFormContentType)
                     return Sobre(http, ArchivosTabulares.Vacio, StatusCodes.Status400BadRequest);
 
@@ -176,7 +213,7 @@ public static class RutasDePlantilla
                 await archivo.CopyToAsync(ms, ct);
                 var subido = new ArchivoDeImportacion(archivo.FileName, ms.ToArray());
 
-                var comando = importar(modo, subido, string.IsNullOrWhiteSpace(motivo) ? null : motivo, http.ClaveDeOperacion());
+                var comando = importar(http, modo, subido, string.IsNullOrWhiteSpace(motivo) ? null : motivo, http.ClaveDeOperacion());
                 if (camposDelFormulario is not null) comando = camposDelFormulario(comando, formulario);
                 var resultado = await sender.Send(comando, ct);
 
@@ -184,7 +221,7 @@ public static class RutasDePlantilla
                 if (resultado.IsSuccess && resultado.Value.Mode == ModoDeImportacion.Review
                     && string.Equals(formato, "xlsx", StringComparison.OrdinalIgnoreCase))
                 {
-                    var revisado = PlantillaDeImportacion.ConResultados(subido, buscarDefinicion(), resultado.Value);
+                    var revisado = PlantillaDeImportacion.ConResultados(subido, parte.Value, resultado.Value);
                     return Results.File(revisado.Contenido, revisado.TipoContenido, revisado.NombreArchivo);
                 }
                 return (object)resultado;

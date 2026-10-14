@@ -602,6 +602,33 @@ public static class ManualCatalogo
         // t.Add(Reporte("/contabilidad/certificados-retencion", "Certificados de retención", Modulos.Contabilidad,
         //     "Certificados de retención en la fuente, ICA e IVA por tercero y año.", "Tercero (o todos), año gravable y tipo de retención.", "certificado", "retencion", "tercero", "año gravable"));
 
+        // ------------------------------------------------------ Cartera: puesta en marcha --
+        // Feature 013, US8 (T0761): la carga de la cartera vigente por partes, su cuadre contra Contabilidad y la activación con el acta.
+        // El procedimiento completo, con lo que debe existir antes y las verificaciones, está en docs/operaciones/cartera-puesta-en-marcha.md.
+        t.Add(Proceso("cartera-migracion", "Migración de la cartera vigente", Modulos.Cartera, "/cartera/migracion",
+            "Cargar la cartera que la cooperativa ya tiene, con fecha de corte, en 17 partes; revisar cada archivo, aplicar la carga, cuadrarla contra Contabilidad, conciliar las ventas a crédito y aceptar las diferencias con un acta.",
+            [
+                P("Cartera → Migración", "Lista de cargas con su estado: borrador, aplicada, reemplazada o activada. «Carga nueva» pide la fecha de corte (el último día que la cartera anterior manejó).", "/cartera/migracion", "Abrir Migración"),
+                P("Cargar las partes", "Por cada parte, descargá su plantilla (encabezados en la fila 1), diligenciala y subila: primero se revisa sin guardar nada (errores con fila y columna, y la revisión en Excel) y después se aplica. Una parte admite varios archivos; «Reemplazar la parte» deja sin efecto los anteriores. Créditos, cuotas, saldos y riesgo son obligatorias."),
+                P("Aplicar la carga", "Aplicar sólo guarda la carga: valida entre partes (todo o nada), calcula el cuadre y concilia las ventas. Los créditos nacen al activar. Otra carga aplicada con el mismo corte deja la anterior reemplazada."),
+                P("Cuadre, ventas y diferencias", "La pestaña «Cuadre» compara con Contabilidad por concepto, modalidad, sub-segmento, categoría y conjunto de cuentas. «Ventas» muestra las ventas a crédito hasta el corte; las que no se migraron se marcan como canceladas antes del corte o fuera de Cartera, con motivo. «Diferencias» se aceptan con el punto de una sesión cerrada, por una persona distinta de quien cargó."),
+            ],
+            ["migracion", "carga", "corte", "cartera vigente", "cuadre", "conciliacion de ventas", "diferencias", "acta", "puesta en marcha"],
+            ["Contabilidad iniciada con su apertura al corte.", "Personas, líneas de crédito y oficinas registradas.", "Permiso Lending.Migration.Load (y Lending.Migration.AcceptDifferences para aceptar)."],
+            ["cartera-activacion"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-activacion", "Activación de Cartera", Modulos.Cartera, "/cartera/activacion",
+            "Activar Cartera el día siguiente al corte: revisar los requisitos y avisos, los cobros provisionales y el acta, y hacer nacer en una sola operación los créditos y todo lo del deudor que trae la carga.",
+            [
+                P("Cartera → Activación", "Lista de requisitos con su estado y quién arregla cada uno, con el enlace a su pantalla. Fuera de producción algunos no bloquean.", "/cartera/activacion", "Abrir Activación"),
+                P("Avisos", "Lo que Comercial ajusta el mismo día (fecha de habilitación, política sin respuesta, quién registra la cuenta por cobrar) y las cuentas del concepto de descuento de Cartera en Nómina, que hay que reconocer."),
+                P("Cobros provisionales", "Si después del corte se recaudaron ventas a crédito, descargá la plantilla, subila y revisala: queda guardada para la activación, que vuelve a validarla."),
+                P("Activar", "La fecha es la del día siguiente al corte, dentro del plazo y con el mes contable abierto. Elegí el punto del acta que aprueba la activación y confirmá. Si algo falla no queda nada: se corrige y se vuelve a activar."),
+            ],
+            ["activacion", "activar cartera", "requisitos", "cobros provisionales", "acta", "puesta en marcha", "fecha de corte"],
+            ["Una carga aplicada con las diferencias aceptadas.", "Permiso Lending.Activation.Execute."],
+            ["cartera-migracion"], [], TipoDeTema.Proceso));
+
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.
         // Los temas del crédito heredado se retiraron con sus pantallas; la Cartera nueva trae los suyos en Modulos.Cartera.
