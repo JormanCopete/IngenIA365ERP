@@ -37,6 +37,8 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
         "Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Documents/IssuedDocumentCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Documents/IssueLendingDocumentCommand.cs",
+        // K2 (T0818): el enlace de descarga del archivo de descuentos (documentos, créditos y cuotas de los deudores).
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileCommands.cs",
     ];
 
     /// <summary>Cada lectura sensible: su archivo, su consulta y el método de <see cref="LendingAuditEmitter"/> que la audita.</summary>
@@ -67,6 +69,11 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
             nameof(LendingAuditEmitter.EmitirDocumentoReimpresoAsync)),
         ("Core/IngenIA365ERP.Application/Lending/Documents/IssueLendingDocumentCommand.cs", "IssueLendingDocumentCommand",
             nameof(LendingAuditEmitter.EmitirDocumentoEmitidoAsync)),
+        // K2 (T0818): el enlace de descarga del archivo de descuentos y el evento resumen de cada archivo generado (C46).
+        ("Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileCommands.cs", "IssuePayrollDeductionFileDownloadLinkCommand",
+            nameof(LendingAuditEmitter.EmitirArchivoDeDescuentosDescargadoAsync)),
+        ("Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileCommands.cs", "GeneratePayrollDeductionFileCommand",
+            nameof(LendingAuditEmitter.EmitirArchivoDeDescuentosGeneradoAsync)),
     ];
 
     /// <summary>La lista cerrada de research §13 y C89 (los diez eventos de T0256).</summary>

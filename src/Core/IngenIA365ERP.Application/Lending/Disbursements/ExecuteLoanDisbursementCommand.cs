@@ -186,8 +186,7 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
             {
                 foreach (var parte in r.Partes.Where(p => p.Role is CreditPartyRole.CoDebtor or CreditPartyRole.Guarantor))
                     db.LoanParties.Add(LoanParty.DeLaSolicitud(credito.Id, parte.PersonId, parte.Role, r.FechaValor, parte.Id));
-                db.LoanPayrollLinks.Add(LoanPayrollLink.AlOriginar(credito.Id, s.RepaymentChannel,
-                    s.RepaymentChannel == RepaymentChannel.OwnPayroll ? s.ApplicantPersonId : null, operacion.Id, r.FechaValor));
+                db.LoanPayrollLinks.Add(await VinculoAlOriginarAsync(s, credito.Id, operacion.Id, r.FechaValor, ct));
                 db.PrepaymentPreferences.Add(PrepaymentPreference.Registrar(s.ApplicantPersonId, credito.Id, null, s.PrepaymentChoice, 1, operacion.RegisteredAt,
                     PreferenceOrigin.Application, actor.UserId, s.Id, operacion.Id));
                 s.Desembolsar(credito.Id);
@@ -260,6 +259,42 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
         payoffs = recogidas.Select(p => new { loan = p.Loan.LoanNumber, operation = p.OperationPublicId, amount = p.Amount }),
         net = r.Bruto - recogidas.Sum(p => p.Amount),
     };
+
+    /// <summary>
+    /// El vínculo de forma de pago con que nace el crédito (C44; K2, T0842; FR-109, FR-111): la forma aprobada; la nómina propia con el empleado como
+    /// pagador (G7) y, desde K2, el convenio de la nómina propia si existe; la libranza con la pagaduría y el convenio de la solicitud, la
+    /// identificación del empleado ante ella, la certificación (el documento de la solicitud sin requisito) y el ingreso certificado. La fecha de la
+    /// libranza, para la prelación, es la del desembolso.
+    /// </summary>
+    private async Task<LoanPayrollLink> VinculoAlOriginarAsync(CreditApplication s, int creditoId, long operacionId, DateOnly fecha, CancellationToken ct)
+    {
+        if (s.RepaymentChannel == RepaymentChannel.PaymasterDeduction && s.PayrollAgreementId is { } convenioId)
+        {
+            var pagaduria = await db.PayrollAgreements.AsNoTracking().Where(a => a.Id == convenioId).Select(a => a.PaymasterPersonId).FirstAsync(ct);
+            var certificacion = await db.CreditApplicationDocuments.AsNoTracking()
+                .Where(d => d.ApplicationId == s.Id && d.RequirementId == null && d.PartyId == null && !d.IsDeleted)
+                .OrderByDescending(d => d.DocumentDate).ThenByDescending(d => d.Id).FirstOrDefaultAsync(ct);
+            var ingreso = await db.CreditApplicationParties.AsNoTracking()
+                .Where(p => p.ApplicationId == s.Id && p.Role == CreditPartyRole.Applicant && !p.IsDeleted).Select(p => p.MonthlyIncome).FirstOrDefaultAsync(ct);
+            var libranza = LoanPayrollLink.AlOriginar(creditoId, s.RepaymentChannel, pagaduria, operacionId, fecha);
+            libranza.PayrollAgreementId = convenioId;
+            libranza.EmployeeIdAtPaymaster = s.PayrollEmployeeIdentifier;
+            libranza.LibranzaDate = fecha;
+            libranza.CertificationAttachmentPublicId = certificacion?.AttachmentPublicId;
+            libranza.CertificationDate = certificacion?.DocumentDate;
+            libranza.CertifiedNetIncome = ingreso;
+            return libranza;
+        }
+        var vinculo = LoanPayrollLink.AlOriginar(creditoId, s.RepaymentChannel,
+            s.RepaymentChannel == RepaymentChannel.OwnPayroll ? s.ApplicantPersonId : null, operacionId, fecha);
+        if (s.RepaymentChannel == RepaymentChannel.OwnPayroll)
+        {
+            vinculo.LibranzaDate = fecha;
+            vinculo.PayrollAgreementId = await db.PayrollAgreements.AsNoTracking().Where(a => a.IsOwnPayroll && !a.IsDeleted).Select(a => (int?)a.Id)
+                .FirstOrDefaultAsync(ct);
+        }
+        return vinculo;
+    }
 
     private static Result<DisbursementResultDto> Falla(Error e) => Result.Failure<DisbursementResultDto>(e);
 }

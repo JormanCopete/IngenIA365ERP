@@ -98,6 +98,12 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/UsuryReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/DebtorMessagesReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/MigrationReconciliationReportQuery.cs",
+        // K2 (US10, bloque B; T0818): los archivos de descuento y sus líneas (por los créditos de sus líneas, el 404 fuera), los no aplicados, lo
+        // pendiente de giro y las dos vistas de la libranza.
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/NotApplied/InstallmentNonDeductionCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Agreements/PendingPayrollTransfersQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PayrollReportQueries.cs",
     ];
 
     /// <summary>
@@ -197,6 +203,11 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // US9 (bloque 12B): lo de toda la cooperativa, sin datos de deudores.
         ["GetRiskPolicyQuery"] = "la política SARC es del consejo y la norma es nacional: celdas y versiones, sin deudores ni oficina (Parameters.View)",
         ["GetMonthlyCloseReadinessQuery"] = "los requisitos del cierre son de toda la cooperativa: conteos y estados, sin deudores (MonthlyClose.Execute)",
+        // K2 (US10, bloque B): los convenios son un catálogo de la cooperativa; el archivo de una pagaduría lleva todas sus obligaciones.
+        ["ListPayrollAgreementsQuery"] = "catálogo de la cooperativa: un convenio de libranza no tiene oficina (contactos sin documento, C84)",
+        ["GetPayrollAgreementQuery"] = "catálogo de la cooperativa: un convenio de libranza no tiene oficina (contactos sin documento, C84)",
+        ["PreviewPayrollDeductionFileQuery"] =
+            "el archivo de una pagaduría lleva todas las obligaciones del convenio, de cualquier oficina: lo prepara quien genera (PayrollDeductionFiles.Generate)",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

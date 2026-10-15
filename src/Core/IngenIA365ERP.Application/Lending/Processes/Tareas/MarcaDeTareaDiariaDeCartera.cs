@@ -30,8 +30,8 @@ public sealed class MarcaDeTareaDiariaDeCartera(IApplicationDbContext db, IDateT
         new(TareaDeGirosSinResultado.NombreDeLaTarea, EntregaDeCartera.K1),
         new("cartera.cierre-programado", EntregaDeCartera.K1),
         new(TareaDeGarantiasPorVencer.NombreDeLaTarea, EntregaDeCartera.K1),
-        new("cartera.archivos-de-descuento", EntregaDeCartera.K2),
-        new("cartera.giros-de-pagaduria", EntregaDeCartera.K2),
+        new(Payroll.Tasks.TareaDeArchivosDeDescuento.NombreDeLaTarea, EntregaDeCartera.K2),
+        new(Payroll.Tasks.TareaDeGirosDePagaduria.NombreDeLaTarea, EntregaDeCartera.K2),
     ];
 
     /// <summary>El origen con que se marca una tarea.</summary>

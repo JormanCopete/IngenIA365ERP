@@ -207,16 +207,26 @@ public sealed class AplicacionDePagos(
 
         if (NoPagables.Contains(credito.Status)) return Falla(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
         if (ClasesDeMedioDeRecaudo.Validar(r.Class, pago.MeansClass, esResolucion: p.Origen is not null) is { } medio) return Falla(medio);
-        if (await fechas.ValidarAsync(r.Class, pago.ValueDate, pago.Amount, ct) is { } fecha) return Falla(fecha);
+        var pagador = await db.People.AsNoTracking().Where(x => x.PublicId == pago.PayerPublicId && !x.IsDeleted).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct);
+        if (pagador is null) return Falla(new Error(ErroresDePagos.CodigoNoEncontrado, "El pagador no es una persona del maestro."));
+
+        // K2 (T0840; interfaces §3.7, A9): el giro de una pagaduría externa cita la línea «descontado pendiente de giro» que cubre si el crédito tiene
+        // una de esa pagaduría; con ella la fecha valor es la del descuento, sin el límite de días ni la atribución antes de un cierre.
+        Domain.Entities.Lending.Payroll.PayrollDeductionResult? giro = null;
+        if (pago.MeansClass == ClaseDeMedioDeRecaudo.ExternalPaymasterDeduction)
+        {
+            var referido = await GiroDePagaduriaAsync(credito, pagador.Value, pago.DeductionFileLinePublicId, ct);
+            if (referido.IsFailure) return Falla(referido.Error);
+            giro = referido.Value;
+        }
+        if (await fechas.ValidarAsync(r.Class, giro?.DeductionDate ?? pago.ValueDate, pago.Amount, ct, conReferenciaDePagaduria: giro is not null) is { } fecha)
+            return Falla(fecha);
         var modalidad = ComprobantesDePago.Modalidad(pago.Modality);
         if (credito.Status == LoanStatus.WrittenOff && modalidad == PaymentModality.Advance)
             return Falla(new ErrorConDatos(ErroresDePagos.CodigoModalidadNoAdmitida, "Un crédito castigado no recibe anticipos: aplique el pago como valor libre.",
                 new { modality = modalidad.ToString() }));
-        var pagador = await db.People.AsNoTracking().Where(x => x.PublicId == pago.PayerPublicId && !x.IsDeleted).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct);
-        if (pagador is null) return Falla(new Error(ErroresDePagos.CodigoNoEncontrado, "El pagador no es una persona del maestro."));
-
         // (9) Puesta al día hasta la fecha valor (la de un desembolso en curso la escribe su tramo).
-        var v = pago.ValueDate;
+        var v = giro?.DeductionDate ?? pago.ValueDate;
         var control = await db.LoanControls.FirstAsync(c => c.LoanId == credito.Id, ct);
         var deOtro = puestaAlDia.EstaPendiente(credito.Id);
         var preparada = false;
@@ -299,6 +309,8 @@ public sealed class AplicacionDePagos(
             FinalityDate = firme,
             RelatedOperationId = p.Origen?.Id,
             InsuranceClaimId = reclamacion?.Id,
+            PayrollDeductionResultId = giro?.Id,
+            PaymasterPendingLineReference = giro is null ? null : pago.DeductionFileLinePublicId?.ToString("D"),
             Payload = payload,
             InputsSha256 = TramoDeDesembolso.Sha256(payload),
             RulesVersion = d.Estado.RulesVersion,
@@ -328,7 +340,10 @@ public sealed class AplicacionDePagos(
         var emitidos = await emision.PagoAplicadoAsync(new PagoAEmitir(datos.Hecho(contable.Value), operacion, r, pago.IdempotencyKey, pago.MeansClass,
             pago.PayerPublicId, pago.Receipt, modalidad, pago.Amount, dist.Excedente, efecto.Propias, efecto.DeCausacion, reasignaciones, aplicada.Eleccion,
             ComprobantesDePago.PlanDelHecho(aplicada.PlanNuevo, versionDelPlan?.VersionNumber ?? 0, d.Cargado.Vigentes.Periodicity.ToString()),
-            cancela, cancela ? firme : null, decision.SimulationId, p.ValidacionPrevia, reclamacion?.PublicId), ct);
+            cancela, cancela ? firme : null, decision.SimulationId, p.ValidacionPrevia, reclamacion?.PublicId)
+        {
+            DeductionFileLinePublicId = giro is null ? null : pago.DeductionFileLinePublicId,
+        }, ct);
         if (emitidos.IsFailure) return Falla(emitidos.Error);
         var u = emitidos.Value;
         if (efecto.Reanuda)
@@ -444,6 +459,31 @@ public sealed class AplicacionDePagos(
             u.De(CobroDeInteresEnSuspensoV1.Type) ?? u.De(PagoAplicadoV1.Type),
         _ => u.De(PagoAplicadoV1.Type),
     };
+
+    /// <summary>
+    /// K2 (T0840; interfaces §3.7; data-model §24.8): lo descontado pendiente de giro del crédito por esta pagaduría (el pagador del pago). Sin
+    /// pendientes de ella, el pago va sin referencia y no levanta nada (nulo; una referencia que llegue igual es <c>PaymasterReferenceInvalid</c>);
+    /// con pendientes, la referencia es obligatoria (<c>Lending.Payment.PaymasterReferenceRequired</c>) y tiene que ser de uno de ellos
+    /// (<c>.PaymasterReferenceInvalid</c>).
+    /// </summary>
+    private async Task<Result<Domain.Entities.Lending.Payroll.PayrollDeductionResult?>> GiroDePagaduriaAsync(Loan credito, int pagador, Guid? linea,
+        CancellationToken ct)
+    {
+        var pendientes = await (from res in Payroll.PendientesDeGiro.Consulta(db).AsNoTracking()
+                                join f in db.PayrollDeductionFiles.AsNoTracking() on res.PayrollDeductionFileId equals f.Id
+                                join a in db.PayrollAgreements.AsNoTracking() on f.PayrollAgreementId equals a.Id
+                                where res.LoanId == credito.Id && a.PaymasterPersonId == pagador
+                                select res).ToListAsync(ct);
+        if (linea is null)
+            return pendientes.Count > 0
+                ? Result.Failure<Domain.Entities.Lending.Payroll.PayrollDeductionResult?>(Payroll.ErroresDeLibranza.ReferenciaRequerida(credito.Number))
+                : Result.Success<Domain.Entities.Lending.Payroll.PayrollDeductionResult?>(null);
+        var id = await db.PayrollDeductionFileLines.AsNoTracking().Where(l => l.PublicId == linea.Value).Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
+        var pendiente = pendientes.Where(x => x.PayrollDeductionFileLineId == id).OrderByDescending(x => x.Id).FirstOrDefault();
+        return pendiente is null || pendiente.DeductionDate is null
+            ? Result.Failure<Domain.Entities.Lending.Payroll.PayrollDeductionResult?>(Payroll.ErroresDeLibranza.ReferenciaInvalida(credito.Number))
+            : Result.Success<Domain.Entities.Lending.Payroll.PayrollDeductionResult?>(pendiente);
+    }
 
     private sealed record TopeSellado(ResultadoDeTopeDePrepago Resultado, Guid Smmlv, Guid Limite);
 

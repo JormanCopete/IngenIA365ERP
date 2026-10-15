@@ -234,7 +234,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.DisbursementFile => db.DisbursementFiles.IgnoreQueryFilters().AnyAsync(f => f.Number == numero, ct),
         LendingNumberKind.SessionMinutes => db.LendingSessions.IgnoreQueryFilters().AnyAsync(s => s.Number == numero, ct),
         LendingNumberKind.IssuedDocument => db.IssuedLendingDocuments.IgnoreQueryFilters().AnyAsync(d => d.Number == numero, ct),
-        // K2 (archivo de descuentos) y K5 (archivos regulatorios): sus tablas nacen con su entrega.
+        LendingNumberKind.PayrollDeductionFile => db.PayrollDeductionFiles.IgnoreQueryFilters().AnyAsync(f => f.Number == numero, ct),
+        // K5 (archivos regulatorios): su tabla nace con su entrega.
         _ => Task.FromResult(false),
     };
 

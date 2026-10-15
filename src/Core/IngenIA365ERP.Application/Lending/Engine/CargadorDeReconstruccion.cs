@@ -93,6 +93,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                      select new { v.LoanId, v.OperationId, i.InstallmentNumber, i.PeriodStart, i.DueDate, i.Principal })
                 .ToListAsync(ct);
 
+        var giros = await PendientesDeGiroAsync(ids, operaciones, r, ct);
+
         var versionesDeLinea = condiciones.Where(t => t.VersionNumber == 1).Select(t => t.CreditLineVersionId).Distinct().ToList();
         var momentosDeSeguro = (await db.CreditLineInsurances.AsNoTracking().Where(s => versionesDeLinea.Contains(s.CreditLineVersionId))
                 .Select(s => new { s.CreditLineVersionId, s.Code, s.AccrualTiming }).ToListAsync(ct))
@@ -132,7 +134,7 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                                 .OrderBy(p => p.InstallmentNumber)
                                 .Select(p => new CuotaMigrada(p.InstallmentNumber, p.DueDate, p.Principal) { Desde = p.PeriodStart }).ToList()))
                         .ToList(),
-                    r);
+                    r) { PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [] };
                 resultado[credito.Id] = new CreditoCargado(credito, pactadas, vigentes, ops, leidas.Value.Aplicar(entrada), leidas.Value, null);
             }
             catch (ReglaDeCarteraException ex)
@@ -141,6 +143,40 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             }
         }
         return resultado;
+    }
+
+    /// <summary>
+    /// K2 (T0839; T30, FR-114; data-model §24.8): lo descontado por la pagaduría y pendiente de giro de cada crédito, conocido en R —resultados
+    /// <c>Deducted</c> o <c>PartiallyDeducted</c> registrados hasta R, no reemplazados por otro registrado hasta R y sin un pago de las operaciones
+    /// conocidas que los gire y no esté reversado—, con la cuota de su línea, la fecha del descuento y la ventana y el umbral sellados. Una línea sin
+    /// cuota (sólo vencido) no entra: la reconstrucción la mide como cualquier saldo vencido.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<int, IReadOnlyList<CuotaPendienteDeGiro>>> PendientesDeGiroAsync(IReadOnlyCollection<int> ids,
+        IReadOnlyList<LoanOperation> operaciones, DateTime r, CancellationToken ct)
+    {
+        var resultados = (await (from res in db.PayrollDeductionResults.AsNoTracking()
+                                 join lin in db.PayrollDeductionFileLines.AsNoTracking() on res.PayrollDeductionFileLineId equals lin.Id
+                                 where ids.Contains(res.LoanId) && !res.IsDeleted && res.DeductedAmount > 0m
+                                       && (res.Outcome == PayrollResultOutcome.Deducted || res.Outcome == PayrollResultOutcome.PartiallyDeducted)
+                                 select new
+                                 {
+                                     res.Id, res.LoanId, res.DeductedAmount, res.DeductionDate, res.TransferDueDate, res.PaymasterArrearsThresholdDays,
+                                     res.SupersedesResultId, res.CreatedAt, lin.InstallmentNumber,
+                                 }).ToListAsync(ct))
+            .Where(x => x.CreatedAt <= r).ToList();
+        if (resultados.Count == 0) return new Dictionary<int, IReadOnlyList<CuotaPendienteDeGiro>>();
+        var reemplazados = resultados.Where(x => x.SupersedesResultId is not null).Select(x => x.SupersedesResultId!.Value).ToHashSet();
+        var reversados = operaciones.Where(o => o.ReversesOperationId is not null).Select(o => o.ReversesOperationId!.Value).ToHashSet();
+        var girados = operaciones.Where(o => o.PayrollDeductionResultId is not null && !reversados.Contains(o.Id))
+            .Select(o => o.PayrollDeductionResultId!.Value).ToHashSet();
+        return resultados
+            .Where(x => !reemplazados.Contains(x.Id) && !girados.Contains(x.Id) && x.InstallmentNumber is not null && x.DeductionDate is not null)
+            .GroupBy(x => x.LoanId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<CuotaPendienteDeGiro>)g.Select(x => new CuotaPendienteDeGiro(x.InstallmentNumber!.Value,
+                x.DeductionDate!.Value, x.TransferDueDate ?? x.DeductionDate!.Value, x.DeductedAmount, x.CreatedAt)
+            {
+                UmbralDias = x.PaymasterArrearsThresholdDays,
+            }).ToList());
     }
 
     /// <summary>Un crédito (atajo de <see cref="CargarAsync"/>); nulo si no existe o no tiene condiciones.</summary>

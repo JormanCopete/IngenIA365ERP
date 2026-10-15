@@ -93,8 +93,10 @@ public sealed class SolicitudDeAplicacionValidator : AbstractValidator<Solicitud
             p.RuleFor(i => i.Choice).Null().When(i => i.Modality != ModalidadDePago.ExtraordinaryPrincipal)
                 .WithErrorCode("Choice").WithMessage("La elección sólo va en un abono extraordinario.");
             p.RuleFor(i => i.Choice).IsInEnum().When(i => i.Choice is not null).WithErrorCode("Choice");
-            p.RuleFor(i => i.DeductionFileLinePublicId).Null().WithErrorCode("DeductionFileLinePublicId")
-                .WithMessage("La referencia a una línea de descuentos de pagaduría llega con la entrega K2.");
+            // K2 (T0840): la referencia a la línea pendiente de giro sólo la trae el pago de una pagaduría externa.
+            p.RuleFor(i => i.DeductionFileLinePublicId).Null().When(i => i.MeansClass != ClaseDeMedioDeRecaudo.ExternalPaymasterDeduction)
+                .WithErrorCode("DeductionFileLinePublicId")
+                .WithMessage("La referencia a una línea del archivo de descuentos sólo va en el pago de una pagaduría.");
         });
         RuleForEach(x => x.Payments).Must((s, p) => GramaticaDeClaves.Cumple(s.Collector.Class, p.IdempotencyKey))
             .When(x => x.Collector is not null).WithErrorCode("IdempotencyKey").WithMessage((s, _) => GramaticaDeClaves.Mensaje(s.Collector.Class));

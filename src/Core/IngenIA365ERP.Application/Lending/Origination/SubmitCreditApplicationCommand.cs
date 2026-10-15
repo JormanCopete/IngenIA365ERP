@@ -124,6 +124,9 @@ public sealed class SubmitCreditApplicationCommandHandler(
     public static Error? DetenerAlRadicar(ValidacionesEvaluadas v)
     {
         if (v.Concentracion?.Error is { } excedida) return excedida;
+        // K2 (T0842; api.md §13.3): la libranza con pagaduría que excede la capacidad de descuento no se radica (422 con lo disponible).
+        if (v.Bloqueante(ApplicationCheckKind.DeductionCapacity) is { Codigo: Payroll.ErroresDeLibranza.CodigoCapacidadExcedida, Detalle: DetalleDeCapacidadDeLibranza d })
+            return Payroll.ErroresDeLibranza.CapacidadExcedida(d.Available, d.Requested);
         return v.Bloqueante(ApplicationCheckKind.Concentration) is { Codigo: ErroresDeOriginacion.CodigoSinPatrimonioTecnico }
             ? new Error(ErroresDeOriginacion.CodigoSinPatrimonioTecnico,
                 "No hay patrimonio técnico vigente registrado en Contabilidad: no se puede validar el límite de concentración. Pida al contador registrarlo.")

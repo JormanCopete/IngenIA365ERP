@@ -188,6 +188,19 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Documents.IssueLendingDocumentCommand),
         typeof(IngenIA365ERP.Application.Lending.Documents.SendLendingDocumentCommand),
         typeof(IngenIA365ERP.Application.Lending.Documents.VoidLendingDocumentCommand),
+        // K2 (US10, bloque B; T0818): convenios y su plantilla, el archivo de descuentos, el traslado, los no aplicados y el recaudador de prueba de
+        // la libranza. Sin clave sólo la vista previa del archivo (una consulta por POST) y su enlace de descarga (/download-link). Sus archivos de rutas
+        // (PayrollAgreementsEndpoints, PayrollDeductionFilesEndpoints, PayrollNotAppliedEndpoints) se suman a Archivos con las rutas (bloque C).
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.CreatePayrollAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.AddPayrollAgreementVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.SetPayrollAgreementContactsCommand),
+        typeof(IngenIA365ERP.Application.Lending.Imports.ImportPayrollAgreementsCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Files.GeneratePayrollDeductionFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Files.VoidPayrollDeductionFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.Transfers.TransferLoanPayrollCommand),
+        typeof(IngenIA365ERP.Application.Lending.Payroll.NotApplied.ResolveInstallmentNonDeductionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ConfirmTestPayrollFileSentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestPayrollDeductionResultCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

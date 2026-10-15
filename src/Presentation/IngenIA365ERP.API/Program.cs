@@ -280,6 +280,12 @@ try
     // Riesgo.CierreProgramado esta apagado (el defecto: el cierre es manual y la vigilancia alerta pasado el dia limite).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Risk.TareaDeCierreProgramado>();
+    // Feature 013, K2 (T0845; DT §2.13): las tareas de la libranza una vez al dia. cartera.archivos-de-descuento alerta los archivos cuya
+    // antelacion llego sin generar; cartera.giros-de-pagaduria alerta los giros atrasados y avisa al deudor superado el umbral. Salen sin Cartera activada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Payroll.Tasks.TareaDeArchivosDeDescuento>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Payroll.Tasks.TareaDeGirosDePagaduria>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

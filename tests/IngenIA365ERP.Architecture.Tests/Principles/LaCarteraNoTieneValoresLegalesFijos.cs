@@ -33,6 +33,16 @@ public class LaCarteraNoTieneValoresLegalesFijos
     };
 
     [Fact]
+    public void La_libranza_esta_en_la_regla()
+    {
+        // K2 (T0818): los motores puros de la libranza (Domain/Lending/Payroll) y su Application están entre los archivos que se revisan.
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => a.Replace('\\', '/')).ToList();
+        Assert.Contains(archivos, a => a.EndsWith("Domain/Lending/Payroll/CapacidadDeDescuento.cs", StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith("Domain/Lending/Payroll/NovedadesDeLibranza.cs", StringComparison.Ordinal));
+        Assert.Contains(archivos, a => a.EndsWith("Application/Lending/Payroll/ConveniosDeLibranza.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void El_motor_de_Cartera_no_lleva_valores_legales_fijos()
     {
         var root = RepoPath.FindRepoRoot();

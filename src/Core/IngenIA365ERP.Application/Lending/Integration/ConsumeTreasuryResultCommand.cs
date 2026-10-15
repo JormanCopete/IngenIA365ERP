@@ -182,12 +182,19 @@ public sealed class ConsumeTreasuryResultCommandHandler(
 /// <summary>
 /// Las versiones que acepta el destino <c>Lending</c> (mensajes.md §15.1; C16): <b>toda</b> versión de <c>VentaACreditoRegistrada</c> y
 /// <c>AjusteDeVentaACredito</c> —así una versión desconocida no se rechaza en el despachador sin respuesta: el consumidor deja su evaluación y la
-/// responde como no convertible— (US6, T0586) y <c>ResultadoDelGiro</c> v1 (US3). Lo demás, <c>Rejected</c> con <c>Integration.VersionNotAccepted</c>
+/// responde como no convertible— (US6, T0586), <c>ResultadoDelGiro</c> v1 (US3) y, desde K2, <c>EnvioDeDescuentosConfirmado</c> v1 y
+/// <c>ResultadoDeDescuentos</c> v1 (T0838). Lo demás, <c>Rejected</c> con <c>Integration.VersionNotAccepted</c>
 /// en el despachador. (nuevo)
 /// </summary>
 public static class VersionesAceptadasDeCartera
 {
-    private static readonly HashSet<(string Type, int Version)> Aceptadas = [(ResultadoDelGiroV1.Type, 1)];
+    private static readonly HashSet<(string Type, int Version)> Aceptadas =
+    [
+        (ResultadoDelGiroV1.Type, 1),
+        // K2 (T0838): lo que Recaudo devuelve del archivo de descuentos (la fila CAR del registro los adopta desde CarteraLibranza).
+        (EnvioDeDescuentosConfirmadoV1.Type, 1),
+        (ResultadoDeDescuentosV1.Type, 1),
+    ];
 
     /// <summary>Las familias de Comercial: se aceptan en toda versión (C16).</summary>
     private static readonly HashSet<string> FamiliasDeComercial =

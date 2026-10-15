@@ -73,8 +73,8 @@ public class ListIntegrationMessagesQueryTests
 
     /// <summary>
     /// Feature 013, US3 (bloque 7C) y US6 (bloque 10A, T0586): con <c>DestinoCartera</c> registrado, el destino <c>Lending</c> está disponible para lo que
-    /// acepta —<c>ResultadoDelGiro</c> v1 y, desde US6, la venta a crédito de Comercial en toda versión (C16)— y no para lo que no acepta (los
-    /// descuentos de pagaduría llegan con K2).
+    /// acepta —<c>ResultadoDelGiro</c> v1, desde US6 la venta a crédito de Comercial en toda versión (C16) y desde K2 lo que Recaudo devuelve del
+    /// archivo de descuentos— y no para lo que no acepta.
     /// </summary>
     [Fact]
     public async Task Con_DestinoCartera_Lending_esta_disponible_solo_para_lo_que_acepta()
@@ -97,7 +97,7 @@ public class ListIntegrationMessagesQueryTests
 
         filas.Single(m => m.MessagePublicId == giro.PublicId).DestinationAvailable.Should().BeTrue();
         filas.Single(m => m.MessagePublicId == credito.PublicId).DestinationAvailable.Should().BeTrue("desde US6 Cartera consume la familia de Comercial");
-        filas.Single(m => m.MessagePublicId == descuentos.PublicId).DestinationAvailable.Should().BeFalse("los descuentos de pagaduría llegan con K2");
+        filas.Single(m => m.MessagePublicId == descuentos.PublicId).DestinationAvailable.Should().BeTrue("desde K2 Cartera consume lo que Recaudo devuelve del archivo de descuentos");
     }
 
     [Fact]

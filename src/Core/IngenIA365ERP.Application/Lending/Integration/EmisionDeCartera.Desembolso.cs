@@ -25,6 +25,9 @@ public sealed record HechoDeCredito(
     DateOnly FechaContable)
 {
     public LoanRefV1 Referencia => new() { LoanPublicId = Credito.PublicId, LoanNumber = Credito.Number };
+
+    /// <summary>K2 (T0843; FR-116, C44): el sub-segmento que rige tras un traslado de libranza o el paso a la forma alterna; nulo = el de las condiciones.</summary>
+    public string? Subsegmento { get; init; }
 }
 
 /// <summary>Un tramo desembolsado tal como se emite (mensajes.md §10.1, §11.3). (nuevo)</summary>
@@ -88,7 +91,7 @@ public sealed partial class EmisionDeCartera
     {
         CreditLineCode = h.CodigoDeLinea,
         ModalityCode = h.Condiciones.ModalityCode,
-        SubsegmentCode = h.Condiciones.SubsegmentCode,
+        SubsegmentCode = h.Subsegmento ?? h.Condiciones.SubsegmentCode,
         RiskCategory = categoria.Category,
         RiskSubcategory = "None",
         IsEmployee = h.DeudorEsEmpleado,

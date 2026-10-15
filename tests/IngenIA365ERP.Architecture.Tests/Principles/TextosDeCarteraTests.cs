@@ -82,6 +82,14 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Documents/ConstructorDeDocumentosDeCartera.cs",
         "Core/IngenIA365ERP.Application/Lending/Documents/SendLendingDocumentCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Documents/AnulacionDeDocumentosPorReverso.cs",
+        // K2 (US10, bloque B; T0848): los errores de la libranza y los textos que lee la persona (avisos, alertas, plantilla, informes).
+        "Core/IngenIA365ERP.Application/Lending/Payroll/ErroresDeLibranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Results/SeguimientoDeNoAplicados.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Results/ConsumoDeLibranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Tasks/TareasDeLibranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Payroll/Transfers/TransferLoanPayrollCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Imports/PayrollAgreementsTemplate.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PayrollReportQueries.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

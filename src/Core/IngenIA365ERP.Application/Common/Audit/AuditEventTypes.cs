@@ -251,6 +251,10 @@ public static class AuditEventTypes
     // US3 (T0454, bloque 7B): la emisión del enlace de descarga de un archivo de desembolsos (adaptadores §6.2: «enlace firmado de 60 s, auditado»).
     public const string LendingDisbursementFileDownloaded = "Lending.DisbursementFile.Downloaded";
 
+    // K2 (T0836; C46): el evento resumen de cada archivo de descuentos (sus líneas van con [SinDiffDeAuditoria]) y el enlace de descarga.
+    public const string LendingPayrollDeductionFileGenerated = "Lending.PayrollDeductionFile.Generated";
+    public const string LendingPayrollDeductionFileDownloaded = "Lending.PayrollDeductionFile.Downloaded";
+
     // US5 (bloque 9B, T0546; interfaces §3.13; T68, A11): el contrato de obligaciones. El intento va por un contexto aparte (sobrevive a la
     // reversión del recaudador); el hecho, en COR_AuditOutbox dentro de la transacción con la distribución completa. Las lecturas del contrato
     // (listar y simular) llevan D, R y la huella; no son de la lista cerrada de lecturas sensibles.

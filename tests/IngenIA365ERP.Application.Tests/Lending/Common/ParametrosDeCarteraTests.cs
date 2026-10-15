@@ -90,14 +90,14 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K1_vigente_no_se_ofrece_ninguna_clave_de_K2_en_adelante()
+    public void Con_K2_vigente_se_ofrecen_las_de_libranza_y_ninguna_posterior()
     {
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K1);
-        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K1).ToList();
+        // T0849: K2 habilita las claves Libranza.*; las de K4 en adelante siguen sin ofrecerse.
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K2);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K2).ToList();
 
-        posteriores.Select(d => d.Clave).Should().BeEquivalentTo(
-            ["Libranza.CapacidadDeDescuento", "Libranza.VentanaDeGiroDias", "Libranza.UmbralDeMoraDePagaduria",
-             "AvisoPrevio.DiasMinimos", "AvisoPrevio.UmbralDosComunicaciones"]);
+        posteriores.Select(d => d.Clave).Should().BeEquivalentTo(["AvisoPrevio.DiasMinimos", "AvisoPrevio.UmbralDosComunicaciones"]);
+        ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
         posteriores.Should().OnlyContain(d => !d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Except(posteriores).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
     }

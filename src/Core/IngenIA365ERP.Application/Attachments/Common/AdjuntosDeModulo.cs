@@ -163,6 +163,21 @@ public static class AdjuntosDeModulo
     public const string ArchivoDeDesembolsos = "LendingDisbursementFile";
 
     /// <summary>
+    /// Feature 013, K2 (T0837, T78; adaptadores-y-archivos.md §9): el archivo de descuentos de una pagaduría tal como se generó (SHA-256 en
+    /// <c>LND_PayrollDeductionFiles</c>; viaja a Recaudo por su <c>PublicId</c> en <c>DescuentosPorPagaduria</c>). Lo genera Cartera: se lee con
+    /// <c>Lending.PayrollDeductionFiles.Read</c>, no recibe subidas y no se borra.
+    /// </summary>
+    public const string ArchivoDeDescuentos = "LendingPayrollDeductionFile";
+
+    /// <summary>
+    /// Feature 013, K2 (T0837; FR-109; adaptadores-y-archivos.md §9): la certificación laboral y de descuentos de la pagaduría. El dueño es la
+    /// <b>solicitud</b> que se radica por libranza —se lee con <c>Lending.Applications.Read</c>, se sube con <c>Lending.Applications.Create</c> mientras
+    /// la solicitud no esté decidida y decidida queda bloqueada (<c>Attachments.OwnerLocked</c>)— o el <b>crédito</b> que se traslada a otra pagaduría
+    /// (FR-116: se sube con <c>Lending.PayrollTransfers.Manage</c> y no se borra: respalda el vínculo nuevo).
+    /// </summary>
+    public const string CertificacionDeLibranza = "LendingPayrollCertification";
+
+    /// <summary>
     /// Feature 013, US8 (T0748, C62; plantillas.md §6): el archivo de cobros provisionales tal como se revisó antes de activar Cartera. El dueño es la
     /// carga aplicada (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>); la activación lo vuelve a leer y lo valida en su transacción. Lo genera Cartera:
     /// se lee con <c>Lending.Activation.Execute</c>, no recibe subidas y no se borra.
@@ -212,6 +227,7 @@ public static class AdjuntosDeModulo
     private const string AdministrarGarantias = "Lending.Guarantees.Manage";
 
     private const string LeerSolicitudesDeCredito = "Lending.Applications.Read";
+    private const string TrasladarLibranzas = "Lending.PayrollTransfers.Manage";
     private const string CrearSolicitudesDeCredito = "Lending.Applications.Create";
 
     private const string VerLineas = "Lending.CreditLines.View";
@@ -238,6 +254,7 @@ public static class AdjuntosDeModulo
         [InformeDeCentrales] = new("Lending.CreditBureau.ReadReports", Borrable: false, "el informe de una consulta a centrales de riesgo"),
         [SimulacionEnviada] = new("Lending.DebtorMessages.Read", Borrable: false, "la simulación enviada a la persona"),
         [ArchivoDeDesembolsos] = new("Lending.DisbursementFiles.Generate", Borrable: false, "el archivo de desembolsos de crédito que se entregó al banco"),
+        [ArchivoDeDescuentos] = new("Lending.PayrollDeductionFiles.Read", Borrable: false, "el archivo de descuentos que se entregó a una pagaduría"),
         [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
         [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
     };
@@ -262,7 +279,7 @@ public static class AdjuntosDeModulo
             AutorizacionDeDatos => VerHabeasData,
             SolicitudDelTitular => LeerSolicitudes,
             SoporteTributarioDeLinea => VerLineas,
-            DocumentoDeSolicitud => LeerSolicitudesDeCredito,
+            DocumentoDeSolicitud or CertificacionDeLibranza => LeerSolicitudesDeCredito,
             DocumentoDeGarantia => LeerGarantias,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
@@ -339,6 +356,23 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Solicitud de crédito no encontrada.");
             return SolicitudDecidida(solicitud.Value) ? SolicitudBloqueada() : null;
         }
+        if (ownerEntityType == CertificacionDeLibranza)
+        {
+            // Feature 013, K2 (T0837): la certificación de una solicitud por libranza (como sus demás soportes) o la de un traslado (el crédito).
+            var solicitudDeLibranza = await db.CreditApplications.AsNoTracking()
+                .Where(a => a.PublicId == ownerEntityPublicId && !a.IsDeleted)
+                .Select(a => (Domain.Enums.Lending.CreditApplicationStatus?)a.Status)
+                .FirstOrDefaultAsync(ct);
+            if (solicitudDeLibranza is { } estadoDeLibranza)
+            {
+                if (!await permisos.HasPermissionAsync(CrearSolicitudesDeCredito, ct)) return new Error("Generic.NotFound", "Solicitud de crédito no encontrada.");
+                return SolicitudDecidida(estadoDeLibranza) ? SolicitudBloqueada() : null;
+            }
+            if (!await permisos.HasPermissionAsync(TrasladarLibranzas, ct)
+                || !await db.Loans.AnyAsync(l => l.PublicId == ownerEntityPublicId && !l.IsDeleted, ct))
+                return new Error("Generic.NotFound", "Crédito no encontrado.");
+            return null;
+        }
         if (ownerEntityType == DocumentoDeGarantia)
         {
             if (!await permisos.HasPermissionAsync(AdministrarGarantias, ct)) return new Error("Generic.NotFound", "Garantía no encontrada.");
@@ -413,6 +447,20 @@ public static class AdjuntosDeModulo
             if (permisos is not null && !await permisos.HasPermissionAsync(CrearSolicitudesDeCredito, ct))
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return solicitud is { } estadoDeLaSolicitud && SolicitudDecidida(estadoDeLaSolicitud) ? SolicitudBloqueada() : null;
+        }
+        // Feature 013, K2 (T0837): la certificación de libranza se borra como un soporte de la solicitud; la de un traslado respalda el vínculo nuevo.
+        if (ownerEntityType == CertificacionDeLibranza)
+        {
+            var solicitudDeLibranza = await db.CreditApplications.AsNoTracking()
+                .Where(a => a.PublicId == ownerEntityPublicId)
+                .Select(a => (Domain.Enums.Lending.CreditApplicationStatus?)a.Status)
+                .FirstOrDefaultAsync(ct);
+            if (solicitudDeLibranza is null)
+                return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                    "Es la certificación que respalda el traslado de una libranza: se conserva y no se puede borrar.", new { ownerEntityType });
+            if (permisos is not null && !await permisos.HasPermissionAsync(CrearSolicitudesDeCredito, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return SolicitudDecidida(solicitudDeLibranza.Value) ? SolicitudBloqueada() : null;
         }
         // Feature 013 (T0450, T81): el soporte de una garantía o de un pagaré se borra sólo antes de perfeccionarse y de decidirse su dueño.
         if (ownerEntityType == DocumentoDeGarantia)

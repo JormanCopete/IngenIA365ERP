@@ -108,6 +108,20 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
         EmitAsync(AuditEventTypes.LendingDisbursementFileDownloaded, "DisbursementFile", filePublicId, new { number = numero, sha256 }, ct);
 
     /// <summary>
+    /// K2 (T0836; C46): el evento resumen de un archivo de descuentos —número, convenio, período, versión, conteos por novedad, total y huella—, en
+    /// la transacción de la generación (se llama después de su guardado). Sus líneas van con <c>[SinDiffDeAuditoria]</c>: no es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoDeDescuentosGeneradoAsync(Guid filePublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingPayrollDeductionFileGenerated, "PayrollDeductionFile", filePublicId, resumen, ct);
+
+    /// <summary>
+    /// K2 (T0836): el enlace de descarga de un archivo de descuentos (documentos, créditos y cuotas de los deudores). Se registra como el de los
+    /// demás archivos de módulo; no va en <see cref="LecturasSensibles"/>, que es la lista cerrada de research §13.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoDeDescuentosDescargadoAsync(Guid filePublicId, string numero, string sha256, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingPayrollDeductionFileDownloaded, "PayrollDeductionFile", filePublicId, new { number = numero, sha256 }, ct);
+
+    /// <summary>
     /// US8 (T0752): la activación de Cartera, en su transacción, con los requisitos evaluados, lo que nació y las huellas del cuadre, la conciliación y
     /// los cobros provisionales. No es una lectura sensible: no va en <see cref="LecturasSensibles"/>.
     /// </summary>

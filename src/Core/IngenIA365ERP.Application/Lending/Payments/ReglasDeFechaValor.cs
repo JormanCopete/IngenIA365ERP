@@ -81,10 +81,14 @@ public sealed class ReglasDeFechaValor(
         return FechaValorFijadaPorLaSpec(clase) ? new RangoDeFechaValor(null, null, dias) : new RangoDeFechaValor(hoy.AddDays(-dias), hoy, dias);
     }
 
-    /// <summary>El primer error de la fecha valor de un pago de <paramref name="monto"/>, o nulo si la fecha se admite.</summary>
-    public async Task<Error?> ValidarAsync(ClaseDeRecaudador clase, DateOnly fechaValor, decimal monto, CancellationToken ct)
+    /// <summary>
+    /// El primer error de la fecha valor de un pago de <paramref name="monto"/>, o nulo si la fecha se admite. <paramref name="conReferenciaDePagaduria"/>
+    /// es el giro de una pagaduría que cita su línea pendiente (K2, T0840, A9): su fecha valor es la del descuento y queda exenta como Nómina.
+    /// </summary>
+    public async Task<Error?> ValidarAsync(ClaseDeRecaudador clase, DateOnly fechaValor, decimal monto, CancellationToken ct, bool conReferenciaDePagaduria = false)
     {
-        var rango = await RangoAsync(clase, ct);
+        var exenta = FechaValorFijadaPorLaSpec(clase) || conReferenciaDePagaduria;
+        var rango = exenta ? new RangoDeFechaValor(null, null, 0) : await RangoAsync(clase, ct);
         if ((rango.Maxima is { } maxima && fechaValor > maxima) || (rango.Minima is { } minima && fechaValor < minima))
             return ErroresDePagos.FechaValorFueraDeRango(fechaValor, rango.Minima ?? fechaValor, rango.Maxima ?? fechaValor, rango.Dias);
 
@@ -93,7 +97,7 @@ public sealed class ReglasDeFechaValor(
         if (activacion is { } activada && fechaValor <= activada.AddDays(-1))
             return ErroresDePagos.AntesDelCorte(fechaValor, activada.AddDays(-1));
 
-        if (FechaValorFijadaPorLaSpec(clase)) return null;
+        if (exenta) return null;
         if (await cierres.CerradoHastaAsync(ct) is not { } cerrado || fechaValor > cerrado) return null;
         if (!permisos.EsMaestroGlobal && !(await permisos.ListAsync(ct)).Contains(PermisoAntesDelCierre, StringComparer.OrdinalIgnoreCase)) return ErroresDePagos.FechaValorAntesDelCierre(fechaValor, cerrado);
         var actor = await actorActual.ObtenerAsync(ct);

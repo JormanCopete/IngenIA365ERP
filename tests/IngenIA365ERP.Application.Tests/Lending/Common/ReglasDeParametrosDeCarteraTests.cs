@@ -92,7 +92,6 @@ public class ReglasDeParametrosDeCarteraTests
     }
 
     [Theory]
-    [InlineData(ParametrosDeCartera.LibranzaVentanaDeGiroDias, "K2")]
     [InlineData(ParametrosDeCartera.AvisoPrevioDiasMinimos, "K4")]
     public async Task Una_clave_de_una_entrega_posterior_es_NotYetAvailable_con_availableFrom(string clave, string entrega)
     {

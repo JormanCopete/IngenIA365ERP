@@ -105,12 +105,32 @@ public class PayrollDeductionFile : AuditableEntity
     /// </summary>
     public void Reemplazar(int nuevoArchivoId, DateTime instante)
     {
+        MarcarReemplazado(instante);
+        AnotarReemplazo(nuevoArchivoId);
+    }
+
+    /// <summary>
+    /// La primera mitad de <see cref="Reemplazar"/> (K2, T0836): deja este archivo <c>Superseded</c> <b>antes</b> de insertar la versión siguiente,
+    /// porque el único filtrado «un <c>Generated</c> por período» no admite los dos a la vez; el Id del nuevo se anota después
+    /// (<see cref="AnotarReemplazo"/>).
+    /// </summary>
+    public void MarcarReemplazado(DateTime instante)
+    {
         if (Status == PayrollFileStatus.Sent)
             throw new InvalidOperationException($"El archivo {Number} ya se envió: no se regenera (la corrección va en el período siguiente).");
         ExigirGenerado("regenerar");
         Status = PayrollFileStatus.Superseded;
-        SupersededByFileId = nuevoArchivoId;
         SupersededAt = instante;
+    }
+
+    /// <summary>La segunda mitad de <see cref="Reemplazar"/>: la versión que lo reemplazó, una vez y sólo en un archivo reemplazado.</summary>
+    public void AnotarReemplazo(int nuevoArchivoId)
+    {
+        if (Status != PayrollFileStatus.Superseded)
+            throw new InvalidOperationException($"El archivo {Number} no está reemplazado: está {Status}.");
+        if (SupersededByFileId is not null)
+            throw new InvalidOperationException($"El archivo {Number} ya apunta a su reemplazo.");
+        SupersededByFileId = nuevoArchivoId;
     }
 
     /// <summary>Anular, sólo desde <c>Generated</c> y con motivo (§32.4).</summary>

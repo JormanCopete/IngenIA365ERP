@@ -54,7 +54,9 @@ public sealed class DestinoCarteraTests : IAsyncLifetime
     [InlineData("AjusteDeVentaACredito", 2, true)]
     [InlineData("ResultadoDelGiro", 1, true)]
     [InlineData("ResultadoDelGiro", 2, false)]
-    [InlineData("ResultadoDeDescuentos", 1, false)]
+    [InlineData("ResultadoDeDescuentos", 1, true)]
+    [InlineData("EnvioDeDescuentosConfirmado", 1, true)]
+    [InlineData("ResultadoDeDescuentos", 2, false)]
     [InlineData("VentaFacturada", 1, false)]
     public void Acepta_toda_version_de_la_familia_de_Comercial_y_el_resultado_del_giro(string tipo, int version, bool acepta) =>
         Destino().Acepta(tipo, version).Should().Be(acepta);

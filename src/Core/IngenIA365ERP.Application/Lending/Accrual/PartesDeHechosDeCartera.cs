@@ -30,8 +30,14 @@ public sealed record DatosDeHecho(
 {
     public LoanRefV1 Referencia => new() { LoanPublicId = Credito.PublicId, LoanNumber = Credito.Number };
 
+    /// <summary>
+    /// K2 (T0843; FR-116, C44): el sub-segmento que rige después de un traslado de libranza o del paso a la forma alterna, si cambió frente al de
+    /// las condiciones; nulo = el de las condiciones.
+    /// </summary>
+    public string? Subsegmento { get; init; }
+
     public HechoDeCredito Hecho(DateOnly fechaContable) =>
-        new(Credito, Condiciones, CodigoDeLinea, DeudorPublicId, DeudorEsEmpleado, SucursalPublicId, fechaContable);
+        new(Credito, Condiciones, CodigoDeLinea, DeudorPublicId, DeudorEsEmpleado, SucursalPublicId, fechaContable) { Subsegmento = Subsegmento };
 }
 
 /// <summary>
@@ -115,14 +121,26 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                              where versiones.Contains(s.CreditLineVersionId)
                              select new { s.CreditLineVersionId, s.Code, p.PublicId }).ToListAsync(ct);
 
+        // K2 (T0843): el vínculo de libranza vigente de los créditos cuya forma de pago cambió después de nacer (traslado o forma alterna).
+        var creditos = lista.Select(c => c.Credito.Id).ToList();
+        var cambiados = (await db.LoanPayrollLinks.AsNoTracking()
+                .Where(v => creditos.Contains(v.LoanId) && !v.IsDeleted && v.ValidTo == null
+                            && (v.Origin == LoanPayrollLinkOrigin.Transfer || v.Origin == LoanPayrollLinkOrigin.ChannelChange))
+                .ToListAsync(ct))
+            .GroupBy(v => v.LoanId).ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.ValidFrom).First());
+
         var datos = new Dictionary<int, DatosDeHecho>();
         foreach (var c in lista)
         {
             var deudor = deudores.GetValueOrDefault(c.Credito.DebtorPersonId);
             var suyos = seguros.Where(s => s.CreditLineVersionId == c.Pactadas.CreditLineVersionId).ToList();
+            var subsegmento = EmisionDeCartera.SubsegmentoVigente(c.Vigentes.SubsegmentCode, cambiados.GetValueOrDefault(c.Credito.Id));
             datos[c.Credito.Id] = new DatosDeHecho(c.Credito, c.Vigentes, codigos.GetValueOrDefault(c.Credito.CreditLineId) ?? string.Empty,
                 deudor?.PublicId ?? Guid.Empty, deudor?.IsEmployee ?? false, sucursales.GetValueOrDefault(c.Credito.BranchId),
-                suyos.Count == 1 ? suyos[0].PublicId : null);
+                suyos.Count == 1 ? suyos[0].PublicId : null)
+            {
+                Subsegmento = subsegmento == c.Vigentes.SubsegmentCode ? null : subsegmento,
+            };
         }
         return datos;
     }

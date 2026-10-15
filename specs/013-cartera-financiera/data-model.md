@@ -2060,6 +2060,15 @@ También se fija aquí la **numeración** de los enums de §2.7 que no la traía
 `Lending.Contract.UnknownMeansClass`; `Lending.Reversal.DisbursementPaidOut`; y `Lending.Payment.MeansClassNotAllowed`
 (C30).
 
+**Códigos de error de K2** (libranza, T0848; mensajes en español en `Application/Lending/Payroll/ErroresDeLibranza.cs`, vigilados por
+`TextosDeCarteraTests`): `Lending.PayrollAgreement.NotFound`, `.PayerNotLegalEntity`, `.OperatorRegistrationMissing`,
+`.OwnPayrollAlreadyExists`, `.OwnPayrollNotCooperative`, `.VersionOverlaps`, `.VersionInUse`, `.NoCurrentVersion`, `.NotAvailable`,
+`.ResultCodeDuplicate`; `Lending.Payroll.DeductionCapacityExceeded` (`data: { available, requested }`), `.CertificationRequired`;
+`Lending.Loan.NotPayroll`; `Lending.PayrollFile.AlreadySent`, `.Superseded`, `.HashMismatch`, `.LineMismatch` (`data.lines[]`),
+`.OwnPayrollHasNoFile`, `.Empty`, `.LineTooLong`, `.PeriodInvalid`; `Lending.PayrollDeductionFile.NotFound`;
+`Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`; `Lending.InstallmentNonDeduction.AlreadyResolved`, `.NotFound`.
+Reusa `Catalogo.CodigoDuplicado`, `Core.BankFileFormat.ScopeMismatch` y `Lending.Parameter.BelowLegalFloor`.
+
 **Defectos de parámetros** que §2.20 dejaba a este documento (§0.15), sembrados «pendiente de validar»:
 `Originacion.DiasVigenciaDeAprobacion` 30, `Reservas.DiasDeVigencia` 5, `Giros.DiasSinResultado` 3 hábiles,
 `Cupo.MoraMaximaParaVender` 0, `Bloqueos.DiasDeMoraParaBloquear` 30, `Centrales.DiasDeVigenciaDeConsulta` 30,
