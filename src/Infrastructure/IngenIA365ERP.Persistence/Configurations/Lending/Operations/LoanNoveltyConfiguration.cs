@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Core;
+﻿using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Governance;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
@@ -85,7 +85,7 @@ public class LoanNoveltyLoanConfiguration : IEntityTypeConfiguration<LoanNovelty
     }
 }
 
-/// <summary><c>LND_LoanNoveltyConsents</c>: <c>UK (LoanNoveltyId, PersonId, CollateralId)</c>.</summary>
+/// <summary><c>LND_LoanNoveltyConsents</c>: <c>UK (LoanNoveltyId, PersonId, CollateralId)</c>, partido en dos filtrados por la garantía nula.</summary>
 public class LoanNoveltyConsentConfiguration : IEntityTypeConfiguration<LoanNoveltyConsent>
 {
     public const string Tabla = "LND_LoanNoveltyConsents";
@@ -107,8 +107,13 @@ public class LoanNoveltyConsentConfiguration : IEntityTypeConfiguration<LoanNove
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditDecision>().WithMany().HasForeignKey(e => e.ExceptionDecisionId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(e => new { e.LoanNoveltyId, e.PersonId, e.CollateralId }).IsUnique()
-            .HasDatabaseName("UK_LND_LoanNoveltyConsents_Novelty_Person_Collateral");
+        // Dos únicos filtrados en lugar de uno sobre (novedad, persona, garantía): con la garantía nula, PostgreSQL no trata
+        // los nulos como iguales y EF filtra el único de SQL Server a garantía no nula, así que ninguno impedía repetir a
+        // la misma persona sin garantía.
+        builder.HasIndex(e => new { e.LoanNoveltyId, e.PersonId, e.CollateralId }, "UK_LND_LoanNoveltyConsents_Novelty_Person_Collateral")
+            .IsUnique().HasFilter("[CollateralId] IS NOT NULL");
+        builder.HasIndex(e => new { e.LoanNoveltyId, e.PersonId }, "UK_LND_LoanNoveltyConsents_Novelty_Person_NoCollateral")
+            .IsUnique().HasFilter("[CollateralId] IS NULL");
         builder.HasIndex(e => e.PersonId).HasDatabaseName("IX_LND_LoanNoveltyConsents_PersonId");
         builder.HasIndex(e => e.CollateralId).HasDatabaseName("IX_LND_LoanNoveltyConsents_CollateralId");
         builder.HasIndex(e => e.RecordedByUserId).HasDatabaseName("IX_LND_LoanNoveltyConsents_RecordedByUserId");
