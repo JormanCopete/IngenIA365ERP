@@ -628,9 +628,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `LendingPending` y `LendingLoadWillExpire`), leyendo sólo recibos `ACC_LendingPostings` y entregas; la conciliación
   compara **por conjuntos de cuentas** y explica cada diferencia hecho por hecho; `DESC_CARTERA` vuelve a contabilizar
   en Nómina contra el puente «recaudos por nómina para Cartera» (enmienda D-08 de la 010). La 009 quedó enmendada en
-  sus artefactos (E-01, 2026-10-13). La migración aditiva `IntegracionContableDeCartera` (cuatro tablas `ACC_`) es
-  **regenerable**: la fase 12 la quita y la vuelve a generar detrás de `CarteraRiesgo` (C103, C104) y no se aplica fuera
-  de local ni de las e2e hasta congelar K1. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+  sus artefactos (E-01, 2026-10-13). **Las migraciones de K1 están congeladas desde el 2026-10-15 (T0802)**:
+  `CarteraNucleo` (93 tablas `LND_`), `CarteraRiesgo` (7) e `IntegracionContableDeCartera` (cuatro `ACC_`), en ese orden
+  detrás de `RetiroDeLaCarteraHeredada`, todas aditivas; todo cambio de esquema posterior (K2–K6b, la feature 014 de
+  Ahorros o una corrección de K1) es una **migración nueva**, nunca una regeneración. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
   pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.

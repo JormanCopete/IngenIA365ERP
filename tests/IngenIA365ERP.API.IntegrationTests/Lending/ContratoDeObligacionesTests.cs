@@ -48,7 +48,8 @@ public sealed class ContratoDeObligacionesTests(CentralIdentityApiFixture fx)
         var (creditoA, creditoB) = (Credito(a), Credito(b));
         var cuota1 = await CuotaAsync(http, u.Jefe.Token, creditoA);
         var cuota2 = await CuotaAsync(http, u.Jefe.Token, creditoA, 2);
-        var dia = cuota1.Vence.AddDays(10);
+        // Diez días después de la fecha exigible (no del vencimiento): así la mora es 10 cualquier día de la semana.
+        var dia = (await ExigibleAsync(http, u.Jefe.Token, creditoA)).AddDays(10);
 
         using (RelojEn(fx, dia))
         {

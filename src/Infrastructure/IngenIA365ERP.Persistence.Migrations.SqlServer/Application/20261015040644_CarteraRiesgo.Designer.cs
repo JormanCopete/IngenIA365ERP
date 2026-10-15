@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261014093033_CarteraNucleo")]
-    partial class CarteraNucleo
+    [Migration("20261015040644_CarteraRiesgo")]
+    partial class CarteraRiesgo
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -34644,6 +34644,959 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("LND_LoanDailyPositions", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LiftReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("LiftedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("LiftedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("LiftedEffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<int>("LoanId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime>("SetAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SetByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Subcategory")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SupportAttachmentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LiftedByUserId")
+                        .HasDatabaseName("IX_LND_AnalysisRatings_LiftedByUserId");
+
+                    b.HasIndex("LoanId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_AnalysisRatings_Loan_Active")
+                        .HasFilter("[LiftedAt] IS NULL AND [IsDeleted] = 0");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_AnalysisRatings_PublicId");
+
+                    b.HasIndex("SetByUserId")
+                        .HasDatabaseName("IX_LND_AnalysisRatings_SetByUserId");
+
+                    b.ToTable("LND_AnalysisRatings", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ArrearsHistoryLoadId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("DaysPastDueAtMonthEnd")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("LoanId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxDaysPastDue")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MigrationLoadId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("PeriodMonth")
+                        .HasColumnType("tinyint");
+
+                    b.Property<short>("PeriodYear")
+                        .HasColumnType("smallint");
+
+                    b.Property<string>("PredecessorLoanNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int?>("ProcessRunId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MigrationLoadId")
+                        .HasDatabaseName("IX_LND_LoanArrearsHistory_MigrationLoadId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_LoanArrearsHistory_PublicId");
+
+                    b.HasIndex("ProcessRunId", "LoanId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_LoanArrearsHistory_Run_Loan")
+                        .HasFilter("[ProcessRunId] IS NOT NULL");
+
+                    b.HasIndex("LoanId", "PeriodYear", "PeriodMonth")
+                        .HasDatabaseName("IX_LND_LoanArrearsHistory_Loan_Period");
+
+                    b.ToTable("LND_LoanArrearsHistory", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ActivationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly>("CloseDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("ClosedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("DocumentsUsedJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IncompleteHistory")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IncompleteHistoryJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("InformationCutoffAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LinesSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("LoanCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ModelBySegmentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("NationalValuesWatermark")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("ObligatoryModelUnavailable")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("OrderedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("OrderedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte>("PeriodMonth")
+                        .HasColumnType("tinyint");
+
+                    b.Property<short>("PeriodYear")
+                        .HasColumnType("smallint");
+
+                    b.Property<int?>("PreviousCloseId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ProcessRunId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("RiskPolicyVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SupersedesCloseId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalGeneralImpairment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalIndividualImpairment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalInterest")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalPrincipal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("TotalsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("UnvalidatedParameters")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("UnvalidatedParametersJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActivationId")
+                        .HasDatabaseName("IX_LND_MonthlyCloses_ActivationId");
+
+                    b.HasIndex("CloseDate")
+                        .HasDatabaseName("IX_LND_MonthlyCloses_CloseDate");
+
+                    b.HasIndex("Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloses_Base")
+                        .HasFilter("[Kind] = 1");
+
+                    b.HasIndex("OrderedByUserId")
+                        .HasDatabaseName("IX_LND_MonthlyCloses_OrderedByUserId");
+
+                    b.HasIndex("PreviousCloseId")
+                        .HasDatabaseName("IX_LND_MonthlyCloses_PreviousCloseId");
+
+                    b.HasIndex("ProcessRunId")
+                        .HasDatabaseName("IX_LND_MonthlyCloses_ProcessRunId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloses_PublicId");
+
+                    b.HasIndex("RiskPolicyVersionId")
+                        .HasDatabaseName("IX_LND_MonthlyCloses_RiskPolicyVersionId");
+
+                    b.HasIndex("SupersedesCloseId")
+                        .HasDatabaseName("IX_LND_MonthlyCloses_SupersedesCloseId");
+
+                    b.HasIndex("Kind", "PeriodYear", "PeriodMonth", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloses_Period");
+
+                    b.ToTable("LND_MonthlyCloses", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AdditionalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AdditionalPercentage")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CompensationOfIndividual")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("Delta")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("GrossPortfolio")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ImpairmentModel")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsEmployee")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("MinimumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MinimumPercentage")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<string>("ModalityCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("MonthlyCloseId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PreviousAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SourceJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SubsegmentCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId")
+                        .HasDatabaseName("IX_LND_MonthlyCloseGeneralImpairments_BranchId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloseGeneralImpairments_PublicId");
+
+                    b.HasIndex("MonthlyCloseId", "BranchId", "ModalityCode", "SubsegmentCode", "IsEmployee", "ImpairmentModel")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloseGeneralImpairments_Dimensions")
+                        .HasFilter("[SubsegmentCode] IS NOT NULL");
+
+                    b.ToTable("LND_MonthlyCloseGeneralImpairments", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccountingRating")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ArrearsRating")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BalancesByConceptJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("BatchNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CandidatesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("CollateralAdmissibleValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ContributionsDeducted")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("CreditLineId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CurrentInterestBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("DaysPastDueAtClose")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("DefaultInterestBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ExpectedLossSegmentCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("ExplanationJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("ExposureAtDefault")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("FinalRating")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FinalSubcategory")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ImpairmentBase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ImpairmentDelta")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ImpairmentModel")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ImpairmentPercentage")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal>("InterestImpairment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsEmployee")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRestructured")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSuspended")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsWrittenOff")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LoanId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("LossGivenDefault")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<int>("MaxDaysPastDueInMonth")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ModalityCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("ModelBasis")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ModelRating")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MonthlyCloseId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MonthsInE")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("OfficePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("OtherBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("OtherImpairment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PreviousAccountingRating")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("PreviousTotalImpairment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PrincipalBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PrincipalImpairment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ProbabilityOfDefault")
+                        .HasPrecision(28, 18)
+                        .HasColumnType("decimal(28,18)");
+
+                    b.Property<int?>("ProcessRunId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RatingCause")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RestructuringCount")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SarcSegmentCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("SubsegmentCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<decimal>("SuspendedInterestBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalImpairment")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId")
+                        .HasDatabaseName("IX_LND_MonthlyCloseLoans_BranchId");
+
+                    b.HasIndex("CreditLineId")
+                        .HasDatabaseName("IX_LND_MonthlyCloseLoans_CreditLineId");
+
+                    b.HasIndex("LoanId")
+                        .HasDatabaseName("IX_LND_MonthlyCloseLoans_LoanId");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("IX_LND_MonthlyCloseLoans_PersonId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloseLoans_PublicId");
+
+                    b.HasIndex("MonthlyCloseId", "LoanId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloseLoans_Close_Loan")
+                        .HasFilter("[MonthlyCloseId] IS NOT NULL");
+
+                    b.HasIndex("ProcessRunId", "LoanId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloseLoans_Run_Loan")
+                        .HasFilter("[ProcessRunId] IS NOT NULL");
+
+                    b.ToTable("LND_MonthlyCloseLoans", "dbo", t =>
+                        {
+                            t.HasCheckConstraint("CK_LND_MonthlyCloseLoans_Link", "([ProcessRunId] IS NOT NULL AND [MonthlyCloseId] IS NULL) OR ([ProcessRunId] IS NULL AND [MonthlyCloseId] IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountingPeriodStatusJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("MonthlyCloseId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProcessRunId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("ReopenedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ReopenedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReversalPartCount")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MonthlyCloseId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloseReopenings_MonthlyCloseId");
+
+                    b.HasIndex("ProcessRunId")
+                        .HasDatabaseName("IX_LND_MonthlyCloseReopenings_ProcessRunId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_MonthlyCloseReopenings_PublicId");
+
+                    b.HasIndex("ReopenedByUserId")
+                        .HasDatabaseName("IX_LND_MonthlyCloseReopenings_ReopenedByUserId");
+
+                    b.ToTable("LND_MonthlyCloseReopenings", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("BaseDocumentPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BaseDocumentSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Overrides")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OverridesSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RegisteredByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int?>("SessionItemId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly>("ValidFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("ValidatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ValidatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_RiskPolicyVersions_PublicId");
+
+                    b.HasIndex("RegisteredByUserId")
+                        .HasDatabaseName("IX_LND_RiskPolicyVersions_RegisteredByUserId");
+
+                    b.HasIndex("SessionItemId")
+                        .HasDatabaseName("IX_LND_RiskPolicyVersions_SessionItemId");
+
+                    b.HasIndex("ValidatedByUserId")
+                        .HasDatabaseName("IX_LND_RiskPolicyVersions_ValidatedByUserId");
+
+                    b.HasIndex("VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UK_LND_RiskPolicyVersions_VersionNumber");
+
+                    b.HasIndex("ValidFrom", "VersionNumber")
+                        .HasDatabaseName("IX_LND_RiskPolicyVersions_ValidFrom_VersionNumber");
+
+                    b.ToTable("LND_RiskPolicyVersions", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment", b =>
                 {
                     b.Property<long>("Id")
@@ -52261,6 +53214,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", null)
+                        .WithMany()
+                        .HasForeignKey("MonthlyCloseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening", null)
+                        .WithMany()
+                        .HasForeignKey("MonthlyCloseReopeningId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun", null)
                         .WithMany()
                         .HasForeignKey("ProcessRunId")
@@ -53530,6 +54493,170 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired();
 
                     b.Navigation("Loan");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("LiftedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Loans.Loan", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("SetByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Loans.Loan", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.MigrationLoad", null)
+                        .WithMany()
+                        .HasForeignKey("MigrationLoadId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Migration.LendingActivation", null)
+                        .WithMany()
+                        .HasForeignKey("ActivationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("OrderedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousCloseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion", null)
+                        .WithMany()
+                        .HasForeignKey("RiskPolicyVersionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", null)
+                        .WithMany()
+                        .HasForeignKey("SupersedesCloseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", null)
+                        .WithMany()
+                        .HasForeignKey("MonthlyCloseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Configuration.CreditLine", null)
+                        .WithMany()
+                        .HasForeignKey("CreditLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Loans.Loan", null)
+                        .WithMany()
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", null)
+                        .WithMany()
+                        .HasForeignKey("MonthlyCloseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessRunId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseReopening", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose", null)
+                        .WithMany()
+                        .HasForeignKey("MonthlyCloseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Integration.LendingProcessRun", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ReopenedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Governance.SessionItem", null)
+                        .WithMany()
+                        .HasForeignKey("SessionItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
+                        .WithMany()
+                        .HasForeignKey("ValidatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment", b =>

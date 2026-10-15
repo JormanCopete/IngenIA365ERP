@@ -292,9 +292,10 @@ public sealed class DesembolsoYRecogidaTests(CentralIdentityApiFixture fx)
         var (persona, _) = await DeudorAsync(http, esc.Coop.TokenAdmin, "RecogidaEnMora");
         var (anterior, _) = await AprobadaAsync(http, esc, persona, 1_000_000m);
         var enMora = (await DesembolsarAsync(http, esc, Desembolso(esc, anterior, persona))).GetProperty("loanPublicId").GetGuid();
-        var vence = (await PagosE2E.CuotaAsync(http, esc.Usuarios.Jefe.Token, enMora)).Vence;
+        // Tres días después de la fecha exigible (art. 829), no del vencimiento: la mora es 3 cualquier día de la semana.
+        var exigible = await PagosE2E.ExigibleAsync(http, esc.Usuarios.Jefe.Token, enMora);
 
-        using (CausacionE2E.RelojEn(fx, vence.AddDays(3)))
+        using (CausacionE2E.RelojEn(fx, exigible.AddDays(3)))
         {
             var solicitud = await AprobadaConRecogidaAsync(http, esc, persona, 3_000_000m, enMora);
             var cuerpo = Desembolso(esc, solicitud, persona);
