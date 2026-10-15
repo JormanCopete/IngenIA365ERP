@@ -453,10 +453,13 @@ public static class AccountingErrors
             + "Procéselos ahora o cierre de todos modos: lo que siga pendiente se rechazará por período cerrado y se recupera reabriendo el mes.",
             new { pending, inBatch, rejected, oldestOperationDate, types });
 
-    /// <summary>Cerrar el mes deja sin poder activar la carga de Cartera ya aplicada (§12, c; FR-142): aviso reconocible.</summary>
+    /// <summary>
+    /// La carga de Cartera aplicada todavía no se activó y su día de activación cae en el mes que se cierra (§12, c; FR-142): aviso reconocible. Desde
+    /// la respuesta del dueño del 2026-10-14 cerrar el mes ya no impide activar: lo que emita la activación se registra en el primer mes abierto.
+    /// </summary>
     public static Error PeriodLendingLoadWillExpire(DateOnly cutoffDate, Guid loadPublicId) =>
         new ErrorConDatos("Accounting.Period.LendingLoadWillExpire",
-            $"La carga de Cartera con corte al {cutoffDate:yyyy-MM-dd} todavía no se activó: si cierra este mes, esa carga ya no podrá activarse y habrá que cargarla de nuevo. Active Cartera primero o cierre de todos modos.",
+            $"La carga de Cartera con corte al {cutoffDate:yyyy-MM-dd} todavía no se activó y su día de activación cae en este mes: si lo cierra, la activación sigue siendo posible, pero lo que emita se registrará en el primer mes abierto siguiente. Active Cartera primero o cierre de todos modos.",
             new { cutoffDate, loadPublicId });
 
     public static Error LendingBatchAlreadyRunning(Guid batchPublicId, long number) =>

@@ -614,9 +614,13 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   modo; los acompañantes sellan el del principal y el tipo sale del hecho principal: `DS`, `RC`, `DN` si recauda Nómina,
   `CA`, `PV` y el nuevo `CN` —24 tipos sembrados, 40 permisos contables—) y la causación **por lotes resumida**: un `CA`
   por día con la sucursal en cada línea y una línea por crédito donde la cuenta exige tercero o cruce; los reversos
-  heredan el modo de su original; la **validación previa** (`IContabilidadParaCartera.EvaluarAsync`) **bloquea sólo en
-  las pantallas de Cartera** (`Lending.Prevalidation.NotPostable` / `.NoResponse`), mientras el contrato de
-  obligaciones, Comercial y los procesos aplican, sellan y alertan (`Cartera.HechoNoContabilizable`, enmienda A8); lo de
+  heredan el modo de su original; la **validación previa** (`IContabilidadParaCartera.EvaluarAsync`) la gobierna el
+  parámetro `Contabilidad.FaltaDeRegla`, que **arranca en «Bloquear»** (A8, decisión del dueño del 2026-10-14): si falta
+  la regla, la pantalla no confirma (`Lending.Prevalidation.NotPostable`), el contrato rechaza el pago, Nómina no
+  aprueba (`Payroll.LoanDeductionNotPostable`), la venta de Comercial queda en reproceso y el proceso detiene su tanda y
+  alerta (`Cartera.HechoNoContabilizable`); con «Advertir» todo se aplica, sella y alerta, y sin contabilidad iniciada o
+  con el hecho en «no pasa» nada se bloquea. `.PoliticaSinRespuesta` (Contabilidad no responde) sigue bloqueando sólo
+  en pantalla; lo de
   Cartera **no se reversa desde Comprobantes** (`Accounting.Document.ModuleOwned` con mensaje propio y
   `Accounting.Document.LendingCorrectsWithNewVoucher` en `PrepareReversalAsync`): se corrige con un **comprobante
   nuevo** de su propio hecho y fecha, con las dimensiones vigentes del saldo; Contabilidad **no cierra un mes que

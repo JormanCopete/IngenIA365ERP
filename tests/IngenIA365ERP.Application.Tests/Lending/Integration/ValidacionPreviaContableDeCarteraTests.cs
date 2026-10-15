@@ -23,9 +23,11 @@ namespace IngenIA365ERP.Application.Tests.Lending.Integration;
 /// <summary>
 /// Feature 013, US7, T0626 (contabilidad.md §13.1–§13.3; FR-127, T56, enmienda A8, C80): la validación previa contable de Cartera sobre un doble
 /// de <see cref="IContabilidadParaCartera"/>. Por origen —pantalla, contrato, consumidor de Comercial, procesos y cobros provisionales—, con
-/// hallazgos y sin respuesta (excepción o tiempo agotado): sólo en pantalla <c>Contabilidad.FaltaDeRegla = Bloquear</c> responde 422
-/// <c>Lending.Prevalidation.NotPostable</c> con <c>data.errors[] { factType, role, combination, account, rule, whoFixes }</c> y
-/// <c>PoliticaSinRespuesta = Bloquear</c> 422 <c>Lending.Prevalidation.NoResponse</c>; lo demás advierte y sella. <c>FaltaDeRegla</c> gobierna
+/// hallazgos y sin respuesta (excepción o tiempo agotado): <c>Contabilidad.FaltaDeRegla = Bloquear</c> bloquea con
+/// <c>Lending.Prevalidation.NotPostable</c> y <c>data.errors[] { factType, role, combination, account, rule, whoFixes }</c> en <b>todo</b> origen
+/// (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14; fuera de la pantalla, con alerta) y <c>PoliticaSinRespuesta = Bloquear</c> sólo en
+/// pantalla (422 <c>Lending.Prevalidation.NoResponse</c>); con <c>Advertir</c> se advierte y sella. Los procesos sólo preguntan si la política podría
+/// bloquear (<see cref="ValidacionPreviaContableDeCartera.DecidirEnProcesoAsync"/>). <c>FaltaDeRegla</c> gobierna
 /// todo hallazgo; una pregunta por combinación; los <c>NoPasa</c>, informativos y otros destinos no se preguntan; la reserva de número no se
 /// evalúa; alerta <c>Cartera.HechoNoContabilizable</c> por combinación y día.
 /// </summary>
@@ -67,11 +69,11 @@ public class ValidacionPreviaContableDeCarteraTests
         _contabilidad.EvaluarAsync(Arg.Do<IReadOnlyList<MensajeContableDto>>(_preguntas.Add), Arg.Any<CancellationToken>())
             .Returns(Result.Success(new ResultadoDeEvaluacionContableDto(hallazgos.Length == 0, hallazgos, [])));
 
-    private void Politica(string clave, string valor)
+    private void Politica(string clave, string valor, DateOnly? desde = null)
     {
         _db.ParameterVersions.Add(new ParameterVersion
         {
-            Module = ParametrosDeCartera.Modulo, Key = clave, Value = valor, ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+            Module = ParametrosDeCartera.Modulo, Key = clave, Value = valor, ValidFrom = desde ?? new DateOnly(2026, 1, 1), Reason = "prueba",
             ScopeKind = ParameterScopeKind.None, CreatedBy = "test",
         });
         _db.SaveChanges();
@@ -123,6 +125,7 @@ public class ValidacionPreviaContableDeCarteraTests
     public async Task En_pantalla_con_Advertir_confirma_sella_NotPostable_y_alerta()
     {
         Responde(ReglaFaltante);
+        Politica(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Advertir");
 
         var d = await Validacion().DecidirAsync([Hecho()], OrigenDeValidacionPrevia.Pantalla, "SOL-1", default);
 
@@ -137,22 +140,71 @@ public class ValidacionPreviaContableDeCarteraTests
     [InlineData(OrigenDeValidacionPrevia.ConsumidorDeComercial)]
     [InlineData(OrigenDeValidacionPrevia.Proceso)]
     [InlineData(OrigenDeValidacionPrevia.CobroProvisional)]
-    public async Task Fuera_de_las_pantallas_nunca_bloquea_aunque_la_politica_diga_Bloquear(OrigenDeValidacionPrevia origen)
+    public async Task Fuera_de_las_pantallas_la_falta_de_regla_con_Bloquear_tambien_bloquea_y_alerta(OrigenDeValidacionPrevia origen)
     {
+        // A8 = «Bloquear todo» (respuesta del dueño, 2026-10-14; contraria a la propuesta, que sólo bloqueaba en pantalla).
         Responde(ReglaFaltante);
         Politica(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Bloquear");
         Politica(ParametrosDeCartera.ContabilidadPoliticaSinRespuesta, "Bloquear");
 
         var d = await Validacion().DecidirAsync([Hecho()], origen, "PG-7", default);
 
-        d.Bloquea.Should().BeFalse("enmienda A8: el contrato, el consumidor y los procesos siempre advierten");
+        d.Bloquea.Should().BeTrue("A8 = «Bloquear todo»: el contrato, el consumidor y los procesos también se detienen");
+        d.Bloqueo!.Code.Should().Be("Lending.Prevalidation.NotPostable");
         d.Outcome.Should().Be(PrevalidationOutcome.NotPostable);
-        _alertasLevantadas.Should().ContainSingle();
+        _alertasLevantadas.Should().ContainSingle("fuera de la pantalla quien opera no corrige la matriz: se alerta a quien sí")
+            .Which.Body.Should().Contain("no se confirmó");
 
         _contabilidad.EvaluarAsync(Arg.Any<IReadOnlyList<MensajeContableDto>>(), Arg.Any<CancellationToken>()).ThrowsAsync(new TimeoutException("caída"));
         var sinRespuesta = await Validacion().DecidirAsync([Hecho()], origen, "PG-7", default);
-        sinRespuesta.Bloquea.Should().BeFalse();
+        sinRespuesta.Bloquea.Should().BeFalse("PoliticaSinRespuesta sigue mordiendo sólo en pantalla: A8 tocó la falta de regla");
         sinRespuesta.Outcome.Should().Be(PrevalidationOutcome.NoResponse);
+    }
+
+    [Theory]
+    [InlineData(OrigenDeValidacionPrevia.Contrato)]
+    [InlineData(OrigenDeValidacionPrevia.Proceso)]
+    public async Task Fuera_de_las_pantallas_con_Advertir_sigue_advirtiendo(OrigenDeValidacionPrevia origen)
+    {
+        Responde(ReglaFaltante);
+        Politica(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Advertir");
+
+        var d = await Validacion().DecidirAsync([Hecho()], origen, "PG-7", default);
+
+        d.Bloquea.Should().BeFalse("con Advertir fijado (el defecto es Bloquear desde el 2026-10-14)");
+        d.Outcome.Should().Be(PrevalidationOutcome.NotPostable);
+        _alertasLevantadas.Should().ContainSingle().Which.Body.Should().Contain("se confirmó");
+    }
+
+    [Fact]
+    public async Task Un_proceso_no_pregunta_con_Advertir_y_con_Bloquear_se_detiene_sin_alertar_todavia()
+    {
+        Responde(ReglaFaltante);
+        Politica(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Advertir");
+
+        (await Validacion().DecidirEnProcesoAsync([Hecho()], default)).Should().BeNull();
+        _preguntas.Should().BeEmpty("con Advertir los procesos no preguntan, como hasta el 2026-10-14");
+
+        Politica(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Bloquear", Hoy);
+        var detenida = await Validacion().DecidirEnProcesoAsync([Hecho()], default);
+
+        detenida.Should().NotBeNull();
+        detenida!.Bloqueo!.Code.Should().Be("Lending.Prevalidation.NotPostable");
+        _alertasLevantadas.Should().BeEmpty("el proceso alerta después de deshacer su tanda");
+        await Validacion().AlertarBloqueoAsync(detenida.Resultado, "la causación del 2026-12-14", default);
+        _alertasLevantadas.Should().ContainSingle().Which.Body.Should().Contain("no se confirmó");
+    }
+
+    [Fact]
+    public async Task Un_proceso_con_Bloquear_y_sin_contabilidad_iniciada_no_se_detiene()
+    {
+        Responde(ReglaFaltante);
+        Politica(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Bloquear");
+        _contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new EstadoDelPeriodoDto(false, EstadoDePeriodoContable.NotFound, null)));
+
+        (await Validacion().DecidirEnProcesoAsync([Hecho()], default)).Should().BeNull("sin contabilidad iniciada nada pasa y no hay qué bloquear (§10.1)");
+        (await Validacion().DecidirAsync([Hecho()], OrigenDeValidacionPrevia.Contrato, "PG-7", default)).Bloquea.Should().BeFalse();
     }
 
     [Fact]

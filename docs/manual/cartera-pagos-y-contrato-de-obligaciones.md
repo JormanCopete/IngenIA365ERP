@@ -124,7 +124,7 @@ contable abierto, nunca el recaudador.
 
 | Regla | Si falla |
 |---|---|
-| nunca futura | `Lending.Payment.ValueDateOutOfRange` |
+| nunca futura. **Nómina está exenta** (respuesta del dueño del 2026-10-14, A9): la ordinaria aprobada antes del fin del período recauda con la fecha valor del fin del período, y la definitiva con la de su aprobación; desde K2, igual la pagaduría con referencia. Una persona nunca registra una fecha futura | `Lending.Payment.ValueDateOutOfRange` |
 | hasta `Pagos.DiasMaximosFechaValor` días atrás (5 por defecto, parámetro con vigencia en `/cartera/parametros`). **Nómina está exenta**: su fecha la fija la norma | `Lending.Payment.ValueDateOutOfRange` (con la fecha mínima) |
 | posterior al corte de la carga inicial: lo de antes ya debía venir en los saldos de apertura | `Lending.Payment.BeforeCutoff` |
 | si cae en un mes con **cierre de Cartera** vigente, quien actúa necesita `Lending.Payments.BackdateBeforeClose` y que el valor no supere su límite de monto. Se mira a la persona —sus permisos y su límite—, no su alcance de oficina o línea. Nómina está exenta | `Lending.Payment.ValueDateBeforeClosing` |

@@ -3325,9 +3325,62 @@ el congelamiento, `has-pending-model-changes` limpio y la colección «Cartera e
 
 > Tarea de base de entrega (sin historia): es la última de K1 y va después de todo lo que cambia el esquema de K1.
 
-- [ ] T0801 Registrar, antes del congelamiento (T0802), las respuestas del dueño a las preguntas que afectan a K1 —**A1–A11, B1, B4, C1, F1 y H7** (DT §5)— en specs/013-cartera-financiera/spec.md («Clarifications», una sesión nueva con la fecha) y en specs/013-cartera-financiera/decisiones-transversales.md (§5, la respuesta junto a cada pregunta); donde el dueño no respondió, se anota la **propuesta vigente** con «rige la propuesta por defecto, sin respuesta del dueño a la fecha» (dueño)
+- [X] T0801 Registrar, antes del congelamiento (T0802), las respuestas del dueño a las preguntas que afectan a K1 —**A1–A11, B1, B4, C1, F1 y H7** (DT §5)— en specs/013-cartera-financiera/spec.md («Clarifications», una sesión nueva con la fecha) y en specs/013-cartera-financiera/decisiones-transversales.md (§5, la respuesta junto a cada pregunta); donde el dueño no respondió, se anota la **propuesta vigente** con «rige la propuesta por defecto, sin respuesta del dueño a la fecha» (dueño)
   · si una respuesta contradice lo construido en K1 (por ejemplo A3 rechazada: se quitan los tres contingentes de C15; C1: Contabilidad entra o no a la cadena), se corrige **antes** de T0802, porque después del congelamiento todo cambio de esquema es una migración nueva;
   · B4 y E11 ya se registraron en la fase 1 (T0016, T0017); H7 se completa con el nombre del revisor en T1083.
+  - Hecho (2026-10-14): respuestas del dueño en DT §5 (columna «Respuesta del dueño» de cada tabla, y el grupo nuevo **J** con las tres
+    preguntas surgidas al construir K1) y en spec.md («Clarifications», Session 2026-10-14, con FR-012, FR-075, FR-127, FR-142 y E-01
+    ajustados). **Sí, la propuesta**: A1, A2, A3 (contingentes con `NoPasa`), A5, A6, A7, A11, B1, C1, F1, I6; A4 sin respuesta (rige la
+    propuesta); B4: QA no corre como Production (sin cambio); H7: el segundo revisor es el dueño (Jorman Copete) y el diagnóstico en
+    producción sólo con su autorización expresa en el momento (no se corrió nada en producción); A10: ahorros, aportes y CDT se renuevan en
+    una feature nueva de Ahorros después de K1 (P18 en `docs/operaciones/estado-y-pendientes.md`; nada construido). **Lo que cambió el código**:
+    (1) **A9 = sí**: `ReglasDeFechaValor.FechaValorFijadaPorLaSpec` (Nómina; la pagaduría con referencia se suma en K2, T0840) exime de la
+    fecha futura además de la ventana y del cierre (`RangoDeFechaValor` con mínima y máxima nulas); una persona sigue sin fecha futura.
+    Pruebas: `ContratoDeObligacionesDeCarteraTests.Nomina_aplica_con_fecha_valor_futura_y_antes_de_un_cierre_y_una_persona_no` y la e2e
+    `NominaRecaudaPorElContratoTests.La_ordinaria_aprobada_antes_del_fin_del_periodo_recauda_con_la_fecha_valor_del_fin_del_periodo`.
+    (2) **A8 = «Bloquear todo»** (contraria a la propuesta): `ValidacionPreviaContableDeCartera.DecidirAsync` bloquea con
+    `Contabilidad.FaltaDeRegla = Bloquear` en cualquier origen (fuera de la pantalla también alerta, cuerpo «no se confirmó»);
+    `PoliticaSinRespuesta` sigue sólo en pantalla. El contrato decide por combinación (línea, modalidad, sub-segmento, sucursal, clase) y
+    rechaza los pagos de la combinación sin regla con `Lending.Prevalidation.NotPostable` y `data.errors[]`; Nómina convierte ese rechazo
+    en la falla entera de la aprobación —ordinaria y definitiva— con `Payroll.LoanDeductionNotPostable` (nuevo, data-model §10, C111;
+    `RecaudoDeNomina.NoContabilizable`); el consumidor de Comercial deja el recibo `Rejected` y reprocesable sin obligación; los procesos
+    (causación diaria y su cierre de corrida, corrección por valor nacional, transacción final del cierre mensual) preguntan por
+    `ValidacionPreviaDeProceso` (nuevo; sólo si la política podría bloquear, sin tiempo máximo, sobre los hechos agregados sin guardar) y,
+    si bloquea, no guardan la tanda, alertan y dejan la corrida `Failed` con el código («Reintentar» la retoma desde el cursor). Sin
+    contabilidad iniciada o en `NoPasa` nada se bloquea. Contratos: contabilidad.md §13.2, interfaces.md §3.12, data-model §10, DT §3
+    (Contabilidad) y el catálogo de parámetros. Pruebas: `ValidacionPreviaContableDeCarteraTests` (por origen con `Bloquear`, con
+    `Advertir`, procesos con y sin contabilidad iniciada), `ContratoDeObligacionesDeCarteraTests` (`Advertir` aplica y sella; `Bloquear`
+    rechaza sin escribir), `RecaudoPorNominaTests` y `ApproveSettlementCommandHandlerTests` (`Payroll.LoanDeductionNotPostable`),
+    `RunDailyAccrualCommandHandlerTests.Con_FaltaDeRegla_Bloquear_y_la_causacion_sin_regla_la_tanda_no_avanza_alerta_y_reintentada_sigue`;
+    la e2e `ContabilizacionDeCarteraPorMensajesTests` ahora espera el rechazo del pago contra el hueco con `Bloquear` y pasa a `Advertir`
+    para el resto del recorrido. (3) **J1, la recogida queda fuera del tope de prepago**: `AplicacionDePagos` no llama a `TopeAsync` con
+    `OwnLoanPayoff` (no se sella ni se bloquea sin SMMLV o `PREPAGO_TOPE_SMMLV`); prueba
+    `La_recogida_queda_fuera_del_tope_de_prepago_y_no_se_bloquea_sin_SMMLV_ni_limite`. (4) **J2, el mes de C+1 cerrado no limita**:
+    `RequisitosDeActivacion` deja `AccountingMonthOpen` en `NotApplicable` y agrega el aviso `AccountingMonthClosed` (estado y respuesta,
+    `LendingActivationDto.Warnings`); sin contabilidad iniciada sigue faltando; `DeadlinePassed` es sólo el plazo (mensaje y `data` sin el mes
+    cerrado); verificado que `FechaContable` lleva el `CarteraActivada` al primer mes siguiente abierto (con diciembre cerrado, 2027-01-01);
+    el aviso `Accounting.Period.LendingLoadWillExpire` cambió de texto (ya no dice que la carga no podrá activarse). Pruebas en
+    `ActivacionSinCarteraPreviaTests` y `RequisitosDeActivacionTests`. (5) **J3, asesor**: `cartera.asesor` suma `Lending.CreditLines.View`;
+    los roles creados desde las plantillas son de la cooperativa y se editan en Seguridad › Roles (`PUT /api/admin/roles/{id}`, documentado
+    en `cartera-gobierno-y-seguridad.md` §8); `UsuariosDeCartera` ya no crea el rol de ensayo `ENS-CAR-LINEAS`. **Fallas de la corrida
+    anterior**: `RetiroDeLaCarteraHeredadaTests` (las dos) era un defecto de la prueba —`/api/reports/lending` volvió con el centro de informes
+    (DT §2.15) y `aging` es una vista nueva—: ahora verifica que no quedan las rutas heredadas (`aging/`, `loan-statement`, `person-portfolio`,
+    `savings-statement`) y que bajo el prefijo sólo hay `/{vista}`; `DocumentosDeCarteraTests` (3) recibía 429 del limitador de
+    `POST /api/auth/login` (10 por minuto por IP en el host compartido de la regresión completa): `UsuariosDeCartera.IngresarAsync` manda su
+    propia `CF-Connecting-IP`; `CausacionYLiquidacionTests.Los_dos_motores_saltan_lo_ocupado…` en SQL Server: dos corridas que terminaban a la
+    vez tomaban las mismas entregas sin lote y la segunda chocaba por la RowVersion —defecto del producto—: `CicloDiarioDeCartera.TerminarAsync`
+    guarda lo pendiente antes y arma el lote y su asignación bajo un punto de guardado; la que pierde vuelve al punto y sigue. Y un defecto de
+    Nómina que destapó la e2e nueva: poner, quitar y volver a poner las cuentas de un concepto respondía 500
+    (`UX_PAY_ConceptDefinitionAccounts_Default` no mira el borrado lógico); `SetConceptAccountsCommand` revive la fila retirada
+    (`ConceptDefinitionCommandsTests`). **Defecto de `Contabilidad.FaltaDeRegla` = `Bloquear`** (decisión del dueño del mismo día, cambiada en
+    `ParametrosDeCartera`): las pruebas de «Advertir» lo fijan explícitamente (`ValidacionPreviaContableDeCarteraTests`, `ContratoDeObligacionesDeCarteraTests`,
+    `ExecuteLoanDisbursementCommandHandlerTests`), `ParametrosDeCarteraTests` y `EntregaDeModuloTests` esperan el defecto nuevo, y
+    `CarteraE2E.ActivarCarteraAsync` fija `Advertir` desde el corte (`OpcionesDeActivacion.AdvertirSinRegla`, por defecto sí) porque esas
+    cooperativas inician la contabilidad sin matriz: con el defecto nuevo 40 e2e quedaban detenidas en el desembolso
+    (`Lending.Prevalidation.NotPostable`); `ContabilizacionDeCarteraPorMensajesTests` sigue fijando `Bloquear` con su vigencia. Documentado en
+    data-model §12.1, DT (§2.20, §3, §5 A8), contabilidad.md §13.2, interfaces.md §3.12, spec y manuales. Sin columnas nuevas ni migraciones.
+    Resultados (antes del cambio de defecto): e2e de módulos en PostgreSQL 328 pasan y 11 omitidas (las de rendimiento y la de hashes), en SQL Server 328 y 11; regresión completa en PostgreSQL 565 pasan y 13 omitidas, ninguna falla; suites sin contenedores Domain 1.925, Application 5.288, Architecture 602 y Shared 443, verdes; solución con 0 errores; `check-migration-parity.ps1` verde (Admin 15, Application 42). Con el defecto en `Bloquear`: e2e de módulos PostgreSQL 328 + 11 omitidas y SQL Server 328 + 11, regresión
+    completa PostgreSQL 565 + 13 omitidas, ninguna falla; las cuatro suites sin contenedores verdes (Application 5.288).
 
 - [ ] T0802 Congelar los tres pares de K1 (C103, C104; más `CarteraInformes`, el cuarto, si E11 = sí según T0017): borrar y **regenerar una última vez** con `tools/scripts/add-migration.ps1`, en PostgreSQL y SQL Server y en este orden, `CarteraNucleo`, `CarteraRiesgo` e `IntegracionContableDeCartera` sobre el modelo final de K1 (detrás de `RetiroDeLaCarteraHeredada`); revisar a mano el snapshot de cada motor y el SQL de los seis archivos (`dotnet ef migrations script` de cada par): sólo las tablas de su lista de data-model §14 (`CarteraNucleo` con las 74 + 17 más las dos del grupo conectado de C112, 76 + 17, sin FK hacia riesgo; `CarteraRiesgo` con las siete y las FK de C66; `IntegracionContableDeCartera` con las cuatro `ACC_`), índices con nombre de 63 caracteres o menos, filtros por motor, FK `Restrict`, la fila `LND_Setup` `Id = 1` por `INSERT … WHERE NOT EXISTS`, ninguna operación sobre tablas existentes ni sobre las 38 de `Savings`; `check-migration-parity.ps1` y `dotnet ef migrations has-pending-model-changes` limpios en los dos motores; correr «Cartera e2e», «Valores nacionales e2e», «Nomina e2e», «Inventario e2e» y «Contabilidad e2e» con `DB_PROVIDER=PostgreSql` y `SqlServer`. Commit propio con los tres pares, sus designers y snapshots. **Desde aquí los pares de K1 quedan congelados**: todo cambio de esquema posterior (K2–K6b, o una corrección de K1 ya promovida) es una migración nueva, nunca una regeneración; es el primer momento en que estos pares pueden aplicarse fuera de local y de las e2e.
 

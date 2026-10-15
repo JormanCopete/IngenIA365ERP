@@ -202,13 +202,7 @@ public sealed class ContratoDeObligacionesDeCartera(
         if (await RechazoDeLoteAsync(validadorDeAplicacion, solicitud, solicitud.Collector, ct) is { } lote)
             return await RechazarLoteAsync(solicitud, lote, ct);
 
-        var validacion = await ValidacionPreviaAsync(solicitud.Collector, pagos, ct);
-        var avisos = validacion switch
-        {
-            PrevalidationOutcome.NotPostable => new[] { "Lending.Prevalidation.NotPostable" },
-            PrevalidationOutcome.NoResponse => ["Lending.Prevalidation.NoResponse"],
-            _ => [],
-        };
+        var previas = await ValidacionPreviaAsync(solicitud.Collector, pagos, ct);
 
         await BloquearAsync(pagos.Select(p => p.ObligationPublicId).Concat(noDescontados.Select(n => n.ObligationPublicId)).ToList(), ct);
         var corte = await CorteAsync(ct);
@@ -217,9 +211,21 @@ public sealed class ContratoDeObligacionesDeCartera(
         foreach (var pago in pagos)
         {
             // US8 (T0753, FR-142): lo pagado hasta el corte de la migración debía venir en la carga; desde el día siguiente entra con su fecha valor.
+            // A8 = «Bloquear todo» (2026-10-14): con Contabilidad.FaltaDeRegla = Bloquear, el pago cuya combinación no se puede contabilizar se
+            // rechaza con Lending.Prevalidation.NotPostable (y su data.errors[]); los demás ítems del lote siguen.
+            var previa = previas.GetValueOrDefault(pago.ObligationPublicId);
+            var validacion = previa?.Outcome ?? PrevalidationOutcome.NotApplicable;
+            string[] avisos = validacion switch
+            {
+                PrevalidationOutcome.NotPostable => ["Lending.Prevalidation.NotPostable"],
+                PrevalidationOutcome.NoResponse => ["Lending.Prevalidation.NoResponse"],
+                _ => [],
+            };
             var r = corte is { } diaDelCorte && pago.ValueDate <= diaDelCorte
                 ? Result.Failure<PagoAplicado>(Migration.ErroresDeMigracion.AntesDelCorte(pago.ValueDate, diaDelCorte))
-                : await aplicacion.AplicarAsync(new PagoEnCurso(solicitud.Collector, solicitud.Form, pago, validacion) { Avisos = avisos }, ct);
+                : previa?.Bloqueo is { } bloqueo
+                    ? Result.Failure<PagoAplicado>(bloqueo)
+                    : await aplicacion.AplicarAsync(new PagoEnCurso(solicitud.Collector, solicitud.Form, pago, validacion) { Avisos = avisos }, ct);
             if (r.IsSuccess)
             {
                 var c = r.Value.Comprobante;
@@ -410,19 +416,34 @@ public sealed class ContratoDeObligacionesDeCartera(
 
     /// <summary>
     /// La validación previa contable del lote (§3.12, A8): un <c>PagoAplicado</c> por combinación de dimensiones (línea, modalidad, sub-segmento,
-    /// sucursal y clase del recaudador), fuera del cerrojo; en el contrato nunca bloquea: su sello va en cada operación y su aviso en el comprobante.
+    /// sucursal y clase del recaudador), fuera del cerrojo, y la decisión de cada obligación del lote. Con <c>Contabilidad.FaltaDeRegla = Bloquear</c>
+    /// la combinación que no se puede contabilizar bloquea sus pagos (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14; hasta ese día el
+    /// contrato nunca bloqueaba); si no, su sello va en cada operación y su aviso en el comprobante.
     /// </summary>
-    private async Task<PrevalidationOutcome> ValidacionPreviaAsync(Recaudador recaudador, IReadOnlyList<PagoAAplicar> pagos, CancellationToken ct)
+    private async Task<IReadOnlyDictionary<Guid, DecisionDeValidacionPrevia>> ValidacionPreviaAsync(Recaudador recaudador, IReadOnlyList<PagoAAplicar> pagos,
+        CancellationToken ct)
     {
-        if (pagos.Count == 0) return PrevalidationOutcome.NotApplicable;
+        if (pagos.Count == 0) return new Dictionary<Guid, DecisionDeValidacionPrevia>();
         var publicos = pagos.Select(p => p.ObligationPublicId).Distinct().ToList();
         var combinaciones = await (from l in db.Loans.AsNoTracking()
                                    join c in db.CreditLines.AsNoTracking().IgnoreQueryFilters() on l.CreditLineId equals c.Id
                                    join t in db.LoanTermsVersions.AsNoTracking() on l.Id equals t.LoanId
                                    join b in db.Branches.AsNoTracking().IgnoreQueryFilters() on l.BranchId equals b.Id
                                    where publicos.Contains(l.PublicId) && t.VersionNumber == 1
-                                   select new { c.Code, t.ModalityCode, t.SubsegmentCode, Branch = b.PublicId, l.DebtorPersonId }).Distinct().ToListAsync(ct);
-        var hechos = combinaciones.Select(c => (c.Code, c.ModalityCode, c.SubsegmentCode, c.Branch)).Distinct().Select(c => new MensajeContableDto(
+                                   select new { l.PublicId, c.Code, t.ModalityCode, t.SubsegmentCode, Branch = b.PublicId }).Distinct().ToListAsync(ct);
+        var decisiones = new Dictionary<Guid, DecisionDeValidacionPrevia>();
+        foreach (var grupo in combinaciones.GroupBy(c => (c.Code, c.ModalityCode, c.SubsegmentCode, c.Branch)))
+        {
+            var decision = await validacionPrevia.DecidirAsync([Hecho(recaudador, grupo.Key)], OrigenDeValidacionPrevia.Contrato,
+                $"el lote de {recaudador.Class}", ct);
+            foreach (var credito in grupo) decisiones[credito.PublicId] = decision;
+        }
+        return decisiones;
+    }
+
+    /// <summary>El <c>PagoAplicado</c> de una combinación (sin importes reales: la validación sólo mira hecho, sucursal y dimensiones).</summary>
+    private static MensajeContableDto Hecho(Recaudador recaudador, (string Code, string ModalityCode, string? SubsegmentCode, Guid Branch) c) =>
+        new(
             new IntegrationEnvelopeV1
             {
                 MessageId = Guid.Empty, Type = PagoAplicadoV1.Type, Kind = IntegrationMessageKind.Business, OriginModule = ModulosDeOrigen.Cartera,
@@ -437,9 +458,5 @@ public sealed class ContratoDeObligacionesDeCartera(
                     BranchPublicId = c.Branch, ImpairmentModel = "ArrearsAnnex1", RiskSegment = c.ModalityCode, ValueUnit = "Pesos",
                 },
                 Amounts = [new ConceptAmountV1 { Concept = nameof(LoanConcept.Principal), Amount = 1m }],
-            })).ToList();
-        // Origen contrato (§13.2, A8): siempre advierte; un NotPostable se sella y alerta, nunca bloquea.
-        var r = await validacionPrevia.DecidirAsync(hechos, OrigenDeValidacionPrevia.Contrato, $"el lote de {recaudador.Class}", ct);
-        return r.Outcome;
-    }
+            });
 }

@@ -136,9 +136,10 @@ public static class PerfilesSugeridos
             ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.TestDoubles.Operate"]),
 
         new("cartera.asesor", ModuloCartera, "Asesor de crédito",
-            "Simula, radica y envía solicitudes, consulta centrales, registra garantías y pagarés, emite documentos y escribe al deudor.",
+            "Consulta las líneas, simula, radica y envía solicitudes, consulta centrales, registra garantías y pagarés, emite documentos y escribe al deudor.",
             [
-                "Lending.Simulations.Run", "Lending.Applications.Read", "Lending.Applications.Create", "Lending.Applications.Submit",
+                // Lending.CreditLines.View: respuesta del dueño del 2026-10-14 (sólo consultar; cada cooperativa lo quita o lo agrega en Seguridad › Roles).
+                "Lending.CreditLines.View", "Lending.Simulations.Run", "Lending.Applications.Read", "Lending.Applications.Create", "Lending.Applications.Submit",
                 "Lending.PrepaymentPreferences.Manage", "Lending.CreditBureau.Query", "Lending.Guarantees.Read", "Lending.Guarantees.Manage",
                 "Lending.PromissoryNotes.Manage", "Lending.CreditLimits.Read", "Lending.Loans.Read", "Lending.Payoffs.Read",
                 "Lending.Documents.Read", "Lending.Documents.Issue", "Lending.DebtorMessages.Read", "Lending.DebtorMessages.Send",

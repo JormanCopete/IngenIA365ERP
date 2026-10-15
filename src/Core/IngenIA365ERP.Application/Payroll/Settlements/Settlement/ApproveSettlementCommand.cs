@@ -174,6 +174,13 @@ public sealed class ApproveSettlementCommandHandler(
             []);
         var resultado = await recaudo.AplicarAsync(lote, ct);
 
+        // Feature 013, T0801 (A8 = «Bloquear todo», 2026-10-14): lo que Contabilidad no puede registrar se dice con su propio código.
+        var noContabilizables = resultado.Pagos.Where(p => p.NoContabilizable).ToList();
+        if (noContabilizables.Count > 0)
+            return Result.Failure(SettlementErrors.LoanDeductionNotPostable(noContabilizables
+                .Select(p => (propuestas[p.ObligationPublicId].ObligationNumber ?? propuestas[p.ObligationPublicId].Description, p.Respuesta.Message,
+                    (object?)p.Respuesta.Data)).ToList()));
+
         var fallidos = resultado.Pagos.Where(p => !p.Aplicado || p.Excedente > 0m || p.ValorAplicado != p.Enviado).ToList();
         if (fallidos.Count > 0)
         {

@@ -910,23 +910,30 @@ inactivo, hecho que no cuadra, más de dos decimales. Sólo evalúa lo que pasar
 
 | Origen de la operación | Con hallazgos (`IsPostable = false`) | Sin respuesta |
 |---|---|---|
-| **Pantallas de Cartera**: desembolso, novedad (reestructuración, modificación, novación), condonación, castigo | `Contabilidad.FaltaDeRegla = Bloquear`: no confirma, `Lending.Prevalidation.NotPostable` (422) con `data.errors[]`. `Advertir` (defecto): confirma, sella `PrevalidationOutcome = NotPostable` y alerta | `Contabilidad.PoliticaSinRespuesta = Bloquear`: `Lending.Prevalidation.NoResponse` (422). `ConfirmarConPendiente` (defecto, D7): confirma y sella `NoResponse` |
-| **Contrato de obligaciones** (Recaudo, Nómina, Aportes, recogida de créditos propios, recaudador de prueba) | **siempre advierte**: aplica, sella `NotPostable` y alerta | siempre aplica y sella `NoResponse` |
-| **Consumidor de Comercial** (obligación desde una venta, ajustes) | siempre advierte: D9 manda crear la obligación aunque la evaluación falle; **la venta de Comercial nunca se detiene por la matriz de Cartera** | ídem |
-| **Procesos** (causación, cierre, réplica, corrida de corrección, tareas) y cobros provisionales al activar | siempre advierte | ídem |
+| **Pantallas de Cartera**: desembolso, novedad (reestructuración, modificación, novación), condonación, castigo | `Contabilidad.FaltaDeRegla = Bloquear` (el defecto desde el 2026-10-14): no confirma, `Lending.Prevalidation.NotPostable` (422) con `data.errors[]`. `Advertir`: confirma, sella `PrevalidationOutcome = NotPostable` y alerta | `Contabilidad.PoliticaSinRespuesta = Bloquear`: `Lending.Prevalidation.NoResponse` (422). `ConfirmarConPendiente` (defecto, D7): confirma y sella `NoResponse` |
+| **Contrato de obligaciones** (Recaudo, Nómina, Aportes, recogida de créditos propios, recaudador de prueba) | `Bloquear`: **rechaza el ítem** (`Rejected`) con `Lending.Prevalidation.NotPostable` y `data.errors[]`, no escribe nada de ese pago y alerta; los ítems de otras combinaciones del lote siguen. **Nómina** no aprueba: la ordinaria y la definitiva fallan enteras con `Payroll.LoanDeductionNotPostable` (422, `data.loans[] { loanNumber, message, lending }`) y su transacción revierte lo que Cartera alcanzó a aplicar (I-4). `Advertir`: aplica, sella `NotPostable` y alerta | siempre aplica y sella `NoResponse` |
+| **Consumidor de Comercial** (obligación desde una venta, ajustes) | `Bloquear`: la obligación **no nace**; el recibo queda `Rejected` y reprocesable (como lo no convertible, C95: sin `ObligacionRechazada`, la venta se informa `Pending` con el motivo) y alerta; corregida la matriz, se reprocesa desde la bandeja. La venta de Comercial ya está confirmada: lo que espera es su obligación en Cartera. `Advertir`: D9, crea la obligación aunque la evaluación falle | ídem |
+| **Procesos** (causación diaria, corrección por valor nacional, cierre mensual) | `Bloquear`: la tanda **no avanza** —no se guarda nada de ella, el cursor no se mueve—, la corrida queda `Failed` con `Lending.Prevalidation.NotPostable` en `LND_ProcessRunErrors` y sale la alerta; corregida la matriz, «Reintentar» la retoma. Con `Advertir` los procesos **no preguntan** (`ValidacionPreviaDeProceso` sólo evalúa si la política podría bloquear, sin tiempo máximo porque corre dentro de la transacción de la tanda) | no preguntan |
+| **Cobros provisionales al activar** | advierte (no se evalúan en K1) | — |
 | **Reserva de número de crédito** | no se evalúa: corre dentro de la confirmación de Comercial y no produce hecho (T22) | — |
 
 - `Contabilidad.FaltaDeRegla` gobierna **todo** hallazgo de la evaluación, no sólo la regla faltante: una cuenta
-  inactiva en la matriz es el mismo vacío de parametrización. `PoliticaSinRespuesta = Bloquear` también se limita a
-  las operaciones de pantalla (C80, coherente con A8).
+  inactiva en la matriz es el mismo vacío de parametrización. `PoliticaSinRespuesta = Bloquear` se limita a las
+  operaciones de pantalla (C80): la respuesta a A8 no la tocó.
+- **Sin contabilidad iniciada o con el hecho en `NoPasa` no se pregunta nada y no se bloquea nada** (§10.1), en ningún
+  origen.
+- **El defecto de `Contabilidad.FaltaDeRegla` es `Bloquear`** (decisión del dueño del 2026-10-14): con la contabilidad
+  iniciada, la matriz de Cartera tiene que estar completa para lo que la cooperativa opere, o `Advertir` fijado a
+  propósito (por vigencia o por tipo de hecho).
 - `PrevalidationOutcome` gana `NotPostable = 4` («evaluado no contabilizable, confirmado con advertencia») además de
   `Postable`, `NoResponse` y `NotApplicable`. La bandeja compara lo sellado con el resultado de la entrega.
 - Alerta `Cartera.HechoNoContabilizable` para quienes tienen `Accounting.LendingRules.Manage` y
   `Lending.Messages.Reprocess`, con la combinación y la operación; una por combinación y día (`DedupKey`).
-- **Por qué**: un pago que ya ocurrió en el mundo no se rechaza por un vacío de la matriz, y la nómina es «todo o
-  nada» (I-4, FR-088): bloquearla por una regla tumbaría la aprobación entera. Que «Bloquear» no alcance al contrato,
-  al consumidor ni a los procesos recorta FR-127 y US7-2: es la **enmienda A8** (T97). Lo que se aplicó sin regla
-  queda rechazado en la bandeja, se ve en la conciliación y se recupera creando la regla y reprocesando.
+- **Por qué**: la propuesta de la enmienda A8 limitaba «Bloquear» a las pantallas (un pago que ya ocurrió no se
+  rechaza por un vacío de la matriz); el dueño respondió **«Bloquear todo»** el 2026-10-14 (decisiones-transversales §5,
+  A8): quien elige `Bloquear` prefiere que nada pase sin poder contabilizarse, aunque eso detenga una nómina o una
+  tanda. FR-127 y US7-2 quedan como estaban (sin recorte). Con `Advertir`, lo que se aplicó sin regla queda rechazado
+  en la bandeja, se ve en la conciliación y se recupera creando la regla y reprocesando.
 
 ### 13.3 Respuesta de Cartera y quién corrige
 

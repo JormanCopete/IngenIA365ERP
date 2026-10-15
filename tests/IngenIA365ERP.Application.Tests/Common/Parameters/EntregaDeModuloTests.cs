@@ -169,7 +169,7 @@ public class EntregaDeModuloTests
     [InlineData(ParametrosDeCartera.BloqueosDiasDeMoraParaBloquear, "30", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.ContabilidadDiferirComisiones, "false", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.ContabilidadPoliticaSinRespuesta, "ConfirmarConPendiente", EntregaDeCartera.K1)]
-    [InlineData(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Advertir", EntregaDeCartera.K1)]
+    [InlineData(ParametrosDeCartera.ContabilidadFaltaDeRegla, "Bloquear", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.InformesRangosDeEdad, "30,60,90,180,360", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.ListasUmbralDeCoincidenciaDeNombre, "0.90", EntregaDeCartera.K1)]
     [InlineData(ParametrosDeCartera.CobranzaHorarioLunesAViernes, "07:00-19:00", EntregaDeCartera.K1)]

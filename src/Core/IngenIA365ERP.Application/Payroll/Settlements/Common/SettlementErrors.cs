@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Enums.Payroll;
 
 namespace IngenIA365ERP.Application.Payroll.Settlements.Common;
@@ -111,6 +112,19 @@ public static class SettlementErrors
         new ErrorConDatos("Payroll.Settlement.LoanAmountsChanged",
             $"Cartera no pudo aplicar los descuentos tal como se calcularon ({detalle}). Recalcule o ajuste los descuentos.",
             new { items });
+
+    public const string LoanDeductionNotPostableCode = "Payroll.LoanDeductionNotPostable";
+
+    /// <summary>
+    /// Feature 013 (T0801; A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): Cartera rechazó uno o más descuentos porque Contabilidad no tiene
+    /// cómo registrar el pago (<c>Lending.Prevalidation.NotPostable</c>, con la política <c>Contabilidad.FaltaDeRegla = Bloquear</c>). La aprobación
+    /// entera falla —ordinaria o definitiva— y dice qué regla falta; nada queda en Cartera ni en Nómina.
+    /// </summary>
+    public static Error LoanDeductionNotPostable(IReadOnlyList<(string Credito, string Mensaje, object? Datos)> rechazos) =>
+        new ErrorConDatos(LoanDeductionNotPostableCode,
+            $"No se aprobó: Contabilidad no tiene cómo registrar el recaudo de Cartera ({string.Join("; ", rechazos.Select(r => $"crédito {r.Credito}: {r.Mensaje}"))}). "
+            + "Pida a la contadora completar la matriz de Cartera y apruebe de nuevo.",
+            new { lendingCode = RecaudoPorNomina.CodigoNoContabilizable, loans = rechazos.Select(r => new { loanNumber = r.Credito, message = r.Mensaje, lending = r.Datos }).ToList() });
 
     /// <summary>Al reversar la definitiva, Cartera no reversó un descuento: se revierte la reversión entera (R105).</summary>
     public static Error LoanReversalRejected(string obligacion, string codigo, string mensaje) =>

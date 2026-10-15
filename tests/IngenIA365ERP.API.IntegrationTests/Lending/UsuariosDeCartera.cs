@@ -18,8 +18,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// (<c>POST /api/lending/amount-limits</c>).
 /// <list type="table">
 /// <item><c>administrador</c>: <c>cartera.administrador</c> (trae todas las oficinas y líneas).</item>
-/// <item><c>asesor.o1</c>, <c>asesor.o2</c>: <c>cartera.asesor</c> + <c>Lending.CreditLines.View</c> (la plantilla del asesor no lee
-/// líneas, api.md §2.4; el ensayo del alcance por línea las consulta); O1 y O2.</item>
+/// <item><c>asesor.o1</c>, <c>asesor.o2</c>: <c>cartera.asesor</c> (desde el 2026-10-14 la plantilla trae <c>Lending.CreditLines.View</c>, respuesta
+/// del dueño: ya no hace falta el rol de ensayo aparte que tenía para leer líneas); O1 y O2.</item>
 /// <item><c>analista</c>: <c>cartera.analista</c>; O1 y O2.</item>
 /// <item><c>jefe</c>: <c>cartera.jefe</c> + <c>Lending.Payments.BackdateBeforeClose</c>; <c>Lending.Disbursements.Execute</c> hasta 50.000.000.</item>
 /// <item><c>gerente</c>: <c>cartera.gerente</c>.</item>
@@ -47,13 +47,23 @@ public sealed class UsuariosDeCartera
     /// <summary>La contraseña con que los usuarios del ensayo aceptan su invitación.</summary>
     public const string ClaveDelEnsayo = "Ensayo-Cartera-2026!";
 
+    private static int _ingresos;
+
     /// <summary>
     /// Un access nuevo del usuario por <c>/api/auth/login</c> (una sola membresía: selección automática). Lo usan las pruebas largas: el access
-    /// dura 15 minutos (US4, T0483).
+    /// dura 15 minutos (US4, T0483). Cada ingreso va con su propia IP de origen (<c>CF-Connecting-IP</c>, la que cuenta el limitador): el host de la
+    /// colección es uno y <c>POST /api/auth/login</c> admite 10 por minuto por IP, así que en la regresión completa, con las demás clases
+    /// ingresando en el mismo minuto, <c>DocumentosDeCarteraTests</c> recibía 429 (2026-10-14) aunque en el filtro de módulos pasaba.
     /// </summary>
     public static async Task<string> IngresarAsync(HttpClient http, Usuario usuario)
     {
-        var resp = await http.PostAsJsonAsync("/api/auth/login", new { email = usuario.Correo, password = ClaveDelEnsayo });
+        var n = Interlocked.Increment(ref _ingresos);
+        using var pedido = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = JsonContent.Create(new { email = usuario.Correo, password = ClaveDelEnsayo }),
+        };
+        pedido.Headers.Add("CF-Connecting-IP", $"10.252.{n / 250 % 250}.{n % 250 + 1}");
+        var resp = await http.SendAsync(pedido);
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"ingresar como {usuario.Clave}: «{await resp.Content.ReadAsStringAsync()}»");
         return (await CarteraE2E.LeerAsync(resp)).GetProperty("accessToken").GetString()!;
     }
@@ -128,7 +138,6 @@ public sealed class UsuariosDeCartera
         // están en el catálogo: los siembra la historia de la matriz contable (US7), que los suma aquí.
         var contable = await RolPropioAsync(http, admin, "ENS-CAR-CONTA", "Core.NationalValues.Review");
         var pruebas = await RolPropioAsync(http, admin, "ENS-CAR-PRUEBAS", "Lending.TestDoubles.Operate");
-        var lectorDeLineas = await RolPropioAsync(http, admin, "ENS-CAR-LINEAS", "Lending.CreditLines.View");
         var lectura = (await CarteraE2E.GetAsync(http, admin, "/api/admin/roles?includeBuiltIn=true&pageSize=100")).GetProperty("items").EnumerateArray()
             .Single(r => r.GetProperty("code").GetString() == "ReadOnly").GetProperty("publicId").GetGuid();
 
@@ -143,8 +152,8 @@ public sealed class UsuariosDeCartera
         }
 
         await UnoAsync("administrador", [Plantilla("cartera.administrador")], []);
-        await UnoAsync("asesor.o1", [Plantilla("cartera.asesor"), lectorDeLineas], [o1]);
-        await UnoAsync("asesor.o2", [Plantilla("cartera.asesor"), lectorDeLineas], [o2]);
+        await UnoAsync("asesor.o1", [Plantilla("cartera.asesor")], [o1]);
+        await UnoAsync("asesor.o2", [Plantilla("cartera.asesor")], [o2]);
         await UnoAsync("analista", [Plantilla("cartera.analista")], [o1, o2]);
         await UnoAsync("jefe", [Plantilla("cartera.jefe"), ajusteJefe], []);
         await UnoAsync("gerente", [Plantilla("cartera.gerente")], []);

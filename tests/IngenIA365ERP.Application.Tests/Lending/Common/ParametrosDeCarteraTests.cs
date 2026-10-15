@@ -38,7 +38,7 @@ public class ParametrosDeCarteraTests
         { "Contabilidad.DisparadorDeLote", "FinDeCausacion", [N, F], EntregaDeCartera.K1 },
         { "Contabilidad.HoraDeLote", "", [N, F], EntregaDeCartera.K1 },
         { "Contabilidad.PoliticaSinRespuesta", "ConfirmarConPendiente", [N], EntregaDeCartera.K1 },
-        { "Contabilidad.FaltaDeRegla", "Advertir", [N, F], EntregaDeCartera.K1 },
+        { "Contabilidad.FaltaDeRegla", "Bloquear", [N, F], EntregaDeCartera.K1 },
         { "Contabilidad.ValidacionPreviaSegundos", "3", [N], EntregaDeCartera.K1 },
         { "Contabilidad.DisminucionDeDeterioro", "MismoEjercicioPrimero", [N], EntregaDeCartera.K1 },
         { "Contabilidad.IndicadoresVigenciaMeses", "6", [N], EntregaDeCartera.K1 },

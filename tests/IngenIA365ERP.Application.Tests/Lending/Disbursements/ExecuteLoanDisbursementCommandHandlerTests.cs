@@ -260,6 +260,13 @@ public sealed class ExecuteLoanDisbursementCommandHandlerTests : IAsyncLifetime
     {
         var s = await _d.AprobadaAsync();
         SinRegla();
+        // El defecto es «Bloquear» (decisión del dueño, 2026-10-14): «Advertir» se fija a propósito.
+        _d.Db.ParameterVersions.Add(new ParameterVersion
+        {
+            Module = ParametrosDeCartera.Modulo, Key = ParametrosDeCartera.ContabilidadFaltaDeRegla, ScopeKind = ParameterScopeKind.None, Value = "Advertir",
+            ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba", CreatedAt = _d.G.UtcNow.AddDays(-10),
+        });
+        await _d.Db.SaveChangesAsync();
 
         var r = await _d.DesembolsadoAsync(_d.Entrada(s));
 

@@ -847,6 +847,15 @@ found`), y la Web arrancaba mostrando una página en blanco.
 Se agregó una comprobación puntual en el `Dockerfile` de la Web, pero un paso de
 CI que ejecute cada imagen (`--help`, *health check*) cerraría la clase completa.
 
+#### P18 — Feature nueva de Ahorros: ahorros, aportes y CDT (después de K1 de la 013)
+
+Respuesta del dueño a la pregunta A10 de la 013 (2026-10-14, `specs/013-cartera-financiera/decisiones-transversales.md` §5):
+ahorros, aportes y CDT se **renuevan en una feature propia de Ahorros**, que se especifica **después de K1** de Cartera.
+Hasta entonces sigue lo construido en la 013: las 38 tablas conservadas de la cartera heredada, en el espacio de nombres
+`Savings`, con rutas `/api/savings/*` y `/api/reports/savings/*`, sin cambios funcionales (FR-144). **No se ha construido
+nada de la feature nueva**: falta especificarla (`/speckit-specify`), con lo que Cartera ya consume de aportes (saldos de
+aportes para el cupo, D19) y el retiro de asociado (FR-061) como interfaces que esa feature tendrá que ofrecer.
+
 ### 🟢 Prioridad baja
 
 #### P8 — Deuda de pruebas del feature 002

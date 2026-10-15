@@ -28,7 +28,7 @@ quién lo arregla; en producción, lo que falta **bloquea**; fuera de producció
 | Órganos de gobierno con sus miembros | `/cartera/actas` | La aceptación de diferencias y la activación citan un **punto de acta cerrada** |
 | Oficinas vinculadas a su sucursal contable | Maestros › Agencias | `OfficesLinkedToAccountingBranches`; la plantilla rechaza una oficina sin vincular |
 | Contabilidad iniciada, con la **apertura al corte** | `/contabilidad/apertura` | El cuadre compara contra los saldos contables a C; sin contabilidad, `Lending.Accounting.NotStarted` |
-| Matriz contable de Cartera con la **completitud vacía** | `/contabilidad/cartera/matriz`, `/contabilidad/cartera/completitud` | Sin reglas, el cuadre sale «sin regla en la matriz» y todo es diferencia |
+| Matriz contable de Cartera con la **completitud vacía** | `/contabilidad/cartera/matriz`, `/contabilidad/cartera/completitud` | Sin reglas, el cuadre sale «sin regla en la matriz» y todo es diferencia; y como `Contabilidad.FaltaDeRegla` arranca en **Bloquear** (decisión del dueño del 2026-10-14), con la contabilidad iniciada nada de lo que falte en la matriz se confirma: ni el desembolso, ni los pagos, ni la nómina, ni la causación. Para operar mientras se completa, fijar `Advertir` con su vigencia en `/cartera/parametros` |
 | La regla `RecaudoPorAplicar` con clase de recaudador `Payroll` | Matriz contable | `PayrollBridgeRuleResolved` |
 | `DESC_CARTERA` con cuentas en Nómina | `/nomina/conceptos` | Aviso `PayrollConceptAccounts`; la pantalla de activación lo pregunta a Nómina |
 | Patrimonio técnico vigente | `/contabilidad/indicadores-regulatorios` (`ACC_RegulatoryIndicators`) | Sin él, el límite de concentración bloquea desembolsos y cupos |
@@ -83,7 +83,8 @@ Se puede aplicar en producción una carga con un corte anterior para validar per
 - cada nómina quincenal y cada liquidación definitiva con deudores de la carga exige reconocer «Cartera por activar»
   (`Payroll.LendingPendingActivationAckRequired`);
 - Personas no deja borrar a sus deudores ni codeudores (`Person.HasActiveLoans`) y su detalle dice «migrada, sin activar»;
-- Contabilidad avisa al cerrar el mes que contiene C+1 (`Accounting.Period.LendingLoadWillExpire`).
+- Contabilidad avisa al cerrar el mes que contiene C+1 (`Accounting.Period.LendingLoadWillExpire`): cerrarlo ya no impide activar,
+  pero lo que emita la activación quedará en el primer mes abierto siguiente.
 
 Coordinarlo con Nómina y Contabilidad antes de aplicarla. La carga real la deja `Replaced`.
 
@@ -114,8 +115,10 @@ de Comercial aplica al nacer la obligación de cada venta. Errores: `Import.Inva
 1. **Requisitos** sin faltantes (en producción) y **avisos** revisados: lo que Comercial ajusta el mismo día (§7), las cuentas de
    `DESC_CARTERA` en Nómina (casilla de reconocimiento) y los usuarios sin alcance.
 2. **La fecha es C+1** y no se edita. Se registra **dentro del plazo** (`Pagos.DiasMaximosFechaValor` días desde C; vencido,
-   `Lending.Activation.DeadlinePassed`) y con el **mes contable de C+1 abierto** (si está cerrado, la activación responde
-   `RequirementsMissing` con `AccountingMonthOpen`).
+   `Lending.Activation.DeadlinePassed`). Con la contabilidad iniciada (si no, falta `AccountingMonthOpen`). Si Contabilidad ya cerró el
+   mes de C+1, **no limita, sólo informa** (respuesta del dueño del 2026-10-14): sale el aviso `AccountingMonthClosed` en los avisos y en
+   la respuesta, la activación procede y lo que emite (`CarteraActivada`) queda fechado en el primer mes abierto —la fecha de activación
+   sigue siendo C+1—.
 3. **El acta de activación** (C61) es obligatoria: el punto de una sesión cerrada sobre la carga. Declara que el consejo conoce la carga,
    su corte, el cuadre y las diferencias aceptadas, los cobros provisionales y que la cuota puede diferir en centavos porque el interés lo
    causa el motor desde el corte.
@@ -185,8 +188,8 @@ después de activar queda fuera de Cartera con la alerta `Cartera.VentaNoIncorpo
 - **La activación es todo o nada**: si algo falla (una tanda, el cierre base, los cobros), no queda nada —ningún crédito, ningún cierre base,
   el destino `Lending` inactivo y la carga `Applied`—. Corregir la causa (en la carga: otra carga con el mismo corte, o reemplazar la parte) y
   volver a activar. La misma `Idempotency-Key` con el mismo cuerpo devuelve la misma activación.
-- **Con el plazo vencido** (`DeadlinePassed`) o el mes de C+1 cerrado en Contabilidad: pedir una carga con **corte nuevo**, aplicarla
-  (la anterior queda `Replaced`), volver a cuadrar y aceptar, y activar en su C+1.
+- **Con el plazo vencido** (`DeadlinePassed`): pedir una carga con **corte nuevo**, aplicarla (la anterior queda `Replaced`), volver a
+  cuadrar y aceptar, y activar en su C+1. El mes de C+1 cerrado en Contabilidad ya no obliga a esto: es un aviso.
 - **Diferencias que cambiaron** al activar (`DifferencesNotAccepted` después de aceptar): alguien contabilizó en Contabilidad entre la
   aceptación y la activación; revisar la versión nueva del cuadre y volver a aceptar con acta.
 - Un requisito de producción que no se cumple: la lista de `RequirementsMissing` dice quién lo corrige y en qué pantalla.

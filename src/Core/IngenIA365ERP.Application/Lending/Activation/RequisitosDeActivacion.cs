@@ -25,8 +25,10 @@ namespace IngenIA365ERP.Application.Lending.Activation;
 /// <list type="bullet">
 /// <item><c>LoadApplied</c>, <c>DifferencesAccepted</c>, <c>SalesReconciled</c>: la carga está <c>Applied</c>, su cuadre y su conciliación de ventas
 /// sin diferencias o con todas aceptadas (la carga sin partes de C107 está cuadrada y conciliada);</item>
-/// <item><c>DateInTerm</c> y <c>AccountingMonthOpen</c>: hoy no pasa del plazo de la carga y el mes de la fecha de activación está abierto en
-/// Contabilidad (<see cref="IContabilidadParaCartera.EstadoDelPeriodoAsync"/>);</item>
+/// <item><c>DateInTerm</c> y <c>AccountingMonthOpen</c>: hoy no pasa del plazo de la carga y la contabilidad está iniciada
+/// (<see cref="IContabilidadParaCartera.EstadoDelPeriodoAsync"/>). El mes de la fecha de activación (C+1) cerrado o inexistente en Contabilidad
+/// <b>no limita</b> (decisión del dueño, 2026-10-14): el requisito queda <c>NotApplicable</c> y sale el aviso <c>AccountingMonthClosed</c>, porque lo
+/// que emite la activación toma su fecha contable por <c>FechaContable</c>, que la lleva al primer mes abierto;</item>
 /// <item><c>ReceiptsCollectorRegistered</c> y <c>TreasuryDestinationRegistered</c>: un recaudador <c>Receipts</c> y un destino <c>Treasury</c> que
 /// cuentan en el registro —en producción, reales y con la adopción vigente de <c>ProveedorDeObligaciones</c> y de <c>OrdenDeGiroEmitida</c>—; fuera de producción también los dobles <c>Test</c>
 /// (<c>TST</c>, <c>TES</c>); en producción un doble nunca cuenta;</item>
@@ -75,6 +77,7 @@ public sealed class RequisitosDeActivacion(
     public const string AvisoParametrosComerciales = "CommercialParametersToAdjust";
     public const string AvisoCuentasDeNomina = "PayrollConceptAccounts";
     public const string AvisoUsuariosSinAlcance = "UsersWithoutScope";
+    public const string AvisoMesContableCerrado = "AccountingMonthClosed";
 
     /// <summary>Los requisitos que la activación responde con su propio código y no en <c>RequirementsMissing</c>.</summary>
     public static IReadOnlySet<string> ConCodigoPropio { get; } = new HashSet<string>(StringComparer.Ordinal) { DiferenciasAceptadas, VentasConciliadas };
@@ -115,12 +118,27 @@ public sealed class RequisitosDeActivacion(
                     : "una carga aplicada con plazo de activación", "Cartera", "/cartera/migracion", "Lending.Migration.Load"),
         };
 
+        // El mes de C+1 cerrado (o sin crear) no limita, sólo informa (decisión del dueño, 2026-10-14): sin contabilidad iniciada sí falta.
         var periodo = await contabilidad.EstadoDelPeriodoAsync(fechaDeActivacion, ct);
-        requisitos.Add(periodo.IsSuccess && periodo.Value is { AccountingInitialized: true, State: EstadoDePeriodoContable.Open }
-            ? Cumple(MesContableAbierto, string.Create(CultureInfo.InvariantCulture, $"El mes de {fechaDeActivacion:yyyy-MM} está abierto en Contabilidad."))
-            : Falta(MesContableAbierto, periodo.IsSuccess && !periodo.Value.AccountingInitialized
-                ? "iniciar la contabilidad"
-                : string.Create(CultureInfo.InvariantCulture, $"el mes de {fechaDeActivacion:yyyy-MM} abierto en Contabilidad"),
+        var avisosDelMes = new List<AvisoDeActivacionDto>();
+        if (periodo.IsSuccess && periodo.Value is { AccountingInitialized: true, State: EstadoDePeriodoContable.Open })
+            requisitos.Add(Cumple(MesContableAbierto, string.Create(CultureInfo.InvariantCulture, $"El mes de {fechaDeActivacion:yyyy-MM} está abierto en Contabilidad.")));
+        else if (periodo.IsSuccess && periodo.Value.AccountingInitialized)
+        {
+            var donde = periodo.Value.FirstOpenMonthFrom is { } abierto
+                ? string.Create(CultureInfo.InvariantCulture, $"en el primer mes abierto ({abierto:yyyy-MM})")
+                : "en el primer mes que se abra";
+            var estado = periodo.Value.State == EstadoDePeriodoContable.NotFound ? "no existe" : "está cerrado";
+            requisitos.Add(NoAplica(MesContableAbierto, string.Create(CultureInfo.InvariantCulture,
+                $"El mes de {fechaDeActivacion:yyyy-MM} {estado} en Contabilidad: no impide activar.")));
+            avisosDelMes.Add(new AvisoDeActivacionDto(AvisoMesContableCerrado, string.Create(CultureInfo.InvariantCulture,
+                    $"El mes de {fechaDeActivacion:yyyy-MM} {estado} en Contabilidad. La activación procede y lo que emite se registra {donde}."),
+                new QuienCorrigeDto("Contabilidad", "/contabilidad/periodos", "Accounting.Periods.Reopen")));
+        }
+        else
+            requisitos.Add(Falta(MesContableAbierto, periodo.IsSuccess
+                    ? "iniciar la contabilidad"
+                    : string.Create(CultureInfo.InvariantCulture, $"saber el estado del mes de {fechaDeActivacion:yyyy-MM} en Contabilidad ({periodo.Error.Message})"),
                 "Contabilidad", "/contabilidad/periodos", "Accounting.Periods.Reopen"));
 
         var participantes = await registro.QueCuentanAsync(fechaDeActivacion, ct);
@@ -155,7 +173,7 @@ public sealed class RequisitosDeActivacion(
         requisitos.Add(await OficinasAsync(carga, ct));
         requisitos.Add(await PuenteDeNominaAsync(fechaDeActivacion, ct));
 
-        return new EvaluacionDeActivacion(requisitos, await AvisosAsync(ct), sinModeloObligatorio);
+        return new EvaluacionDeActivacion(requisitos, [.. avisosDelMes, .. await AvisosAsync(ct)], sinModeloObligatorio);
     }
 
     // ------------------------------------------------------------------------------------------------- pérdida esperada --

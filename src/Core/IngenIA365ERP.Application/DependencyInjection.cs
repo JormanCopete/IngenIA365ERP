@@ -528,6 +528,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Integration.FechaContable>();
         services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
+        // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.
+        services.AddScoped<Lending.Integration.ValidacionPreviaDeProceso>();
         // Feature 013, US7 (T0657, T0658): el puerto de las dimensiones de Cartera para Contabilidad (enmienda A1) y la conciliacion.
         services.AddScoped<Lending.Integration.SaldosContablesDeCartera>();
         services.AddScoped<Lending.Integration.ConciliacionContableDeCartera>();

@@ -69,6 +69,17 @@ public class PerfilesSugeridosDeCarteraTests
             Codigos(plantilla.Key).Should().NotContain("Lending.TestDoubles.Operate", $"«{plantilla.Key}» no trae los dobles de prueba");
     }
 
+    /// <summary>
+    /// Respuesta del dueño (2026-10-14): el asesor consulta las líneas de crédito (sólo consultar); cada cooperativa lo ajusta en los permisos del rol
+    /// (Seguridad › Roles), porque el rol creado desde la plantilla es suyo y se edita.
+    /// </summary>
+    [Fact]
+    public void El_asesor_consulta_las_lineas_y_no_las_administra()
+    {
+        Codigos("cartera.asesor").Should().Contain("Lending.CreditLines.View");
+        Codigos("cartera.asesor").Should().NotContain("Lending.CreditLines.Manage");
+    }
+
     [Fact]
     public void Asesor_y_jefe_cambian_la_preferencia_del_deudor()
     {

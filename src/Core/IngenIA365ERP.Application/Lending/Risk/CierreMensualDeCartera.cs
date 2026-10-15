@@ -64,9 +64,13 @@ public sealed class CierreMensualDeCartera(
     ParametrosDeLaTandaDeCartera tanda,
     IDateTimeService reloj,
     ReplicacionDeValoresNacionales? replicacion = null,
-    ILogger<CierreMensualDeCartera>? logger = null)
+    ILogger<CierreMensualDeCartera>? logger = null,
+    ValidacionPreviaDeProceso? validacionDeProceso = null)
 {
     private const int LargoDelMensaje = 1000;
+
+    /// <summary>La decisión de la validación previa que detuvo la transacción final (A8); nula si siguió.</summary>
+    private DecisionDeValidacionPrevia? _detenida;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -164,7 +168,15 @@ public sealed class CierreMensualDeCartera(
     private async Task<AvanceDeCorrida> TransaccionFinalAsync(LendingProcessRun corrida, int anio, int mes, DateOnly fin, CancellationToken ct)
     {
         var corridaId = corrida.Id;
+        _detenida = null;
         var resultado = await TransaccionExplicita.EjecutarAsync(db, () => FinalAsync(corridaId, anio, mes, fin, ct), ct);
+        if (_detenida is not null)
+        {
+            // A8 = «Bloquear todo» (2026-10-14): el cierre no se guardó; la alerta sale y la corrida queda Failed con el código.
+            var seguidaAlDetener = db.LendingProcessRuns.Local.FirstOrDefault(x => x.Id == corridaId) ?? corrida;
+            db.DescartarCambiosSalvo(seguidaAlDetener);
+            throw await validacionDeProceso!.DetenerAsync(_detenida, $"el cierre de {ErroresDeRiesgo.Mes(anio, mes)}", ct);
+        }
         if (resultado.IsFailure) throw new ReglaDeCarteraException(new ProblemaDeCartera(resultado.Error.Code, resultado.Error.Message));
         var (totales, huella) = resultado.Value;
         // La corrida pudo haberse descartado al repetir la transacción: se toma la que está en seguimiento.
@@ -353,6 +365,14 @@ public sealed class CierreMensualDeCartera(
             InformationCutoffAt = new DateTimeOffset(DateTime.SpecifyKind(r, DateTimeKind.Utc)), Marks = marcas, FactParts = resumen,
         }, usuario, ct);
         if (informativo.IsFailure) return Result.Failure<(string, string)>(informativo.Error);
+
+        // A8 = «Bloquear todo» (2026-10-14): con Contabilidad.FaltaDeRegla = Bloquear, un cierre con hechos que Contabilidad no puede registrar no se
+        // guarda (la transacción vuelve atrás, el cierre incluido).
+        if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } contableNo)
+        {
+            _detenida = contableNo;
+            return Result.Failure<(string, string)>(contableNo.Bloqueo!);
+        }
 
         await db.SaveChangesAsync(ct);
         await LoteAsync(fin, ct);

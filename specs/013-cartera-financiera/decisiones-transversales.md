@@ -800,7 +800,7 @@ nacional (T42). Ámbitos: `None`, `CreditLine`, `LendingFactType`.
 | `Contabilidad.Granularidad` | `PorDia`, `PorDiaYSucursal` | PorDia | LendingFactType | K1 | DC-11, DC-12 |
 | `Contabilidad.DisparadorDeLote` · `Contabilidad.HoraDeLote` | `Hora`, `FinDeCausacion`, `CierreDeCartera` · hora | por tipo (T56) | LendingFactType | K1 | DC-11 |
 | `Contabilidad.PoliticaSinRespuesta` | `ConfirmarConPendiente`, `Bloquear` | ConfirmarConPendiente (D7) | None | K1 | DC-11, DC-15 |
-| `Contabilidad.FaltaDeRegla` | `Advertir`, `Bloquear` | Advertir. «Bloquear» sólo muerde en las operaciones de pantalla de Cartera (desembolso, novedad, condonación, castigo); en el contrato, el consumidor y los procesos siempre advierte (T56, enmienda A8). La descripción del parámetro lo dice | None, LendingFactType | K1 | DC-15 |
+| `Contabilidad.FaltaDeRegla` | `Advertir`, `Bloquear` | **Bloquear** (decisión del dueño del 2026-10-14; hasta ese día `Advertir`). «Bloquear» detiene **todo** (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14; la propuesta lo limitaba a las pantallas): la pantalla no confirma, el contrato rechaza el pago (Nómina no aprueba), la venta de Comercial queda en reproceso y el proceso detiene su tanda y alerta (T56, §5 A8). La descripción del parámetro lo dice | None, LendingFactType | K1 | DC-15 |
 | `Contabilidad.ValidacionPreviaSegundos` | int | 3 | None | K1 | DC-11 |
 | `Contabilidad.DisminucionDeDeterioro` (fijado aquí) | `MismoEjercicioPrimero`, `TodoARecuperacion` | MismoEjercicioPrimero | None | K1 | DC-13 |
 | `Contabilidad.IndicadoresVigenciaMeses` (fijado aquí) | int | 6 | None | K1 | DC-18 |
@@ -1614,15 +1614,23 @@ emite una operación y `PorLotes` cuando la emite el proceso; con vigencia propi
 `LendingClose:{aaaa-mm}`). El resumido de la causación es **un comprobante por día** (clave fecha contable + tipo),
 cada línea con su sucursal; suma sin netear por cuenta, lado, sucursal y centro y conserva una línea por crédito en
 las cuentas que exigen tercero, cruce o base. Validación previa por `IContabilidadParaCartera.EvaluarAsync`,
-reducida a una pregunta por combinación de dimensiones: la falta de regla **bloquea sólo** en las operaciones que
-nacen en pantallas de Cartera (desembolso, novedad, condonación, castigo) si `Contabilidad.FaltaDeRegla = Bloquear`;
-en el contrato, en el consumidor de Comercial y en los procesos **siempre advierte**, sella `PrevalidationOutcome` y
-alerta; sin respuesta rige D7 (advierte y permite). La reserva de número no se evalúa (corre dentro de la confirmación
-de Comercial y no produce hecho contable) y el alta de una obligación desde una venta tampoco se frena: la crea el
-consumidor, que advierte y sella, y D9 manda crearla aunque la evaluación falle; **la venta de Comercial nunca se
-detiene por la matriz de Cartera**. Que «Bloquear» no alcance al contrato ni a los procesos recorta FR-127 y US7-2:
-es la enmienda A8 (T97). Por qué: un pago que ya ocurrió no se rechaza por un vacío de la matriz y la nómina es
-«todo o nada». FR: FR-088, FR-127, FR-128, D7, D8, US7-3. Origen:
+reducida a una pregunta por combinación de dimensiones. Con `Contabilidad.FaltaDeRegla = Advertir` toda
+operación confirma, sella `PrevalidationOutcome` y alerta. Con `Bloquear` **todo se detiene** —respuesta del dueño a A8
+del 2026-10-14, «Bloquear todo», contraria a la propuesta que lo limitaba a las pantallas—: la pantalla de Cartera
+(desembolso, novedad, condonación, castigo) responde 422 `Lending.Prevalidation.NotPostable`; el contrato de
+obligaciones rechaza el ítem con ese código y su `data.errors[]` (Recaudo, Aportes, la recogida y el recaudador de
+prueba lo reciben en su respuesta; **Nómina no aprueba**: la ordinaria y la definitiva fallan enteras con
+`Payroll.LoanDeductionNotPostable`, que dice qué regla falta); el consumidor de Comercial no hace nacer la obligación y
+deja el recibo `Rejected` y reprocesable (la venta de Comercial ya está confirmada: queda pendiente en Cartera hasta
+que la contadora complete la matriz y se reprocese); y un proceso (causación, corrección por valor nacional, cierre
+mensual) no guarda la tanda, deja la corrida `Failed` con el código y alerta `Cartera.HechoNoContabilizable`
+(«Reintentar» la retoma desde el mismo cursor). Fuera de la pantalla el bloqueo también alerta, porque quien opera no
+corrige la matriz. Sin contabilidad iniciada o con el hecho en `NoPasa` no se pregunta nada y no se bloquea nada
+(contabilidad.md §10.1). Sin respuesta rige D7 y `PoliticaSinRespuesta = Bloquear` sigue mordiendo **sólo** en las
+pantallas (A8 tocó la falta de regla). La reserva de número no se evalúa (corre dentro de la confirmación de Comercial y
+no produce hecho contable). Por qué: el dueño prefiere que nada pase a medias a que pase sin contabilizar, y por eso
+el defecto es `Bloquear` (decisión del dueño del 2026-10-14): una cooperativa que inicia la contabilidad tiene que
+completar la matriz de Cartera antes de operar, o fijar `Advertir` a propósito. FR: FR-088, FR-127, FR-128, D7, D8, US7-3. Origen:
 DC-11, DC-12, DC-15 (pregunta C5).
 
 **T57 · Contabilidad no cierra un mes que Cartera no cerró.**
@@ -2526,154 +2534,165 @@ H5 → A10; sus filas quedan como remisión): son **97**, y la conciliación (§
 una propuesta por defecto coherente con la spec y la constitución; si el dueño no responde, **rige la propuesta**.
 «Bloquea» dice qué no puede cerrarse sin respuesta explícita.
 
+**Respuestas del dueño del 2026-10-14 (T0801)**: la última columna de cada tabla. Las que cambiaron lo construido —A8 («Bloquear todo»), A9 y las tres de J— se aplicaron antes del congelamiento de K1 (T0802), con sus pruebas; las demás confirman la propuesta. «—» es una pregunta que T0801 no cubre (de otra entrega o no bloqueante): sigue rigiendo su propuesta mientras el dueño no diga otra cosa.
+
 ### A. Enmiendas a la especificación
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| A1 | ¿Se enmienda la lista cerrada de interfaces con «Dimensiones de Cartera para Contabilidad» (Ofrece), «Perfil regulatorio» (Consume, plataforma), «Autorizaciones del titular» (Consume, Cumplimiento), «Oficinas, sucursales contables y usuario–persona» (Consume, Seguridad y plataforma: alcance, sobre y segregación) y la consulta de obligaciones para Cumplimiento? | Sí (T97) | `LaCarteraSoloSeTocaPorSusInterfaces` y los contratos de K1 |
-| A2 | ¿FR-125 suma los informativos `CarteraActivada`, `CargaDeCarteraAplicada`, `CierreDeCarteraRealizado` y `CierreDeCarteraReabierto`? | Sí (T57) | La regla de cierre contable de FR-146 (K1) |
-| A3 | ¿Cartera emite hechos para las cuentas contingentes del CUIF (9115 aprobados no desembolsados, 913005 rotativos, 9110 garantías)? | Sí desde K1 con modo `NoPasa`; sus tipos se nombran por enmienda de este documento antes de `contracts` | No bloquea |
-| A4 | ¿Se corrige la fila XII de la spec (el retiro no toca la base administrativa, que sólo se respalda)? | Sí | No (redacción) |
-| A5 | ¿Se adaptan en K1 el retiro de asociado (por FR-061), los extractos y el portafolio de la persona (sin la parte de crédito)? | Sí (T94, T88) | El retiro de lo heredado |
-| A6 | ¿Se enmiendan Alcance y Dependencias («Comercial · servicios a asociados») para que esta feature construya en E-02 el dato `CreditWithoutLending` (D29)? (antes G8) | Sí (T95); si no, sale de K1 y es precondición de activación: un ajuste de la 012 del que depende la conciliación de FR-143 | Conciliación de ventas de COOFLOPAL; `ComercioConCartera` |
-| A7 | ¿Se enmiendan FR-147 y C8 para que Nómina conserve una proyección del SMMLV, la UVT y los festivos que sólo escribe la réplica, en vez de leerlos de la plataforma? (antes G1) | Sí (T93); leer directo (`ValoresNacionalesParaNomina`), después | Alcance de E-03 (K1) |
-| A8 | ¿Se enmienda FR-127 (y US7-2) para que «Bloquear» por falta de regla contable sólo aplique a las operaciones de pantalla de Cartera (desembolso, novedad, condonación, castigo), y en el contrato, el consumidor y los procesos siempre advierta? | Sí (T56): un pago que ya ocurrió no se rechaza por un vacío de la matriz y la nómina es «todo o nada» | Validación previa (K1) |
-| A9 | ¿Se enmiendan FR-012 y D4 con una excepción para los pagos sin interacción cuya fecha valor fija la propia spec: Nómina (fin del período en la ordinaria, aprobación en la definitiva; FR-088, FR-112) y, desde K2, el pago de pagaduría con referencia (fecha del descuento, FR-114), sin límite de días ni atribución antes de un cierre? | Sí (T92); la alternativa es parametrizar el límite por clase de recaudador sin exención fija | Validación de fecha valor del contrato (K1, K2) |
-| A10 | ¿Se enmienda FR-144 («quedan intactos») para que lo conservado cambie de espacio de nombres (`Savings`) y de ruta API (`/api/savings/*`, `/api/reports/savings/*`), sin tocar tablas ni rutas de pantalla? (antes H5) | Sí (T3, T99); si no, conserva `/api/lending/*` hasta la feature de Ahorros, con exención por nombre | Estructura del plan y `ElEspacioLendingEsSoloCartera` |
-| A11 | ¿Se enmienda I-4 para que el desenlace «revertido junto con el recaudador» se derive de un intento sin hecho, en vez de escribirse? | Sí (T68); si no, `cartera.vigilancia` escribe un evento compensatorio por cada intento sin hecho pasado su plazo | Auditoría del contrato (K1) |
-| A12 | ¿Se enmienda FR-053 para que «obligación rechazada» por un mensaje no convertible se envíe sólo cuando una persona lo marca no reprocesable (C95, C102), y no apenas falla? | Sí | Consumidor de ventas (K1) |
-| A13 | ¿Se enmienda FR-140 (carga complementaria del historial de mora) para adelantarla a K1, ya que FR-105 la necesita al registrar una obligación sobrevenida? Si no, la obligación sobrevenida antes de K6a se registra sin historial completo y queda marcada | Adelantarla a K1 (plantilla `lending.arrears-history` y `LND_ArrearsHistoryLoads` en `CarteraNucleo`) | FR-105 (K1) |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| A1 | ¿Se enmienda la lista cerrada de interfaces con «Dimensiones de Cartera para Contabilidad» (Ofrece), «Perfil regulatorio» (Consume, plataforma), «Autorizaciones del titular» (Consume, Cumplimiento), «Oficinas, sucursales contables y usuario–persona» (Consume, Seguridad y plataforma: alcance, sobre y segregación) y la consulta de obligaciones para Cumplimiento? | Sí (T97) | `LaCarteraSoloSeTocaPorSusInterfaces` y los contratos de K1 | Sí, la propuesta (2026-10-14). |
+| A2 | ¿FR-125 suma los informativos `CarteraActivada`, `CargaDeCarteraAplicada`, `CierreDeCarteraRealizado` y `CierreDeCarteraReabierto`? | Sí (T57) | La regla de cierre contable de FR-146 (K1) | Sí, la propuesta (2026-10-14). |
+| A3 | ¿Cartera emite hechos para las cuentas contingentes del CUIF (9115 aprobados no desembolsados, 913005 rotativos, 9110 garantías)? | Sí desde K1 con modo `NoPasa`; sus tipos se nombran por enmienda de este documento antes de `contracts` | No bloquea | Sí, la propuesta (2026-10-14): los contingentes del CUIF se emiten desde K1 con modo `NoPasa`. |
+| A4 | ¿Se corrige la fila XII de la spec (el retiro no toca la base administrativa, que sólo se respalda)? | Sí | No (redacción) | Sin respuesta del dueño a la fecha (2026-10-14): rige la propuesta por defecto. |
+| A5 | ¿Se adaptan en K1 el retiro de asociado (por FR-061), los extractos y el portafolio de la persona (sin la parte de crédito)? | Sí (T94, T88) | El retiro de lo heredado | Sí, la propuesta (2026-10-14). |
+| A6 | ¿Se enmiendan Alcance y Dependencias («Comercial · servicios a asociados») para que esta feature construya en E-02 el dato `CreditWithoutLending` (D29)? (antes G8) | Sí (T95); si no, sale de K1 y es precondición de activación: un ajuste de la 012 del que depende la conciliación de FR-143 | Conciliación de ventas de COOFLOPAL; `ComercioConCartera` | Sí, la propuesta (2026-10-14). |
+| A7 | ¿Se enmiendan FR-147 y C8 para que Nómina conserve una proyección del SMMLV, la UVT y los festivos que sólo escribe la réplica, en vez de leerlos de la plataforma? (antes G1) | Sí (T93); leer directo (`ValoresNacionalesParaNomina`), después | Alcance de E-03 (K1) | Sí, la propuesta (2026-10-14). |
+| A8 | ¿Se enmienda FR-127 (y US7-2) para que «Bloquear» por falta de regla contable sólo aplique a las operaciones de pantalla de Cartera (desembolso, novedad, condonación, castigo), y en el contrato, el consumidor y los procesos siempre advierta? | Sí (T56): un pago que ya ocurrió no se rechaza por un vacío de la matriz y la nómina es «todo o nada» | Validación previa (K1) | **«Bloquear todo»** (2026-10-14), contraria a la propuesta: con `Contabilidad.FaltaDeRegla = Bloquear` se detiene también el contrato (rechaza el ítem con `Lending.Prevalidation.NotPostable` y su `data.errors[]`; en Nómina la aprobación entera falla con `Payroll.LoanDeductionNotPostable`), el consumidor de Comercial (la venta queda en reproceso, sin obligación) y los procesos (la tanda no avanza, la corrida queda `Failed` con el código y alerta `Cartera.HechoNoContabilizable`; «Reintentar» la retoma). Sin contabilidad iniciada o con el hecho en `NoPasa` no se bloquea nada (§10.1 de contabilidad.md). `PoliticaSinRespuesta` no cambia: sólo pantalla. Además el dueño decidió el mismo día que `Contabilidad.FaltaDeRegla` **arranque en `Bloquear`** (antes `Advertir`). Aplicado en T0801. |
+| A9 | ¿Se enmiendan FR-012 y D4 con una excepción para los pagos sin interacción cuya fecha valor fija la propia spec: Nómina (fin del período en la ordinaria, aprobación en la definitiva; FR-088, FR-112) y, desde K2, el pago de pagaduría con referencia (fecha del descuento, FR-114), sin límite de días ni atribución antes de un cierre? | Sí (T92); la alternativa es parametrizar el límite por clase de recaudador sin exención fija | Validación de fecha valor del contrato (K1, K2) | **Sí** (2026-10-14): Nómina (fin del período en la ordinaria, aprobación en la definitiva) y, desde K2, la pagaduría con referencia se aplican aunque la fecha valor sea futura, sin límite de días ni atribución antes de un cierre (`ReglasDeFechaValor.FechaValorFijadaPorLaSpec`). Las personas siguen sin poder registrar pagos con fecha futura. Aplicado en T0801. |
+| A10 | ¿Se enmienda FR-144 («quedan intactos») para que lo conservado cambie de espacio de nombres (`Savings`) y de ruta API (`/api/savings/*`, `/api/reports/savings/*`), sin tocar tablas ni rutas de pantalla? (antes H5) | Sí (T3, T99); si no, conserva `/api/lending/*` hasta la feature de Ahorros, con exención por nombre | Estructura del plan y `ElEspacioLendingEsSoloCartera` | El dueño (2026-10-14): ahorros, aportes y CDT se renuevan en una **feature nueva de Ahorros, después de K1**; hasta entonces sigue lo construido (la propuesta: `Savings`, `/api/savings/*`, `/api/reports/savings/*`). Pendiente en `docs/operaciones/estado-y-pendientes.md`. |
+| A11 | ¿Se enmienda I-4 para que el desenlace «revertido junto con el recaudador» se derive de un intento sin hecho, en vez de escribirse? | Sí (T68); si no, `cartera.vigilancia` escribe un evento compensatorio por cada intento sin hecho pasado su plazo | Auditoría del contrato (K1) | Sí, la propuesta (2026-10-14). |
+| A12 | ¿Se enmienda FR-053 para que «obligación rechazada» por un mensaje no convertible se envíe sólo cuando una persona lo marca no reprocesable (C95, C102), y no apenas falla? | Sí | Consumidor de ventas (K1) | Sin respuesta del dueño a la fecha (2026-10-14): rige la propuesta por defecto. |
+| A13 | ¿Se enmienda FR-140 (carga complementaria del historial de mora) para adelantarla a K1, ya que FR-105 la necesita al registrar una obligación sobrevenida? Si no, la obligación sobrevenida antes de K6a se registra sin historial completo y queda marcada | Adelantarla a K1 (plantilla `lending.arrears-history` y `LND_ArrearsHistoryLoads` en `CarteraNucleo`) | FR-105 (K1) | Sin respuesta del dueño a la fecha (2026-10-14): rige la propuesta por defecto. |
 
 ### B. Plataforma, procesos y valores nacionales
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| B1 | ¿Se acepta que el proceso origine mensajes, sólo en los tipos de Cartera marcados (enmienda de la regla de la 012)? | Sí (T11) | K1: todo hecho automático y las respuestas a Comercial |
-| B2 | ¿Recaudo se identifica como destino `Receipts` y módulo `REC`? | Sí (CH10); la alternativa era `Collections` | Contratos de K1 (`PagoReversadoPorCartera`, recaudador de prueba) |
-| B3 | ¿Qué retención tiene `COR_IntegrationMessages` con el volumen de Cartera? | Sin purga; medir con 50.000 créditos y decidir después | No |
-| B4 | ¿«Despliegue de producción» es `IHostEnvironment.IsProduction()`? ¿Con qué ambiente corren DEV y QA en el clúster? | Sí; confirmar que QA no corre como Production (si corre así, allí no hay dobles) | K1: dobles de prueba y activación |
-| B5 | ¿Quién registra valores nacionales y documentos normativos en la central? | El maestro con segundo factor, con plantilla de índices y paquete de exportación e importación entre ambientes | Rutas `/api/saas/*` (K1) |
-| B6 | ¿Entra la UVT a los valores nacionales ya en K1, proyectada a Nómina como el SMMLV? | Sí (T93): `LectorDeUvt` no cambia y lee la proyección; `AddLegalParameterVersion` rechaza `UVT` | No |
-| B7 | Si la central no responde al momento del cierre oficial, ¿se niega el cierre? | Sí, con motivo y reintento; la calificación diaria calcula con lo replicado y lo advierte | Diseño del cierre (K1) |
-| B8 | Al confirmar por excepción una venta con validación fallida, ¿la entrega queda en `ValidationFailed`? | Sí; cambia el recibo y la consulta responde `Validated` «confirmada por excepción» | No |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| B1 | ¿Se acepta que el proceso origine mensajes, sólo en los tipos de Cartera marcados (enmienda de la regla de la 012)? | Sí (T11) | K1: todo hecho automático y las respuestas a Comercial | Sí, la propuesta (2026-10-14). |
+| B2 | ¿Recaudo se identifica como destino `Receipts` y módulo `REC`? | Sí (CH10); la alternativa era `Collections` | Contratos de K1 (`PagoReversadoPorCartera`, recaudador de prueba) | — |
+| B3 | ¿Qué retención tiene `COR_IntegrationMessages` con el volumen de Cartera? | Sin purga; medir con 50.000 créditos y decidir después | No | — |
+| B4 | ¿«Despliegue de producción» es `IHostEnvironment.IsProduction()`? ¿Con qué ambiente corren DEV y QA en el clúster? | Sí; confirmar que QA no corre como Production (si corre así, allí no hay dobles) | K1: dobles de prueba y activación | Sí (2026-10-14): QA **no** corre como Production (allí cuentan los dobles); sin cambio en el código. |
+| B5 | ¿Quién registra valores nacionales y documentos normativos en la central? | El maestro con segundo factor, con plantilla de índices y paquete de exportación e importación entre ambientes | Rutas `/api/saas/*` (K1) | — |
+| B6 | ¿Entra la UVT a los valores nacionales ya en K1, proyectada a Nómina como el SMMLV? | Sí (T93): `LectorDeUvt` no cambia y lee la proyección; `AddLegalParameterVersion` rechaza `UVT` | No | — |
+| B7 | Si la central no responde al momento del cierre oficial, ¿se niega el cierre? | Sí, con motivo y reintento; la calificación diaria calcula con lo replicado y lo advierte | Diseño del cierre (K1) | — |
+| B8 | Al confirmar por excepción una venta con validación fallida, ¿la entrega queda en `ValidationFailed`? | Sí; cambia el recibo y la consulta responde `Validated` «confirmada por excepción» | No | — |
 
 ### C. Contabilidad
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| C1 | ¿`DESC_CARTERA` contabiliza en Nómina contra un puente «recaudos por nómina para Cartera» (enmienda D-08 de la 010)? | Sí (T53) | Pagos por nómina y retiro de `RecaudoDeCredito` (K1) |
-| C2 | Cuando el deterioro baja, ¿primero contra el gasto del mismo ejercicio y el resto a recuperaciones (4225)? | Sí, parámetro con fuente «pendiente de validar» | La validación del cierre con la contadora |
-| C3 | Patrimonio técnico y solvencia: ¿registrados por el contador con soporte? ¿Aplica la solvencia a COOFLOPAL? Sin patrimonio técnico vigente, ¿qué hace el límite de concentración (FR-041)? | Registrados en `ACC_RegulatoryIndicators`, vencen a los 6 meses; sin dato, en FR-100 y FR-103 lo conservador de D19, y en FR-041 se bloquean desembolso, cupo y novedad con «patrimonio técnico no disponible» y alerta al contador (T59); la alternativa es usar el último registrado con advertencia | FR-041, FR-100, FR-103 (K1) |
-| C4 | ¿Se amplían FR-107 y FR-126 con la dimensión «reestructurado» y la reclasificación de todo saldo con categoría? | Sí (T48, T52) | Cierre de K1 y SC-006 |
-| C5 | Resumido de la causación: uno por día con la sucursal en cada línea; con cuentas que exigen tercero, ~20.000 líneas al día. ¿Se acepta? | Sí; medir con `RUN_PERF_TESTS`; la granularidad admite «por día y sucursal» | No el plan; lo valida la prueba de volumen |
-| C6 | ¿Se agrega el comprobante `CN` y se mantiene `PG` como cruce aunque un crédito de Comercial no tenga pagaré? | Sí a `CN`; `PG` por continuidad; si la contadora objeta, cruce nuevo `CR` | Semillas de K1 |
-| C7 | Capitalización al reestructurar, castigo con deterioro insuficiente y condonación: ¿roles `IngresoDiferido` y `GastoDeCastigoOCondonacion`? | Sí, sembrados sin cuenta y «pendiente de validar» | Hechos de K3 |
-| C8 | ¿La dimensión «deudor empleado» sale del estado actual de la persona maestra? | Sí; el ciclo diario detecta el cambio y emite `DimensionContableCambiada` | Hechos y conciliación de K1 |
-| C9 | Oficina con créditos sin sucursal contable vinculada: ¿qué pasa? | Se bloquea la operación y la activación exige el vínculo (CH49) | Activación (K1) |
-| C10 | ¿Se difieren comisiones y costos de originación (FR-017)? | No (`Contabilidad.DiferirComisiones` = false, defecto de FR-017); si se activa, un hecho de amortización en otra entrega | No |
-| C11 | ¿El interés de financiación de las líneas de origen comercial es gravado con IVA (D20)? | Sin defecto: cada versión de línea sella el concepto con su soporte; sin él, una línea de origen comercial con tasa mayor que cero no se activa (T44) | Líneas de origen comercial con interés (K1) |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| C1 | ¿`DESC_CARTERA` contabiliza en Nómina contra un puente «recaudos por nómina para Cartera» (enmienda D-08 de la 010)? | Sí (T53) | Pagos por nómina y retiro de `RecaudoDeCredito` (K1) | Sí, la propuesta (2026-10-14). |
+| C2 | Cuando el deterioro baja, ¿primero contra el gasto del mismo ejercicio y el resto a recuperaciones (4225)? | Sí, parámetro con fuente «pendiente de validar» | La validación del cierre con la contadora | — |
+| C3 | Patrimonio técnico y solvencia: ¿registrados por el contador con soporte? ¿Aplica la solvencia a COOFLOPAL? Sin patrimonio técnico vigente, ¿qué hace el límite de concentración (FR-041)? | Registrados en `ACC_RegulatoryIndicators`, vencen a los 6 meses; sin dato, en FR-100 y FR-103 lo conservador de D19, y en FR-041 se bloquean desembolso, cupo y novedad con «patrimonio técnico no disponible» y alerta al contador (T59); la alternativa es usar el último registrado con advertencia | FR-041, FR-100, FR-103 (K1) | — |
+| C4 | ¿Se amplían FR-107 y FR-126 con la dimensión «reestructurado» y la reclasificación de todo saldo con categoría? | Sí (T48, T52) | Cierre de K1 y SC-006 | — |
+| C5 | Resumido de la causación: uno por día con la sucursal en cada línea; con cuentas que exigen tercero, ~20.000 líneas al día. ¿Se acepta? | Sí; medir con `RUN_PERF_TESTS`; la granularidad admite «por día y sucursal» | No el plan; lo valida la prueba de volumen | — |
+| C6 | ¿Se agrega el comprobante `CN` y se mantiene `PG` como cruce aunque un crédito de Comercial no tenga pagaré? | Sí a `CN`; `PG` por continuidad; si la contadora objeta, cruce nuevo `CR` | Semillas de K1 | — |
+| C7 | Capitalización al reestructurar, castigo con deterioro insuficiente y condonación: ¿roles `IngresoDiferido` y `GastoDeCastigoOCondonacion`? | Sí, sembrados sin cuenta y «pendiente de validar» | Hechos de K3 | — |
+| C8 | ¿La dimensión «deudor empleado» sale del estado actual de la persona maestra? | Sí; el ciclo diario detecta el cambio y emite `DimensionContableCambiada` | Hechos y conciliación de K1 | — |
+| C9 | Oficina con créditos sin sucursal contable vinculada: ¿qué pasa? | Se bloquea la operación y la activación exige el vínculo (CH49) | Activación (K1) | — |
+| C10 | ¿Se difieren comisiones y costos de originación (FR-017)? | No (`Contabilidad.DiferirComisiones` = false, defecto de FR-017); si se activa, un hecho de amortización en otra entrega | No | — |
+| C11 | ¿El interés de financiación de las líneas de origen comercial es gravado con IVA (D20)? | Sin defecto: cada versión de línea sella el concepto con su soporte; sin él, una línea de origen comercial con tasa mayor que cero no se activa (T44) | Líneas de origen comercial con interés (K1) | — |
 
 ### D. Motor financiero y pagos
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| D1 | ¿Cómo se define la equivalencia «lineal»? | NA_m = m·((1+EA)^(1/m) − 1) dividida por la base; por defecto compuesta; la valida la contadora | Casos dorados de K1 |
-| D2 | Para el art. 829, ¿el sábado es hábil? | Sí; no hábiles sólo domingos y festivos nacionales, como parámetro legal «pendiente de validar» | `CalendarioHabil` (K1) |
-| D3 | Real/365 en año bisiesto: ¿base fija 365 con el 29 de febrero causando? | Sí; el control de usura usa base 365; caso dorado de 2028 | `ContadorDeDias` (K1) |
-| D4 | Un pago con fecha valor anterior a otro ya aplicado, ¿redistribuye el posterior? | Sí, como el reverso de FR-081 | T33 (K1) |
-| D5 | Créditos migrados: ¿se conserva el plan cargado o se regenera? | Se conserva el capital por cuota; el interés lo causa el motor desde el corte y se declara en el acta de activación | Saldo inicial y cuadre (K1) |
-| D6 | Si el anticipo no alcanza una cuota en su vencimiento, ¿se aplica parcial? | Sí, con la prelación | `AplicadorDePagos` (K1) |
-| D7 | En una cancelación, ¿se aplican solos el anticipo y el saldo a favor del mismo crédito? | El anticipo sí; el saldo a favor no (quinta operación del contrato) | Liquidación y listado (K1) |
-| D8 | Pagar la cuota del ciclo antes del vencimiento, ¿reduce intereses? | No; el resto queda como anticipo de esa cuota | Modalidad 3 (K1) |
-| D9 | ¿Cuándo se causan los seguros? | Al vencer la cuota del período, sobre el saldo inicial del período o el monto inicial según la línea | `SeguroCausado` (K1) |
-| D10 | Tasa variable: ¿el margen se suma en la expresión del índice o sobre la EA? | En la expresión del índice, luego a EA, piso, techo y usura | `TasaDelDia` (K1) |
-| D11 | Liquidación a fecha futura sin usura certificada: ¿proyecta o bloquea? | Proyecta con la última conocida e informa `ValidaHasta`; la causación real sí se bloquea | `GetLoanSettlementQuery` (K1) |
-| D12 | Desembolso por tramos: ¿el plan se regenera en cada tramo? | Sí, sobre el capital desembolsado | Tramos (K1) |
-| D13 | Posiciones diarias (~18 millones al año con 50.000 créditos): ¿diarias o sólo en eventos? | Diarias desde K1; particionar por año al pasar de 20.000 créditos | Modelo de proyecciones (K1) |
-| D14 | ¿Se causa mora sobre intereses? | No por defecto; parámetro legal con techo, nunca en vivienda | Causación de mora (K1) |
-| D15 | Fecha valor de Nómina y de los pagos de pagaduría con referencia (K2) | Ordinaria: fin del período; definitiva: fecha de aprobación; pagaduría con referencia: fecha del descuento. La exención del límite D4 la decide A9 | Validación de fecha valor del contrato (K1, K2) |
-| D16 | Un pago con fecha valor anterior a un cierre exige atribución: ¿quién la tiene cuando paga Recaudo? | El usuario de Recaudo con `Lending.Payments.BackdateBeforeClose` y su límite; si no, el contrato rechaza con `Lending.Payment.ValueDateBeforeClosing`; la exención de Nómina la decide A9 | Contrato (K1) |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| D1 | ¿Cómo se define la equivalencia «lineal»? | NA_m = m·((1+EA)^(1/m) − 1) dividida por la base; por defecto compuesta; la valida la contadora | Casos dorados de K1 | — |
+| D2 | Para el art. 829, ¿el sábado es hábil? | Sí; no hábiles sólo domingos y festivos nacionales, como parámetro legal «pendiente de validar» | `CalendarioHabil` (K1) | — |
+| D3 | Real/365 en año bisiesto: ¿base fija 365 con el 29 de febrero causando? | Sí; el control de usura usa base 365; caso dorado de 2028 | `ContadorDeDias` (K1) | — |
+| D4 | Un pago con fecha valor anterior a otro ya aplicado, ¿redistribuye el posterior? | Sí, como el reverso de FR-081 | T33 (K1) | — |
+| D5 | Créditos migrados: ¿se conserva el plan cargado o se regenera? | Se conserva el capital por cuota; el interés lo causa el motor desde el corte y se declara en el acta de activación | Saldo inicial y cuadre (K1) | — |
+| D6 | Si el anticipo no alcanza una cuota en su vencimiento, ¿se aplica parcial? | Sí, con la prelación | `AplicadorDePagos` (K1) | — |
+| D7 | En una cancelación, ¿se aplican solos el anticipo y el saldo a favor del mismo crédito? | El anticipo sí; el saldo a favor no (quinta operación del contrato) | Liquidación y listado (K1) | — |
+| D8 | Pagar la cuota del ciclo antes del vencimiento, ¿reduce intereses? | No; el resto queda como anticipo de esa cuota | Modalidad 3 (K1) | — |
+| D9 | ¿Cuándo se causan los seguros? | Al vencer la cuota del período, sobre el saldo inicial del período o el monto inicial según la línea | `SeguroCausado` (K1) | — |
+| D10 | Tasa variable: ¿el margen se suma en la expresión del índice o sobre la EA? | En la expresión del índice, luego a EA, piso, techo y usura | `TasaDelDia` (K1) | — |
+| D11 | Liquidación a fecha futura sin usura certificada: ¿proyecta o bloquea? | Proyecta con la última conocida e informa `ValidaHasta`; la causación real sí se bloquea | `GetLoanSettlementQuery` (K1) | — |
+| D12 | Desembolso por tramos: ¿el plan se regenera en cada tramo? | Sí, sobre el capital desembolsado | Tramos (K1) | — |
+| D13 | Posiciones diarias (~18 millones al año con 50.000 créditos): ¿diarias o sólo en eventos? | Diarias desde K1; particionar por año al pasar de 20.000 créditos | Modelo de proyecciones (K1) | — |
+| D14 | ¿Se causa mora sobre intereses? | No por defecto; parámetro legal con techo, nunca en vivienda | Causación de mora (K1) | — |
+| D15 | Fecha valor de Nómina y de los pagos de pagaduría con referencia (K2) | Ordinaria: fin del período; definitiva: fecha de aprobación; pagaduría con referencia: fecha del descuento. La exención del límite D4 la decide A9 | Validación de fecha valor del contrato (K1, K2) | — |
+| D16 | Un pago con fecha valor anterior a un cierre exige atribución: ¿quién la tiene cuando paga Recaudo? | El usuario de Recaudo con `Lending.Payments.BackdateBeforeClose` y su límite; si no, el contrato rechaza con `Lending.Payment.ValueDateBeforeClosing`; la exención de Nómina la decide A9 | Contrato (K1) | — |
 
 ### E. Riesgo y normativa
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| E1 | ¿«Pendiente de validar» bloquea algo? | No: marca el cierre y el SICSES y alerta; la activación en producción exige Anexo 1 vigente y usura de las líneas activas (T41) | Guardas del cierre y de la activación |
-| E2 | La CE 100 cuenta la antelación del aviso contra el reporte del mes de aplicación; FR-105, contra la fecha desde. ¿Cuál rige? | La de la spec, más estricta, con la antelación como dato del documento; se documenta la diferencia para la contadora | K6a (adopción voluntaria) |
-| E3 | Grupo NIIF: ¿cuál es la fuente si ya vive en `AccountingSetup.NiifGroup` sin vigencia? | El perfil regulatorio, sembrado desde `AccountingSetup`, con alerta si difieren; una enmienda posterior hace que Contabilidad lo lea del perfil | No |
-| E4 | Modalidades productivas del Decreto 455: ¿a qué segmento SARC van y qué modalidades certifica la Superintendencia Financiera desde octubre de 2026? | Popular productivo rural y urbano → microcrédito; productivo rural, urbano y de mayor monto → comercial; claves de usura según la certificación, «pendiente de validar» | Semilla del catálogo de modalidades (K1) |
-| E5 | ¿Los festivos «Manual» de una cooperativa cuentan para la mora de Cartera? | No; Cartera usa sólo el calendario nacional | No |
-| E6 | ¿El cierre mensual es manual o programado por defecto? | Manual; `Riesgo.CierreProgramado` apagado; alerta pasado `Riesgo.DiaLimiteCierre` (10) | No |
-| E7 | ¿La calificación diaria informativa aplica el arrastre? | Sí, rotulada «informativa»; se apaga con `Riesgo.CalificacionDiariaConArrastre` | No |
-| E8 | Cortes del puntaje, PDI por días, homologación y comercial persona jurídica vienen como imágenes en los PDF: ¿quién los transcribe y coteja? | El equipo los transcribe con `verified = false`; el dueño y la contadora cotejan contra la circular consolidada vigente | Semilla de K6a; del Anexo 1 en K1 sólo la tabla de comercial persona jurídica |
-| E9 | ¿El deterioro de cada crédito se redondea al centavo o al peso? | Al centavo; en la pérdida esperada sólo el puntaje se redondea a la escala del documento | No |
-| E10 | ¿El microcrédito se divide en los sub-segmentos `Inmobiliario` y `Empresarial` del catálogo de modalidades, como el CUIF (1448, 1455)? | Sí, «pendiente de validar» por la contadora; sin ellos la matriz no puede elegir la cuenta de capital | Semilla del catálogo de modalidades (K1) |
-| E11 | Si el primer vencimiento del formato de cartera del SICSES de COOFLOPAL llega antes que K5, ¿se adelanta a K1? | Sí, sólo el formato de cartera (§7.7) | Alcance de K1; se decide en la fase 1 |
-| E12 | ¿La corrección monetaria UVR llega a Contabilidad como hecho propio (`CorreccionMonetariaUvrCausada`)? | Sí, en K6b (C111) | K6b |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| E1 | ¿«Pendiente de validar» bloquea algo? | No: marca el cierre y el SICSES y alerta; la activación en producción exige Anexo 1 vigente y usura de las líneas activas (T41) | Guardas del cierre y de la activación | — |
+| E2 | La CE 100 cuenta la antelación del aviso contra el reporte del mes de aplicación; FR-105, contra la fecha desde. ¿Cuál rige? | La de la spec, más estricta, con la antelación como dato del documento; se documenta la diferencia para la contadora | K6a (adopción voluntaria) | — |
+| E3 | Grupo NIIF: ¿cuál es la fuente si ya vive en `AccountingSetup.NiifGroup` sin vigencia? | El perfil regulatorio, sembrado desde `AccountingSetup`, con alerta si difieren; una enmienda posterior hace que Contabilidad lo lea del perfil | No | — |
+| E4 | Modalidades productivas del Decreto 455: ¿a qué segmento SARC van y qué modalidades certifica la Superintendencia Financiera desde octubre de 2026? | Popular productivo rural y urbano → microcrédito; productivo rural, urbano y de mayor monto → comercial; claves de usura según la certificación, «pendiente de validar» | Semilla del catálogo de modalidades (K1) | — |
+| E5 | ¿Los festivos «Manual» de una cooperativa cuentan para la mora de Cartera? | No; Cartera usa sólo el calendario nacional | No | — |
+| E6 | ¿El cierre mensual es manual o programado por defecto? | Manual; `Riesgo.CierreProgramado` apagado; alerta pasado `Riesgo.DiaLimiteCierre` (10) | No | — |
+| E7 | ¿La calificación diaria informativa aplica el arrastre? | Sí, rotulada «informativa»; se apaga con `Riesgo.CalificacionDiariaConArrastre` | No | — |
+| E8 | Cortes del puntaje, PDI por días, homologación y comercial persona jurídica vienen como imágenes en los PDF: ¿quién los transcribe y coteja? | El equipo los transcribe con `verified = false`; el dueño y la contadora cotejan contra la circular consolidada vigente | Semilla de K6a; del Anexo 1 en K1 sólo la tabla de comercial persona jurídica | — |
+| E9 | ¿El deterioro de cada crédito se redondea al centavo o al peso? | Al centavo; en la pérdida esperada sólo el puntaje se redondea a la escala del documento | No | — |
+| E10 | ¿El microcrédito se divide en los sub-segmentos `Inmobiliario` y `Empresarial` del catálogo de modalidades, como el CUIF (1448, 1455)? | Sí, «pendiente de validar» por la contadora; sin ellos la matriz no puede elegir la cuenta de capital | Semilla del catálogo de modalidades (K1) | — |
+| E11 | Si el primer vencimiento del formato de cartera del SICSES de COOFLOPAL llega antes que K5, ¿se adelanta a K1? | Sí, sólo el formato de cartera (§7.7) | Alcance de K1; se decide en la fase 1 | — |
+| E12 | ¿La corrección monetaria UVR llega a Contabilidad como hecho propio (`CorreccionMonetariaUvrCausada`)? | Sí, en K6b (C111) | K6b | — |
 
 ### F. Seguridad, actas y habeas data
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| F1 | ¿La decisión de crédito vive en un modelo propio de Cartera en vez del motor `COR_Approval*` de la 012 que la spec cita? | Sí (T63–T65) | Diseño de originación (K1) |
-| F2 | ¿Basta con trece plantillas y un comando que crea los roles al preparar la activación? | Sí (T61) | Siembra de seguridad (K1) |
-| F3 | ¿Se tocan Auditor y CompanyAdmin? | Auditor no (el revisor fiscal usa su plantilla); a CompanyAdmin se le excluyen `Lending.Decisions.*` y `Lending.Sessions.Vote` | `BuiltInRolesSeeder` (K1) |
-| F4 | ¿Se confirma que el alcance falla cerrado y se agrega en K1 el selector agencia–oficina en Agencias? | Sí; el asistente de activación lista usuarios con roles de Cartera sin alcance | Puesta en marcha (K1) |
-| F5 | ¿Todo usuario que radique, decida, vote o desembolse debe tener persona vinculada? | Sí (`Lending.Security.UserWithoutPerson`) | Segregación y actas (K1) |
-| F6 | ¿Qué incompatibilidades vienen activas por defecto? | `Decidir × Desembolsar`, desactivable con motivo; las demás sugeridas e inactivas | Semilla de parámetros (K1) |
-| F7 | Sesiones: suplentes, quórum, mayoría ordinaria y mayoría para vinculados en entidades sin actividad financiera | Composición = principales con voto; el suplente vota por un principal ausente; quórum mayoría absoluta de la composición; mayoría de los presentes elegibles; sin actividad financiera, la de los estatutos; todo «pendiente de validar» | `EvaluadorDeVotacion` (K1) |
-| F8 | ¿Los votos los registra la secretaría o vota cada miembro en el sistema? | La secretaría por defecto; el miembro que sea usuario puede votar con su sesión o en presencia con passkey o TOTP | Pantalla de sesión (K1) |
-| F9 | ¿Se auditan los rechazos del validador (forma)? | Sí, como pide FR-003: el metadato del grupo `/api/lending` registra `Lending.Request.Rejected` (campos y códigos, sin valores) (T67) | No |
-| F10 | ¿Qué es «dispositivo» en la auditoría? | User-Agent más `X-Dispositivo` de MAUI; oficina por `IConOficina` o la del usuario | No |
-| F11 | Plazos del titular (consultas 10 + 5, reclamos 15 + 8 días hábiles, leyenda en 2): ¿como límites con fuente? | Sí, «pendiente de validar», con festivos nacionales | Solicitudes del titular (K1) y reclamos (K4) |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| F1 | ¿La decisión de crédito vive en un modelo propio de Cartera en vez del motor `COR_Approval*` de la 012 que la spec cita? | Sí (T63–T65) | Diseño de originación (K1) | Sí, la propuesta (2026-10-14). |
+| F2 | ¿Basta con trece plantillas y un comando que crea los roles al preparar la activación? | Sí (T61) | Siembra de seguridad (K1) | — |
+| F3 | ¿Se tocan Auditor y CompanyAdmin? | Auditor no (el revisor fiscal usa su plantilla); a CompanyAdmin se le excluyen `Lending.Decisions.*` y `Lending.Sessions.Vote` | `BuiltInRolesSeeder` (K1) | — |
+| F4 | ¿Se confirma que el alcance falla cerrado y se agrega en K1 el selector agencia–oficina en Agencias? | Sí; el asistente de activación lista usuarios con roles de Cartera sin alcance | Puesta en marcha (K1) | — |
+| F5 | ¿Todo usuario que radique, decida, vote o desembolse debe tener persona vinculada? | Sí (`Lending.Security.UserWithoutPerson`) | Segregación y actas (K1) | — |
+| F6 | ¿Qué incompatibilidades vienen activas por defecto? | `Decidir × Desembolsar`, desactivable con motivo; las demás sugeridas e inactivas | Semilla de parámetros (K1) | — |
+| F7 | Sesiones: suplentes, quórum, mayoría ordinaria y mayoría para vinculados en entidades sin actividad financiera | Composición = principales con voto; el suplente vota por un principal ausente; quórum mayoría absoluta de la composición; mayoría de los presentes elegibles; sin actividad financiera, la de los estatutos; todo «pendiente de validar» | `EvaluadorDeVotacion` (K1) | — |
+| F8 | ¿Los votos los registra la secretaría o vota cada miembro en el sistema? | La secretaría por defecto; el miembro que sea usuario puede votar con su sesión o en presencia con passkey o TOTP | Pantalla de sesión (K1) | — |
+| F9 | ¿Se auditan los rechazos del validador (forma)? | Sí, como pide FR-003: el metadato del grupo `/api/lending` registra `Lending.Request.Rejected` (campos y códigos, sin valores) (T67) | No | — |
+| F10 | ¿Qué es «dispositivo» en la auditoría? | User-Agent más `X-Dispositivo` de MAUI; oficina por `IConOficina` o la del usuario | No | — |
+| F11 | Plazos del titular (consultas 10 + 5, reclamos 15 + 8 días hábiles, leyenda en 2): ¿como límites con fuente? | Sí, «pendiente de validar», con festivos nacionales | Solicitudes del titular (K1) y reclamos (K4) | — |
 
 ### G. Nómina, Personas y Comercial
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| G1 | (Movida a A7: es enmienda de FR-147 y C8.) | — | — |
-| G2 | En la ordinaria, ¿un rechazo o excedente de Cartera ajusta la línea al aprobar? | Sí, con vista previa; no impide aprobar | T92 |
-| G3 | ¿Reversar una ordinaria aprobada reversa sus recaudos por el contrato? | Sí, todo o nada, como la definitiva | `ReversePayrollRunCommand` |
-| G4 | ¿Qué propone la definitiva? | Todas las vivas como deudor, castigadas incluidas y de cualquier forma de pago; nunca las de codeudor | `PropuestaDeDescuentosDeCartera` |
-| G5 | Prelación de la cuota de Cartera en la ordinaria frente a otras deducciones y alimentos | Primera entre las autorizadas, después de las de ley y sujeta al tope; alimentos cuando exista ese concepto | Motor de Nómina y sus casos dorados |
-| G6 | ¿La reserva de número corre dentro de la unidad de trabajo de la confirmación de Comercial? | Sí; si la medición de cerrojos en el POS sale mal, transacción propia con `Expired` sin reasignar | E-02 (K1) |
-| G7 | ¿Quién es el pagador de la nómina propia: el empleado o la cooperativa? | El empleado deudor | Dimensiones de `PagoAplicado` |
-| G8 | (Movida a A6: es enmienda de Alcance y Dependencias.) | — | — |
-| G9 | Si cambia el monto de una venta con número reservado | Se libera la reserva y se pide otra con la clave nueva | T22 |
-| G10 | Definitivas y novedades ya registradas con crédito heredado: ¿basta conservar el PublicId y el número como historia? | Sí, sin FK, en `PAY_SettlementDeductions` y `PAY_Novelties` (T87) | `NominaRecaudaPorElContrato` |
-| G11 | Ventas de servicios a crédito confirmadas antes de existir `CreditWithoutLending`, que ya emitieron `VentaACreditoRegistrada` hacia Lending: ¿cómo se resuelven? | En la conciliación de FR-143, marcadas «aceptadas fuera de Cartera (D29)» con motivo y punto de acta; responden `ObligacionRechazada` no reprocesable (T83) | Activación de COOFLOPAL |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| G1 | (Movida a A7: es enmienda de FR-147 y C8.) | — | — | — |
+| G2 | En la ordinaria, ¿un rechazo o excedente de Cartera ajusta la línea al aprobar? | Sí, con vista previa; no impide aprobar | T92 | — |
+| G3 | ¿Reversar una ordinaria aprobada reversa sus recaudos por el contrato? | Sí, todo o nada, como la definitiva | `ReversePayrollRunCommand` | — |
+| G4 | ¿Qué propone la definitiva? | Todas las vivas como deudor, castigadas incluidas y de cualquier forma de pago; nunca las de codeudor | `PropuestaDeDescuentosDeCartera` | — |
+| G5 | Prelación de la cuota de Cartera en la ordinaria frente a otras deducciones y alimentos | Primera entre las autorizadas, después de las de ley y sujeta al tope; alimentos cuando exista ese concepto | Motor de Nómina y sus casos dorados | — |
+| G6 | ¿La reserva de número corre dentro de la unidad de trabajo de la confirmación de Comercial? | Sí; si la medición de cerrojos en el POS sale mal, transacción propia con `Expired` sin reasignar | E-02 (K1) | — |
+| G7 | ¿Quién es el pagador de la nómina propia: el empleado o la cooperativa? | El empleado deudor | Dimensiones de `PagoAplicado` | — |
+| G8 | (Movida a A6: es enmienda de Alcance y Dependencias.) | — | — | — |
+| G9 | Si cambia el monto de una venta con número reservado | Se libera la reserva y se pide otra con la clave nueva | T22 | — |
+| G10 | Definitivas y novedades ya registradas con crédito heredado: ¿basta conservar el PublicId y el número como historia? | Sí, sin FK, en `PAY_SettlementDeductions` y `PAY_Novelties` (T87) | `NominaRecaudaPorElContrato` | — |
+| G11 | Ventas de servicios a crédito confirmadas antes de existir `CreditWithoutLending`, que ya emitieron `VentaACreditoRegistrada` hacia Lending: ¿cómo se resuelven? | En la conciliación de FR-143, marcadas «aceptadas fuera de Cartera (D29)» con motivo y punto de acta; responden `ObligacionRechazada` no reprocesable (T83) | Activación de COOFLOPAL | — |
 
 ### H. Retiro de lo heredado
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| H1 | ¿`LND_SiplaGroupParameters` se conserva sin su FK a la línea? | Sí; si tiene filas, decide el dueño | Scaffold del retiro |
-| H2 | ¿Se conservan las compartidas (`LND_Minutes`, `LND_MinuteAttendees`, `LND_Blacklist`, `LND_TransactionCodes`, `LND_Documents`)? | Sí (CH22) | Clasificación final |
-| H3 | ¿Se retiran como crédito `LND_PeriodicityParameters`, `LND_DeductionValues`, `LND_InterestRates`, `LND_OnlineQueries`, `LND_RecreationApplications`? | Sí | Lista de la guarda |
-| H4 | Si un ambiente tiene `ACC_Documents` con origen CAR, ¿se aprueba el retiro dejándolos con origen huérfano? | Sí, con la fila de aprobación y constancia | Promoción en esa base |
-| H5 | (Movida a A10: es enmienda de FR-144.) | — | — |
-| H6 | ¿Se retira entero el proyecto `IngenIA365ERP.Legacy`? | Sí | No |
-| H7 | ¿Quién es el segundo revisor del retiro y se autoriza correr el diagnóstico en PDN? | El dueño lo nombra; diagnóstico con autorización expresa | Promoción |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| H1 | ¿`LND_SiplaGroupParameters` se conserva sin su FK a la línea? | Sí; si tiene filas, decide el dueño | Scaffold del retiro | — |
+| H2 | ¿Se conservan las compartidas (`LND_Minutes`, `LND_MinuteAttendees`, `LND_Blacklist`, `LND_TransactionCodes`, `LND_Documents`)? | Sí (CH22) | Clasificación final | — |
+| H3 | ¿Se retiran como crédito `LND_PeriodicityParameters`, `LND_DeductionValues`, `LND_InterestRates`, `LND_OnlineQueries`, `LND_RecreationApplications`? | Sí | Lista de la guarda | — |
+| H4 | Si un ambiente tiene `ACC_Documents` con origen CAR, ¿se aprueba el retiro dejándolos con origen huérfano? | Sí, con la fila de aprobación y constancia | Promoción en esa base | — |
+| H5 | (Movida a A10: es enmienda de FR-144.) | — | — | — |
+| H6 | ¿Se retira entero el proyecto `IngenIA365ERP.Legacy`? | Sí | No | — |
+| H7 | ¿Quién es el segundo revisor del retiro y se autoriza correr el diagnóstico en PDN? | El dueño lo nombra; diagnóstico con autorización expresa | Promoción | El segundo revisor es **el dueño, Jorman Copete** (2026-10-14). El diagnóstico en producción se corre **sólo con su autorización expresa en el momento**; nada se corrió en producción. |
 
 ### I. Adaptadores, cobranza, documentos e informes
 
-| # | Pregunta | Propuesta por defecto | Bloquea |
-|---|---|---|---|
-| I1 | ¿Los proveedores de SMS y WhatsApp los contrata cada cooperativa? | Sí, credencial por cooperativa y canal | Paso a canal real (K4) |
-| I2 | Ley 2300: «un solo canal por semana» tras un contacto directo, ¿es el canal de ese contacto? ¿Los informativos cuentan? | El del contacto directo; los informativos respetan horario y tope pero no fijan canal; lo valida el abogado | Casos dorados de `VentanaLegalDeContacto` |
-| I3 | ¿Un documento pedido por el titular y enviado por correo está exento de las ventanas? | Sí; exige correo registrado y autorización de tratamiento | Envío de documentos |
-| I4 | En producción y sin contratos, ¿se admite el simulado antes y después de activar? ¿Pueden las líneas aprobar sin consulta a centrales? | Sí, siempre sin efecto legal (T73, como dice FR-044); cada línea lleva «exige consulta a centrales»; sin pagaré desmaterializado, pagaré físico | Originación en producción (K1) |
-| I5 | ¿Se adelantan a K1 el plan de pagos, el paz y salvo y el certificado de saldo (la spec deja los documentos en K5)? | Sí; extracto y certificado tributario en K5 | Orden de las entregas |
-| I6 | Firma de la cooperativa y logotipo en los documentos | Nombre y cargo por parámetro más código y QR; imagen de firma y logotipo como adjuntos opcionales | PDF de documentos |
-| I7 | ¿Cuál es el formato de cartera del SICSES y qué centrales usa COOFLOPAL? | El dueño aporta layouts; se cargan con `verified = false` | K5 |
-| I8 | Layouts de ida y vuelta de cada pagaduría y quién procesa la vuelta mientras Recaudo no exista | Formatos con ámbitos 5 y 6; en pruebas, el doble emite `ResultadoDeDescuentos` | K2 |
-| I9 | ¿Se puede regenerar un archivo de descuentos ya enviado? | No; la corrección va como novedad del período siguiente | K2 |
-| I10 | ¿De dónde sale la cuenta bancaria del beneficiario del desembolso? | Se propone desde la persona o el asociado, se corrige al desembolsar y se sella en la orden | Desembolso por transferencia (K1) |
-| I11 | ¿Cuántos créditos y cuotas trae la migración de COOFLOPAL y están ya en el maestro sus personas? | Carga por partes; las personas se registran antes (no hay plantilla de personas) | Migración (K1) |
-| I12 | Listas restrictivas: ¿cada cooperativa carga las suyas? ¿Se re-escanea a los deudores vivos al cargar una versión? | Cada cooperativa; re-escaneo nocturno sólo con alerta al oficial | Listas (K1) |
-| I13 | ¿La cooperativa debe existir como persona jurídica en `COR_People` para su convenio de nómina propia? | Sí | K2 |
-| I14 | ¿Los avisos a usuarios internos también salen por SMS? | No; sólo el puerto de mensajería a personas | No |
-| I15 | ¿Quién registra ante el proveedor las plantillas de WhatsApp aprobadas por Meta? | La cooperativa; sin `ProviderTemplateId` no se usa WhatsApp | WhatsApp real (K4) |
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| I1 | ¿Los proveedores de SMS y WhatsApp los contrata cada cooperativa? | Sí, credencial por cooperativa y canal | Paso a canal real (K4) | — |
+| I2 | Ley 2300: «un solo canal por semana» tras un contacto directo, ¿es el canal de ese contacto? ¿Los informativos cuentan? | El del contacto directo; los informativos respetan horario y tope pero no fijan canal; lo valida el abogado | Casos dorados de `VentanaLegalDeContacto` | — |
+| I3 | ¿Un documento pedido por el titular y enviado por correo está exento de las ventanas? | Sí; exige correo registrado y autorización de tratamiento | Envío de documentos | — |
+| I4 | En producción y sin contratos, ¿se admite el simulado antes y después de activar? ¿Pueden las líneas aprobar sin consulta a centrales? | Sí, siempre sin efecto legal (T73, como dice FR-044); cada línea lleva «exige consulta a centrales»; sin pagaré desmaterializado, pagaré físico | Originación en producción (K1) | — |
+| I5 | ¿Se adelantan a K1 el plan de pagos, el paz y salvo y el certificado de saldo (la spec deja los documentos en K5)? | Sí; extracto y certificado tributario en K5 | Orden de las entregas | — |
+| I6 | Firma de la cooperativa y logotipo en los documentos | Nombre y cargo por parámetro más código y QR; imagen de firma y logotipo como adjuntos opcionales | PDF de documentos | Sí, la propuesta (2026-10-14). |
+| I7 | ¿Cuál es el formato de cartera del SICSES y qué centrales usa COOFLOPAL? | El dueño aporta layouts; se cargan con `verified = false` | K5 | — |
+| I8 | Layouts de ida y vuelta de cada pagaduría y quién procesa la vuelta mientras Recaudo no exista | Formatos con ámbitos 5 y 6; en pruebas, el doble emite `ResultadoDeDescuentos` | K2 | — |
+| I9 | ¿Se puede regenerar un archivo de descuentos ya enviado? | No; la corrección va como novedad del período siguiente | K2 | — |
+| I10 | ¿De dónde sale la cuenta bancaria del beneficiario del desembolso? | Se propone desde la persona o el asociado, se corrige al desembolsar y se sella en la orden | Desembolso por transferencia (K1) | — |
+| I11 | ¿Cuántos créditos y cuotas trae la migración de COOFLOPAL y están ya en el maestro sus personas? | Carga por partes; las personas se registran antes (no hay plantilla de personas) | Migración (K1) | — |
+| I12 | Listas restrictivas: ¿cada cooperativa carga las suyas? ¿Se re-escanea a los deudores vivos al cargar una versión? | Cada cooperativa; re-escaneo nocturno sólo con alerta al oficial | Listas (K1) | — |
+| I13 | ¿La cooperativa debe existir como persona jurídica en `COR_People` para su convenio de nómina propia? | Sí | K2 | — |
+| I14 | ¿Los avisos a usuarios internos también salen por SMS? | No; sólo el puerto de mensajería a personas | No | — |
+| I15 | ¿Quién registra ante el proveedor las plantillas de WhatsApp aprobadas por Meta? | La cooperativa; sin `ProviderTemplateId` no se usa WhatsApp | WhatsApp real (K4) | — |
+
+
+### J. Surgidas al construir K1 (respondidas el 2026-10-14)
+
+| # | Pregunta | Propuesta por defecto | Bloquea | Respuesta del dueño |
+|---|---|---|---|---|
+| J1 | La recogida de un crédito al desembolsar otro (`OwnLoanPayoff`), ¿se evalúa contra el tope legal del prepago sin penalidad (FR-075, `TopeLegalDePrepago`) y se bloquea si falta el SMMLV o `PREPAGO_TOPE_SMMLV`? (fase 9, decisión 7 del bloque B) | Sí, como todo prepago | Recogida de migrados (K1) | **No** (2026-10-14): la recogida queda **fuera** del tope; no se mide, no se sella y no se bloquea por falta del SMMLV o del límite (`AplicacionDePagos`). Aplicado en T0801. |
+| J2 | Si Contabilidad ya cerró el mes de C+1, ¿la activación responde `RequirementsMissing` (`AccountingMonthOpen`) o `DeadlinePassed`? (fase 13) | `RequirementsMissing` | Activación (K1) | **Ninguno: no limita, sólo informa** (2026-10-14). Sale el aviso `AccountingMonthClosed` (`warnings`) en el estado y en la respuesta de la activación, que procede; lo que emite la activación toma su fecha contable por `FechaContable`, que la lleva al primer mes abierto (el `CarteraActivada` de un C+1 cerrado queda fechado el primer día del mes siguiente abierto). `AccountingMonthOpen` sólo falta sin contabilidad iniciada; `DeadlinePassed` es sólo el plazo de la carga. Aplicado en T0801. |
+| J3 | ¿El rol sugerido de asesor (`cartera.asesor`) consulta las líneas de crédito? (fase 5) | No; se agrega en un rol aparte | No | **Sí, sólo consultar** (2026-10-14), y cada cooperativa lo ajusta en los permisos de su rol: la plantilla suma `Lending.CreditLines.View`, y el rol `CARTERA-ASESOR` creado desde ella es de la cooperativa y se edita en Seguridad › Roles (`PUT /api/admin/roles/{id}`). Aplicado en T0801 (las e2e ya no usan el rol de ensayo aparte). |
 
 ---
 

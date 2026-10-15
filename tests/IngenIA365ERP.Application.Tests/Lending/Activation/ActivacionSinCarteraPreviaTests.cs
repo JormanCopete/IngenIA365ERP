@@ -262,12 +262,33 @@ public class ActivacionSinCarteraPreviaTests
     }
 
     [Fact]
-    public async Task Con_el_mes_cerrado_en_Contabilidad_falta_AccountingMonthOpen()
+    public async Task Con_el_mes_de_C_mas_1_cerrado_en_Contabilidad_activa_con_el_aviso_y_fecha_lo_que_emite_en_el_primer_mes_abierto()
     {
+        // Decisión del dueño (2026-10-14): el mes de C+1 cerrado no limita, sólo informa.
         RegistrarDobles();
         var carga = await CargaAplicadaAsync();
         var diciembre = await _db.AccountingPeriods.SingleAsync(p => p.Month == 12);
         diciembre.Status = PeriodStatus.Closed;
+        await _db.SaveChangesAsync();
+        _db.ChangeTracker.Clear();
+
+        var r = await Activar().Handle(Orden(carga.PublicId, Acta(carga.PublicId)), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        r.Value.Warnings.Should().ContainSingle(a => a.Code == RequisitosDeActivacion.AvisoMesContableCerrado)
+            .Which.Detail.Should().Contain("2026-12").And.Contain("procede");
+        (await _db.LendingActivations.AsNoTracking().SingleAsync()).RequirementsJson.Should().Contain(EstadosDeRequisito.NotApplicable);
+        var activada = await _db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == CarteraActivadaV1.Type);
+        activada.OperationDate.Should().Be(new DateOnly(2027, 1, 1), "FechaContable lleva lo que emite la activación al primer mes siguiente al cerrado");
+        (await _db.LendingSetups.AsNoTracking().SingleAsync()).ActivationDate.Should().Be(Hoy, "la activación sigue siendo C+1");
+    }
+
+    [Fact]
+    public async Task Sin_contabilidad_iniciada_sigue_faltando_AccountingMonthOpen()
+    {
+        RegistrarDobles();
+        var carga = await CargaAplicadaAsync();
+        _db.AccountingSetups.RemoveRange(_db.AccountingSetups);
         await _db.SaveChangesAsync();
         _db.ChangeTracker.Clear();
 

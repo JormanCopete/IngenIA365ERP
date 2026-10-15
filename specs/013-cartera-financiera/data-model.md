@@ -1783,7 +1783,7 @@ sus filas `PaymentAllocation` por cuota y concepto y la referencia del recibo.
 - **Validaciones**: transacción del recaudador en curso (`Lending.Contract.TransactionRequired`), recaudador
   registrado salvo `OwnLoanPayoff` (`Lending.Contract.CollectorNotRegistered`), Cartera activada
   (`Lending.NotActivated`), fecha valor dentro de `Pagos.DiasMaximosFechaValor`
-  (`Lending.Payment.ValueDateOutOfRange`; Nómina y la pagaduría con referencia exentas, A9), posterior al corte
+  (`Lending.Payment.ValueDateOutOfRange`; Nómina y la pagaduría con referencia exentas, también de la fecha futura, A9), posterior al corte
   de la migración (`Lending.Contract.BeforeCutoff`, C71) y, antes de un cierre, con
   `Lending.Payments.BackdateBeforeClose` y su límite, que el contrato consulta del usuario que actúa por
   `IPermissionChecker` (`Lending.Payment.ValueDateBeforeClosing`; C41), clase de medio conocida
@@ -3662,9 +3662,12 @@ desactivación.
 
 **Requisitos** (si falta alguno, se niega con la lista: `Lending.Activation.RequirementsMissing`, §10.1):
 - **fechas**: `ActivationDate` = corte + 1 (`Lending.Activation.CutoffInvalid`); registrada a más tardar en
-  `ActivationDeadline` y con el mes que contiene `ActivationDate` abierto en Contabilidad
-  (`Lending.Activation.DeadlinePassed`); una segunda activación, `Lending.Activation.AlreadyActivated` (códigos de
-  §10.1, C71);
+  `ActivationDeadline` (`Lending.Activation.DeadlinePassed`); una segunda activación, `Lending.Activation.AlreadyActivated`
+  (códigos de §10.1, C71). El mes que contiene `ActivationDate` **cerrado en Contabilidad no limita, sólo informa**
+  (respuesta del dueño del 2026-10-14, decisiones-transversales §5 J2): el requisito `AccountingMonthOpen` queda
+  `NotApplicable` y sale el aviso `AccountingMonthClosed` en `warnings` del estado y de la respuesta; lo que emite la
+  activación (`CarteraActivada`) toma su fecha contable por `FechaContable`, que la lleva al primer mes abierto.
+  `AccountingMonthOpen` sólo falta sin contabilidad iniciada;
 - **diferencias** de la versión recalculada aceptadas (`Lending.Activation.DifferencesNotAccepted`);
 - **acta** de activación (C61) y **cobros provisionales** validados (C62);
 - **en producción**: un recaudador `Receipts` y un destino `Treasury` reales en el registro con versiones vigentes
@@ -4786,7 +4789,9 @@ contrato (`RecaudoPorNomina`), en la misma transacción que el NM.
 Índice `UK_PAY_PayrollLoanDeductions_Run_Employee_Obligation (PayrollRunId, PayrollRunEmployeeId, ObligationPublicId)`
 filtrado vivos. Ruta `GET /api/payroll/runs/{runId}/loan-deductions` (`Payroll.Runs.View`). Los `NoDescontado` viajan en
 la misma llamada al contrato y Cartera los guarda en `LND_InstallmentNonDeductions` (origen `Contract`). Un rechazo o
-excedente no bloquea la aprobación (FR-112); sí deja el aviso `Payroll.LoanDeductionNotApplied`.
+excedente no bloquea la aprobación (FR-112); sí deja el aviso `Payroll.LoanDeductionNotApplied`. **Salvo** el rechazo
+`Lending.Prevalidation.NotPostable` (con `Contabilidad.FaltaDeRegla = Bloquear`, A8 = «Bloquear todo», 2026-10-14): la
+aprobación entera falla con `Payroll.LoanDeductionNotPostable` y nada queda en Nómina ni en Cartera.
 
 ### 7.2 `PAY_SettlementDeductions` (definitiva)
 
@@ -5068,7 +5073,7 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.NotActivated` | 422 · puerto | «Cartera todavía no está activada en esta cooperativa. Esta operación estará disponible cuando se registre la activación.» | contrato (aplicar, reversar, resolver), consulta de obligaciones; rutas que exigen Cartera activa (radicar, desembolsar…) | R-03, T85 |
 | `Lending.Activation.RequirementsMissing` **(fijado aquí)** | 422 | «No se puede activar Cartera todavía. Falta: {lista}. Complete lo que falta y vuelva a intentarlo.» (`data.missing[]`) | Recaudo y Tesorería reales, K6a si es obligada, Anexo 1 y usura, roles, oficinas vinculadas, regla `RecaudoPorAplicar` de Nómina, carga aplicada | T84 |
 | `Lending.Activation.CutoffInvalid` **(fijado aquí)** | 422 | «La fecha de activación debe ser el día siguiente al corte de la carga aplicada ({corte}).» | FR-142 | T84 |
-| `Lending.Activation.DeadlinePassed` **(fijado aquí)** | 422 | «Ya no se puede activar con esta carga: venció el plazo ({fechaLimite}) o Contabilidad cerró {mes}. Aplique una carga con un corte nuevo.» | FR-142 | T84 |
+| `Lending.Activation.DeadlinePassed` **(fijado aquí)** | 422 | «Ya no se puede activar con esta carga: venció el plazo ({fechaLimite}). Aplique una carga con un corte nuevo.» (`data.deadline`; desde el 2026-10-14 el mes de C+1 cerrado ya no responde esto: es el aviso `AccountingMonthClosed`, decisiones-transversales §5 J2) | FR-142 | T84 |
 | `Lending.Activation.DifferencesNotAccepted` **(fijado aquí)** | 422 | «El cuadre o la conciliación de ventas tienen diferencias sin aceptar, o cambiaron desde que se aceptaron. Revíselas y acéptelas con motivo y acta, o corrija la carga.» | FR-141, FR-143, D17 | T83, T84 |
 | `Lending.Activation.AlreadyActivated` **(fijado aquí)** | 422 | «Cartera ya está activada desde el {fecha}.» | segunda activación | T84 |
 | `Lending.Activation.ZeroObligationNotPossible` **(nuevo, C111; T0752)** | 422 | «La venta {factura} cancelada antes del corte no puede nacer en Cartera como obligación en cero: {motivo}. Corríjalo y vuelva a activar.» (`data.invoice`) | la activación no encuentra la línea de la obligación en cero (ni la de la parte `sales` ni una de origen comercial por defecto del tipo de deudor) o la venta no nombra a una persona del maestro | FR-143 |
@@ -5091,7 +5096,7 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.Contract.BeforeCutoff` **(fijado aquí)** | puerto | «El pago tiene fecha valor {fecha}, igual o anterior al corte de la migración ({corte}): debía venir en la carga.» | FR-142 | T84 |
 | `Lending.Contract.UnknownMeansClass` **(fijado aquí)** | puerto | «Cartera no acepta la clase de medio {clase}.» | FR-082 | T31 |
 | `Lending.Payment.DistributionChanged` | 422 · puerto | «El crédito cambió desde la simulación. Revise la distribución nueva y confirme otra vez.» (`data.simulation`) | forma interactiva, huella distinta | T32 |
-| `Lending.Payment.ValueDateOutOfRange` | 422 · puerto | «La fecha valor {fecha} está fuera de lo permitido: hasta {dias} días antes de hoy y nunca futura.» | D4 (exentos: Nómina y, desde K2, pagaduría con referencia; A9) | T33 |
+| `Lending.Payment.ValueDateOutOfRange` | 422 · puerto | «La fecha valor {fecha} está fuera de lo permitido: hasta {dias} días antes de hoy y nunca futura.» | D4 y T9 (exentos de las dos reglas —ventana y fecha futura— y de la atribución antes de un cierre: Nómina y, desde K2, pagaduría con referencia; A9, respuesta del dueño del 2026-10-14) | T33 |
 | `Lending.Payment.ValueDateBeforeClosing` | 422 · puerto | «La fecha valor cae antes del cierre de {mes}: necesita la atribución para aplicar con fecha anterior a un cierre por este valor.» | FR-012, D16 | T33 |
 | `Lending.Payment.PreferenceMissing` | 422 · puerto | «El abono a capital necesita que el deudor elija si reduce el plazo o la cuota.» | forma interactiva sin elección | T31 |
 | `Lending.Payment.SpecificInstallmentBlocked` **(fijado aquí, C115)** | 422 · puerto | «Antes de la cuota {n} hay cuotas exigibles sin cubrir ({pendientes}): la línea no permite pagarla fuera de orden.» (`data.pendingBefore[]`) | `AplicadorDePagos` (US5, T0534) | FR-071 |
@@ -5235,7 +5240,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.PayrollFile.AlreadySent` | 422 | «El archivo ya se envió a la pagaduría: la corrección va como novedad del período siguiente.» | K2 | T78 |
 | `Lending.Regulatory.LayoutSinCotejar` | aviso | «El formato {codigo} tiene campos sin cotejar contra el instructivo vigente.» | K5 | T79 |
 | `Lending.Regulatory.BlockingIssues` | 422 | «Hay {n} inconsistencias que impiden generar el archivo. Revise el detalle.» | K5 | T79 |
-| `Lending.Prevalidation.NotPostable` | 422 · aviso | «Contabilidad no tiene regla para {combinacion}. Pida a la contadora completar la matriz.» | 422 sólo en pantallas de Cartera con `Contabilidad.FaltaDeRegla = Bloquear`; en el contrato, el consumidor y los procesos, aviso sellado (A8) | T56 |
+| `Lending.Prevalidation.NotPostable` | 422 · aviso · rechazo del contrato · corrida detenida | «Contabilidad no tiene cómo registrar {hecho} en el rol {rol}. Pida a la contadora completar la matriz de Cartera.» (`data.errors[]`) | Con `Contabilidad.FaltaDeRegla = Bloquear`, en todo origen (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): 422 en pantallas; ítem `Rejected` en el contrato; recibo del consumidor de Comercial `Rejected` y reprocesable; error de la corrida `Failed` en los procesos («La tanda de {operación} no avanzó: … Corregida la matriz, reintente la corrida.»). Con `Advertir`, aviso sellado | T56 |
 | `Lending.Prevalidation.NoResponse` | 422 · aviso | «Contabilidad no respondió a tiempo: la operación sigue y queda marcada para revisión.» (aviso); con `Contabilidad.PoliticaSinRespuesta = Bloquear` en una pantalla de Cartera, 422 «Contabilidad no respondió a tiempo y la cooperativa pide no confirmar sin su respuesta. Intente de nuevo en unos minutos.» | D7; el 422 sólo en pantallas (C80, T0655) | T56 |
 | `Lending.Accounting.NotStarted` **(nuevo, C111; T0658)** | 409 | «La contabilidad de la cooperativa no está iniciada: no hay con qué conciliar la cartera. Iníciela en Contabilidad › Configuración.» | conciliación contable de Cartera (`GET /api/lending/accounting/reconciliation`) sin contabilidad iniciada (§14.2) | T58 |
 | `Lending.AccountingFactPart.NotFound` **(nuevo, C111; T0658)** | 404 | «La parte de hechos contables no existe.» | `GET /api/lending/accounting/fact-parts/{id}` de una parte inexistente o de una oficina fuera del alcance de quien pregunta (el mismo 404, T62) | T58 |
@@ -5343,7 +5348,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Accounting.LendingFact.WaitingForOriginal` | consumo `Retry` | «Espera a que se contabilice el hecho original.» | T12 |
 | `Accounting.Period.LendingNotClosed` | 422 | «Cartera no ha cerrado {mes}. Ciérrelo en Cartera antes de cerrar Contabilidad.» (sin reconocimiento posible) | T57 |
 | `Accounting.Period.LendingPending` | aviso (422 sin reconocimiento) | «Hay {n} hechos de Cartera de {mes} pendientes, en lote o rechazados. Reconózcalos para cerrar de todos modos.» | T57 |
-| `Accounting.Period.LendingLoadWillExpire` | aviso (422 sin reconocimiento) | «Cerrar {mes} impedirá activar la carga de Cartera con corte {corte}.» | T57 |
+| `Accounting.Period.LendingLoadWillExpire` | aviso (422 sin reconocimiento) | «La carga de Cartera con corte al {corte} todavía no se activó y su día de activación cae en este mes: si lo cierra, la activación sigue siendo posible, pero lo que emita se registrará en el primer mes abierto siguiente. Active Cartera primero o cierre de todos modos.» (desde el 2026-10-14: el mes de C+1 cerrado ya no impide activar, §5 J2 de decisiones-transversales) | T57 |
 | `Accounting.Document.LendingCorrectsWithNewVoucher` | 422 | «Los comprobantes de Cartera no se reversan aquí: se corrigen con un hecho nuevo desde Cartera.» | T55 |
 | `Accounting.LendingRule.DimensionRequired` **(nuevo, T0642, C111)** | 400 · 422 | «El rol {rol} exige la dimensión {dimensión}: indíquela (no admite «*»).» (`data: { operation, role, dimension }`) | T52 |
 | `Accounting.LendingRule.DimensionNotAllowed` **(nuevo, T0642, C111)** | 400 · 422 | «El rol {rol} no admite la dimensión {dimensión}: déjela en «*».» (también el hecho fijado en un rol que no es de resultado, C77) | T52 |
@@ -5370,6 +5375,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Payroll.LendingPendingActivation` | aviso | «Hay empleados con créditos en una carga de Cartera sin activar: esta nómina no les descuenta cuotas.» | DE-10 |
 | `Payroll.LendingPendingActivationAckRequired` | 422 | «Confirme que sabe que Cartera está por activar para {n} empleados ({nombres}).» | DE-10 |
 | `Payroll.LoanDeductionNotApplied` | aviso | «{n} descuentos de Cartera no se aplicaron: {motivos}.» | T92 |
+| `Payroll.LoanDeductionNotPostable` **(nuevo, C111; T0801)** | 422 | «No se aprobó: Contabilidad no tiene cómo registrar el recaudo de Cartera (crédito {numero}: {mensaje de Cartera}; …). Pida a la contadora completar la matriz de Cartera y apruebe de nuevo.» (`data.lendingCode`, `data.loans[] { loanNumber, message, lending }`) | ordinaria o definitiva cuando el contrato rechaza un descuento con `Lending.Prevalidation.NotPostable` (A8 = «Bloquear todo», 2026-10-14) | T92, A8 |
 | `Payroll.LegalParameter.NationalValue` | 422 | «El {codigo} es un valor nacional: lo registra la plataforma, no Nómina.» | T93 |
 | `Inventory.Credit.LendingBlocked` | 422 | «{persona} tiene el crédito bloqueado en Cartera ({motivo}).» | T95 |
 | `Inventory.Credit.QuotaExceeded` | 422 | «El valor supera el cupo disponible ({disponible}).» (`data.availableQuota`) | T95 |
@@ -5495,8 +5501,8 @@ transversales deja a este documento.
 | `Contabilidad.Granularidad` | Choice | `PorDia`, `PorDiaYSucursal`, `PorHecho` (C07) | `PorDia` | LendingFactType | K1 | DC-12, FR-128 |
 | `Contabilidad.DisparadorDeLote` | Choice | `Hora`, `FinDeCausacion`, `CierreDeCartera` | `FinDeCausacion` en los de causación; `CierreDeCartera` en los del cierre | LendingFactType | K1 | DC-11 |
 | `Contabilidad.HoraDeLote` | Time | | sin valor (sólo con disparador `Hora`) | LendingFactType | K1 | DC-11 |
-| `Contabilidad.PoliticaSinRespuesta` | Choice | `ConfirmarConPendiente`, `Bloquear` | `ConfirmarConPendiente` (D7). «Bloquear» sólo muerde en las operaciones de pantalla (A8, C80) | None | K1 | DC-15 |
-| `Contabilidad.FaltaDeRegla` | Choice | `Advertir`, `Bloquear` | `Advertir`. «Bloquear» sólo muerde en desembolso, novedad, condonación y castigo; en el contrato, el consumidor y los procesos siempre advierte (A8). Gobierna todo hallazgo de la evaluación (C80) | None, LendingFactType | K1 | DC-15 |
+| `Contabilidad.PoliticaSinRespuesta` | Choice | `ConfirmarConPendiente`, `Bloquear` | `ConfirmarConPendiente` (D7). «Bloquear» sólo muerde en las operaciones de pantalla (C80; la respuesta a A8 no la tocó) | None | K1 | DC-15 |
+| `Contabilidad.FaltaDeRegla` | Choice | `Advertir`, `Bloquear` | **Bloquear** (decisión del dueño del 2026-10-14; hasta ese día `Advertir`). «Bloquear» detiene todo (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14): la pantalla no confirma, el contrato rechaza el pago (Nómina no aprueba), la venta de Comercial queda en reproceso y el proceso detiene su tanda y alerta. Gobierna todo hallazgo de la evaluación (C80) | None, LendingFactType | K1 | DC-15 |
 | `Contabilidad.ValidacionPreviaSegundos` | Int | 1–30 | 3 | None | K1 | DC-11 |
 | `Contabilidad.DisminucionDeDeterioro` | Choice | `MismoEjercicioPrimero`, `TodoARecuperacion` | `MismoEjercicioPrimero` (PV; C2) | None | K1 | DC-13 |
 | `Contabilidad.IndicadoresVigenciaMeses` | Int | ≥ 1 | 6 | None | K1 | DC-18 |

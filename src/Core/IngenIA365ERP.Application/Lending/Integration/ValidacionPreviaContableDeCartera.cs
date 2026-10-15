@@ -19,8 +19,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace IngenIA365ERP.Application.Lending.Integration;
 
 /// <summary>
-/// De dónde viene la operación que pregunta si es contabilizable (contabilidad.md §13.2; A8, C80): sólo las <see cref="Pantalla"/>s de Cartera
-/// pueden bloquear; el contrato, el consumidor de Comercial, los procesos y los cobros provisionales siempre advierten. (nuevo)
+/// De dónde viene la operación que pregunta si es contabilizable (contabilidad.md §13.2; A8, C80). Con <c>Contabilidad.FaltaDeRegla = Bloquear</c>
+/// <b>todos</b> bloquean (respuesta del dueño a A8, 2026-10-14, «Bloquear todo»), cada uno a su manera: la pantalla responde el 422, el contrato
+/// rechaza el ítem con su código, el consumidor de Comercial deja la venta en reproceso y el proceso detiene la tanda y alerta. Sin respuesta de
+/// Contabilidad (<c>PoliticaSinRespuesta</c>) sólo bloquea la pantalla. (nuevo)
 /// </summary>
 public enum OrigenDeValidacionPrevia
 {
@@ -49,12 +51,16 @@ public enum OrigenDeValidacionPrevia
 /// pregunta por combinación distinta</b> de hecho, sucursal y dimensiones, y pregunta por <see cref="IContabilidadParaCartera.EvaluarAsync"/>
 /// <b>fuera del cerrojo</b> con el tiempo máximo de <c>Contabilidad.ValidacionPreviaSegundos</c>. Una excepción, una falla o el tiempo
 /// agotado es <c>NoResponse</c>; con hallazgos <c>NotPostable</c>; sin ellos <c>Postable</c>; sin nada que preguntar <c>NotApplicable</c>.</item>
-/// <item><see cref="DecidirAsync"/> decide por origen: sólo en una <see cref="OrigenDeValidacionPrevia.Pantalla"/>, con
-/// <c>Contabilidad.FaltaDeRegla = Bloquear</c> (que gobierna <b>todo</b> hallazgo, cuenta inactiva incluida) responde
-/// <c>Lending.Prevalidation.NotPostable</c> (422) con <c>data.errors[] { factType, role, combination, account, rule, whoFixes }</c>, y con
-/// <c>Contabilidad.PoliticaSinRespuesta = Bloquear</c> <c>Lending.Prevalidation.NoResponse</c> (422). En todo lo demás advierte: la operación
-/// confirma y sella el resultado; un <c>NotPostable</c> levanta <c>Cartera.HechoNoContabilizable</c>, una por combinación y día, para quienes
-/// tienen <c>Accounting.LendingRules.Manage</c> y <c>Lending.Messages.Reprocess</c>.</item>
+/// <item><see cref="DecidirAsync"/> decide: con <c>Contabilidad.FaltaDeRegla = Bloquear</c> (que gobierna <b>todo</b> hallazgo, cuenta inactiva
+/// incluida) el bloqueo es <c>Lending.Prevalidation.NotPostable</c> con <c>data.errors[] { factType, role, combination, account, rule, whoFixes }</c>
+/// <b>en cualquier origen</b> (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14; hasta ese día sólo bloqueaba la pantalla y lo demás
+/// advertía); fuera de la pantalla, además, levanta la alerta (quien opera no puede corregir la matriz). Con
+/// <c>Contabilidad.PoliticaSinRespuesta = Bloquear</c> sólo la pantalla responde <c>Lending.Prevalidation.NoResponse</c> (422): A8 no la tocó.
+/// Con <c>Advertir</c> (hasta el 2026-10-14 el defecto; desde entonces el defecto es <c>Bloquear</c>) la operación confirma y sella el resultado; un <c>NotPostable</c> levanta <c>Cartera.HechoNoContabilizable</c>,
+/// una por combinación y día, para quienes tienen <c>Accounting.LendingRules.Manage</c> y <c>Lending.Messages.Reprocess</c>. Sin contabilidad
+/// iniciada o con el hecho en <c>NoPasa</c> no se pregunta nada y no hay qué bloquear (§10.1).</item>
+/// <item><see cref="DecidirEnProcesoAsync"/>: la de los procesos (causación, corrección, cierre), que sólo preguntan si la política podría bloquear
+/// y sin tiempo máximo (corren dentro de su transacción: cancelar la consulta abortaría la de PostgreSQL).</item>
 /// </list>
 /// La reserva de número de crédito no se evalúa (no produce hecho, T22). (nuevo)
 /// </summary>
@@ -78,8 +84,12 @@ public sealed class ValidacionPreviaContableDeCartera(
 
     private readonly ILogger _log = logger ?? NullLogger<ValidacionPreviaContableDeCartera>.Instance;
 
-    /// <summary>Evalúa los hechos de una operación. Nunca falla por el puerto; una cancelación de la petición sí se propaga.</summary>
-    public async Task<ResultadoDeValidacionPreviaDeCartera> EvaluarAsync(IReadOnlyList<MensajeContableDto> hechos, CancellationToken ct)
+    /// <summary>
+    /// Evalúa los hechos de una operación. Nunca falla por el puerto; una cancelación de la petición sí se propaga. Con
+    /// <paramref name="sinTiempoMaximo"/> (los procesos) no corta la consulta a los <c>Contabilidad.ValidacionPreviaSegundos</c>.
+    /// </summary>
+    public async Task<ResultadoDeValidacionPreviaDeCartera> EvaluarAsync(IReadOnlyList<MensajeContableDto> hechos, CancellationToken ct,
+        bool sinTiempoMaximo = false)
     {
         ArgumentNullException.ThrowIfNull(hechos);
         var aPreguntar = Reducir(await QueSiPasanAsync(hechos, ct));
@@ -88,7 +98,7 @@ public sealed class ValidacionPreviaContableDeCartera(
         var segundos = await SegundosAsync(ct);
         var cronometro = Stopwatch.StartNew();
         using var tiempo = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        tiempo.CancelAfter(TimeSpan.FromSeconds(segundos));
+        if (!sinTiempoMaximo) tiempo.CancelAfter(TimeSpan.FromSeconds(segundos));
         try
         {
             var r = await contabilidad.EvaluarAsync(aPreguntar, tiempo.Token);
@@ -138,12 +148,17 @@ public sealed class ValidacionPreviaContableDeCartera(
 
         if (resultado.Outcome == PrevalidationOutcome.NotPostable)
         {
-            if (origen == OrigenDeValidacionPrevia.Pantalla && await FaltaDeReglaBloqueaAsync(resultado.Errors, hoy, ct))
+            // A8 = «Bloquear todo» (2026-10-14): la política bloquea en cualquier origen. Fuera de la pantalla también alerta: quien opera (Recaudo,
+            // Nómina, Comercial) no corrige la matriz.
+            if (await FaltaDeReglaBloqueaAsync(resultado.Errors, hoy, ct))
+            {
                 bloqueo = ErroresDeValidacionPreviaDeCartera.NoContabilizable(resultado.Errors);
+                if (alertar && origen != OrigenDeValidacionPrevia.Pantalla) await AlertarAsync(resultado.Errors, operacion, hoy, bloqueada: true, ct);
+            }
             else
             {
                 avisos.Add("Contabilidad no tiene cómo registrar todo lo de esta operación: sigue y queda marcada para que la contadora complete la matriz.");
-                if (alertar) await AlertarAsync(resultado.Errors, operacion, hoy, ct);
+                if (alertar) await AlertarAsync(resultado.Errors, operacion, hoy, bloqueada: false, ct);
             }
         }
         else if (resultado.Outcome == PrevalidationOutcome.NoResponse)
@@ -156,6 +171,31 @@ public sealed class ValidacionPreviaContableDeCartera(
 
         avisos.AddRange(resultado.Warnings.Select(w => w.Message));
         return new DecisionDeValidacionPrevia(resultado, bloqueo, avisos);
+    }
+
+    /// <summary>
+    /// La decisión de un proceso (causación, corrección, cierre; A8 = «Bloquear todo»): nulo si la política <c>Contabilidad.FaltaDeRegla</c> no podría
+    /// bloquear ninguno de los tipos de <paramref name="hechos"/> —con <c>Advertir</c> los procesos no preguntan, como hasta el 2026-10-14— o si lo
+    /// evaluado se puede contabilizar; si bloquea, la decisión con su error. Evalúa sin tiempo máximo y sin alertar: el proceso alerta después de
+    /// deshacer su tanda (<see cref="AlertarBloqueoAsync"/>).
+    /// </summary>
+    public async Task<DecisionDeValidacionPrevia?> DecidirEnProcesoAsync(IReadOnlyList<MensajeContableDto> hechos, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(hechos);
+        var hoy = reloj.HoyLocal;
+        if (hechos.Count == 0 || !await FaltaDeReglaPuedeBloquearAsync(hechos.Select(h => h.Envelope.Type), hoy, ct)) return null;
+        var resultado = await EvaluarAsync(hechos, ct, sinTiempoMaximo: true);
+        if (resultado.Outcome != PrevalidationOutcome.NotPostable || !await FaltaDeReglaBloqueaAsync(resultado.Errors, hoy, ct)) return null;
+        return new DecisionDeValidacionPrevia(resultado, ErroresDeValidacionPreviaDeCartera.NoContabilizable(resultado.Errors), []);
+    }
+
+    /// <summary>La alerta de una operación que <b>no</b> se confirmó porque la política bloqueó (A8): una por combinación y día.</summary>
+    public Task AlertarBloqueoAsync(ResultadoDeValidacionPreviaDeCartera resultado, string operacion, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(resultado);
+        return resultado.Outcome == PrevalidationOutcome.NotPostable
+            ? AlertarAsync(resultado.Errors, operacion, reloj.HoyLocal, bloqueada: true, ct)
+            : Task.CompletedTask;
     }
 
     // ------------------------------------------------------------------------------------------------------------ filtro --
@@ -261,6 +301,19 @@ public sealed class ValidacionPreviaContableDeCartera(
         return false;
     }
 
+    /// <summary>¿<c>Contabilidad.FaltaDeRegla</c> está en <c>Bloquear</c> en general o para alguno de esos tipos de hecho?</summary>
+    public async Task<bool> FaltaDeReglaPuedeBloquearAsync(IEnumerable<string> tiposDeHecho, DateOnly hoy, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(tiposDeHecho);
+        var tipos = tiposDeHecho.Distinct(StringComparer.Ordinal).ToList();
+        if (await LeeBloquearAsync(ParametrosDeCartera.ContabilidadFaltaDeRegla, hoy, ParameterScopeKind.None, 0, ct)) return true;
+        if (db is null) return false;
+        var ids = await db.LendingFactTypes.AsNoTracking().Where(f => tipos.Contains(f.Code) && !f.IsDeleted).Select(f => f.Id).ToListAsync(ct);
+        foreach (var id in ids)
+            if (await LeeBloquearAsync(ParametrosDeCartera.ContabilidadFaltaDeRegla, hoy, ParameterScopeKind.LendingFactType, id, ct)) return true;
+        return false;
+    }
+
     private async Task<bool> LeeBloquearAsync(string clave, DateOnly fecha, ParameterScopeKind ambito, int id, CancellationToken ct)
     {
         var leido = await parametros.LeerAsync(ParametrosDeCartera.Modulo, clave, fecha, ambito, id, ct);
@@ -271,10 +324,12 @@ public sealed class ValidacionPreviaContableDeCartera(
     public Task AlertarAsync(ResultadoDeValidacionPreviaDeCartera resultado, string operacion, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(resultado);
-        return resultado.Outcome == PrevalidationOutcome.NotPostable ? AlertarAsync(resultado.Errors, operacion, reloj.HoyLocal, ct) : Task.CompletedTask;
+        return resultado.Outcome == PrevalidationOutcome.NotPostable
+            ? AlertarAsync(resultado.Errors, operacion, reloj.HoyLocal, bloqueada: false, ct)
+            : Task.CompletedTask;
     }
 
-    private async Task AlertarAsync(IReadOnlyList<HallazgoDeCarteraDto> hallazgos, string operacion, DateOnly hoy, CancellationToken ct)
+    private async Task AlertarAsync(IReadOnlyList<HallazgoDeCarteraDto> hallazgos, string operacion, DateOnly hoy, bool bloqueada, CancellationToken ct)
     {
         if (alertas is null) return;
         var dia = hoy.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -284,9 +339,12 @@ public sealed class ValidacionPreviaContableDeCartera(
             await alertas.LevantarAsync(new AlertaALevantar(
                 TiposDeAlerta.HechoNoContabilizable,
                 $"{h.FactType} de {operacion} no es contabilizable",
-                $"La operación {operacion} se confirmó, pero Contabilidad no puede registrar {h.FactType}"
+                (bloqueada ? $"La operación {operacion} no se confirmó porque Contabilidad no puede registrar {h.FactType}"
+                           : $"La operación {operacion} se confirmó, pero Contabilidad no puede registrar {h.FactType}")
                     + (h.Role is null ? string.Empty : $" en el rol {h.Role}") + (g.Key.Combinacion.Length == 0 ? string.Empty : $" ({g.Key.Combinacion})")
-                    + $": {h.Message} Quien corrige: {h.WhoFixes.Module}. Corregido, reprocese el hecho desde la bandeja de Cartera.",
+                    + $": {h.Message} Quien corrige: {h.WhoFixes.Module}. "
+                    + (bloqueada ? "Corregida la matriz, repita la operación (un proceso detenido se reanuda con «Reintentar»)."
+                                 : "Corregido, reprocese el hecho desde la bandeja de Cartera."),
                 DedupKey: $"{TiposDeAlerta.HechoNoContabilizable}:{h.FactType}:{g.Key.Combinacion}:{dia}",
                 RecipientPermissions: DestinatariosDeLaAlerta,
                 ModuloDeOrigen: "Lending"), ct);
@@ -320,8 +378,8 @@ public sealed record ResultadoDeValidacionPreviaDeCartera(
 }
 
 /// <summary>
-/// La decisión por origen (§13.2): el resultado que se sella, el bloqueo —sólo en una pantalla con la política en <c>Bloquear</c>— y los avisos
-/// en español claro para quien confirma. (nuevo)
+/// La decisión por origen (§13.2): el resultado que se sella, el bloqueo —con la política en <c>Bloquear</c>, en cualquier origen desde A8 = «Bloquear
+/// todo»— y los avisos en español claro para quien confirma. (nuevo)
 /// </summary>
 public sealed record DecisionDeValidacionPrevia(ResultadoDeValidacionPreviaDeCartera Resultado, Error? Bloqueo, IReadOnlyList<string> Avisos)
 {
@@ -336,7 +394,10 @@ public static class ErroresDeValidacionPreviaDeCartera
     public const string CodigoNoContabilizable = "Lending.Prevalidation.NotPostable";
     public const string CodigoSinRespuesta = "Lending.Prevalidation.NoResponse";
 
-    /// <summary>422: hallazgos con <c>Contabilidad.FaltaDeRegla = Bloquear</c> en una pantalla de Cartera.</summary>
+    /// <summary>
+    /// Hallazgos con <c>Contabilidad.FaltaDeRegla = Bloquear</c> (A8 = «Bloquear todo»): 422 en pantalla, rechazo del ítem en el contrato, venta en
+    /// reproceso en el consumidor de Comercial y tanda detenida en un proceso.
+    /// </summary>
     public static Error NoContabilizable(IReadOnlyList<HallazgoDeCarteraDto> hallazgos)
     {
         ArgumentNullException.ThrowIfNull(hallazgos);

@@ -458,7 +458,7 @@ Plantillas en código (`PerfilesSugeridos`, módulo `Lending`), servidas por
 | Plantilla | Actor | Permisos | Alcance y montos |
 |---|---|---|---|
 | `cartera.administrador` | Administrador de Cartera | `Lending.*` **salvo** `Lending.Decisions.*` y `Lending.Sessions.Vote` (C86) | todas las oficinas y líneas; sin límite |
-| `cartera.asesor` | Asesor de crédito | `Simulations.Run`, `Applications.{Read,Create,Submit}`, `PrepaymentPreferences.Manage`, `CreditBureau.Query`, `Guarantees.{Read,Manage}`, `PromissoryNotes.Manage`, `CreditLimits.Read`, `Loans.Read`, `Payoffs.Read`, `Documents.{Read,Issue}`, `DebtorMessages.{Read,Send}`, `Core.People.Create`, `Compliance.HabeasData.RecordConsent` | sus oficinas y líneas |
+| `cartera.asesor` | Asesor de crédito | `CreditLines.View` (respuesta del dueño, 2026-10-14: sólo consultar), `Simulations.Run`, `Applications.{Read,Create,Submit}`, `PrepaymentPreferences.Manage`, `CreditBureau.Query`, `Guarantees.{Read,Manage}`, `PromissoryNotes.Manage`, `CreditLimits.Read`, `Loans.Read`, `Payoffs.Read`, `Documents.{Read,Issue}`, `DebtorMessages.{Read,Send}`, `Core.People.Create`, `Compliance.HabeasData.RecordConsent` | sus oficinas y líneas |
 | `cartera.analista` | Analista | `Applications.{Read,Analyze}`, `Decisions.Analyst`, `CreditBureau.{Query,ReadReports}`, `Guarantees.Read`, `CreditLimits.Read`, `Loans.Read`, `Payoffs.Read`, `Ratings.Read` | sus oficinas y líneas |
 | `cartera.jefe` | Jefe de cartera | `Decisions.Coordinator`, `Applications.{Read,Cancel}`, `PrepaymentPreferences.Manage`, `CreditLimits.{Read,Assign}`, `Blocks.Manage`, `Disbursements.{Execute,Void}`, `DisbursementOrders.Void`, `DisbursementFiles.Generate`, `Loans.Read`, `Payoffs.Read`, `Payments.{Simulate,Reverse}`, `MonthlyClose.Execute`, `Ratings.Read`, `Novelties.{Read,Request}`, `WriteOffs.Prepare`, `Sessions.{Read,Manage}`, `Messages.*`, `Processes.*`, `Reconciliation.View`, `Migration.Load`, `PayrollNotApplied.Manage`, `Collections.{Read,Assign}`, `CollectionStages.Manage`, `Alerts.*`, `Reports.{View,Export}`, `Parameters.View`, `Templates.View` | todas las oficinas y líneas; límite en `Disbursements.Execute` y `CreditLimits.Assign` si la cooperativa lo fija |
 | `cartera.comite-credito` | Secretaría del comité de crédito | `Sessions.{Read,Manage,RecordVotes,Close}`, `Applications.Read`, `RelatedParties.Read` | todas las oficinas y líneas |
@@ -1673,13 +1673,15 @@ que se decide en el ERP); las reclamaciones al seguro y las insolvencias viajan 
 | `POST /activation` | Activation.Execute | `ActivateLendingCommand` | `{ migrationLoadPublicId, activationDate, provisionalCollectionsAttachmentPublicId?, sessionItemPublicId, acknowledgeWarnings, reason }` → 201 `{ activationPublicId, activationDate, loans, openingTransactions, baseClosePublicId, creditLimits, revalidatedLimits, nonDeductionsMarked, provisionalCollectionsStored, messages: [CarteraActivada, …] }`. `sessionItemPublicId` es **obligatorio** (acta de activación, `LND_Activations.SessionItemId` no nulo, C61) | `Lending.Activation.RequirementsMissing` (`data: { missing: [{ code, detail, whoFixes }] }`), `.CutoffInvalid` (`data: { expected }`: día siguiente al corte), `.DeadlinePassed` (plazo vencido o mes contable cerrado: pida una carga con corte nuevo), `.DifferencesNotAccepted` (sin aceptar o cambiaron desde que se aceptaron: vuelva a aceptar), `.AlreadyActivated`, `Lending.Session.ItemMismatch`, `Import.Invalid` y `Lending.ProvisionalCollection.ExceedsSale` (cobros provisionales) | K1 |
 
 `ActivationReadinessDto.requirements[].code`: `LoadApplied`, `DifferencesAccepted`, `SalesReconciled`,
-`DateInTerm`, `AccountingMonthOpen`, `ReceiptsCollectorRegistered`, `TreasuryDestinationRegistered`
+`DateInTerm`, `AccountingMonthOpen` (sólo falta sin contabilidad iniciada: el mes de C+1 cerrado queda `NotApplicable` con el aviso `AccountingMonthClosed`, respuesta del dueño del 2026-10-14), `ReceiptsCollectorRegistered`, `TreasuryDestinationRegistered`
 (producción, sin dobles), `ExpectedLossAvailable` (cooperativa obligada), `ExpectedLossParameters` y
 `ArrearsHistoryComplete` (donde K6a esté desplegada), `Annex1Current`, `UsuryForActiveLines`,
 `LendingRolesCreated`, `OfficesLinkedToAccountingBranches`, `PayrollBridgeRuleResolved`. Avisos que no
 bloquean: `CommercialParametersToAdjust` (fecha de habilitación, política sin respuesta, quién registra la
 cuenta por cobrar), `PayrollConceptAccounts` (la pantalla pregunta a Nómina por
-`GET /api/payroll/concept-definitions/DESC_CARTERA/accounts`), `UsersWithoutScope`.
+`GET /api/payroll/concept-definitions/DESC_CARTERA/accounts`), `UsersWithoutScope` y `AccountingMonthClosed` (el mes de C+1
+cerrado o sin crear en Contabilidad: la activación procede y lo que emite queda en el primer mes abierto; 2026-10-14). La
+respuesta de `POST /activation` lleva los mismos avisos en `warnings`.
 
 **Cómo corre la activación** (C60): `ActivateLendingCommand` abre una transacción explícita y guarda **por tandas
 de 1.000 créditos** con `ChangeTracker.Clear()` entre tandas; el destino `Lending` del registro de participantes se

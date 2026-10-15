@@ -176,13 +176,14 @@ public static class ParametrosDeCartera
         Eleccion(Modulo, ContabilidadPoliticaSinRespuesta,
             "Qué pasa si la validación previa contable no responde a tiempo. «Bloquear» sólo muerde en las operaciones de pantalla "
             + "de Cartera (desembolso, novedad, condonación, castigo); en el contrato, el consumidor y los procesos se confirma con "
-            + "pendiente (enmienda A8).",
+            + "pendiente (A8 tocó sólo la falta de regla).",
             ["ConfirmarConPendiente", "Bloquear"], "ConfirmarConPendiente", K1, General),
         Eleccion(Modulo, ContabilidadFaltaDeRegla,
-            "Qué pasa cuando la evaluación contable encuentra un hallazgo (falta la regla, la cuenta o un dato). «Bloquear» sólo muerde "
-            + "en las operaciones de pantalla de Cartera (desembolso, novedad, condonación, castigo); en el contrato, el consumidor y "
-            + "los procesos siempre advierte (enmienda A8).",
-            ["Advertir", "Bloquear"], "Advertir", K1, General, TipoDeHecho),
+            "Qué pasa cuando la evaluación contable encuentra un hallazgo (falta la regla, la cuenta o un dato). «Bloquear» detiene "
+            + "todo (A8, respuesta del dueño del 2026-10-14): la pantalla no confirma, el contrato rechaza el pago (Nómina no aprueba), "
+            + "la venta de Comercial queda en reproceso y el proceso detiene su tanda y alerta. «Advertir» confirma y alerta. "
+            + "Arranca en «Bloquear» (decisión del dueño del 2026-10-14).",
+            ["Advertir", "Bloquear"], "Bloquear", K1, General, TipoDeHecho),
         Entero(Modulo, ContabilidadValidacionPreviaSegundos, "Segundos que espera la validación previa contable.", "3", K1, General)
             with { Minimo = 1m, Maximo = 30m },
         Eleccion(Modulo, ContabilidadDisminucionDeDeterioro,

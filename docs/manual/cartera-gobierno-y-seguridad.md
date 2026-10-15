@@ -237,7 +237,14 @@ Lo que tiene que estar antes de activar Cartera (F4, F5; quickstart §2.7):
 
 1. **Roles**: `POST /api/lending/activation/suggested-roles` crea en bloque los trece roles de las
    plantillas `cartera.*` (`CARTERA-ADMINISTRADOR`, `CARTERA-ASESOR`…; repetir no duplica). Son roles
-   normales de la cooperativa: se ajustan sin tocar la plantilla. `cartera.administrador` no decide ni vota
+   normales de la cooperativa: se ajustan sin tocar la plantilla, en **Seguridad › Roles** (`/security/roles/{id}`,
+   la matriz de permisos del rol; `PUT /api/admin/roles/{id}` con la lista de permisos; quien lo hace necesita
+   `Security.Roles.View` y `Security.Roles.Update`, y no se puede quitar el último rol con usuarios activos que puede
+   volver a editar roles, `LastAdminLockout`). Por ejemplo, el
+   asesor (`cartera.asesor`) trae `Lending.CreditLines.View` —**sólo consultar** las líneas, respuesta del dueño del
+   2026-10-14—: la cooperativa que no quiera que su asesor las vea se lo quita a `CARTERA-ASESOR`, y la que quiera
+   que otro rol las consulte se lo agrega; nada de eso toca la plantilla ni a las demás cooperativas.
+   `cartera.administrador` no decide ni vota
    (C86); `cartera.comite-credito` y `cartera.consejo` son la **secretaría** de su órgano (registran votos y
    cierran): a los miembros que votan desde su sesión se les da `Lending.Sessions.Vote` en un rol aparte.
 2. **Personas de los usuarios**: cada usuario que radique, decida, vote, cierre o desembolse, asociado a su

@@ -24,9 +24,9 @@ cargos que computan, supere la usura certificada de su modalidad.
 Las líneas son también una dimensión del **alcance**: un usuario sólo ve las líneas que tiene asignadas
 (`/cartera/alcances`, ahora con un selector de líneas por código y nombre) o todas con
 `Lending.Scope.AllLines`. Fuera de su alcance, una línea responde el mismo 404 que una que no existe y la
-auditoría anota `Lending.Access.OutOfScope`. La plantilla de rol `cartera.asesor` no trae
-`Lending.CreditLines.View`: si el asesor debe consultar las líneas en pantalla, se le agrega en un rol
-aparte.
+auditoría anota `Lending.Access.OutOfScope`. La plantilla de rol `cartera.asesor` trae
+`Lending.CreditLines.View` (sólo consultar, respuesta del dueño del 2026-10-14); si una cooperativa no
+quiere que su asesor vea las líneas, se lo quita al rol en Seguridad › Roles.
 
 ## 2. Versiones: por qué los créditos vivos no cambian
 

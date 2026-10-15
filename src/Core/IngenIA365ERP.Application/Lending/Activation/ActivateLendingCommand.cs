@@ -40,7 +40,8 @@ public sealed record LendingActivationDto(
     int RevalidatedLimits,
     int NonDeductionsMarked,
     int ProvisionalCollectionsStored,
-    IReadOnlyList<MensajeEmitidoDto> Messages);
+    IReadOnlyList<MensajeEmitidoDto> Messages,
+    IReadOnlyList<AvisoDeActivacionDto>? Warnings = null);
 
 /// <summary>Un mensaje que nació con la activación. (nuevo)</summary>
 public sealed record MensajeEmitidoDto(string Type, Guid MessagePublicId);
@@ -81,7 +82,9 @@ public sealed class ActivateLendingCommandValidator : ValidadorConMotivo<Activat
 /// <c>Lending.Session.ItemMismatch</c>); el <b>recálculo</b> del cuadre y la conciliación (<see cref="RecalculoDelCuadreDeActivacion"/>: con otra
 /// huella nace <c>CheckVersion + 1</c>, guardada fuera de esta transacción, y responde <c>.DifferencesNotAccepted</c>) y sus diferencias aceptadas
 /// (<c>.DifferencesNotAccepted</c>); y los requisitos de <see cref="RequisitosDeActivacion"/> (<c>.RequirementsMissing</c>, <c>data.missing[]</c>).
-/// El mes contable cerrado sigue saliendo como el requisito <c>AccountingMonthOpen</c> (lo fijó la activación sin cartera previa).</item>
+/// El mes de C+1 cerrado en Contabilidad <b>no limita</b> (decisión del dueño, 2026-10-14): sale como el aviso <c>AccountingMonthClosed</c> en el estado y en
+/// la respuesta (<c>warnings</c>), y lo que emite la activación toma su fecha contable por <see cref="Integration.FechaContable"/>, que la lleva al
+/// primer mes abierto. Sin contabilidad iniciada sigue faltando <c>AccountingMonthOpen</c>.</item>
 /// <item><b>En una <see cref="TransaccionExplicita"/></b>, con <c>LND_Setup</c> exclusivo (<see cref="ICerrojoDeCartera"/>), se repiten esas
 /// validaciones (sin recalcular) y: se revalidan los cobros provisionales del adjunto (<see cref="ValidacionDeCobrosProvisionales"/>: <c>Import.Invalid</c>
 /// o <c>Lending.ProvisionalCollection.ExceedsSale</c>); nacen los créditos por tandas de 1.000 (<see cref="NacimientoDeCreditosMigrados"/>), guardando y
@@ -281,7 +284,7 @@ public sealed class ActivateLendingCommandHandler(
 
             return Result.Success(new LendingActivationDto(activacion.PublicId, activacion.ActivationDate, conteo.Creditos + conteo.Castigados,
                 conteo.SaldosIniciales, basePublicId, conteo.Cupos, revalidados, noAplicadas.Count, cobros.Count,
-                [new MensajeEmitidoDto(mensaje.Value.Type, mensaje.Value.PublicId)]));
+                [new MensajeEmitidoDto(mensaje.Value.Type, mensaje.Value.PublicId)], evaluacion.Avisos));
         }, ct);
     }
 

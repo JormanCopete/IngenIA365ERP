@@ -17,8 +17,10 @@ namespace IngenIA365ERP.Application.Lending.Integration.Comercial;
 /// <list type="number">
 /// <item>la conversión (<see cref="ConversionDeVentaACredito"/>): lo no convertible deja el recibo <c>Rejected</c> y reprocesable, con su evaluación y
 /// <b>sin</b> <c>ObligacionRechazada</c> (C95);</item>
-/// <item>el plan de la venta (<see cref="NacimientoDeObligacionDeVenta.SimularAsync"/>) y la validación previa contable, fuera del cerrojo (sólo advierte y
-/// sella <c>PrevalidationOutcome</c>, T56, D9);</item>
+/// <item>el plan de la venta (<see cref="NacimientoDeObligacionDeVenta.SimularAsync"/>) y la validación previa contable, fuera del cerrojo (advierte y
+/// sella <c>PrevalidationOutcome</c>, T56, D9; con <c>Contabilidad.FaltaDeRegla = Bloquear</c> la obligación no nace y el recibo queda <c>Rejected</c> y
+/// reprocesable como lo no convertible —A8 = «Bloquear todo», respuesta del dueño del 2026-10-14—: la venta de Comercial ya está confirmada y queda
+/// pendiente en Cartera hasta que la contadora complete la matriz y se reprocese);</item>
 /// <item>el cerrojo: <c>LND_Setup</c> compartido → <c>LND_DebtorControls</c> del deudor (T34): en orden de llegada, lo ya creado cuenta;</item>
 /// <item>con <c>pendingValidation</c>, la evaluación de FR-051 a la fecha de la venta (<see cref="EvaluacionDeVentaACredito"/>); sin ella, no se reevalúa;</item>
 /// <item>la obligación nace siempre (<see cref="NacimientoDeObligacionDeVenta"/>) y, en el mismo guardado, <c>ObligacionCreada</c>
@@ -54,11 +56,13 @@ public sealed class ConsumoDeVentaACredito(
         if (simulada.IsFailure) return await NoConvertibleAsync(m, recibo, simulada.Error, c.Linea.Code, ct);
         var sim = simulada.Value.Simulacion;
 
-        // La validación previa contable, fuera del cerrojo: sólo advierte (T56, D9).
+        // La validación previa contable, fuera del cerrojo: advierte (T56, D9) o, con la política en Bloquear, deja la venta en reproceso (A8).
         var sucursal = await SucursalAsync(m, ct);
-        var previa = (await validacionPrevia.DecidirAsync(
+        var decisionPrevia = await validacionPrevia.DecidirAsync(
             [RequisitosDelDesembolso.HechoParaValidar(c.Linea, sim, c.Persona, sucursal, venta.Fecha, venta.Pago.Amount, 1, DisbursementForm.InKind)],
-            OrigenDeValidacionPrevia.ConsumidorDeComercial, $"la venta {venta.NumeroDeFactura}", ct)).Resultado;
+            OrigenDeValidacionPrevia.ConsumidorDeComercial, $"la venta {venta.NumeroDeFactura}", ct);
+        if (decisionPrevia.Bloqueo is { } bloqueo) return await NoConvertibleAsync(m, recibo, bloqueo, c.Linea.Code, ct);
+        var previa = decisionPrevia.Resultado;
 
         await cerrojo.TomarSetupAsync(exclusivo: false, ct);
         await cerrojo.BloquearDeudoresAsync([c.Persona.Id], ModoDeEspera.Esperar, ct);

@@ -37,7 +37,8 @@ public sealed class CorreccionDeValorNacional(
     FechaContable fechaContable,
     ParametrosDeLaTandaDeCartera tanda,
     IngenIA365ERP.Application.Common.NationalValues.IValoresNacionales valores,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    ValidacionPreviaDeProceso? validacionDeProceso = null)
 {
     public async Task<AvanceDeCorrida> TandaAsync(LendingProcessRun corrida, CancellationToken ct)
     {
@@ -57,6 +58,7 @@ public sealed class CorreccionDeValorNacional(
             .OrderBy(c => c.LoanId).Select(c => c.LoanId).Take(Math.Max(1, tanda.TamanoDeTanda)).ToListAsync(ct);
         if (ids.Count == 0) return AvanceDeCorrida.Terminada;
 
+        DecisionDeValidacionPrevia? detenida = null;
         await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
@@ -143,9 +145,21 @@ public sealed class CorreccionDeValorNacional(
                     registro.PosicionVersionada(control, MotorDeCartera.Reconstruir(cargado.Entrada!, dia), cargado.Credito, cargado.Vigentes, u.Version, u.Huella, ahora);
                 }
             }
+            // A8 = «Bloquear todo» (2026-10-14): con la política en Bloquear, una tanda con ajustes que Contabilidad no puede registrar no se guarda.
+            if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } bloqueo)
+            {
+                detenida = bloqueo;
+                return Result.Failure(bloqueo.Bloqueo!);
+            }
             await db.SaveChangesAsync(ct);
             return Result.Success();
         }, ct);
+
+        if (detenida is not null)
+        {
+            db.DescartarCambiosSalvo(corrida);
+            throw await validacionDeProceso!.DetenerAsync(detenida, $"la corrección por {valor.Code}", ct);
+        }
 
         db.DescartarCambiosSalvo(corrida);
         corrida.CursorLoanId = ids.Max();

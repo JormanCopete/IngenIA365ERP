@@ -68,7 +68,8 @@ public interface IAvisoDeAbonoConPreferencia
 /// queda como saldo a favor (D24); en la forma interactiva se compara la huella (<c>Lending.Payment.DistributionChanged</c> con
 /// <c>data.simulation</c>, sin escribir, T32);</item>
 /// <item>el tope legal del prepago sin penalidad (<see cref="TopeLegalDePrepago"/>, FR-075) con el SMMLV y <c>PREPAGO_TOPE_SMMLV</c> a la fecha del
-/// desembolso por <see cref="IValoresNacionales"/>: el motor no cobra cargos de prepago, así que sólo se sella (en la decisión, sin columna nueva);</item>
+/// desembolso por <see cref="IValoresNacionales"/>: el motor no cobra cargos de prepago, así que sólo se sella (en la decisión, sin columna nueva);
+/// la recogida (<c>OwnLoanPayoff</c>) queda fuera del tope y no se mide (decisión del dueño, 2026-10-14);</item>
 /// <item>por <see cref="RegistroDeCartera"/>: la operación <c>Payment</c> numerada (<see cref="NumeradorDeCartera"/>, al final del orden de cerrojos y
 /// en el orden del lote), sus filas (las del libro teórico con la operación), las diferencias por familia en los días ya causados
 /// (<see cref="EfectoEnElLibro"/>), el plan regenerado y el estado <c>PaidOff</c>; la reclamación al seguro que el pago de la aseguradora cierra
@@ -240,8 +241,9 @@ public sealed class AplicacionDePagos(
                 new Dictionary<string, object?> { ["simulation"] = Simulacion(d) }));
         var dist = d.Distribucion;
 
-        // El tope legal del prepago sin penalidad (FR-075): sólo se sella, el motor no cobra cargos de prepago.
-        var tope = await TopeAsync(credito, modalidad, dist, ct);
+        // El tope legal del prepago sin penalidad (FR-075): sólo se sella, el motor no cobra cargos de prepago. La recogida queda fuera (decisión del
+        // dueño, 2026-10-14): recoger un crédito al desembolsar otro no es un prepago del deudor y no se bloquea por falta del SMMLV o del límite.
+        var tope = r.Class == ClaseDeRecaudador.OwnLoanPayoff ? Result.Success<TopeSellado?>(null) : await TopeAsync(credito, modalidad, dist, ct);
         if (tope.IsFailure) return Falla(tope.Error);
 
         var datos = (await partes.DatosAsync([d.Cargado], ct))[credito.Id];
@@ -447,7 +449,8 @@ public sealed class AplicacionDePagos(
 
     /// <summary>
     /// El tope legal del prepago (FR-075) en un abono extraordinario a capital o en una cancelación: el SMMLV y el límite a la fecha del desembolso.
-    /// Nulo si la modalidad no es un prepago; <c>NationalValues.Missing</c> si falta un valor nacional.
+    /// Nulo si la modalidad no es un prepago; <c>NationalValues.Missing</c> si falta un valor nacional. La recogida (<c>OwnLoanPayoff</c>) no llega
+    /// aquí: queda fuera del tope (decisión del dueño, 2026-10-14).
     /// </summary>
     private async Task<Result<TopeSellado?>> TopeAsync(Loan credito, PaymentModality modalidad, DistribucionDePago d, CancellationToken ct)
     {

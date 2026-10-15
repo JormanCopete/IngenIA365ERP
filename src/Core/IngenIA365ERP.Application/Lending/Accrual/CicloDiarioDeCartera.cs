@@ -101,7 +101,8 @@ public sealed class CicloDiarioDeCartera(
     IDateTimeService reloj,
     ILogger<CicloDiarioDeCartera>? logger = null,
     MovimientoContingenteDeCartera? contingentes = null,
-    Risk.CalificacionDelCiclo? calificacion = null)
+    Risk.CalificacionDelCiclo? calificacion = null,
+    ValidacionPreviaDeProceso? validacionDeProceso = null)
 {
     /// <summary>Créditos de la muestra de verificación del paso (8).</summary>
     public const int MuestraDeVerificacion = 20;
@@ -143,13 +144,25 @@ public sealed class CicloDiarioDeCartera(
         corrida.CurrentStep = PasosDelCiclo.Causacion;
         var pendientes = new List<AlertaPendiente>();
         var errores = new List<LendingProcessRunError>();
+        // A8 = «Bloquear todo» (2026-10-14): con Contabilidad.FaltaDeRegla = Bloquear, una tanda con hechos que Contabilidad no puede registrar no
+        // se guarda; la corrida se detiene con el código y la alerta, y «Reintentar» la retoma desde el mismo cursor.
+        DecisionDeValidacionPrevia? detenida = null;
+        async Task<Result> GuardarSiEsContabilizableAsync()
+        {
+            if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } bloqueo)
+            {
+                detenida = bloqueo;
+                return Result.Failure(bloqueo.Bloqueo!);
+            }
+            await db.SaveChangesAsync(ct);
+            return Result.Success();
+        }
         try
         {
             await TransaccionExplicita.EjecutarAsync(db, async () =>
             {
                 await UnaTandaAsync(corrida, d, ids, intento: 1, pendientes, errores, ct);
-                await db.SaveChangesAsync(ct);
-                return Result.Success();
+                return await GuardarSiEsContabilizableAsync();
             }, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -169,9 +182,9 @@ public sealed class CicloDiarioDeCartera(
                     await TransaccionExplicita.EjecutarAsync(db, async () =>
                     {
                         await UnaTandaAsync(corrida, d, [id], intento: 2, suyas, suyos, ct);
-                        await db.SaveChangesAsync(ct);
-                        return Result.Success();
+                        return await GuardarSiEsContabilizableAsync();
                     }, ct);
+                    if (detenida is not null) break;
                     pendientes.AddRange(suyas);
                     errores.AddRange(suyos);
                 }
@@ -186,6 +199,13 @@ public sealed class CicloDiarioDeCartera(
                     pendientes.Add(new AlertaPendiente(AlertaDeCredito(id, d, otra.Message), error));
                 }
             }
+        }
+
+        if (detenida is not null)
+        {
+            // La tanda no se guardó: el cursor no se mueve, la alerta sale y la corrida queda Failed con el código (quien conduce lo anota).
+            Soltar(corrida, []);
+            throw await validacionDeProceso!.DetenerAsync(detenida, string.Create(CultureInfo.InvariantCulture, $"la causación del {d:yyyy-MM-dd}"), ct);
         }
 
         // Sin seguimiento entre tandas (T67): la corrida y los errores siguen, lo demás se suelta. El cursor se mueve después de soltar, para
@@ -543,7 +563,16 @@ public sealed class CicloDiarioDeCartera(
                 contingente.Error.Message);
 
         // T0654, C09: toma las entregas InBatch sin lote de AccrualRun:{x} con x ≤ d (las de la causación de d y los hechos FinDeCausacion
-        // nacidos fuera de una corrida anterior, sellados con su día siguiente), en el mismo guardado con que termina la corrida.
+        // nacidos fuera de una corrida anterior, sellados con su día siguiente), en el mismo guardado con que termina la corrida. Lo pendiente
+        // (los contadores de la corrida, los contingentes) se guarda antes: el punto de guardado del lote sólo puede tocar el lote, el contador y las
+        // entregas, porque al volver a él EF ya dio por guardado lo que se escribió adentro. Los contingentes pasan antes por la validación previa
+        // de los procesos (A8 = «Bloquear todo»): si no se pueden contabilizar, la corrida se detiene sin terminar.
+        if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } bloqueo)
+        {
+            Soltar(corrida, []);
+            throw await validacionDeProceso.DetenerAsync(bloqueo, string.Create(CultureInfo.InvariantCulture, $"el cierre del ciclo del {d:yyyy-MM-dd}"), ct);
+        }
+        await db.SaveChangesAsync(ct);
         var alcance = EmisionDeCartera.AlcanceDeLoteDeCausacion(d);
         var entregas = await db.IntegrationMessageDeliveries
             .Where(x => x.Destination == IntegrationDestinations.Accounting && x.Status == DeliveryStatus.InBatch && x.BatchId == null
@@ -553,15 +582,35 @@ public sealed class CicloDiarioDeCartera(
         if (entregas.Count > 0)
         {
             var actor = IngenIA365ERP.Application.Common.Execution.Actor.ProcesoDeIntegracion(IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea(TareaDelCiclo));
-            var lote = LotesDeIntegracion.Nuevo(await LotesDeIntegracion.TomarNumeroAsync(db, ct), IntegrationDestinations.Accounting,
-                BatchTrigger.LendingAccrualRun, actor, null, reloj.UtcNow);
-            lote.MessageCount = entregas.Count;
-            lote.CutoffMessageId = entregas[^1].MessageId;
-            lote.DateFrom = await db.IntegrationMessages.AsNoTracking().Where(m => m.Id == entregas[0].MessageId).Select(m => (DateOnly?)m.OperationDate).FirstOrDefaultAsync(ct) ?? d;
-            lote.DateTo = d;
-            db.IntegrationBatches.Add(lote);
-            await db.SaveChangesAsync(ct);
-            LotesDeIntegracion.Asignar(lote, entregas);
+            var desde = await db.IntegrationMessages.AsNoTracking().Where(m => m.Id == entregas[0].MessageId).Select(m => (DateOnly?)m.OperationDate)
+                .FirstOrDefaultAsync(ct) ?? d;
+            IntegrationBatch? lote = null;
+            // Dos corridas que terminan a la vez (la de un día atrasado y la de hoy) ven las mismas entregas sin lote: la segunda en guardar pierde por
+            // la RowVersion del contador o de la entrega. El lote y su asignación van juntos bajo un punto de guardado: la que pierde vuelve al punto,
+            // suelta lo suyo y sigue (las entregas quedaron en el lote de la otra, o las toma el ciclo siguiente, que recoge todo AccrualRun ≤ d).
+            // Hasta el 2026-10-14 la asignación se guardaba en el guardado de quien conduce y la corrida terminaba con ConcurrencyConflictException.
+            var tomado = await TransaccionExplicita.EjecutarAsync(db, () => PuntoDeGuardado.EjecutarAsync(db, "lote_de_causacion", async () =>
+            {
+                lote = LotesDeIntegracion.Nuevo(await LotesDeIntegracion.TomarNumeroAsync(db, ct), IntegrationDestinations.Accounting,
+                    BatchTrigger.LendingAccrualRun, actor, null, reloj.UtcNow);
+                lote.MessageCount = entregas.Count;
+                lote.CutoffMessageId = entregas[^1].MessageId;
+                lote.DateFrom = desde;
+                lote.DateTo = d;
+                db.IntegrationBatches.Add(lote);
+                await db.SaveChangesAsync(ct);
+                LotesDeIntegracion.Asignar(lote, entregas);
+                await db.SaveChangesAsync(ct);
+                return true;
+            }, e => e is Domain.Exceptions.ConcurrencyConflictException or DbUpdateConcurrencyException ? false : throw new InvalidOperationException(
+                "No se pudo armar el lote de la causación del día.", e), ct), ct);
+            if (!tomado)
+            {
+                _logger.LogInformation("[Cartera.LoteDeCausacionTomado] Otra corrida tomó a la vez las entregas de la causación hasta {Fecha}: van en su lote.", d);
+                foreach (var entrega in entregas) db.IntegrationMessageDeliveries.Entry(entrega).State = EntityState.Detached;
+                foreach (var contador in db.IntegrationBatchCounters.Local.ToList()) db.IntegrationBatchCounters.Entry(contador).State = EntityState.Detached;
+                if (lote is not null) db.IntegrationBatches.Entry(lote).State = EntityState.Detached;
+            }
         }
 
         var totales = Totales(corrida);

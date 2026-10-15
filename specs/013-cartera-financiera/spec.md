@@ -207,6 +207,39 @@ listo. Sí fija qué debe estar para salir en vivo, porque el primer cierre mens
   - Lo que los asociados deban por servicios al corte tampoco entra a Cartera (D29).
   - Queda fuera de esta feature (Alcance).
 
+### Session 2026-10-14
+
+Respuestas del dueño a las preguntas que afectan a K1 (decisiones-transversales §5, T0801), antes del congelamiento de
+las migraciones (T0802). Las demás preguntas siguen con su propuesta por defecto.
+
+- Q: A1, A2, A3, A5, A6, A7, A11, B1, C1, F1 e I6, ¿se aceptan las propuestas?
+  → A: **Sí, la propuesta por defecto en todas.** A3: los contingentes del CUIF se emiten desde K1 con modo `NoPasa`.
+  A4 no tuvo respuesta: rige la propuesta por defecto.
+- Q: B4, ¿con qué ambiente corre QA?
+  → A: **QA no corre como Production**: allí cuentan los dobles de prueba. Sin cambio.
+- Q: H7, ¿quién es el segundo revisor del retiro y se autoriza el diagnóstico en producción?
+  → A: **El segundo revisor es el dueño (Jorman Copete).** El diagnóstico en producción se corre sólo con su
+  autorización expresa en el momento.
+- Q: A9, ¿se exceptúan del límite de la fecha valor los pagos sin interacción cuya fecha la fija esta spec?
+  → A: **Sí.** Nómina (fin del período en la ordinaria, aprobación en la definitiva) y, desde K2, la pagaduría con
+  referencia se aplican aunque la fecha valor sea **futura**, sin límite de días ni atribución antes de un cierre
+  (FR-012). Una persona sigue sin poder registrar un pago con fecha futura.
+- Q: A8, ¿«Bloquear» por falta de regla contable aplica sólo en las pantallas de Cartera?
+  → A: **No: «Bloquear todo».** Con la política en «Bloquear», la falta de regla detiene también el contrato de
+  obligaciones (el pago se rechaza; Nómina no aprueba y dice qué regla falta), el consumidor de Comercial (la venta
+  queda en reproceso) y los procesos (la tanda no avanza y alerta). Sin contabilidad iniciada o con el hecho en «no
+  pasa» no se bloquea nada. El parámetro **arranca en «Bloquear»** (decisión del dueño del mismo día; FR-127).
+- Q: ¿La recogida de un crédito al desembolsar otro se mide contra el tope legal del prepago sin penalidad?
+  → A: **No: queda fuera del tope** (FR-075) y no se bloquea por falta del SMMLV o del límite.
+- Q: Si Contabilidad ya cerró el mes del día siguiente al corte, ¿se niega la activación?
+  → A: **No limita, sólo informa** (FR-142): la activación procede con un aviso y lo que emite se registra en el
+  primer mes abierto.
+- Q: ¿El rol sugerido de asesor consulta las líneas de crédito?
+  → A: **Sí, sólo consultar**, y cada cooperativa lo ajusta en los permisos de su rol.
+- Q: A10, ¿qué pasa con ahorros, aportes y CDT?
+  → A: El dueño los quiere **renovar en una feature nueva de Ahorros, después de K1**. Hasta entonces sigue lo
+  construido (lo conservado en `Savings`, sin cambios funcionales).
+
 ## Conflictos con la constitución y con decisiones vigentes
 
 La solicitud pide marcar todo conflicto con la constitución. Ésta es la revisión.
@@ -1424,6 +1457,9 @@ auditados.
 - **FR-012 · Tres fechas.** Toda transacción lleva fecha valor, fecha contable y fecha de registro.
   - **La fecha valor** puede ser anterior a hoy, aun dentro de un mes ya cerrado, hasta los días
     configurados. Si cae antes de un cierre, exige la atribución configurada.
+  - Los pagos sin interacción cuya fecha valor fija esta spec —Nómina (FR-088, FR-112) y, desde K2, la
+    pagaduría con referencia (FR-114)— no tienen ese límite ni piden esa atribución, y se aplican aunque su
+    fecha valor sea futura (A9, Session 2026-10-14). Una persona nunca registra una fecha valor futura.
   - **La fecha contable** es el primer mes sin cierre de Cartera que Contabilidad tenga abierto, según
     la consulta del estado del período.
   - **Los cierres mensuales** no se reescriben: los efectos posteriores se reconocen en el período
@@ -1965,6 +2001,8 @@ auditados.
       opción de cambiarla (D24);
     - sin preferencia registrada, el valor queda como saldo a favor hasta que el deudor elija.
   - El límite de monto de crédito que fija la ley para este beneficio es un parámetro legal con fuente.
+  - La recogida de un crédito al desembolsar otro no es un abono del deudor: queda fuera de ese límite
+    (Session 2026-10-14).
 - **FR-076 · Excedentes, anticipos y saldos a favor.**
   - Lo que supera lo exigible de la modalidad elegida, o el total en una cancelación, es un
     **excedente**: vuelve al recaudador y nunca entra a Cartera.
@@ -2450,7 +2488,9 @@ auditados.
 - **FR-127 · Validación previa.**
   - Antes de confirmar una operación, Cartera pregunta a Contabilidad si es contabilizable: si la matriz
     tiene regla para cada combinación.
-  - Según el parámetro, la falta **advierte** o **bloquea**, y dice qué regla falta.
+  - Según el parámetro, la falta **advierte** o **bloquea**, y dice qué regla falta. «Bloquea» vale para
+    toda operación: las pantallas de Cartera, el contrato de obligaciones (Nómina no aprueba), el consumidor de
+    Comercial y los procesos (A8, Session 2026-10-14).
   - Sin respuesta de Contabilidad se aplica la política configurada (D7).
 - **FR-128 · Modo de paso por hecho.**
   - Cada tipo de hecho tiene su modo con vigencia, el mismo de la 012:
@@ -2593,8 +2633,9 @@ auditados.
       la aceptación anterior (D17) deja de valer y hay que volver a aceptar las diferencias.
   - **Plazo para registrar la activación**:
     - se registra, a más tardar, dentro de los días de fecha valor de FR-012 contados desde el corte;
-    - sólo si Contabilidad tiene abierto el mes que contiene el día siguiente al corte;
-    - si pasó el plazo o ese mes ya está cerrado, la activación se niega y pide una carga con corte nuevo.
+    - si pasó el plazo, la activación se niega y pide una carga con corte nuevo;
+    - si Contabilidad ya cerró el mes que contiene el día siguiente al corte, la activación procede con un
+      aviso y lo que emite se registra en el primer mes abierto (Session 2026-10-14).
   - **Qué guarda la carga y qué nace al activar**:
     - aplicar una carga guarda sólo la carga, su revisión, su cuadre y su conciliación de ventas
       (FR-143);
@@ -2740,7 +2781,7 @@ auditados.
     en esa cooperativa (FR-142). Mientras Cartera no esté activada, Contabilidad cierra sus meses como
     hoy, y una prueba lo cubre con Cartera desplegada y sin activar;
   - mientras haya una carga aplicada sin activar, cerrar el mes que contiene el día siguiente a su corte
-    advierte que esa carga ya no podrá activarse.
+    advierte que lo que emita la activación quedará en el primer mes abierto siguiente (Session 2026-10-14).
 - **FR-147 · E-03 · Nómina.**
   - La liquidación definitiva y la nómina ordinaria dejan de leer y escribir datos de Cartera. Usan la
     consulta de FR-061 y el contrato de FR-083.

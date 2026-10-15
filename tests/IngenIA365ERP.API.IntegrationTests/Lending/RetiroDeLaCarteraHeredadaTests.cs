@@ -118,16 +118,23 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
             .Select(r => r.RoutePattern.RawText ?? string.Empty)
             .ToList();
 
-        // Las 15 familias del crédito heredado (63 rutas) y los informes retirados: sin alias.
+        // Las 15 familias del crédito heredado (63 rutas) y los informes heredados de /api/reports/lending: sin alias. El prefijo
+        // /api/reports/lending volvió con el centro de informes de la Cartera nueva (DT §2.15, R-08): lo que se comprueba es que no queda
+        // ninguna ruta heredada —aging/pdf, loan-statement, y person-portfolio y savings-statement, que se mudaron a /api/reports/savings—.
         string[] retiradas =
         [
             "/api/lending/accruals", "/api/lending/classifications", "/api/lending/defaults", "/api/lending/housing-parameters",
             "/api/lending/interest-rates", "/api/lending/loan-applications", "/api/lending/portfolios", "/api/lending/payments",
             "/api/lending/deduction-concepts", "/api/lending/payroll-deductions", "/api/lending/periodicity-parameters",
             "/api/lending/portfolio-accounts", "/api/lending/provision-parameters", "/api/lending/scoring-parameters",
-            "/api/lending/term-rates", "/api/reports/lending",
+            "/api/lending/term-rates", "/api/reports/lending/aging/", "/api/reports/lending/loan-statement",
+            "/api/reports/lending/person-portfolio", "/api/reports/lending/savings-statement",
         ];
         rutas.Where(r => retiradas.Any(p => r.StartsWith(p, StringComparison.OrdinalIgnoreCase))).Should().BeEmpty("el crédito heredado se retira sin alias (api.md §25)");
+        // Bajo /api/reports/lending sólo queda el centro de informes nuevo: el registro de vistas y una ruta de un segmento por vista.
+        rutas.Where(r => r.StartsWith("/api/reports/lending", StringComparison.OrdinalIgnoreCase))
+            .Should().OnlyContain(r => System.Text.RegularExpressions.Regex.IsMatch(r, "^/api/reports/lending/?([a-z-]+)?$"),
+                "el centro de informes publica /api/reports/lending/{vista}, sin rutas con identificador ni /pdf como las heredadas");
 
         // Las 12 familias conservadas, ahora bajo /api/savings, y ninguna bajo /api/lending.
         string[] conservadas =
@@ -151,8 +158,10 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
         var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "retiro_http");
         using var http = fx.CreateClient();
 
+        // /api/reports/lending/aging es hoy la vista «aging» del centro de informes nuevo (DT §2.15): lo heredado es su /pdf y las rutas con id.
         foreach (var ruta in new[] { "/api/lending/portfolios", "/api/lending/loan-applications", "/api/lending/payments",
-                     "/api/reports/lending/aging", "/api/reports/lending/aging/pdf", $"/api/reports/lending/loan-statement/{Guid.NewGuid()}/pdf" })
+                     "/api/reports/lending/aging/pdf", $"/api/reports/lending/loan-statement/{Guid.NewGuid()}/pdf",
+                     $"/api/reports/lending/person-portfolio/{Guid.NewGuid()}", $"/api/reports/lending/savings-statement/{Guid.NewGuid()}/pdf" })
         {
             using var pedido = new HttpRequestMessage(HttpMethod.Get, ruta);
             pedido.Headers.Authorization = new AuthenticationHeaderValue("Bearer", coop.TokenAdmin);

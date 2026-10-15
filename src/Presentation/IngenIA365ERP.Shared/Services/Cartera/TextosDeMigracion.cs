@@ -76,7 +76,7 @@ public static class TextosDeMigracion
         "DifferencesAccepted" => "Diferencias del cuadre aceptadas",
         "SalesReconciled" => "Ventas a crédito conciliadas",
         "DateInTerm" => "Fecha dentro del plazo",
-        "AccountingMonthOpen" => "Mes contable abierto",
+        "AccountingMonthOpen" => "Contabilidad iniciada",
         "ReceiptsCollectorRegistered" => "Recaudo registrado",
         "TreasuryDestinationRegistered" => "Tesorería registrada",
         "ExpectedLossAvailable" => "Modelo de pérdida esperada disponible",
@@ -90,6 +90,7 @@ public static class TextosDeMigracion
         "CommercialParametersToAdjust" => "Lo que Comercial ajusta el mismo día",
         "PayrollConceptAccounts" => "Cuentas del descuento de Cartera en Nómina",
         "UsersWithoutScope" => "Usuarios sin alcance de oficinas",
+        "AccountingMonthClosed" => "Mes de la activación cerrado en Contabilidad",
         _ => codigo,
     };
 }

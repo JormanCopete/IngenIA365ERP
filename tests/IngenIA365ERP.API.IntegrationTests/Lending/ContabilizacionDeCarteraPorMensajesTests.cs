@@ -7,6 +7,7 @@ using IngenIA365ERP.API.IntegrationTests.Accounting;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Integration;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
+using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.EntityFrameworkCore;
 using static IngenIA365ERP.API.IntegrationTests.Lending.CausacionE2E;
 using static IngenIA365ERP.API.IntegrationTests.Lending.DesembolsoE2E;
@@ -28,9 +29,11 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <c>PoliticaSinRespuesta = Bloquear</c> responde 422 <c>Lending.Prevalidation.NoResponse</c> (D7);</item>
 /// <item>dos días de causación dejan, cada uno, un lote <c>LendingAccrualRun</c> con un <c>CA</c> resumido que lleva una línea por crédito en la cuenta
 /// de interés que exige tercero;</item>
-/// <item>el pago por el recaudador de prueba contra el hueco se aplica (el contrato nunca bloquea) sellado <c>NotPostable</c> y su hecho queda
-/// <c>Rejected</c>; creada la regla y reprocesado por <c>/api/lending/messages/reprocess</c>, queda en un <c>RC</c>; el reverso del pago es un
-/// comprobante nuevo y el original sigue intacto (T55);</item>
+/// <item>con <c>FaltaDeRegla = Bloquear</c> el pago por el recaudador de prueba contra el hueco se <b>rechaza</b> con
+/// <c>Lending.Prevalidation.NotPostable</c> y su <c>data.errors[]</c> (A8 = «Bloquear todo», respuesta del dueño del 2026-10-14; hasta ese día el
+/// contrato nunca bloqueaba); con <c>Advertir</c> se aplica sellado <c>NotPostable</c> y su hecho queda <c>Rejected</c>; creada la regla y
+/// reprocesado por <c>/api/lending/messages/reprocess</c>, queda en un <c>RC</c>; el reverso del pago es un comprobante nuevo y el original sigue
+/// intacto (T55);</item>
 /// <item>un comprobante <c>CAR</c> no se reversa desde Comprobantes (<c>Accounting.Document.ModuleOwned</c>); la conciliación a la fecha da diferencia
 /// cero sin pendientes; el balance de prueba cuadra.</item>
 /// </list>
@@ -146,8 +149,20 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
         deInteres.Should().OnlyContain(l => l.GetProperty("personPublicId").ValueKind == JsonValueKind.String,
                 "la cuenta de interés exige tercero: una línea por crédito con su deudor");
 
-        // ----------------------------- el pago contra el hueco: se aplica, sella NotPostable y su hecho queda Rejected --
+        // ----------------------- el pago contra el hueco con «Bloquear»: el contrato lo rechaza con su código (A8 = «Bloquear todo») --
         var diaDePago = hoy.AddDays(2);
+        using (RelojEn(fx, hoy.AddDays(1)))
+        {
+            var rechazado = await AplicarUnoAsync(http, esc.Usuarios, Pago(credito, persona, "FreeAmount", 80_000m, hoy.AddDays(1)));
+            Resultado(rechazado).Should().Be(Rechazado, rechazado.ToString());
+            rechazado.GetProperty("code").GetString().Should().Be("Lending.Prevalidation.NotPostable");
+            rechazado.GetProperty("data").GetProperty("errors").EnumerateArray()
+                .Should().Contain(e => e.GetProperty("role").GetString() == "RecaudoPorAplicar", "dice qué regla falta");
+        }
+        (await OperacionesAsync(fx, esc, credito)).Should().NotContain(o => o.Clase == LoanOperationKind.Payment, "el pago rechazado no se escribe");
+
+        // ------------- con «Advertir» desde el día del pago: se aplica, sella NotPostable y su hecho queda Rejected --
+        await ParametroAsync(http, admin, "Contabilidad.FaltaDeRegla", "Advertir", diaDePago);
         string clave;
         using (RelojEn(fx, diaDePago))
         {
@@ -155,7 +170,7 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
             await AplicadoAsync(http, esc.Usuarios, Pago(credito, persona, "FreeAmount", 80_000m, diaDePago, clave));
         }
         var pago = await DespacharHastaResolverAsync(despachador, tenant, http, admin, credito, "PagoAplicado", diaDePago);
-        pago.GetProperty("prevalidationOutcome").GetString().Should().Be("NotPostable", "el contrato advierte y sella (A8)");
+        pago.GetProperty("prevalidationOutcome").GetString().Should().Be("NotPostable", "con Advertir el contrato aplica y sella");
         Estado(pago).Should().Be("Rejected", pago.ToString());
 
         // ---------------------------------------------------- crear la regla, reprocesar y ver el RC (T58, FR-079) --

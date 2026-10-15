@@ -218,6 +218,25 @@ public class ContratoDeObligacionesDeCarteraTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task La_recogida_queda_fuera_del_tope_de_prepago_y_no_se_bloquea_sin_SMMLV_ni_limite()
+    {
+        // Decisión del dueño (2026-10-14): recoger un crédito al desembolsar otro no se evalúa contra TopeLegalDePrepago (FR-075).
+        var sinValores = await PagosDePrueba.CrearAsync(sinTopeDePrepago: true);
+        var recogida = await sinValores.AplicarAsync(sinValores.Pago(ModalidadDePago.FullPayoff, 3_000_000m, clave: $"CAR:{Guid.NewGuid():N}:{sinValores.Credito.PublicId:N}",
+            medio: ClaseDeMedioDeRecaudo.InternalOffset), recaudador: new Recaudador("CAR", ClaseDeRecaudador.OwnLoanPayoff));
+
+        recogida.Result.Should().Be(ResultadoDelContrato.Applied, "sin SMMLV ni límite la recogida no se bloquea: " + recogida.Message);
+        recogida.Value!.PaidOff.Should().BeTrue();
+        var decision = DecisionDePago.Leer((await sinValores.OperacionAsync(recogida.Value.OperationPublicId)).Payload)!;
+        decision.WithinLegalPrepaymentCap.Should().BeNull("la recogida no se mide contra el tope");
+        decision.LegalPrepaymentCap.Should().BeNull();
+
+        var otro = await PagosDePrueba.CrearAsync(sinTopeDePrepago: true);
+        var cancelacionDeUnaPersona = await otro.AplicarAsync(otro.Pago(ModalidadDePago.FullPayoff, 3_000_000m));
+        cancelacionDeUnaPersona.Code.Should().Be("NationalValues.Missing", "fuera de la recogida el tope sigue midiéndose y sin valores nacionales no se aplica");
+    }
+
+    [Fact]
     public async Task Un_recaudador_que_adopto_una_version_que_no_existe_responde_VersionNotSupported()
     {
         var fila = new IntegrationParticipant
@@ -278,6 +297,27 @@ public class ContratoDeObligacionesDeCarteraTests : IAsyncLifetime
         var nomina = await _p.AplicarAsync(_p.Pago(ModalidadDePago.FreeAmount, 1m, Hoy.AddDays(2), clave: $"NOM:{Guid.NewGuid():N}:{_p.Credito.PublicId:N}",
             medio: ClaseDeMedioDeRecaudo.OwnPayrollDeduction), recaudador: Recaudador.Nomina);
         nomina.Result.Should().Be(ResultadoDelContrato.Applied, "Nómina no tiene ventana de fecha valor (A9): " + nomina.Message);
+    }
+
+    [Fact]
+    public async Task Nomina_aplica_con_fecha_valor_futura_y_antes_de_un_cierre_y_una_persona_no()
+    {
+        // A9 (respuesta del dueño, 2026-10-14): la ordinaria aprobada antes del fin del período recauda con la fecha valor del fin del período.
+        _p.C.Ir(Hoy.AddDays(10));
+        var futuraDeNomina = await _p.AplicarAsync(_p.Pago(ModalidadDePago.FreeAmount, 1m, Hoy.AddDays(25), clave: $"NOM:{Guid.NewGuid():N}:{_p.Credito.PublicId:N}",
+            medio: ClaseDeMedioDeRecaudo.OwnPayrollDeduction), recaudador: Recaudador.Nomina);
+        futuraDeNomina.Result.Should().Be(ResultadoDelContrato.Applied, "la fecha valor de Nómina la fija la spec, también futura (A9): " + futuraDeNomina.Message);
+        futuraDeNomina.Value!.ValueDate.Should().Be(Hoy.AddDays(25));
+
+        var futuraDeUnaPersona = await _p.AplicarAsync(_p.Pago(ModalidadDePago.FreeAmount, 1m, Hoy.AddDays(11)));
+        futuraDeUnaPersona.Code.Should().Be("Lending.Payment.ValueDateOutOfRange", "una persona no registra pagos con fecha futura");
+
+        _p.CerradoHasta = Hoy.AddDays(10);
+        var nominaAntesDelCierre = await _p.AplicarAsync(_p.Pago(ModalidadDePago.FreeAmount, 1m, Hoy.AddDays(9),
+            clave: $"NOM:{Guid.NewGuid():N}:{_p.Credito.PublicId:N}", medio: ClaseDeMedioDeRecaudo.OwnPayrollDeduction), recaudador: Recaudador.Nomina);
+        nominaAntesDelCierre.Result.Should().Be(ResultadoDelContrato.Applied, "Nómina no pide atribución antes de un cierre (A9): " + nominaAntesDelCierre.Message);
+        var personaAntesDelCierre = await _p.AplicarAsync(_p.Pago(ModalidadDePago.FreeAmount, 1m, Hoy.AddDays(9)));
+        personaAntesDelCierre.Code.Should().Be("Lending.Payment.ValueDateBeforeClosing");
     }
 
     [Fact]
@@ -399,8 +439,30 @@ public class ContratoDeObligacionesDeCarteraTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Sin_regla_contable_el_contrato_nunca_rechaza_aunque_la_cooperativa_bloquee_y_sella_NotPostable()
+    public async Task Sin_regla_contable_y_con_Advertir_el_contrato_aplica_y_sella_NotPostable()
     {
+        // El defecto es «Bloquear» (decisión del dueño, 2026-10-14): «Advertir» se fija a propósito.
+        _p.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = Domain.Lending.Parameters.ParametrosDeCartera.ContabilidadFaltaDeRegla,
+            ScopeKind = Domain.Enums.Parameters.ParameterScopeKind.None, Value = "Advertir", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+            CreatedAt = _p.G.UtcNow.AddDays(-10),
+        });
+        await _p.Db.SaveChangesAsync();
+        SinRegla();
+
+        var c = await _p.AplicadoAsync(_p.Pago(ModalidadDePago.FreeAmount, 10_000m));
+
+        c.Warnings.Should().Contain("Lending.Prevalidation.NotPostable");
+        (await _p.OperacionAsync(c.OperationPublicId)).PrevalidationOutcome.Should().Be(nameof(PrevalidationOutcome.NotPostable));
+        (await _p.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == PagoAplicadoV1.Type)).PrevalidationOutcome
+            .Should().Be(PrevalidationOutcome.NotPostable, "el sello va en el hecho");
+    }
+
+    [Fact]
+    public async Task Sin_regla_contable_y_con_Bloquear_el_contrato_rechaza_el_pago_con_su_codigo_y_no_escribe()
+    {
+        // A8 = «Bloquear todo» (respuesta del dueño, 2026-10-14): hasta ese día el contrato nunca rechazaba por la matriz.
         _p.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
         {
             Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = Domain.Lending.Parameters.ParametrosDeCartera.ContabilidadFaltaDeRegla,
@@ -408,18 +470,24 @@ public class ContratoDeObligacionesDeCarteraTests : IAsyncLifetime
             CreatedAt = _p.G.UtcNow.AddDays(-10),
         });
         await _p.Db.SaveChangesAsync();
+        SinRegla();
+
+        var r = await _p.AplicarAsync(_p.Pago(ModalidadDePago.FreeAmount, 10_000m));
+
+        r.Result.Should().Be(ResultadoDelContrato.Rejected);
+        r.Code.Should().Be("Lending.Prevalidation.NotPostable");
+        r.Message.Should().Contain("contadora");
+        r.Data.Should().ContainKey("errors");
+        (await _p.Db.LoanOperations.AsNoTracking().AnyAsync(o => o.Kind == LoanOperationKind.Payment)).Should().BeFalse("el pago rechazado no se escribe");
+        (await _p.Db.IntegrationMessages.AsNoTracking().AnyAsync(m => m.Type == PagoAplicadoV1.Type)).Should().BeFalse();
+    }
+
+    private void SinRegla() =>
         _p.D.Contabilidad.EvaluarAsync(Arg.Any<IReadOnlyList<MensajeContableDto>>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success(new ResultadoDeEvaluacionContableDto(false,
-                [new HallazgoDeCarteraDto(PagoAplicadoV1.Type, "RecaudoPorAplicar", null, null, "SinRegla", "Falta la regla", new QuienCorrigeDto("Accounting", null, null))],
+                [new HallazgoDeCarteraDto(PagoAplicadoV1.Type, "RecaudoPorAplicar", null, null, "Accounting.LendingRule.Missing", "Falta la regla",
+                    new QuienCorrigeDto("Contabilidad", "/contabilidad/cartera/matriz", "Accounting.LendingRules.Manage"))],
                 [])));
-
-        var c = await _p.AplicadoAsync(_p.Pago(ModalidadDePago.FreeAmount, 10_000m));
-
-        c.Warnings.Should().Contain("Lending.Prevalidation.NotPostable");
-        (await _p.OperacionAsync(c.OperationPublicId)).PrevalidationOutcome.Should().Be(nameof(PrevalidationOutcome.NotPostable));
-        (await _p.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.Type == PagoAplicadoV1.Type)).PrevalidationOutcome
-            .Should().Be(PrevalidationOutcome.NotPostable, "el sello va en el hecho (A8)");
-    }
 
     [Fact]
     public async Task El_pago_de_la_aseguradora_cierra_su_reclamacion_en_proceso()

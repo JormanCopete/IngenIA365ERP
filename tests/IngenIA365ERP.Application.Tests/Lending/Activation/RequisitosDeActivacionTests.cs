@@ -358,16 +358,34 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Fuera_del_plazo_o_con_el_mes_cerrado_faltan_la_fecha_y_el_mes()
+    public async Task Fuera_del_plazo_falta_la_fecha_y_el_mes_cerrado_solo_avisa()
     {
+        // Decisión del dueño (2026-10-14): el mes de C+1 cerrado no limita, sólo informa; el plazo de la carga sí limita.
         _contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Closed, null))));
+            .Returns(Task.FromResult(Result.Success(new EstadoDelPeriodoDto(true, EstadoDePeriodoContable.Closed, Hoy.AddMonths(1)))));
 
         var e = await Requisitos().EvaluarConAvisosAsync(_carga, Hoy, Corte.AddDays(6), default);
 
         De(e, RequisitosDeActivacion.FechaEnPlazo).Met.Should().BeFalse();
+        De(e, RequisitosDeActivacion.MesContableAbierto).Should().BeEquivalentTo(new { Met = true, Status = EstadosDeRequisito.NotApplicable },
+            o => o.ExcludingMissingMembers());
+        e.Faltantes.Select(f => f.Code).Should().NotContain(RequisitosDeActivacion.MesContableAbierto);
+        var aviso = e.Avisos.Should().ContainSingle(a => a.Code == RequisitosDeActivacion.AvisoMesContableCerrado).Subject;
+        aviso.Detail.Should().Contain(Hoy.AddMonths(1).ToString("yyyy-MM"), "dice en qué mes queda lo que emite la activación");
+        aviso.WhoFixes!.Module.Should().Be("Contabilidad");
+    }
+
+    [Fact]
+    public async Task Sin_contabilidad_iniciada_falta_el_mes()
+    {
+        _contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(Result.Success(new EstadoDelPeriodoDto(false, EstadoDePeriodoContable.NotFound, null))));
+
+        var e = await Requisitos().EvaluarConAvisosAsync(_carga, Hoy, Hoy, default);
+
         De(e, RequisitosDeActivacion.MesContableAbierto).Met.Should().BeFalse();
         De(e, RequisitosDeActivacion.MesContableAbierto).WhoFixes!.Module.Should().Be("Contabilidad");
+        e.Avisos.Should().NotContain(a => a.Code == RequisitosDeActivacion.AvisoMesContableCerrado);
     }
 
     [Fact]
