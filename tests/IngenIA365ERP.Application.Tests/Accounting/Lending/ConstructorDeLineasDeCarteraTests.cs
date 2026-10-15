@@ -18,7 +18,7 @@ namespace IngenIA365ERP.Application.Tests.Accounting.Lending;
 /// <c>SameAccounts</c>). Cubren los quince ejemplos de §24 (casos 01–22), un caso por cada tipo de negocio de <see cref="OperacionesDeCartera"/>
 /// (los de K3 y K4 incluidos, 23–37), importe negativo que invierte el lado, ceros descartados y suma de líneas iguales (38), el recibo
 /// <c>SameAccounts</c> (39), el tercero natural de cada rol (26, 40, 41), la gracia (42), los movimientos del deterioro y el nivel general o
-/// adicional (10, 11, 43, 44), el castigo con su suspenso (19) y los contingentes con y sin cruce (34–37).
+/// adicional (10, 11, 43, 44), el castigo con su suspenso (19) y con faltante de deterioro (49, T0900) y los contingentes con y sin cruce (34–37).
 ///
 /// <para>
 /// <b>Lo que corre en A1</b> (el constructor, <c>ConstructorDeLineasDeCartera</c>, es de T0646): que cada caso esté bien formado —los

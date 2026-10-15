@@ -60,8 +60,11 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>Las clases de operación que no mueven saldos y la reconstrucción no recibe.</summary>
-    public static IReadOnlySet<LoanOperationKind> SinEfectoEnSaldos { get; } = new HashSet<LoanOperationKind> { LoanOperationKind.PreferenceChange };
+    /// <summary>
+    /// Las clases de operación que no mueven saldos y la reconstrucción no recibe. K3 (T0908): el castigo (<c>WriteOff</c>) no cambia lo que el deudor
+    /// debe —su efecto en la causación lo lleva <c>CastigoDesde</c>, la fecha del castigo del crédito— y no deja filas propias en el libro.
+    /// </summary>
+    public static IReadOnlySet<LoanOperationKind> SinEfectoEnSaldos { get; } = new HashSet<LoanOperationKind> { LoanOperationKind.PreferenceChange, LoanOperationKind.WriteOff };
 
     /// <summary>
     /// Los créditos de <paramref name="loanIds"/> con lo conocido en <paramref name="informacionHasta"/> (nulo = todo) y las series hasta

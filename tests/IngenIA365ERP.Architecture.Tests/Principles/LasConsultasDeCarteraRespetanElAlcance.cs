@@ -112,6 +112,12 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Waivers/WaiverQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/DebtorEvents/InsuranceClaimAndInsolvencyCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/RestructuredReportQuery.cs",
+        // K3 (US14, bloque B; T0901): los lotes de castigo (la lista sólo con los que tienen todos sus créditos en el alcance; el detalle con
+        // CastigosDeCartera.LeerAsync, el 404 del lote), las evaluaciones de cartera (la lista con las que tienen algún crédito del alcance; el detalle
+        // sólo con sus créditos del alcance) y la vista charge-offs por AmbitoDeInformeDeCartera.
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/WriteOffBatchQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/PortfolioEvaluationQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ChargeOffsReportQuery.cs",
     ];
 
     /// <summary>

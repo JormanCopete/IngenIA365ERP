@@ -53,7 +53,7 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
     [Fact]
     public void Con_K3_vigente_no_se_ofrece_ninguna_clave_posterior()
     {
-        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 (sin claves propias); las de K4 en adelante siguen sin ofrecerse.
+        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; las de K4 en adelante siguen sin ofrecerse.
         Assert.Equal(EntregaDeCartera.K3, CatalogoDeCartera.EntregaVigente);
         var vigente = CatalogoDeParametros.EntregaVigenteDe(EntregaDeModulo.LineaDeCartera);
 
@@ -65,6 +65,10 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
         Assert.All(posteriores, d => Assert.False(d.DisponibleEnLaEntrega(), $"{d.Clave} es de {d.DisponibleDesde} y se ofrece con K3."));
         Assert.All(ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)),
             d => Assert.True(d.DisponibleEnLaEntrega(), $"{d.Clave} es de K2 y no se ofrece."));
+        var castigo = ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Castigo.", StringComparison.Ordinal)).ToList();
+        Assert.Equal(3, castigo.Count);
+        Assert.All(castigo, d => Assert.True(d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K3 && d.DisponibleEnLaEntrega() && d.PendienteDeValidar is not null,
+            $"{d.Clave} es de K3, se ofrece y está pendiente de validar."));
     }
 
     [Fact]

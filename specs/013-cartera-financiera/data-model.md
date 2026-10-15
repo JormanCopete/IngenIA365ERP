@@ -550,7 +550,7 @@ actas (`SessionMinutes`, ámbito = el órgano; el prefijo vive en `LND_Governing
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `Kind` | int (`LendingNumberKind`, fijado aquí) | no | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8 (K2), `RegulatoryFile` 9 (K5), `LoanNovelty` 10 y `Waiver` 11 (K3, T0878, T0884) |
+| `Kind` | int (`LendingNumberKind`, fijado aquí) | no | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8 (K2), `RegulatoryFile` 9 (K5), `LoanNovelty` 10 y `Waiver` 11 (K3, T0878, T0884), `WriteOffBatch` 12 y `PortfolioEvaluation` 13 (K3, US14, T0906, T0912) |
 | `ScopeKey` | nvarchar(40) | no | `''` o el ámbito: clase de operación (`LoanOperationKind` por nombre), órgano (`PublicId:N` del órgano), clase de documento |
 | `Prefix` | nvarchar(10) | no | `''` admitido; se antepone al número (`AP-`, `DS-`, prefijo del acta del órgano) |
 | `NextValue` | bigint | no | ≥ 1 |
@@ -1492,7 +1492,7 @@ filas. Vive en `Domain/Entities/Lending/Transactions` (`PrincipioXI_ContableImmu
 | `CreditBalanceRecognized` · `CreditBalanceSettled` | `+CreditBalance` · `−CreditBalance` |
 | `Charge` · `Waiver` | `+CollectionFee`/`+OtherCharge` (K4) · `−` el concepto condonado (K3) |
 | `CommercialAdjustment` | `±Principal` por nota o anulación (FR-054) |
-| `WriteOff` | K3; su forma la fija la parte 2 (novedades) |
+| `WriteOff` | K3 (US14, T0908, **fijado aquí**): la operación `WriteOff` **no deja filas propias**: el castigo no cambia lo que el deudor debe (la reconstrucción no la recibe, `SinEfectoEnSaldos`) y su efecto en la causación lo lleva `LND_Loans.WrittenOffOn` (`CastigoDesde`): desde el **día siguiente** a la fecha del castigo lo nuevo se causa en `*InSuspense` (el día del castigo ya se causó normal), y la cartera castigada sigue en el ciclo diario. Lo que sale del activo, contra el deterioro y del suspenso a control lo dice el `CreditoCastigado` (`Payload` de la operación: `DecisionDeCastigo`) |
 | `Capitalization` (K3, T0874) | `−` el interés (o el seguro o el cargo) de cada concepto y cuota que una novedad capitaliza y `+Principal` sin cuota por el total; en una novación o refinanciación el `−` va en el crédito anterior y el `+Principal`, en el enlazado |
 | `TransferToLinkedLoan` · `TransferFromLinkedLoan` (K3, T0874) | el crédito anterior de una novación o refinanciación traslada todo lo que queda (`−` por concepto y cuota) y queda en cero; el enlazado lo recibe: `+Principal` sin cuota y los demás conceptos en su cuota 1 (anticipo y saldo a favor sin cuota) |
 
@@ -2027,7 +2027,7 @@ negocio pasan de las 101 de §2.3 a **113** (recuento en §14).
 | `CollateralKind` · `PromissoryNoteKind` | `PromissoryNote` 1, `CoDebtor` 2, `Pledge` 3, `Mortgage` 4, `GuaranteeFund` 5, `Contributions` 6 · `Physical` 1, `Dematerialized` 2 |
 | `PromissoryNoteStatus` (valores de F-19, que §2.7 no listaba) | `Created` 1, `PendingSignature` 2, `Signed` 3, `InCustody` 4, `Endorsed` 5, `Voided` 6 |
 | `CommercialTermKind` | `Periodicity` 1, `TermUnit` 2 |
-| `LendingNumberKind` | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8, `RegulatoryFile` 9, `LoanNovelty` 10, `Waiver` 11 (K3) |
+| `LendingNumberKind` | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8, `RegulatoryFile` 9, `LoanNovelty` 10, `Waiver` 11, `WriteOffBatch` 12, `PortfolioEvaluation` 13 (K3) |
 | `ApplicationKind` · `CreditApplicationStatus` | `Loan` 1, `RevolvingLimit` 2 · `Draft` 1, `Submitted` 2, `PendingDecision` 3, `Returned` 4, `Approved` 5, `Denied` 6, `Disbursed` 7, `Granted` 8, `Cancelled` 9 |
 | `ApplicationCheckKind` | `RestrictiveLists` 1, `CreditBureau` 2, `PaymentCapacity` 3, `DeductionCapacity` 4, `ConsolidatedExposure` 5, `CreditLimit` 6, `Concentration` 7, `Usury` 8, `LineRequirements` 9, `DataAuthorization` 10, `Scoring` 11, `RelatedParty` 12, `Documents` 13 |
 | `CheckStage` · `CheckOutcome` | `AtSubmission` 1, `BeforeDecision` 2, `BeforeDisbursement` 3 · `Passed` 1, `Warning` 2, `Blocking` 3, `NotApplicable` 4, `Unavailable` 5 |
@@ -2721,6 +2721,8 @@ FR-099). El cierre la lee a R: creada hasta R y no levantada hasta R.
 Las líneas se editan sólo en `Draft`. Aplicada, la evaluación es candidata (`RatingCause.Evaluation`) desde el cierre del
 mes de efecto hasta la siguiente evaluación aplicada (FR-102). El acta la aplica por `IAsuntoDeActa`.
 
+**Reglas de US14 (bloque B, T0912, T0913)**: el corte es fin de mes y el mes de efecto, posterior; si el documento `TiposDeOrganizacion` trae `portfolioEvaluation { cutoffMonths[], effectMonthsAfterCutoff }` para el tipo del perfil vigente, tienen que ser los suyos (`Lending.PortfolioEvaluation.PeriodInvalid`). `RuleRatingAtCutoff` es la calificación oficial del cierre al corte. Mientras no tenga recomendación la trata el comité de riesgos —un punto `Recommendation` (que el cierre no aplica: lo recoge el consejo al decidir) o un punto `Decision` del comité (la deja `Recommended`)—; recomendada, la decide el consejo. En el cierre rige **la última evaluación aplicada a R cuyo mes de efecto ya llegó**, para toda la cartera (un crédito que esa evaluación no incluye no tiene candidata `Evaluation`).
+
 ### 23.8 `LND_ImpairmentModelElections` — `ImpairmentModelElection` (H; K6a; FR-105; R15)
 
 | Columna | Tipo | Nulo | Notas |
@@ -3114,6 +3116,8 @@ novación exige constituir sus propias garantías.
 **Seguimiento de la castigada** (FR-096, sin tabla propia): el crédito queda `WrittenOff` con su interés en control;
 sus pagos entran por el contrato como recuperación (`RecuperacionDeCastigada`) y la vista `charge-offs` reúne lo
 castigado, lo recuperado y las gestiones. Sigue en cobranza y en centrales mientras la ley lo permita.
+
+**Reglas de US14 (bloque B, T0906–T0909)**: un crédito va a lo sumo en un lote abierto (borrador, enviado o aprobado; `Lending.WriteOff.LoanInAnotherBatch`); los soportes de cada crédito son adjuntos `LendingWriteOffSupport` del crédito y el del reporte al supervisor, `LendingWriteOffSupervisorReport` del lote (ninguno se borra); el lote lo decide el consejo de administración activo (`IAsuntoDeActa` sujeto `WriteOffBatch`, regla `Majority`, quien lo armó no vota); aplicarlo vuelve a verificar los requisitos a la fecha (uno que ya no cumple detiene el lote) y sella el reporte al supervisor con el dato `writeOffReport { required, dueDays }` del tipo de organización vigente (documento `TiposDeOrganizacion`, opcional; sin él no se exige); la alerta `Cartera.PlazoRegulatorioPorVencer` la atiende el registro del reporte.
 
 ### 25.7 `LND_InsuranceClaims` — `InsuranceClaim` (K1 datos / K3 proceso; FR-085, FR-097; T102)
 
@@ -5342,6 +5346,22 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.InsuranceClaim.NotInProcess` **(K3, T0888)** | 422 | «La reclamación al seguro ya no está en trámite: sólo una en trámite se niega o se desiste.» (`data.status`) | negar o desistir una reclamación pagada, negada o desistida | FR-097, T102 |
 | `Lending.Insolvency.NotFound` **(K3, T0888)** | 404 | «El proceso de insolvencia no existe.» | inexistente | FR-098 |
 | `Lending.Insolvency.AlreadyOpen` **(K3, T0888)** | 422 | «La persona ya tiene un proceso de insolvencia en negociación desde el {fecha}.» (`data: { proceedingPublicId, startDate }`) | abrir un segundo proceso en negociación para la misma persona | FR-098 |
+| `Lending.WriteOffBatch.NotFound` **(K3, T0914)** | 404 | «El lote de castigo no existe.» | inexistente o con algún crédito fuera del alcance | T62 |
+| `Lending.WriteOffBatch.NotDraft` **(K3, T0914)** | 422 | «El lote ya no admite cambios: sólo se arma en borrador.» (`data.status`) | agregar o quitar créditos de un lote enviado, aprobado o aplicado | FR-095 |
+| `Lending.WriteOffBatch.InvalidStatus` **(K3, T0914)** | 422 | «El lote está en «{estado}» y no puede pasar a «{hacia}».» · «El lote lleva al menos un crédito que cumple.» · «Sólo se registra el reporte de un lote aplicado que debe reportarse al supervisor.» · «El reporte al supervisor ya se registró.» | transición fuera del ciclo; enviar sin incluidos; reportar sin deber o dos veces | FR-095 |
+| `Lending.WriteOffBatch.LoanAlreadyIncluded` **(K3, T0914, fijado aquí)** | 422 | «El crédito {numero} ya está en este lote de castigo.» (`data.loanNumber`) | agregar dos veces el mismo crédito | FR-095 |
+| `Lending.WriteOffBatch.ItemNotFound` **(K3, T0914, fijado aquí)** | 404 | «Ese crédito no está en el lote de castigo.» | quitar un ítem que no es del lote | FR-095 |
+| `Lending.WriteOff.ApprovalRequired` **(K3, T0914)** | 422 | «El lote se aplica con la aprobación del consejo con acta.» (`data.status`) | aplicar un lote que el consejo no aprobó | FR-095 |
+| `Lending.WriteOff.LoanInAnotherBatch` **(K3, T0914, fijado aquí)** | 422 | «El crédito {numero} ya está en el lote de castigo {lote}, que todavía no se aplicó ni se anuló.» (`data: { loanNumber, batchNumber }`) | armar o ampliar un lote con un crédito incluido en otro abierto | FR-095 |
+| `Lending.WriteOff.BoardMissing` **(K3, T0914, fijado aquí)** | 422 | «La cooperativa no tiene un consejo de administración activo entre sus órganos: el castigo lo aprueba el consejo con acta. Regístrelo en Órganos.» | enviar el lote o llevarlo a una sesión sin consejo activo | FR-095 |
+| `Lending.WriteOff.AttachmentInvalid` **(K3, T0914, fijado aquí)** | 422 | «El soporte del reporte al supervisor no es un adjunto disponible de este lote. Súbalo como soporte del reporte del lote y vuelva a intentarlo.» | registrar el reporte con un adjunto que no es `LendingWriteOffSupervisorReport` del lote | FR-095 |
+| `Lending.PortfolioEvaluation.NotFound` **(K3, T0914)** | 404 | «La evaluación de cartera no existe.» | inexistente o sin créditos del alcance | T62 |
+| `Lending.PortfolioEvaluation.Overlaps` **(K3, T0914)** | 422 | «Ya hay una evaluación de cartera sin aplicar con corte {fecha} ({número}): termínela antes de preparar otra del mismo corte.» (`data: { cutoffDate, number }`) | preparar otra del mismo corte con una en borrador, recomendada o aprobada | FR-102 |
+| `Lending.PortfolioEvaluation.NotDraft` · `.InvalidStatus` **(K3, T0914)** | 422 | «La evaluación ya no admite cambios: sus líneas se editan sólo en borrador.» · «La evaluación está en «{estado}» y no puede pasar a «{hacia}».» | editar fuera de borrador; aplicar sin aprobar; transición fuera del ciclo | FR-102 |
+| `Lending.PortfolioEvaluation.PeriodInvalid` **(K3, T0914, fijado aquí)** | 422 | «El tipo de entidad ({tipo}) evalúa con corte en los meses {meses} y la recalificación se refleja {n} mes(es) después del corte (para este corte, {AAAA-MM}).» (`data: { organizationType, cutoffMonths, expectedEffectMonth }`) | corte o mes de efecto fuera de la periodicidad del tipo | FR-102 |
+| `Lending.PortfolioEvaluation.LoanNotLive` **(K3, T0914, fijado aquí)** | 422 | «El crédito {numero} no estaba vigente al corte {fecha}: la evaluación recalifica sólo la cartera viva al corte.» | evaluar un crédito abierto después del corte o cancelado antes | FR-102 |
+| `Lending.PortfolioEvaluation.RiskCommitteeMissing` **(K3, T0914, fijado aquí)** | 422 | «La cooperativa no tiene un comité de riesgos activo entre sus órganos: la evaluación de cartera la recomienda ese comité. Regístrelo en Órganos.» | llevar la evaluación a una sesión sin comité de riesgos activo | FR-102 |
+| `Lending.PortfolioEvaluation.RecommendationRequired` **(K3, T0914, fijado aquí)** | 422 | «La evaluación todavía no tiene la recomendación del comité de riesgos con acta cerrada: llévela primero a una sesión del comité.» | cerrar un acta del consejo que decide una evaluación sin recomendación | FR-102 |
 | `Lending.Insolvency.NotNegotiating` **(K3, T0888)** | 422 | «El proceso de insolvencia ya no está en negociación.» (`data.status`) | registrar el fracaso o cerrar con acuerdo un proceso que no está `Negotiating` | FR-098 |
 
 ### 10.2 Otras familias
@@ -5560,6 +5580,14 @@ transversales deja a este documento.
 | `Libranza.VentanaDeGiroDias` | Int | ≥ 1 | 3 (FR-114) | None | `LIBRANZA_VENTANA_GIRO_DIAS` | K2 | F-11 |
 | `Libranza.UmbralDeMoraDePagaduria` | Int | días | el de la CBCF vigente (PV; se coteja antes de K2) | None | `LIBRANZA_UMBRAL_MORA_PAGADURIA` | K2 | FR-114 |
 
+**Castigo (K3, T0910)**
+
+| Clave | Tipo | Valores | Defecto | Ámbitos | Límite | E | Origen |
+|---|---|---|---|---|---|---|---|
+| `Castigo.ExigeDeterioroTotal` **(fijado aquí)** | Bool | | `true` (PV, dueño) | None | — | K3 | FR-095 |
+| `Castigo.DiasMinimosDeMora` **(fijado aquí)** | Int | ≥ 0; vacío = no se exige | vacío hasta que el dueño lo fije (PV) | None | — | K3 | FR-095 |
+| `Castigo.GestionesMinimas` **(fijado aquí)** | Int | ≥ 0 | 0 hasta K4: sin registro de gestiones, el informe motivado las acredita (PV) | None | — | K3 | FR-095 |
+
 **Cobranza, aviso previo, mensajes, canales y listas**
 
 | Clave | Tipo | Valores | Defecto | Ámbitos | Límite | E | Origen |
@@ -5616,7 +5644,7 @@ que lo que admite el catálogo de códigos para ese índice.
 | `RegulatoryDocumentKind` | Tipado en | Qué trae | Semilla central (`PlatformNationalValuesSeeder`, Admin, Order 6, JSON embebidos) | E |
 |---|---|---|---|---|
 | `CatalogoDeModalidades` | `Domain/Common/NationalValues` | modalidades (`CONSUMO`, `COMERCIAL`, `VIVIENDA`, `MICROCREDITO`, `POPULAR_PRODUCTIVO_RURAL`, `POPULAR_PRODUCTIVO_URBANO`, `PRODUCTIVO_RURAL`, `PRODUCTIVO_URBANO`, `PRODUCTIVO_MAYOR_MONTO`), sub-segmentos (`ConLibranza`/`SinLibranza`, `PersonaNatural`/`PersonaJuridica`, `Empleados`, `Inmobiliario`/`Empresarial` en microcrédito), y por combinación: segmento SARC, segmento de pérdida esperada, clave de `USURA` o tope de vivienda, si admite UVR | versión inicial, `Verified = 0` (preguntas E4, E10) | K1 |
-| `TiposDeOrganizacion` | `Domain/Common/NationalValues` | códigos de tipo de organización solidaria, categorías de fondos de empleados, si exigen o admiten la pérdida esperada | versión inicial, `Verified = 0` | K1 |
+| `TiposDeOrganizacion` | `Domain/Common/NationalValues` | códigos de tipo de organización solidaria, categorías de fondos de empleados, si exigen o admiten la pérdida esperada; desde K3 (US14, opcionales, sin cambiar la versión de esquema) `writeOffReport { required, dueDays }` —si reporta los castigos al supervisor y en cuántos días calendario desde que se aplican— y `portfolioEvaluation { cutoffMonths[], effectMonthsAfterCutoff }` —la periodicidad de la evaluación de cartera— | versión inicial, `Verified = 0`; los datos de K3 **no se siembran**: los aporta el dueño (T0910) | K1 |
 | `SarcAnexo1` | `Domain/Lending/Risk/Normativa` (`Anexo1`) | segmentos SARC, rangos, reglas especiales, porcentajes con condición de subcategoría, garantías por meses, aportes, arrastre, suspensión, reestructurados, general | Anexo 1 del 2025-01-31, `Verified = 0` salvo lo cotejado (E8) | K1 |
 | `ReglaDePerdidaEsperada` | `Domain/Lending/Risk/Normativa` | perfiles obligados, segmentos cubiertos, meses de historial que pide el modelo, antelación del aviso voluntario | CE 100 del 2026-05-12, `Verified = 0` | K1 |
 | `SarcAnexo2` | `Domain/Lending/Risk/Normativa` (`Anexo2`) | variables, coeficientes, cortes, PI por tipo de organización (clave `VOLUNTARIA`), PDI, VEA, homologación | versión consolidada vigente, `Verified = 0` (E8) | K6a |

@@ -506,7 +506,7 @@ def novedades_calculadas(caso):
 #   con la ultima conocida y se informa ValidaHasta (D11).
 # - Altura: dia - exigible de la cuota vencida mas antigua cuyo saldo vencido supere la tolerancia; [decision] el saldo vencido de
 #   la cuota es su capital pendiente mas su corriente (con suspenso) y su seguro al dia anterior: la mora no cuenta.
-# - Suspension el dia d: castigo, insolvencia, mas de una reestructuracion o altura >= umbral vigente [decision: el umbral es la
+# - Suspension el dia d: castigo (desde el dia siguiente a su fecha, K3), insolvencia, mas de una reestructuracion o altura >= umbral vigente [decision: el umbral es la
 #   primera altura que suspende]; lo nuevo va a *InSuspense, lo causado antes no se reclasifica.
 # - Seguros: al vencer la cuota (AtDueDate) o a prorrata de los dias del periodo (Daily), D9.
 # - K2 (fase 15, T0804; T30, FR-114): la serie "pendientesDeGiro" trae lo que la pagaduria desconto de una cuota y no ha girado
@@ -1501,7 +1501,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                 cands.append(n_)
         altura = (d - ex[min(cands)]).days if cands else 0
         motivo = None
-        if cond["castigo"] is not None and cond["castigo"] <= d:
+        # K3 (T0908): el castigo suspende desde el dia siguiente a su fecha valor.
+        if cond["castigo"] is not None and cond["castigo"] < d:
             motivo = "WriteOff"
         elif cond["insolvencia"] is not None and cond["insolvencia"] <= d:
             motivo = "Insolvency"

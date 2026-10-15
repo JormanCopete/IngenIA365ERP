@@ -39,6 +39,8 @@ public class LaSegregacionNoUsaUserIdDelToken
         // K3 (US11, bloque B; T0868): quien radica, decide y aplica una novedad o una condonación.
         Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Novelties"),
         Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Waivers"),
+        // K3 (US14, bloque B; T0901): quien arma, aplica y reporta un lote de castigo.
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "WriteOffs"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Attributions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Sessions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Segregation"),

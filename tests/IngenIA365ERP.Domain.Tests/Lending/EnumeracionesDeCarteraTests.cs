@@ -37,7 +37,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(DisbursementOrderStatus)] = [("Issued", 1), ("Disbursed", 2), ("Rejected", 3), ("CheckNotCashed", 4), ("Voided", 5)],
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
         [typeof(LendingNumberKind)] = [("Loan", 1), ("Operation", 2), ("Application", 3), ("DisbursementOrder", 4), ("DisbursementFile", 5),
-            ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11)],
+            ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11),
+            ("WriteOffBatch", 12), ("PortfolioEvaluation", 13)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],

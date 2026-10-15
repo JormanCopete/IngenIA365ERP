@@ -82,6 +82,11 @@ public static class ParametrosDeCartera
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
     public const string LibranzaUmbralDeMoraDePagaduria = "Libranza.UmbralDeMoraDePagaduria";
 
+    // ------------------------------------------------------------------------------------------------- castigo (K3) --
+    public const string CastigoExigeDeterioroTotal = "Castigo.ExigeDeterioroTotal";
+    public const string CastigoDiasMinimosDeMora = "Castigo.DiasMinimosDeMora";
+    public const string CastigoGestionesMinimas = "Castigo.GestionesMinimas";
+
     // -------------------------------------------------------------------- cobranza, aviso previo, mensajes y canales --
     public const string CobranzaHorarioLunesAViernes = "Cobranza.HorarioLunesAViernes";
     public const string CobranzaHorarioSabado = "Cobranza.HorarioSabado";
@@ -236,6 +241,27 @@ public static class ParametrosDeCartera
             AdmiteVacio = true,
             LimitesLegales = [CatalogoDeLimitesLegales.LibranzaUmbralMoraPagaduria],
             PendienteDeValidar = "Sin valor hasta que el dueño coteje la Circular Básica Contable y Financiera antes de K2 (C71).",
+        },
+
+        // --------------------------------------------------------------------------------------------- castigo (K3) --
+        // US14 (T0910; FR-095): la política de castigo de la cooperativa, que evalúa RequisitosDeCastigo junto con lo que exige la norma.
+        SiNo(Modulo, CastigoExigeDeterioroTotal,
+            "El castigo exige que el deterioro individual del último cierre cubra todo el saldo del crédito.", true, K3, General) with
+        {
+            PendienteDeValidar = "Defecto propuesto (exigir el deterioro total), sembrado pendiente de validar por el dueño y la contadora.",
+        },
+        Entero(Modulo, CastigoDiasMinimosDeMora,
+            "Días de mora mínimos para castigar un crédito. Vacío: no se exige altura mínima.", "", K3, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m,
+            PendienteDeValidar = "Sin valor hasta que el dueño lo fije: mientras esté vacío, el castigo no exige altura mínima.",
+        },
+        Entero(Modulo, CastigoGestionesMinimas,
+            "Gestiones de cobranza registradas mínimas para castigar. Mientras no exista el registro de gestiones (K4), las acredita el informe motivado.",
+            "0", K3, General) with
+        {
+            Minimo = 0m,
+            PendienteDeValidar = "Cero hasta K4: sin registro de gestiones, el informe motivado acredita que se agotaron.",
         },
 
         // ---------------------------------------------------------------- cobranza, aviso previo, mensajes y canales --

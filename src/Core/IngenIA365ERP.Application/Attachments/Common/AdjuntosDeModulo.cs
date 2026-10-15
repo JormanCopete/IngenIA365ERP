@@ -233,6 +233,23 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeEventoDelDeudor = "LendingDebtorEventSupport";
 
+    /// <summary>
+    /// Feature 013, K3 (US14, T0906): el informe motivado, el concepto de irrecuperabilidad o el soporte del cruce de aportes de un crédito que se
+    /// propone castigar, con dueño el <b>crédito</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>: el lote todavía no existe al subirlos). Se lee con
+    /// <c>Lending.Loans.Read</c>; lo sube quien tiene <c>Lending.WriteOffs.Prepare</c> sobre un crédito que exista; no se borra: respalda el castigo.
+    /// </summary>
+    public const string SoporteDeCastigo = "LendingWriteOffSupport";
+
+    /// <summary>
+    /// Feature 013, K3 (US14, T0909): el soporte del reporte de los castigos al supervisor, con dueño el <b>lote</b> (<c>OwnerEntityPublicId</c> = su
+    /// <c>PublicId</c>). Se lee con <c>Lending.Loans.Read</c>; lo sube quien tiene <c>Lending.WriteOffs.Apply</c> mientras el lote esté aplicado, deba
+    /// reportarse y el reporte no se haya registrado; no se borra.
+    /// </summary>
+    public const string ReporteDeCastigos = "LendingWriteOffSupervisorReport";
+
+    private const string ArmarLotesDeCastigo = "Lending.WriteOffs.Prepare";
+    private const string AplicarLotesDeCastigo = "Lending.WriteOffs.Apply";
+
     private const string LeerCreditos = "Lending.Loans.Read";
     private const string GestionarEventosDelDeudor = "Lending.DebtorEvents.Manage";
     private const string GestionarInsolvencia = "Lending.Insolvency.Manage";
@@ -305,7 +322,7 @@ public static class AdjuntosDeModulo
             DocumentoDeSolicitud or CertificacionDeLibranza => LeerSolicitudesDeCredito,
             DocumentoDeGarantia => LeerGarantias,
             ConsentimientoDeNovedad => LeerNovedades,
-            SoporteDeEventoDelDeudor => LeerCreditos,
+            SoporteDeEventoDelDeudor or SoporteDeCastigo or ReporteDeCastigos => LeerCreditos,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
             _ => De(ownerEntityType)?.PermisoDeLectura,
@@ -432,6 +449,27 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Persona no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteDeCastigo)
+        {
+            // Feature 013, K3 (US14): los soportes del castigo de un crédito, de quien arma el lote.
+            if (!await permisos.HasPermissionAsync(ArmarLotesDeCastigo, ct)
+                || !await db.Loans.AnyAsync(l => l.PublicId == ownerEntityPublicId && !l.IsDeleted, ct))
+                return new Error("Generic.NotFound", "Crédito no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == ReporteDeCastigos)
+        {
+            // Feature 013, K3 (US14): el soporte del reporte al supervisor de un lote aplicado que debe reportarse y todavía no se reportó.
+            var lote = await db.WriteOffBatches.AsNoTracking().Where(b => b.PublicId == ownerEntityPublicId && !b.IsDeleted)
+                .Select(b => new { b.Status, b.SupervisorReportRequired, b.SupervisorReportedAt }).FirstOrDefaultAsync(ct);
+            if (lote is null || !await permisos.HasPermissionAsync(AplicarLotesDeCastigo, ct))
+                return new Error("Generic.NotFound", "Lote de castigo no encontrado.");
+            return lote.Status == Domain.Enums.Lending.WriteOffBatchStatus.Applied && lote.SupervisorReportRequired && lote.SupervisorReportedAt is null
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                    "El lote no espera el soporte del reporte al supervisor: no está aplicado, no debe reportarse o el reporte ya se registró.",
+                    new { ownerEntityType });
+        }
         if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
         {
             if (contentType is not null && !TiposDeImagenDeCartera.Contains(contentType))
@@ -476,6 +514,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == SoporteDeEventoDelDeudor)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es el soporte de un evento del deudor (fallecimiento, retiro, embargo o insolvencia): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013, K3 (US14): los soportes del castigo y del reporte al supervisor respaldan lo que se castigó.
+        if (ownerEntityType is SoporteDeCastigo or ReporteDeCastigos)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es un soporte del castigo de cartera (informe, concepto, cruce de aportes o reporte al supervisor): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 013 (T0361): el soporte del concepto tributario respalda una versión sellada de la línea.
         if (ownerEntityType == SoporteTributarioDeLinea)

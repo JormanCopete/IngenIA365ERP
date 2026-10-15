@@ -542,6 +542,10 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             case LoanStatus.PaidOff:
                 credito.PaidOffOn = fecha;
                 break;
+            case LoanStatus.WrittenOff:
+                // K3 (T0908): la fecha del castigo; la causación se suspende desde el día siguiente (CastigoDesde de la reconstrucción).
+                credito.WrittenOffOn = fecha;
+                break;
             case LoanStatus.Active:
                 credito.PaidOffOn = null;
                 break;

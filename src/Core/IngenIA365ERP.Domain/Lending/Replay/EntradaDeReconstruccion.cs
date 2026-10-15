@@ -55,6 +55,10 @@ public sealed record CondicionesDeCredito(
     /// </summary>
     public DateOnly? InsolvenciaHasta { get; init; }
 
+    /// <summary>
+    /// La fecha del castigo (<c>LND_Loans.WrittenOffOn</c>). Un pago con fecha valor desde ese día es recuperación; la causación se suspende desde
+    /// el día siguiente (K3, T0908: como todo hecho con fecha valor v, rige desde v + 1; el día del castigo ya se causó normal).
+    /// </summary>
     public DateOnly? CastigoDesde { get; init; }
 
     /// <summary>

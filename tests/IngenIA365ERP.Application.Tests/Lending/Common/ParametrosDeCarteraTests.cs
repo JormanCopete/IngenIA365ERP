@@ -52,6 +52,9 @@ public class ParametrosDeCarteraTests
         { "Libranza.CapacidadDeDescuento", "", [N], EntregaDeCartera.K2 },
         { "Libranza.VentanaDeGiroDias", "3", [N], EntregaDeCartera.K2 },
         { "Libranza.UmbralDeMoraDePagaduria", "", [N], EntregaDeCartera.K2 },
+        { "Castigo.ExigeDeterioroTotal", "true", [N], EntregaDeCartera.K3 },
+        { "Castigo.DiasMinimosDeMora", "", [N], EntregaDeCartera.K3 },
+        { "Castigo.GestionesMinimas", "0", [N], EntregaDeCartera.K3 },
         { "Cobranza.HorarioLunesAViernes", "07:00-19:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.HorarioSabado", "08:00-15:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.ContactosPorDia", "1", [N], EntregaDeCartera.K1 },
@@ -92,12 +95,14 @@ public class ParametrosDeCarteraTests
     [Fact]
     public void Con_K3_vigente_se_ofrecen_las_de_libranza_y_ninguna_posterior()
     {
-        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3, que no trae claves propias; las de K4 en adelante siguen sin ofrecerse.
+        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; las de K4 en adelante siguen sin ofrecerse.
         CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K3);
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K3).ToList();
 
         posteriores.Select(d => d.Clave).Should().BeEquivalentTo(["AvisoPrevio.DiasMinimos", "AvisoPrevio.UmbralDosComunicaciones"]);
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
+        ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Castigo.", StringComparison.Ordinal)).Should().HaveCount(3)
+            .And.OnlyContain(d => d.DisponibleEnLaEntrega() && d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K3 && d.PendienteDeValidar != null);
         posteriores.Should().OnlyContain(d => !d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Except(posteriores).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
     }

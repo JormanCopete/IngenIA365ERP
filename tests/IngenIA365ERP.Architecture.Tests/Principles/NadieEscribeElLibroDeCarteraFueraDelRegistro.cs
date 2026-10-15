@@ -110,4 +110,23 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
         }
         ReglaSobreFuente.SinInfracciones(infracciones, "Las novedades o las condonaciones no escriben el libro por RegistroDeCartera (FR-001)");
     }
+
+    /// <summary>
+    /// K3 (US14, bloque B; T0901): la aplicación del lote de castigo registra la operación <c>WriteOff</c> de cada crédito y el estado
+    /// <c>WrittenOff</c> sólo por <c>RegistroDeCartera</c>, dentro del recorrido de la regla; la operación no deja filas propias en el libro (el castigo no
+    /// cambia lo que se debe).
+    /// </summary>
+    [Fact]
+    public void El_castigo_escribe_la_operacion_WriteOff_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(["Core/IngenIA365ERP.Application/Lending/WriteOffs/ApplyWriteOffBatchCommand.cs"]).ToList();
+        Assert.Single(nombrados);
+        var archivo = nombrados[0];
+        Assert.Contains(archivo, recorridos);
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("registro.RegistrarOperacion(", fuente);
+        Assert.Contains("RegistroDeCartera.CambiarEstado(", fuente);
+        Assert.DoesNotContain("RegistrarTransacciones(", fuente);
+    }
 }

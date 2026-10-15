@@ -228,6 +228,16 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.DebtorEvents.ChangeInsuranceClaimStatusCommand),
         typeof(IngenIA365ERP.Application.Lending.DebtorEvents.OpenInsolvencyProceedingCommand),
         typeof(IngenIA365ERP.Application.Lending.DebtorEvents.RecordInsolvencyFailureCommand),
+        // K3 (US14, bloque B; T0901): el lote de castigo (armar, agregar y quitar créditos, enviar, aplicar, el reporte al supervisor) y la evaluación de
+        // cartera (preparar y aplicar). Sus archivos de rutas (WriteOffBatchesEndpoints y /risk/evaluations en RiskEndpoints) los suma el bloque C (T0915).
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.CreateWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.AddWriteOffBatchItemCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.RemoveWriteOffBatchItemCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.SubmitWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.ApplyWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.RegisterWriteOffSupervisorReportCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.PreparePortfolioEvaluationCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.ApplyPortfolioEvaluationCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

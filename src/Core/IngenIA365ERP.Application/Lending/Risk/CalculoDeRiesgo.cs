@@ -77,6 +77,8 @@ public static class CalculoDeRiesgo
                     c.LineaAnterior?.FinalRating ?? contexto.Norma.CategoriaPorMora(segmento, c.DiasDeMora))
                 : null,
             Analisis = sinAnalisis || c.Analisis is null ? null : new CalificacionImpuesta(c.Analisis.Rating, c.Analisis.Subcategory),
+            // K3 (T0913): la evaluación de cartera aplicada que rige al mes del corte (FR-102); compite como la peor, igual que el análisis.
+            Evaluacion = c.Evaluacion is null ? null : new CalificacionImpuesta(c.Evaluacion.ProposedRating, c.Evaluacion.ProposedSubcategory ?? RatingSubcategory.None),
         };
     }
 

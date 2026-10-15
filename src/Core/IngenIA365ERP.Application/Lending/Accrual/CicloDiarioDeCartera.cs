@@ -221,13 +221,14 @@ public sealed class CicloDiarioDeCartera(
     }
 
     /// <summary>
-    /// Los créditos vivos después del cursor. Los que ya están al día a d (una operación los puso al día, o nacieron después) se recorren y se
-    /// cuentan como saltados (<c>SkippedLoans</c>, data-model §22.4); los demás se causan desde su marca.
+    /// Los créditos vivos después del cursor —vigentes y, desde K3 (US14, T0898; FR-096), castigados: su interés se sigue causando en suspenso, en
+    /// control—. Los que ya están al día a d (una operación los puso al día, o nacieron después) se recorren y se cuentan como saltados
+    /// (<c>SkippedLoans</c>, data-model §22.4); los demás se causan desde su marca.
     /// </summary>
     private IQueryable<LoanControl> CandidatosAsync(DateOnly d, int? cursor) =>
         from c in db.LoanControls.AsNoTracking()
         join l in db.Loans.AsNoTracking() on c.LoanId equals l.Id
-        where l.Status == LoanStatus.Active && (cursor == null || c.LoanId > cursor)
+        where (l.Status == LoanStatus.Active || l.Status == LoanStatus.WrittenOff) && (cursor == null || c.LoanId > cursor)
         select c;
 
     /// <summary>

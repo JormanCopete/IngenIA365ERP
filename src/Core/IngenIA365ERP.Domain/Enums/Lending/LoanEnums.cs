@@ -176,4 +176,10 @@ public enum LendingNumberKind
     RegulatoryFile = 9,
     LoanNovelty = 10,
     Waiver = 11,
+
+    /// <summary>K3 (US14, T0906): el lote de castigo (columna entera: sin migración).</summary>
+    WriteOffBatch = 12,
+
+    /// <summary>K3 (US14, T0912): la evaluación de cartera (columna entera: sin migración).</summary>
+    PortfolioEvaluation = 13,
 }

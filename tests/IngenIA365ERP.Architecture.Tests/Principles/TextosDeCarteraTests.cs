@@ -109,6 +109,20 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/LoanNovelty.cs",
         "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/Waiver.cs",
         "Core/IngenIA365ERP.Domain/Lending/Replay/NovedadEnLaReconstruccion.cs",
+        // K3 (US14, bloque B; T0914): los errores y los textos del castigo, de la evaluación de cartera y de la vista de la cartera castigada.
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/ErroresDeCastigo.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/CastigosDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/WriteOffBatchCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/AsuntoDeLoteDeCastigo.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/ApplyWriteOffBatchCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/WriteOffs/RegisterWriteOffSupervisorReportCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/EvaluacionesDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/PortfolioEvaluationCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/AsuntoDeEvaluacionDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ChargeOffsReportQuery.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/WriteOffBatch.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Risk/PortfolioEvaluation.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Risk/RequisitosDeCastigo.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

@@ -11,7 +11,32 @@ public enum PerdidaEsperadaDelTipo
 }
 
 /// <summary>Un tipo de organización solidaria de la taxonomía del supervisor.</summary>
-public sealed record TipoDeOrganizacion(string Code, string Name, bool IsEmployeeFund, PerdidaEsperadaDelTipo ExpectedLoss, bool Verified);
+public sealed record TipoDeOrganizacion(string Code, string Name, bool IsEmployeeFund, PerdidaEsperadaDelTipo ExpectedLoss, bool Verified)
+{
+    /// <summary>
+    /// Feature 013, K3 (US14, T0910; FR-095): si el tipo debe reportar los castigos al supervisor y en cuántos días calendario desde que se aplican.
+    /// Nulo: el documento no lo dice (no se exige reporte). Dato del documento, «pendiente de validar» con el resto del tipo (<see cref="Verified"/>).
+    /// </summary>
+    public ReporteDeCastigos? WriteOffReport { get; init; }
+
+    /// <summary>
+    /// Feature 013, K3 (US14, T0912; FR-102): la periodicidad de la evaluación de cartera del tipo —los meses de corte (6 y 12, semestral; 12, anual) y
+    /// cuántos meses después del corte se refleja en el cierre—. Nulo: el documento no lo dice (la evaluación no se valida contra él).
+    /// </summary>
+    public PeriodicidadDeEvaluacion? PortfolioEvaluation { get; init; }
+}
+
+/// <summary>El reporte de castigos al supervisor de un tipo de organización: si es obligatorio y su plazo en días calendario (nulo: sin plazo fijado).</summary>
+public sealed record ReporteDeCastigos(bool Required, int? DueDays);
+
+/// <summary>La periodicidad de la evaluación de cartera: los meses del año en que se corta y los meses hasta el cierre que refleja la recalificación.</summary>
+public sealed record PeriodicidadDeEvaluacion(IReadOnlyList<int> CutoffMonths, int EffectMonthsAfterCutoff)
+{
+    /// <summary>¿El corte cae en un mes de corte del tipo y el mes de efecto es el que le corresponde?</summary>
+    public bool Admite(DateOnly corte, int anioDeEfecto, int mesDeEfecto) =>
+        CutoffMonths.Contains(corte.Month)
+        && anioDeEfecto * 12 + mesDeEfecto == corte.Year * 12 + corte.Month + EffectMonthsAfterCutoff;
+}
 
 /// <summary>Una categoría de los fondos de empleados.</summary>
 public sealed record CategoriaDeFondoDeEmpleados(string Code, string Name);
@@ -22,8 +47,10 @@ public sealed record CategoriaDeFondoDeEmpleados(string Code, string Name);
 /// documento (no es enum: la taxonomía del supervisor cambia) y, si es fondo de empleados, su categoría.
 ///
 /// <para>Esquema 1 (camelCase): <c>{ employeeFundCategories: [ { code, name } ], organizationTypes: [ { code, name,
-/// isEmployeeFund, expectedLoss: NotAdmitted | Admitted | Required, verified? } ] }</c>. Códigos únicos; si algún tipo es
-/// fondo de empleados, las categorías no pueden faltar.</para>
+/// isEmployeeFund, expectedLoss: NotAdmitted | Admitted | Required, verified?, writeOffReport?: { required, dueDays? },
+/// portfolioEvaluation?: { cutoffMonths: [1..12], effectMonthsAfterCutoff } } ] }</c>. Códigos únicos; si algún tipo es
+/// fondo de empleados, las categorías no pueden faltar. <c>writeOffReport</c> y <c>portfolioEvaluation</c> son opcionales (K3, US14: sin
+/// cambio de versión de esquema); un plazo obligatorio no puede faltar si el reporte es obligatorio y los meses de corte van del 1 al 12.</para>
 /// </summary>
 public sealed class TiposDeOrganizacion
 {
@@ -101,13 +128,59 @@ public sealed class TiposDeOrganizacion
                 errores.Add(new($"{ruta}.expectedLoss", $"«{textoPerdida}» no es válido; se admiten: {string.Join(", ", Enum.GetNames<PerdidaEsperadaDelTipo>())}."));
             var perdida = textoPerdida is not null && Enum.TryParse<PerdidaEsperadaDelTipo>(textoPerdida, out var p) ? p : PerdidaEsperadaDelTipo.NotAdmitted;
             var verificado = LecturaDeDocumento.Booleano(t, "verified", ruta, false, errores);
-            tipos.Add(new(code ?? string.Empty, name ?? string.Empty, fondo, perdida, verificado));
+            tipos.Add(new(code ?? string.Empty, name ?? string.Empty, fondo, perdida, verificado)
+            {
+                WriteOffReport = Reporte(t, ruta, errores),
+                PortfolioEvaluation = Evaluacion(t, ruta, errores),
+            });
         }
 
         if (tipos.Any(t => t.IsEmployeeFund) && categorias.Count == 0)
             errores.Add(new("$.employeeFundCategories", "Hay fondos de empleados: el documento debe declarar sus categorías."));
 
         return errores.Count > 0 ? new(null, errores) : new(new TiposDeOrganizacion(tipos, categorias), errores);
+    }
+
+    private static ReporteDeCastigos? Reporte(JsonElement tipo, string ruta, List<ErrorDeDocumentoNormativo> errores)
+    {
+        if (!tipo.TryGetProperty("writeOffReport", out var r) || r.ValueKind == JsonValueKind.Null) return null;
+        var aqui = $"{ruta}.writeOffReport";
+        if (r.ValueKind != JsonValueKind.Object)
+        {
+            errores.Add(new(aqui, "El reporte de castigos es un objeto { required, dueDays }."));
+            return null;
+        }
+        var obligatorio = LecturaDeDocumento.Booleano(r, "required", aqui, false, errores);
+        int? dias = null;
+        if (r.TryGetProperty("dueDays", out var d) && d.ValueKind != JsonValueKind.Null)
+        {
+            if (d.ValueKind == JsonValueKind.Number && d.TryGetInt32(out var n) && n > 0) dias = n;
+            else errores.Add(new($"{aqui}.dueDays", "El plazo del reporte es un número entero de días mayor que cero."));
+        }
+        if (obligatorio && dias is null)
+            errores.Add(new($"{aqui}.dueDays", "Un reporte de castigos obligatorio lleva su plazo en días."));
+        return new ReporteDeCastigos(obligatorio, dias);
+    }
+
+    private static PeriodicidadDeEvaluacion? Evaluacion(JsonElement tipo, string ruta, List<ErrorDeDocumentoNormativo> errores)
+    {
+        if (!tipo.TryGetProperty("portfolioEvaluation", out var e) || e.ValueKind == JsonValueKind.Null) return null;
+        var aqui = $"{ruta}.portfolioEvaluation";
+        if (e.ValueKind != JsonValueKind.Object)
+        {
+            errores.Add(new(aqui, "La evaluación de cartera es un objeto { cutoffMonths, effectMonthsAfterCutoff }."));
+            return null;
+        }
+        var meses = new List<int>();
+        foreach (var m in LecturaDeDocumento.Arreglo(e, "cutoffMonths", aqui, noVacio: true, errores))
+        {
+            if (m.ValueKind == JsonValueKind.Number && m.TryGetInt32(out var mes) && mes is >= 1 and <= 12 && !meses.Contains(mes)) meses.Add(mes);
+            else errores.Add(new($"{aqui}.cutoffMonths", "Los meses de corte van del 1 al 12, sin repetirse."));
+        }
+        var efecto = 0;
+        if (!e.TryGetProperty("effectMonthsAfterCutoff", out var x) || x.ValueKind != JsonValueKind.Number || !x.TryGetInt32(out efecto) || efecto < 0)
+            errores.Add(new($"{aqui}.effectMonthsAfterCutoff", "Los meses entre el corte y el cierre que refleja la evaluación son un entero de cero o más."));
+        return new PeriodicidadDeEvaluacion(meses, efecto);
     }
 
     private static string? Codigo(JsonElement objeto, string ruta, HashSet<string> vistos, string que, List<ErrorDeDocumentoNormativo> errores)

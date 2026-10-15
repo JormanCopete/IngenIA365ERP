@@ -33,6 +33,12 @@ public sealed record CreditoDeRiesgo(
 
     public AnalysisRating? Analisis { get; init; }
 
+    /// <summary>
+    /// K3 (US14, T0913; FR-102): la línea del crédito en la evaluación de cartera aplicada que rige al mes del corte —la última aplicada (a R) cuyo mes de
+    /// efecto ya llegó—; la candidata <c>Evaluation</c>. Nula si esa evaluación no lo incluye o si no hay ninguna.
+    /// </summary>
+    public PortfolioEvaluationLoan? Evaluacion { get; init; }
+
     public MonthlyCloseLoan? LineaAnterior { get; init; }
 
     public InsolvencyProceeding? Insolvencia { get; init; }
@@ -58,7 +64,8 @@ public sealed record DatosDeRiesgo(
 /// <summary>
 /// La carga en bloque del riesgo (feature 013, US9, T0699; T46, T47): para una tanda de créditos y un corte con R, la reconstrucción a fin de mes
 /// por <see cref="CargadorDeReconstruccion"/> y, de cada uno, las garantías vigentes con su valor admisible, los codeudores, el análisis vigente
-/// a R, la línea del cierre anterior (o del base), la insolvencia del deudor y la mayor mora del mes. Para el arrastre carga <b>todos</b> los
+/// a R, la evaluación de cartera aplicada que rige al mes (K3, T0913), la línea del cierre anterior (o del base), la insolvencia del deudor y la mayor
+/// mora del mes. Para el arrastre carga <b>todos</b> los
 /// créditos vivos de los deudores de la tanda (y de sus codeudores si la norma alcanza las codeudas): los que no son de la tanda se califican
 /// para el grupo pero no se escriben. Un crédito que no se puede reconstruir o cuya modalidad no está en el catálogo o en la norma vigentes queda
 /// en <see cref="DatosDeRiesgo.Errores"/>. No escribe. (nuevo)
@@ -105,6 +112,18 @@ public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconst
         var r = informacionHasta ?? DateTime.MaxValue;
         var analisis = (await db.AnalysisRatings.AsNoTracking().Where(a => todos.Contains(a.LoanId) && !a.IsDeleted && a.SetAt <= r).ToListAsync(ct))
             .Where(a => a.VigenteA(r)).GroupBy(a => a.LoanId).ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.SetAt).First());
+
+        // K3 (T0913): la evaluación de cartera aplicada que rige al mes del corte: la última (por mes de efecto y, en empate, por aplicación) aplicada
+        // hasta R y con su mes de efecto alcanzado. Reemplaza a las anteriores para toda la cartera (FR-102: «hasta la siguiente evaluación»).
+        var mesDelCorte = corte.Year * 12 + corte.Month;
+        var evaluacion = await db.PortfolioEvaluations.AsNoTracking()
+            .Where(e => !e.IsDeleted && e.Status == PortfolioEvaluationStatus.Applied && e.AppliedAt <= r && e.EffectiveYear * 12 + e.EffectiveMonth <= mesDelCorte)
+            .OrderByDescending(e => e.EffectiveYear).ThenByDescending(e => e.EffectiveMonth).ThenByDescending(e => e.AppliedAt).ThenByDescending(e => e.Id)
+            .Select(e => (int?)e.Id).FirstOrDefaultAsync(ct);
+        var evaluados = evaluacion is not { } evaluacionId
+            ? new Dictionary<int, PortfolioEvaluationLoan>()
+            : await db.PortfolioEvaluationLoans.AsNoTracking().Where(l => l.PortfolioEvaluationId == evaluacionId && !l.IsDeleted && todos.Contains(l.LoanId))
+                .ToDictionaryAsync(l => l.LoanId, ct);
 
         var anteriores = cierreAnterior is null
             ? new Dictionary<int, MonthlyCloseLoan>()
@@ -160,6 +179,7 @@ public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconst
                 Codeudores = codeudasDeTodos.Where(c => c.LoanId == id).Select(c => c.PersonId).Distinct().ToList(),
                 Garantias = garantias.Where(g => g.LoanId == id && g.PerfeccionadaA(corte)).Select(Garantia).ToList(),
                 Analisis = analisis.GetValueOrDefault(id),
+                Evaluacion = evaluados.GetValueOrDefault(id),
                 LineaAnterior = anteriores.GetValueOrDefault(id),
                 Insolvencia = insolvencias.GetValueOrDefault(cargado.Credito.DebtorPersonId),
                 MaxDiasDeMoraDelMes = Math.Max(moraDelMes.GetValueOrDefault(id), estado.AlturaDeMora.Dias),

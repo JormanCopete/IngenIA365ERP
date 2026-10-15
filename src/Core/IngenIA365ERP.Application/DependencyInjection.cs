@@ -612,6 +612,10 @@ public static class DependencyInjection
         services.AddScoped<Lending.Waivers.DecisionSobreCondonacion>();
         services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Waivers.DecisionSobreCondonacion>());
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Waivers.AsuntoDeCondonacion>();
+        // Feature 013, K3 (US14, bloque B): el castigo (verificación, lote y su asunto de acta del consejo) y la evaluación de cartera (comité y consejo).
+        services.AddScoped<Lending.WriteOffs.CastigosDeCartera>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.WriteOffs.AsuntoDeLoteDeCastigo>();
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.Evaluations.AsuntoDeEvaluacionDeCartera>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();

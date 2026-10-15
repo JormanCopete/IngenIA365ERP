@@ -113,6 +113,19 @@ public class CasosDoradosDeCarteraTests
             ["k3-prorroga-con-capitalizacion", "k3-cambio-de-fecha", "k3-cambio-de-tasa-usura", "k3-refinanciacion-dos-creditos", "k3-novacion"]);
     }
 
+    /// <summary>
+    /// K3 (US14, T0908): el castigo suspende la causación desde el día siguiente a su fecha —el día del castigo todavía causa normal y la transición
+    /// a suspenso es del día siguiente—.
+    /// </summary>
+    [Fact]
+    public void Esta_el_caso_del_castigo_de_K3_y_suspende_desde_el_dia_siguiente()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k3-castigo-suspende-al-dia-siguiente.json"));
+        caso.Consultas.Should().HaveCount(3);
+        caso.Consultas[0].Esperado!.Suspendida.Should().BeFalse("el día del castigo causa normal");
+        caso.Consultas[1].Esperado!.Suspendida.Should().BeTrue("desde el día siguiente, en suspenso");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_caso_coincide_con_la_hoja_de_calculo(string archivo)

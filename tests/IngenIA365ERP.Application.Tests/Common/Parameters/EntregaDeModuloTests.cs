@@ -98,14 +98,14 @@ public class EntregaDeModuloTests
     }
 
     [Fact]
-    public async Task Una_clave_de_Cartera_de_K4_no_se_ofrece_y_las_de_K1_y_K2_si()
+    public async Task Una_clave_de_Cartera_de_K4_no_se_ofrece_y_las_de_K1_a_K3_si()
     {
         var claves = (await Listar("LND")).Select(p => p.Key).ToList();
 
         claves.Should().Contain(ParametrosDeCartera.PagosDiasMaximosFechaValor).And.Contain(ParametrosDeCartera.CobranzaHorarioLunesAViernes)
-            .And.Contain(ParametrosDeCartera.LibranzaVentanaDeGiroDias);
+            .And.Contain(ParametrosDeCartera.LibranzaVentanaDeGiroDias).And.Contain(ParametrosDeCartera.CastigoExigeDeterioroTotal);
         claves.Should().NotContain(ParametrosDeCartera.AvisoPrevioDiasMinimos);
-        (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1" || p.AvailableFrom == "K2");
+        (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1" || p.AvailableFrom == "K2" || p.AvailableFrom == "K3");
     }
 
     [Fact]
