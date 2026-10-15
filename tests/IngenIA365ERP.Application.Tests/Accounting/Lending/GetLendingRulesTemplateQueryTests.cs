@@ -66,6 +66,20 @@ public class GetLendingRulesTemplateQueryTests
     }
 
     [Fact]
+    public void Sugiere_la_castigada_en_orden_el_gasto_del_castigo_y_el_ingreso_diferido()
+    {
+        // Defecto del 2026-10-15 (e2e de US14): sin estas filas, CreditoCastigado no encontraba regla para CastigadaEnOrden ni para
+        // GastoDeCastigoOCondonacion (WriteOff) y la cooperativa que diligenciaba la plantilla no lo veía venir.
+        var sugeridas = GetLendingRulesTemplateQueryHandler.Sugeridas(new CatalogoDeDimensionesDeCarteraDto(
+            [new("LIB01", "Libranza", "CONSUMO", "ConLibranza", true)], [new("CONSUMO", "Consumo", ["ConLibranza"])], R.Conceptos, ["Payroll"], []));
+
+        sugeridas.Where(s => s.Rol == R.CastigadaEnOrden).Select(s => s.Concepto).Should().BeEquivalentTo(R.Buscar(R.CastigadaEnOrden)!.Conceptos!);
+        sugeridas.Where(s => s.Rol == R.GastoDeCastigoOCondonacion).Select(s => (s.Motivo, s.Concepto)).Should().Contain(
+            [("WriteOff", R.Principal), ("WriteOff", R.CurrentInterest), ("Waiver", R.DefaultInterest)]);
+        sugeridas.Should().ContainSingle(s => s.Rol == R.IngresoDiferido && s.Modalidad == "CONSUMO");
+    }
+
+    [Fact]
     public void Las_sugeridas_son_de_roles_y_conceptos_del_catalogo_y_pasan_la_forma()
     {
         var sugeridas = GetLendingRulesTemplateQueryHandler.Sugeridas(new CatalogoDeDimensionesDeCarteraDto(
