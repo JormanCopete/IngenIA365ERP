@@ -217,6 +217,17 @@ public static class AdjuntosDeModulo
     public static readonly IReadOnlySet<string> TiposDeImagenDeCartera =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "image/jpeg", "image/png" };
 
+    /// <summary>
+    /// Feature 013, K3 (T0880; transversales §2.24): la aceptación firmada (o la constancia del rechazo) de un codeudor, avalista o propietario de una
+    /// garantía a una novedad, con dueño la <b>novedad</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.Novelties.Read</c>; se
+    /// sube y se borra con <c>Lending.Novelties.Request</c> mientras la novedad no esté decidida (borrador o radicada); decidida, queda bloqueado
+    /// (<c>Attachments.OwnerLocked</c>): es lo que respalda la decisión.
+    /// </summary>
+    public const string ConsentimientoDeNovedad = "LendingNoveltyConsent";
+
+    private const string LeerNovedades = "Lending.Novelties.Read";
+    private const string PedirNovedades = "Lending.Novelties.Request";
+
     private const string LeerDocumentosDeCartera = "Lending.Documents.Read";
     private const string AdministrarParametrosDeCartera = "Lending.Parameters.Manage";
 
@@ -281,6 +292,7 @@ public static class AdjuntosDeModulo
             SoporteTributarioDeLinea => VerLineas,
             DocumentoDeSolicitud or CertificacionDeLibranza => LeerSolicitudesDeCredito,
             DocumentoDeGarantia => LeerGarantias,
+            ConsentimientoDeNovedad => LeerNovedades,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
             _ => De(ownerEntityType)?.PermisoDeLectura,
@@ -392,6 +404,13 @@ public static class AdjuntosDeModulo
             if (!await permisos.HasPermissionAsync(AdministrarIndicadores, ct)) return new Error("Generic.NotFound", "Indicador no encontrado.");
             return await IndicadorRegistradoAsync(db, ownerEntityPublicId, ct) ? IndicadorBloqueado() : null;
         }
+        if (ownerEntityType == ConsentimientoDeNovedad)
+        {
+            // Feature 013, K3 (T0880): el consentimiento de una novedad, mientras no se decida.
+            var novedad = await EstadoDeNovedadAsync(db, ownerEntityPublicId, ct);
+            if (novedad is null || !await permisos.HasPermissionAsync(PedirNovedades, ct)) return new Error("Generic.NotFound", "Novedad no encontrada.");
+            return NovedadDecidida(novedad.Value) ? NovedadBloqueada() : null;
+        }
         if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
         {
             if (contentType is not null && !TiposDeImagenDeCartera.Contains(contentType))
@@ -469,6 +488,15 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Adjunto no encontrado.");
             return await GarantiaBorrableAsync(db, ownerEntityPublicId, ct) ? null : GarantiaBloqueada();
         }
+        // Feature 013, K3 (T0880): el consentimiento de una novedad se borra sólo antes de decidirla, con el permiso de pedirla.
+        if (ownerEntityType == ConsentimientoDeNovedad)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(PedirNovedades, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await EstadoDeNovedadAsync(db, ownerEntityPublicId, ct) is { } estadoDeLaNovedad && NovedadDecidida(estadoDeLaNovedad)
+                ? NovedadBloqueada()
+                : null;
+        }
         // Feature 013 (T0638): el soporte de un indicador regulatorio se borra sólo antes de registrar el indicador que lo cita.
         if (ownerEntityType == SoporteDeIndicadorRegulatorio)
         {
@@ -513,6 +541,18 @@ public static class AdjuntosDeModulo
                 new { ownerEntityType })
             : null;
     }
+
+    /// <summary>K3: el estado de una novedad por su <c>PublicId</c>, o nulo si no existe.</summary>
+    private static Task<Domain.Enums.Lending.LoanNoveltyStatus?> EstadoDeNovedadAsync(IApplicationDbContext db, Guid publicId, CancellationToken ct) =>
+        db.LoanNovelties.AsNoTracking().Where(n => n.PublicId == publicId && !n.IsDeleted)
+            .Select(n => (Domain.Enums.Lending.LoanNoveltyStatus?)n.Status).FirstOrDefaultAsync(ct);
+
+    /// <summary>K3: decidida (aprobada, rechazada, aplicada o anulada): sus consentimientos se conservan con ella.</summary>
+    public static bool NovedadDecidida(Domain.Enums.Lending.LoanNoveltyStatus estado) =>
+        estado is not (Domain.Enums.Lending.LoanNoveltyStatus.Draft or Domain.Enums.Lending.LoanNoveltyStatus.Submitted);
+
+    public static Error NovedadBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "La novedad ya se decidió: sus consentimientos respaldan la decisión y no se cambian.", new { ownerEntityType = ConsentimientoDeNovedad });
 
     /// <summary>Decidida (o terminada): sus soportes se conservan con ella (T81).</summary>
     public static bool SolicitudDecidida(Domain.Enums.Lending.CreditApplicationStatus estado) =>

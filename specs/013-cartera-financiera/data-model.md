@@ -550,7 +550,7 @@ actas (`SessionMinutes`, ámbito = el órgano; el prefijo vive en `LND_Governing
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `Kind` | int (`LendingNumberKind`, fijado aquí) | no | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8 (K2), `RegulatoryFile` 9 (K5) |
+| `Kind` | int (`LendingNumberKind`, fijado aquí) | no | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8 (K2), `RegulatoryFile` 9 (K5), `LoanNovelty` 10 y `Waiver` 11 (K3, T0878, T0884) |
 | `ScopeKey` | nvarchar(40) | no | `''` o el ámbito: clase de operación (`LoanOperationKind` por nombre), órgano (`PublicId:N` del órgano), clase de documento |
 | `Prefix` | nvarchar(10) | no | `''` admitido; se antepone al número (`AP-`, `DS-`, prefijo del acta del órgano) |
 | `NextValue` | bigint | no | ≥ 1 |
@@ -1257,13 +1257,13 @@ transacción del acto.
 |---|---|---|---|
 | `CaseRootType` · `CaseRootPublicId` | nvarchar(40) · uniqueidentifier | no | expediente: la solicitud (y su crédito y desembolsos), el crédito sin solicitud (venta), la novedad, la condonación, el lote de castigo, la carga de migración |
 | `SubjectType` · `SubjectPublicId` | nvarchar(40) · uniqueidentifier | no | sobre qué actuó |
-| `Action` | nvarchar(30) | no | `AccionesDeSegregacion` (fijado aquí), con los tokens de T66: `Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias` |
+| `Action` | nvarchar(30) | no | `AccionesDeSegregacion` (fijado aquí), con los tokens de T66: `Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias` y, desde K3 (T0881, T0884), `Aplicar` (aplicar una novedad o una condonación aprobada) |
 | `UserId` | int FK `SEC_Users` | no | |
 | `PersonId` | int FK `COR_People` | no | obligatorio (`Lending.Security.UserWithoutPerson`) |
 | `At` | datetime | no | |
 
 IX `(CaseRootPublicId, Action)`, `(PersonId, CaseRootPublicId)`. **Reglas**. `ReglasDeSegregacion` aplica la
-regla fija (quien radica o solicita no decide ni vota sobre lo suyo) y los pares de
+regla fija (quien radica o solicita no decide ni vota sobre lo suyo y, desde K3, no aplica la novedad o la condonación que radicó) y los pares de
 `Segregacion.Incompatibilidades` (defecto `Decidir × Desembolsar`), por `UserId` y, si los dos la tienen, por
 persona: `Lending.Segregation.Conflict` con la acción previa. **H**: sí.
 
@@ -1492,6 +1492,8 @@ filas. Vive en `Domain/Entities/Lending/Transactions` (`PrincipioXI_ContableImmu
 | `Charge` · `Waiver` | `+CollectionFee`/`+OtherCharge` (K4) · `−` el concepto condonado (K3) |
 | `CommercialAdjustment` | `±Principal` por nota o anulación (FR-054) |
 | `WriteOff` | K3; su forma la fija la parte 2 (novedades) |
+| `Capitalization` (K3, T0874) | `−` el interés (o el seguro o el cargo) de cada concepto y cuota que una novedad capitaliza y `+Principal` sin cuota por el total; en una novación o refinanciación el `−` va en el crédito anterior y el `+Principal`, en el enlazado |
+| `TransferToLinkedLoan` · `TransferFromLinkedLoan` (K3, T0874) | el crédito anterior de una novación o refinanciación traslada todo lo que queda (`−` por concepto y cuota) y queda en cero; el enlazado lo recibe: `+Principal` sin cuota y los demás conceptos en su cuota 1 (anticipo y saldo a favor sin cuota) |
 
 **Reglas**.
 - Sólo inserción; un solo escritor (`RegistroDeCartera`); la causación del proceso se escribe en bloque, sin
@@ -2024,7 +2026,7 @@ negocio pasan de las 101 de §2.3 a **113** (recuento en §14).
 | `CollateralKind` · `PromissoryNoteKind` | `PromissoryNote` 1, `CoDebtor` 2, `Pledge` 3, `Mortgage` 4, `GuaranteeFund` 5, `Contributions` 6 · `Physical` 1, `Dematerialized` 2 |
 | `PromissoryNoteStatus` (valores de F-19, que §2.7 no listaba) | `Created` 1, `PendingSignature` 2, `Signed` 3, `InCustody` 4, `Endorsed` 5, `Voided` 6 |
 | `CommercialTermKind` | `Periodicity` 1, `TermUnit` 2 |
-| `LendingNumberKind` | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8, `RegulatoryFile` 9 |
+| `LendingNumberKind` | `Loan` 1, `Operation` 2, `Application` 3, `DisbursementOrder` 4, `DisbursementFile` 5, `SessionMinutes` 6, `IssuedDocument` 7, `PayrollDeductionFile` 8, `RegulatoryFile` 9, `LoanNovelty` 10, `Waiver` 11 (K3) |
 | `ApplicationKind` · `CreditApplicationStatus` | `Loan` 1, `RevolvingLimit` 2 · `Draft` 1, `Submitted` 2, `PendingDecision` 3, `Returned` 4, `Approved` 5, `Denied` 6, `Disbursed` 7, `Granted` 8, `Cancelled` 9 |
 | `ApplicationCheckKind` | `RestrictiveLists` 1, `CreditBureau` 2, `PaymentCapacity` 3, `DeductionCapacity` 4, `ConsolidatedExposure` 5, `CreditLimit` 6, `Concentration` 7, `Usury` 8, `LineRequirements` 9, `DataAuthorization` 10, `Scoring` 11, `RelatedParty` 12, `Documents` 13 |
 | `CheckStage` · `CheckOutcome` | `AtSubmission` 1, `BeforeDecision` 2, `BeforeDisbursement` 3 · `Passed` 1, `Warning` 2, `Blocking` 3, `NotApplicable` 4, `Unavailable` 5 |
@@ -3003,7 +3005,7 @@ decisiones por atribución son filas de `LND_CreditDecisions` con el sujeto (`No
 |---|---|---|---|
 | `Number` | nvarchar(20) | no | `NumeradorDeCartera`; único |
 | `LoanId` | int FK | no | crédito principal; los demás van en `LND_LoanNoveltyLoans` |
-| `Mechanism` | int (`NoveltyMechanism`) **(nuevo)** | no | `Extension` (prórroga), `PaymentDateChange`, `RateChange`, `Novation`, `Refinancing` |
+| `Mechanism` | int (`NoveltyMechanism`) **(nuevo)** | no | `Extension` (prórroga), `PaymentDateChange`, `RateChange`, `Novation`, `Refinancing`, `BranchChange` 6 (cambio de oficina sin efecto en la causa, T0883, **sujeto a confirmación del dueño**) |
 | `Cause` | int (`NoveltyCause`) **(nuevo)** | no | `Restructuring` o `Modification`, por la causa y no por el mecanismo (FR-090) |
 | `CauseDeterminationJson` | nvarchar(max) | no | por qué: mora, solicitud por dificultades de pago, historial reciente frente al límite de la norma para una modificación |
 | `InsolvencyProceedingId` | int FK `LND_InsolvencyProceedings` | sí | el acuerdo de insolvencia es una reestructuración (FR-098) |
@@ -3858,7 +3860,7 @@ completa (§23.10).
 - `NonDeductionFollowUpAction { DebtorNotified, IncludedInNextFile, MovedToCashPayment, SentToCollection, Closed }`
 - `LoanPayrollLinkOrigin { Origination, Migration, Transfer, CommercialSale, ChannelChange }` (C44)
 - `RiskPolicyVersionStatus { PendingValidation, Validated }` (calculado; §23.10)
-- `NoveltyMechanism { Extension, PaymentDateChange, RateChange, Novation, Refinancing }`
+- `NoveltyMechanism { Extension, PaymentDateChange, RateChange, Novation, Refinancing, BranchChange }` (`BranchChange` = 6, T0883, sujeto a confirmación)
 - `NoveltyCause { Restructuring, Modification }`
 - `LoanNoveltyStatus { Draft, Submitted, Approved, Rejected, Applied, Cancelled }`
 - `NoveltyLoanRole { Modified, Collected, Resulting }`
@@ -4950,7 +4952,7 @@ partes 1 y 2 la usan (§0.7.1 la copia); los enums que esas partes fijan llevan 
 | Enum | Valores | Dónde se guarda | Origen |
 |---|---|---|---|
 | `LoanConcept` | `Principal = 1`, `CurrentInterest = 2`, `DefaultInterest = 3`, `CurrentInterestInSuspense = 4`, `DefaultInterestInSuspense = 5`, `Insurance = 6`, `CollectionFee = 7`, `OtherCharge = 8`, `Advance = 9`, `CreditBalance = 10` | `LND_LoanTransactions`; texto en `ACC_LendingPostingRules.ConceptCode` | M |
-| `LoanTransactionKind` | `Disbursement = 1`, `OpeningBalance = 2`, `Accrual = 3`, `AccrualAdjustment = 4`, `SuspenseReclassification = 5`, `PaymentAllocation = 6`, `PaymentReallocation = 7`, `AdvanceReceived = 8`, `AdvanceApplied = 9`, `CreditBalanceRecognized = 10`, `CreditBalanceSettled = 11`, `Charge = 12`, `Waiver = 13`, `CommercialAdjustment = 14`, `WriteOff = 15`, `Recovery = 16` | `LND_LoanTransactions` | M |
+| `LoanTransactionKind` | `Disbursement = 1`, `OpeningBalance = 2`, `Accrual = 3`, `AccrualAdjustment = 4`, `SuspenseReclassification = 5`, `PaymentAllocation = 6`, `PaymentReallocation = 7`, `AdvanceReceived = 8`, `AdvanceApplied = 9`, `CreditBalanceRecognized = 10`, `CreditBalanceSettled = 11`, `Charge = 12`, `Waiver = 13`, `CommercialAdjustment = 14`, `WriteOff = 15`, `Recovery = 16`; **K3 (T0874, 2026-10-15)**: `Capitalization = 17`, `TransferToLinkedLoan = 18`, `TransferFromLinkedLoan = 19` (la capitalización de una novedad y el traslado del saldo de la novación o refinanciación al crédito enlazado; parte 1 §5.1; columna entera, sin migración) | `LND_LoanTransactions` | M |
 | `LoanOperationKind` | `Disbursement = 1`, `OpeningBalance = 2`, `Payment = 3`, `PaymentReversal = 4`, `DisbursementReversal = 5`, `RateReset = 6`, `TermsChange = 7`, `Charge = 8`, `Waiver = 9`, `CommercialAdjustment = 10`, `WriteOff = 11`, `PreferenceChange = 12`, `CreditBalanceResolution = 13`, `ProvisionalCollection = 14` | `LND_LoanOperations` | M, FR-048, FR-142 |
 | `LoanStatus` | `PendingDisbursement = 1`, `Active = 2`, `PaidOff = 3`, `WrittenOff = 4`, `Voided = 5`, `Novated = 6` | `LND_Loans` | spec |
 | `LoanOrigin` | `Origination = 1`, `Commercial = 2`, `Migration = 3` | `LND_Loans` | spec |
@@ -5319,6 +5321,27 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.DisbursementFile.FormatNotCurrent` **(nuevo, US3 bloque 7B, C111)** | 422 | «El formato {código} no está activo y vigente para la fecha de pago {fecha}.» (`data: { code, paymentDate }`) | formato inactivo o fuera de vigencia a la fecha de pago | FR-047 |
 | `Lending.DisbursementFile.AlreadyVoided` **(nuevo, US3 bloque 7B, C111)** | 422 | «El archivo {número} ya está anulado.» (`data.number`) | anular dos veces | FR-047 |
 | `Lending.DisbursementFile.LineTooLong` **(nuevo, US3 bloque 7B, C111)** | 422 | «La orden {orden} no cabe en el formato: el campo «{campo}» es más largo de lo que admite.» (`data: { line, field, order }`) | `BankFileWriteException` del motor común en un campo sin truncar | FR-047 |
+| `Lending.Novelty.NotFound` **(K3, T0888)** | 404 | «La novedad no existe.» | inexistente o de un crédito fuera del alcance | T62 |
+| `Lending.Novelty.ModificationNotAllowed` **(K3, T0888)** | 422 | «El historial de mora reciente ({dias} días) pasa del límite de la norma para una modificación ({limite} días): tramítela como reestructuración.» · «La norma vigente no permite tramitar esta novedad como modificación (…); tramítela como reestructuración.» (`data: { recentDaysPastDue, limit }`) | a petición del deudor y sin deterioro, con la mora de los meses que observa el Anexo 1 sobre el límite del segmento o sin regla en la norma | FR-090 |
+| `Lending.Novelty.PartyUnknown` **(K3, T0888)** | 422 | «Esa persona no es codeudora, avalista ni propietaria de una garantía de los créditos de la novedad: no tiene que consentir.» | registrar o resolver el consentimiento de alguien que no es parte | FR-092 |
+| `Lending.Novelty.ConsentAttachmentRequired` **(K3, T0888)** | 422 | «La aceptación del codeudor o garante va con su documento firmado.» · «El documento no está entre los soportes de consentimiento de esta novedad: súbalo a la novedad y vuelva a registrarlo.» (`data.attachmentPublicId`) | aceptar sin adjunto `LendingNoveltyConsent` disponible de la novedad | FR-092 |
+| `Lending.Novelty.ConsentMissing` **(K3, T0888)** | 422 | «Falta el consentimiento de codeudores o garantes. Registre su aceptación firmada o decida qué hacer ante cada rechazo antes de aplicar.» (`data.parties[] { personPublicId, fullName, role, status }`) | aplicar con un consentimiento pendiente o un rechazo sin resolver | FR-092 |
+| `Lending.Novelty.CoverageInsufficient` **(K3, T0888)** | 422 | «Sin esa garantía la cobertura que queda ({restante}) no cumple la que exige la línea ({exigida}). No aplique la novedad o constituya otra garantía.» (`data: { required, remaining }`) | aplicar extinguiendo una garantía real o un codeudor que la regla de garantías de la línea vigente exige | FR-092 |
+| `Lending.Novelty.NotApproved` **(K3, T0888)** | 422 | «Sólo se aplica una novedad aprobada.» (`data.status`) | aplicar una novedad en borrador, radicada o rechazada | FR-091 |
+| `Lending.Novelty.AlreadyApplied` **(K3, T0888)** | 422 | «La novedad ya se aplicó: no se modifica ni se anula.» (`data.status`) | aplicar dos veces, editar o anular una aplicada | FR-091 |
+| `Lending.Novelty.InvalidStatus` **(K3, T0888)** | 422 | «La novedad está en «{estado}» y no puede pasar a «{hacia}».» (`data: { status, requested }`) | cualquier otra transición fuera de `LoanNoveltyStatus` | FR-091 |
+| `Lending.Novelty.RefusalNotResolved` **(K3, T0888)** | 422 | «Sólo se decide qué hacer ante un rechazo cuando la parte no consintió.» | resolver un consentimiento que no está rehusado | FR-092 |
+| `Lending.Waiver.NotFound` **(K3, T0888)** | 404 | «La condonación no existe.» | inexistente o de un crédito fuera del alcance | T62 |
+| `Lending.Waiver.ExceedsBalance` **(K3, T0888)** | 422 | «Se pide condonar {valor} de {concepto} y el saldo es {saldo}.» (`data: { concept, balance }`) | una línea sobre el saldo del concepto (y la cuota) a la fecha base al pedirla, o sobre el de hoy al aplicarla | FR-094 |
+| `Lending.Waiver.PrincipalRequiresException` **(K3, T0888)** | 422 | «Condonar capital sólo lo decide el nivel de excepción de la matriz de atribuciones, y la matriz vigente no lo tiene. Quite el capital o pida que se defina ese nivel.» | condonación con capital y matriz sin nivel de excepción | FR-094 |
+| `Lending.Waiver.NotApproved` **(K3, T0888)** | 422 | «Sólo se aplica una condonación aprobada.» (`data.status`) | aplicar una condonación que no está aprobada | FR-094 |
+| `Lending.Waiver.InvalidStatus` **(K3, T0888)** | 422 | «La condonación está en «{estado}» y no puede pasar a «{hacia}».» (`data: { status, requested }`) | anular una aplicada; cualquier otra transición fuera de `WaiverStatus` | FR-094 |
+| `Lending.DebtorEvent.Duplicate` **(K3, T0888)** | 422 | «Ese evento ya está registrado para la persona desde el {fecha}.» (`data: { kind, since, eventPublicId }`) | registrar un fallecimiento, retiro o embargo con otro vigente de la misma clase | FR-097 |
+| `Lending.InsuranceClaim.NotFound` **(K3, T0888)** | 404 | «La reclamación al seguro no existe.» | inexistente o de un crédito fuera del alcance | T62 |
+| `Lending.InsuranceClaim.NotInProcess` **(K3, T0888)** | 422 | «La reclamación al seguro ya no está en trámite: sólo una en trámite se niega o se desiste.» (`data.status`) | negar o desistir una reclamación pagada, negada o desistida | FR-097, T102 |
+| `Lending.Insolvency.NotFound` **(K3, T0888)** | 404 | «El proceso de insolvencia no existe.» | inexistente | FR-098 |
+| `Lending.Insolvency.AlreadyOpen` **(K3, T0888)** | 422 | «La persona ya tiene un proceso de insolvencia en negociación desde el {fecha}.» (`data: { proceedingPublicId, startDate }`) | abrir un segundo proceso en negociación para la misma persona | FR-098 |
+| `Lending.Insolvency.NotNegotiating` **(K3, T0888)** | 422 | «El proceso de insolvencia ya no está en negociación.» (`data.status`) | registrar el fracaso o cerrar con acuerdo un proceso que no está `Negotiating` | FR-098 |
 
 ### 10.2 Otras familias
 
@@ -5526,7 +5549,7 @@ transversales deja a este documento.
 | `Giros.DiasSinResultado` | Int | ≥ 1 | 3 **(fijado aquí)** | None | — | K1 | FR-045 |
 | `Cupo.MoraMaximaParaVender` | Int | días ≥ 0 | 0 **(fijado aquí)**: en mora no se vende | None | — | K1 | FR-059 |
 | `Bloqueos.DiasDeMoraParaBloquear` | Int | ≥ 1 | 30 **(fijado aquí)**, el de §0.15 (para validar por la contadora, §7.7 de las transversales) | None | — | K1 | FR-060 |
-| `Segregacion.Incompatibilidades` | Text (JSON) | pares de acciones (`Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias`) con `activo` | `Decidir × Desembolsar` activo; los demás sugeridos e inactivos (F6) | None | — | K1 | S7 |
+| `Segregacion.Incompatibilidades` | Text (JSON) | pares de acciones (`Radicar`, `Analizar`, `Decidir`, `Votar`, `Desembolsar`, `AnularOrdenDeGiro`, `ArmarLoteDeCastigo`, `AplicarCastigo`, `CargarMigracion`, `AceptarDiferencias` y, desde K3, `Aplicar`) con `activo` | `Decidir × Desembolsar` activo; los demás sugeridos e inactivos (F6) | None | — | K1 | S7 |
 
 **Libranza (K2)**
 

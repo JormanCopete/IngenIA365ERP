@@ -36,6 +36,9 @@ public class LaSegregacionNoUsaUserIdDelToken
         Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Origination"),
         // US3 (bloque 7C, T0428): quien desembolsa, anula la orden o el crédito, y quien registra garantías y pagarés.
         Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Disbursements"),
+        // K3 (US11, bloque B; T0868): quien radica, decide y aplica una novedad o una condonación.
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Novelties"),
+        Path.Combine("Core", "IngenIA365ERP.Application", "Lending", "Waivers"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Attributions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Sessions"),
         Path.Combine("Core", "IngenIA365ERP.Domain", "Lending", "Segregation"),

@@ -600,6 +600,18 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payroll.Files.PayrollDeductionLines>();
         services.AddScoped<Lending.Payroll.Files.PreparacionDeArchivoDeDescuentos>();
         services.AddScoped<Lending.Payroll.Results.SeguimientoDeNoAplicados>();
+        // Feature 013, K3 (US11, bloque B): novedades (cálculo, enrutamiento, hechos, simulación, decisión individual y asunto de acta) y condonaciones.
+        services.AddScoped<Lending.Novelties.CalculoDeNovedad>();
+        services.AddScoped<Lending.Novelties.EnrutamientoDeNovedad>();
+        services.AddScoped<Lending.Novelties.HechosDeLaNovedad>();
+        services.AddScoped<Lending.Novelties.SimulacionDeNovedad>();
+        services.AddScoped<Lending.Novelties.DecisionSobreNovedad>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Novelties.DecisionSobreNovedad>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Novelties.AsuntoDeNovedad>();
+        services.AddScoped<Lending.Waivers.CondonacionesDeCartera>();
+        services.AddScoped<Lending.Waivers.DecisionSobreCondonacion>();
+        services.AddScoped<Lending.Attributions.IDecisionIndividual>(sp => sp.GetRequiredService<Lending.Waivers.DecisionSobreCondonacion>());
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Waivers.AsuntoDeCondonacion>();
         services.AddScoped<Inventory.Sales.CreditoEnLaVenta>();
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();

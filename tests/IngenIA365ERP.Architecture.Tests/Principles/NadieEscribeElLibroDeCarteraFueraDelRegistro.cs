@@ -86,4 +86,28 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
         }
         ReglaSobreFuente.SinInfracciones(infracciones, "La activación no escribe los saldos iniciales por RegistroDeCartera (FR-001)");
     }
+
+    /// <summary>
+    /// K3 (US11, bloque B; T0868): la aplicación de una novedad (<c>TermsChange</c>, sus versiones de condiciones y plan, y el nacimiento del enlazado) y
+    /// la de una condonación (<c>Waiver</c>) escriben la operación, el libro y el plan sólo por <c>RegistroDeCartera</c>.
+    /// </summary>
+    [Fact]
+    public void Las_novedades_y_las_condonaciones_escriben_el_libro_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        string[] escritores =
+        [
+            "Core/IngenIA365ERP.Application/Lending/Novelties/ApplyLoanNoveltyCommand.cs",
+            "Core/IngenIA365ERP.Application/Lending/Waivers/ApplyWaiverCommand.cs",
+        ];
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(escritores).ToList();
+        Assert.Equal(escritores.Length, nombrados.Count);
+        var infracciones = new List<string>();
+        foreach (var archivo in nombrados)
+        {
+            if (!recorridos.Contains(archivo)) infracciones.Add($"{archivo}: fuera del recorrido de la regla");
+            if (!FuenteSinComentarios.Leer(archivo).Contains("RegistroDeCartera", StringComparison.Ordinal)) infracciones.Add($"{archivo}: no escribe por RegistroDeCartera");
+        }
+        ReglaSobreFuente.SinInfracciones(infracciones, "Las novedades o las condonaciones no escriben el libro por RegistroDeCartera (FR-001)");
+    }
 }

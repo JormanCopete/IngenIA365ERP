@@ -90,11 +90,11 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K2_vigente_se_ofrecen_las_de_libranza_y_ninguna_posterior()
+    public void Con_K3_vigente_se_ofrecen_las_de_libranza_y_ninguna_posterior()
     {
-        // T0849: K2 habilita las claves Libranza.*; las de K4 en adelante siguen sin ofrecerse.
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K2);
-        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K2).ToList();
+        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3, que no trae claves propias; las de K4 en adelante siguen sin ofrecerse.
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K3);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K3).ToList();
 
         posteriores.Select(d => d.Clave).Should().BeEquivalentTo(["AvisoPrevio.DiasMinimos", "AvisoPrevio.UmbralDosComunicaciones"]);
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());

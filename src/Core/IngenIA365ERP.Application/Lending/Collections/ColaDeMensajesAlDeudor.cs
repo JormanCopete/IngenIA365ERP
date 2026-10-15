@@ -257,6 +257,54 @@ public sealed class ColaDeMensajesAlDeudor(
         return canceladas;
     }
 
+    /// <summary>¿Hay una reclamación al seguro en trámite por el deudor fallecido (o por el crédito)? (T0886)</summary>
+    private Task<bool> ReclamacionEnTramiteAsync(int deudorId, int? loanId, CancellationToken ct) =>
+        db.InsuranceClaims.AsNoTracking().AnyAsync(c => !c.IsDeleted && c.Status == InsuranceClaimStatus.InProcess
+                                                        && (c.DeceasedPersonId == deudorId || (loanId != null && c.LoanId == loanId)), ct);
+
+    /// <summary>¿Alguna de las personas está en negociación de insolvencia a <paramref name="dia"/>? (T0886)</summary>
+    private Task<bool> InsolvenciaEnNegociacionAsync(int[] personas, DateOnly dia, CancellationToken ct) =>
+        db.InsolvencyProceedings.AsNoTracking().AnyAsync(p => !p.IsDeleted && personas.Contains(p.PersonId)
+                                                              && p.Status == InsolvencyProceedingStatus.Negotiating && p.StartDate <= dia, ct);
+
+    /// <summary>El motivo con que un evento del deudor (fallecimiento o insolvencia, K3) cancela sus mensajes de cobro.</summary>
+    public const string MotivoEventoDelDeudor = "DebtorEvent";
+
+    /// <summary>
+    /// Un evento del deudor que suspende el cobro (feature 013, K3, T0885; FR-097, FR-098): los mensajes de cobro, de aviso previo y de gasto de
+    /// cobranza que todavía no salieron (<c>Queued</c> o <c>Deferred</c>) de los créditos de <paramref name="loanIds"/> —a cualquier destinatario— o
+    /// dirigidos al deudor se cancelan en la unidad de trabajo del evento, sin guardar. Los informativos y la entrega de documentos siguen. Devuelve
+    /// cuántos canceló.
+    /// </summary>
+    public async Task<int> CancelarCobrosDelDeudorAsync(int deudorId, IReadOnlyCollection<int> loanIds, string motivo, ActorKind actorKind,
+        int? actorUserId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        var creditos = loanIds.Distinct().ToArray();
+        DebtorMessagePurpose[] decobro = [DebtorMessagePurpose.Collection, DebtorMessagePurpose.PriorNotice, DebtorMessagePurpose.CollectionFeeNotice];
+        var guardados = await db.DebtorMessages
+            .Where(m => decobro.Contains(m.Purpose) && (m.PersonId == deudorId || (m.LoanId != null && creditos.Contains(m.LoanId.Value))))
+            .ToListAsync(ct);
+        var mensajes = guardados
+            .Concat(db.DebtorMessages.Local.Where(m => decobro.Contains(m.Purpose)
+                                                       && (m.PersonId == deudorId || (m.LoanId is { } l && creditos.Contains(l)))))
+            .Distinct()
+            .ToList();
+        var canceladas = 0;
+        foreach (var mensaje in mensajes)
+        {
+            var ultimo = await UltimoEventoAsync(mensaje, ct);
+            if (ultimo?.Kind is not (DebtorMessageEventKind.Queued or DebtorMessageEventKind.Deferred)) continue;
+            await RegistrarAsync(mensaje, new EventoDeMensaje(DebtorMessageEventKind.Cancelled, reloj.UtcNow, actorKind, actorUserId)
+            {
+                CodigoDeMotivo = MotivoEventoDelDeudor,
+                TextoDelMotivo = Recortar(motivo.Trim(), LargoDelTexto),
+            }, ct);
+            canceladas++;
+        }
+        return canceladas;
+    }
+
     /// <summary>
     /// Agrega el paso siguiente de la historia de <paramref name="mensaje"/> (sin guardar), con las transiciones del dominio. Lo llaman los
     /// comandos que registran un intento, una entrega o una cancelación: así la cola sigue siendo el único escritor.
@@ -329,9 +377,9 @@ public sealed class ColaDeMensajesAlDeudor(
             AutorizacionGeneral = general is { Autoriza: true },
             AutorizacionGeneralConEvidencia = general is { Autoriza: true, HasEvidence: true },
             Destinos = Enum.GetValues<MessageChannel>().Where(c => DestinoDe(persona, c) is not null).ToList(),
-            // Hasta que existan las reclamaciones al seguro (T102), la marca de fallecido del deudor basta: ante la duda, lo más estricto.
-            DeudorFallecidoConReclamacion = deudor?.IsDeceased == true,
-            EnInsolvencia = persona.IsInsolvent,
+            // La marca de fallecido del deudor o una reclamación al seguro en trámite (migrada o registrada en K3, T0886): ante la duda, lo más estricto.
+            DeudorFallecidoConReclamacion = deudor?.IsDeceased == true || await ReclamacionEnTramiteAsync(deudor?.Id ?? persona.Id, consulta.LoanId, ct),
+            EnInsolvencia = persona.IsInsolvent || await InsolvenciaEnNegociacionAsync([persona.Id, deudor?.Id ?? persona.Id], dia, ct),
         };
 
         var reglas = await ReglasAsync(dia, ct);

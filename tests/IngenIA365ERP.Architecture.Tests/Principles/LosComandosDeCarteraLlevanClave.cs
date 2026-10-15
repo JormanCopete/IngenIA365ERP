@@ -206,6 +206,21 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Payroll.NotApplied.ResolveInstallmentNonDeductionCommand),
         typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ConfirmTestPayrollFileSentCommand),
         typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestPayrollDeductionResultCommand),
+        // K3 (US11, bloque B; T0868): novedades (radicar, enviar, consentimiento, aplicar, anular), condonaciones (pedir, aplicar, anular), eventos del
+        // deudor, reclamación al seguro e insolvencia. La simulación de la novedad es una consulta por POST (sin clave). Sus archivos de rutas
+        // (NoveltiesEndpoints, WaiversEndpoints, DebtorEventsEndpoints) los crea el bloque C (T0890) y se suman a Archivos allí.
+        typeof(IngenIA365ERP.Application.Lending.Novelties.RequestLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.SubmitLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.RegisterNoveltyConsentCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.ApplyLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Novelties.CancelLoanNoveltyCommand),
+        typeof(IngenIA365ERP.Application.Lending.Waivers.RequestWaiverCommand),
+        typeof(IngenIA365ERP.Application.Lending.Waivers.ApplyWaiverCommand),
+        typeof(IngenIA365ERP.Application.Lending.Waivers.CancelWaiverCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.RegisterDebtorEventCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.ChangeInsuranceClaimStatusCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.OpenInsolvencyProceedingCommand),
+        typeof(IngenIA365ERP.Application.Lending.DebtorEvents.RecordInsolvencyFailureCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

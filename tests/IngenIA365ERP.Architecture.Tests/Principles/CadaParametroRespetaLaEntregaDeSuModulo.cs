@@ -51,10 +51,10 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
     }
 
     [Fact]
-    public void Con_K2_vigente_no_se_ofrece_ninguna_clave_posterior()
+    public void Con_K3_vigente_no_se_ofrece_ninguna_clave_posterior()
     {
-        // T0849: K2 habilita las claves Libranza.*; las de K4 en adelante siguen sin ofrecerse.
-        Assert.Equal(EntregaDeCartera.K2, CatalogoDeCartera.EntregaVigente);
+        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 (sin claves propias); las de K4 en adelante siguen sin ofrecerse.
+        Assert.Equal(EntregaDeCartera.K3, CatalogoDeCartera.EntregaVigente);
         var vigente = CatalogoDeParametros.EntregaVigenteDe(EntregaDeModulo.LineaDeCartera);
 
         var ofrecidas = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleEnLaEntrega()).ToList();
@@ -62,7 +62,7 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
 
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > vigente).ToList();
         Assert.NotEmpty(posteriores);
-        Assert.All(posteriores, d => Assert.False(d.DisponibleEnLaEntrega(), $"{d.Clave} es de {d.DisponibleDesde} y se ofrece con K2."));
+        Assert.All(posteriores, d => Assert.False(d.DisponibleEnLaEntrega(), $"{d.Clave} es de {d.DisponibleDesde} y se ofrece con K3."));
         Assert.All(ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)),
             d => Assert.True(d.DisponibleEnLaEntrega(), $"{d.Clave} es de K2 y no se ofrece."));
     }

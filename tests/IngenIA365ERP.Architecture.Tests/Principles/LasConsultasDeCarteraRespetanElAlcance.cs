@@ -104,6 +104,14 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Payroll/NotApplied/InstallmentNonDeductionCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Payroll/Agreements/PendingPayrollTransfersQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PayrollReportQueries.cs",
+        // K3 (US11, bloque B; T0868): las novedades y las condonaciones por la oficina y la línea de su crédito (la lista con PorOficinaYLinea; el
+        // detalle y la simulación con NovedadesDeCartera.LeerAsync / CondonacionesDeCartera.LeerAsync, el 404 del asunto); las reclamaciones al
+        // seguro por las de su crédito; la vista de reestructurados por AmbitoDeInformeDeCartera.
+        "Core/IngenIA365ERP.Application/Lending/Novelties/NoveltyQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/SimulateLoanNoveltyQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/WaiverQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/InsuranceClaimAndInsolvencyCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/RestructuredReportQuery.cs",
     ];
 
     /// <summary>
@@ -208,6 +216,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["GetPayrollAgreementQuery"] = "catálogo de la cooperativa: un convenio de libranza no tiene oficina (contactos sin documento, C84)",
         ["PreviewPayrollDeductionFileQuery"] =
             "el archivo de una pagaduría lleva todas las obligaciones del convenio, de cualquier oficina: lo prepara quien genera (PayrollDeductionFiles.Generate)",
+        // K3 (US11, bloque B; T0868): los eventos del deudor se guardan como bloqueos de la persona y el proceso de insolvencia es de la persona.
+        ["ListDebtorEventsQuery"] = "los eventos del deudor son bloqueos de la persona, no de una oficina (como ListDebtorBlocksQuery)",
+        ["ListInsolvencyProceedingsQuery"] = "el proceso de insolvencia es de la persona y alcanza todos sus créditos, de cualquier oficina (FR-098)",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

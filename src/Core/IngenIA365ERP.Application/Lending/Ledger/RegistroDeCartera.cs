@@ -314,6 +314,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         LoanTransactionKind.CreditBalanceRecognized, LoanTransactionKind.CreditBalanceSettled, LoanTransactionKind.PaymentReallocation,
         // US6 (T0591): las filas de un ajuste de Comercial (nota crédito o débito, devolución, anulación).
         LoanTransactionKind.CommercialAdjustment,
+        // K3 (T0874, T0881, T0884): la capitalización y el traslado al enlazado de una novedad, y la condonación.
+        LoanTransactionKind.Capitalization, LoanTransactionKind.TransferToLinkedLoan, LoanTransactionKind.TransferFromLinkedLoan, LoanTransactionKind.Waiver,
     };
 
     /// <summary>

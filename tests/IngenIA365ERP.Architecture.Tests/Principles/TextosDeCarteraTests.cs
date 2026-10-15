@@ -92,6 +92,23 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Application/Lending/Payroll/Transfers/TransferLoanPayrollCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Imports/PayrollAgreementsTemplate.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/PayrollReportQueries.cs",
+        // K3 (US11, bloque B; T0888): los errores de novedades, condonaciones y eventos del deudor y los textos que lee la persona (motivos,
+        // efectos, asuntos de acta, el informe de reestructurados).
+        "Core/IngenIA365ERP.Application/Lending/Novelties/ErroresDeNovedades.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/RequestLoanNoveltyCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/ApplyLoanNoveltyCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Novelties/DecisionSobreNovedad.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/CondonacionesDeCartera.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/RequestWaiverCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/DecisionSobreCondonacion.cs",
+        "Core/IngenIA365ERP.Application/Lending/Waivers/WaiverQueries.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/ErroresDeEventosDelDeudor.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/DebtorEventCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/DebtorEvents/InsuranceClaimAndInsolvencyCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/RestructuredReportQuery.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/LoanNovelty.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/Waiver.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Replay/NovedadEnLaReconstruccion.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

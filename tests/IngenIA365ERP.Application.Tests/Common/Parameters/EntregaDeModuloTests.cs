@@ -67,7 +67,7 @@ public class EntregaDeModuloTests
 
         CatalogoDeParametros.EntregaVigenteDe("INV").Should().Be((EntregaDeModulo)CatalogoDeParametros.EntregaVigente);
         CatalogoDeParametros.EntregaVigenteDe("LND").Should().Be((EntregaDeModulo)CatalogoDeCartera.EntregaVigente);
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K2, "T0849 la subió a K2");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K3, "T0849 la subió a K2 y T0889 a K3");
     }
 
     [Fact]
