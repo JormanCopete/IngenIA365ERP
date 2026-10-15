@@ -1,8 +1,10 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
@@ -92,7 +94,52 @@ public class TestDoublesEndpoints : ICarterModule
                 await sender.Send(new ListTestCollectorReversalsQuery(), ct))
             .WithName("Lending_TestDoubles_CollectorReversals")
             .RequirePermission(Operar);
+
+        // K2 (US10, T0850): el recaudador de prueba confirma el envío de un archivo de descuentos y devuelve la respuesta de la pagaduría, como REC.
+        dobles.MapPost("/collector/payroll-deduction-files/{id:guid}/confirm-sent", async (Guid id, ConfirmacionDeEnvioRequest? body, HttpContext http,
+                ISender sender, CancellationToken ct) =>
+                LendingGroup.Creado(await sender.Send(new ConfirmTestPayrollFileSentCommand(id, body?.Channel ?? "Portal", body?.Reference)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct), $"/api/lending/payroll-deduction-files/{id}"))
+            .WithName("Lending_TestDoubles_CollectorPayrollFileSent")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/payroll-deduction-results", async (HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                if (!http.Request.HasFormContentType)
+                    return Results.Json(new { code = ArchivosTabulares.Vacio.Code, message = ArchivosTabulares.Vacio.Message, traceId = http.TraceIdentifier },
+                        statusCode: StatusCodes.Status400BadRequest);
+                var formulario = await http.Request.ReadFormAsync(ct);
+                var archivo = formulario.Files.FirstOrDefault();
+                if (archivo is null || archivo.Length == 0)
+                    return Results.Json(new { code = ArchivosTabulares.Vacio.Code, message = ArchivosTabulares.Vacio.Message, traceId = http.TraceIdentifier },
+                        statusCode: StatusCodes.Status400BadRequest);
+                if (archivo.Length > EjecutorDeImportacion.MaximoDeBytes)
+                    return Results.Json(new { code = "Archivo.DemasiadoGrande", message = "El archivo pesa más de 16 MB.", traceId = http.TraceIdentifier },
+                        statusCode: StatusCodes.Status413PayloadTooLarge);
+                if (!Guid.TryParse(formulario["filePublicId"].FirstOrDefault(), out var deducciones))
+                    return Results.Json(new
+                    {
+                        code = "Validation.Invalid", message = "Indique el archivo de descuentos al que responde (filePublicId).", traceId = http.TraceIdentifier,
+                    }, statusCode: StatusCodes.Status400BadRequest);
+                using var ms = new MemoryStream();
+                await archivo.CopyToAsync(ms, ct);
+                return LendingGroup.Creado(await sender.Send(new EmitTestPayrollDeductionResultCommand(deducciones, archivo.FileName, ms.ToArray())
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct), $"/api/lending/payroll-deduction-files/{deducciones}");
+            })
+            .WithName("Lending_TestDoubles_CollectorPayrollResult")
+            .DisableAntiforgery()
+            .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(EjecutorDeImportacion.MaximoDeBytes + 256 * 1024))
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
     }
+
+    /// <summary>La confirmación del envío (§20): el canal (<c>Email</c>, <c>Portal</c>, <c>Physical</c>, <c>Other</c>) y el radicado de la pagaduría.</summary>
+    public sealed record ConfirmacionDeEnvioRequest(string? Channel, string? Reference);
 
     /// <summary>Si las rutas se publican: pedidas por configuración y fuera de producción (la guarda que registra los dobles).</summary>
     public static bool Publicados(IConfiguration configuracion, IHostEnvironment ambiente) =>

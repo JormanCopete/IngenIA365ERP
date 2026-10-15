@@ -77,7 +77,14 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(DebtorMessagesReportQueryHandler.Vista,
             (f, q) => new DebtorMessagesReportQuery(f, Texto(q, "purpose"), Texto(q, "channel"), Texto(q, "status")));
         group.MapVistaDeCartera(MigrationReconciliationReportQueryHandler.Vista, (f, q) => new MigrationReconciliationReportQuery(f, Id(q, "load")));
+        // K2 (US10, T0846, T0850): las pagadurías al corte y el cuadre de un convenio y período (agreement = su PublicId, year, month).
+        group.MapVistaDeCartera(PayrollAgreementsReportQueryHandler.Vista, (f, _) => new PayrollAgreementsReportQuery(f));
+        group.MapVistaDeCartera(PayrollDeductionReconciliationReportQueryHandler.Vista,
+            (f, q) => new PayrollDeductionReconciliationReportQuery(f, Id(q, "agreement"), Entero(q, "year"), Entero(q, "month")));
     }
+
+    private static int? Entero(IQueryCollection q, string clave) =>
+        int.TryParse(q[clave].ToString(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : null;
 
     private static Guid? Id(IQueryCollection q, string clave) => Guid.TryParse(q[clave].ToString(), out var id) ? id : null;
 

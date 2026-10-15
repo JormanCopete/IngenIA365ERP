@@ -5,6 +5,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Components.Cartera.Pagos
 @inject DoblesDePruebaClient Dobles
+@inject LibranzaClient Libranza
 @inject INotificationService Notification
 
 <PageTitle>Dobles de prueba de Cartera - IngenIA365ERP</PageTitle>
@@ -40,6 +41,7 @@
             <div class="toolbar">
                 <SfButton CssClass="@(_pestana == Pestana.Tesoreria ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(Pestana.Tesoreria))">Tesorería</SfButton>
                 <SfButton CssClass="@(_pestana == Pestana.Recaudador ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(Pestana.Recaudador))">Recaudador</SfButton>
+                <SfButton CssClass="@(_pestana == Pestana.Libranza ? "e-primary" : "e-outline")" OnClick="@(() => AbrirAsync(Pestana.Libranza))">Libranza</SfButton>
             </div>
         }
     </IndicadorDeCarga>
@@ -320,6 +322,71 @@
             </div>
         }
     }
+    else if (_disponibles is not null && _pestana == Pestana.Libranza)
+    {
+        @* K2 (T0852; api.md §20): lo que Recaudo hace con un archivo de descuentos —entregarlo a la pagaduría y devolver su respuesta—. *@
+        @if (!_disponibles.Collector)
+        {
+            <p class="aviso aviso-info">El recaudador de prueba no está habilitado en este ambiente.</p>
+        }
+        else
+        {
+            <div class="info-card">
+                <h4>Archivos de descuento recibidos por el recaudador</h4>
+                <p class="texto-apoyo">Confirme la entrega de un archivo generado (queda «enviado») y cargue la respuesta de la pagaduría en el formato de vuelta de
+                    su convenio: una fila por crédito con su código de respuesta, lo descontado y la fecha del descuento.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cargaArchivos.Activa" OnClick="@CargarArchivosDeLibranzaAsync">Actualizar</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_cargaArchivos.Activa">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Archivo</th><th>Convenio</th><th>Período</th><th class="numero">Líneas</th><th class="numero">Total</th><th>Estado</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var a in _archivosDeLibranza)
+                                {
+                                    var archivo = a;
+                                    <tr>
+                                        <td>@archivo.Number (v@(archivo.Version))</td>
+                                        <td>@archivo.AgreementCode</td>
+                                        <td>@TextosDeLibranza.Periodo(archivo.Year, archivo.Month, archivo.SubPeriod)</td>
+                                        <td class="numero">@archivo.Lines</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(archivo.Total)</td>
+                                        <td>@TextosDeLibranza.EstadoDeArchivo(archivo.Status)</td>
+                                        <td>
+                                            @if (archivo.Status == "Generated")
+                                            {
+                                                <SfButton CssClass="e-flat e-small" Disabled="@_accionLibranza.Activa" OnClick="@(() => ConfirmarEnvioAsync(archivo))">Confirmar envío</SfButton>
+                                            }
+                                            @if (archivo.Status is "Generated" or "Sent")
+                                            {
+                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => ElegirArchivoDeRespuesta(archivo))">Cargar respuesta…</SfButton>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_archivosDeLibranza.Count == 0) { <p class="texto-tenue">No hay archivos de descuento generados ni enviados.</p> }
+                </IndicadorDeCarga>
+            </div>
+            @if (_archivoDeRespuesta is { } elegido)
+            {
+                <div class="info-card">
+                    <h4>Respuesta de la pagaduría al archivo @elegido.Number</h4>
+                    <IndicadorDeCarga Cargando="@_accionLibranza.Activa" Texto="Leyendo la respuesta…">
+                        <InputFile OnChange="@ElegirRespuestaAsync" accept=".csv,.txt" />
+                        @if (_errorLibranza is not null) { <p class="aviso aviso-error" role="alert">@_errorLibranza</p> }
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_accionLibranza.Activa || _respuesta is null)" OnClick="@EmitirRespuestaAsync">Emitir el resultado</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@(() => ElegirArchivoDeRespuesta(null))">Volver</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+            }
+        }
+    }
 </div>
 
 <SfDialog @bind-Visible="_mostrar" Header="@($"Resultado de la orden {_orden?.OrderNumber}")" Width="520px" IsModal="true" ShowCloseIcon="true">
@@ -346,10 +413,10 @@
 </PermissionGate>
 
 @code {
-    private enum Pestana { Tesoreria, Recaudador }
+    private enum Pestana { Tesoreria, Recaudador, Libranza }
 
     private readonly EstadoDeCarga _carga = new(), _cargaOrdenes = new(), _accion = new(), _cargaObligaciones = new(), _cargaPago = new(),
-        _cargaReverso = new(), _cargaResolucion = new(), _cargaRecibidos = new();
+        _cargaReverso = new(), _cargaResolucion = new(), _cargaRecibidos = new(), _cargaArchivos = new(), _accionLibranza = new();
     private Pestana _pestana = Pestana.Tesoreria;
     private DoblesDisponiblesDto? _disponibles;
     private bool _noDisponibles;
@@ -424,7 +491,70 @@
     {
         _pestana = pestana;
         if (pestana == Pestana.Tesoreria) await CargarOrdenesAsync();
+        else if (pestana == Pestana.Libranza) await CargarArchivosDeLibranzaAsync();
         else if (_disponibles is { Collector: true } && !_recibidosLeidos) await CargarRecibidosAsync();
+    }
+
+    // ------------------------------------------------------------------------------------------------- libranza --
+
+    private List<ArchivoDeDescuentosDto> _archivosDeLibranza = [];
+    private ArchivoDeDescuentosDto? _archivoDeRespuesta;
+    private (string Nombre, byte[] Contenido)? _respuesta;
+    private string? _errorLibranza;
+    private ClaveDeOperacion _claveDeEnvio = new(), _claveDeRespuesta = new();
+
+    private async Task CargarArchivosDeLibranzaAsync()
+    {
+        if (_disponibles is not { Collector: true }) { _archivosDeLibranza = []; return; }
+        using var carga = _cargaArchivos.Iniciar();
+        var generados = await Libranza.ArchivosAsync(estado: "Generated");
+        var enviados = await Libranza.ArchivosAsync(estado: "Sent");
+        if (!generados.IsSuccess)
+        {
+            _archivosDeLibranza = [];
+            await Notification.ErrorAsync(generados.StatusCode == 404
+                ? "Para ver los archivos de descuento hace falta el permiso de consultarlos (Cartera › Archivos de descuento)."
+                : generados.ErrorMessage ?? "No se pudieron leer los archivos de descuento.");
+            return;
+        }
+        _archivosDeLibranza = [.. (generados.Value?.Items ?? []).Concat(enviados.Value?.Items ?? []).OrderByDescending(a => a.GeneratedAt)];
+    }
+
+    private void ElegirArchivoDeRespuesta(ArchivoDeDescuentosDto? archivo)
+    {
+        _archivoDeRespuesta = archivo;
+        _respuesta = null;
+        _errorLibranza = null;
+        _claveDeRespuesta = new ClaveDeOperacion();
+    }
+
+    private async Task ConfirmarEnvioAsync(ArchivoDeDescuentosDto archivo)
+    {
+        using var carga = _accionLibranza.Iniciar();
+        _claveDeEnvio = new ClaveDeOperacion();
+        var r = await Libranza.ConfirmarEnvioDePruebaAsync(archivo.PublicId, new ConfirmacionDeEnvioDePruebaRequest("Portal", $"RAD-{archivo.Number}"), _claveDeEnvio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el envío."); return; }
+        await Notification.SuccessAsync($"Envío del archivo {archivo.Number} confirmado; Cartera lo marca enviado al procesar el mensaje.");
+        await CargarArchivosDeLibranzaAsync();
+    }
+
+    private async Task ElegirRespuestaAsync(InputFileChangeEventArgs e)
+    {
+        _errorLibranza = null;
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(16 * 1024 * 1024).CopyToAsync(ms);
+        _respuesta = (e.File.Name, ms.ToArray());
+    }
+
+    private async Task EmitirRespuestaAsync()
+    {
+        if (_archivoDeRespuesta is not { } archivo || _respuesta is not { } respuesta) return;
+        using var carga = _accionLibranza.Iniciar();
+        var r = await Libranza.ResultadoDePruebaAsync(archivo.PublicId, respuesta.Nombre, respuesta.Contenido, _claveDeRespuesta);
+        if (!r.IsSuccess) { _errorLibranza = r.ErrorMessage ?? "No se pudo leer la respuesta."; return; }
+        await Notification.SuccessAsync($"Resultado emitido con {r.Value!.Lines} líneas.");
+        ElegirArchivoDeRespuesta(null);
+        await CargarArchivosDeLibranzaAsync();
     }
 
     private async Task CargarOrdenesAsync()

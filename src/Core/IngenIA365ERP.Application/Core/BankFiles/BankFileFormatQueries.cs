@@ -139,3 +139,55 @@ public sealed class ListBankFieldSourcesQueryHandler : IRequestHandler<ListBankF
         Task.FromResult(Result.Success<IReadOnlyList<BankFieldSourceDto>>(Catalogo.Select(c =>
             new BankFieldSourceDto(c.Source.ToString(), c.Descripcion, BankFileFormatDefinition.TipoPorDefecto(c.Source).ToString(), c.H, c.D, c.T, c.Ambito)).ToList()));
 }
+
+// ----------------------------------------------------------- lectura de prueba --
+
+/// <summary>Una fila de detalle leída: su línea física, el texto y los valores por origen ya tipados (texto, monto o fecha ISO).</summary>
+public sealed record BankFileSampleRowDto(int LineNumber, string Text, IReadOnlyDictionary<string, string?> Values);
+
+/// <summary>Un error de lectura con su línea y campo.</summary>
+public sealed record BankFileSampleErrorDto(int LineNumber, string? Field, string Message);
+
+/// <summary>Lo que el formato leyó de un archivo de prueba: las filas, los errores y cuántas líneas de detalle tenía.</summary>
+public sealed record BankFileSampleReadDto(IReadOnlyList<BankFileSampleRowDto> Rows, IReadOnlyList<BankFileSampleErrorDto> Errors, int DetailLineCount);
+
+/// <summary>
+/// Feature 013, K2 (T0832; adaptadores-y-archivos.md §6.1): la vista previa de un formato de vuelta —o de cualquiera—: lee un archivo de prueba con
+/// <see cref="FlatFileReader"/> sin guardar nada, para comprobar el layout antes de usarlo en un convenio. Es una consulta por POST (el cuerpo es el
+/// archivo). (nuevo)
+/// </summary>
+public sealed record ReadBankFileSampleQuery(Guid FormatPublicId, byte[] Content) : IRequest<Result<BankFileSampleReadDto>>;
+
+public sealed class ReadBankFileSampleQueryValidator : AbstractValidator<ReadBankFileSampleQuery>
+{
+    public ReadBankFileSampleQueryValidator()
+    {
+        RuleFor(x => x.FormatPublicId).NotEmpty();
+        RuleFor(x => x.Content).NotNull().Must(c => c is { Length: > 0 }).WithMessage("Adjunte el archivo de prueba.");
+    }
+}
+
+public sealed class ReadBankFileSampleQueryHandler(IApplicationDbContext db) : IRequestHandler<ReadBankFileSampleQuery, Result<BankFileSampleReadDto>>
+{
+    /// <summary>Cuántas filas devuelve la vista previa (los errores van todos).</summary>
+    public const int MaximoDeFilas = 200;
+
+    public async Task<Result<BankFileSampleReadDto>> Handle(ReadBankFileSampleQuery request, CancellationToken ct)
+    {
+        var f = await db.BankFileFormats.AsNoTracking().Include(x => x.Fields).FirstOrDefaultAsync(x => x.PublicId == request.FormatPublicId && !x.IsDeleted, ct);
+        if (f is null) return Result.Failure<BankFileSampleReadDto>(BankFileFormatErrors.NotFound);
+        var leido = FlatFileReader.Leer(f, request.Content);
+        var filas = leido.Rows.Take(MaximoDeFilas).Select(r => new BankFileSampleRowDto(r.LineNumber, r.Text,
+            r.Valores.ToDictionary(v => v.Key.ToString(), v => Texto(v.Value)))).ToList();
+        return Result.Success(new BankFileSampleReadDto(filas, leido.Errors.Select(e => new BankFileSampleErrorDto(e.LineNumber, e.Field, e.Message)).ToList(),
+            leido.DetailLineCount));
+    }
+
+    private static string? Texto(object? valor) => valor switch
+    {
+        null => null,
+        decimal d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        DateOnly f => f.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+        _ => Convert.ToString(valor, System.Globalization.CultureInfo.InvariantCulture),
+    };
+}

@@ -62,6 +62,10 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Verificar.razor", "/cartera/verificar", "Lending.Documents.Verify"),
         // Fase 14, US15 (T0800): el centro de informes de Cartera (las siete vistas de K1).
         ("Pages/Cartera/Informes.razor", "/cartera/informes", "Lending.Reports.View"),
+        // Fase 15, US10 (T0852, T0853; K2): la libranza —pagadurías, archivos de descuento y no aplicados—.
+        ("Pages/Cartera/Pagadurias.razor", "/cartera/pagadurias", "Lending.PayrollAgreements.View"),
+        ("Pages/Cartera/ArchivosDeDescuento.razor", "/cartera/archivos-de-descuento", "Lending.PayrollDeductionFiles.Read"),
+        ("Pages/Cartera/NoAplicados.razor", "/cartera/no-aplicados", "Lending.PayrollDeductionFiles.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
@@ -77,6 +81,9 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Contabilidad/Cartera/Lote.razor", "/contabilidad/cartera/lotes/{Id:guid}", "Accounting.LendingBatches.View"),
         // US9 (T0714): el detalle de un cierre se abre desde Cierres y desde la calificación del crédito.
         ("Pages/Cartera/Cierre.razor", "/cartera/cierres/{Id:guid}", "Lending.Ratings.Read"),
+        // US10 (T0852): el detalle de una pagaduría y el de un archivo de descuentos se abren desde sus listas.
+        ("Pages/Cartera/Pagaduria.razor", "/cartera/pagadurias/{Id:guid}", "Lending.PayrollAgreements.View"),
+        ("Pages/Cartera/ArchivoDeDescuento.razor", "/cartera/archivos-de-descuento/{Id:guid}", "Lending.PayrollDeductionFiles.Read"),
     ];
 
     /// <summary>

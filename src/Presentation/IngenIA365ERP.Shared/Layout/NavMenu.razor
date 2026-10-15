@@ -171,6 +171,18 @@
             <PermissionGate Required="Lending.Reports.View">
                 <NavLink href="/cartera/informes" class="nav-subitem">Informes de cartera</NavLink>
             </PermissionGate>
+            @* K2, US10 (T0853): la libranza —pagadurías con su convenio, archivos de descuento por período y las cuotas no aplicadas—. El detalle de
+               una pagaduría y el de un archivo se abren desde sus listas. *@
+            <span class="nav-subgroup-title">Libranza</span>
+            <PermissionGate Required="Lending.PayrollAgreements.View">
+                <NavLink href="/cartera/pagadurias" class="nav-subitem">Pagadurías</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <NavLink href="/cartera/archivos-de-descuento" class="nav-subitem">Archivos de descuento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PayrollDeductionFiles.Read">
+                <NavLink href="/cartera/no-aplicados" class="nav-subitem">No aplicados</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Gobierno</span>
             <PermissionGate Required="Lending.Sessions.Read">
                 <NavLink href="/cartera/actas" class="nav-subitem">Actas y órganos</NavLink>

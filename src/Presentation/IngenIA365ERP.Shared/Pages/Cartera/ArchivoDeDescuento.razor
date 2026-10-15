@@ -1,0 +1,132 @@
+@page "/cartera/archivos-de-descuento/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject LibranzaClient Libranza
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Archivo de descuento - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K2, US10 (T0852; contracts/api.md §13.2; FR-113, I9): el detalle de un archivo de descuentos —inmutable—: su período, versión,
+   estado, huella SHA-256, conteos de novedades, el envío confirmado por Recaudo con su radicado y las líneas del alcance de quien pregunta. Descargar
+   es un enlace firmado de 60 s (auditado); anular, con motivo, sólo antes del envío. El cuadre de lo enviado, descontado, girado y no aplicado está en
+   el informe payroll-deduction-reconciliation del centro de informes. *@
+<PermissionGate Required="Lending.PayrollDeductionFiles.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_detalle is { } d ? $"Archivo {d.File.Number}" : "Archivo de descuento")</h3>
+        <div class="toolbar">
+            <a href="/cartera/archivos-de-descuento">Volver a Archivos de descuento</a>
+            @if (_detalle is { } x)
+            {
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@DescargarAsync">Descargar</SfButton>
+                <PermissionGate Required="Lending.Reports.View">
+                    <a href="/cartera/informes?vista=payroll-deduction-reconciliation">Cuadre del período</a>
+                </PermissionGate>
+                @if (x.File.Status == "Generated")
+                {
+                    <PermissionGate Required="Lending.PayrollDeductionFiles.Generate">
+                        <SfButton CssClass="e-outline" OnClick="@AbrirAnulacion">Anular…</SfButton>
+                    </PermissionGate>
+                }
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_detalle is { } d)
+        {
+            var a = d.File;
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Líneas</span><span class="kpi-value">@a.Lines</span></div>
+                <div class="kpi-card"><span class="kpi-label">Total</span><span class="kpi-value">@TextosDeCreditos.Pesos(a.Total)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@TextosDeLibranza.EstadoDeArchivo(a.Status)</span></div>
+                <div class="kpi-card"><span class="kpi-label">Versión</span><span class="kpi-value">@a.Version</span></div>
+            </div>
+            <div class="info-card">
+                <p>Pagaduría @a.AgreementCode · período @TextosDeLibranza.Periodo(a.Year, a.Month, a.SubPeriod) · generado el
+                    @a.GeneratedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @a.FileName</p>
+                <p class="texto-tenue">Huella SHA-256 @a.Sha256</p>
+                <p>Altas @a.NewCount · cambios @a.ChangeCount · retiros @a.CancellationCount · sin cambio @a.UnchangedCount</p>
+                @if (a.SentAt is { } enviado) { <p class="aviso aviso-exito">Enviado el @enviado.ToLocalTime().ToString("dd/MM/yyyy HH:mm")@(a.PaymasterReference is { } r ? $", radicado {r}" : "").</p> }
+                @if (a.VoidReason is { } motivo) { <p class="aviso aviso-alerta">Anulado: @motivo</p> }
+                @if (a.SupersededByPublicId is { } nuevo) { <p class="aviso aviso-info">Reemplazado por <a href="/cartera/archivos-de-descuento/@nuevo">otra versión</a>.</p> }
+            </div>
+            <TablaDeLineasDeDescuento Lineas="@d.Lines" />
+            @if (d.TotalLines > d.PageSize)
+            {
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => PaginaAsync(_pagina - 1))">Anterior</SfButton>
+                    <span>Página @_pagina de @((d.TotalLines + d.PageSize - 1) / d.PageSize)</span>
+                    <SfButton CssClass="e-flat e-small" Disabled="@(_pagina * d.PageSize >= d.TotalLines)" OnClick="@(() => PaginaAsync(_pagina + 1))">Siguiente</SfButton>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular el archivo" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Anulando…">
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private ArchivoDeDescuentosDetalleDto? _detalle;
+    private int _pagina = 1;
+    private bool _mostrarAnulacion;
+    private string? _motivo, _error;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnParametersSetAsync() => PaginaAsync(1);
+
+    private async Task PaginaAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Libranza.ArchivoAsync(Id, pagina);
+        if (!r.IsSuccess) { _detalle = null; await Notification.ErrorAsync(r.ErrorMessage ?? "El archivo no existe."); return; }
+        _detalle = r.Value;
+        _pagina = pagina;
+    }
+
+    private async Task DescargarAsync()
+    {
+        if (_detalle is null) return;
+        using var carga = _accion.Iniciar();
+        var r = await Libranza.EnlaceAsync(Id);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        await Adjuntos.DescargarAsync(url, _detalle.File.FileName);
+    }
+
+    private void AbrirAnulacion()
+    {
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarAnulacion = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Libranza.AnularAsync(Id, _motivo!.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo anular el archivo."; return; }
+        _mostrarAnulacion = false;
+        await Notification.SuccessAsync("Archivo anulado.");
+        await PaginaAsync(_pagina);
+    }
+}

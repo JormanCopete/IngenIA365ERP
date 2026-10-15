@@ -28,6 +28,10 @@
             <PermissionGate Required="Lending.Documents.Read">
                 <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/documentos?credito={Id}&emitir=true"))">Documentos</SfButton>
             </PermissionGate>
+            @* K2 (T0852): trasladar la libranza a otra pagaduría o a la forma de pago alterna del convenio. *@
+            <PermissionGate Required="Lending.PayrollTransfers.Manage">
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarTraslado = true)">Trasladar libranza</SfButton>
+            </PermissionGate>
             <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/creditos"))">Volver</SfButton>
         </div>
     </div>
@@ -431,10 +435,14 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+<TrasladoDeLibranza CreditoId="@Id" @bind-Visible="_mostrarTraslado" />
 </PermissionGate>
 
 @code {
     [Parameter] public Guid Id { get; set; }
+
+    // K2 (T0852): el traslado de la libranza.
+    private bool _mostrarTraslado;
 
     // US6 (T0603): la confirmación por excepción de una validación fallida.
     private readonly EstadoDeCarga _guardado = new();

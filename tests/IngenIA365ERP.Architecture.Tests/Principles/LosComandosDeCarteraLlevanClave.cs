@@ -59,6 +59,11 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs",
         // US13 (bloque 14B, T0790): emitir, enviar y anular un documento; el enlace del PDF guardado (reimprimir) es "/download-link", sin clave.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/DocumentsEndpoints.cs",
+        // K2, US10 (bloque 15C, T0850): convenios y su plantilla, archivos de descuento, no aplicados y el traslado; las dos rutas del doble van
+        // en TestDoublesEndpoints. Sin clave sólo la vista previa del archivo ("/preview") y su enlace ("/download-link").
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollAgreementsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollDeductionFilesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollNotAppliedEndpoints.cs",
     ];
 
     /// <summary>
@@ -190,7 +195,7 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Documents.VoidLendingDocumentCommand),
         // K2 (US10, bloque B; T0818): convenios y su plantilla, el archivo de descuentos, el traslado, los no aplicados y el recaudador de prueba de
         // la libranza. Sin clave sólo la vista previa del archivo (una consulta por POST) y su enlace de descarga (/download-link). Sus archivos de rutas
-        // (PayrollAgreementsEndpoints, PayrollDeductionFilesEndpoints, PayrollNotAppliedEndpoints) se suman a Archivos con las rutas (bloque C).
+        // (PayrollAgreementsEndpoints, PayrollDeductionFilesEndpoints, PayrollNotAppliedEndpoints) están en Archivos desde el bloque C (T0850).
         typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.CreatePayrollAgreementCommand),
         typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.AddPayrollAgreementVersionCommand),
         typeof(IngenIA365ERP.Application.Lending.Payroll.Agreements.SetPayrollAgreementContactsCommand),
