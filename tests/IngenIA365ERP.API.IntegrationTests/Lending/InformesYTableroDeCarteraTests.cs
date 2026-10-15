@@ -35,6 +35,9 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
     /// <summary>K2 (fase 15, T0850): las dos vistas de la libranza, publicadas desde que la entrega vigente es K2; la del cuadre trae datos del deudor.</summary>
     private static readonly string[] VistasDeK2 = ["payroll-agreements", "payroll-deduction-reconciliation"];
 
+    /// <summary>K3 (fase 16, T0890): los reestructurados, con datos del deudor.</summary>
+    private static readonly string[] VistasDeK3 = ["restructured"];
+
     [Fact]
     public async Task K1_registro_permisos_exportacion_auditada_alcance_y_columnas()
     {
@@ -64,11 +67,12 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
 
         // (1) El registro: las siete de K1 para quien lee créditos; sin las de datos del deudor para quien no.
         var registro = (await CarteraE2E.GetAsync(http, contadora, Informes)).EnumerateArray().ToList();
-        registro.Select(v => v.GetProperty("key").GetString()).Should().BeEquivalentTo(VistasDeK1.Concat(VistasDeK2));
+        registro.Select(v => v.GetProperty("key").GetString()).Should().BeEquivalentTo(VistasDeK1.Concat(VistasDeK2).Concat(VistasDeK3));
         registro.Where(v => v.GetProperty("personalData").GetBoolean()).Select(v => v.GetProperty("key").GetString())
-            .Should().BeEquivalentTo(ConDatosDelDeudor.Append("payroll-deduction-reconciliation"));
+            .Should().BeEquivalentTo(ConDatosDelDeudor.Append("payroll-deduction-reconciliation").Concat(VistasDeK3));
         registro.Where(v => VistasDeK1.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 1);
         registro.Where(v => VistasDeK2.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 2);
+        registro.Where(v => VistasDeK3.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 3);
         var delOficial = (await CarteraE2E.GetAsync(http, oficial, Informes)).EnumerateArray().Select(v => v.GetProperty("key").GetString()).ToList();
         delOficial.Should().BeEquivalentTo(["placement", "receipts", "payroll-agreements"], "sin Lending.Loans.Read no se ofrecen las vistas con datos del deudor");
         foreach (var vista in ConDatosDelDeudor)
