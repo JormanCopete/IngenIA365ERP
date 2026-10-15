@@ -7,7 +7,8 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Payroll;
 /// <c>LND_LoanPayrollLinks</c> (feature 013, C.3; data-model §24.5; FR-061, FR-069, FR-109–FR-112, FR-116; C44): forma de pago y
 /// vínculo deudor–pagaduría de un crédito, con vigencia. <b>Fuente única</b> de la forma de pago y la pagaduría: ni el crédito
 /// ni sus condiciones las repiten. Un vínculo vigente por crédito. No es hecho: <see cref="ValidTo"/> se escribe una vez al
-/// trasladar o pasar a la forma alterna. La columna <c>PayrollAgreementId</c> nace con K2 (<c>CarteraLibranza</c>).
+/// trasladar o pasar a la forma alterna. La columna <c>PayrollAgreementId</c> nace con K2 (<c>CarteraLibranza</c>), que también trae el
+/// traslado (<see cref="Trasladar"/>) y el paso a la forma alterna (<see cref="PasarALaFormaAlterna"/>): el vigente se cierra y nace otro.
 /// </summary>
 public class LoanPayrollLink : AuditableEntity
 {
@@ -20,6 +21,9 @@ public class LoanPayrollLink : AuditableEntity
 
     /// <summary>Nómina propia: el empleado deudor es el pagador (G7).</summary>
     public bool IsOwnPayroll { get; set; }
+
+    /// <summary>K2 (<c>CarteraLibranza</c>): el convenio de la pagaduría; nulo en K1, en caja y en débito.</summary>
+    public int? PayrollAgreementId { get; set; }
 
     /// <summary>Identificación del empleado ante la pagaduría (FR-109).</summary>
     public string? EmployeeIdAtPaymaster { get; set; }
@@ -71,5 +75,69 @@ public class LoanPayrollLink : AuditableEntity
             OperationId = operacionId,
             ValidFrom = desde,
         };
+    }
+
+    /// <summary>¿Rige el <paramref name="dia"/>?</summary>
+    public bool VigenteEn(DateOnly dia) => !IsDeleted && ValidFrom <= dia && (ValidTo is null || dia <= ValidTo);
+
+    /// <summary>
+    /// Traslado de la libranza a otra pagaduría con convenio (K2, FR-116, US10-5; C44): cierra este vínculo la víspera de
+    /// <paramref name="desde"/> y abre otro con <c>Origin = Transfer</c>, la <b>misma</b> <see cref="LibranzaDate"/> (prelación, FR-111) y
+    /// <see cref="PreviousLinkId"/> a éste. No es una operación del libro (sin <c>OperationId</c>) ni una <c>LoanNovelty</c>.
+    /// </summary>
+    public LoanPayrollLink Trasladar(int pagaduriaId, int convenioId, string? empleadoEnLaPagaduria, DateOnly desde, string motivo,
+        Guid? certificacion = null, DateOnly? fechaDeCertificacion = null, decimal? ingresoCertificado = null, decimal? capacidadCertificada = null)
+    {
+        if (RepaymentChannel != RepaymentChannel.PaymasterDeduction && RepaymentChannel != RepaymentChannel.OwnPayroll)
+            throw new InvalidOperationException("Sólo una libranza se traslada a otra pagaduría.");
+        Cerrar(desde, motivo);
+        return new LoanPayrollLink
+        {
+            LoanId = LoanId,
+            RepaymentChannel = RepaymentChannel.PaymasterDeduction,
+            PaymasterPersonId = pagaduriaId,
+            IsOwnPayroll = false,
+            PayrollAgreementId = convenioId,
+            EmployeeIdAtPaymaster = string.IsNullOrWhiteSpace(empleadoEnLaPagaduria) ? null : empleadoEnLaPagaduria.Trim(),
+            LibranzaDate = LibranzaDate,
+            CertificationAttachmentPublicId = certificacion,
+            CertificationDate = fechaDeCertificacion,
+            CertifiedNetIncome = ingresoCertificado,
+            CertifiedAvailableCapacity = capacidadCertificada,
+            Origin = LoanPayrollLinkOrigin.Transfer,
+            PreviousLinkId = Id,
+            ValidFrom = desde,
+        };
+    }
+
+    /// <summary>
+    /// Retiro sin nuevo empleador (FR-116): cierra este vínculo y abre otro con la forma de pago alterna del convenio (caja o débito, sin
+    /// pagaduría) y <c>Origin = ChannelChange</c>. El aviso al deudor y la dimensión contable los emite quien lo llama.
+    /// </summary>
+    public LoanPayrollLink PasarALaFormaAlterna(RepaymentChannel alterna, DateOnly desde, string motivo)
+    {
+        if (alterna is RepaymentChannel.OwnPayroll or RepaymentChannel.PaymasterDeduction)
+            throw new ArgumentException("La forma alterna no lleva pagaduría: caja o débito.", nameof(alterna));
+        Cerrar(desde, motivo);
+        return new LoanPayrollLink
+        {
+            LoanId = LoanId,
+            RepaymentChannel = alterna,
+            Origin = LoanPayrollLinkOrigin.ChannelChange,
+            PreviousLinkId = Id,
+            ValidFrom = desde,
+        };
+    }
+
+    /// <summary>¿El vínculo es de libranza (con pagaduría)? Pasar entre con y sin libranza cambia el sub-segmento contable (FR-116).</summary>
+    public bool ConLibranza => RepaymentChannel is RepaymentChannel.OwnPayroll or RepaymentChannel.PaymasterDeduction;
+
+    private void Cerrar(DateOnly desde, string motivo)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        if (ValidTo is not null) throw new InvalidOperationException("El vínculo ya está cerrado.");
+        if (desde <= ValidFrom) throw new ArgumentOutOfRangeException(nameof(desde), desde, "El vínculo nuevo empieza después del vigente.");
+        ValidTo = desde.AddDays(-1);
+        EndReason = motivo.Trim();
     }
 }

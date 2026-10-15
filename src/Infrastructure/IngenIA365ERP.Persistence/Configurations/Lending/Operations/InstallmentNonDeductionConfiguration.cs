@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
+using IngenIA365ERP.Domain.Entities.Lending.Payroll;
 using IngenIA365ERP.Domain.Entities.Lending.Schedules;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -9,7 +10,8 @@ namespace IngenIA365ERP.Persistence.Configurations.Lending.Operations;
 
 /// <summary>
 /// <c>LND_InstallmentNonDeductions</c> (feature 013; data-model §24.9): hecho; idempotente por clave del contrato y cuota, y por
-/// activación y cuota (únicos filtrados a no nulo). La cuota es <c>bigint</c>. El único de <c>PayrollDeductionResultId</c> nace con K2.
+/// activación y cuota (únicos filtrados a no nulo). La cuota es <c>bigint</c>. <c>PayrollDeductionResultId</c> y su único filtrado nacen con
+/// K2 (<c>CarteraLibranza</c>): un resultado de la pagaduría da a lo sumo un no aplicado.
 /// </summary>
 public class InstallmentNonDeductionConfiguration : IEntityTypeConfiguration<InstallmentNonDeduction>
 {
@@ -32,11 +34,14 @@ public class InstallmentNonDeductionConfiguration : IEntityTypeConfiguration<Ins
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<RepaymentInstallment>().WithMany().HasForeignKey(e => e.RepaymentInstallmentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<LendingActivation>().WithMany().HasForeignKey(e => e.ActivationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PayrollDeductionResult>().WithMany().HasForeignKey(e => e.PayrollDeductionResultId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.ContractOperationKey, e.RepaymentInstallmentId }).IsUnique()
             .HasDatabaseName("UK_LND_InstallmentNonDeductions_ContractKey_Inst").HasFilter("[ContractOperationKey] IS NOT NULL");
         builder.HasIndex(e => new { e.ActivationId, e.RepaymentInstallmentId }).IsUnique()
             .HasDatabaseName("UK_LND_InstallmentNonDeductions_Activation_Inst").HasFilter("[ActivationId] IS NOT NULL");
         builder.HasIndex(e => new { e.LoanId, e.DueDate }).HasDatabaseName("IX_LND_InstallmentNonDeductions_Loan_DueDate");
+        builder.HasIndex(e => e.PayrollDeductionResultId).IsUnique()
+            .HasDatabaseName("UK_LND_InstallmentNonDeductions_PayrollDeductionResultId").HasFilter("[PayrollDeductionResultId] IS NOT NULL");
     }
 }

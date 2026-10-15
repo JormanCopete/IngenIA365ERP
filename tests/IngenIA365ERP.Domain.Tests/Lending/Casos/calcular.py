@@ -427,6 +427,12 @@ def esperado_completo(caso):
 # - Suspension el dia d: castigo, insolvencia, mas de una reestructuracion o altura >= umbral vigente [decision: el umbral es la
 #   primera altura que suspende]; lo nuevo va a *InSuspense, lo causado antes no se reclasifica.
 # - Seguros: al vencer la cuota (AtDueDate) o a prorrata de los dias del periodo (Daily), D9.
+# - K2 (fase 15, T0804; T30, FR-114): la serie "pendientesDeGiro" trae lo que la pagaduria desconto de una cuota y no ha girado
+#   (cuota, monto, vencimiento de la ventana de giro, umbral sellado, registradoEn). Conocido a R, mientras la mora de la pagaduria
+#   (dias desde el vencimiento de la ventana, nunca negativos) no supere el umbral (sin umbral: nunca), lo descontado se resta del
+#   saldo vencido de la cuota para la altura, y cubre la cuota en el orden seguro -> corriente -> capital: lo cubierto no causa mora
+#   [decision: FR-114 dice que al deudor no se le imputa]. Superado el umbral, la cuota cuenta entera desde su exigible y causa mora
+#   desde ese dia en adelante (lo de antes no se recalcula).
 
 CONCEPTOS = ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense",
              "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance"]
@@ -1060,7 +1066,19 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     us = usuras(series, cond["modalidad"])
     umbrales = [(fecha(x["desde"]), int(x["dias"])) for x in series.get("umbralesDeSuspension") or []]
     tolerancias = [(fecha(x["desde"]), D(x["valor"])) for x in series.get("tolerancias") or []]
+    giros = {}
+    for g in series.get("pendientesDeGiro") or []:
+        if instante(g["registradoEn"]) <= R and D(g["monto"]) > 0:
+            giros.setdefault(int(g["cuota"]), []).append(
+                (D(g["monto"]), fecha(g["vencimientoDelGiro"]), int(g["umbral"]) if g.get("umbral") is not None else None))
     r = cond["r"]
+
+    def cubierto_por_giro(n_, d):
+        total = D(0)
+        for monto, vence, umbral in giros.get(n_, []):
+            if umbral is None or max((d - vence).days, 0) <= umbral:
+                total += monto
+        return total
 
     ops = [dict(o, _seq=o.get("secuencia", i + 1)) for i, o in enumerate(ops_json) if instante(o["registradoEn"]) <= R]
     reversadas = {o["reversa"] for o in ops if o.get("reversa")}
@@ -1295,12 +1313,19 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         tol = serie_vigente(tolerancias, d) or D(0)
         umb = serie_vigente(umbrales, d)
         cands = []
+        cub = {}
         for x in cuotas:
             n_ = x["numero"]
             if not vencida[n_]:
                 continue
-            sv = pend(x) + interes_corriente(n_, d - UN_DIA) + saldo(n_, "Insurance", d - UN_DIA)
-            if sv > tol:
+            ic = interes_corriente(n_, d - UN_DIA)
+            seg = saldo(n_, "Insurance", d - UN_DIA)
+            sv = pend(x) + ic + seg
+            c_ = cubierto_por_giro(n_, d)
+            if c_ > 0:
+                tras = max(c_ - seg, D(0))
+                cub[n_] = (min(ic, tras), min(pend(x), max(tras - ic, D(0))))
+            if sv - c_ > tol:
                 cands.append(n_)
         altura = (d - ex[min(cands)]).days if cands else 0
         motivo = None
@@ -1312,7 +1337,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             motivo = "Restructuring"
         elif umb is not None and altura >= umb:
             motivo = "Delinquency"
-        return {"ex": ex, "vencida": vencida, "altura": altura, "cands": cands, "motivo": motivo}
+        return {"ex": ex, "vencida": vencida, "altura": altura, "cands": cands, "motivo": motivo, "cub": cub}
 
     def interes_corriente(numero, d):
         """La corriente (con su suspenso) que se cobra a una cuota, con la gracia repartida atribuida a su cuota (US5)."""
@@ -1349,9 +1374,10 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         for x in cuotas:
             n_ = x["numero"]
             if ev["vencida"][n_]:
-                b = pend(x)
+                ic_cub, k_cub = ev["cub"].get(n_, (D(0), D(0)))
+                b = pend(x) - k_cub
                 if cond["moraSobreIntereses"]:
-                    b += interes_corriente(n_, d - UN_DIA)
+                    b += interes_corriente(n_, d - UN_DIA) - ic_cub
                 if b > 0:
                     out[(mor, n_, False)] = (b, dm, periodo)
         return out

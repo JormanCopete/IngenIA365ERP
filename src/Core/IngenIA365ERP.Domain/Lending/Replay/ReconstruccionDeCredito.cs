@@ -297,6 +297,12 @@ public static class ReconstruccionDeCredito
         private readonly CondicionesDeCredito _c = entrada.Condiciones;
         private readonly CalendarioHabil _calendario = FechasDeVencimiento.CalendarioDelArticulo829(entrada.Festivos);
         private readonly List<ValorDeUsura> _usura = [.. entrada.Usura];
+
+        // K2 (T0826): lo descontado y pendiente de giro conocido en R, por número de cuota, con su ventana y su umbral sellados.
+        private readonly Dictionary<int, GiroPendiente[]> _giros = entrada.PendientesDeGiro
+            .Where(p => p.ConocidaEn <= entrada.InformacionHasta && p.Monto > 0m)
+            .GroupBy(p => p.Cuota)
+            .ToDictionary(g => g.Key, g => g.Select(p => new GiroPendiente(p.Monto, p.VencimientoDelGiro, p.UmbralDias)).ToArray());
         private ContextoDeReconstruccion _ctx = null!;
         private RegistroDeVentanas _ventanas = null!;
         private int _versionDelPlan = -1;
@@ -508,12 +514,20 @@ public static class ReconstruccionDeCredito
                 foreach (var ex in _exigibles) Poner(ex.AddDays(u.Valor - 1));
             }
             foreach (var t in entrada.Tolerancias) Poner(t.Desde.AddDays(-1));
+            // K2: el último día en que lo descontado no cuenta (la mora de la pagaduría llega a su umbral); al día siguiente cambia la altura.
+            foreach (var g in _giros.Values.SelectMany(x => x))
+                if (g.UmbralDias is { } umbralDeGiro) Poner(g.VencimientoDelGiro.AddDays(umbralDeGiro));
             if (_c.InsolvenciaDesde is { } i) Poner(i.AddDays(-1));
             if (_c.CastigoDesde is { } k) Poner(k.AddDays(-1));
             return s;
         }
 
-        private sealed record Evaluacion(bool[] Vencidas, ResultadoDeAlturaDeMora Altura, MotivoDeSuspension? Motivo);
+        /// <summary>
+        /// Lo evaluado un día: las cuotas vencidas, la altura, el motivo de suspensión y, por cuota (K2), el interés corriente y el capital
+        /// cubiertos por lo descontado y pendiente de giro dentro del umbral, que no causan mora.
+        /// </summary>
+        private sealed record Evaluacion(bool[] Vencidas, ResultadoDeAlturaDeMora Altura, MotivoDeSuspension? Motivo,
+            decimal[]? InteresCubierto = null, decimal[]? CapitalCubierto = null);
 
         private Evaluacion Evaluar(DateOnly d)
         {
@@ -521,17 +535,40 @@ public static class ReconstruccionDeCredito
             var plan = _ctx.Plan!;
             var vencidas = new bool[plan.Cuotas.Count];
             var paraMora = new List<CuotaParaMora>();
+            decimal[]? interesCubierto = null, capitalCubierto = null;
             for (var i = 0; i < plan.Cuotas.Count; i++)
             {
                 vencidas[i] = AlturaDeMora.EstaVencida(_exigibles[i], d);
-                if (vencidas[i]) paraMora.Add(new CuotaParaMora(plan.Cuotas[i].Numero, _exigibles[i], SaldoVencido(i, d)));
+                if (!vencidas[i]) continue;
+                var numero = plan.Cuotas[i].Numero;
+                var saldoVencido = SaldoVencido(i, d);
+                if (_giros.TryGetValue(numero, out var giros))
+                {
+                    paraMora.Add(new CuotaParaMora(numero, _exigibles[i], saldoVencido) { Giros = giros });
+                    // Lo descontado cubre la cuota en el orden de la prelación: seguro, corriente, capital (T31).
+                    var cubierto = AlturaDeMora.CubiertoPorGiro(d, giros);
+                    if (cubierto > 0m)
+                    {
+                        interesCubierto ??= new decimal[plan.Cuotas.Count];
+                        capitalCubierto ??= new decimal[plan.Cuotas.Count];
+                        var vispera = d.AddDays(-1);
+                        var tras = Math.Max(cubierto - Saldo(numero, LoanConcept.Insurance, vispera), 0m);
+                        var interes = InteresCorriente(numero, vispera);
+                        interesCubierto[i] = Math.Min(interes, tras);
+                        capitalCubierto[i] = Math.Min(_ctx.CapitalPendiente(plan.Cuotas[i]), Math.Max(tras - interes, 0m));
+                    }
+                }
+                else
+                {
+                    paraMora.Add(new CuotaParaMora(numero, _exigibles[i], saldoVencido));
+                }
             }
             var tolerancia = Vigente(entrada.Tolerancias, d) ?? 0m;
             var umbral = Vigente(entrada.UmbralesDeSuspension, d);
             var altura = AlturaDeMora.Calcular(d, paraMora, tolerancia);
             var motivo = ReglaDeSuspension.Evaluar(new EntradaDeSuspension(altura.Dias, umbral, _c.Reestructuraciones,
                 _c.InsolvenciaDesde is { } ins && ins <= d, _c.CastigoDesde is { } cas && cas <= d));
-            return new Evaluacion(vencidas, altura, motivo);
+            return new Evaluacion(vencidas, altura, motivo, interesCubierto, capitalCubierto);
         }
 
         /// <summary>
@@ -627,9 +664,10 @@ public static class ReconstruccionDeCredito
             {
                 if (!ev.Vencidas[i]) continue;
                 var q = cuotas[i];
-                var b = _ctx.CapitalPendiente(q);
+                // K2: lo descontado y pendiente de giro dentro del umbral no causa mora (FR-114: al deudor no se le imputa).
+                var b = _ctx.CapitalPendiente(q) - (ev.CapitalCubierto?[i] ?? 0m);
                 if (_c.MoraSobreIntereses)
-                    b += InteresCorriente(q.Numero, d.AddDays(-1));
+                    b += InteresCorriente(q.Numero, d.AddDays(-1)) - (ev.InteresCubierto?[i] ?? 0m);
                 if (b > 0m)
                     salida[new ClaveDeCausacion(mora, q.Numero)] = new VentanaDeseada(
                         new ParametrosDeVentana(b, tasa.TasaDiariaMora, periodo), tasa.MoraEA, tasa.TopeDiarioMora, tasa.MoraTopada, suspendida);

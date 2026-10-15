@@ -512,6 +512,15 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote> PromissoryNotes { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult> ScreeningResults { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink> LoanPayrollLinks { get; }
+    // K2 (CarteraLibranza): convenios de libranza, archivo de descuentos, resultados y seguimientos de los no aplicados.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreement> PayrollAgreements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion> PayrollAgreementVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact> PayrollAgreementContacts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode> PayrollAgreementResultCodes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition> LoanDailyPositions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions { get; }

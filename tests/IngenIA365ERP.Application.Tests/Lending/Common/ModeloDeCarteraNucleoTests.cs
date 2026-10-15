@@ -16,6 +16,9 @@ namespace IngenIA365ERP.Application.Tests.Lending.Common;
 ///
 /// <para>US9 (bloque 12B, T0697): suma las siete tablas de <c>CarteraRiesgo</c> (data-model §23.1–§23.6, §23.10) con sus marcas, y las FK de
 /// <c>LND_AccountingFactParts</c> hacia el cierre y su reapertura, que la base dejó sin crear (C66).</para>
+///
+/// <para>K2 (fase 15, T0827): suma las ocho tablas de <c>CarteraLibranza</c> con sus marcas: la línea del archivo, el resultado y el seguimiento
+/// son hechos; la línea va sin diferencias de auditoría (C46).</para>
 /// </summary>
 public class ModeloDeCarteraNucleoTests
 {
@@ -55,6 +58,9 @@ public class ModeloDeCarteraNucleoTests
         // Riesgo y cierres (US9, CarteraRiesgo)
         "LND_RiskPolicyVersions", "LND_MonthlyCloses", "LND_MonthlyCloseLoans", "LND_MonthlyCloseGeneralImpairments", "LND_MonthlyCloseReopenings",
         "LND_LoanArrearsHistory", "LND_AnalysisRatings",
+        // Libranza (K2, CarteraLibranza; data-model §24.1–§24.4, §24.6–§24.8, §24.10)
+        "LND_PayrollAgreements", "LND_PayrollAgreementVersions", "LND_PayrollAgreementContacts", "LND_PayrollAgreementResultCodes",
+        "LND_PayrollDeductionFiles", "LND_PayrollDeductionFileLines", "LND_PayrollDeductionResults", "LND_NonDeductionFollowUps",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -78,13 +84,13 @@ public class ModeloDeCarteraNucleoTests
         "LendingInboundMessageEvaluation", "AccountingFactPart", "DebtorMessage", "DebtorMessageEvent", "PriorNotice",
         "IssuedLendingDocument", "IssuedDocumentLoan", "IssuedDocumentEvent", "MigrationLoadDifference", "ProvisionalCollection",
         "LendingActivation", "MonthlyClose", "MonthlyCloseLoan", "MonthlyCloseGeneralImpairment", "MonthlyCloseReopening", "LoanArrearsHistoryEntry",
-        "RiskPolicyVersion", .. Preparacion,
+        "RiskPolicyVersion", "PayrollDeductionFileLine", "PayrollDeductionResult", "NonDeductionFollowUp", .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
-            .. Preparacion];
+            "PayrollDeductionFileLine", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
@@ -109,7 +115,8 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(100, "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9)");
+        Tablas.Should().HaveCount(108,
+            "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)");
     }
 
     [Theory]

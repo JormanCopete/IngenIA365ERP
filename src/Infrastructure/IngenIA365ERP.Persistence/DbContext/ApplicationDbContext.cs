@@ -610,6 +610,14 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote> PromissoryNotes => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.PromissoryNote>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult> ScreeningResults => Set<IngenIA365ERP.Domain.Entities.Lending.Origination.ScreeningResult>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink> LoanPayrollLinks => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.LoanPayrollLink>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreement> PayrollAgreements => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion> PayrollAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact> PayrollAgreementContacts => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementContact>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode> PayrollAgreementResultCodes => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollAgreementResultCode>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile> PayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition> LoanDailyPositions => Set<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>();

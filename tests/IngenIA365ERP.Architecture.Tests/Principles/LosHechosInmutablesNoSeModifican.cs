@@ -237,6 +237,10 @@ public class LosHechosInmutablesNoSeModifican
         // después de insertarse; la versión de la política sólo su validación con el punto de acta (C52).
         ["MonthlyClose"] = [], ["MonthlyCloseLoan"] = [], ["MonthlyCloseGeneralImpairment"] = [], ["MonthlyCloseReopening"] = [],
         ["LoanArrearsHistoryEntry"] = [], ["RiskPolicyVersion"] = ["ValidatedAt", "ValidatedByUserId", "SessionItemId"],
+        // K2 (T0824; data-model §24.7, §24.8, §24.10): la línea del archivo de descuentos, el resultado de la pagaduría y el seguimiento de un
+        // no aplicado no admiten ninguna escritura después de insertarse (un resultado posterior reemplaza al anterior con SupersedesResultId). El
+        // archivo no es hecho: su contenido es de sólo init y sólo avanza el estado.
+        ["PayrollDeductionFileLine"] = [], ["PayrollDeductionResult"] = [], ["NonDeductionFollowUp"] = [],
     };
 
     [Fact]

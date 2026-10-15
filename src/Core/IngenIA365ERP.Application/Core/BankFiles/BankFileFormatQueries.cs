@@ -120,6 +120,19 @@ public sealed class ListBankFieldSourcesQueryHandler : IRequestHandler<ListBankF
         (BankFieldSource.SeveranceBaseSalary, "Salario base de liquidación", false, true, false, nameof(BankFileScope.SeveranceDeposit)),
         (BankFieldSource.PayeeHireDate, "Fecha de ingreso del empleado", false, true, false, nameof(BankFileScope.SeveranceDeposit)),
         (BankFieldSource.Year, "Año de la consignación (o del pago)", true, true, true, null),
+        // Feature 013 (Cartera): desembolsos (K1) y libranza de ida y de vuelta (K2; adaptadores-y-archivos.md §6.1).
+        (BankFieldSource.LoanNumber, "Número del crédito", false, true, false, null),
+        (BankFieldSource.PayerEmployeeId, "Identificación del empleado ante la pagaduría", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.InstallmentNumber, "Número de la cuota", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.DueDate, "Vencimiento de la cuota", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.NoveltyKind, "Novedad de la línea (alta, cambio, cancelación, sin cambio; use un mapa)", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.PastDueAmount, "Valor vencido que se pide además de la cuota", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.PeriodYear, "Año del período de nómina", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.PeriodMonth, "Mes del período de nómina", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.LibranzaDate, "Fecha de la libranza (prelación)", false, true, false, nameof(BankFileScope.PayrollDeductionRequest)),
+        (BankFieldSource.ResultCode, "Código de respuesta de la pagaduría", false, true, false, nameof(BankFileScope.PayrollDeductionResult)),
+        (BankFieldSource.DeductedAmount, "Valor descontado", false, true, false, nameof(BankFileScope.PayrollDeductionResult)),
+        (BankFieldSource.DeductionDate, "Fecha del descuento", false, true, false, nameof(BankFileScope.PayrollDeductionResult)),
     ];
 
     public Task<Result<IReadOnlyList<BankFieldSourceDto>>> Handle(ListBankFieldSourcesQuery request, CancellationToken ct) =>

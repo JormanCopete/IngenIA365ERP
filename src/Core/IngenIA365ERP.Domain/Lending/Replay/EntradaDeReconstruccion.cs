@@ -101,6 +101,18 @@ public sealed record EntradaDeOperacion(string Id, LoanOperationKind Clase, Date
 }
 
 /// <summary>
+/// Lo que la pagaduría descontó de una cuota y todavía no giró (feature 013, K2, T0826; T30, FR-114; data-model §24.8): un resultado
+/// <c>Deducted</c> o <c>PartiallyDeducted</c> de <c>LND_PayrollDeductionResults</c>, no reemplazado ni girado, con la fecha del descuento, el
+/// vencimiento de la ventana de giro y el umbral de mora de la pagaduría <b>sellados</b> al recibirlo, y cuándo se supo (R = su registro). Lo
+/// carga <c>CargadorDeReconstruccion</c> (T0839). Mientras la mora de la pagaduría no supere el umbral, la cuota no cuenta para la altura de
+/// mora por lo descontado ni causa mora sobre ello; superado, cuenta desde su vencimiento. Umbral nulo: nunca se imputa (C71). (nuevo)
+/// </summary>
+public sealed record CuotaPendienteDeGiro(int Cuota, DateOnly FechaDelDescuento, DateOnly VencimientoDelGiro, decimal Monto, DateTime ConocidaEn)
+{
+    public int? UmbralDias { get; init; }
+}
+
+/// <summary>
 /// Todo lo que la reconstrucción de un crédito necesita (T24): las condiciones selladas, el plan pactado del primer tramo (para un
 /// migrado, el plan sale de su <c>OpeningBalance</c>), las operaciones, R y las series regulatorias de la modalidad (usura, festivos
 /// nacionales, umbral de suspensión, tolerancia de saldo vencido).
@@ -118,4 +130,10 @@ public sealed record EntradaDeReconstruccion(
     public IReadOnlyList<ValorConVigencia<int>> UmbralesDeSuspension { get; init; } = [];
 
     public IReadOnlyList<ValorConVigencia<decimal>> Tolerancias { get; init; } = [];
+
+    /// <summary>
+    /// K2 (T0826): lo descontado por la pagaduría y pendiente de giro, por cuota. Sin pendientes la reconstrucción es la de K1 (no cambia la
+    /// versión de reglas).
+    /// </summary>
+    public IReadOnlyList<CuotaPendienteDeGiro> PendientesDeGiro { get; init; } = [];
 }

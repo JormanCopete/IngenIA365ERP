@@ -127,6 +127,9 @@ public sealed class CasoDoradoDeCartera
             Festivos = Series.Festivos,
             UmbralesDeSuspension = Series.UmbralesDeSuspension.Select(u => new ValorConVigencia<int>(u.Desde, u.Dias)).ToList(),
             Tolerancias = Series.Tolerancias.Select(t => new ValorConVigencia<decimal>(t.Desde, t.Valor)).ToList(),
+            PendientesDeGiro = Series.PendientesDeGiro
+                .Select(g => new CuotaPendienteDeGiro(g.Cuota, g.FechaDelDescuento, g.VencimientoDelGiro, g.Monto, g.RegistradoEn) { UmbralDias = g.Umbral })
+                .ToList(),
         };
 
     private EntradaDeOperacion Operacion(OperacionJson o, int indice) =>
@@ -272,6 +275,18 @@ public sealed class CasoDoradoDeCartera
         public List<IndiceJson> Indices { get; set; } = [];
         public List<UmbralJson> UmbralesDeSuspension { get; set; } = [];
         public List<ToleranciaJson> Tolerancias { get; set; } = [];
+        /// <summary>K2 (T0804): lo descontado por la pagaduría y pendiente de giro, con su ventana y su umbral sellados.</summary>
+        public List<PendienteDeGiroJson> PendientesDeGiro { get; set; } = [];
+    }
+
+    public sealed class PendienteDeGiroJson
+    {
+        public int Cuota { get; set; }
+        public DateOnly FechaDelDescuento { get; set; }
+        public DateOnly VencimientoDelGiro { get; set; }
+        public decimal Monto { get; set; }
+        public int? Umbral { get; set; }
+        public DateTime RegistradoEn { get; set; }
     }
 
     public sealed class UmbralJson

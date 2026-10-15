@@ -1,0 +1,33 @@
+// K2, T0803 (FR-113, T78): el archivo del período siguiente contra el último enviado. El convenio lleva lo vencido. Frente al base:
+// 201 pide lo mismo (sin cambio); 202 pide otra cuota (cambio, con lo anterior); 203 ya no está entre las obligaciones del convenio
+// (se canceló o se trasladó: cancelación con total cero); 204 es nueva; 205 vino en el base como cancelación y vuelve (alta); 206 trae
+// lo vencido además de su cuota, que se suma al total y la vuelve un cambio. Calculado con novedades.py (decimal).
+{
+  "nombre": "Cambios, cancelaciones y altas contra el base",
+  "incluyeVencido": true,
+  "base": [
+    { "credito": 201, "vinculo": 601, "persona": 9101, "fechaLibranza": "2025-06-01", "total": 300000, "novedad": "New" },
+    { "credito": 202, "vinculo": 602, "persona": 9102, "fechaLibranza": "2025-07-01", "total": 250000, "novedad": "Unchanged" },
+    { "credito": 203, "vinculo": 603, "persona": 9103, "fechaLibranza": "2025-08-01", "total": 180000.50, "novedad": "Change" },
+    { "credito": 205, "vinculo": 605, "persona": 9105, "fechaLibranza": "2025-04-20", "total": 0, "novedad": "Cancellation" },
+    { "credito": 206, "vinculo": 606, "persona": 9106, "fechaLibranza": "2025-09-09", "total": 145000, "novedad": "New" }
+  ],
+  "obligaciones": [
+    { "credito": 201, "vinculo": 601, "persona": 9101, "fechaLibranza": "2025-06-01", "exigible": 300000, "vencido": 0 },
+    { "credito": 202, "vinculo": 602, "persona": 9102, "fechaLibranza": "2025-07-01", "exigible": 262345.67, "vencido": 0 },
+    { "credito": 204, "vinculo": 604, "persona": 9104, "fechaLibranza": "2026-02-28", "exigible": 99999.99, "vencido": 0 },
+    { "credito": 205, "vinculo": 607, "persona": 9105, "fechaLibranza": "2025-04-20", "exigible": 120000, "vencido": 0 },
+    { "credito": 206, "vinculo": 606, "persona": 9106, "fechaLibranza": "2025-09-09", "exigible": 145000, "vencido": 87500.25 }
+  ],
+  "esperado": {
+    "lineas": [
+      {"linea": 1, "credito": 205, "novedad": "New", "corriente": 120000, "vencido": 0, "total": 120000, "anterior": null},
+      {"linea": 2, "credito": 201, "novedad": "Unchanged", "corriente": 300000, "vencido": 0, "total": 300000, "anterior": 300000},
+      {"linea": 3, "credito": 202, "novedad": "Change", "corriente": 262345.67, "vencido": 0, "total": 262345.67, "anterior": 250000},
+      {"linea": 4, "credito": 203, "novedad": "Cancellation", "corriente": 0, "vencido": 0, "total": 0, "anterior": 180000.5},
+      {"linea": 5, "credito": 206, "novedad": "Change", "corriente": 145000, "vencido": 87500.25, "total": 232500.25, "anterior": 145000},
+      {"linea": 6, "credito": 204, "novedad": "New", "corriente": 99999.99, "vencido": 0, "total": 99999.99, "anterior": null}
+    ],
+    "totales": {"nuevas": 2, "cambios": 2, "cancelaciones": 1, "sinCambio": 1, "montoNuevas": 219999.99, "montoCambios": 494845.92, "montoSinCambio": 300000, "lineas": 6, "total": 1014845.91}
+  }
+}

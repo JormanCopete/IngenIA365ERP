@@ -3,6 +3,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
+using IngenIA365ERP.Domain.Entities.Lending.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -60,6 +61,8 @@ public class LoanOperationConfiguration : IEntityTypeConfiguration<LoanOperation
         builder.HasOne<LendingInboundMessage>().WithMany().HasForeignKey(e => e.InboundMessageId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MigrationLoad>().WithMany().HasForeignKey(e => e.MigrationLoadId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InsuranceClaim>().WithMany().HasForeignKey(e => e.InsuranceClaimId).OnDelete(DeleteBehavior.Restrict);
+        // K2 (CarteraLibranza): el pago de la pagaduría nombra el resultado «pendiente de giro» que gira.
+        builder.HasOne<PayrollDeductionResult>().WithMany().HasForeignKey(e => e.PayrollDeductionResultId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_LoanOperations_Number");
         builder.HasIndex(e => new { e.LoanId, e.Sequence }).IsUnique().HasDatabaseName("UK_LND_LoanOperations_Loan_Sequence");
@@ -71,5 +74,7 @@ public class LoanOperationConfiguration : IEntityTypeConfiguration<LoanOperation
         builder.HasIndex(e => e.PayerPersonId).HasDatabaseName("IX_LND_LoanOperations_PayerPersonId");
         builder.HasIndex(e => e.RelatedOperationId)
             .HasDatabaseName("IX_LND_LoanOperations_RelatedOperationId").HasFilter("[RelatedOperationId] IS NOT NULL");
+        builder.HasIndex(e => e.PayrollDeductionResultId)
+            .HasDatabaseName("IX_LND_LoanOperations_PayrollDeductionResultId").HasFilter("[PayrollDeductionResultId] IS NOT NULL");
     }
 }

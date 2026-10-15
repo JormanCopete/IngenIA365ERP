@@ -54,6 +54,38 @@ public class CasosDoradosDeCarteraTests
         ]);
     }
 
+    /// <summary>
+    /// K2, T0804 (T30, FR-114): los casos del pendiente de giro —dentro del umbral sellado la cuota descontada no cuenta para la altura ni
+    /// causa mora; superado, cuenta desde su vencimiento; girada con fecha valor del descuento, queda pagada en esa fecha sin mora ni ajuste—.
+    /// </summary>
+    [Fact]
+    public void Estan_los_casos_del_pendiente_de_giro_de_K2()
+    {
+        CasoDoradoDeCartera.Archivos().Select(Path.GetFileNameWithoutExtension).Should().Contain(
+            ["k2-pendiente-de-giro-umbral", "k2-pendiente-de-giro-girado"]);
+    }
+
+    /// <summary>
+    /// K2, T0804: dentro del umbral la cuota descontada no cambia la calificación diaria (la altura del día no la cuenta); al superarlo, la
+    /// altura es la de su vencimiento. Se mira con la reconstrucción del caso, sin la hoja: lo que el caso fija al centavo lo compara la teoría.
+    /// </summary>
+    [Fact]
+    public void Dentro_del_umbral_la_cuota_descontada_no_cuenta_y_fuera_cuenta_desde_su_vencimiento()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k2-pendiente-de-giro-umbral.json"));
+        EstadoDelCredito A(string dia) => MotorDeCartera.Reconstruir(
+            caso.Entrada(caso.Condiciones, caso.Operaciones, DateTime.Parse(dia + "T23:00:00Z").ToUniversalTime()), DateOnly.Parse(dia));
+        var sinElResultado = caso.Entrada(caso.Condiciones, caso.Operaciones, DateTime.Parse("2026-12-20T23:00:00Z").ToUniversalTime()) with
+        {
+            PendientesDeGiro = [],
+        };
+
+        A("2026-12-20").AlturaDeMora.Dias.Should().Be(0, "la pagaduría está dentro de la ventana: el deudor no tiene mora");
+        MotorDeCartera.Reconstruir(sinElResultado, DateOnly.Parse("2026-12-20")).AlturaDeMora.Dias.Should().Be(15, "sin el resultado, la cuota cuenta");
+        A("2027-01-07").AlturaDeMora.CuotaMasAntigua.Should().Be(2, "la cuota 1 sigue dentro del umbral el día 30 de mora de la pagaduría");
+        A("2027-01-08").AlturaDeMora.Should().Be(new Domain.Lending.Delinquency.ResultadoDeAlturaDeMora(34, 1, 2), "superado el umbral cuenta desde su vencimiento");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_caso_coincide_con_la_hoja_de_calculo(string archivo)

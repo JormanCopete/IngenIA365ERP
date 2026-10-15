@@ -3,6 +3,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Governance;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Origination;
+using IngenIA365ERP.Domain.Entities.Lending.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -33,6 +34,7 @@ public class CreditApplicationConfiguration : IEntityTypeConfiguration<CreditApp
         builder.Property(e => e.SimulationSha256).HasMaxLength(EntidadDeCartera.Huella);
         builder.Property(e => e.Purpose).HasMaxLength(300);
         builder.Property(e => e.RepaymentChannel).HasConversion<int>().IsRequired();
+        builder.Property(e => e.PayrollEmployeeIdentifier).HasMaxLength(30);
         builder.Property(e => e.PrepaymentChoice).HasConversion<int?>();
         builder.Property(e => e.PayoffRequest);
         builder.Property(e => e.PolicyExceptionRequested).IsRequired();
@@ -57,6 +59,8 @@ public class CreditApplicationConfiguration : IEntityTypeConfiguration<CreditApp
         builder.HasOne<CreditDecision>().WithMany().HasForeignKey(e => e.ApprovalDecisionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditLimit>().WithMany().HasForeignKey(e => e.CreditLimitId).OnDelete(DeleteBehavior.Restrict);
+        // K2 (CarteraLibranza): el convenio de la libranza de pagaduría externa (FR-109).
+        builder.HasOne<PayrollAgreement>().WithMany().HasForeignKey(e => e.PayrollAgreementId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.Number).IsUnique()
             .HasDatabaseName("UK_LND_CreditApplications_Number").HasFilter("[Number] IS NOT NULL");

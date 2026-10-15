@@ -84,6 +84,12 @@ public class LoanOperation : AuditableEntityLong, IHechoInmutable
     /// <summary>K2: la línea «descontado pendiente de giro» que cubre (FR-085). Dato, sin FK.</summary>
     public string? PaymasterPendingLineReference { get; init; }
 
+    /// <summary>
+    /// K2 (<c>CarteraLibranza</c>; data-model §24.8): el resultado «descontado pendiente de giro» que este pago de la pagaduría gira. Un pago
+    /// vigente (no reversado) que lo nombra levanta el pendiente; reversarlo lo vuelve a dejar.
+    /// </summary>
+    public int? PayrollDeductionResultId { get; init; }
+
     /// <summary>Huella de la simulación en la forma interactiva (T32).</summary>
     public string? SimulationId { get; init; }
 
