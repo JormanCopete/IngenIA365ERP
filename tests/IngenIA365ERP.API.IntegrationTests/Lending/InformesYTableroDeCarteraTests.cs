@@ -35,8 +35,8 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
     /// <summary>K2 (fase 15, T0850): las dos vistas de la libranza, publicadas desde que la entrega vigente es K2; la del cuadre trae datos del deudor.</summary>
     private static readonly string[] VistasDeK2 = ["payroll-agreements", "payroll-deduction-reconciliation"];
 
-    /// <summary>K3 (fase 16, T0890): los reestructurados, con datos del deudor.</summary>
-    private static readonly string[] VistasDeK3 = ["restructured"];
+    /// <summary>K3: los reestructurados (fase 16, T0890) y la cartera castigada (fase 17, T0915), con datos del deudor.</summary>
+    private static readonly string[] VistasDeK3 = ["restructured", "charge-offs"];
 
     [Fact]
     public async Task K1_registro_permisos_exportacion_auditada_alcance_y_columnas()
