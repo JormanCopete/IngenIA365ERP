@@ -3894,6 +3894,16 @@ deja la castigada en control, en cobranza y con sus recuperaciones a la vista; l
 desde el cierre de su mes de efecto. Pruebas de US14 verdes; `CastigoYRecuperacionTests` y `EvaluacionDeCarteraTests`
 verdes en los dos motores. Con esto K3 está completa.
 
+- Cierre de la fase 17 (2026-10-15): US14 verde. Domain 2.049, Application 5.458, Architecture 620 y Shared 453, todas pasan;
+  `FullyQualifiedName~Lending` en PostgreSQL y SQL Server: 98 pasan y 5 omitidas (las de volumen) en cada motor, con
+  `CastigoYRecuperacionTests` y `EvaluacionDeCarteraTests`. Defectos corregidos en el bloque C: la conciliación
+  (`SaldosContablesDeCartera`) llevaba el capital y el interés de un castigado —también el migrado— a `Capital` e `InteresPorCobrar`
+  en vez de `CastigadaEnOrden` con su concepto; la plantilla de la matriz no sugería `CastigadaEnOrden`, `GastoDeCastigoOCondonacion`
+  ni `IngresoDiferido`; el registro de informes de `InformesYTableroDeCarteraTests` no esperaba `charge-offs`. Quedan para el dueño:
+  ninguna ruta de Core retira al asociado (`IsAssociate`), ninguna plantilla de Cartera trae `Attachments.Upload`, `cartera.consejo`
+  no trae `Loans.Read` ni `Ratings.Read` (las pantallas que aplica), `Castigo.DiasMinimosDeMora`, `writeOffReport` y
+  `portfolioEvaluation` en `TiposDeOrganizacion`, y T0895 con la contadora. Sin migraciones nuevas.
+
 ---
 
 ## Phase 18: User Story 12 - Cobranza por etapas que respeta la ley (Priority: P2) — entrega K4
