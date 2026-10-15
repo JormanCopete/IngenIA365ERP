@@ -73,6 +73,41 @@ public class SaldosContablesDeCarteraTests : IAsyncLifetime
     public void Cada_concepto_va_a_su_rol_de_saldo(LoanConcept concepto, bool enControl, string rol) =>
         SaldosContablesDeCartera.RolDelConcepto(concepto, enControl).Should().Be(rol);
 
+    [Theory]
+    [InlineData(LoanConcept.Principal, "CastigadaEnOrden")]
+    [InlineData(LoanConcept.CurrentInterest, "CastigadaEnOrden")]
+    [InlineData(LoanConcept.DefaultInterest, "CastigadaEnOrden")]
+    [InlineData(LoanConcept.CurrentInterestInSuspense, "CastigadaEnOrden")]
+    [InlineData(LoanConcept.Insurance, "CastigadaEnOrden")]
+    [InlineData(LoanConcept.OtherCharge, "CastigadaEnOrden")]
+    [InlineData(LoanConcept.Advance, "Anticipo")]
+    [InlineData(LoanConcept.CreditBalance, "SaldoAFavor")]
+    public void En_un_credito_castigado_el_activo_va_a_la_castigada_en_orden(LoanConcept concepto, string rol) =>
+        SaldosContablesDeCartera.RolDelConcepto(concepto, enControl: false, castigado: true).Should().Be(rol);
+
+    [Fact]
+    public async Task Un_credito_castigado_al_corte_lleva_su_capital_a_la_castigada_en_orden_con_su_concepto()
+    {
+        // Defecto del 2026-10-15: la conciliación dejaba el capital del castigado en «Capital» mientras Contabilidad lo lleva a
+        // «CastigadaEnOrden» (contabilidad.md §2.1, ejemplo 14), y cada castigado salía como diferencia.
+        var (credito, sucursal, bruto) = await DesembolsarAsync();
+        var loan = await _d.Db.Loans.SingleAsync(l => l.Id == credito);
+        loan.WrittenOffOn = Hoy.AddDays(1);
+        await _d.Db.SaveChangesAsync();
+
+        var antes = await Saldos().PorCombinacionAsync(Hoy, null, default);
+        antes.Single(s => s.Clave.Rol == "Capital").Saldo.Should().Be(bruto, "el día anterior al castigo sigue en el activo");
+        antes.Should().NotContain(s => s.Clave.Rol == "CastigadaEnOrden");
+
+        var despues = await Saldos().PorCombinacionAsync(Hoy.AddDays(1), null, default);
+        despues.Should().NotContain(s => s.Clave.Rol == "Capital" || s.Clave.Rol == "InteresPorCobrar");
+        var castigada = despues.Single(s => s.Clave.Rol == "CastigadaEnOrden" && s.Clave.Concepto == nameof(LoanConcept.Principal));
+        castigada.Saldo.Should().Be(bruto);
+        castigada.Creditos.Should().Equal(credito);
+        castigada.Clave.Sucursal.Should().Be(sucursal);
+        SaldosContablesDeCartera.Signo("CastigadaEnOrden").Should().Be(1, "la castigada en orden es de naturaleza débito");
+    }
+
     [Fact]
     public void Los_roles_de_naturaleza_credito_se_leen_con_el_signo_contrario()
     {
