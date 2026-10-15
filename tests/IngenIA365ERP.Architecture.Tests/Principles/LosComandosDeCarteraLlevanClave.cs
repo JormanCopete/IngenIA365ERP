@@ -64,6 +64,11 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollAgreementsEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollDeductionFilesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollNotAppliedEndpoints.cs",
+        // K3, US11 (bloque C, T0890, T0868): novedades, condonaciones, eventos del deudor, reclamación al seguro e insolvencia. Sin clave sólo la
+        // simulación de la novedad ("/simulate", una consulta por POST).
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/NoveltiesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/WaiversEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/DebtorEventsEndpoints.cs",
     ];
 
     /// <summary>
@@ -77,7 +82,9 @@ public class LosComandosDeCarteraLlevanClave
             // US4 (bloque 8C): verificar el libro (api.md §16.5: no corrige nada).
             "\"/verify\"",
             // US5 (bloque 9C): simular un pago, la vista previa de su reverso y la simulación del recaudador de prueba (no escriben).
-            "/payment-simulations\"", "/reversal-preview\"", "\"/collector/simulations\""];
+            "/payment-simulations\"", "/reversal-preview\"", "\"/collector/simulations\"",
+            // K3 (bloque C, T0890): simular la novedad (api.md §11.1, «sin clave»: no escribe).
+            "/simulate\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -208,7 +215,7 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestPayrollDeductionResultCommand),
         // K3 (US11, bloque B; T0868): novedades (radicar, enviar, consentimiento, aplicar, anular), condonaciones (pedir, aplicar, anular), eventos del
         // deudor, reclamación al seguro e insolvencia. La simulación de la novedad es una consulta por POST (sin clave). Sus archivos de rutas
-        // (NoveltiesEndpoints, WaiversEndpoints, DebtorEventsEndpoints) los crea el bloque C (T0890) y se suman a Archivos allí.
+        // (NoveltiesEndpoints, WaiversEndpoints, DebtorEventsEndpoints) están en Archivos desde el bloque C (T0890).
         typeof(IngenIA365ERP.Application.Lending.Novelties.RequestLoanNoveltyCommand),
         typeof(IngenIA365ERP.Application.Lending.Novelties.SubmitLoanNoveltyCommand),
         typeof(IngenIA365ERP.Application.Lending.Novelties.RegisterNoveltyConsentCommand),

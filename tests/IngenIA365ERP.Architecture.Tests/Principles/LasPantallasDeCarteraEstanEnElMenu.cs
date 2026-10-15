@@ -66,6 +66,10 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Pagadurias.razor", "/cartera/pagadurias", "Lending.PayrollAgreements.View"),
         ("Pages/Cartera/ArchivosDeDescuento.razor", "/cartera/archivos-de-descuento", "Lending.PayrollDeductionFiles.Read"),
         ("Pages/Cartera/NoAplicados.razor", "/cartera/no-aplicados", "Lending.PayrollDeductionFiles.Read"),
+        // Fase 16, US11 (T0892, T0893; K3): las novedades y las condonaciones. Los eventos del deudor, la insolvencia y las reclamaciones viven
+        // en el detalle del crédito (se comprueba aparte).
+        ("Pages/Cartera/Novedades.razor", "/cartera/novedades", "Lending.Novelties.Read"),
+        ("Pages/Cartera/Condonaciones.razor", "/cartera/condonaciones", "Lending.Loans.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
@@ -103,6 +107,20 @@ public class LasPantallasDeCarteraEstanEnElMenu
         Assert.Contains("<PoliticaSarc", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "Parametros.razor")), StringComparison.Ordinal);
         Assert.Contains("<CalificacionDelCredito", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "CreditoDetalle.razor")), StringComparison.Ordinal);
         Assert.Contains("href=\"/cartera/cierres\"", File.ReadAllText(Path.Combine(Shared, "Pages", "Contabilidad", "Periodos.razor")), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// US11 (T0892): el detalle del crédito ofrece «Registrar evento del deudor» e «Insolvencia» detrás de sus permisos y la pestaña de
+    /// reclamaciones al seguro, con su indicador; «Mis pendientes» lista también novedades y condonaciones.
+    /// </summary>
+    [Fact]
+    public void El_detalle_del_credito_registra_eventos_del_deudor_e_insolvencia()
+    {
+        var eventos = File.ReadAllText(Path.Combine(Shared, "Components", "Cartera", "EventosDelDeudor.razor"));
+        Assert.Contains("Required=\"Lending.DebtorEvents.Manage\"", eventos, StringComparison.Ordinal);
+        Assert.Contains("Required=\"Lending.Insolvency.Manage\"", eventos, StringComparison.Ordinal);
+        Assert.Contains("<IndicadorDeCarga", eventos, StringComparison.Ordinal);
+        Assert.Contains("<EventosDelDeudor", File.ReadAllText(Path.Combine(Shared, "Pages", "Cartera", "CreditoDetalle.razor")), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1139,6 +1139,7 @@ Pantallas `/cartera/documentos` y `/cartera/verificar`; vista de informe `issued
 | `LendingPriorNoticeEvidence` | `Lending.PriorNotices.Read` | `Lending.PriorNotices.RegisterEvidence` | no, una vez registrada |
 | `LendingLegalProcessDocument` | `Lending.Collections.Read` | `Lending.LegalProcesses.Manage` | no |
 | `LendingNoveltyConsent` | `Lending.Novelties.Read` | `Lending.Novelties.Request` | no, una vez decidida la novedad |
+| `LendingDebtorEventSupport` (K3, bloque C; dueño: la persona) | `Lending.Loans.Read` | `Lending.DebtorEvents.Manage` o `Lending.Insolvency.Manage` | no (evidencia del evento, de la insolvencia o de la reclamación) |
 | `DataAuthorization` (plataforma) | `Compliance.DataSubjectRequests.Read` | quien registra la autorización (radicación o Cumplimiento) | no |
 | `LendingLogo` · `LendingSignatureImage` (sólo si el dueño acepta I6, C90) | `Lending.Documents.Read` | `Lending.Parameters.Manage` (como el firmante, que es parámetro) | sí, al reemplazarlo por otro; un documento ya emitido conserva su PDF |
 

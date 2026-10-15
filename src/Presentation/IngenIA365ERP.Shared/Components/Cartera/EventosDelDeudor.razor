@@ -1,0 +1,263 @@
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject NovedadesClient Novedades
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+
+@* Feature 013, K3, US11 (T0892; contracts/api.md §11.4; FR-097, FR-098, T102): en el expediente del crédito, los eventos del deudor (fallecimiento,
+   retiro de la cooperativa, embargo), sus procesos de insolvencia y las reclamaciones al seguro de vida deudores del crédito. «Registrar evento del
+   deudor» (Lending.DebtorEvents.Manage) bloquea el cupo y, si es el fallecimiento, abre la reclamación y suspende el cobro; «Insolvencia»
+   (Lending.Insolvency.Manage) abre el proceso —suspende la causación y el cobro y mantiene la calificación— o registra su fracaso. El acuerdo se
+   tramita como novedad de reestructuración. La reclamación la cierra pagada sólo el contrato, cuando la aseguradora paga; aquí se niega o se
+   desiste. El soporte se sube a la persona y no se borra. *@
+<div class="info-card">
+    <div class="toolbar">
+        <h4>Eventos del deudor</h4>
+        <PermissionGate Required="Lending.DebtorEvents.Manage">
+            <SfButton CssClass="e-outline" Disabled="@(PersonaId is null)" OnClick="@AbrirEvento">Registrar evento del deudor</SfButton>
+        </PermissionGate>
+        <PermissionGate Required="Lending.Insolvency.Manage">
+            <SfButton CssClass="e-outline" Disabled="@(PersonaId is null)" OnClick="@AbrirInsolvencia">Insolvencia</SfButton>
+        </PermissionGate>
+    </div>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <table class="data-grid">
+            <thead><tr><th>Evento</th><th>Fecha</th><th>Registrado por</th><th>Efectos</th><th>Levantado</th></tr></thead>
+            <tbody>
+                @foreach (var e in _eventos)
+                {
+                    <tr><td>@TextosDeNovedades.Evento(e.Kind)</td><td>@e.EventDate.ToString("dd/MM/yyyy")</td><td>@(e.RegisteredBy?.Name ?? "—")</td>
+                        <td>@string.Join("; ", e.Effects)</td><td>@(e.LiftedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</td></tr>
+                }
+            </tbody>
+        </table>
+        @if (_eventos.Count == 0) { <p class="texto-tenue">Sin eventos registrados.</p> }
+
+        <h4>Procesos de insolvencia</h4>
+        <table class="data-grid">
+            <thead><tr><th>Estado</th><th>Inicio</th><th>Régimen</th><th>Autoridad</th><th>Radicado</th><th>Créditos</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in _procesos)
+                {
+                    var proceso = p;
+                    <tr>
+                        <td>@TextosDeNovedades.EstadoDeInsolvencia(proceso.Status)@(proceso.FailedOn is { } f ? $" desde {f:dd/MM/yyyy}" : "")</td>
+                        <td>@proceso.StartDate.ToString("dd/MM/yyyy")</td>
+                        <td>@TextosDeNovedades.Regimen(proceso.Regime)</td>
+                        <td>@(proceso.Authority ?? "—")</td>
+                        <td>@(proceso.CaseNumber ?? "—")</td>
+                        <td>@string.Join(", ", proceso.Loans)</td>
+                        <td>
+                            @if (proceso.Status == 1)
+                            {
+                                <PermissionGate Required="Lending.Insolvency.Manage">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirFracaso(proceso))">Registrar fracaso…</SfButton>
+                                </PermissionGate>
+                                <PermissionGate Required="Lending.Novelties.Request">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => Navegacion.NavigateTo($"/cartera/novedades?credito={CreditoId}"))">Acuerdo como novedad</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_procesos.Count == 0) { <p class="texto-tenue">Sin procesos de insolvencia.</p> }
+
+        <h4>Reclamaciones al seguro</h4>
+        <table class="data-grid">
+            <thead><tr><th>Aseguradora</th><th>Fallecimiento</th><th>Estado</th><th class="numero">Pagado</th><th>Abierta</th><th>Cerrada</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _reclamaciones)
+                {
+                    var reclamacion = r;
+                    <tr>
+                        <td>@reclamacion.Insurer.FullName</td>
+                        <td>@reclamacion.DeathDate.ToString("dd/MM/yyyy")</td>
+                        <td>@TextosDeNovedades.EstadoDeReclamacion(reclamacion.Status)</td>
+                        <td class="numero">@(reclamacion.PaidAmount is { } v ? TextosDeCreditos.Pesos(v) : "—")</td>
+                        <td>@reclamacion.OpenedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                        <td>@(reclamacion.ClosedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</td>
+                        <td>
+                            @if (reclamacion.Status == 1)
+                            {
+                                <PermissionGate Required="Lending.DebtorEvents.Manage">
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirReclamacion(reclamacion))">Cerrar…</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_reclamaciones.Count == 0) { <p class="texto-tenue">Sin reclamaciones al seguro.</p> }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@_titulo" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    @if (_dialogo == Dialogo.Evento)
+                    {
+                        <label class="campo">Evento *
+                            <select class="e-input" @bind="_clase">
+                                @foreach (var e in TextosDeNovedades.Eventos) { <option value="@e.Nombre">@e.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Fecha del evento * <input class="e-input" type="date" @bind="_fecha" /></label>
+                    }
+                    else if (_dialogo == Dialogo.Insolvencia)
+                    {
+                        <label class="campo">Inicio del proceso * <input class="e-input" type="date" @bind="_fecha" /></label>
+                        <label class="campo">Régimen *
+                            <select class="e-input" @bind="_regimen">
+                                @foreach (var r in TextosDeNovedades.Regimenes) { <option value="@r.Nombre">@r.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo">Autoridad (juzgado, centro de conciliación) * <input class="e-input" @bind="_autoridad" maxlength="200" /></label>
+                        <label class="campo">Radicado <input class="e-input" @bind="_radicado" maxlength="60" /></label>
+                    }
+                    else if (_dialogo == Dialogo.Fracaso)
+                    {
+                        <label class="campo">Fecha del fracaso * <input class="e-input" type="date" @bind="_fecha" /></label>
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                    }
+                    else if (_dialogo == Dialogo.Reclamacion)
+                    {
+                        <label class="campo">Cómo se cierra *
+                            <select class="e-input" @bind="_cierre">
+                                @foreach (var c in TextosDeNovedades.CierresDeReclamacion) { <option value="@c.Nombre">@c.Texto</option> }
+                            </select>
+                        </label>
+                        <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                    }
+                </div>
+                @if (PersonaId is { } persona)
+                {
+                    <SubirSoporte OwnerEntityType="@NovedadesClient.DuenoDeSoportesDelDeudor" OwnerEntityPublicId="@persona" OnSubido="@CargarSoportesAsync" />
+                }
+                <label class="campo">Soporte @(_dialogo is Dialogo.Evento or Dialogo.Insolvencia ? "*" : "")
+                    <select class="e-input" @bind="_soporte">
+                        <option value="">Sin soporte</option>
+                        @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                    </select>
+                </label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter, EditorRequired] public Guid CreditoId { get; set; }
+    [Parameter] public Guid? PersonaId { get; set; }
+
+    private enum Dialogo { Evento, Insolvencia, Fracaso, Reclamacion }
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private List<EventoDelDeudorDto> _eventos = [];
+    private List<ProcesoDeInsolvenciaDto> _procesos = [];
+    private List<ReclamacionAlSeguroDto> _reclamaciones = [];
+    private List<AdjuntoDto> _soportes = [];
+    private Dialogo _dialogo;
+    private bool _mostrar;
+    private string _titulo = string.Empty, _clase = "Deceased", _regimen = "NaturalPersonDebtNegotiation", _cierre = "Denied";
+    private string? _autoridad, _radicado, _motivo, _soporte, _error;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private ProcesoDeInsolvenciaDto? _proceso;
+    private ReclamacionAlSeguroDto? _reclamacion;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var reclamaciones = await Novedades.ReclamacionesAsync(CreditoId);
+        _reclamaciones = reclamaciones.IsSuccess ? [.. reclamaciones.Value?.Items ?? []] : [];
+        if (PersonaId is { } persona)
+        {
+            var eventos = await Novedades.EventosAsync(persona);
+            _eventos = eventos.IsSuccess ? [.. eventos.Value?.Items ?? []] : [];
+            var procesos = await Novedades.InsolvenciasAsync(persona);
+            _procesos = procesos.IsSuccess ? [.. procesos.Value?.Items ?? []] : [];
+        }
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (PersonaId is not { } persona) return;
+        var r = await Adjuntos.ListarAsync(NovedadesClient.DuenoDeSoportesDelDeudor, persona);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task AbrirAsync(Dialogo dialogo, string titulo)
+    {
+        _dialogo = dialogo;
+        _titulo = titulo;
+        _error = _motivo = _soporte = _autoridad = _radicado = null;
+        _fecha = DateOnly.FromDateTime(DateTime.Today);
+        _clave = new ClaveDeOperacion();
+        await CargarSoportesAsync();
+        _mostrar = true;
+    }
+
+    private Task AbrirEvento() => AbrirAsync(Dialogo.Evento, "Registrar evento del deudor");
+
+    private Task AbrirInsolvencia() => AbrirAsync(Dialogo.Insolvencia, "Abrir proceso de insolvencia");
+
+    private Task AbrirFracaso(ProcesoDeInsolvenciaDto proceso)
+    {
+        _proceso = proceso;
+        return AbrirAsync(Dialogo.Fracaso, "Registrar el fracaso del proceso");
+    }
+
+    private Task AbrirReclamacion(ReclamacionAlSeguroDto reclamacion)
+    {
+        _reclamacion = reclamacion;
+        return AbrirAsync(Dialogo.Reclamacion, $"Cerrar la reclamación del crédito {reclamacion.LoanNumber}");
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (PersonaId is not { } persona) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var soporte = Guid.TryParse(_soporte, out var s) ? s : (Guid?)null;
+        string? error = null;
+        switch (_dialogo)
+        {
+            case Dialogo.Evento:
+                var evento = await Novedades.RegistrarEventoAsync(new EventoDelDeudorRequest(persona, _clase, _fecha, soporte), _clave);
+                error = evento.IsSuccess ? null : evento.ErrorMessage ?? "No se pudo registrar el evento.";
+                break;
+            case Dialogo.Insolvencia:
+                var abierto = await Novedades.AbrirInsolvenciaAsync(new InsolvenciaRequest(persona, _fecha, _regimen, _autoridad?.Trim() ?? string.Empty,
+                    string.IsNullOrWhiteSpace(_radicado) ? null : _radicado.Trim(), soporte), _clave);
+                error = abierto.IsSuccess ? null : abierto.ErrorMessage ?? "No se pudo abrir el proceso.";
+                break;
+            case Dialogo.Fracaso when _proceso is { } proceso:
+                var fracaso = await Novedades.RegistrarFracasoAsync(proceso.PublicId,
+                    new FracasoDeInsolvenciaRequest(_fecha, _motivo?.Trim() ?? string.Empty, soporte), _clave);
+                error = fracaso.IsSuccess ? null : fracaso.ErrorMessage ?? "No se pudo registrar el fracaso.";
+                break;
+            case Dialogo.Reclamacion when _reclamacion is { } reclamacion:
+                var cerrada = await Novedades.CambiarReclamacionAsync(reclamacion.PublicId,
+                    new EstadoDeReclamacionRequest(_cierre, _motivo?.Trim() ?? string.Empty, soporte), _clave);
+                error = cerrada.IsSuccess ? null : cerrada.ErrorMessage ?? "No se pudo cerrar la reclamación.";
+                break;
+        }
+        if (error is not null) { _error = error; return; }
+        _mostrar = false;
+        await Notification.SuccessAsync("Registrado.");
+        await CargarAsync();
+    }
+}

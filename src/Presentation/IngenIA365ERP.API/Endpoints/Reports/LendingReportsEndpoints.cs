@@ -81,6 +81,8 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(PayrollAgreementsReportQueryHandler.Vista, (f, _) => new PayrollAgreementsReportQuery(f));
         group.MapVistaDeCartera(PayrollDeductionReconciliationReportQueryHandler.Vista,
             (f, q) => new PayrollDeductionReconciliationReportQuery(f, Id(q, "agreement"), Entero(q, "year"), Entero(q, "month")));
+        // K3 (US11, T0887, T0890): los reestructurados al corte, con el filtro propio mechanism.
+        group.MapVistaDeCartera(RestructuredReportQueryHandler.Vista, (f, q) => new RestructuredReportQuery(f, Texto(q, "mechanism")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

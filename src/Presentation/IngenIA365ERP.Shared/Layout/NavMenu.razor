@@ -148,6 +148,14 @@
             <PermissionGate Required="Lending.Loans.Read">
                 <NavLink href="/cartera/creditos" class="nav-subitem">Créditos</NavLink>
             </PermissionGate>
+            @* K3, US11 (T0893): las novedades (prórroga, fecha, tasa, novación, refinanciación) y las condonaciones. Los eventos del deudor, la
+               insolvencia y las reclamaciones al seguro viven en el detalle del crédito. *@
+            <PermissionGate Required="Lending.Novelties.Read">
+                <NavLink href="/cartera/novedades" class="nav-subitem">Novedades</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/condonaciones" class="nav-subitem">Condonaciones</NavLink>
+            </PermissionGate>
             @* US13 (T0793): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) y la verificación de su código. *@
             <PermissionGate Required="Lending.Documents.Read">
                 <NavLink href="/cartera/documentos" class="nav-subitem">Documentos</NavLink>

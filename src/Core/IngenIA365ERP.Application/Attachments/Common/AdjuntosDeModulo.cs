@@ -225,6 +225,18 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string ConsentimientoDeNovedad = "LendingNoveltyConsent";
 
+    /// <summary>
+    /// Feature 013, K3 (bloque C, T0890, T0892): el soporte de un evento del deudor (acta de defunción, constancia de retiro, oficio de embargo), del
+    /// proceso de insolvencia (auto de admisión, constancia del fracaso) o del cambio de estado de una reclamación al seguro, con dueño la
+    /// <b>persona</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.Loans.Read</c>; lo sube quien tiene
+    /// <c>Lending.DebtorEvents.Manage</c> o <c>Lending.Insolvency.Manage</c>; no se borra: es la evidencia de lo que suspendió el cobro (Principio XI).
+    /// </summary>
+    public const string SoporteDeEventoDelDeudor = "LendingDebtorEventSupport";
+
+    private const string LeerCreditos = "Lending.Loans.Read";
+    private const string GestionarEventosDelDeudor = "Lending.DebtorEvents.Manage";
+    private const string GestionarInsolvencia = "Lending.Insolvency.Manage";
+
     private const string LeerNovedades = "Lending.Novelties.Read";
     private const string PedirNovedades = "Lending.Novelties.Request";
 
@@ -293,6 +305,7 @@ public static class AdjuntosDeModulo
             DocumentoDeSolicitud or CertificacionDeLibranza => LeerSolicitudesDeCredito,
             DocumentoDeGarantia => LeerGarantias,
             ConsentimientoDeNovedad => LeerNovedades,
+            SoporteDeEventoDelDeudor => LeerCreditos,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
             _ => De(ownerEntityType)?.PermisoDeLectura,
@@ -411,6 +424,14 @@ public static class AdjuntosDeModulo
             if (novedad is null || !await permisos.HasPermissionAsync(PedirNovedades, ct)) return new Error("Generic.NotFound", "Novedad no encontrada.");
             return NovedadDecidida(novedad.Value) ? NovedadBloqueada() : null;
         }
+        if (ownerEntityType == SoporteDeEventoDelDeudor)
+        {
+            // Feature 013, K3 (bloque C): el soporte de un evento del deudor, de su insolvencia o de su reclamación.
+            var puede = await permisos.HasPermissionAsync(GestionarEventosDelDeudor, ct) || await permisos.HasPermissionAsync(GestionarInsolvencia, ct);
+            if (!puede || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
         {
             if (contentType is not null && !TiposDeImagenDeCartera.Contains(contentType))
@@ -450,6 +471,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType is AutorizacionDeDatos or SolicitudDelTitular)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es evidencia del titular de los datos (autorización o solicitud): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013, K3 (bloque C): el soporte de un evento del deudor es la evidencia de lo que suspendió el cobro.
+        if (ownerEntityType == SoporteDeEventoDelDeudor)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es el soporte de un evento del deudor (fallecimiento, retiro, embargo o insolvencia): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 013 (T0361): el soporte del concepto tributario respalda una versión sellada de la línea.
         if (ownerEntityType == SoporteTributarioDeLinea)
