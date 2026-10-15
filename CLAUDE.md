@@ -631,7 +631,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   sus artefactos (E-01, 2026-10-13). **Las migraciones de K1 están congeladas desde el 2026-10-15 (T0802)**:
   `CarteraNucleo` (93 tablas `LND_`), `CarteraRiesgo` (7) e `IntegracionContableDeCartera` (cuatro `ACC_`), en ese orden
   detrás de `RetiroDeLaCarteraHeredada`, todas aditivas; todo cambio de esquema posterior (K2–K6b, la feature 014 de
-  Ahorros o una corrección de K1) es una **migración nueva**, nunca una regeneración. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+  Ahorros o una corrección de K1) es una **migración nueva**, nunca una regeneración. **K2, libranza (fase 15,
+2026-10-15)**: migración aditiva `CarteraLibranza` (8 tablas, 6 columnas nulas en tablas de K1, adopción por `CAR` de
+`EnvioDeDescuentosConfirmado` y `ResultadoDeDescuentos`); convenios de pagaduría versionados con formatos de ida y vuelta
+elegidos **por referencia** (ámbitos 5 y 6 de `COR_BankFileFormats`, genéricos, sin cruce de vigencias; `FlatFileReader` es
+el inverso de `FlatFileWriter`), archivo de descuentos inmutable por pagaduría y período que va a Recaudo como
+`DescuentosPorPagaduria`, y lo **descontado y no girado no causa mora** al deudor mientras la pagaduría esté dentro del
+umbral `LIBRANZA_UMBRAL_MORA_PAGADURIA` (sin valor sembrado: sin él nunca se imputa); el giro se aplica por el contrato con
+`DeductionFileLinePublicId` y fecha valor del descuento. Receta: `docs/manual/cartera-libranza-y-pagadurias.md`. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
   pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.
