@@ -144,7 +144,7 @@ public sealed partial class EmisionDeCartera
         var modo = await modoDePaso.ResolverAsync(DimensionContableCambiadaV1.Type, h.FechaContable, emitidoPorElProceso: false, ct);
         if (modo.IsFailure) return Result.Failure<IntegrationMessage>(modo.Error);
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(
-            new OrigenDeEmision(MessageOriginKind.Document, vinculo.PublicId, ClaseVinculoDeLibranza, null, h.Credito.Number, h.FechaContable,
+            new OrigenDeEmision(MessageOriginKind.Document, vinculo.PublicId, ClaseVinculoDeLibranza, Prefijo(h.Credito.Number), h.Credito.Number, h.FechaContable,
                 h.SucursalPublicId, PersonPublicId: h.DeudorPublicId),
             ClavesDeEvento.ConfirmacionPor(h.Credito.PublicId), [contenido], modo.Value, ValidacionPrevia: validacionPrevia), ct);
         return Result.Success(mensajes[0]);

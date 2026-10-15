@@ -147,8 +147,9 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
 
     /// <summary>
     /// K2 (T0839; T30, FR-114; data-model §24.8): lo descontado por la pagaduría y pendiente de giro de cada crédito, conocido en R —resultados
-    /// <c>Deducted</c> o <c>PartiallyDeducted</c> registrados hasta R, no reemplazados por otro registrado hasta R y sin un pago de las operaciones
-    /// conocidas que los gire y no esté reversado—, con la cuota de su línea, la fecha del descuento y la ventana y el umbral sellados. Una línea sin
+    /// <c>Deducted</c> o <c>PartiallyDeducted</c> registrados hasta R y no reemplazados por otro registrado hasta R—, con la cuota de su línea, la
+    /// fecha del descuento y la ventana y el umbral sellados. Uno que ya giró un pago de las operaciones conocidas no reversado sigue en la entrada
+    /// con <c>GiradoDesde</c> (la fecha valor del pago): cubre la cuota hasta la víspera, así girar no cambia lo que el libro ya causó. Una línea sin
     /// cuota (sólo vencido) no entra: la reconstrucción la mide como cualquier saldo vencido.
     /// </summary>
     private async Task<IReadOnlyDictionary<int, IReadOnlyList<CuotaPendienteDeGiro>>> PendientesDeGiroAsync(IReadOnlyCollection<int> ids,
@@ -168,14 +169,16 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
         var reemplazados = resultados.Where(x => x.SupersedesResultId is not null).Select(x => x.SupersedesResultId!.Value).ToHashSet();
         var reversados = operaciones.Where(o => o.ReversesOperationId is not null).Select(o => o.ReversesOperationId!.Value).ToHashSet();
         var girados = operaciones.Where(o => o.PayrollDeductionResultId is not null && !reversados.Contains(o.Id))
-            .Select(o => o.PayrollDeductionResultId!.Value).ToHashSet();
+            .GroupBy(o => o.PayrollDeductionResultId!.Value).ToDictionary(g => g.Key, g => g.OrderBy(o => o.ValueDate).ThenBy(o => o.Sequence).First());
         return resultados
-            .Where(x => !reemplazados.Contains(x.Id) && !girados.Contains(x.Id) && x.InstallmentNumber is not null && x.DeductionDate is not null)
+            .Where(x => !reemplazados.Contains(x.Id) && x.InstallmentNumber is not null && x.DeductionDate is not null)
             .GroupBy(x => x.LoanId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<CuotaPendienteDeGiro>)g.Select(x => new CuotaPendienteDeGiro(x.InstallmentNumber!.Value,
                 x.DeductionDate!.Value, x.TransferDueDate ?? x.DeductionDate!.Value, x.DeductedAmount, x.CreatedAt)
             {
                 UmbralDias = x.PaymasterArrearsThresholdDays,
+                GiradoDesde = girados.TryGetValue(x.Id, out var girado) ? girado.ValueDate : null,
+                GiradoPor = girado is null ? null : Id(girado.Id),
             }).ToList());
     }
 

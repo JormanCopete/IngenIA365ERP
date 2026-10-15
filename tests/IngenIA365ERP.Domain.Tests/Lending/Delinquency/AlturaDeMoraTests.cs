@@ -86,6 +86,17 @@ public class AlturaDeMoraTests
         AlturaDeMora.CubiertoPorGiro(F("2027-02-28"), [giro, giro with { Monto = 5m, UmbralDias = 2 }]).Should().Be(250_000m);
     }
 
+    /// <summary>K2 (T0839): girado, lo descontado cubre la cuota hasta la víspera del pago que lo giró; desde ese día, el pago.</summary>
+    [Fact]
+    public void Lo_descontado_y_girado_cubre_hasta_la_vispera_del_giro()
+    {
+        var giro = new GiroPendiente(250_000m, F("2027-02-18"), 10) { GiradoDesde = F("2027-02-20") };
+        giro.DentroDelUmbral(F("2027-02-19")).Should().BeTrue();
+        giro.DentroDelUmbral(F("2027-02-20")).Should().BeFalse("desde el giro lo cubre el pago");
+        AlturaDeMora.CubiertoPorGiro(F("2027-02-19"), [giro]).Should().Be(250_000m);
+        AlturaDeMora.CubiertoPorGiro(F("2027-02-20"), [giro]).Should().Be(0m);
+    }
+
     [Fact]
     public void La_fachada_da_lo_mismo_y_una_tolerancia_negativa_es_un_error()
     {

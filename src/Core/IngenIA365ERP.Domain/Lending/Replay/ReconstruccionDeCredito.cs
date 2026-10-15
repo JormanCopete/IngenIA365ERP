@@ -298,11 +298,17 @@ public static class ReconstruccionDeCredito
         private readonly CalendarioHabil _calendario = FechasDeVencimiento.CalendarioDelArticulo829(entrada.Festivos);
         private readonly List<ValorDeUsura> _usura = [.. entrada.Usura];
 
-        // K2 (T0826): lo descontado y pendiente de giro conocido en R, por número de cuota, con su ventana y su umbral sellados.
+        // K2 (T0826): lo descontado y pendiente de giro conocido en R, por número de cuota, con su ventana y su umbral sellados. Girado (T0839),
+        // cubre hasta la víspera del pago que lo giró, salvo que la entrada traiga el reverso de ese pago conocido en R.
         private readonly Dictionary<int, GiroPendiente[]> _giros = entrada.PendientesDeGiro
             .Where(p => p.ConocidaEn <= entrada.InformacionHasta && p.Monto > 0m)
             .GroupBy(p => p.Cuota)
-            .ToDictionary(g => g.Key, g => g.Select(p => new GiroPendiente(p.Monto, p.VencimientoDelGiro, p.UmbralDias)).ToArray());
+            .ToDictionary(g => g.Key, g => g.Select(p => new GiroPendiente(p.Monto, p.VencimientoDelGiro, p.UmbralDias)
+            {
+                GiradoDesde = p.GiradoPor is { } por && entrada.Operaciones.Any(o => o.Reversa == por && o.RegistradoEn <= entrada.InformacionHasta)
+                    ? null
+                    : p.GiradoDesde,
+            }).ToArray());
         private ContextoDeReconstruccion _ctx = null!;
         private RegistroDeVentanas _ventanas = null!;
         private int _versionDelPlan = -1;

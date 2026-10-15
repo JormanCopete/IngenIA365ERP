@@ -110,6 +110,15 @@ public sealed record EntradaDeOperacion(string Id, LoanOperationKind Clase, Date
 public sealed record CuotaPendienteDeGiro(int Cuota, DateOnly FechaDelDescuento, DateOnly VencimientoDelGiro, decimal Monto, DateTime ConocidaEn)
 {
     public int? UmbralDias { get; init; }
+
+    /// <summary>
+    /// La fecha valor del pago que lo giró: desde ese día ya no cubre la cuota. Nula mientras siga pendiente. Girado, lo descontado sigue en la
+    /// entrada para los días anteriores: si saliera, la reconstrucción causaría mora que el libro no causó.
+    /// </summary>
+    public DateOnly? GiradoDesde { get; init; }
+
+    /// <summary>El <see cref="EntradaDeOperacion.Id"/> del pago que lo giró: si la entrada trae su reverso, vuelve a estar pendiente.</summary>
+    public string? GiradoPor { get; init; }
 }
 
 /// <summary>

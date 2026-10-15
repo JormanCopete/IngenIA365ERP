@@ -30,8 +30,18 @@ public sealed record GiroPendiente(decimal Monto, DateOnly VencimientoDelGiro, i
     /// <summary>Los días que la pagaduría lleva en mora el <paramref name="dia"/>: desde el vencimiento de la ventana, nunca negativos.</summary>
     public int MoraDeLaPagaduria(DateOnly dia) => Math.Max(dia.DayNumber - VencimientoDelGiro.DayNumber, 0);
 
-    /// <summary>¿El <paramref name="dia"/> la mora de la pagaduría todavía no supera el umbral? (Sin umbral, siempre.)</summary>
-    public bool DentroDelUmbral(DateOnly dia) => UmbralDias is not { } u || MoraDeLaPagaduria(dia) <= u;
+    /// <summary>
+    /// K2 (T0839): la fecha valor del pago que giró lo descontado (la del descuento), si ya se giró. Desde ese día la cuota la cubre el pago y lo
+    /// descontado deja de cubrirla; antes sigue cubriéndola, para que girar no cambie la historia que el libro ya causó.
+    /// </summary>
+    public DateOnly? GiradoDesde { get; init; }
+
+    /// <summary>
+    /// ¿El <paramref name="dia"/> lo descontado todavía cubre la cuota? No, desde el día en que se giró; si no, mientras la mora de la pagaduría no
+    /// supere el umbral (sin umbral, siempre).
+    /// </summary>
+    public bool DentroDelUmbral(DateOnly dia) =>
+        (GiradoDesde is not { } girado || dia < girado) && (UmbralDias is not { } u || MoraDeLaPagaduria(dia) <= u);
 }
 
 /// <summary>Los días de mora, la cuota impaga más antigua que los cuenta y cuántas cuotas vencidas cuentan.</summary>
