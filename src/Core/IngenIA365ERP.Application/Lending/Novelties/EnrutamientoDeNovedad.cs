@@ -24,9 +24,8 @@ public sealed record NovedadEnrutada(MatrizVigente Matriz, EnrutamientoDeAtribuc
 /// <summary>
 /// El enrutamiento de una novedad (feature 013, K3, T0879; T63, FR-038, FR-040): sujeto <c>Novelty</c> por la matriz de atribuciones vigente, con el
 /// monto consolidado del deudor (su exposición más lo que la novedad capitaliza), la línea y la modalidad del crédito principal, el plazo del plan nuevo
-/// en meses, los días de mora y si el deudor o alguna parte de los créditos es vinculado (al consejo con acta, FR-040). La matriz no distingue
-/// mecanismo ni causa: <c>LND_AttributionRules</c> no tiene esas columnas (pendiente de esquema, ver tasks.md T0879); el nivel sale del monto, la
-/// mora, la línea, la modalidad y el vinculado. La huella cubre la novedad, su simulación, la matriz, el nivel, las razones, el monto y el vinculado: si
+/// en meses, los días de mora, el mecanismo y la causa de la novedad (columnas <c>NoveltyMechanism</c> y <c>NoveltyCause</c> de la regla, K3) y si el
+/// deudor o alguna parte de los créditos es vinculado (al consejo con acta, FR-040). La huella cubre la novedad, su simulación, la matriz, el nivel, las razones, el monto y el vinculado: si
 /// cambia entre que se radicó y se decide, <c>Lending.Decision.ContentChanged</c>. (nuevo)
 /// </summary>
 public sealed class EnrutamientoDeNovedad(
@@ -57,6 +56,8 @@ public sealed class EnrutamientoDeNovedad(
             Modalidad = modalidad,
             PlazoMeses = CalculoDeNovedad.Meses(datos.Installments, periodicidad),
             DiasDeMora = datos.DaysPastDue,
+            Mecanismo = n.Mechanism,
+            Causa = n.Cause,
             HayVinculado = vinculado,
         };
         EnrutamientoDeAtribucion enrutado;

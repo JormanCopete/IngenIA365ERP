@@ -1067,6 +1067,7 @@ colegiado sin techo, para que ninguna solicitud quede sin quién la decida
 | `ScoreBelowMinimum` · `HasWarnings` · `PolicyException` | bit | sí | nulo = no importa |
 | `MinDaysPastDue` · `MaxDaysPastDue` | int | sí | novedades y condonaciones |
 | `Concept` | int (`LoanConcept`) | sí | condonaciones (FR-094) |
+| `NoveltyMechanism` · `NoveltyCause` | int (`NoveltyMechanism`) · int (`NoveltyCause`) | sí | novedades (sujeto `Novelty`, FR-038, FR-090): nulo = no importa; con otro sujeto la matriz no se publica (`RuleNoveltyCriteriaOutOfSubject`). **Columnas nacidas en K3, migración `CarteraNovedades`** (T0879); entran en la huella de la matriz sólo cuando no son nulas, así la de las matrices anteriores no cambia |
 | `MinimumLevelId` | int FK `LND_AttributionLevels` | no | de la misma matriz |
 
 **Reglas**. `EnrutadorDeAtribuciones` toma el **mayor** entre el nivel del techo de monto consolidado, el de
@@ -3051,7 +3052,7 @@ crédito; una novación o refinanciación crea el enlazado.
 | `SignedAttachmentPublicId` | uniqueidentifier | sí | aceptación firmada (`LendingNoveltyConsent`); obligatoria con `Accepted` |
 | `RecordedByUserId` · `RecordedAt` | int FK · datetime | sí | |
 | `RefusalResolution` | int (`ConsentRefusalResolution`) **(nuevo)** | sí | con `Refused`: `DoNotApply` o `ApplyWithGuaranteeExtinguished` |
-| `ResolutionReason` · `CoverageAfterJson` · `ExceptionDecisionId` | nvarchar(500) · nvarchar(max) · int FK | sí | cobertura restante frente a la línea y la excepción aprobada, si hizo falta |
+| `ResolutionReason` · `CoverageAfterJson` · `ExceptionDecisionId` | nvarchar(500) · nvarchar(max) · int FK | sí | cobertura restante frente a la línea y la excepción aprobada, si hizo falta: la decisión individual `Approve` con `IsPolicyException` sobre la novedad (sujeto `Novelty`), del nivel de excepción de la matriz vigente, que registra quien aplica con esa atribución (bloque B2, 2026-10-15) |
 
 `UK (LoanNoveltyId, PersonId, CollateralId)`. Aplicar con la garantía extinguida recalcula cobertura y deterioro; una
 novación exige constituir sus propias garantías.

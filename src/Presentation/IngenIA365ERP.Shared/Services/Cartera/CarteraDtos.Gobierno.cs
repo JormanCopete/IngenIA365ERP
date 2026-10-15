@@ -53,7 +53,9 @@ public sealed record CondicionesDeReglaDto(
     bool? PolicyException = null,
     int? MinDaysPastDue = null,
     int? MaxDaysPastDue = null,
-    int? Concept = null);
+    int? Concept = null,
+    int? NoveltyMechanism = null,
+    int? NoveltyCause = null);
 
 public sealed record ReglaDeAtribucionDto(int Order, string Subject, CondicionesDeReglaDto Conditions, string MinimumLevelCode);
 
@@ -105,7 +107,9 @@ public sealed record VistaPreviaDeAtribucionRequest(
     int? DaysPastDue = null,
     int? Concept = null,
     bool? PolicyException = null,
-    DateOnly? Date = null);
+    DateOnly? Date = null,
+    int? NoveltyMechanism = null,
+    int? NoveltyCause = null);
 
 /// <summary>Una razón del enrutamiento: 1 tope de monto, 2 regla, 3 vinculado, 4 excepción.</summary>
 public sealed record RazonDeEnrutamientoDto(int Kind, string LevelCode, string Detail);

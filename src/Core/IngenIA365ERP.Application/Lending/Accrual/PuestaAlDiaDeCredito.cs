@@ -40,6 +40,7 @@ public static class PosicionesDeCartera
             MotivoDeSuspension.Reestructuraciones => "RepeatedRestructuring",
             MotivoDeSuspension.Insolvencia => "Insolvency",
             MotivoDeSuspension.Castigo => "WriteOff",
+            MotivoDeSuspension.Fallecimiento => "Deceased",
             _ => "ArrearsThreshold",
         }
         : "ArrearsCured";

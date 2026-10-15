@@ -871,7 +871,7 @@ comprobante: Contabilidad deja su recibo. Lo causado antes no se reclasifica (T3
 |---|---|---|---|
 | `loan`, `debtorPersonPublicId`, `dimensions`, `registeredAt` | | sí | Como §10.0 |
 | `effectiveDate` | DateOnly | sí | Desde cuándo se causa en suspenso, o se deja de hacerlo |
-| `cause` | string | sí | Suspensión: `ArrearsThreshold`, `RepeatedRestructuring`, `Insolvency`, `WriteOff`. Reanudación: `ArrearsCured`, `InsolvencyEnded`, `CauseReversed` |
+| `cause` | string | sí | Suspensión: `ArrearsThreshold`, `RepeatedRestructuring`, `Insolvency`, `WriteOff` y, desde K3, `Deceased` (el deudor falleció y `Causacion.ContinuaTrasFallecimiento = false` para su línea; FR-097, T102, bloque B2 del 2026-10-15). Reanudación: `ArrearsCured`, `InsolvencyEnded`, `CauseReversed` |
 | `daysPastDue` | int | sí | Altura de mora a la fecha efectiva |
 | `causeFact` | `OriginalFactRefV1` | no | La operación que lo provocó |
 

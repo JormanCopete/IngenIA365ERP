@@ -281,8 +281,7 @@ public sealed class CalculoDeNovedad(IApplicationDbContext db, CargadorDeReconst
         var antes = principal.Cargado.Vigentes.RestructuringCount;
         var despues = n.Cause == NoveltyCause.Restructuring ? antes + 1 : antes;
         var hoy = await CalificacionOficialAsync(principal.Credito.Id, fecha, ct);
-        // Un reestructurado nunca queda mejor (FR-093): el piso es la calificación de hoy; la del cierre la da el motor de calificación.
-        var luego = hoy;
+        var luego = await CalificacionResultanteAsync(n, hoy, fecha, ct);
         var avisos = new List<string>();
         if (usura.Veredicto == VeredictoDeUsura.SinUsura)
             avisos.Add($"No hay usura certificada de la modalidad el {fecha:yyyy-MM-dd}: el plan nuevo no se pudo controlar contra la usura.");
@@ -292,6 +291,20 @@ public sealed class CalculoDeNovedad(IApplicationDbContext db, CargadorDeReconst
             avisos.Add("Es una modificación: si bajo las condiciones nuevas el crédito vuelve a la mora que fija la norma, pasa a ser reestructuración.");
         return Result.Success(new NovedadCalculada(n, fecha, creditos, terminos, capitalizaciones, saldo, recogidos.Sum(), entrada, nuevo, usura, despues, hoy, luego,
             avisos));
+    }
+
+    /// <summary>
+    /// La calificación resultante (FR-093): una modificación no la cambia; una reestructuración nunca queda mejor que la que tenía al pedirla
+    /// (<c>RatingAtRequest</c>, sellada al pedir), que la de hoy ni que el mínimo de la norma para un reestructurado (<c>Anexo1.Reestructurados</c>),
+    /// lo mismo que aplica <c>MotorDeCalificacion</c> en el cierre siguiente. Las mejoras por tramos de cuotas las da ese motor después.
+    /// </summary>
+    public async Task<RatingCategory> CalificacionResultanteAsync(LoanNovelty n, RatingCategory hoy, DateOnly fecha, CancellationToken ct)
+    {
+        if (n.Cause != NoveltyCause.Restructuring) return hoy;
+        var piso = Enum.IsDefined(n.RatingAtRequest) && n.RatingAtRequest > hoy ? n.RatingAtRequest : hoy;
+        var anexo = await normativa.LeerAsync(RegulatoryDocumentKind.SarcAnexo1, fecha, Anexo1.Leer, ct: ct);
+        if (anexo.IsSuccess && anexo.Value.Documento.Reestructurados is { } regla && regla.CategoriaMinima > piso) piso = regla.CategoriaMinima;
+        return piso;
     }
 
     /// <summary>La usura certificada de la modalidad del principal a la fecha (de sus series); nula si no hay o no la exige.</summary>

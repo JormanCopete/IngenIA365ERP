@@ -2,6 +2,8 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Lending.Configuration;
 using IngenIA365ERP.Application.Lending.Novelties;
+using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Domain.Lending.Attributions;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
@@ -154,5 +156,46 @@ public sealed class ConsentimientoDeGarantesTests : IAsyncLifetime
         r.Error.Code.Should().Be(ErroresDeNovedades.CodigoCoberturaInsuficiente);
         var datos = NovedadesDePrueba.Datos(r.Error);
         (datos.GetProperty("required").GetDecimal(), datos.GetProperty("remaining").GetDecimal()).Should().Be((1m, 0m));
+    }
+
+    [Fact]
+    public async Task Con_la_excepcion_aprobada_por_el_nivel_de_excepcion_se_extingue_aunque_falte_cobertura()
+    {
+        // FR-092 (bloque B2): «sólo si la cobertura restante cumple la línea o se aprueba la excepción».
+        await _n.D.VersionDesdeMananaAsync(new CollateralRuleInput(AmountFrom: 1m, AmountTo: 30_000_000m, TermFrom: 1, CoDebtors: 1));
+        var credito = await ConCodeudorAsync();
+        var aprobada = await _n.AprobadaAsync(NoveltyMechanism.Extension, Prorroga, NoveltyRequestMotive.Hardship, credito);
+        var sinConsentimiento = new WithoutConsentInput(_n.D.O.Beto.PublicId, ConsentRefusalResolution.ApplyWithGuaranteeExtinguished, "El codeudor no firma",
+            ApproveCoverageException: true);
+
+        // Sin la atribución del nivel de excepción, no se aprueba.
+        _n.G.ActuarComo(_n.Tesorera);
+        _n.G.Conceder("Lending.Novelties.Read", "Lending.Novelties.Apply");
+        var sinAtribucion = await _n.Aplicar().Handle(new ApplyLoanNoveltyCommand(aprobada.PublicId, [sinConsentimiento], true) { OperationKey = Guid.NewGuid() },
+            default);
+        _n.Db.ChangeTracker.Clear();
+        sinAtribucion.Error.Code.Should().Be(ErroresDeDecisionesYCupos.CodigoNivelRequerido);
+
+        _n.G.Conceder("Lending.Novelties.Read", "Lending.Novelties.Apply", "Lending.Decisions.Exceptions");
+        var r = await _n.Aplicar().Handle(new ApplyLoanNoveltyCommand(aprobada.PublicId, [sinConsentimiento], true) { OperationKey = Guid.NewGuid() }, default);
+        _n.Db.ChangeTracker.Clear();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        var consentimiento = await _n.Db.LoanNoveltyConsents.AsNoTracking().SingleAsync();
+        consentimiento.ExceptionDecisionId.Should().NotBeNull();
+        consentimiento.CoverageAfterJson.Should().Contain("\"exception\":true");
+        var excepcion = await _n.Db.CreditDecisions.AsNoTracking().SingleAsync(d => d.Id == consentimiento.ExceptionDecisionId);
+        (excepcion.SubjectType, excepcion.SubjectPublicId, excepcion.Outcome, excepcion.IsPolicyException)
+            .Should().Be((LendingDecisionSubjects.Novelty, aprobada.PublicId, CreditDecisionOutcome.Approve, true));
+        (await _n.Db.AttributionLevels.AsNoTracking().SingleAsync(l => l.Id == excepcion.LevelId)).IsExceptionLevel.Should().BeTrue();
+        (await _n.Db.LoanParties.AsNoTracking().SingleAsync(p => p.LoanId == credito.Id && p.PersonId == _n.D.O.Beto.Id)).ExtinguishedOn.Should().Be(_n.G.HoyLocal);
+    }
+
+    [Fact]
+    public void La_excepcion_de_cobertura_solo_va_con_la_garantia_extinguida()
+    {
+        var v = new ApplyLoanNoveltyCommandValidator().Validate(new ApplyLoanNoveltyCommand(Guid.NewGuid(),
+            [new WithoutConsentInput(Guid.NewGuid(), ConsentRefusalResolution.DoNotApply, "No firma", ApproveCoverageException: true)]));
+        v.IsValid.Should().BeFalse();
     }
 }

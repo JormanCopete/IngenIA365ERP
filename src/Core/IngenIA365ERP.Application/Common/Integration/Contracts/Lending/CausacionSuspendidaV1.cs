@@ -19,7 +19,7 @@ public sealed record CausacionSuspendidaV1
 
     public DateOnly EffectiveDate { get; init; }
 
-    /// <summary><c>ArrearsThreshold</c>, <c>RepeatedRestructuring</c>, <c>Insolvency</c>, <c>WriteOff</c>.</summary>
+    /// <summary><c>ArrearsThreshold</c>, <c>RepeatedRestructuring</c>, <c>Insolvency</c>, <c>WriteOff</c> y, desde K3, <c>Deceased</c>.</summary>
     public string Cause { get; init; } = string.Empty;
 
     /// <summary>Altura de mora a la fecha efectiva.</summary>

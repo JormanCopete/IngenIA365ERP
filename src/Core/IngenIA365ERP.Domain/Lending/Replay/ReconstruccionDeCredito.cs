@@ -559,6 +559,7 @@ public static class ReconstruccionDeCredito
             if (_c.InsolvenciaHasta is { } fin) Poner(fin);
             if (_ctx.ExtinguidoDesde is { } extinguido) Poner(extinguido);
             if (_c.CastigoDesde is { } k) Poner(k.AddDays(-1));
+            if (_c.FallecimientoDesde is { } fallecido) Poner(fallecido.AddDays(-1));
             return s;
         }
 
@@ -607,7 +608,7 @@ public static class ReconstruccionDeCredito
             var umbral = Vigente(entrada.UmbralesDeSuspension, d);
             var altura = AlturaDeMora.Calcular(d, paraMora, tolerancia);
             var motivo = ReglaDeSuspension.Evaluar(new EntradaDeSuspension(altura.Dias, umbral, _ctx.Reestructuraciones,
-                EnInsolvencia(d), _c.CastigoDesde is { } cas && cas <= d));
+                EnInsolvencia(d), _c.CastigoDesde is { } cas && cas <= d, _c.FallecimientoDesde is { } fal && fal <= d));
             return new Evaluacion(vencidas, altura, motivo, interesCubierto, capitalCubierto);
         }
 

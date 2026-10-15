@@ -49,6 +49,12 @@ public class AttributionRule : AuditableEntity, IHechoInmutable
     /// <summary>Concepto condonado (FR-094).</summary>
     public LoanConcept? Concept { get; init; }
 
+    /// <summary>Mecanismo de la novedad (sujeto <c>Novelty</c>, FR-038, FR-090); nulo = no importa. Nace en K3 (T0879, migración <c>CarteraNovedades</c>).</summary>
+    public NoveltyMechanism? NoveltyMechanism { get; init; }
+
+    /// <summary>Causa de la novedad (reestructuración o modificación, FR-090); nulo = no importa. Nace en K3 (T0879, migración <c>CarteraNovedades</c>).</summary>
+    public NoveltyCause? NoveltyCause { get; init; }
+
     /// <summary>Nivel mínimo exigido, de la misma matriz.</summary>
     public int MinimumLevelId { get; init; }
 
@@ -71,6 +77,8 @@ public class AttributionRule : AuditableEntity, IHechoInmutable
         MinDaysPastDue = r.MinDaysPastDue,
         MaxDaysPastDue = r.MaxDaysPastDue,
         Concept = r.Concept,
+        NoveltyMechanism = r.NoveltyMechanism,
+        NoveltyCause = r.NoveltyCause,
         MinimumLevelId = minimumLevelId,
     };
 }

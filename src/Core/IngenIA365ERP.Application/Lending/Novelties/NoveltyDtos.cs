@@ -152,7 +152,13 @@ public sealed record ApplyNoveltyResultDto(
     IReadOnlyList<string> Warnings);
 
 /// <summary>La decisión de quien aplica ante un codeudor o garante que no consintió (api.md §11.1, <c>withoutConsent[]</c>). (nuevo)</summary>
-public sealed record WithoutConsentInput(Guid PartyPersonPublicId, ConsentRefusalResolution Decision, string Reason, Guid? CollateralPublicId = null);
+/// <summary>
+/// La decisión de quien aplica ante una parte que no consintió (FR-092, api.md §11.1 <c>withoutConsent[]</c>). Con
+/// <see cref="ApproveCoverageException"/> (bloque B2), si la cobertura restante no cumple la línea, quien aplica aprueba la excepción —con la
+/// atribución del nivel de excepción de la matriz vigente— en lugar de recibir <c>Lending.Novelty.CoverageInsufficient</c>.
+/// </summary>
+public sealed record WithoutConsentInput(Guid PartyPersonPublicId, ConsentRefusalResolution Decision, string Reason, Guid? CollateralPublicId = null,
+    bool ApproveCoverageException = false);
 
 /// <summary>El motivo por el que el deudor pide la novedad (para la causa; no se guarda como columna). (nuevo)</summary>
 public static class MotivosDeNovedad

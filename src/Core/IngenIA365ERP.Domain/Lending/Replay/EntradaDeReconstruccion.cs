@@ -57,6 +57,12 @@ public sealed record CondicionesDeCredito(
 
     public DateOnly? CastigoDesde { get; init; }
 
+    /// <summary>
+    /// K3 (FR-097, T102): el día del fallecimiento del deudor cuando la causación <b>no</b> sigue tras él (<c>Causacion.ContinuaTrasFallecimiento =
+    /// false</c> para la línea, leído a esa fecha); desde ese día se causa en suspenso. Nulo si no falleció o si la causación sigue (el defecto).
+    /// </summary>
+    public DateOnly? FallecimientoDesde { get; init; }
+
     /// <summary>Si la modalidad exige usura certificada para causar (sin ella la causación real se bloquea, D11).</summary>
     public bool UsuraRequerida { get; init; } = true;
 

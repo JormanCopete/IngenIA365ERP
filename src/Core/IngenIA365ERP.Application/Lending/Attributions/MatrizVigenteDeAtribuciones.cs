@@ -82,6 +82,8 @@ public sealed class MatrizVigenteDeAtribuciones(IApplicationDbContext db)
                 MoraMinima = r.MinDaysPastDue,
                 MoraMaxima = r.MaxDaysPastDue,
                 Concepto = r.Concept,
+                Mecanismo = r.NoveltyMechanism,
+                Causa = r.NoveltyCause,
             }).ToList());
         return new MatrizVigente(matriz, niveles, reglas, motor);
     }

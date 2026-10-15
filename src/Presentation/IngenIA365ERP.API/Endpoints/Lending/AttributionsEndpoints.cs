@@ -49,7 +49,8 @@ public class AttributionsEndpoints : ICarterModule
         matrices.MapPost("/preview", async (VistaPreviaRequest body, ISender sender, CancellationToken ct) =>
                 await sender.Send(new PreviewAttributionRoutingQuery(
                     body.Subject ?? string.Empty, body.Amount, body.CreditLinePublicId, body.PersonPublicId, body.TermInstallments,
-                    body.CollateralKinds, body.Score, body.Alerts, body.DaysPastDue, body.Concept, body.PolicyException ?? false, body.Date), ct))
+                    body.CollateralKinds, body.Score, body.Alerts, body.DaysPastDue, body.Concept, body.PolicyException ?? false, body.Date,
+                    body.NoveltyMechanism, body.NoveltyCause), ct))
             .WithName("Lending_AttributionMatrices_Preview")
             .RequirePermission(Ver);
 
@@ -94,7 +95,9 @@ public class AttributionsEndpoints : ICarterModule
         int? DaysPastDue,
         LoanConcept? Concept,
         bool? PolicyException,
-        DateOnly? Date);
+        DateOnly? Date,
+        NoveltyMechanism? NoveltyMechanism = null,
+        NoveltyCause? NoveltyCause = null);
 
     /// <summary>El cuerpo del monto de una atribución operativa (§3.5.2); <c>maxAmount</c> nulo = sin límite.</summary>
     public sealed record FijarMontoRequest(Guid RolePublicId, string? PermissionCode, decimal? MaxAmount, DateOnly ValidFrom, string? Reason);

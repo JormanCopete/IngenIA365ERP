@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Lending.Attributions;
 using IngenIA365ERP.Application.Lending.Novelties;
 using IngenIA365ERP.Domain.Entities.Lending.Risk;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -47,6 +48,9 @@ public sealed class TramiteDeNovedadTests : IAsyncLifetime
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
         r.Value.Cause.Should().Be(NoveltyCause.Modification);
+        var s = await _n.Simular().Handle(new SimulateLoanNoveltyQuery(r.Value.PublicId), default);
+        s.IsSuccess.Should().BeTrue(s.IsFailure ? $"{s.Error.Code}: {s.Error.Message}" : string.Empty);
+        s.Value.RatingAfter.Should().Be(s.Value.RatingNow, "una modificación no cambia la calificación (FR-093 sólo rige para reestructurados)");
     }
 
     [Fact]
@@ -96,6 +100,8 @@ public sealed class TramiteDeNovedadTests : IAsyncLifetime
         s.Value.NewSchedule.Should().HaveCount(36);
         s.Value.NewSchedule.Sum(c => c.Principal).Should().Be(s.Value.NewPrincipal, "el plan nuevo amortiza el capital que queda");
         s.Value.RestructuringCount.Should().Be(1);
+        // FR-093 (bloque B2): nunca mejor que al pedirla ni que el mínimo de la norma para un reestructurado (B en el Anexo 1 sembrado).
+        (s.Value.RatingNow, s.Value.RatingAfter).Should().Be(("A", "B"));
         s.Value.Usury.Verdict.Should().NotBeNullOrEmpty();
         s.Value.SimulationSha256.Should().HaveLength(64);
         (await _n.Db.LoanOperations.CountAsync()).Should().Be(operaciones, "simular no escribe");
@@ -161,5 +167,48 @@ public sealed class TramiteDeNovedadTests : IAsyncLifetime
         var anulada = await _n.Anular().Handle(new CancelLoanNoveltyCommand(pedida.PublicId, "El deudor desistió") { OperationKey = Guid.NewGuid() }, default);
         anulada.IsSuccess.Should().BeTrue(anulada.IsFailure ? anulada.Error.Message : string.Empty);
         (await _n.Db.LoanNovelties.AsNoTracking().SingleAsync()).Status.Should().Be(LoanNoveltyStatus.Cancelled);
+    }
+
+    [Fact]
+    public async Task La_matriz_enruta_la_novedad_por_su_mecanismo_y_su_causa()
+    {
+        // T0879 (bloque B2): una versión de la matriz desde mañana con una regla del sujeto Novelty por mecanismo y causa (columnas nacidas en K3).
+        var niveles = await _n.Db.AttributionLevels.AsNoTracking().ToListAsync();
+        var organos = await _n.Db.GoverningBodies.AsNoTracking().ToDictionaryAsync(b => b.Id, b => b.PublicId);
+        var entrada = niveles.OrderBy(l => l.Rank).Select(l => new AttributionLevelInput(l.Code, l.Name, l.Rank, l.Kind, l.PermissionCode,
+            l.GoverningBodyId is { } g ? organos[g] : null, l.MaxConsolidatedAmount, l.IsExceptionLevel, l.IsBoardLevel)).ToList();
+        _n.G.ActuarComo(_n.D.O.Asesora);
+        var matriz = await new AddAttributionMatrixVersionCommandHandler(_n.Db, _n.G.Actor, _n.G.Reloj).Handle(new AddAttributionMatrixVersionCommand(
+            _n.G.HoyLocal.AddDays(1), "Reestructuraciones por prórroga a gerencia", null, entrada,
+            [
+                new AttributionRuleInput(1, LendingDecisionSubjects.Novelty, "GERENCIA",
+                    new AttributionRuleConditionsDto(NoveltyMechanism: NoveltyMechanism.Extension, NoveltyCause: NoveltyCause.Restructuring)),
+            ]) { OperationKey = Guid.NewGuid() }, default);
+        matriz.IsSuccess.Should().BeTrue(matriz.IsFailure ? $"{matriz.Error.Code}: {matriz.Error.Message}" : string.Empty);
+        matriz.Value.Rules.Should().ContainSingle().Which.Conditions.NoveltyMechanism.Should().Be(NoveltyMechanism.Extension);
+        _n.Db.ChangeTracker.Clear();
+        _n.D.Manana();
+
+        var reestructuracion = await _n.RadicadaAsync(NoveltyMechanism.Extension, Prorroga());
+        reestructuracion.Routing!.LevelCode.Should().Be("GERENCIA");
+        reestructuracion.Routing.Reasons.Should().Contain(r => r.Detail.Contains("mecanismo Extension") && r.Detail.Contains("causa Restructuring"));
+    }
+
+    [Fact]
+    public async Task La_regla_de_novedad_por_mecanismo_no_alcanza_otro_mecanismo()
+    {
+        var niveles = await _n.Db.AttributionLevels.AsNoTracking().ToListAsync();
+        var organos = await _n.Db.GoverningBodies.AsNoTracking().ToDictionaryAsync(b => b.Id, b => b.PublicId);
+        var entrada = niveles.OrderBy(l => l.Rank).Select(l => new AttributionLevelInput(l.Code, l.Name, l.Rank, l.Kind, l.PermissionCode,
+            l.GoverningBodyId is { } g ? organos[g] : null, l.MaxConsolidatedAmount, l.IsExceptionLevel, l.IsBoardLevel)).ToList();
+        _n.G.ActuarComo(_n.D.O.Asesora);
+        (await new AddAttributionMatrixVersionCommandHandler(_n.Db, _n.G.Actor, _n.G.Reloj).Handle(new AddAttributionMatrixVersionCommand(
+            _n.G.HoyLocal.AddDays(1), "Novaciones a gerencia", null, entrada,
+            [new AttributionRuleInput(1, LendingDecisionSubjects.Novelty, "GERENCIA", new AttributionRuleConditionsDto(NoveltyMechanism: NoveltyMechanism.Novation))])
+            { OperationKey = Guid.NewGuid() }, default)).IsSuccess.Should().BeTrue();
+        _n.Db.ChangeTracker.Clear();
+        _n.D.Manana();
+
+        (await _n.RadicadaAsync(NoveltyMechanism.Extension, Prorroga())).Routing!.LevelCode.Should().Be("ANALISTA");
     }
 }

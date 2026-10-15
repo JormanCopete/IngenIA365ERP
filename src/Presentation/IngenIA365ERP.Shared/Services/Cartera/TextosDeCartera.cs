@@ -40,6 +40,17 @@ public static class TextosDeCartera
         ("RiskPolicyVersion", "Versión de la política de riesgo"),
     ];
 
+    /// <summary>Mecanismos de una novedad (<c>NoveltyMechanism</c>), para las reglas de la matriz (K3, T0879).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> MecanismosDeNovedad { get; } =
+        [(1, "Prórroga"), (2, "Cambio de fecha de pago"), (3, "Cambio de tasa"), (4, "Novación"), (5, "Refinanciación"), (6, "Cambio de oficina")];
+
+    /// <summary>Causas de una novedad (<c>NoveltyCause</c>).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> CausasDeNovedad { get; } = [(1, "Reestructuración"), (2, "Modificación")];
+
+    public static string MecanismoDeNovedad(int v) => De(MecanismosDeNovedad, v);
+
+    public static string CausaDeNovedad(int v) => De(CausasDeNovedad, v);
+
     public static string Sujeto(string codigo) => Sujetos.FirstOrDefault(s => s.Codigo == codigo).Texto ?? codigo;
 
     public static string ClaseDeNivel(int v) => De(ClasesDeNivel, v);

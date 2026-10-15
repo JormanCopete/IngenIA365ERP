@@ -7,6 +7,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Schedules;
@@ -55,7 +56,7 @@ public sealed record CreditoCargado(
 /// </list>
 /// No escribe. (nuevo)
 /// </summary>
-public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRegulatorias series)
+public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRegulatorias series, ReglasDeParametrosDeCartera? parametros = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -95,6 +96,7 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
 
         var giros = await PendientesDeGiroAsync(ids, operaciones, r, ct);
         var insolvencias = await InsolvenciasAsync(creditos, operaciones, r, ct);
+        var fallecimientos = await FallecimientosAsync(creditos, r, informacionHasta, ct);
 
         var versionesDeLinea = condiciones.Where(t => t.VersionNumber == 1).Select(t => t.CreditLineVersionId).Distinct().ToList();
         var momentosDeSeguro = (await db.CreditLineInsurances.AsNoTracking().Where(s => versionesDeLinea.Contains(s.CreditLineVersionId))
@@ -128,6 +130,7 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                         CastigoDesde = credito.WrittenOffOn,
                         InsolvenciaDesde = insolvencias.TryGetValue(credito.DebtorPersonId, out var insolvencia) ? insolvencia.Desde : null,
                         InsolvenciaHasta = insolvencias.ContainsKey(credito.DebtorPersonId) ? insolvencia.Hasta : null,
+                        FallecimientoDesde = fallecimientos.TryGetValue(credito.Id, out var fallecimiento) ? fallecimiento : null,
                     },
                     credito.Origin == LoanOrigin.Migration ? null : Plan(pactadas, ops),
                     ops.Where(o => !SinEfectoEnSaldos.Contains(o.Kind))
@@ -354,6 +357,34 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
     /// fin si ya terminó en R: el fracaso (<c>FailedOn</c>) o el acuerdo (la fecha valor de la novedad que lo tramitó). La causación de todos sus
     /// créditos queda en suspenso desde el inicio hasta ese fin; lo migrado y lo abierto por pantalla se leen igual.
     /// </summary>
+    /// <summary>
+    /// K3 (FR-097, T102): por crédito, el día del fallecimiento de su deudor (el evento <c>Deceased</c> vigente, conocido en R) cuando la causación no
+    /// sigue tras él: <c>Causacion.ContinuaTrasFallecimiento</c> leído a esa fecha para la línea del crédito (con su excepción por línea). Con el valor
+    /// por defecto (<c>true</c>) o sin lector de parámetros el crédito no aparece y causa como siempre.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<int, DateOnly>> FallecimientosAsync(IReadOnlyList<Loan> creditos, DateTime r, DateTime? informacionHasta,
+        CancellationToken ct)
+    {
+        var resultado = new Dictionary<int, DateOnly>();
+        if (parametros is null || creditos.Count == 0) return resultado;
+        var personas = creditos.Select(c => c.DebtorPersonId).Distinct().ToList();
+        var eventos = (await db.DebtorBlocks.AsNoTracking()
+                .Where(b => personas.Contains(b.PersonId) && b.Reason == DebtorBlockReason.Deceased && !b.IsDeleted)
+                .Select(b => new { b.PersonId, b.StartedOn, b.CreatedAt, b.LiftedAt })
+                .ToListAsync(ct))
+            .Where(b => b.CreatedAt <= r && (b.LiftedAt is not { } levantado || levantado > r))
+            .GroupBy(b => b.PersonId).ToDictionary(g => g.Key, g => g.Min(b => b.StartedOn));
+        if (eventos.Count == 0) return resultado;
+        foreach (var credito in creditos)
+        {
+            if (!eventos.TryGetValue(credito.DebtorPersonId, out var dia)) continue;
+            var sigue = await parametros.LeerAsync(ParametrosDeCartera.CausacionContinuaTrasFallecimiento, dia, informacionHasta,
+                Domain.Enums.Parameters.ParameterScopeKind.CreditLine, credito.CreditLineId, ct);
+            if (sigue.IsSuccess && sigue.Value.Valor is false) resultado[credito.Id] = dia;
+        }
+        return resultado;
+    }
+
     private async Task<IReadOnlyDictionary<int, (DateOnly Desde, DateOnly? Hasta)>> InsolvenciasAsync(IReadOnlyList<Loan> creditos,
         IReadOnlyList<LoanOperation> operaciones, DateTime r, CancellationToken ct)
     {

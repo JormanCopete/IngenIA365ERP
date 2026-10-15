@@ -16,7 +16,11 @@ using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Ledger;
 using IngenIA365ERP.Application.Lending.Payments;
 using IngenIA365ERP.Application.Lending.Segregation;
+using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Domain.Entities.Lending.Governance;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
+using IngenIA365ERP.Domain.Lending.Attributions;
+using IngenIA365ERP.Domain.Lending.Governance;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Entities.Lending.Payroll;
 using IngenIA365ERP.Domain.Entities.Lending.Schedules;
@@ -38,8 +42,9 @@ namespace IngenIA365ERP.Application.Lending.Novelties;
 /// <list type="number">
 /// <item>sólo aprobada (<c>Lending.Novelty.NotApproved</c>; aplicada, <c>.AlreadyApplied</c>) y por quien no la radicó (<c>Lending.Segregation.Conflict</c>);</item>
 /// <item>los consentimientos: los pendientes o rechazados sin resolver los resuelve quien aplica en <paramref name="WithoutConsent"/> con motivo —no
-/// aplicar (la novedad queda anulada) o aplicar con esa garantía extinguida, si la cobertura que queda cumple la línea
-/// (<c>Lending.Novelty.CoverageInsufficient</c> con <c>required</c> y <c>remaining</c>)—; si queda alguno, <c>Lending.Novelty.ConsentMissing</c> con
+/// aplicar (la novedad queda anulada) o aplicar con esa garantía extinguida, si la cobertura que queda cumple la línea o quien aplica aprueba la
+/// excepción con la atribución del nivel de excepción (<c>approveCoverageException</c>, bloque B2; si no, <c>Lending.Novelty.CoverageInsufficient</c>
+/// con <c>required</c> y <c>remaining</c>)—; si queda alguno, <c>Lending.Novelty.ConsentMissing</c> con
 /// <c>parties[]</c>;</item>
 /// <item>el cálculo a hoy (la usura vigente no se exceptúa) y la validación previa contable de pantalla (A8, <c>Lending.Prevalidation.NotPostable</c>);</item>
 /// <item>la puesta al día y, por <see cref="RegistroDeCartera"/>, la operación <c>TermsChange</c> con sus filas (capitalización; en una novación o
@@ -47,9 +52,11 @@ namespace IngenIA365ERP.Application.Lending.Novelties;
 /// del plan; el número del crédito se conserva y el plan anterior queda como versión;</item>
 /// <item>en una novación o refinanciación: cada crédito anterior queda <c>Novated</c> y nace el enlazado (<c>OriginLoanId</c>, <c>OriginLinkKind</c>) con su
 /// versión 1, su plan, su operación de origen y sus filas; hereda la calificación, la marca, el conteo y el historial de mora por el enlace; sus
-/// garantías se constituyen aparte (FR-092);</item>
+/// garantías se constituyen aparte (FR-092). La refinanciación traslada el saldo de los recogidos al enlazado como la novación, no los paga por
+/// <c>OwnLoanPayoff</c> (decisión del bloque B2, tasks.md T0881);</item>
 /// <item>los hechos <c>CreditoReestructurado</c>, <c>CreditoModificado</c> o <c>CreditoNovado</c> en línea (<c>CN</c>) y, si el crédito pasa a
-/// reestructurado, <c>DimensionContableCambiada</c> aparte; el acuerdo de insolvencia cierra su proceso en <c>Agreement</c>.</item>
+/// reestructurado, <c>DimensionContableCambiada</c> aparte; el acuerdo de insolvencia cierra su proceso en <c>Agreement</c> y levanta el bloqueo
+/// <c>Insolvency</c> de crédito nuevo (bloque B2).</item>
 /// </list>
 /// (nuevo)
 /// </summary>
@@ -69,6 +76,8 @@ public sealed class ApplyLoanNoveltyCommandValidator : AbstractValidator<ApplyLo
             c.RuleFor(x => x.PartyPersonPublicId).NotEmpty();
             c.RuleFor(x => x.Decision).IsInEnum();
             c.RuleFor(x => x.Reason).NotEmpty().WithMessage("Diga por qué decide así ante la falta de consentimiento.").MaximumLength(500);
+            c.RuleFor(x => x.ApproveCoverageException).Equal(false).When(x => x.Decision != ConsentRefusalResolution.ApplyWithGuaranteeExtinguished)
+                .WithMessage("La excepción de cobertura sólo se aprueba al aplicar con la garantía extinguida.");
         });
     }
 }
@@ -89,7 +98,9 @@ public sealed class ApplyLoanNoveltyCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<ApplyLoanNoveltyCommand, Result<ApplyNoveltyResultDto>>
+    IDateTimeService reloj,
+    Attributions.MatrizVigenteDeAtribuciones matrices,
+    Attributions.AtribucionDelDecisor atribucion) : IRequestHandler<ApplyLoanNoveltyCommand, Result<ApplyNoveltyResultDto>>
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -118,7 +129,7 @@ public sealed class ApplyLoanNoveltyCommandHandler(
                     creditos.First(c => c.Credito.Status != LoanStatus.Active).Credito.Status.ToString()));
 
             // (2) Los consentimientos: quien aplica resuelve los que faltan.
-            var consentimientos = await ConsentimientosAsync(n, request.WithoutConsent ?? [], usuario, v, ct);
+            var consentimientos = await ConsentimientosAsync(n, request.WithoutConsent ?? [], verificada.Value, v, ct);
             if (consentimientos.IsFailure) return Falla(consentimientos.Error);
             if (consentimientos.Value is { } noSeAplica)
             {
@@ -244,7 +255,12 @@ public sealed class ApplyLoanNoveltyCommandHandler(
             if (n.InsolvencyProceedingId is { } proceso)
             {
                 var insolvencia = await db.InsolvencyProceedings.FirstAsync(p => p.Id == proceso, ct);
-                if (insolvencia.Status == InsolvencyProceedingStatus.Negotiating) insolvencia.CerrarConAcuerdo(n.Id, ahora);
+                if (insolvencia.Status == InsolvencyProceedingStatus.Negotiating)
+                {
+                    insolvencia.CerrarConAcuerdo(n.Id, ahora);
+                    await DebtorEvents.CierreDeInsolvencia.LevantarBloqueosAsync(db, insolvencia.PersonId, v, ahora, usuario,
+                        $"Acuerdo de insolvencia aplicado con la novedad {n.Number}.", ct);
+                }
             }
             if (enlazado is not null) db.LoanNoveltyLoans.Add(new LoanNoveltyLoan { LoanNoveltyId = n.Id, Loan = enlazado, Role = NoveltyLoanRole.Resulting });
             intervenciones.Registrar(verificada.Value, LendingDecisionSubjectsDeK3.Novelty, n.PublicId);
@@ -441,9 +457,10 @@ public sealed class ApplyLoanNoveltyCommandHandler(
     /// garantía extinguida exige que la cobertura restante cumpla la línea—; si alguno queda sin resolver, <c>ConsentMissing</c>. Devuelve el motivo si
     /// la decisión es no aplicar (la novedad se anula), o nulo para seguir.
     /// </summary>
-    private async Task<Result<string?>> ConsentimientosAsync(LoanNovelty n, IReadOnlyList<WithoutConsentInput> sinConsentimiento, int usuario, DateOnly v,
-        CancellationToken ct)
+    private async Task<Result<string?>> ConsentimientosAsync(LoanNovelty n, IReadOnlyList<WithoutConsentInput> sinConsentimiento,
+        IntervencionVerificada quien, DateOnly v, CancellationToken ct)
     {
+        var usuario = quien.UsuarioId;
         var consentimientos = await db.LoanNoveltyConsents.Where(x => x.LoanNoveltyId == n.Id && !x.IsDeleted).ToListAsync(ct);
         var idsDePersona = consentimientos.Select(x => x.PersonId).Distinct().ToList();
         var personas = await db.People.AsNoTracking().Where(p => idsDePersona.Contains(p.Id)).ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
@@ -466,9 +483,9 @@ public sealed class ApplyLoanNoveltyCommandHandler(
                     noAplicar ??= d.Reason.Trim();
                     continue;
                 }
-                var extinguida = await ExtinguirAsync(n, x, garantias, d.Reason, v, ct);
+                var extinguida = await ExtinguirAsync(n, x, garantias, d.Reason, d.ApproveCoverageException ? quien : null, v, ct);
                 if (extinguida.IsFailure) return Result.Failure<string?>(extinguida.Error);
-                x.ResolverRechazo(ConsentRefusalResolution.ApplyWithGuaranteeExtinguished, d.Reason, extinguida.Value);
+                x.ResolverRechazo(ConsentRefusalResolution.ApplyWithGuaranteeExtinguished, d.Reason, extinguida.Value.Cobertura, extinguida.Value.Excepcion);
             }
         }
         if (noAplicar is not null) return Result.Success<string?>(noAplicar);
@@ -486,11 +503,13 @@ public sealed class ApplyLoanNoveltyCommandHandler(
 
     /// <summary>
     /// Extingue la garantía de quien no consintió (la real, o su papel de codeudor o avalista en los créditos) si lo que queda cumple la regla de
-    /// garantías de la línea vigente (cobertura mínima de las reales; codeudores exigidos); si no, <c>CoverageInsufficient</c>. Devuelve la cobertura
-    /// restante en JSON. Sin guardar.
+    /// garantías de la línea vigente (cobertura mínima de las reales; codeudores exigidos) o, si no la cumple y quien aplica pidió la excepción
+    /// (<paramref name="excepcion"/>), con la excepción aprobada (FR-092, <see cref="ExcepcionDeCoberturaAsync"/>); si no, <c>CoverageInsufficient</c>.
+    /// Devuelve la cobertura restante en JSON y la decisión de la excepción, si la hubo. Sin guardar la extinción.
     /// </summary>
-    private async Task<Result<string>> ExtinguirAsync(LoanNovelty n, LoanNoveltyConsent x, IReadOnlyDictionary<int, Domain.Entities.Lending.Origination.Collateral> garantias,
-        string motivo, DateOnly v, CancellationToken ct)
+    private async Task<Result<(string Cobertura, int? Excepcion)>> ExtinguirAsync(LoanNovelty n, LoanNoveltyConsent x,
+        IReadOnlyDictionary<int, Domain.Entities.Lending.Origination.Collateral> garantias, string motivo, IntervencionVerificada? excepcion, DateOnly v,
+        CancellationToken ct)
     {
         var credito = await db.Loans.AsNoTracking().FirstAsync(l => l.Id == n.LoanId, ct);
         var condiciones = await db.LoanTermsVersions.AsNoTracking().Where(t => t.LoanId == credito.Id).OrderByDescending(t => t.VersionNumber).FirstAsync(ct);
@@ -507,9 +526,15 @@ public sealed class ApplyLoanNoveltyCommandHandler(
                 .Where(c => c.LoanId == credito.Id && c.Id != id && !c.IsDeleted && (c.Status == CollateralStatus.Constituted || c.Status == CollateralStatus.Valid))
                 .ToListAsync(ct);
             var restante = capital == 0m ? 0m : decimal.Round(otras.Where(c => GarantiasDeCartera.Reales.Contains(c.Kind)).Sum(c => c.AdmissibleValue) / capital, 6);
+            int? decisionReal = null;
             if (regla?.MinimumCoverage is { } exigida && GarantiasDeCartera.Reales.Contains(g.Kind) && restante < exigida)
-                return Result.Failure<string>(ErroresDeNovedades.CoberturaInsuficiente(exigida, restante));
-            if (g.PuedeIrA(CollateralStatus.Extinguished) is { } problema) return Result.Failure<string>(ErroresDeGobierno.De(problema));
+            {
+                if (excepcion is null) return Falla2(ErroresDeNovedades.CoberturaInsuficiente(exigida, restante));
+                var aprobada = await ExcepcionDeCoberturaAsync(n, excepcion, $"cobertura {restante} frente a {exigida} de la línea", motivo, v, ct);
+                if (aprobada.IsFailure) return Falla2(aprobada.Error);
+                decisionReal = aprobada.Value;
+            }
+            if (g.PuedeIrA(CollateralStatus.Extinguished) is { } problema) return Falla2(ErroresDeGobierno.De(problema));
             g.Status = CollateralStatus.Extinguished;
             g.ExtinguishedOn = v;
             g.ExtinguishReason = Recortar($"Novedad {n.Number}: {motivo.Trim()}");
@@ -518,22 +543,66 @@ public sealed class ApplyLoanNoveltyCommandHandler(
             {
                 var emitida = await GarantiasDeCartera.EmitirAsync(db, emision, fechaContable, v, reloj.UtcNow, g, dueno.Value,
                     EmisionDeCartera.MovimientosDeGarantia.Extinguida, -g.Value, 0m, ct);
-                if (emitida.IsFailure) return Result.Failure<string>(emitida.Error);
+                if (emitida.IsFailure) return Falla2(emitida.Error);
             }
-            return Result.Success(JsonSerializer.Serialize(new { required = regla?.MinimumCoverage, remaining = restante, collateral = g.PublicId }, Json));
+            return Result.Success<(string, int?)>((JsonSerializer.Serialize(new
+            {
+                required = regla?.MinimumCoverage, remaining = restante, collateral = g.PublicId, exception = decisionReal is not null,
+            }, Json), decisionReal));
         }
 
         var partes = await db.LoanParties.Where(p => p.LoanId == credito.Id && !p.IsDeleted).ToListAsync(ct);
         var codeudores = partes.Count(p => p.VigenteA(v) && p.Role == CreditPartyRole.CoDebtor && p.PersonId != x.PersonId);
+        int? decisionPersonal = null;
         if (regla is { RequiredCoDebtors: > 0 } r && x.PartyRole == ConsentPartyRole.CoDebtor && codeudores < r.RequiredCoDebtors)
-            return Result.Failure<string>(ErroresDeNovedades.CoberturaInsuficiente(r.RequiredCoDebtors, codeudores));
+        {
+            if (excepcion is null) return Falla2(ErroresDeNovedades.CoberturaInsuficiente(r.RequiredCoDebtors, codeudores));
+            var aprobada = await ExcepcionDeCoberturaAsync(n, excepcion, $"{codeudores} codeudores frente a {r.RequiredCoDebtors} que exige la línea", motivo, v,
+                ct);
+            if (aprobada.IsFailure) return Falla2(aprobada.Error);
+            decisionPersonal = aprobada.Value;
+        }
         foreach (var p in partes.Where(p => p.PersonId == x.PersonId && p.VigenteA(v)))
         {
             p.ExtinguishedOn = v;
             p.ExtinguishReason = Recortar($"Novedad {n.Number}: {motivo.Trim()}");
         }
-        return Result.Success(JsonSerializer.Serialize(new { required = regla?.RequiredCoDebtors, remaining = codeudores }, Json));
+        return Result.Success<(string, int?)>((JsonSerializer.Serialize(new
+        {
+            required = regla?.RequiredCoDebtors, remaining = codeudores, exception = decisionPersonal is not null,
+        }, Json), decisionPersonal));
     }
+
+    /// <summary>
+    /// La excepción de cobertura (FR-092: «sólo si la cobertura restante cumple la línea o se aprueba la excepción»): la aprueba quien aplica si tiene
+    /// la atribución del nivel de excepción de la matriz vigente (<c>IsExceptionLevel</c>; un nivel colegiado o uno que no alcanza responde
+    /// <c>Lending.Attribution.LevelRequired</c>); queda como decisión individual <c>Approve</c> sobre la novedad con <c>IsPolicyException</c>, ese nivel y
+    /// el motivo, y su Id se sella en el consentimiento (<c>ExceptionDecisionId</c>). Sin matriz o sin nivel de excepción no hay excepción posible.
+    /// </summary>
+    private async Task<Result<int>> ExcepcionDeCoberturaAsync(LoanNovelty n, IntervencionVerificada quien, string faltante, string motivo,
+        DateOnly v, CancellationToken ct)
+    {
+        var matriz = await matrices.LeerAsync(v, reloj.UtcNow, ct);
+        if (matriz is null) return Result.Failure<int>(ErroresDeGobierno.SinMatrizVigente(v));
+        var nivel = matriz.Niveles.Where(l => l.IsExceptionLevel).OrderByDescending(l => l.Rank).FirstOrDefault();
+        if (nivel is null)
+            return Result.Failure<int>(new Error(ErroresDeNovedades.CodigoCoberturaInsuficiente,
+                "La matriz de atribuciones vigente no tiene nivel de excepción: la cobertura que falta no se puede aprobar por excepción."));
+        if (await atribucion.ExigirAsync(nivel, matriz.Niveles, ErroresDeDecisionesYCupos.NivelRequerido(nivel.Code, nivel.Name, null), ct) is { } sinAtribucion)
+            return Result.Failure<int>(sinAtribucion);
+        var decision = CreditDecision.Individual(new LoDecidido(LendingDecisionSubjects.Novelty, n.PublicId, n.PublicId, CreditDecisionOutcome.Approve)
+        {
+            AttributionMatrixId = matriz.Matriz.Id,
+            LevelId = nivel.Id,
+            IsPolicyException = true,
+            Reason = Recortar($"Excepción de cobertura al extinguir una garantía ({faltante}): {motivo.Trim()}"),
+        }, quien.UsuarioId, quien.PersonaId, reloj.UtcNow);
+        db.CreditDecisions.Add(decision);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(decision.Id);
+    }
+
+    private static Result<(string Cobertura, int? Excepcion)> Falla2(Error e) => Result.Failure<(string Cobertura, int? Excepcion)>(e);
 
     private static string Recortar(string texto) => texto.Length <= 500 ? texto : texto[..500];
 

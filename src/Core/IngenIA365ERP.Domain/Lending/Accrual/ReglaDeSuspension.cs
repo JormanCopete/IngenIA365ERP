@@ -16,6 +16,12 @@ public enum MotivoDeSuspension
 
     /// <summary>Castigado.</summary>
     Castigo = 4,
+
+    /// <summary>
+    /// K3 (FR-097, T102): el deudor falleció y la cooperativa decidió que la causación no sigue tras el fallecimiento
+    /// (<c>Causacion.ContinuaTrasFallecimiento = false</c>, por línea). (nuevo)
+    /// </summary>
+    Fallecimiento = 5,
 }
 
 /// <summary>El cambio de estado de la causación de un día: Application emite <c>CausacionSuspendida</c> o <c>CausacionReanudada</c>.</summary>
@@ -27,16 +33,18 @@ public enum TransicionDeCausacion
 
 /// <summary>
 /// Lo que la regla mira de un crédito un día: su altura de mora, el umbral vigente de su modalidad (la primera altura que suspende;
-/// nulo si la norma no fija uno), cuántas veces se reestructuró y si ese día está en insolvencia o castigado.
+/// nulo si la norma no fija uno), cuántas veces se reestructuró, si ese día está en insolvencia o castigado y si ya pasó el fallecimiento del
+/// deudor con la causación que no sigue tras él (K3, <see cref="TrasFallecimiento"/>).
 /// </summary>
-public sealed record EntradaDeSuspension(int AlturaDeMora, int? Umbral, int Reestructuraciones, bool EnInsolvencia, bool Castigado);
+public sealed record EntradaDeSuspension(int AlturaDeMora, int? Umbral, int Reestructuraciones, bool EnInsolvencia, bool Castigado,
+    bool TrasFallecimiento = false);
 
 /// <summary>
 /// La suspensión y la reanudación de la causación como <b>transiciones del estado</b> (feature 013, US4, T0487; T30, R38, M9;
 /// FR-065): no son una marca que ponga el proceso —una fecha valor anterior no la reconstruiría—, sino lo que sale cada día de la
 /// reconstrucción.
 /// <list type="bullet">
-/// <item>Se suspende si está castigado, en insolvencia, reestructurado <b>más de una vez</b> o con altura <b>mayor o igual</b> al umbral
+/// <item>Se suspende si está castigado, en insolvencia, tras el fallecimiento del deudor si la causación no sigue (K3), reestructurado <b>más de una vez</b> o con altura <b>mayor o igual</b> al umbral
 /// vigente de su modalidad (el umbral es la primera altura que suspende: con «más de 60 días», 61).</item>
 /// <item>Se reanuda por la regla por defecto: cuando ya no hay ningún disparador —la altura quedó debajo del umbral vigente—.</item>
 /// <item>Suspendida, lo nuevo se causa en <see cref="LoanConcept.CurrentInterestInSuspense"/> y
@@ -56,6 +64,7 @@ public static class ReglaDeSuspension
         ArgumentNullException.ThrowIfNull(e);
         if (e.Castigado) return MotivoDeSuspension.Castigo;
         if (e.EnInsolvencia) return MotivoDeSuspension.Insolvencia;
+        if (e.TrasFallecimiento) return MotivoDeSuspension.Fallecimiento;
         if (e.Reestructuraciones >= ReestructuracionesQueSuspenden) return MotivoDeSuspension.Reestructuraciones;
         if (e.Umbral is { } umbral && e.AlturaDeMora >= umbral) return MotivoDeSuspension.AlturaDeMora;
         return null;

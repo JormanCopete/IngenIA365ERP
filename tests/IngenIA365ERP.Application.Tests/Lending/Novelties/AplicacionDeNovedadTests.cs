@@ -179,6 +179,8 @@ public sealed class AplicacionDeNovedadTests : IAsyncLifetime
         var proceso = await _n.Db.InsolvencyProceedings.AsNoTracking().SingleAsync();
         (proceso.Status, proceso.AgreementNoveltyId).Should().Be((InsolvencyProceedingStatus.Agreement,
             (await _n.Db.LoanNovelties.AsNoTracking().SingleAsync()).Id));
+        // Bloque B2: el acuerdo termina la negociación y levanta el bloqueo de crédito nuevo.
+        (await _n.Db.DebtorBlocks.AsNoTracking().SingleAsync(b => b.Reason == DebtorBlockReason.Insolvency)).Vigente.Should().BeFalse();
     }
 
 }

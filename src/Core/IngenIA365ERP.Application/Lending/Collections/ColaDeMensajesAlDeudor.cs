@@ -259,8 +259,7 @@ public sealed class ColaDeMensajesAlDeudor(
 
     /// <summary>¿Hay una reclamación al seguro en trámite por el deudor fallecido (o por el crédito)? (T0886)</summary>
     private Task<bool> ReclamacionEnTramiteAsync(int deudorId, int? loanId, CancellationToken ct) =>
-        db.InsuranceClaims.AsNoTracking().AnyAsync(c => !c.IsDeleted && c.Status == InsuranceClaimStatus.InProcess
-                                                        && (c.DeceasedPersonId == deudorId || (loanId != null && c.LoanId == loanId)), ct);
+        DebtorEvents.ReclamacionesEnTramite.HayAsync(db, deudorId, loanId, ct);
 
     /// <summary>¿Alguna de las personas está en negociación de insolvencia a <paramref name="dia"/>? (T0886)</summary>
     private Task<bool> InsolvenciaEnNegociacionAsync(int[] personas, DateOnly dia, CancellationToken ct) =>

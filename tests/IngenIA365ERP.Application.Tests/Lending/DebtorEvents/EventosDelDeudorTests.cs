@@ -173,6 +173,11 @@ public sealed class EventosDelDeudorTests : IAsyncLifetime
         fracaso.IsSuccess.Should().BeTrue(fracaso.IsFailure ? fracaso.Error.Message : string.Empty);
         (fracaso.Value.Status, fracaso.Value.FailedOn).Should().Be((InsolvencyProceedingStatus.Failed, (DateOnly?)_n.G.HoyLocal));
         _n.Db.ChangeTracker.Clear();
+        // Bloque B2: terminada la negociación, el bloqueo de crédito nuevo se levanta en la misma transacción.
+        (await _n.D.O.BloqueosReales().VigentesAsync([_n.D.O.Ana.Id], default)).Should().NotContain(b => b.Reason == DebtorBlockReason.Insolvency);
+        var levantado = await _n.Db.DebtorBlocks.AsNoTracking().SingleAsync(b => b.Reason == DebtorBlockReason.Insolvency);
+        (levantado.LiftedOn, levantado.LiftReason).Should().Be(((DateOnly?)_n.G.HoyLocal, "La negociación de insolvencia fracasó el "
+            + $"{_n.G.HoyLocal:yyyy-MM-dd}: No hubo acuerdo"));
 
         var otraVez = await _n.Fracaso().Handle(new RecordInsolvencyFailureCommand(abierto.Value.PublicId, _n.G.HoyLocal, "Otra vez", null)
             { OperationKey = Guid.NewGuid() }, default);
@@ -196,5 +201,55 @@ public sealed class EventosDelDeudorTests : IAsyncLifetime
             InsolvencyRegime.BusinessReorganization, "Superintendencia de Sociedades") { OperationKey = Guid.NewGuid() }, default);
         completo.IsSuccess.Should().BeTrue(completo.IsFailure ? completo.Error.Message : string.Empty);
         (completo.Value.Regime, completo.Value.Authority).Should().Be(((InsolvencyRegime?)InsolvencyRegime.BusinessReorganization, "Superintendencia de Sociedades"));
+    }
+
+    [Fact]
+    public async Task Tras_el_fallecimiento_la_causacion_sigue_salvo_que_el_parametro_diga_otra_cosa()
+    {
+        // FR-097, T102: Causacion.ContinuaTrasFallecimiento (defecto true). Con true el crédito causa como siempre; con false, desde el día del
+        // fallecimiento causa en suspenso (motivo Fallecimiento, CausacionSuspendida con cause = Deceased).
+        var vencimiento = await _n.PrimerVencimientoAsync();
+        var fallecimiento = _n.G.HoyLocal.AddDays(5);
+        _n.P.C.Ir(fallecimiento.AddDays(1));
+        (await RegistrarAsync(DebtorBlockReason.Deceased, fallecimiento)).IsSuccess.Should().BeTrue();
+        await _n.P.CausarHastaAsync(vencimiento.AddDays(10));
+
+        var sigue = await _n.P.C.Cargador().CargarAsync(_n.Credito.Id, null, _n.G.HoyLocal, default);
+        sigue!.Entrada!.Condiciones.FallecimientoDesde.Should().BeNull("el defecto es que la causación sigue");
+        Domain.Lending.MotorDeCartera.Reconstruir(sigue.Entrada!, _n.G.HoyLocal).Suspendida.Should().BeFalse();
+
+        _n.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = Domain.Lending.Parameters.ParametrosDeCartera.CausacionContinuaTrasFallecimiento,
+            ScopeKind = Domain.Enums.Parameters.ParameterScopeKind.None, Value = "false", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+            CreatedAt = _n.G.UtcNow.AddDays(-30), CreatedBy = "test",
+        });
+        await _n.Db.SaveChangesAsync();
+        _n.Db.ChangeTracker.Clear();
+
+        var noSigue = await _n.P.C.Cargador().CargarAsync(_n.Credito.Id, null, _n.G.HoyLocal, default);
+        noSigue!.Entrada!.Condiciones.FallecimientoDesde.Should().Be(fallecimiento);
+        var estado = Domain.Lending.MotorDeCartera.Reconstruir(noSigue.Entrada!, _n.G.HoyLocal);
+        estado.Suspendida.Should().BeTrue();
+        estado.MotivoDeSuspension.Should().Be(Domain.Lending.Accrual.MotivoDeSuspension.Fallecimiento);
+        Domain.Lending.MotorDeCartera.Reconstruir(noSigue.Entrada!, fallecimiento.AddDays(-1)).Suspendida.Should().BeFalse("antes del fallecimiento causa normal");
+    }
+
+    [Fact]
+    public async Task La_reclamacion_en_tramite_se_consulta_por_credito_para_suspender_el_reporte_negativo()
+    {
+        // FR-097: mientras la reclamación está en trámite no hay reporte negativo; la proyección a centrales de K5 (T1003) lo consulta aquí.
+        await ConSeguroDeVidaAsync();
+        (await ReclamacionesEnTramite.CreditosAsync(_n.Db, [_n.Credito.Id], default)).Should().BeEmpty();
+        (await RegistrarAsync(DebtorBlockReason.Deceased)).IsSuccess.Should().BeTrue();
+
+        (await ReclamacionesEnTramite.CreditosAsync(_n.Db, [_n.Credito.Id], default)).Should().Equal(_n.Credito.Id);
+        (await ReclamacionesEnTramite.HayAsync(_n.Db, _n.D.O.Ana.Id, null, default)).Should().BeTrue();
+        var reclamacion = await _n.Db.InsuranceClaims.AsNoTracking().SingleAsync();
+        _n.G.ActuarComo(_n.D.O.Asesora);
+        (await _n.CambiarReclamacion().Handle(new ChangeInsuranceClaimStatusCommand(reclamacion.PublicId, InsuranceClaimStatus.Denied, "La aseguradora la negó")
+            { OperationKey = Guid.NewGuid() }, default)).IsSuccess.Should().BeTrue();
+        _n.Db.ChangeTracker.Clear();
+        (await ReclamacionesEnTramite.CreditosAsync(_n.Db, [_n.Credito.Id], default)).Should().BeEmpty("negada, la suspensión se levanta");
     }
 }

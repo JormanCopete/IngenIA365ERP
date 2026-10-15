@@ -280,7 +280,8 @@ public sealed class OpenInsolvencyProceedingCommandHandler(
 /// Registra el fracaso de la negociación (feature 013, K3, T0885; api.md §11.4, <c>POST /api/lending/insolvency-proceedings/{id}/failure</c>,
 /// <c>Lending.Insolvency.Manage</c>, con clave y motivo; FR-098): <c>Negotiating</c> → <c>Failed</c> desde <c>date</c>; desde otro estado,
 /// <c>Lending.Insolvency.NotNegotiating</c>. Desde esa fecha la causación se reanuda y rige la calificación que fija la norma. Lo migrado sin régimen o
-/// autoridad se completa aquí (C64). El bloqueo de crédito nuevo sigue: lo levanta quien administra los bloqueos. (nuevo)
+/// autoridad se completa aquí (C64). El bloqueo <c>Insolvency</c> de crédito nuevo se levanta en la misma transacción (bloque B2, 2026-10-15): la
+/// negociación terminó (<see cref="CierreDeInsolvencia"/>). (nuevo)
 /// </summary>
 public sealed record RecordInsolvencyFailureCommand(
     Guid ProceedingPublicId,
@@ -304,7 +305,7 @@ public sealed class RecordInsolvencyFailureCommandValidator : ValidadorConMotivo
     }
 }
 
-public sealed class RecordInsolvencyFailureCommandHandler(IApplicationDbContext db, ICerrojoDeCartera cerrojo, IDateTimeService reloj)
+public sealed class RecordInsolvencyFailureCommandHandler(IApplicationDbContext db, ICerrojoDeCartera cerrojo, IActorActual actorActual, IDateTimeService reloj)
     : IRequestHandler<RecordInsolvencyFailureCommand, Result<InsolvencyProceedingDto>>
 {
     public async Task<Result<InsolvencyProceedingDto>> Handle(RecordInsolvencyFailureCommand request, CancellationToken ct)
@@ -337,10 +338,61 @@ public sealed class RecordInsolvencyFailureCommandHandler(IApplicationDbContext 
             {
                 return Falla(ErroresDeGobierno.De(ex.Problema));
             }
+            var actor = await actorActual.ObtenerAsync(ct);
+            await CierreDeInsolvencia.LevantarBloqueosAsync(db, proceso.PersonId, request.Date, reloj.UtcNow, actor.UserId,
+                $"La negociación de insolvencia fracasó el {request.Date:yyyy-MM-dd}: {request.Reason.Trim()}", ct);
             await db.SaveChangesAsync(ct);
             return Result.Success((await ConsultasDeEventosDelDeudor.ProcesosAsync(db, [proceso], ct))[0]);
         }, ct);
     }
 
     private static Result<InsolvencyProceedingDto> Falla(Error e) => Result.Failure<InsolvencyProceedingDto>(e);
+}
+
+/// <summary>
+/// Lo que pasa con los bloqueos al terminar una negociación de insolvencia (feature 013, K3, bloque B2; FR-098): por fracaso
+/// (<see cref="RecordInsolvencyFailureCommand"/>) o por el acuerdo aplicado como novedad (<c>ApplyLoanNoveltyCommand</c>), el bloqueo
+/// <c>Insolvency</c> de crédito nuevo de la persona se levanta —el abierto por pantalla y el migrado—, sin guardar. Hay a lo sumo una negociación
+/// abierta por persona (<c>Lending.Insolvency.AlreadyOpen</c>). (nuevo)
+/// </summary>
+public static class CierreDeInsolvencia
+{
+    public static async Task<int> LevantarBloqueosAsync(IApplicationDbContext db, int personaId, DateOnly fecha, DateTime instante, int? usuarioId, string motivo,
+        CancellationToken ct)
+    {
+        var vigentes = await db.DebtorBlocks
+            .Where(b => b.PersonId == personaId && b.Reason == DebtorBlockReason.Insolvency && b.LiftedAt == null && !b.IsDeleted).ToListAsync(ct);
+        var texto = motivo.Length <= 500 ? motivo : motivo[..500];
+        foreach (var bloqueo in vigentes) bloqueo.Levantar(fecha, instante, usuarioId, texto);
+        return vigentes.Count;
+    }
+}
+
+/// <summary>
+/// Las reclamaciones al seguro de vida deudores en trámite (feature 013, K3, bloque B2; FR-097, T102): mientras una está <c>InProcess</c> no hay cobranza,
+/// mensajes de cobro ni <b>reporte negativo</b>. La cola de mensajes la consulta aquí y la proyección a centrales de K5 (T1003, exclusión
+/// <c>DeceasedClaimInProcess</c>) debe consultarla aquí también: la reclamación cuenta por el crédito o por el deudor fallecido, migrada o registrada
+/// por pantalla. (nuevo)
+/// </summary>
+public static class ReclamacionesEnTramite
+{
+    /// <summary>¿Hay una reclamación en trámite por el deudor fallecido <paramref name="deudorId"/> o por el crédito <paramref name="loanId"/>?</summary>
+    public static Task<bool> HayAsync(IApplicationDbContext db, int deudorId, int? loanId, CancellationToken ct) =>
+        db.InsuranceClaims.AsNoTracking().AnyAsync(c => !c.IsDeleted && c.Status == InsuranceClaimStatus.InProcess
+                                                        && (c.DeceasedPersonId == deudorId || (loanId != null && c.LoanId == loanId)), ct);
+
+    /// <summary>De los créditos de <paramref name="loanIds"/>, los que tienen reclamación en trámite (por el crédito o por su deudor fallecido).</summary>
+    public static async Task<IReadOnlySet<int>> CreditosAsync(IApplicationDbContext db, IReadOnlyCollection<int> loanIds, CancellationToken ct)
+    {
+        var ids = loanIds.Distinct().ToList();
+        if (ids.Count == 0) return new HashSet<int>();
+        var deudores = await db.Loans.AsNoTracking().Where(l => ids.Contains(l.Id)).Select(l => new { l.Id, l.DebtorPersonId }).ToListAsync(ct);
+        var personas = deudores.Select(d => d.DebtorPersonId).Distinct().ToList();
+        var reclamaciones = await db.InsuranceClaims.AsNoTracking()
+            .Where(c => !c.IsDeleted && c.Status == InsuranceClaimStatus.InProcess && (ids.Contains(c.LoanId) || personas.Contains(c.DeceasedPersonId)))
+            .Select(c => new { c.LoanId, c.DeceasedPersonId }).ToListAsync(ct);
+        var porCredito = reclamaciones.Select(r => r.LoanId).ToHashSet();
+        var porPersona = reclamaciones.Select(r => r.DeceasedPersonId).ToHashSet();
+        return deudores.Where(d => porCredito.Contains(d.Id) || porPersona.Contains(d.DebtorPersonId)).Select(d => d.Id).ToHashSet();
+    }
 }

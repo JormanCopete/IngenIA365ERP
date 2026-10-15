@@ -603,7 +603,9 @@ Una ruta para todas las claves del módulo `LND` de `COR_ParameterVersions` (cat
 `subject` es una de las constantes `LendingDecisionSubjects` (§27): `CreditApplication`, `CreditLimit`,
 `Novelty`, `Condonation`, `WriteOffBatch`, `PortfolioEvaluation`, `ImpairmentModelChange`,
 `ActivationDifferences`, `ValidationFailureException`, `RiskPolicyVersion` (C52, C100). El consejo para
-vinculados es forzado y no se configura (FR-040).
+vinculados es forzado y no se configura (FR-040). Las `conditions` de una regla del sujeto `Novelty` admiten también
+`noveltyMechanism` y `noveltyCause` (K3, T0879, bloque B2 del 2026-10-15; nulo = no importa; con otro sujeto,
+`Lending.Attribution.MatrixInvalid` con `reason = RuleNoveltyCriteriaOutOfSubject`), y la vista previa recibe los mismos dos campos.
 
 #### 3.5.2 Montos de las atribuciones operativas — `/amount-limits`
 
@@ -1193,7 +1195,7 @@ sea el mecanismo; si no, `Modification`). Enums de `data-model.md` (§27): `Nove
 | `POST /{id}/submit` | Novelties.Request | `SubmitLoanNoveltyCommand` | → `LoanNoveltyDto` en `Submitted` con `routing` (vinculados: consejo) | `Lending.Usury.Exceeded`, `Lending.Concentration.LimitExceeded` | K3 |
 | `POST /{id}/consents` | Novelties.Request | `RegisterNoveltyConsentCommand` | `{ partyPersonPublicId, consented, attachmentPublicId, addendumAttachmentPublicId? }` → 201 (adjunto `LendingNoveltyConsent`) | `Lending.Novelty.PartyUnknown` | K3 |
 | `POST /{id}/decisions` | Novelties.Read (+ nivel) | `RecordCreditDecisionCommand` | §4.3 | §4.3 | K3 |
-| `POST /{id}/apply` | Novelties.Apply | `ApplyLoanNoveltyCommand` | `{ withoutConsent?: [{ partyPersonPublicId, decision: DoNotApply \| ApplyWithGuaranteeExtinguished, reason }], acknowledgeWarnings? }` → `{ operationPublicId, scheduleVersion, newLoanPublicId?, messages[] }`; emite `CreditoReestructurado`, `CreditoModificado` o `CreditoNovado` | `Lending.Novelty.NotApproved`, `.ConsentMissing` (`data: { parties[] }`), `.CoverageInsufficient` (`data: { required, remaining }`), `Lending.Prevalidation.NotPostable`, `Lending.Segregation.Conflict` | K3 |
+| `POST /{id}/apply` | Novelties.Apply | `ApplyLoanNoveltyCommand` | `{ withoutConsent?: [{ partyPersonPublicId, decision: DoNotApply \| ApplyWithGuaranteeExtinguished, reason, collateralPublicId?, approveCoverageException? }], acknowledgeWarnings? }` (`approveCoverageException`, bloque B2: si la cobertura restante no cumple la línea, quien aplica aprueba la excepción con la atribución del nivel de excepción de la matriz —sin ella, `Lending.Attribution.LevelRequired`—; queda como decisión `Approve` con `isPolicyException` sobre la novedad y en `ExceptionDecisionId` del consentimiento) → `{ operationPublicId, scheduleVersion, newLoanPublicId?, messages[] }`; emite `CreditoReestructurado`, `CreditoModificado` o `CreditoNovado` | `Lending.Novelty.NotApproved`, `.ConsentMissing` (`data: { parties[] }`), `.CoverageInsufficient` (`data: { required, remaining }`), `Lending.Prevalidation.NotPostable`, `Lending.Segregation.Conflict` | K3 |
 | `POST /{id}/cancel` | Novelties.Request | `CancelLoanNoveltyCommand` | `{ reason }` → 204 | `Lending.Novelty.AlreadyApplied` | K3 |
 
 Una novación o refinanciación crea un crédito enlazado que hereda marca, conteo, calificación e historial de

@@ -47,7 +47,9 @@ public sealed record AttributionRuleConditionsDto(
     bool? PolicyException = null,
     int? MinDaysPastDue = null,
     int? MaxDaysPastDue = null,
-    LoanConcept? Concept = null);
+    LoanConcept? Concept = null,
+    NoveltyMechanism? NoveltyMechanism = null,
+    NoveltyCause? NoveltyCause = null);
 
 /// <summary>Una regla de la matriz: sujeto, condiciones y el nivel mínimo que exige (por código).</summary>
 public sealed record AttributionRuleDto(int Order, string Subject, AttributionRuleConditionsDto Conditions, string MinimumLevelCode);
@@ -116,6 +118,10 @@ public sealed class AddAttributionMatrixVersionCommandValidator : ValidadorConMo
         {
             r.RuleFor(x => x.Subject).NotEmpty().MaximumLength(40);
             r.RuleFor(x => x.MinimumLevelCode).NotEmpty().MaximumLength(10);
+            r.RuleFor(x => x.Conditions!.NoveltyMechanism).IsInEnum().WithMessage("Elegí un mecanismo de novedad que exista.")
+                .When(x => x.Conditions?.NoveltyMechanism is not null);
+            r.RuleFor(x => x.Conditions!.NoveltyCause).IsInEnum().WithMessage("Elegí una causa de novedad que exista.")
+                .When(x => x.Conditions?.NoveltyCause is not null);
         });
     }
 }
@@ -192,6 +198,8 @@ public sealed class AddAttributionMatrixVersionCommandHandler(IApplicationDbCont
             MinDaysPastDue = c.MinDaysPastDue,
             MaxDaysPastDue = c.MaxDaysPastDue,
             Concept = c.Concept,
+            NoveltyMechanism = c.NoveltyMechanism,
+            NoveltyCause = c.NoveltyCause,
         };
     }
 
@@ -279,7 +287,9 @@ public sealed record PreviewAttributionRoutingQuery(
     int? DaysPastDue = null,
     LoanConcept? Concept = null,
     bool PolicyException = false,
-    DateOnly? Date = null) : IRequest<Result<AttributionRoutingPreviewDto>>;
+    DateOnly? Date = null,
+    NoveltyMechanism? NoveltyMechanism = null,
+    NoveltyCause? NoveltyCause = null) : IRequest<Result<AttributionRoutingPreviewDto>>;
 
 public sealed class PreviewAttributionRoutingQueryValidator : AbstractValidator<PreviewAttributionRoutingQuery>
 {
@@ -289,6 +299,8 @@ public sealed class PreviewAttributionRoutingQueryValidator : AbstractValidator<
         RuleFor(x => x.Amount).GreaterThanOrEqualTo(0).PrecisionScale(18, 2, true).WithMessage("El monto admite hasta 2 decimales y no es negativo.");
         RuleFor(x => x.TermInstallments).GreaterThan(0).When(x => x.TermInstallments is not null);
         RuleFor(x => x.DaysPastDue).GreaterThanOrEqualTo(0).When(x => x.DaysPastDue is not null);
+        RuleFor(x => x.NoveltyMechanism).IsInEnum().When(x => x.NoveltyMechanism is not null);
+        RuleFor(x => x.NoveltyCause).IsInEnum().When(x => x.NoveltyCause is not null);
     }
 }
 
@@ -347,6 +359,8 @@ public sealed class PreviewAttributionRoutingQueryHandler(
             ExcepcionALaPolitica = request.PolicyException,
             DiasDeMora = request.DaysPastDue,
             Concepto = request.Concept,
+            Mecanismo = request.NoveltyMechanism,
+            Causa = request.NoveltyCause,
             HayVinculado = hayVinculado,
         }, matriz.ParaElMotor);
 
@@ -379,7 +393,8 @@ internal static class ConsultasDeMatrices
             await NivelesAsync(db, niveles, ct),
             reglas.Select(r => new AttributionRuleDto(r.Order, r.Subject, new AttributionRuleConditionsDto(
                 r.CreditLineId is { } l ? lineas[l] : null, r.ModalityCode, r.MinConsolidatedAmount, r.MaxConsolidatedAmount, r.MinTermMonths,
-                r.MaxTermMonths, r.CollateralKind, r.ScoreBelowMinimum, r.HasWarnings, r.PolicyException, r.MinDaysPastDue, r.MaxDaysPastDue, r.Concept),
+                r.MaxTermMonths, r.CollateralKind, r.ScoreBelowMinimum, r.HasWarnings, r.PolicyException, r.MinDaysPastDue, r.MaxDaysPastDue, r.Concept,
+                r.NoveltyMechanism, r.NoveltyCause),
                 codigoDeNivel[r.MinimumLevelId])).ToList());
     }
 
