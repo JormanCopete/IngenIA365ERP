@@ -9,8 +9,8 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Operations;
 /// primario —lo que decidió una persona o el proceso— y <b>el comprobante de la operación</b> (no hay <c>LND_PaymentApplications</c>,
 /// CH27); su distribución son las filas del libro con su <c>OperationId</c>. Hecho de sólo inserción (<see cref="IHechoInmutable"/>,
 /// <c>bigint</c>) que escribe <c>RegistroDeCartera</c> bajo el cerrojo de T34; sólo <see cref="ReversedByOperationId"/> se escribe una
-/// vez. Las columnas <c>NoveltyId</c>, <c>WaiverId</c>, <c>WriteOffBatchItemId</c> (K3) y <c>PayrollDeductionResultId</c> (K2) nacen
-/// con su entrega.
+/// vez. Las columnas <c>NoveltyId</c>, <c>WaiverId</c>, <c>WriteOffBatchItemId</c> (K3, <c>CarteraNovedades</c>) y
+/// <c>PayrollDeductionResultId</c> (K2) nacen con su entrega.
 /// </summary>
 public class LoanOperation : AuditableEntityLong, IHechoInmutable
 {
@@ -123,6 +123,15 @@ public class LoanOperation : AuditableEntityLong, IHechoInmutable
 
     /// <summary>Reclamación cerrada por el pago de la aseguradora (T102).</summary>
     public int? InsuranceClaimId { get; init; }
+
+    /// <summary>K3 (<c>CarteraNovedades</c>; data-model §7.1): la novedad que aplica esta operación <c>TermsChange</c>.</summary>
+    public int? NoveltyId { get; init; }
+
+    /// <summary>K3: la condonación que aplica esta operación <c>Waiver</c>.</summary>
+    public int? WaiverId { get; init; }
+
+    /// <summary>K3: el ítem del lote de castigo que aplica esta operación <c>WriteOff</c>.</summary>
+    public int? WriteOffBatchItemId { get; init; }
 
     // ------------------------------------------------------------------------------------------------ decisión --
 

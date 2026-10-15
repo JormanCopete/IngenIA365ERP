@@ -86,6 +86,17 @@ public class CasosDoradosDeCarteraTests
         A("2027-01-08").AlturaDeMora.Should().Be(new Domain.Lending.Delinquency.ResultadoDeAlturaDeMora(34, 1, 2), "superado el umbral cuenta desde su vencimiento");
     }
 
+    /// <summary>
+    /// K3, T0858 (T29, FR-090, FR-091): el plan de una novedad —prórroga con capitalización, cambio de fecha, cambio de tasa topado por la usura,
+    /// refinanciación que recoge dos créditos y novación— regenerado desde la fecha de la decisión con las reglas vigentes.
+    /// </summary>
+    [Fact]
+    public void Estan_los_casos_de_novedades_de_K3()
+    {
+        CasoDoradoDeCartera.Archivos().Select(Path.GetFileNameWithoutExtension).Should().Contain(
+            ["k3-prorroga-con-capitalizacion", "k3-cambio-de-fecha", "k3-cambio-de-tasa-usura", "k3-refinanciacion-dos-creditos", "k3-novacion"]);
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_caso_coincide_con_la_hoja_de_calculo(string archivo)
@@ -121,6 +132,10 @@ public class CasosDoradosDeCarteraTests
                 plan.Explicacion.Lineas.Should().Contain(l => l.Contains("redondeada a 18 decimales"));
             }
         }
+
+        foreach (var novedad in caso.Novedades)
+            using (new AssertionScope($"{caso.Nombre} · novedad {novedad.Nombre}"))
+                CompararNovedad(caso, novedad);
 
         foreach (var (nombre, condiciones, operaciones, operacion) in caso.OperacionesConEsperado())
             using (new AssertionScope($"{nombre} · operación {operacion.Id}"))
@@ -319,6 +334,37 @@ public class CasosDoradosDeCarteraTests
         CompararCuotas(d.PlanNuevo!.Cuotas, e.PlanNuevo.Cuotas);
         d.PlanNuevo.TotalCapital.Should().Be(e.PlanNuevo.Totales.Capital, $"{donde}: Σ capital del plan nuevo (SC-017)");
         d.PlanNuevo.TotalInteres.Should().Be(e.PlanNuevo.Totales.Interes, $"{donde}: Σ interés del plan nuevo");
+    }
+
+    /// <summary>
+    /// K3 (T0858): el plan de la novedad cuota a cuota con su numeración, Σ capital = saldo + recogido + capitalizado (los costos no entran),
+    /// la versión de reglas vigente y el veredicto de la usura vigente a la fecha de la decisión.
+    /// </summary>
+    private static void CompararNovedad(CasoDoradoDeCartera caso, CasoDoradoDeCartera.NovedadJson n)
+    {
+        var e = n.Esperado;
+        var entrada = n.Entrada(caso.Condiciones);
+        var (plan, usura) = MotorDeCartera.SimularNovedad(entrada, caso.UsuraA(caso.Condiciones.Modalidad, n.Fecha));
+
+        plan.RulesVersion.Should().Be(VersionesDeReglas.Vigente, "se regenera con las reglas vigentes");
+        plan.PrimeraCuotaRegenerada.Should().Be(e.PrimeraCuota, "primera cuota del plan nuevo");
+        plan.Entrada.FechaDesembolso.Should().Be(n.Fecha, "desde la fecha de la decisión");
+        plan.TasaDiaria.Should().Be(e.Tasas.Diaria, "tasa diaria");
+        plan.TasaNominalDelPeriodo.Should().Be(e.Tasas.NominalDelPeriodo, "nominal del período");
+        plan.CuotaNivelada.Should().Be(e.Tasas.CuotaNivelada, "cuota nivelada");
+        plan.ResiduoDeLaUltimaCuota.Should().Be(e.Plan.Residuo, "residuo");
+        CompararCuotas(plan.Cuotas, e.Plan.Cuotas);
+
+        var capital = n.SaldoDeCapital + n.SaldosRecogidos.Sum() + n.InteresCapitalizado;
+        e.Capital.Should().Be(capital, "la hoja suma saldo, recogido y capitalizado");
+        plan.TotalCapital.Should().Be(capital, "Σ capital del plan nuevo = saldo + recogido + capitalizado; los costos no entran");
+        if (n.Costos > 0m) plan.TotalCapital.Should().NotBe(capital + n.Costos, "los costos no se trasladan al deudor (FR-091)");
+        plan.TotalInteres.Should().Be(e.Plan.Totales.Interes, "total de interés");
+
+        decimal.Round(usura.EfectivaSinCargos, 6).Should().Be(e.Tasas.EfectivaSinCargos, "efectiva");
+        usura.Veredicto.Should().Be(e.Usura.Veredicto, "veredicto de la usura vigente a la decisión");
+        usura.Usura.Should().Be(e.Usura.Usura, "usura usada");
+        (usura.Holgura is { } h ? decimal.Round(h, 6) : (decimal?)null).Should().Be(e.Usura.Holgura, "holgura");
     }
 
     private static void CompararCuotas(IReadOnlyList<Domain.Lending.Schedules.CuotaDelPlan> reales, IReadOnlyList<CasoDoradoDeCartera.CuotaJson> esperadas)

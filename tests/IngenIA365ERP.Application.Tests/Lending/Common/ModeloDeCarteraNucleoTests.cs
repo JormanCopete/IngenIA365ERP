@@ -19,10 +19,13 @@ namespace IngenIA365ERP.Application.Tests.Lending.Common;
 ///
 /// <para>K2 (fase 15, T0827): suma las ocho tablas de <c>CarteraLibranza</c> con sus marcas: la línea del archivo, el resultado y el seguimiento
 /// son hechos; la línea va sin diferencias de auditoría (C46).</para>
+///
+/// <para>K3 (fases 16 y 17, T0875): suma las nueve tablas de <c>CarteraNovedades</c> (data-model §25.1–§25.6, §23.7); ninguna es hecho: las
+/// novedades, condonaciones, lotes y evaluaciones avanzan de estado.</para>
 /// </summary>
 public class ModeloDeCarteraNucleoTests
 {
-    /// <summary>Las 74 + 17 de data-model §14 más las dos del grupo conectado (C112): 93.</summary>
+    /// <summary>Las 74 + 17 de data-model §14 más las dos del grupo conectado (C112), y las de CarteraRiesgo, CarteraLibranza y CarteraNovedades.</summary>
     private static readonly string[] Tablas =
     [
         // Configuración (19)
@@ -61,6 +64,9 @@ public class ModeloDeCarteraNucleoTests
         // Libranza (K2, CarteraLibranza; data-model §24.1–§24.4, §24.6–§24.8, §24.10)
         "LND_PayrollAgreements", "LND_PayrollAgreementVersions", "LND_PayrollAgreementContacts", "LND_PayrollAgreementResultCodes",
         "LND_PayrollDeductionFiles", "LND_PayrollDeductionFileLines", "LND_PayrollDeductionResults", "LND_NonDeductionFollowUps",
+        // Novedades, condonaciones, castigo y evaluación (K3, CarteraNovedades; data-model §25.1–§25.6, §23.7)
+        "LND_LoanNovelties", "LND_LoanNoveltyLoans", "LND_LoanNoveltyConsents", "LND_Waivers", "LND_WaiverLines", "LND_WriteOffBatches",
+        "LND_WriteOffBatchItems", "LND_PortfolioEvaluations", "LND_PortfolioEvaluationLoans",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -115,8 +121,9 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(108,
-            "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)");
+        Tablas.Should().HaveCount(117,
+            "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
+            + " + 9 de CarteraNovedades (K3)");
     }
 
     [Theory]
@@ -210,6 +217,23 @@ public class ModeloDeCarteraNucleoTests
         // US9 (T0697, C66): CarteraRiesgo crea las FK hacia el cierre y su reapertura.
         partes.GetForeignKeys().Should().Contain(fk => fk.Properties.Single().Name == "MonthlyCloseId" && fk.PrincipalEntityType.GetTableName() == "LND_MonthlyCloses")
             .And.Contain(fk => fk.Properties.Single().Name == "MonthlyCloseReopeningId" && fk.PrincipalEntityType.GetTableName() == "LND_MonthlyCloseReopenings");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Las_columnas_de_K3_en_tablas_de_K1_apuntan_a_sus_tablas(bool postgres)
+    {
+        // K3 (T0876; data-model §14, parte 3): cinco columnas nacen con CarteraNovedades en tablas de K1.
+        var modelo = Modelo(postgres);
+        void Apunta(Type entidad, string columna, string tabla) =>
+            modelo.FindEntityType(entidad)!.GetForeignKeys()
+                .Should().Contain(fk => fk.Properties.Single().Name == columna && fk.PrincipalEntityType.GetTableName() == tabla, $"{entidad.Name}.{columna}");
+
+        Apunta(typeof(Domain.Entities.Lending.Loans.InsolvencyProceeding), "AgreementNoveltyId", "LND_LoanNovelties");
+        Apunta(typeof(Domain.Entities.Lending.Loans.LoanTermsVersion), "NoveltyId", "LND_LoanNovelties");
+        Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "NoveltyId", "LND_LoanNovelties");
+        Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "WaiverId", "LND_Waivers");
+        Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "WriteOffBatchItemId", "LND_WriteOffBatchItems");
     }
 
     private static IModel Modelo(bool postgres)

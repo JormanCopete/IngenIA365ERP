@@ -40,6 +40,8 @@ public sealed class CasoDoradoDeRiesgo
     public SelectorJson? Selector { get; set; }
     public List<VarianteJson> Variantes { get; set; } = [];
     public EsperadoJson Esperado { get; set; } = new();
+    /// <summary>K3 (T0859): historiales de mora que siguen el enlace de una novación, con lo que esperan.</summary>
+    public List<HistorialJson> Historiales { get; set; } = [];
 
     public static string Directorio => Path.Combine(AppContext.BaseDirectory, "Lending", "Risk");
 
@@ -105,6 +107,8 @@ public sealed class CasoDoradoDeRiesgo
         public bool PagoUnico { get; set; }
         public bool Nuevo { get; set; }
         public ReestructuracionJson? Reestructuracion { get; set; }
+        /// <summary>K3: el conteo de reestructuraciones; más de una suspende (el interés sólo al cobrarlo).</summary>
+        public int Reestructuraciones { get; set; }
         public InsolvenciaJson? Insolvencia { get; set; }
         public ImpuestaJson? Analisis { get; set; }
         public ImpuestaJson? Evaluacion { get; set; }
@@ -132,6 +136,47 @@ public sealed class CasoDoradoDeRiesgo
     {
         public InsolvencyProceedingStatus Estado { get; set; }
         public RatingCategory CategoriaAlIniciar { get; set; }
+        // K3 (T0859): con su inicio, su fracaso y los cierres, la categoría mantenida se deriva al corte del caso.
+        public DateOnly? Inicio { get; set; }
+        public DateOnly? FracasoEl { get; set; }
+        public RatingCategory? SinCierreAnterior { get; set; }
+        public List<CierreJson> Cierres { get; set; } = [];
+    }
+
+    public sealed class CierreJson
+    {
+        public DateOnly Fecha { get; set; }
+        public RatingCategory Categoria { get; set; }
+    }
+
+    /// <summary>K3 (T0859): un historial de mora con su cadena (antecesores), sus filas y los meses que espera, como texto.</summary>
+    public sealed class HistorialJson
+    {
+        public int Credito { get; set; }
+        public List<int> Antecesores { get; set; } = [];
+        public DateOnly InicioDeLaCadena { get; set; }
+        public DateOnly? CorteDeMigracion { get; set; }
+        public DateOnly FechaDeReferencia { get; set; }
+        public int MesesExigidos { get; set; }
+        public List<EntradaDeHistorialJson> Entradas { get; set; } = [];
+        public HistorialEsperadoJson Esperado { get; set; } = new();
+    }
+
+    public sealed class EntradaDeHistorialJson
+    {
+        public int Credito { get; set; }
+        public int Anio { get; set; }
+        public int Mes { get; set; }
+        public int Dias { get; set; }
+        public ArrearsHistoryOrigin Origen { get; set; }
+        public long Secuencia { get; set; }
+        public bool Vigente { get; set; } = true;
+    }
+
+    public sealed class HistorialEsperadoJson
+    {
+        public List<string> Meses { get; set; } = [];
+        public List<string> Faltantes { get; set; } = [];
     }
 
     public sealed class ImpuestaJson

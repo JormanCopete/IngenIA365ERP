@@ -38,6 +38,7 @@ public sealed class ContextoDeReconstruccion
         Entrada = entrada;
         Origen = origen;
         TasaCorrienteEA = entrada.Condiciones.TasaEfectivaAnual;
+        Reestructuraciones = entrada.Condiciones.Reestructuraciones;
     }
 
     public EntradaDeReconstruccion Entrada { get; }
@@ -51,6 +52,12 @@ public sealed class ContextoDeReconstruccion
 
     /// <summary>La corriente pactada o reajustada (EA), antes de topar.</summary>
     public decimal TasaCorrienteEA { get; private set; }
+
+    /// <summary>
+    /// K3 (T0874): las reestructuraciones que rigen desde el día siguiente al último hecho aplicado. Parte de las de las condiciones (las del
+    /// origen: lo migrado o lo heredado de la novación) y cada novedad aplicada la cambia desde su fecha valor (T30: más de una suspende).
+    /// </summary>
+    public int Reestructuraciones { get; private set; }
 
     /// <summary>Cambió algo que mueve los cortes o los saldos vencidos: la corrida recalcula lo suyo.</summary>
     internal int Version { get; private set; }
@@ -68,6 +75,14 @@ public sealed class ContextoDeReconstruccion
     public void CambiarTasa(decimal efectivaAnual)
     {
         TasaCorrienteEA = efectivaAnual;
+        Version++;
+    }
+
+    /// <summary>K3: el conteo de reestructuraciones que deja una novedad aplicada.</summary>
+    public void CambiarReestructuraciones(int conteo)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(conteo);
+        Reestructuraciones = conteo;
         Version++;
     }
 
@@ -233,6 +248,8 @@ public static class ReconstruccionDeCredito
         [LoanOperationKind.CreditBalanceResolution] = new InterpreteDeResolucion(),
         // US6 (T0566): los ajustes de una venta a crédito de Comercial (FR-054).
         [LoanOperationKind.CommercialAdjustment] = new InterpreteDeAjusteComercial(),
+        // K3 (T0874): la novedad que conserva el número del crédito (prórroga, cambio de fecha o de tasa).
+        [LoanOperationKind.TermsChange] = new InterpreteDeNovedad(),
     };
 
     /// <summary>Las tasas del día ya calculadas: la raíz de cada EA es cara y los créditos comparten tasas y usuras (memo puro).</summary>
@@ -572,7 +589,7 @@ public static class ReconstruccionDeCredito
             var tolerancia = Vigente(entrada.Tolerancias, d) ?? 0m;
             var umbral = Vigente(entrada.UmbralesDeSuspension, d);
             var altura = AlturaDeMora.Calcular(d, paraMora, tolerancia);
-            var motivo = ReglaDeSuspension.Evaluar(new EntradaDeSuspension(altura.Dias, umbral, _c.Reestructuraciones,
+            var motivo = ReglaDeSuspension.Evaluar(new EntradaDeSuspension(altura.Dias, umbral, _ctx.Reestructuraciones,
                 _c.InsolvenciaDesde is { } ins && ins <= d, _c.CastigoDesde is { } cas && cas <= d));
             return new Evaluacion(vencidas, altura, motivo, interesCubierto, capitalCubierto);
         }

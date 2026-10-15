@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FluentAssertions.Execution;
+using IngenIA365ERP.Domain.Lending.Accrual;
 using IngenIA365ERP.Domain.Lending.Delinquency;
 using IngenIA365ERP.Domain.Lending.Risk;
 using IngenIA365ERP.Domain.Lending.Risk.Normativa;
@@ -21,10 +22,13 @@ public class CasosDoradosDeRiesgoTests
     public static IEnumerable<object[]> Casos() => CasoDoradoDeRiesgo.Archivos().Select(f => new object[] { Path.GetFileName(f) });
 
     [Fact]
-    public void Estan_los_casos_de_K1()
+    public void Estan_los_casos_de_K1_y_K3()
     {
         CasoDoradoDeRiesgo.Archivos().Select(Path.GetFileNameWithoutExtension).Should().BeEquivalentTo(
         [
+            // K3 (T0859, T0905): novación y reestructurado dos veces con el historial que sigue el enlace, insolvencia con sus cierres y
+            // la evaluación de cartera.
+            "r-k3-novacion-hereda", "r-k3-insolvencia-cierres", "r-k3-evaluacion",
             "r01-rangos-por-modalidad", "r02-subcategorias", "r03-arrastre-por-modalidad", "r04-arrastre-no-alcanza-codeudas",
             "r05-reestructurado", "r06-pago-unico", "r07-credito-nuevo", "r08-analisis-solo-peor", "r09-insolvencia",
             "r10-deterioro-individual-anexo1", "r11-deterioro-general", "r12-politica-mas-estricta", "r13-redondeo-del-deterioro",
@@ -39,6 +43,24 @@ public class CasosDoradosDeRiesgoTests
         var caso = CasoDoradoDeRiesgo.Cargar(Path.Combine(CasoDoradoDeRiesgo.Directorio, "Casos", archivo));
         foreach (var escenario in caso.Escenarios())
             Comprobar(caso, escenario);
+        foreach (var historial in caso.Historiales)
+            ComprobarHistorial(caso, historial);
+    }
+
+    /// <summary>K3 (T0859): el historial de mora con la cadena de la novación, mes a mes como texto y los que faltan.</summary>
+    private static void ComprobarHistorial(CasoDoradoDeRiesgo caso, CasoDoradoDeRiesgo.HistorialJson h)
+    {
+        var construido = HistorialDeMora.Construir(new CreditoParaHistorial(h.Credito, h.InicioDeLaCadena) { Antecesores = h.Antecesores },
+            h.Entradas.Select(e => new EntradaDeHistorialDeMora(e.Credito, e.Anio, e.Mes, e.Dias, e.Origen, e.Secuencia) { Vigente = e.Vigente }),
+            h.CorteDeMigracion, h.FechaDeReferencia, h.MesesExigidos);
+        static string Mes(MesDeHistorialDeMora m) => $"{m.Anio:0000}-{m.Mes:00}";
+        using var _ = new AssertionScope($"{caso.Nombre} · historial del crédito {h.Credito}");
+        construido.Meses.Select(m => m.MaxDiasDeMora is { } d
+                ? $"{Mes(m)} {d} {m.Origen} {m.LoanIdDeLaFuente}"
+                : m.CubiertoPorTransacciones ? $"{Mes(m)} transacciones" : $"{Mes(m)} falta")
+            .Should().Equal(h.Esperado.Meses, "mes a mes: la mora que manda, su fuente y su crédito");
+        construido.Faltantes.Select(Mes).Should().Equal(h.Esperado.Faltantes);
+        construido.Completo.Should().Be(h.Esperado.Faltantes.Count == 0);
     }
 
     private static void Comprobar(CasoDoradoDeRiesgo caso, CasoDoradoDeRiesgo.Escenario e)
@@ -56,7 +78,7 @@ public class CasosDoradosDeRiesgoTests
             PagoUnico = c.PagoUnico,
             Nuevo = c.Nuevo,
             Reestructuracion = c.Reestructuracion is { } r ? new(r.CategoriaAlReestructurar, r.CuotasPagadasSeguidas) : null,
-            Insolvencia = c.Insolvencia is { } i ? new(i.Estado, i.CategoriaAlIniciar) : null,
+            Insolvencia = Insolvencia(caso, c.Insolvencia),
             CalificacionDelModelo = c.Modelo,
             Evaluacion = c.Evaluacion is { } ev ? new(ev.Categoria, ev.Subcategoria) : null,
             Analisis = c.Analisis is { } an ? new(an.Categoria, an.Subcategoria) : null,
@@ -69,7 +91,8 @@ public class CasosDoradosDeRiesgoTests
             return MotorDeDeterioroIndividual.Calcular(efectiva.Efectiva,
                 new CreditoParaDeteriorar(c.Id, c.Segmento, cal.Categoria, cal.Subcategoria, dias[c.Id],
                     new SaldosParaDeterioro(c.Saldos.Capital, c.Saldos.InteresCorriente, c.Saldos.InteresDeMora, c.Saldos.Otros),
-                    c.Suspendido ?? cal.Categoria >= segmento.CategoriaDeSuspension)
+                    c.Suspendido ?? (cal.Categoria >= segmento.CategoriaDeSuspension
+                        || ReglaDeSuspension.Evaluar(new EntradaDeSuspension(0, null, c.Reestructuraciones, false, false)) is not null))
                 {
                     MesesEnE = c.MesesEnE,
                     Garantias = c.Garantias.Select(g => new GarantiaParaDeterioro(g.Naturaleza, g.Valor)).ToList(),
@@ -132,6 +155,19 @@ public class CasosDoradosDeRiesgoTests
                 .BeEquivalentTo(modelos.Select(m => (m.Segmento, m.Modelo, m.Fundamento, m.Marca)), $"{e.Nombre}: modelo por segmento");
             if (e.Esperado.Marca is { } marca) seleccion.ModeloObligatorioNoDisponible.Should().Be(marca, $"{e.Nombre}: marca del cierre");
         }
+    }
+
+    /// <summary>
+    /// La insolvencia del crédito: tal como viene o, si trae su inicio y sus cierres (K3), la que rige al corte del caso
+    /// (<see cref="CalificacionDeInsolvencia"/>).
+    /// </summary>
+    private static InsolvenciaParaCalificar? Insolvencia(CasoDoradoDeRiesgo caso, CasoDoradoDeRiesgo.InsolvenciaJson? i)
+    {
+        if (i is null) return null;
+        if (i.Inicio is not { } inicio) return new(i.Estado, i.CategoriaAlIniciar);
+        var corte = caso.Corte ?? throw new InvalidOperationException($"{caso.Nombre}: una insolvencia con inicio necesita el corte.");
+        return CalificacionDeInsolvencia.Para(new ProcesoParaCalificar(i.Estado, inicio, i.FracasoEl), corte,
+            i.Cierres.Select(x => new CierreParaInsolvencia(x.Fecha, x.Categoria)), i.SinCierreAnterior ?? i.CategoriaAlIniciar);
     }
 
     /// <summary>Los días que trae el caso o, con cuotas, la altura de mora al corte con la fecha exigible del calendario del art. 829.</summary>

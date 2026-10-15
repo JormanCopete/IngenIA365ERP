@@ -63,6 +63,10 @@ public class LoanOperationConfiguration : IEntityTypeConfiguration<LoanOperation
         builder.HasOne<InsuranceClaim>().WithMany().HasForeignKey(e => e.InsuranceClaimId).OnDelete(DeleteBehavior.Restrict);
         // K2 (CarteraLibranza): el pago de la pagaduría nombra el resultado «pendiente de giro» que gira.
         builder.HasOne<PayrollDeductionResult>().WithMany().HasForeignKey(e => e.PayrollDeductionResultId).OnDelete(DeleteBehavior.Restrict);
+        // K3 (CarteraNovedades): la novedad, la condonación o el ítem del lote de castigo que la operación aplica.
+        builder.HasOne<LoanNovelty>().WithMany().HasForeignKey(e => e.NoveltyId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Waiver>().WithMany().HasForeignKey(e => e.WaiverId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<WriteOffBatchItem>().WithMany().HasForeignKey(e => e.WriteOffBatchItemId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_LoanOperations_Number");
         builder.HasIndex(e => new { e.LoanId, e.Sequence }).IsUnique().HasDatabaseName("UK_LND_LoanOperations_Loan_Sequence");
@@ -76,5 +80,9 @@ public class LoanOperationConfiguration : IEntityTypeConfiguration<LoanOperation
             .HasDatabaseName("IX_LND_LoanOperations_RelatedOperationId").HasFilter("[RelatedOperationId] IS NOT NULL");
         builder.HasIndex(e => e.PayrollDeductionResultId)
             .HasDatabaseName("IX_LND_LoanOperations_PayrollDeductionResultId").HasFilter("[PayrollDeductionResultId] IS NOT NULL");
+        builder.HasIndex(e => e.NoveltyId).HasDatabaseName("IX_LND_LoanOperations_NoveltyId").HasFilter("[NoveltyId] IS NOT NULL");
+        builder.HasIndex(e => e.WaiverId).HasDatabaseName("IX_LND_LoanOperations_WaiverId").HasFilter("[WaiverId] IS NOT NULL");
+        builder.HasIndex(e => e.WriteOffBatchItemId)
+            .HasDatabaseName("IX_LND_LoanOperations_WriteOffBatchItemId").HasFilter("[WriteOffBatchItemId] IS NOT NULL");
     }
 }

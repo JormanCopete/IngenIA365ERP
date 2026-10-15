@@ -521,6 +521,16 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps { get; }
+    // K3 (feature 013, CarteraNovedades): novedades, condonaciones, castigo y evaluación de cartera.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty> LoanNovelties { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyLoan> LoanNoveltyLoans { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyConsent> LoanNoveltyConsents { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.Waiver> Waivers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine> WaiverLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch> WriteOffBatches { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition> LoanDailyPositions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions { get; }

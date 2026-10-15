@@ -1,0 +1,83 @@
+{
+  // r-k3 (T0859; FR-090, FR-093, FR-065, FR-105): lo que hereda el crédito enlazado de una novación y el reestructurado dos veces. A mano,
+  // con la norma de prueba (consumo: A 0–30, C 61–90; reestructurados con mínimo B y una categoría por cada 3 cuotas; C suspende):
+  //  2. el enlazado de la novación hereda la calificación de reestructurar (C), la marca y el conteo (1): 2 cuotas pagadas no alcanzan
+  //     un tramo → C por «Restructured»; deterioro C 10 % de 1.000.000 = 100.000; en C suspende → intereses 20.000 al 100 %;
+  //  3. reestructurado DOS veces, en C con 6 cuotas pagadas → 2 tramos → A (en el empate con la mora gana «Restructured»), pero su interés
+  //     sólo se reconoce al cobrarlo: está en suspenso y se deteriora al 100 % (15.000) aunque la categoría A no deteriore capital;
+  //  4. igual que el 3 con una sola reestructuración: no suspende, deterioro 0.
+  // Historial (T49): el enlazado 2 sigue al 1 (antecesor); por mes manda el cierre vigente sobre la carga complementaria más reciente
+  // sobre la migración; en julio hay fila de los dos: cuenta la mayor mora (45, del 1); septiembre, posterior al corte de la migración,
+  // lo cubren las transacciones. El 3 no tiene antecesor: la fila del 1 de octubre no le cuenta y octubre y noviembre faltan.
+  "nombre": "r-k3-novacion-hereda",
+  "creditos": [
+    { "id": 2, "deudor": 901, "segmento": "CONSUMO", "diasDeMora": 0, "reestructuraciones": 1,
+      "reestructuracion": { "categoriaAlReestructurar": "C", "cuotasPagadasSeguidas": 2 },
+      "saldos": { "capital": 1000000, "interesCorriente": 20000 } },
+    { "id": 3, "deudor": 902, "segmento": "CONSUMO", "diasDeMora": 0, "reestructuraciones": 2,
+      "reestructuracion": { "categoriaAlReestructurar": "C", "cuotasPagadasSeguidas": 6 },
+      "saldos": { "capital": 800000, "interesCorriente": 15000 } },
+    { "id": 4, "deudor": 903, "segmento": "CONSUMO", "diasDeMora": 0, "reestructuraciones": 1,
+      "reestructuracion": { "categoriaAlReestructurar": "C", "cuotasPagadasSeguidas": 6 },
+      "saldos": { "capital": 800000, "interesCorriente": 15000 } }
+  ],
+  "historiales": [
+    {
+      "credito": 2, "antecesores": [ 1 ], "inicioDeLaCadena": "2025-03-10", "corteDeMigracion": "2026-03-31",
+      "fechaDeReferencia": "2026-09-30", "mesesExigidos": 12,
+      "entradas": [
+        { "credito": 1, "anio": 2025, "mes": 10, "dias": 5, "origen": "Migration", "secuencia": 1 },
+        { "credito": 1, "anio": 2025, "mes": 11, "dias": 0, "origen": "Migration", "secuencia": 1 },
+        { "credito": 1, "anio": 2025, "mes": 12, "dias": 35, "origen": "Migration", "secuencia": 1 },
+        { "credito": 1, "anio": 2026, "mes": 1, "dias": 65, "origen": "Migration", "secuencia": 1 },
+        { "credito": 1, "anio": 2026, "mes": 1, "dias": 70, "origen": "ComplementaryLoad", "secuencia": 2 },
+        { "credito": 1, "anio": 2026, "mes": 1, "dias": 60, "origen": "ComplementaryLoad", "secuencia": 3 },
+        { "credito": 1, "anio": 2026, "mes": 2, "dias": 95, "origen": "Migration", "secuencia": 1 },
+        { "credito": 1, "anio": 2026, "mes": 3, "dias": 40, "origen": "Migration", "secuencia": 1 },
+        { "credito": 1, "anio": 2026, "mes": 4, "dias": 10, "origen": "MonthlyClose", "secuencia": 4 },
+        { "credito": 1, "anio": 2026, "mes": 5, "dias": 50, "origen": "MonthlyClose", "secuencia": 5, "vigente": false },
+        { "credito": 1, "anio": 2026, "mes": 5, "dias": 0, "origen": "MonthlyClose", "secuencia": 6 },
+        { "credito": 1, "anio": 2026, "mes": 6, "dias": 30, "origen": "MonthlyClose", "secuencia": 7 },
+        { "credito": 1, "anio": 2026, "mes": 7, "dias": 45, "origen": "MonthlyClose", "secuencia": 8 },
+        { "credito": 2, "anio": 2026, "mes": 7, "dias": 0, "origen": "MonthlyClose", "secuencia": 9 },
+        { "credito": 2, "anio": 2026, "mes": 8, "dias": 0, "origen": "MonthlyClose", "secuencia": 10 }
+      ],
+      "esperado": {
+        "meses": [
+          "2025-10 5 Migration 1", "2025-11 0 Migration 1", "2025-12 35 Migration 1", "2026-01 60 ComplementaryLoad 1",
+          "2026-02 95 Migration 1", "2026-03 40 Migration 1", "2026-04 10 MonthlyClose 1", "2026-05 0 MonthlyClose 1",
+          "2026-06 30 MonthlyClose 1", "2026-07 45 MonthlyClose 1", "2026-08 0 MonthlyClose 2", "2026-09 transacciones"
+        ],
+        "faltantes": []
+      }
+    },
+    {
+      "credito": 3, "antecesores": [], "inicioDeLaCadena": "2025-01-20", "corteDeMigracion": "2026-03-31",
+      "fechaDeReferencia": "2026-09-30", "mesesExigidos": 12,
+      "entradas": [
+        { "credito": 1, "anio": 2025, "mes": 10, "dias": 90, "origen": "Migration", "secuencia": 1 },
+        { "credito": 3, "anio": 2025, "mes": 12, "dias": 0, "origen": "Migration", "secuencia": 1 },
+        { "credito": 3, "anio": 2026, "mes": 1, "dias": 0, "origen": "Migration", "secuencia": 1 },
+        { "credito": 3, "anio": 2026, "mes": 2, "dias": 0, "origen": "Migration", "secuencia": 1 },
+        { "credito": 3, "anio": 2026, "mes": 3, "dias": 0, "origen": "Migration", "secuencia": 1 }
+      ],
+      "esperado": {
+        "meses": [
+          "2025-10 falta", "2025-11 falta", "2025-12 0 Migration 3", "2026-01 0 Migration 3", "2026-02 0 Migration 3", "2026-03 0 Migration 3",
+          "2026-04 transacciones", "2026-05 transacciones", "2026-06 transacciones", "2026-07 transacciones", "2026-08 transacciones",
+          "2026-09 transacciones"
+        ],
+        "faltantes": [ "2025-10", "2025-11" ]
+      }
+    }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 2, "categoriaPorMora": "A", "categoria": "C", "causa": "Restructured", "candidatas": [ "Arrears:A", "Restructured:C" ],
+        "base": 1000000, "porcentaje": 0.10, "deterioroCapital": 100000.00, "deterioroIntereses": 20000.00, "deterioroTotal": 120000.00 },
+      { "id": 3, "categoria": "A", "causa": "Restructured", "candidatas": [ "Arrears:A", "Restructured:A" ],
+        "deterioroCapital": 0.00, "deterioroIntereses": 15000.00, "deterioroTotal": 15000.00 },
+      { "id": 4, "categoria": "A", "causa": "Restructured", "deterioroIntereses": 0, "deterioroTotal": 0.00 }
+    ]
+  }
+}

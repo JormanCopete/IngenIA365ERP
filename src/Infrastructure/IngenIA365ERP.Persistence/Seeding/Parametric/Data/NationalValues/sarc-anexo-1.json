@@ -144,6 +144,19 @@
   "newLoan": { "category": "A" },
   // Insolvencia (Leyes 1116 de 2006 y 1564 de 2012, FR-098): en negociación se mantiene la calificación; si fracasa, ésta.
   "insolvency": { "failedCategory": "E" },
+  // K3 (T0873, FR-090): una novedad a petición del deudor sin deterioro es «modificación» sólo si la mora de los últimos meses no pasa del
+  // límite de su segmento; un modificado que vuelve a la mora por encima de relapseDaysPastDue días pasa a reestructurado.
+  "modifications": {
+    "lookbackMonths": 6,
+    "relapseDaysPastDue": 30,
+    "limits": [
+      { "segment": "COMERCIAL_PN", "maxDaysPastDue": 90 },
+      { "segment": "COMERCIAL_PJ", "maxDaysPastDue": 90 },
+      { "segment": "CONSUMO", "maxDaysPastDue": 60 },
+      { "segment": "MICROCREDITO", "maxDaysPastDue": 60 },
+      { "segment": "VIVIENDA", "maxDaysPastDue": 90 }
+    ]
+  },
   "provenance": [
     { "table": "segments.COMERCIAL_PN", "verified": false, "source": "CBCF (Supersolidaria, CE 22 de 2020 y modificaciones), Tít. IV Cap. II, Anexo 1: rangos de mora y porcentajes de la cartera comercial; transcripción de memoria del equipo, sin cotejar (E8)" },
     { "table": "segments.COMERCIAL_PJ", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: tabla de comercial persona jurídica, que el PDF trae como imagen; transcripción del equipo, la coteja la contadora (E8)" },
@@ -158,6 +171,7 @@
     { "table": "collateral.NonMortgage", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: porcentajes de las garantías no hipotecarias por meses de mora; transcripción de memoria, sin cotejar (E8)" },
     { "table": "collateral.Mortgage", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: porcentajes de las garantías hipotecarias por meses de mora; transcripción de memoria, sin cotejar (E8)" },
     { "table": "restructured", "verified": false, "source": "CBCF, Tít. IV Cap. II: calificación de reestructurados (mínimo B, una categoría por cada 3 cuotas pagadas seguidas, FR-093); propuesta del equipo, sin cotejar" },
+    { "table": "modifications", "verified": false, "source": "Regla de modificaciones (mora máxima en los últimos 6 meses: 60 días consumo y microcrédito, 90 comercial y vivienda; vuelve a reestructurado con 30 días bajo las condiciones nuevas): la de la CE 026 de 2017 de la SFC tomada por analogía; falta cotejarla con la CBCF de la Supersolidaria (E8, K3)" },
     { "table": "generalImpairment", "verified": false, "source": "CBCF, Tít. IV Cap. II, Anexo 1: deterioro general mínimo del 1 % de la cartera bruta (perfil GENERAL); acotado por el límite DETERIORO_GENERAL_MINIMO; sin cotejar" }
   ]
 }

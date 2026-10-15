@@ -127,6 +127,24 @@ public static class MotorDeCartera
     public static string HuellaDeSimulacion(Guid credito, string rulesVersion, Payments.DistribucionDePago distribucion) =>
         HuellaDeCartera.DeSimulacion(credito, rulesVersion, distribucion);
 
+    // ------------------------------------------------------------------------------------------------ K3 (T0874)
+
+    /// <summary>El plan de una novedad desde la fecha de la decisión (prórroga, cambio de fecha o de tasa, novación, refinanciación).</summary>
+    public static PlanDePagos RegenerarPlanPorNovedad(EntradaDeNovedadDePlan entrada) => GeneradorDePlan.RegenerarPorNovedad(entrada);
+
+    /// <summary>
+    /// La simulación del plan de una novedad (FR-091): el plan nuevo controlado contra la usura vigente a la fecha de la decisión
+    /// (<c>Lending.Usury.Exceeded</c> si la pasa).
+    /// </summary>
+    public static (PlanDePagos Plan, ResultadoDeUsura Usura) SimularNovedad(EntradaDeNovedadDePlan entrada, UsuraCertificada? usura)
+    {
+        var plan = GeneradorDePlan.RegenerarPorNovedad(entrada);
+        return (plan, ControlDeUsura.Evaluar(plan, usura));
+    }
+
+    /// <summary>La versión completa del plan de un crédito que conserva su número tras la novedad.</summary>
+    public static PlanDePagos UnirPlanConAnterior(PlanDePagos anterior, PlanDePagos novedad) => GeneradorDePlan.UnirConAnterior(anterior, novedad);
+
     /// <summary>Los días de mora con tolerancia y fecha exigible (T30).</summary>
     public static ResultadoDeAlturaDeMora AlturaDeMora(DateOnly dia, IEnumerable<CuotaParaMora> cuotas, decimal tolerancia, int? umbralDePagaduria = null) =>
         Delinquency.AlturaDeMora.Calcular(dia, cuotas, tolerancia, umbralDePagaduria);

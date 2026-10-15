@@ -12,6 +12,9 @@ US5 (fase 9, T0513) suma los pagos (bloque «US5»): prelacion, las siete modali
 cancelacion y resolucion de saldos; el "esperado" de cada operacion de pago (su distribucion con la informacion hasta su registro) y,
 en las consultas con "conPagos", la distribucion de cada pago a (D, R), que muestra la redistribucion.
 
+K3 (fase 16, T0858) suma las NOVEDADES (bloque «K3»): el plan regenerado desde la fecha de la decision por una prorroga, un cambio
+de fecha o de tasa, una novacion o una refinanciacion, con su usura; el "esperado" de cada novedad del arreglo "novedades".
+
 US4 (fase 8, T0464) la amplia con la causacion, la mora, la suspension, la regeneracion del plan (tramos, reajustes), el plan
 migrado y la reconstruccion a (D, R), calculadas DIA POR DIA (el C# avanza por segmentos entre eventos), para los "esperado" de
 las "consultas" de cada caso y de cada variante: modo "Reconstruccion" (defecto), "PagosATiempo", "Causacion" y "Diferencias".
@@ -403,6 +406,85 @@ def esperado_completo(caso):
         for v in variantes:
             sub = dict(caso); sub["condiciones"] = v["condiciones"]; sub.pop("variantes", None)
             salida["variantes"][v["nombre"]] = esperado_de(sub)
+    return salida
+
+
+# ===================================================================================================== K3 (fase 16, T0858)
+# El plan de una NOVEDAD (FR-090, FR-091, T29), escrito desde la spec y no desde el C#:
+# - Se regenera DESDE LA FECHA DE LA DECISION como un plan nuevo: capital = saldo de capital del credito a esa fecha (lo vencido y lo
+#   por vencer) + lo que recoge una refinanciacion + el interes que se capitaliza. Los COSTOS de la novedad nunca entran (FR-091).
+# - Parte de las condiciones del credito (sistema, convencion, equivalencia, redondeo, seguros) y cambia lo que pide la novedad:
+#   cuotas (prorroga), dia de pago o primer vencimiento (cambio de fecha), tasa (cambio de tasa), periodicidad. Las extraordinarias
+#   pactadas no pasan. [decision] Si el dia de pago no cambia, es el del credito (el pactado, el del primer vencimiento o el del
+#   desembolso): las fechas no se corren.
+# - Prorroga, cambio de fecha o de tasa conservan el numero del credito: las cuotas nuevas siguen la numeracion desde la siguiente a
+#   la ultima que vencio hasta la fecha de la decision (con el plan original). Novacion y refinanciacion: credito enlazado, desde 1.
+# - La usura es la vigente de la modalidad a la fecha de la decision; la efectiva, la TIR de los flujos del plan nuevo desde esa fecha.
+
+def novedad_condiciones(c, n):
+    base_dia = int(c["diaDePago"]) if c.get("diaDePago") else (fecha(c["primerVencimiento"]) if c.get("primerVencimiento") else fecha(c["fechaDesembolso"])).day
+    capital = D(n["saldoDeCapital"]) + sum((D(x) for x in n.get("saldosRecogidos") or []), D(0)) + D(n.get("interesCapitalizado") or 0)
+    nc = dict(c)
+    nc["monto"] = capital
+    nc["fechaDesembolso"] = n["fecha"]
+    nc["plazoCuotas"] = n["cuotas"]
+    nc["periodicidad"] = n.get("periodicidad") or c["periodicidad"]
+    nc["tasaEA"] = n["tasaEA"] if n.get("tasaEA") is not None else c["tasaEA"]
+    nc["diaDePago"] = int(n["diaDePago"]) if n.get("diaDePago") else base_dia
+    nc["primerVencimiento"] = n.get("primerVencimiento")
+    nc["extraordinarias"] = []
+    nc["gracia"] = None
+    return nc
+
+
+def primera_cuota(c, n):
+    if n.get("creditoEnlazado"):
+        return 1
+    original = generar_plan(c)
+    f = fecha(n["fecha"])
+    return sum(1 for x in original["cuotas"] if fecha(x["vencimiento"]) <= f) + 1
+
+
+def usura_a(caso, clave, f):
+    vigentes = [u for u in (caso.get("series") or {}).get("usura") or [] if u["clave"] == clave and fecha(u["desde"]) <= f]
+    return max(vigentes, key=lambda u: u["desde"])["ea"] if vigentes else None
+
+
+def esperado_de_novedad(caso, n):
+    c = caso["condiciones"]
+    nc = novedad_condiciones(c, n)
+    plan = generar_plan(nc)
+    p1 = primera_cuota(c, n)
+    d0 = plan["desembolso"]
+    sin = [(d0, -plan["monto"])] + [(fecha(x["vencimiento"]), x["capital"] + x["interes"]) for x in plan["cuotas"]]
+    e_sin = efectiva(d0, sin)
+    u = usura_a(caso, c.get("modalidad"), d0)
+    usura = {"veredicto": "SinUsura"} if u is None else {
+        "veredicto": "Excede" if e_sin > u else "Pasa", "usura": u, "holgura": q(u - e_sin, 6)}
+    cuotas = []
+    for x in plan["cuotas"]:
+        y = {k: v for k, v in x.items() if not k.startswith("_")}
+        y["numero"] = int(x["numero"]) + p1 - 1
+        cuotas.append(y)
+    return {
+        "primeraCuota": p1,
+        "capital": plan["monto"],
+        "tasas": {"diaria": plan["rd"], "nominalDelPeriodo": plan["nominal"], "cuotaNivelada": plan["cuotaNivelada"],
+                  "efectiva": q(e_sin, 6), "efectivaSinCargos": q(e_sin, 6)},
+        "plan": {"interesDeGracia": plan["interesDeGracia"], "residuo": plan["residuo"],
+                 "totales": {"capital": sum(x["capital"] for x in cuotas), "interes": sum(x["interes"] for x in cuotas),
+                             "seguro": sum(x["seguro"] for x in cuotas)},
+                 "cuotas": cuotas},
+        "usura": usura,
+    }
+
+
+def novedades_calculadas(caso):
+    salida = []
+    for n in caso.get("novedades") or []:
+        m = dict(n)
+        m["esperado"] = esperado_de_novedad(caso, n)
+        salida.append(m)
     return salida
 
 
@@ -1649,6 +1731,7 @@ def main():
         caso = cargar(ruta)
         esperado = esperado_completo(caso) if "esperado" in caso else None
         consultas = consultas_calculadas(caso)
+        novedades = novedades_calculadas(caso)
         operaciones = operaciones_calculadas(caso, caso["condiciones"], caso.get("operaciones") or [])
         for var in caso.get("variantes") or []:
             if var.get("operaciones"):
@@ -1665,6 +1748,9 @@ def main():
             if consultas:
                 a, b = bloque(crudo, "consultas")
                 crudo = crudo[:a] + a_json(consultas, 2, 2) + crudo[b:]
+            if novedades:
+                a, b = bloque(crudo, "novedades")
+                crudo = crudo[:a] + a_json(novedades, 2, 2) + crudo[b:]
             if any(v.get("consultas") or v.get("operaciones") for v in caso.get("variantes") or []):
                 a, b = bloque(crudo, "variantes")
                 crudo = crudo[:a] + a_json(caso["variantes"], 2, 2) + crudo[b:]
@@ -1685,6 +1771,8 @@ def main():
             for calc, orig in zip(operaciones, original.get("operaciones") or []):
                 if "esperado" in orig:
                     ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+            for calc, orig in zip(novedades, original.get("novedades") or []):
+                ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
             print(f"{nombre}: {'coincide' if ok else 'DIFIERE'}")
             malos += 0 if ok else 1
         else:
@@ -1695,6 +1783,8 @@ def main():
                 print(a_json(consultas, 2, 2))
             if any("esperado" in o for o in operaciones):
                 print(a_json(operaciones, 2, 2))
+            if novedades:
+                print(a_json(novedades, 2, 2))
     sys.exit(1 if malos else 0)
 
 

@@ -458,6 +458,16 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine> PayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult> PayrollDeductionResults => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp> NonDeductionFollowUps => Set<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp>();
+    // K3 (feature 013, CarteraNovedades).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty> LoanNovelties => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyLoan> LoanNoveltyLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyLoan>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyConsent> LoanNoveltyConsents => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyConsent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.Waiver> Waivers => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.Waiver>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine> WaiverLines => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch> WriteOffBatches => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose> MonthlyCloses => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan> MonthlyCloseLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment> MonthlyCloseGeneralImpairments => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment>();
@@ -593,6 +603,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionFileLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Payroll.PayrollDeductionResult>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Payroll.NonDeductionFollowUp>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNovelty>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyLoan>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.LoanNoveltyConsent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.Waiver>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

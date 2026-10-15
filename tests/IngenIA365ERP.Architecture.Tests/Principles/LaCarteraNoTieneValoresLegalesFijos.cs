@@ -104,7 +104,9 @@ public class LaCarteraNoTieneValoresLegalesFijos
         var delMotor = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor).Select(a => ReglaSobreFuente.Relativo(root, a)).ToList();
         foreach (var pieza in new[] { "MotorDeCalificacion.cs", "MotorDeDeterioroIndividual.cs", "MotorDeDeterioroGeneral.cs", "PoliticaSarcEfectiva.cs",
                      "SelectorDeModeloDeDeterioro.cs", "HistorialDeMora.cs", "MovimientosDelDeterioro.cs", "DeterioroPorConcepto.cs", "Normativa/Anexo1.cs",
-                     "Normativa/PoliticaSarc.cs", "Normativa/ReglaDePerdidaEsperada.cs" })
+                     "Normativa/PoliticaSarc.cs", "Normativa/ReglaDePerdidaEsperada.cs",
+                     // K3 (T0873, T0904): el clasificador de novedades, los requisitos del castigo y la insolvencia al corte.
+                     "ClasificadorDeNovedad.cs", "RequisitosDeCastigo.cs", "CalificacionDeInsolvencia.cs" })
         {
             Assert.Contains(decimales, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));
             Assert.Contains(delMotor, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));

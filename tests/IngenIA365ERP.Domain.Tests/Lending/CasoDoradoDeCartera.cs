@@ -56,6 +56,8 @@ public sealed class CasoDoradoDeCartera
     public List<OperacionJson> Operaciones { get; set; } = [];
     public List<ConsultaJson> Consultas { get; set; } = [];
     public EsperadoJson? Esperado { get; set; }
+    /// <summary>K3 (T0858): las novedades del crédito de las condiciones, cada una con su plan esperado.</summary>
+    public List<NovedadJson> Novedades { get; set; } = [];
 
     public static string DirectorioDeCasos => Path.Combine(AppContext.BaseDirectory, "Lending", "Casos");
 
@@ -221,6 +223,61 @@ public sealed class CasoDoradoDeCartera
             Seguros = Seguros.Select(s => new SeguroDelPlan(s.Codigo, s.Base, s.Tarifa, s.Periodicidad, s.Computa)).ToList(),
         };
     }
+
+    /// <summary>
+    /// K3 (T0858): una novedad sobre el crédito de las condiciones —su mecanismo, la fecha de la decisión, el saldo de capital a esa fecha, lo
+    /// capitalizado, lo recogido, los costos y las condiciones nuevas— y el plan que la hoja espera, con su primera cuota y su usura.
+    /// </summary>
+    public sealed class NovedadJson
+    {
+        public string Nombre { get; set; } = string.Empty;
+        public NoveltyMechanism Mecanismo { get; set; }
+        public NoveltyCause Causa { get; set; }
+        public DateOnly Fecha { get; set; }
+        public decimal SaldoDeCapital { get; set; }
+        public decimal InteresCapitalizado { get; set; }
+        public List<decimal> SaldosRecogidos { get; set; } = [];
+        public decimal Costos { get; set; }
+        public int Cuotas { get; set; }
+        public decimal? TasaEA { get; set; }
+        public RepaymentPeriodicity? Periodicidad { get; set; }
+        public int? DiaDePago { get; set; }
+        public DateOnly? PrimerVencimiento { get; set; }
+        public bool CreditoEnlazado { get; set; }
+        public EsperadoDeNovedadJson Esperado { get; set; } = new();
+
+        /// <summary>La entrada del motor: las condiciones selladas del crédito como base y la primera cuota que la hoja numeró.</summary>
+        public EntradaDeNovedadDePlan Entrada(CondicionesJson condiciones) =>
+            new(Mecanismo, Fecha, condiciones.Entrada(), SaldoDeCapital, Cuotas)
+            {
+                InteresCapitalizado = InteresCapitalizado,
+                SaldosRecogidos = SaldosRecogidos,
+                Costos = Costos,
+                TasaEfectivaAnual = TasaEA,
+                Periodicidad = Periodicidad,
+                DiaDePago = DiaDePago,
+                PrimerVencimiento = PrimerVencimiento,
+                PrimeraCuota = Esperado.PrimeraCuota,
+            };
+    }
+
+    public sealed class EsperadoDeNovedadJson
+    {
+        public int PrimeraCuota { get; set; } = 1;
+        public decimal Capital { get; set; }
+        public TasasJson Tasas { get; set; } = new();
+        public PlanJson Plan { get; set; } = new();
+        public UsuraEsperadaJson Usura { get; set; } = new();
+    }
+
+    /// <summary>La usura vigente de la modalidad a una fecha (la de la decisión de una novedad).</summary>
+    public UsuraCertificada? UsuraA(string? clave, DateOnly fecha) =>
+        clave is null
+            ? null
+            : Series.Usura.Where(u => u.Clave == clave && u.Desde <= fecha)
+                .OrderByDescending(u => u.Desde).ThenByDescending(u => u.RegistradoEn)
+                .Select(u => new UsuraCertificada(u.Ea, u.PublicId ?? Guid.Empty, u.Clave, u.Desde))
+                .FirstOrDefault();
 
     public sealed class VarianteJson
     {

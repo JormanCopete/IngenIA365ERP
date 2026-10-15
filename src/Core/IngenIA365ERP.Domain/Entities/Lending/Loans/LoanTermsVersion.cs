@@ -8,7 +8,7 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Loans;
 /// del crédito <b>selladas</b> por versión, con su <see cref="RulesVersion"/>. Lo regulatorio (usura, calificación, deterioro,
 /// suspensión) no se sella: se lee a cada fecha valor (D2). Hecho de sólo inserción (<see cref="IHechoInmutable"/>): nace con cada
 /// operación que cambia condiciones; la reconstrucción toma las versiones con <see cref="RegisteredAt"/> ≤ R (T24). Rige desde
-/// <see cref="EffectiveValueDate"/> (no es <c>ValidFrom</c>). La columna <c>NoveltyId</c> nace con K3.
+/// <see cref="EffectiveValueDate"/> (no es <c>ValidFrom</c>). La columna <c>NoveltyId</c> nace con K3 (<c>CarteraNovedades</c>).
 /// </summary>
 public class LoanTermsVersion : AuditableEntity, IHechoInmutable
 {
@@ -32,6 +32,9 @@ public class LoanTermsVersion : AuditableEntity, IHechoInmutable
     public DateTime RegisteredAt { get; init; }
 
     public TermsVersionCause Cause { get; init; }
+
+    /// <summary>K3 (data-model §4.3): la novedad que produjo esta versión; la reconstrucción la reconoce por aquí.</summary>
+    public int? NoveltyId { get; init; }
 
     /// <summary><c>LND-AAAA.n</c> (<c>VersionesDeReglas</c>, T29).</summary>
     public string RulesVersion { get; init; } = string.Empty;

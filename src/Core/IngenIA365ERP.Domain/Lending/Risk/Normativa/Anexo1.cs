@@ -73,6 +73,21 @@ public sealed record ReglaDeCreditoNuevo(RatingCategory Categoria);
 /// <summary>Insolvencia (FR-098, T0690): mientras se negocia la calificación se mantiene; si la negociación fracasa, pasa a <see cref="CategoriaSiFracasa"/>.</summary>
 public sealed record ReglaDeInsolvencia(RatingCategory CategoriaSiFracasa);
 
+/// <summary>El historial de mora reciente que admite una modificación en un segmento SARC (K3, FR-090).</summary>
+public sealed record LimiteDeModificacion(string Segmento, int MaxDiasDeMora);
+
+/// <summary>
+/// Modificaciones (K3, T0873; FR-090): un cambio de condiciones a petición del deudor sin deterioro sólo es «modificación» si en los últimos
+/// <see cref="MesesDeObservacion"/> meses la mora no pasó del límite de su segmento; si no, se tramita como reestructuración. Un modificado
+/// que vuelve a caer en mora por encima de <see cref="DiasParaVolverAReestructuracion"/> días bajo las condiciones nuevas pasa a ser
+/// reestructurado (lo aplica el cierre). Todo número llega en el documento.
+/// </summary>
+public sealed record ReglaDeModificaciones(int MesesDeObservacion, IReadOnlyList<LimiteDeModificacion> Limites, int? DiasParaVolverAReestructuracion)
+{
+    /// <summary>El límite del segmento; nulo si el documento no lo trae (entonces el segmento no admite modificaciones).</summary>
+    public LimiteDeModificacion? LimiteDe(string segmento) => Limites.FirstOrDefault(l => l.Segmento == segmento);
+}
+
 /// <summary>
 /// De dónde se transcribió una tabla del documento y si ya se cotejó (US9, T0691; pregunta E8): <see cref="Verificada"/> falso es
 /// «pendiente de validar», que no bloquea y marca el cierre (pregunta E1).
@@ -95,7 +110,9 @@ public sealed record ProcedenciaDeTabla(string Tabla, bool Verificada, string Fu
 /// generalImpairment: [ { profile, minimumRate } ] }</c>. US9 (T0690) suma tres propiedades opcionales: <c>newLoan: { category }</c>
 /// (regla del crédito nuevo), <c>insolvency: { failedCategory }</c> (FR-098) y <c>provenance: [ { table, verified, source } ]</c>
 /// (de dónde salió cada tabla y si se cotejó, T0691). Son opcionales para que una copia ya registrada del esquema 1 se siga leyendo:
-/// sin <c>newLoan</c> no hay candidata de crédito nuevo y sin <c>insolvency</c> el fracaso de la negociación sólo deja la mora.</para>
+/// sin <c>newLoan</c> no hay candidata de crédito nuevo y sin <c>insolvency</c> el fracaso de la negociación sólo deja la mora.
+/// K3 (T0873) suma otra, también opcional: <c>modifications: { lookbackMonths, relapseDaysPastDue?, limits: [ { segment,
+/// maxDaysPastDue } ] }</c> (FR-090); sin ella ningún cambio a petición del deudor se admite como modificación.</para>
 ///
 /// <para>Las consultas que usan los motores de US9 (<see cref="CategoriaPorMora"/>, <see cref="Porcentaje"/>,
 /// <see cref="FraccionAdmisible"/>, <see cref="DeterioroGeneralDe"/>) viven aquí para que la norma y la política efectiva
@@ -136,6 +153,9 @@ public sealed class Anexo1
 
     /// <summary>La regla de insolvencia; nula si el documento no la trae.</summary>
     public ReglaDeInsolvencia? Insolvencia { get; private init; }
+
+    /// <summary>La regla de las modificaciones (K3); nula si el documento no la trae.</summary>
+    public ReglaDeModificaciones? Modificaciones { get; private init; }
 
     /// <summary>De dónde salió cada tabla y si ya se cotejó (T0691).</summary>
     public IReadOnlyList<ProcedenciaDeTabla> Procedencia { get; private init; } = [];
@@ -204,6 +224,7 @@ public sealed class Anexo1
             DeterioroGeneral = general,
             CreditoNuevo = CreditoNuevo,
             Insolvencia = Insolvencia,
+            Modificaciones = Modificaciones,
             Procedencia = Procedencia,
         };
 
@@ -291,6 +312,8 @@ public sealed class Anexo1
             else if (Categoria(ins, "failedCategory", "$.insolvency", errores) is { } c) insolvencia = new(c);
         }
 
+        var modificaciones = LeerModificaciones(raiz, errores);
+
         var procedencia = LeerProcedencia(raiz, errores);
 
         if (errores.Count > 0 || reglaDeArrastre is null || reglaDeAportes is null || reglaDeReestructurados is null) return new(null, errores);
@@ -305,8 +328,46 @@ public sealed class Anexo1
             DeterioroGeneral = general,
             CreditoNuevo = creditoNuevo,
             Insolvencia = insolvencia,
+            Modificaciones = modificaciones,
             Procedencia = procedencia,
         }, errores);
+    }
+
+    /// <summary>
+    /// <c>modifications: { lookbackMonths, relapseDaysPastDue?, limits: [ { segment, maxDaysPastDue } ] }</c>, opcional (K3): meses de
+    /// observación mayores que cero, segmentos conocidos y sin repetir.
+    /// </summary>
+    private static ReglaDeModificaciones? LeerModificaciones(JsonElement raiz, List<ErrorDeDocumentoNormativo> errores)
+    {
+        if (!raiz.TryGetProperty("modifications", out var m) || m.ValueKind == JsonValueKind.Null) return null;
+        if (m.ValueKind != JsonValueKind.Object)
+        {
+            errores.Add(new("$.modifications", "Es un objeto."));
+            return null;
+        }
+        const string ruta = "$.modifications";
+        var meses = Entero(m, "lookbackMonths", ruta, requerido: true, errores);
+        if (meses is <= 0) errores.Add(new($"{ruta}.lookbackMonths", "Los meses de observación son más de cero."));
+        var recaida = Entero(m, "relapseDaysPastDue", ruta, requerido: false, errores);
+        var limites = new List<LimiteDeModificacion>();
+        var lista = LecturaDeDocumento.Arreglo(m, "limits", ruta, noVacio: true, errores);
+        for (var i = 0; i < lista.Count; i++)
+        {
+            var r = $"{ruta}.limits[{i}]";
+            if (lista[i].ValueKind != JsonValueKind.Object)
+            {
+                errores.Add(new(r, "Cada límite es un objeto."));
+                continue;
+            }
+            var segmento = LecturaDeDocumento.Texto(lista[i], "segment", r, requerido: true, errores);
+            var dias = Entero(lista[i], "maxDaysPastDue", r, requerido: true, errores);
+            if (segmento is null || dias is null) continue;
+            if (!SegmentosConocidos.Contains(segmento, StringComparer.Ordinal))
+                errores.Add(new($"{r}.segment", $"El segmento «{segmento}» no se conoce; se admiten: {string.Join(", ", SegmentosConocidos)}."));
+            if (limites.Any(l => l.Segmento == segmento)) errores.Add(new($"{r}.segment", $"El segmento {segmento} está repetido."));
+            limites.Add(new(segmento, dias.Value));
+        }
+        return meses is > 0 ? new ReglaDeModificaciones(meses.Value, limites, recaida) : null;
     }
 
     /// <summary><c>provenance: [ { table, verified, source } ]</c>, opcional; tablas sin repetir.</summary>

@@ -65,8 +65,11 @@ public class LoanTermsVersionConfiguration : IEntityTypeConfiguration<LoanTermsV
         builder.HasOne(e => e.Loan).WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Operation).WithMany().HasForeignKey(e => e.OperationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CreditLineVersion>().WithMany().HasForeignKey(e => e.CreditLineVersionId).OnDelete(DeleteBehavior.Restrict);
+        // K3 (CarteraNovedades): la novedad que produjo la versión.
+        builder.HasOne<LoanNovelty>().WithMany().HasForeignKey(e => e.NoveltyId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => new { e.LoanId, e.VersionNumber }).IsUnique()
             .HasDatabaseName("UK_LND_LoanTermsVersions_Loan_Version");
+        builder.HasIndex(e => e.NoveltyId).HasDatabaseName("IX_LND_LoanTermsVersions_NoveltyId").HasFilter("[NoveltyId] IS NOT NULL");
     }
 }
