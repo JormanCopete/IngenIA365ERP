@@ -41,6 +41,7 @@ public class NoveltyAndWaiverTests
     [InlineData(LoanNoveltyStatus.Submitted, LoanNoveltyStatus.Approved, true)]
     [InlineData(LoanNoveltyStatus.Submitted, LoanNoveltyStatus.Rejected, true)]
     [InlineData(LoanNoveltyStatus.Submitted, LoanNoveltyStatus.Applied, false)]
+    [InlineData(LoanNoveltyStatus.Submitted, LoanNoveltyStatus.Draft, true)]
     [InlineData(LoanNoveltyStatus.Approved, LoanNoveltyStatus.Applied, true)]
     [InlineData(LoanNoveltyStatus.Approved, LoanNoveltyStatus.Cancelled, true)]
     [InlineData(LoanNoveltyStatus.Rejected, LoanNoveltyStatus.Submitted, false)]
@@ -183,6 +184,7 @@ public class NoveltyAndWaiverTests
     [InlineData(WaiverStatus.Submitted, WaiverStatus.Rejected, true)]
     [InlineData(WaiverStatus.Approved, WaiverStatus.Applied, true)]
     [InlineData(WaiverStatus.Draft, WaiverStatus.Applied, false)]
+    [InlineData(WaiverStatus.Submitted, WaiverStatus.Draft, true)]
     [InlineData(WaiverStatus.Rejected, WaiverStatus.Approved, false)]
     [InlineData(WaiverStatus.Applied, WaiverStatus.Cancelled, false)]
     public void Las_transiciones_de_la_condonacion(WaiverStatus desde, WaiverStatus hacia, bool permitida) =>
@@ -233,5 +235,28 @@ public class NoveltyAndWaiverTests
         w.Aplicar(operacion, 9, Ahora);
         (w.Status, w.FinalDecisionId, w.AppliedOperation, w.AppliedByUserId).Should().Be((WaiverStatus.Applied, (int?)12, operacion, (int?)9));
         ((Action)w.Cancelar).Should().Throw<ReglaDeCarteraException>();
+    }
+
+    // ------------------------------------------------------------------------------------------------------------- devolver --
+
+    [Fact]
+    public void Devolver_regresa_la_radicada_a_borrador_y_la_novedad_pierde_su_simulacion()
+    {
+        var n = Novedad();
+        n.RegistrarSimulacion("{\"plan\":[]}", new string('a', 64));
+        n.Radicar();
+        n.Devolver();
+        (n.Status, n.SimulationJson, n.SimulationSha256).Should().Be((LoanNoveltyStatus.Draft, "{}", string.Empty), "devuelta se corrige y se vuelve a simular");
+        ((Action)n.Radicar).Should().Throw<ReglaDeCarteraException>("sin simular no se radica");
+        ((Action)n.Devolver).Should().Throw<ReglaDeCarteraException>().Which.Codigo.Should().Be(LoanNovelty.CodigoEstadoInvalido);
+
+        var w = Condonacion();
+        w.AgregarLinea(LoanConcept.DefaultInterest, null, 1_000m, 1_000m);
+        w.Radicar();
+        w.Devolver();
+        w.Status.Should().Be(WaiverStatus.Draft);
+        w.AgregarLinea(LoanConcept.CollectionFee, null, 500m, 500m);
+        w.TotalAmount.Should().Be(1_500m, "devuelta se edita de nuevo");
+        ((Action)w.Devolver).Should().Throw<ReglaDeCarteraException>().Which.Codigo.Should().Be(Waiver.CodigoEstadoInvalido);
     }
 }

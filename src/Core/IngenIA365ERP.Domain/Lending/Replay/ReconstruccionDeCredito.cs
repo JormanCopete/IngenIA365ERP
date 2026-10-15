@@ -86,6 +86,19 @@ public sealed class ContextoDeReconstruccion
         Version++;
     }
 
+    /// <summary>
+    /// K3 (T0874): el día desde el cual el crédito ya no existe para la causación —el anterior de una novación o refinanciación, que trasladó todo
+    /// al enlazado—. Desde el día siguiente no causa interés, mora ni seguro.
+    /// </summary>
+    public DateOnly? ExtinguidoDesde { get; private set; }
+
+    /// <summary>K3: el crédito trasladó todo lo que debía a otro con fecha valor <paramref name="fecha"/>; deja de causar desde el día siguiente.</summary>
+    public void Extinguir(DateOnly fecha)
+    {
+        ExtinguidoDesde = fecha;
+        Version++;
+    }
+
     /// <summary>Un hecho del libro (desembolso, saldo inicial; desde US5, pagos y reversos).</summary>
     public void AgregarFila(MovimientoDeLibro fila) => _filas.Add(fila ?? throw new ArgumentNullException(nameof(fila)));
 
@@ -248,8 +261,10 @@ public static class ReconstruccionDeCredito
         [LoanOperationKind.CreditBalanceResolution] = new InterpreteDeResolucion(),
         // US6 (T0566): los ajustes de una venta a crédito de Comercial (FR-054).
         [LoanOperationKind.CommercialAdjustment] = new InterpreteDeAjusteComercial(),
-        // K3 (T0874): la novedad que conserva el número del crédito (prórroga, cambio de fecha o de tasa).
+        // K3 (T0874): la novedad —prórroga, cambio de fecha o de tasa; la novación o refinanciación en el anterior y en el enlazado— y la
+        // condonación (T0884).
         [LoanOperationKind.TermsChange] = new InterpreteDeNovedad(),
+        [LoanOperationKind.Waiver] = new InterpreteDeCondonacion(),
     };
 
     /// <summary>Las tasas del día ya calculadas: la raíz de cada EA es cara y los créditos comparten tasas y usuras (memo puro).</summary>
@@ -541,6 +556,8 @@ public static class ReconstruccionDeCredito
             foreach (var g in _giros.Values.SelectMany(x => x))
                 if (g.UmbralDias is { } umbralDeGiro) Poner(g.VencimientoDelGiro.AddDays(umbralDeGiro));
             if (_c.InsolvenciaDesde is { } i) Poner(i.AddDays(-1));
+            if (_c.InsolvenciaHasta is { } fin) Poner(fin);
+            if (_ctx.ExtinguidoDesde is { } extinguido) Poner(extinguido);
             if (_c.CastigoDesde is { } k) Poner(k.AddDays(-1));
             return s;
         }
@@ -590,9 +607,16 @@ public static class ReconstruccionDeCredito
             var umbral = Vigente(entrada.UmbralesDeSuspension, d);
             var altura = AlturaDeMora.Calcular(d, paraMora, tolerancia);
             var motivo = ReglaDeSuspension.Evaluar(new EntradaDeSuspension(altura.Dias, umbral, _ctx.Reestructuraciones,
-                _c.InsolvenciaDesde is { } ins && ins <= d, _c.CastigoDesde is { } cas && cas <= d));
+                EnInsolvencia(d), _c.CastigoDesde is { } cas && cas <= d));
             return new Evaluacion(vencidas, altura, motivo, interesCubierto, capitalCubierto);
         }
+
+        /// <summary>
+        /// En negociación de insolvencia ese día (T30, FR-098): desde su inicio y, si ya terminó (fracaso o acuerdo), hasta ese día incluido; desde
+        /// el siguiente vuelve a causar normal.
+        /// </summary>
+        private bool EnInsolvencia(DateOnly d) =>
+            _c.InsolvenciaDesde is { } ins && ins <= d && (_c.InsolvenciaHasta is not { } fin || d <= fin);
 
         /// <summary>
         /// El saldo vencido de la cuota i (capital pendiente, su corriente con su suspenso y su seguro, a la víspera del día): no cambia
@@ -647,6 +671,8 @@ public static class ReconstruccionDeCredito
 
         private decimal SeguroExacto(int numero, DateOnly dia)
         {
+            // K3: el crédito extinguido por una novación no causa seguro después de la fecha valor (lo causado hasta ahí pasó al enlazado).
+            if (_ctx.ExtinguidoDesde is { } extinguido && dia > extinguido) dia = extinguido;
             var cuota = _ctx.Plan!.Cuotas.FirstOrDefault(q => q.Numero == numero);
             return cuota is null ? 0m : Causacion.SeguroExacto(cuota, dia, _c.CausacionDeSeguros, _c.Convencion, _ctx.Origen);
         }
@@ -654,6 +680,8 @@ public static class ReconstruccionDeCredito
         private (Dictionary<ClaveDeCausacion, VentanaDeseada> Deseadas, bool Certificada) Deseadas(DateOnly d, Evaluacion ev)
         {
             var plan = _ctx.Plan!;
+            // K3: extinguido por una novación o refinanciación, el crédito ya no causa nada desde el día siguiente a la fecha valor.
+            if (_ctx.ExtinguidoDesde is { } extinguido && d > extinguido) return (new Dictionary<ClaveDeCausacion, VentanaDeseada>(), true);
             var (usura, certificada) = Usura(d);
             var tasa = TasaDelDia(EntradaDeTasa(usura));
             var periodo = _cortesDePeriodo.BinarySearch(d);

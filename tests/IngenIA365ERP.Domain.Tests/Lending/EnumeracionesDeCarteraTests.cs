@@ -21,7 +21,9 @@ public class EnumeracionesDeCarteraTests
         [typeof(LoanTransactionKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Accrual", 3), ("AccrualAdjustment", 4),
             ("SuspenseReclassification", 5), ("PaymentAllocation", 6), ("PaymentReallocation", 7), ("AdvanceReceived", 8),
             ("AdvanceApplied", 9), ("CreditBalanceRecognized", 10), ("CreditBalanceSettled", 11), ("Charge", 12), ("Waiver", 13),
-            ("CommercialAdjustment", 14), ("WriteOff", 15), ("Recovery", 16)],
+            ("CommercialAdjustment", 14), ("WriteOff", 15), ("Recovery", 16),
+            // K3 (T0874): la capitalización y el traslado al crédito enlazado de una novación o refinanciación.
+            ("Capitalization", 17), ("TransferToLinkedLoan", 18), ("TransferFromLinkedLoan", 19)],
         [typeof(LoanOperationKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Payment", 3), ("PaymentReversal", 4),
             ("DisbursementReversal", 5), ("RateReset", 6), ("TermsChange", 7), ("Charge", 8), ("Waiver", 9), ("CommercialAdjustment", 10),
             ("WriteOff", 11), ("PreferenceChange", 12), ("CreditBalanceResolution", 13), ("ProvisionalCollection", 14)],
@@ -35,7 +37,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(DisbursementOrderStatus)] = [("Issued", 1), ("Disbursed", 2), ("Rejected", 3), ("CheckNotCashed", 4), ("Voided", 5)],
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
         [typeof(LendingNumberKind)] = [("Loan", 1), ("Operation", 2), ("Application", 3), ("DisbursementOrder", 4), ("DisbursementFile", 5),
-            ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9)],
+            ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
@@ -146,7 +148,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(NonDeductionFollowUpAction)] = [("DebtorNotified", 1), ("IncludedInNextFile", 2), ("MovedToCashPayment", 3), ("SentToCollection", 4), ("Closed", 5)],
         [typeof(PayrollFileStatus)] = [("Generated", 1), ("Superseded", 2), ("Sent", 3), ("Voided", 4)],
         [typeof(PayrollNoveltyKind)] = [("New", 1), ("Change", 2), ("Cancellation", 3), ("Unchanged", 4)],
-        [typeof(NoveltyMechanism)] = [("Extension", 1), ("PaymentDateChange", 2), ("RateChange", 3), ("Novation", 4), ("Refinancing", 5)],
+        [typeof(NoveltyMechanism)] = [("Extension", 1), ("PaymentDateChange", 2), ("RateChange", 3), ("Novation", 4), ("Refinancing", 5),
+            ("BranchChange", 6)],
         [typeof(NoveltyCause)] = [("Restructuring", 1), ("Modification", 2)],
         [typeof(LoanNoveltyStatus)] = [("Draft", 1), ("Submitted", 2), ("Approved", 3), ("Rejected", 4), ("Applied", 5), ("Cancelled", 6)],
         [typeof(NoveltyLoanRole)] = [("Modified", 1), ("Collected", 2), ("Resulting", 3)],
@@ -226,7 +229,7 @@ public class EnumeracionesDeCarteraTests
     {
         Enum.GetValues<EntregaDeCartera>().Select(e => (e.ToString(), (int)e)).Should().Equal(
             ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7));
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K2, "T0849 la subió a K2");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K3, "T0889 la subió a K3");
     }
 
     [Fact]
@@ -239,7 +242,7 @@ public class EnumeracionesDeCarteraTests
 
         AccionesDeSegregacion.Todas.Should().Equal(
             "Radicar", "Analizar", "Decidir", "Votar", "Desembolsar", "AnularOrdenDeGiro", "ArmarLoteDeCastigo", "AplicarCastigo",
-            "CargarMigracion", "AceptarDiferencias");
+            "CargarMigracion", "AceptarDiferencias", "Aplicar");
         AccionesDeSegregacion.Todas.Should().OnlyContain(a => a.Length <= 30, "Action es nvarchar(30)");
     }
 }

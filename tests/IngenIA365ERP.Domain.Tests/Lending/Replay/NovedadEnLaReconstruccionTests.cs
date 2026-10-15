@@ -143,23 +143,121 @@ public class NovedadEnLaReconstruccionTests
         estado.Plan!.Entrada.TasaEfectivaAnual.Should().Be(0.18m);
     }
 
+    /// <summary>
+    /// La capitalización de una prórroga (T0874, cierre del hueco): las filas <c>Capitalization</c> sacan el interés de su cuota y entran como capital
+    /// sin cuota; el plan nuevo suma lo capitalizado y el libro cuadra con los saldos.
+    /// </summary>
+    [Fact]
+    public void La_capitalizacion_saca_el_interes_y_lo_vuelve_capital()
+    {
+        // Sin pagos: la 1 vence el 15-02 impaga; el 20-02 se prorroga capitalizando todo el interés corriente de la 1.
+        var fecha = new DateOnly(2027, 2, 20);
+        var antes = MotorDeCartera.Reconstruir(CreditosDePrueba.Simple(), fecha);
+        var interes = antes.Saldo(LoanConcept.CurrentInterest, 1);
+        interes.Should().BeGreaterThan(0m);
+        var entrada = ConNovedad(fecha, new ContenidoDeNovedad(NoveltyMechanism.Extension, 18)
+        {
+            ReestructuracionesDespues = 1,
+            Capitalizaciones = [new PartidaDeNovedad(LoanConcept.CurrentInterest, 1, interes)],
+        });
+
+        var estado = MotorDeCartera.Reconstruir(entrada, fecha, fecha);
+
+        estado.Saldo(LoanConcept.CurrentInterest, 1).Should().Be(0m, "lo capitalizado sale de su cuota");
+        estado.Saldo(LoanConcept.Principal).Should().Be(3_000_000m + interes, "y entra como capital");
+        estado.Plan!.Cuotas.Skip(1).Sum(c => c.Capital).Should().Be(3_000_000m + interes, "el plan nuevo reparte el capital y lo capitalizado");
+        estado.Libro.Movimientos.Where(m => m.Clase == LoanTransactionKind.Capitalization).Select(m => (m.Concepto, m.Cuota, m.Monto))
+            .Should().BeEquivalentTo([(LoanConcept.CurrentInterest, (int?)1, -interes), (LoanConcept.Principal, (int?)null, interes)]);
+        ElLibroCuadra(entrada, fecha.AddDays(40));
+
+        var demasiado = ConNovedad(fecha, new ContenidoDeNovedad(NoveltyMechanism.Extension, 18)
+        {
+            Capitalizaciones = [new PartidaDeNovedad(LoanConcept.CurrentInterest, 1, interes + 1m)],
+        });
+        ((Action)(() => MotorDeCartera.Reconstruir(demasiado, fecha))).Should().Throw<ReglaDeCarteraException>()
+            .Which.Codigo.Should().Be(GeneradorDePlan.CodigoNovedadInvalida, "no se capitaliza más que el saldo");
+    }
+
+    /// <summary>
+    /// La novación en el crédito anterior y en el enlazado (T0874, cierre del hueco): el anterior traslada todo lo que queda —capital por cuota,
+    /// interés— y deja de causar; el enlazado nace con el capital trasladado más lo capitalizado y recibe el interés no capitalizado en su cuota 1.
+    /// Lo que sale del anterior es lo que entra al enlazado, y los dos libros cuadran.
+    /// </summary>
     [Theory]
     [InlineData(NoveltyMechanism.Novation)]
     [InlineData(NoveltyMechanism.Refinancing)]
-    public void La_novacion_y_la_refinanciacion_no_se_reconstruyen_en_el_credito_anterior(NoveltyMechanism mecanismo)
+    public void La_novacion_traslada_todo_al_enlazado_y_el_anterior_deja_de_causar(NoveltyMechanism mecanismo)
     {
-        var entrada = ConNovedad(new DateOnly(2027, 2, 1), new ContenidoDeNovedad(mecanismo, 12));
-        ((Action)(() => MotorDeCartera.Reconstruir(entrada, new DateOnly(2027, 3, 1)))).Should().Throw<ReglaDeCarteraException>()
-            .Which.Codigo.Should().Be(ReconstruccionDeCredito.CodigoOperacionNoSoportada);
+        var fecha = new DateOnly(2027, 3, 20);
+        var antes = MotorDeCartera.Reconstruir(CreditosDePrueba.Simple(), fecha);
+        var corriente1 = antes.Saldo(LoanConcept.CurrentInterest, 1);
+        var corriente3 = antes.Saldo(LoanConcept.CurrentInterest, 3);
+        var mora1 = antes.Saldo(LoanConcept.DefaultInterest, 1);
+        corriente3.Should().BeGreaterThan(0m);
+        mora1.Should().BeGreaterThan(0m);
+        var anterior = ConNovedad(fecha, new ContenidoDeNovedad(mecanismo, 24)
+        {
+            ReestructuracionesDespues = 1,
+            Capitalizaciones = [new PartidaDeNovedad(LoanConcept.CurrentInterest, 1, corriente1)],
+        });
+
+        var cerrado = MotorDeCartera.Reconstruir(anterior, fecha.AddDays(60), fecha);
+
+        cerrado.Saldos.Should().BeEmpty("el anterior queda en cero");
+        cerrado.Libro.Movimientos.Where(m => m.Clase == LoanTransactionKind.Accrual && m.Dia > fecha).Should().BeEmpty("y ya no causa nada desde el día siguiente");
+        var trasladado = cerrado.Libro.Movimientos.Where(m => m.Clase == LoanTransactionKind.TransferToLinkedLoan).ToList();
+        trasladado.Where(m => m.Concepto == LoanConcept.Principal).Sum(m => m.Monto).Should().Be(-3_000_000m);
+        trasladado.Where(m => m.Concepto == LoanConcept.CurrentInterest && m.Cuota == 3).Sum(m => m.Monto).Should().Be(-corriente3);
+        trasladado.Where(m => m.Concepto == LoanConcept.DefaultInterest && m.Cuota == 1).Sum(m => m.Monto).Should().Be(-mora1);
+        trasladado.Should().NotContain(m => m.Concepto == LoanConcept.CurrentInterest && m.Cuota == 1, "lo capitalizado ya salió");
+        ElLibroCuadra(anterior, fecha.AddDays(60));
+
+        // El enlazado: nace con el capital + lo capitalizado y recibe lo demás en su cuota 1.
+        var capital = 3_000_000m + corriente1;
+        var traslados = new List<PartidaDeNovedad> { new(LoanConcept.Principal, null, 3_000_000m) };
+        traslados.AddRange(trasladado.Where(m => m.Concepto != LoanConcept.Principal)
+            .GroupBy(m => m.Concepto).Select(g => new PartidaDeNovedad(g.Key, 1, -g.Sum(m => m.Monto))));
+        var plan = new EntradaDePlan(capital, fecha, 24, RepaymentPeriodicity.Monthly, AmortizationSystem.LevelPayment, 0.24m,
+            DayCountConvention.Thirty360, RateEquivalence.Compound, RedondeoDeCartera.AlCentavo) { DiaDePago = 15 };
+        var base_ = CreditosDePrueba.Simple();
+        var enlazado = base_ with
+        {
+            Condiciones = base_.Condiciones with { Reestructuraciones = 1 },
+            Plan = plan,
+            Operaciones =
+            [
+                new EntradaDeOperacion("E1", LoanOperationKind.TermsChange, fecha, CreditosDePrueba.Instante(fecha), 1)
+                {
+                    Contenido = new ContenidoDeNovedad(mecanismo, 24)
+                    {
+                        Lado = LadoDeLaNovedad.Enlazado,
+                        ReestructuracionesDespues = 1,
+                        Capitalizaciones = [new PartidaDeNovedad(LoanConcept.CurrentInterest, 1, corriente1)],
+                        Traslados = traslados,
+                    },
+                },
+            ],
+        };
+
+        var nuevo = MotorDeCartera.Reconstruir(enlazado, fecha, fecha);
+        nuevo.Saldo(LoanConcept.Principal).Should().Be(capital);
+        nuevo.Saldo(LoanConcept.CurrentInterest, 1).Should().Be(-trasladado.Where(m => m.Concepto == LoanConcept.CurrentInterest).Sum(m => m.Monto),
+            "la corriente no capitalizada de las cuotas 2 y 3 llega a su cuota 1");
+        nuevo.Saldo(LoanConcept.DefaultInterest, 1).Should().Be(-trasladado.Where(m => m.Concepto == LoanConcept.DefaultInterest).Sum(m => m.Monto));
+        nuevo.Plan!.Cuotas[0].Vencimiento.Day.Should().Be(15, "el día de pago pactado del enlazado");
+        var entra = nuevo.Libro.Movimientos.Where(m => m.Clase is LoanTransactionKind.TransferFromLinkedLoan or LoanTransactionKind.Capitalization).Sum(m => m.Monto);
+        var sale = -cerrado.Libro.Movimientos.Where(m => m.Clase is LoanTransactionKind.TransferToLinkedLoan or LoanTransactionKind.Capitalization).Sum(m => m.Monto);
+        entra.Should().Be(sale, "lo que sale del anterior es lo que entra al enlazado");
+        ElLibroCuadra(enlazado, fecha.AddDays(60));
+
+        var mal = enlazado with { Plan = plan with { Monto = capital + 1m } };
+        ((Action)(() => MotorDeCartera.Reconstruir(mal, fecha))).Should().Throw<ReglaDeCarteraException>()
+            .Which.Codigo.Should().Be(ReconstruccionDeCredito.CodigoOrigenInvalido, "el plan pactado del enlazado es el de la novedad");
     }
 
     [Fact]
-    public void La_capitalizacion_todavia_no_se_reconstruye_y_sin_decision_tampoco()
+    public void Una_novedad_sin_su_decision_no_se_reconstruye()
     {
-        var capitaliza = ConNovedad(new DateOnly(2027, 2, 1), new ContenidoDeNovedad(NoveltyMechanism.Extension, 18) { InteresCapitalizado = 1_000m });
-        ((Action)(() => MotorDeCartera.Reconstruir(capitaliza, new DateOnly(2027, 3, 1)))).Should().Throw<ReglaDeCarteraException>()
-            .Which.Codigo.Should().Be(ReconstruccionDeCredito.CodigoOperacionNoSoportada);
-
         var entrada = CreditosDePrueba.Simple();
         var sinDecision = entrada with
         {
@@ -167,5 +265,67 @@ public class NovedadEnLaReconstruccionTests
         };
         ((Action)(() => MotorDeCartera.Reconstruir(sinDecision, new DateOnly(2027, 3, 1)))).Should().Throw<ReglaDeCarteraException>()
             .Which.Codigo.Should().Be(ReconstruccionDeCredito.CodigoOperacionNoSoportada);
+
+        var enlazadoEnUnaProrroga = ConNovedad(new DateOnly(2027, 2, 1), new ContenidoDeNovedad(NoveltyMechanism.Extension, 18) { Lado = LadoDeLaNovedad.Enlazado });
+        ((Action)(() => MotorDeCartera.Reconstruir(enlazadoEnUnaProrroga, new DateOnly(2027, 3, 1)))).Should().Throw<ReglaDeCarteraException>()
+            .Which.Codigo.Should().Be(GeneradorDePlan.CodigoNovedadInvalida, "sólo una novación o refinanciación crean un enlazado");
+    }
+
+    /// <summary>La condonación (T0884): filas <c>Waiver</c> por concepto y cuota, sin pasar del saldo; el libro cuadra.</summary>
+    [Fact]
+    public void La_condonacion_baja_cada_concepto_de_su_cuota_sin_pasar_del_saldo()
+    {
+        var fecha = new DateOnly(2027, 3, 20);
+        var antes = MotorDeCartera.Reconstruir(CreditosDePrueba.Simple(), fecha);
+        var mora = antes.Saldo(LoanConcept.DefaultInterest, 1);
+        mora.Should().BeGreaterThan(0m);
+        var entrada = CreditosDePrueba.Simple();
+        EntradaDeReconstruccion Con(decimal valor) => entrada with
+        {
+            Operaciones = [.. entrada.Operaciones, new EntradaDeOperacion("W1", LoanOperationKind.Waiver, fecha, CreditosDePrueba.Instante(fecha), 2)
+            {
+                Contenido = new ContenidoDeCondonacion([new PartidaDeNovedad(LoanConcept.DefaultInterest, 1, valor), new PartidaDeNovedad(LoanConcept.Principal, 1, 10_000m)]),
+            }],
+        };
+
+        var estado = MotorDeCartera.Reconstruir(Con(mora), fecha, fecha);
+        estado.Saldo(LoanConcept.DefaultInterest, 1).Should().Be(0m);
+        estado.Saldo(LoanConcept.Principal).Should().Be(3_000_000m - 10_000m, "el capital condonado baja el de su cuota");
+        estado.Libro.Movimientos.Where(m => m.Clase == LoanTransactionKind.Waiver).Should().HaveCount(2);
+        ElLibroCuadra(Con(mora), fecha.AddDays(30));
+
+        ((Action)(() => MotorDeCartera.Reconstruir(Con(mora + 0.01m), fecha))).Should().Throw<ReglaDeCarteraException>()
+            .Which.Codigo.Should().Be(InterpreteDeCondonacion.CodigoExcedeElSaldo);
+    }
+
+    /// <summary>La insolvencia que termina (T0886): suspende desde su inicio y, fracasada o con acuerdo, vuelve a causar desde el día siguiente.</summary>
+    [Fact]
+    public void La_insolvencia_suspende_hasta_que_termina()
+    {
+        var inicio = new DateOnly(2027, 2, 1);
+        var fin = new DateOnly(2027, 3, 1);
+        var abierta = CreditosDePrueba.Simple(insolvencia: inicio);
+        var cerrada = abierta with { Condiciones = abierta.Condiciones with { InsolvenciaHasta = fin } };
+
+        MotorDeCartera.Reconstruir(abierta, fin.AddDays(5)).MotivoDeSuspension.Should().Be(Domain.Lending.Accrual.MotivoDeSuspension.Insolvencia);
+        MotorDeCartera.Reconstruir(cerrada, fin).MotivoDeSuspension.Should().Be(Domain.Lending.Accrual.MotivoDeSuspension.Insolvencia);
+        var despues = MotorDeCartera.Reconstruir(cerrada, fin.AddDays(5));
+        despues.Suspendida.Should().BeFalse("la negociación terminó");
+        despues.Transiciones.Should().Contain(t => t.Fecha == fin.AddDays(1), "se reanuda el día siguiente");
+    }
+
+    /// <summary>Σ libro desde el origen = saldos por concepto y cuota (el capital sin cuota, por total), como en los casos dorados.</summary>
+    private static void ElLibroCuadra(EntradaDeReconstruccion entrada, DateOnly fecha)
+    {
+        var completo = MotorDeCartera.Reconstruir(entrada, fecha, entrada.Operaciones.Min(o => o.FechaValor));
+        foreach (var grupo in completo.Libro.Movimientos.GroupBy(m => m.Concepto))
+        {
+            if (grupo.Any(m => m.Cuota is null))
+                grupo.Sum(m => m.Monto).Should().Be(completo.Saldo(grupo.Key), $"Σ libro de {grupo.Key}");
+            else
+                foreach (var cuota in grupo.GroupBy(m => m.Cuota))
+                    cuota.Sum(m => m.Monto).Should().Be(completo.Saldo(grupo.Key, cuota.Key), $"Σ libro de {grupo.Key} en la cuota {cuota.Key}");
+        }
+        MotorDeCartera.Verificar(entrada, fecha, completo.Libro.Movimientos).Should().BeEmpty("el libro de la reconstrucción cuadra consigo mismo");
     }
 }

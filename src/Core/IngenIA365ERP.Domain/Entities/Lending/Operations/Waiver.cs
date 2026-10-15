@@ -69,7 +69,7 @@ public class Waiver : AuditableEntity
     private static readonly IReadOnlyDictionary<WaiverStatus, WaiverStatus[]> Transiciones = new Dictionary<WaiverStatus, WaiverStatus[]>
     {
         [WaiverStatus.Draft] = [WaiverStatus.Submitted, WaiverStatus.Cancelled],
-        [WaiverStatus.Submitted] = [WaiverStatus.Approved, WaiverStatus.Rejected, WaiverStatus.Cancelled],
+        [WaiverStatus.Submitted] = [WaiverStatus.Approved, WaiverStatus.Rejected, WaiverStatus.Cancelled, WaiverStatus.Draft],
         [WaiverStatus.Approved] = [WaiverStatus.Applied, WaiverStatus.Cancelled],
     };
 
@@ -157,6 +157,14 @@ public class Waiver : AuditableEntity
         ReglaDeCarteraException.SiHay(PuedeIrA(WaiverStatus.Rejected));
         Status = WaiverStatus.Rejected;
         FinalDecisionId = decisionId;
+    }
+
+    /// <summary>K3 (T0884): <c>Submitted</c> → <c>Draft</c> con la decisión <c>Return</c>: vuelve a borrador para corregir sus líneas.</summary>
+    public void Devolver()
+    {
+        if (Status != WaiverStatus.Submitted)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoEstadoInvalido, "Sólo se devuelve una condonación radicada.", "status", Status.ToString()));
+        Status = WaiverStatus.Draft;
     }
 
     /// <summary><c>Approved</c> → <c>Applied</c> con la operación <c>Waiver</c>; desde aquí queda congelada.</summary>

@@ -90,6 +90,22 @@ public class CasosDoradosDeCarteraTests
     /// K3, T0858 (T29, FR-090, FR-091): el plan de una novedad —prórroga con capitalización, cambio de fecha, cambio de tasa topado por la usura,
     /// refinanciación que recoge dos créditos y novación— regenerado desde la fecha de la decisión con las reglas vigentes.
     /// </summary>
+    /// <summary>
+    /// K3, T0874 (cierre del hueco): la prórroga con capitalización y la novación también se <b>reconstruyen</b> —el libro de la capitalización, del
+    /// traslado al enlazado y del enlazado que nace cuadra con sus saldos (lo comprueba cada consulta)—, no sólo se simula su plan.
+    /// </summary>
+    [Fact]
+    public void Las_novedades_de_K3_se_reconstruyen_y_su_libro_cuadra()
+    {
+        var prorroga = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k3-prorroga-con-capitalizacion.json"));
+        prorroga.Consultas.Should().NotBeEmpty();
+        prorroga.Consultas[0].Esperado!.Libro!.Should().Contain(f => f.Clase == LoanTransactionKind.Capitalization && f.Concepto == LoanConcept.Principal);
+        var novacion = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "k3-novacion.json"));
+        novacion.Consultas[0].Esperado!.Libro!.Should().Contain(f => f.Clase == LoanTransactionKind.TransferToLinkedLoan);
+        novacion.Variantes.Should().ContainSingle(v => v.Nombre == "enlazado").Which.Consultas!.Single().Esperado!.Libro!
+            .Should().Contain(f => f.Clase == LoanTransactionKind.TransferFromLinkedLoan);
+    }
+
     [Fact]
     public void Estan_los_casos_de_novedades_de_K3()
     {

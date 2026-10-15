@@ -1171,7 +1171,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     origen = fecha(ops[0]["fechaValor"])
     # "apertura": lo que no sale de la causacion por (concepto, cuota): saldos iniciales y, desde US5, lo que mueven los pagos (en
     # ("Principal", n) el capital pendiente de la cuota n fuera del plan).
-    estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen}
+    estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen,
+              "reestructuraciones": cond["reestructuraciones"], "extinguido": None}
     prel = prelacion_de(cond_json)
 
     def mover(dia, clase, concepto, cuota, monto):
@@ -1276,6 +1277,10 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                     queda -= t_
         elif t == "CommercialAdjustment":
             ajuste_comercial(o, v)
+        elif t == "TermsChange":
+            novedad_op(o, v)
+        elif t == "Waiver":
+            condonacion(o, v)
         else:
             raise ValueError(f"operacion {t} no soportada en K1")
 
@@ -1335,6 +1340,89 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         if exceso > 0:
             mover(v, "CreditBalanceRecognized", "CreditBalance", None, exceso)
 
+    # K3 (fase 16, T0874): la NOVEDAD en la reconstruccion, escrita desde la spec (FR-090, FR-091) y no desde el C#:
+    # - lo que se capitaliza sale de su concepto y su cuota (fila Capitalization, -) sin pasar de su saldo a la fecha valor;
+    # - prorroga, cambio de fecha o de tasa: el capital capitalizado entra sin cuota (Capitalization, +Principal) y el plan se regenera
+    #   desde la fecha valor sobre TODO el capital pendiente mas lo capitalizado, con las condiciones del credito (las del bloque «K3» de
+    #   arriba) y la numeracion desde la siguiente a la ultima vencida; las vencidas se conservan y su capital se consolida en el plan nuevo;
+    # - novacion o refinanciacion, en el credito anterior: todo lo que queda a la fecha valor pasa al enlazado (TransferToLinkedLoan, -) y
+    #   el credito deja de causar desde el dia siguiente;
+    # - novacion o refinanciacion, en el enlazado: nace con su plan pactado (monto = capital trasladado + capitalizado, fecha = la de la
+    #   novedad) y recibe el capital sin cuota (TransferFromLinkedLoan) y lo capitalizado (Capitalization) como capital.
+    # El conteo de reestructuraciones y la tasa nueva rigen desde el dia siguiente.
+    def partidas(lista):
+        return [(x["concepto"], int(x["cuota"]) if x.get("cuota") is not None else None, D(x["valor"])) for x in lista or []]
+
+    def novedad_op(o, v):
+        mec = o["mecanismo"]
+        crea = mec in ("Novation", "Refinancing")
+        caps = partidas(o.get("capitalizaciones"))
+        if o.get("lado") == "Enlazado":
+            assert crea and estado["plan"] is None, "el enlazado nace con la novacion o la refinanciacion"
+            tras = partidas(o.get("traslados"))
+            capital = sum((x for c_, _, x in tras if c_ == "Principal"), D(0))
+            cap = sum((x for _, _, x in caps), D(0))
+            assert D(cond_json["monto"]) == capital + cap and fecha(cond_json["fechaDesembolso"]) == v, "plan pactado del enlazado"
+            estado["plan"] = generar_plan(cond_json)
+            if capital:
+                estado["libro"].append((v, "TransferFromLinkedLoan", "Principal", None, capital))
+            if cap:
+                estado["libro"].append((v, "Capitalization", "Principal", None, cap))
+            for c_, cu, x in tras:
+                if c_ != "Principal":
+                    mover(v, "TransferFromLinkedLoan", c_, cu, x)
+            if o.get("reestructuracionesDespues") is not None:
+                estado["reestructuraciones"] = int(o["reestructuracionesDespues"])
+            return
+        snap = instantanea(v)
+        total = D(0)
+        for c_, cu, x in caps:
+            assert x <= snap["por"].get((cu, c_), D(0)), "no se capitaliza mas que el saldo"
+            mover(v, "Capitalization", c_, cu, -x)
+            total += x
+        if crea:
+            snap = instantanea(v)
+            for (cu, c_), x in sorted(snap["por"].items(), key=lambda kv: (kv[0][0] or 0, ORDEN[kv[0][1]])):
+                if x:
+                    mover(v, "TransferToLinkedLoan", c_, cu, -x)
+            estado["extinguido"] = v
+            if o.get("reestructuracionesDespues") is not None:
+                estado["reestructuraciones"] = int(o["reestructuracionesDespues"])
+            return
+        if total:
+            estado["libro"].append((v, "Capitalization", "Principal", None, total))
+        p = estado["plan"]
+        saldo = sum((pend(x) for x in p["cuotas"]), D(0))
+        vencidas = [x for x in p["cuotas"] if fecha(x["vencimiento"]) <= v]
+        primera = vencidas[-1]["numero"] + 1 if vencidas else p["cuotas"][0]["numero"]
+        n = {"saldoDeCapital": saldo, "saldosRecogidos": [], "interesCapitalizado": total, "fecha": v.isoformat(),
+             "cuotas": int(o["cuotasNuevas"]), "periodicidad": o.get("periodicidad"),
+             "tasaEA": o["tasaNueva"] if o.get("tasaNueva") is not None else estado["ea"],
+             "diaDePago": o.get("diaDePago"), "primerVencimiento": o.get("primerVencimiento")}
+        nuevo = generar_plan(novedad_condiciones(cond_json, n))
+        for x in nuevo["cuotas"]:
+            x["numero"] = int(x["numero"]) + primera - 1
+        completo = dict(nuevo, cuotas=vencidas + nuevo["cuotas"],
+                        periodosGracia=[pg for pg in p["periodosGracia"] if pg[1] <= v] + nuevo["periodosGracia"])
+        for x in p["cuotas"]:
+            objetivo = -x["capital"] if fecha(x["vencimiento"]) <= v else D(0)
+            if objetivo:
+                estado["apertura"][("Principal", x["numero"])] = objetivo
+            else:
+                estado["apertura"].pop(("Principal", x["numero"]), None)
+        if o.get("tasaNueva") is not None:
+            estado["ea"] = D(o["tasaNueva"])
+        estado["plan"] = completo
+        if o.get("reestructuracionesDespues") is not None:
+            estado["reestructuraciones"] = int(o["reestructuracionesDespues"])
+
+    # K3 (T0884): la CONDONACION baja cada concepto de su cuota (fila Waiver, -) sin pasar de su saldo a la fecha valor.
+    def condonacion(o, v):
+        snap = instantanea(v)
+        for c_, cu, x in partidas(o.get("condonaciones")):
+            assert x <= snap["por"].get((cu, c_), D(0)), "no se condona mas que el saldo"
+            mover(v, "Waiver", c_, cu, -x)
+
     def regenerar_con(v, cambio, eleccion):
         p = estado["plan"]
         ajustes = {x["numero"]: estado["apertura"][("Principal", x["numero"])] for x in p["cuotas"]
@@ -1375,6 +1463,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
 
     def seguro_exacto(numero, d):
         x = next((y for y in plan()["cuotas"] if y["numero"] == numero), None)
+        if estado["extinguido"] is not None and d > estado["extinguido"]:
+            d = estado["extinguido"]
         if x is None or not x["seguro"] or d <= origen:
             return D(0)
         venc = fecha(x["vencimiento"])
@@ -1415,7 +1505,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             motivo = "WriteOff"
         elif cond["insolvencia"] is not None and cond["insolvencia"] <= d:
             motivo = "Insolvency"
-        elif cond["reestructuraciones"] > 1:
+        elif estado["reestructuraciones"] > 1:
             motivo = "Restructuring"
         elif umb is not None and altura >= umb:
             motivo = "Delinquency"
@@ -1435,6 +1525,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     def deseadas(d, ev):
         nonlocal primer_sin_usura
         p = plan()
+        if estado["extinguido"] is not None and d > estado["extinguido"]:
+            return {}
         u, cert = usura_del_dia(us, d, R)
         if cond["usuraRequerida"] and not cert and primer_sin_usura is None:
             primer_sin_usura = d

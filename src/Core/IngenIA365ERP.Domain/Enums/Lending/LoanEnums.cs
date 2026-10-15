@@ -37,6 +37,25 @@ public enum LoanTransactionKind
     CommercialAdjustment = 14,
     WriteOff = 15,
     Recovery = 16,
+
+    /// <summary>
+    /// K3 (T0874; data-model §9.1, §5.1): la capitalización de una novedad. En el crédito que capitaliza, <c>−</c> el interés de cada concepto y
+    /// cuota que pasa a capital y <c>+Principal</c> sin cuota por el total (el plan nuevo lo reparte); en una novación o refinanciación, el
+    /// <c>−</c> va en el crédito anterior y el <c>+Principal</c> en el enlazado. (nuevo)
+    /// </summary>
+    Capitalization = 17,
+
+    /// <summary>
+    /// K3 (T0874): el saldo que el crédito anterior de una novación o refinanciación traslada al enlazado: <c>−</c> cada concepto y cuota que
+    /// queda, para que el anterior termine en cero. (nuevo)
+    /// </summary>
+    TransferToLinkedLoan = 18,
+
+    /// <summary>
+    /// K3 (T0874): lo que recibe el crédito enlazado de una novación o refinanciación: <c>+Principal</c> sin cuota por el capital trasladado y
+    /// <c>+</c> los demás conceptos en su primera cuota (anticipo y saldo a favor, sin cuota). (nuevo)
+    /// </summary>
+    TransferFromLinkedLoan = 19,
 }
 
 /// <summary>Clase de una operación (<c>LND_LoanOperations</c>, M, FR-048, FR-142).</summary>
@@ -140,7 +159,10 @@ public enum LoanNumberReservationStatus
     Expired = 4,
 }
 
-/// <summary>Qué numera una fila de <c>LND_NumberSequences</c> (C48). <c>PayrollDeductionFile</c> es de K2 y <c>RegulatoryFile</c> de K5.</summary>
+/// <summary>
+/// Qué numera una fila de <c>LND_NumberSequences</c> (C48). <c>PayrollDeductionFile</c> es de K2 y <c>RegulatoryFile</c> de K5; K3 (T0878, T0884) suma la
+/// novedad y la condonación (columna entera: sin migración).
+/// </summary>
 public enum LendingNumberKind
 {
     Loan = 1,
@@ -152,4 +174,6 @@ public enum LendingNumberKind
     IssuedDocument = 7,
     PayrollDeductionFile = 8,
     RegulatoryFile = 9,
+    LoanNovelty = 10,
+    Waiver = 11,
 }

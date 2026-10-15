@@ -7,6 +7,10 @@
 // Regla (FR-091, T29): el plan se regenera desde la fecha de la decisión con la versión de reglas vigente; capital = saldo + lo que
 // recoge una refinanciación + lo capitalizado; los costos de la novedad nunca entran. Calculado con calcular.py (bloque «K3»).
 // Pendiente de validar por la contadora.
+// T0874 (cierre del hueco): la RECONSTRUCCION de la novacion en los dos creditos. El anterior paga las cuotas 1 a 9 en su vencimiento
+// (280.357,53 cada una) y el 15-10-2026 se nova: todo lo que queda (el capital de las cuotas 10 a 12, 811.539,58) pasa al enlazado
+// (filas TransferToLinkedLoan) y desde el dia siguiente no causa nada. La variante «enlazado» es el credito nuevo: nace ese dia con
+// lo trasladado (TransferFromLinkedLoan, sin cuota) y el plan de «novedades»; al 15-11 causo el interes de su cuota 1 (14.678,79).
 {
   "nombre": "k3-novacion",
   "condiciones": {
@@ -14,7 +18,7 @@
     "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
     "prelacion": "OldestInstallmentFirst",
     "monto": 3000000, "plazoCuotas": 12, "periodicidad": "Monthly", "tasaEA": 0.240000,
-    "fechaDesembolso": "2026-01-15", "modalidad": "CONSUMO"
+    "fechaDesembolso": "2026-01-15", "modalidad": "CONSUMO", "factorDeMora": 1.5
   },
   "series": {
     "usura": [
@@ -25,7 +29,197 @@
     ],
     "festivos": []
   },
-  "operaciones": [],
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 3000000, "fechaValor": "2026-01-15", "registradoEn": "2026-01-15T15:00:00Z" },
+    { "id": "P1", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-02-15", "registradoEn": "2026-02-15T15:00:00Z" },
+    { "id": "P2", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-03-15", "registradoEn": "2026-03-15T15:00:00Z" },
+    { "id": "P3", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-04-15", "registradoEn": "2026-04-15T15:00:00Z" },
+    { "id": "P4", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-05-15", "registradoEn": "2026-05-15T15:00:00Z" },
+    { "id": "P5", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-06-15", "registradoEn": "2026-06-15T15:00:00Z" },
+    { "id": "P6", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-07-15", "registradoEn": "2026-07-15T15:00:00Z" },
+    { "id": "P7", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-08-15", "registradoEn": "2026-08-15T15:00:00Z" },
+    { "id": "P8", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-09-15", "registradoEn": "2026-09-15T15:00:00Z" },
+    { "id": "P9", "tipo": "Payment", "modalidad": "FreeAmount", "valor": 280357.53, "fechaValor": "2026-10-15", "registradoEn": "2026-10-15T15:00:00Z" },
+    { "id": "N1", "tipo": "TermsChange", "mecanismo": "Novation", "cuotasNuevas": 12, "reestructuracionesDespues": 1, "fechaValor": "2026-10-15", "registradoEn": "2026-10-15T16:00:00Z" }
+  ],
+  "consultas": [
+    {
+      "fecha": "2026-10-15",
+      "informacionHasta": "2026-10-16T00:00:00Z",
+      "libroDesde": "2026-10-15",
+      "esperado": {
+        "saldos": {
+
+        },
+        "porCuota": [],
+        "capitalVencido": 0,
+        "diasDeMora": 0,
+        "cuotaMasAntigua": null,
+        "cuotasVencidas": 0,
+        "suspendida": false,
+        "valorParaCancelar": 0,
+        "tasaDiariaCorriente": 0.000597710167622401,
+        "tasaDiariaMora": 0.000664156288822982,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2026-10-15", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 9, "valor": -260958.63 },
+          { "dia": "2026-10-15", "clase": "TransferToLinkedLoan", "concepto": "Principal", "cuota": 10, "valor": -265678.74 },
+          { "dia": "2026-10-15", "clase": "TransferToLinkedLoan", "concepto": "Principal", "cuota": 11, "valor": -270484.23 },
+          { "dia": "2026-10-15", "clase": "TransferToLinkedLoan", "concepto": "Principal", "cuota": 12, "valor": -275376.61 },
+          { "dia": "2026-10-15", "clase": "PaymentAllocation", "concepto": "CurrentInterest", "cuota": 9, "valor": -19398.90 },
+          { "dia": "2026-10-15", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 9, "valor": 652.25 }
+        ]
+      }
+    },
+    {
+      "fecha": "2026-11-30",
+      "informacionHasta": "2026-12-01T00:00:00Z",
+      "libroDesde": "2026-10-16",
+      "esperado": {
+        "saldos": {
+
+        },
+        "porCuota": [],
+        "capitalVencido": 0,
+        "diasDeMora": 0,
+        "cuotaMasAntigua": null,
+        "cuotasVencidas": 0,
+        "suspendida": false,
+        "valorParaCancelar": 0,
+        "tasaDiariaCorriente": 0.000597710167622401,
+        "tasaDiariaMora": 0.000664156288822982,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": []
+      }
+    }
+  ],
+  "variantes": [
+    {
+      "nombre": "enlazado",
+      "condiciones": {
+        "sistema": "LevelPayment",
+        "convencion": "Thirty360",
+        "equivalencia": "Compound",
+        "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+        "prelacion": "OldestInstallmentFirst",
+        "monto": 811539.58,
+        "plazoCuotas": 12,
+        "periodicidad": "Monthly",
+        "tasaEA": 0.240000,
+        "fechaDesembolso": "2026-10-15",
+        "diaDePago": 15,
+        "modalidad": "CONSUMO",
+        "reestructuraciones": 1,
+        "factorDeMora": 1.5
+      },
+      "operaciones": [
+        {
+          "id": "E1",
+          "tipo": "TermsChange",
+          "mecanismo": "Novation",
+          "lado": "Enlazado",
+          "cuotasNuevas": 12,
+          "reestructuracionesDespues": 1,
+          "traslados": [
+            { "concepto": "Principal", "cuota": null, "valor": 811539.58 }
+          ],
+          "fechaValor": "2026-10-15",
+          "registradoEn": "2026-10-15T16:00:00Z"
+        }
+      ],
+      "consultas": [
+        {
+          "fecha": "2026-11-15",
+          "informacionHasta": "2026-11-16T00:00:00Z",
+          "libroDesde": "2026-10-15",
+          "conPlan": true,
+          "esperado": {
+            "saldos": { "Principal": 811539.58, "CurrentInterest": 14678.79 },
+            "porCuota": [
+              { "cuota": 1, "concepto": "Principal", "valor": 61161.62 },
+              { "cuota": 1, "concepto": "CurrentInterest", "valor": 14678.79 },
+              { "cuota": 2, "concepto": "Principal", "valor": 62267.89 },
+              { "cuota": 3, "concepto": "Principal", "valor": 63394.16 },
+              { "cuota": 4, "concepto": "Principal", "valor": 64540.81 },
+              { "cuota": 5, "concepto": "Principal", "valor": 65708.20 },
+              { "cuota": 6, "concepto": "Principal", "valor": 66896.70 },
+              { "cuota": 7, "concepto": "Principal", "valor": 68106.70 },
+              { "cuota": 8, "concepto": "Principal", "valor": 69338.58 },
+              { "cuota": 9, "concepto": "Principal", "valor": 70592.75 },
+              { "cuota": 10, "concepto": "Principal", "valor": 71869.60 },
+              { "cuota": 11, "concepto": "Principal", "valor": 73169.55 },
+              { "cuota": 12, "concepto": "Principal", "valor": 74493.02 }
+            ],
+            "capitalVencido": 0,
+            "diasDeMora": 0,
+            "cuotaMasAntigua": null,
+            "cuotasVencidas": 0,
+            "suspendida": false,
+            "valorParaCancelar": 826218.37,
+            "tasaDiariaCorriente": 0.000597710167622401,
+            "tasaDiariaMora": 0.000664156288822982,
+            "usuraTopada": true,
+            "validaHasta": null,
+            "transiciones": [],
+            "libro": [
+              { "dia": "2026-10-15", "clase": "TransferFromLinkedLoan", "concepto": "Principal", "cuota": null, "valor": 811539.58 },
+              { "dia": "2026-10-16", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 485.07 },
+              { "dia": "2026-10-17", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 485.35 },
+              { "dia": "2026-10-18", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 485.65 },
+              { "dia": "2026-10-19", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 485.93 },
+              { "dia": "2026-10-20", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 486.23 },
+              { "dia": "2026-10-21", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 486.52 },
+              { "dia": "2026-10-22", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 486.80 },
+              { "dia": "2026-10-23", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 487.10 },
+              { "dia": "2026-10-24", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 487.39 },
+              { "dia": "2026-10-25", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 487.68 },
+              { "dia": "2026-10-26", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 487.97 },
+              { "dia": "2026-10-27", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 488.27 },
+              { "dia": "2026-10-28", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 488.56 },
+              { "dia": "2026-10-29", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 488.84 },
+              { "dia": "2026-10-30", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 489.14 },
+              { "dia": "2026-11-01", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 489.44 },
+              { "dia": "2026-11-02", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 489.72 },
+              { "dia": "2026-11-03", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 490.02 },
+              { "dia": "2026-11-04", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 490.31 },
+              { "dia": "2026-11-05", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 490.60 },
+              { "dia": "2026-11-06", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 490.90 },
+              { "dia": "2026-11-07", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 491.19 },
+              { "dia": "2026-11-08", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 491.49 },
+              { "dia": "2026-11-09", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 491.77 },
+              { "dia": "2026-11-10", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 492.07 },
+              { "dia": "2026-11-11", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 492.37 },
+              { "dia": "2026-11-12", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 492.66 },
+              { "dia": "2026-11-13", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 492.96 },
+              { "dia": "2026-11-14", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 493.24 },
+              { "dia": "2026-11-15", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 493.55 }
+            ],
+            "plan": {
+              "cuotas": [
+                { "numero": 1, "vencimiento": "2026-11-15", "dias": 30, "capital": 61161.62, "interes": 14678.79, "seguro": 0, "saldo": 750377.96 },
+                { "numero": 2, "vencimiento": "2026-12-15", "dias": 30, "capital": 62267.89, "interes": 13572.52, "seguro": 0, "saldo": 688110.07 },
+                { "numero": 3, "vencimiento": "2027-01-15", "dias": 30, "capital": 63394.16, "interes": 12446.25, "seguro": 0, "saldo": 624715.91 },
+                { "numero": 4, "vencimiento": "2027-02-15", "dias": 30, "capital": 64540.81, "interes": 11299.60, "seguro": 0, "saldo": 560175.10 },
+                { "numero": 5, "vencimiento": "2027-03-15", "dias": 30, "capital": 65708.20, "interes": 10132.21, "seguro": 0, "saldo": 494466.90 },
+                { "numero": 6, "vencimiento": "2027-04-15", "dias": 30, "capital": 66896.70, "interes": 8943.71, "seguro": 0, "saldo": 427570.20 },
+                { "numero": 7, "vencimiento": "2027-05-15", "dias": 30, "capital": 68106.70, "interes": 7733.71, "seguro": 0, "saldo": 359463.50 },
+                { "numero": 8, "vencimiento": "2027-06-15", "dias": 30, "capital": 69338.58, "interes": 6501.83, "seguro": 0, "saldo": 290124.92 },
+                { "numero": 9, "vencimiento": "2027-07-15", "dias": 30, "capital": 70592.75, "interes": 5247.66, "seguro": 0, "saldo": 219532.17 },
+                { "numero": 10, "vencimiento": "2027-08-15", "dias": 30, "capital": 71869.60, "interes": 3970.81, "seguro": 0, "saldo": 147662.57 },
+                { "numero": 11, "vencimiento": "2027-09-15", "dias": 30, "capital": 73169.55, "interes": 2670.86, "seguro": 0, "saldo": 74493.02 },
+                { "numero": 12, "vencimiento": "2027-10-15", "dias": 30, "capital": 74493.02, "interes": 1347.40, "seguro": 0, "saldo": 0 }
+              ],
+              "totales": { "capital": 811539.58, "interes": 98545.35 }
+            }
+          }
+        }
+      ]
+    }
+  ],
   "novedades": [
     {
       "nombre": "enlazado-desde-el-saldo",

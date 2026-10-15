@@ -209,7 +209,7 @@ public static class ParametrosDeCartera
         Texto(SegregacionIncompatibilidades,
             "Pares de acciones que una misma persona no puede hacer sobre el mismo expediente, en JSON "
             + "[{ \"a\": acción, \"b\": acción, \"activo\": true|false }] (Radicar, Analizar, Decidir, Votar, Desembolsar, "
-            + "AnularOrdenDeGiro, ArmarLoteDeCastigo, AplicarCastigo, CargarMigracion, AceptarDiferencias). Por defecto (F6, T0290) "
+            + "AnularOrdenDeGiro, ArmarLoteDeCastigo, AplicarCastigo, CargarMigracion, AceptarDiferencias, Aplicar). Por defecto (F6, T0290) "
             + "Decidir × Desembolsar activo y sugeridos inactivos Analizar × Decidir, Desembolsar × AnularOrdenDeGiro, "
             + "ArmarLoteDeCastigo × AplicarCastigo y CargarMigracion × AceptarDiferencias.",
             "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", K1, patron: @"(?s)^\s*\[.*\]\s*$")

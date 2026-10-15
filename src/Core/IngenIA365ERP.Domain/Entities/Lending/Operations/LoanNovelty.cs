@@ -111,7 +111,7 @@ public class LoanNovelty : AuditableEntity
         new Dictionary<LoanNoveltyStatus, LoanNoveltyStatus[]>
         {
             [LoanNoveltyStatus.Draft] = [LoanNoveltyStatus.Submitted, LoanNoveltyStatus.Cancelled],
-            [LoanNoveltyStatus.Submitted] = [LoanNoveltyStatus.Approved, LoanNoveltyStatus.Rejected, LoanNoveltyStatus.Cancelled],
+            [LoanNoveltyStatus.Submitted] = [LoanNoveltyStatus.Approved, LoanNoveltyStatus.Rejected, LoanNoveltyStatus.Cancelled, LoanNoveltyStatus.Draft],
             [LoanNoveltyStatus.Approved] = [LoanNoveltyStatus.Applied, LoanNoveltyStatus.Cancelled],
         };
 
@@ -226,6 +226,19 @@ public class LoanNovelty : AuditableEntity
         ReglaDeCarteraException.SiHay(PuedeIrA(LoanNoveltyStatus.Rejected));
         Status = LoanNoveltyStatus.Rejected;
         FinalDecisionId = decisionId;
+    }
+
+    /// <summary>
+    /// K3 (T0879): <c>Submitted</c> → <c>Draft</c> con la decisión <c>Return</c> (api.md §4.3: «vuelve a borrador para corregir»): la simulación se
+    /// borra y hay que volver a simular y radicar.
+    /// </summary>
+    public void Devolver()
+    {
+        if (Status != LoanNoveltyStatus.Submitted)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoEstadoInvalido, "Sólo se devuelve una novedad radicada.", "status", Status.ToString()));
+        Status = LoanNoveltyStatus.Draft;
+        SimulationJson = "{}";
+        SimulationSha256 = string.Empty;
     }
 
     /// <summary>El nuevo pagaré u otrosí (FR-092), antes de aplicar.</summary>

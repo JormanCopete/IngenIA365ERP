@@ -49,6 +49,12 @@ public sealed record CondicionesDeCredito(
 
     public DateOnly? InsolvenciaDesde { get; init; }
 
+    /// <summary>
+    /// K3 (T0886): el último día de la negociación de insolvencia que terminó —el fracaso (<c>FailedOn</c>) o el acuerdo—; nulo mientras sigue en
+    /// negociación. Desde el día siguiente la causación vuelve a la regla de siempre (T30).
+    /// </summary>
+    public DateOnly? InsolvenciaHasta { get; init; }
+
     public DateOnly? CastigoDesde { get; init; }
 
     /// <summary>Si la modalidad exige usura certificada para causar (sin ella la causación real se bloquea, D11).</summary>

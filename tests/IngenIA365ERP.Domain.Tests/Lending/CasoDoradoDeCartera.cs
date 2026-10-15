@@ -411,8 +411,36 @@ public sealed class CasoDoradoDeCartera
             {
                 Recalculo = Recalculo ?? PrepaymentChoice.ReduceInstallment,
             },
+            // K3 (T0874): la novedad con su mecanismo, sus cuotas nuevas, lo que capitaliza y, en el enlazado, lo que recibe.
+            nameof(LoanOperationKind.TermsChange) => new ContenidoDeNovedad(
+                Mecanismo ?? throw new InvalidOperationException("La novedad lleva su mecanismo."), CuotasNuevas ?? 0)
+            {
+                TasaEfectivaAnual = TasaNueva,
+                DiaDePago = DiaDePago,
+                PrimerVencimiento = PrimerVencimiento,
+                Periodicidad = Periodicidad,
+                ReestructuracionesDespues = ReestructuracionesDespues,
+                Lado = Lado ?? LadoDeLaNovedad.Credito,
+                Capitalizaciones = Capitalizaciones.Select(c => new PartidaDeNovedad(c.Concepto, c.Cuota, c.Valor)).ToList(),
+                Traslados = Traslados.Select(c => new PartidaDeNovedad(c.Concepto, c.Cuota, c.Valor)).ToList(),
+            },
+            // K3 (T0884): la condonación por concepto y cuota.
+            nameof(LoanOperationKind.Waiver) => new ContenidoDeCondonacion(Condonaciones.Select(c => new PartidaDeNovedad(c.Concepto, c.Cuota, c.Valor)).ToList()),
             _ => null,
         };
+
+        // K3 (T0874, T0884): la novedad y la condonación.
+        public NoveltyMechanism? Mecanismo { get; set; }
+        public int? CuotasNuevas { get; set; }
+        public decimal? TasaNueva { get; set; }
+        public int? DiaDePago { get; set; }
+        public DateOnly? PrimerVencimiento { get; set; }
+        public RepaymentPeriodicity? Periodicidad { get; set; }
+        public int? ReestructuracionesDespues { get; set; }
+        public LadoDeLaNovedad? Lado { get; set; }
+        public List<SaldoInicialJson> Capitalizaciones { get; set; } = [];
+        public List<SaldoInicialJson> Traslados { get; set; } = [];
+        public List<SaldoInicialJson> Condonaciones { get; set; } = [];
 
         // US6 (T0565): la clase del ajuste de Comercial (CreditNote, Return, DebitNote, Voiding, VoidingByDianRejection) y el recálculo.
         public string? Clase { get; set; }
