@@ -1,0 +1,378 @@
+@page "/cartera/castigos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CastigosClient Lotes
+@inject CreditosClient Creditos
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Castigos - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K3, US14 (T0917; contracts/api.md §11.3; FR-095, FR-096, C98): el lote de castigo. Cada crédito se verifica contra la norma (ya no es
+   asociado, aportes cruzados, informe motivado y concepto de irrecuperabilidad) y la política (deterioro total, altura mínima, gestiones); el que no
+   cumple queda rechazado con lo que le falta. Enviado, el consejo lo decide en Actas (punto «Decisión» sobre el lote); aprobado, se aplica con ese
+   punto: cada crédito queda castigado, sale CreditoCastigado y, si el tipo de entidad debe reportarlo, el plazo del reporte al supervisor. *@
+<PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Castigos</h3>
+        <PermissionGate Required="Lending.WriteOffs.Prepare">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Nuevo lote</SfButton>
+        </PermissionGate>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeCastigos.EstadosDeLote) { <option value="@e.Nombre">@e.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Estado</th><th class="numero">Créditos</th><th class="numero">Total</th><th>Acta</th><th>Preparado por</th><th>Aplicado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var l in _filas)
+                    {
+                        var fila = l;
+                        <tr>
+                            <td>@fila.Number</td>
+                            <td>@TextosDeCastigos.EstadoDeLote(fila.Status)</td>
+                            <td class="numero">@fila.LoanCount</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(fila.Total)</td>
+                            <td>@(fila.SessionItem is { } p ? TextosDeCastigos.Punto(p.MinutesNumber, p.Order) : "—")</td>
+                            <td>@fila.PreparedBy</td>
+                            <td>@(fila.AppliedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDetalleAsync(fila.PublicId))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay lotes de castigo con ese filtro.</p> }
+        @if (_total > TamanoDePagina)
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span>Página @_pagina de @((_total + TamanoDePagina - 1) / TamanoDePagina)</span>
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_lote is { } lote)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_detalle.Activa">
+                <div class="page-header">
+                    <h4>Lote @lote.Number · @TextosDeCastigos.EstadoDeLote(lote.Status)</h4>
+                    <div class="toolbar">
+                        @if (lote.Status == 1)
+                        {
+                            <PermissionGate Required="Lending.WriteOffs.Prepare">
+                                <SfButton CssClass="e-flat e-small" OnClick="@AbrirAgregar">Agregar crédito…</SfButton>
+                                <SfButton CssClass="e-primary e-small" Disabled="@(_accion.Activa || lote.Items.Count == 0)" OnClick="@EnviarAsync">Enviar al consejo</SfButton>
+                            </PermissionGate>
+                        }
+                        @if (lote.Status == 3 && lote.SessionItem is not null)
+                        {
+                            <PermissionGate Required="Lending.WriteOffs.Apply">
+                                <SfButton CssClass="e-primary e-small" Disabled="@_accion.Activa" OnClick="@AplicarAsync">Aplicar el castigo</SfButton>
+                            </PermissionGate>
+                        }
+                        @if (lote.Status == 5 && lote.SupervisorReportRequired && lote.SupervisorReportedAt is null)
+                        {
+                            <PermissionGate Required="Lending.WriteOffs.Apply">
+                                <SfButton CssClass="e-flat e-small" OnClick="@AbrirReporte">Registrar el reporte al supervisor…</SfButton>
+                            </PermissionGate>
+                        }
+                    </div>
+                </div>
+                <p>@lote.Reason</p>
+                <p class="texto-tenue">
+                    Corte @lote.CutoffDate.ToString("yyyy-MM-dd") · capital @TextosDeCreditos.Pesos(lote.TotalPrincipal) · intereses @TextosDeCreditos.Pesos(lote.TotalInterest)
+                    · otros @TextosDeCreditos.Pesos(lote.TotalOther)
+                    @if (lote.SessionItem is { } punto) { <span> · @TextosDeCastigos.Punto(punto.MinutesNumber, punto.Order): @TextosDeCastigos.Resultado(punto.Outcome)</span> }
+                </p>
+                @if (lote.Status == 2) { <p class="aviso">El lote está en el consejo: decídalo en Actas con un punto «Decisión» sobre este lote.</p> }
+                @if (lote.SupervisorReportRequired)
+                {
+                    <p class="aviso">
+                        Reporte al supervisor: vence el @(lote.SupervisorReportDueDate?.ToString("yyyy-MM-dd") ?? "—")
+                        @if (lote.SupervisorReportedAt is { } r) { <span>· registrado el @r.ToString("yyyy-MM-dd") (@lote.SupervisorReportReference)</span> }
+                    </p>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Crédito</th><th>Deudor</th><th>Estado</th><th class="numero">Saldo</th><th class="numero">Deterioro</th><th>Mora</th><th>Requisitos</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var i in lote.Items)
+                            {
+                                var item = i;
+                                <tr>
+                                    <td><a href="/cartera/creditos/@item.LoanPublicId">@item.LoanNumber</a></td>
+                                    <td>@item.Debtor.Name</td>
+                                    <td>@TextosDeCastigos.EstadoDelCredito(item.Status)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(item.Balance)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(item.Impairment)</td>
+                                    <td>@(item.DaysPastDue?.ToString() ?? "—")</td>
+                                    <td>@Requisitos(item.Requirements)</td>
+                                    <td>
+                                        @if (lote.Status == 1)
+                                        {
+                                            <PermissionGate Required="Lending.WriteOffs.Prepare">
+                                                <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => QuitarAsync(item.ItemPublicId))">Quitar</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (lote.Rejected.Count > 0)
+                {
+                    <h5>Rechazados</h5>
+                    <ul>
+                        @foreach (var r in lote.Rejected)
+                        {
+                            <li>@r.LoanNumber · @r.Debtor.Name — falta: @string.Join(", ", r.Missing.Select(TextosDeCastigos.Requisito))</li>
+                        }
+                    </ul>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarCredito" Header="@(_lote is null ? "Nuevo lote de castigo" : $"Agregar un crédito al lote {_lote.Number}")" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Verificando los requisitos…">
+                <div class="form-grid">
+                    <label class="campo">Crédito (número) <input class="e-input" @bind="_buscarCredito" maxlength="40" /></label>
+                    <SfButton CssClass="e-flat e-small" OnClick="@BuscarCreditoAsync">Buscar</SfButton>
+                    <label class="campo">Crédito *
+                        <select class="e-input" value="@_credito" @onchange="@ElegirCreditoAsync">
+                            <option value="">Elegir…</option>
+                            @foreach (var c in _encontrados) { <option value="@c.PublicId">@c.Number · @c.Debtor.Name · @c.DaysPastDue días</option> }
+                        </select>
+                    </label>
+                </div>
+                @if (Guid.TryParse(_credito, out var creditoElegido))
+                {
+                    <SubirSoporte OwnerEntityType="@CastigosClient.DuenoDeSoportes" OwnerEntityPublicId="@creditoElegido" OnSubido="@CargarSoportesAsync"
+                                  Ayuda="Informe motivado, concepto de irrecuperabilidad y, si la consulta de aportes no está disponible, el soporte del cruce." />
+                    <div class="form-grid">
+                        <label class="campo">Informe motivado
+                            <select class="e-input" @bind="_informe"><option value="">—</option>@foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }</select>
+                        </label>
+                        <label class="campo">Concepto de irrecuperabilidad
+                            <select class="e-input" @bind="_concepto"><option value="">—</option>@foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }</select>
+                        </label>
+                        <label class="campo">Cruce de aportes
+                            <select class="e-input" @bind="_cruce"><option value="">—</option>@foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }</select>
+                        </label>
+                    </div>
+                }
+                @if (_lote is null) { <label class="campo campo-ancho">Por qué se propone el castigo * <input class="e-input" @bind="_motivo" maxlength="1000" /></label> }
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrEmpty(_credito) || (_lote is null && string.IsNullOrWhiteSpace(_motivo)))"
+                              OnClick="@GuardarCreditoAsync">@(_lote is null ? "Armar el lote" : "Agregar")</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCredito = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarReporte" Header="Reporte de los castigos al supervisor" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                @if (_lote is { } l)
+                {
+                    <SubirSoporte OwnerEntityType="@CastigosClient.DuenoDelReporte" OwnerEntityPublicId="@l.PublicId" OnSubido="@CargarSoportesDelReporteAsync" />
+                    <label class="campo">Soporte
+                        <select class="e-input" @bind="_soporteDelReporte"><option value="">—</option>@foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }</select>
+                    </label>
+                }
+                <label class="campo campo-ancho">Radicado * <input class="e-input" @bind="_referencia" maxlength="100" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_referencia))" OnClick="@ReportarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReporte = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new(), _detalle = new(), _accion = new();
+    private List<LoteDeCastigoDto> _filas = [];
+    private List<CreditoEnListaDto> _encontrados = [];
+    private List<AdjuntoDto> _soportes = [];
+    private LoteDeCastigoDto? _lote;
+    private string? _estado, _error, _motivo, _buscarCredito, _credito, _informe, _concepto, _cruce, _referencia, _soporteDelReporte;
+    private bool _mostrarCredito, _mostrarReporte;
+    private int _pagina = 1;
+    private long _total;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync(1);
+
+    private static string Requisitos(IReadOnlyList<RequisitoDeCastigoDto> requisitos) =>
+        string.Join(" · ", requisitos.Select(r => $"{TextosDeCastigos.Requisito(r.Code)}: {(r.Met ? "cumple" : "falta")}"));
+
+    private static Guid? Id(string? texto) => Guid.TryParse(texto, out var id) ? id : null;
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Lotes.LotesAsync(string.IsNullOrEmpty(_estado) ? null : _estado, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los lotes de castigo."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private async Task AbrirDetalleAsync(Guid lote)
+    {
+        using var carga = _detalle.Iniciar();
+        var r = await Lotes.LoteAsync(lote);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el lote."); return; }
+        _lote = r.Value;
+    }
+
+    private void AbrirNuevo()
+    {
+        _lote = null;
+        AbrirAgregar();
+    }
+
+    private void AbrirAgregar()
+    {
+        _error = _motivo = _credito = _informe = _concepto = _cruce = null;
+        _encontrados = [];
+        _soportes = [];
+        _clave = new ClaveDeOperacion();
+        _mostrarCredito = true;
+    }
+
+    private async Task BuscarCreditoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_buscarCredito)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Creditos.ListarAsync(_buscarCredito, tamano: 10);
+        _encontrados = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+    }
+
+    private async Task ElegirCreditoAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _credito = e.Value?.ToString();
+        _informe = _concepto = _cruce = null;
+        await CargarSoportesAsync();
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (Id(_credito) is not { } credito) { _soportes = []; return; }
+        var r = await Adjuntos.ListarAsync(CastigosClient.DuenoDeSoportes, credito);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task CargarSoportesDelReporteAsync()
+    {
+        if (_lote is not { } l) return;
+        var r = await Adjuntos.ListarAsync(CastigosClient.DuenoDelReporte, l.PublicId);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task GuardarCreditoAsync()
+    {
+        if (Id(_credito) is not { } credito) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = _lote is { } lote
+            ? await Lotes.AgregarAsync(lote.PublicId, new ItemDeCastigoRequest(credito, Id(_concepto), Id(_informe), Id(_cruce)), _clave)
+            : await Lotes.ArmarAsync(new LoteDeCastigoRequest([credito], _motivo!.Trim(),
+                [new SoportesDeCastigoRequest(credito, Id(_concepto), Id(_informe), Id(_cruce))]), _clave);
+        if (!r.IsSuccess)
+        {
+            _error = r.ErrorCode == "Lending.WriteOff.RequirementMissing" && r.Dato<List<string>>("missing") is { Count: > 0 } faltan
+                ? $"El crédito no cumple: falta {string.Join(", ", faltan.Select(TextosDeCastigos.Requisito))}."
+                : r.ErrorMessage ?? "No se pudo guardar.";
+            return;
+        }
+        _mostrarCredito = false;
+        _lote = r.Value;
+        if (_lote is { Rejected.Count: > 0 } conRechazos && conRechazos.Items.Count == 0)
+            await Notification.WarningAsync("El crédito quedó rechazado: vea lo que le falta en el detalle del lote.");
+        else
+            await Notification.SuccessAsync($"Lote {_lote?.Number} actualizado.");
+        await CargarAsync(1);
+    }
+
+    private async Task QuitarAsync(Guid item)
+    {
+        if (_lote is not { } lote) return;
+        using var carga = _accion.Iniciar();
+        var r = await Lotes.QuitarAsync(lote.PublicId, item, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo quitar el crédito."); return; }
+        _lote = r.Value;
+        await CargarAsync(_pagina);
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_lote is not { } lote) return;
+        using var carga = _accion.Iniciar();
+        var r = await Lotes.EnviarAlConsejoAsync(lote.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el lote."); return; }
+        _lote = r.Value;
+        await Notification.SuccessAsync("Lote enviado: llévelo a una sesión del consejo en Actas.");
+        await CargarAsync(_pagina);
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (_lote is not { SessionItem: { } punto } lote) return;
+        using var carga = _accion.Iniciar();
+        var r = await Lotes.AplicarAsync(lote.PublicId, new AplicarCastigoRequest(punto.ItemPublicId), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar el castigo."); return; }
+        var aviso = r.Value?.SupervisorReportRequired == true ? $" Repórtelo al supervisor antes del {r.Value.SupervisorReportDueDate:yyyy-MM-dd}." : "";
+        await Notification.SuccessAsync($"Castigo aplicado: {r.Value?.Operations.Count ?? 0} créditos.{aviso}");
+        await AbrirDetalleAsync(lote.PublicId);
+        await CargarAsync(_pagina);
+    }
+
+    private async Task AbrirReporte()
+    {
+        _error = _referencia = _soporteDelReporte = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarReporte = true;
+        await CargarSoportesDelReporteAsync();
+    }
+
+    private async Task ReportarAsync()
+    {
+        if (_lote is not { } lote || string.IsNullOrWhiteSpace(_referencia)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Lotes.ReportarAlSupervisorAsync(lote.PublicId, new ReporteAlSupervisorRequest(_referencia.Trim(), Id(_soporteDelReporte)), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar el reporte."; return; }
+        _mostrarReporte = false;
+        _lote = r.Value;
+        await Notification.SuccessAsync("Reporte al supervisor registrado.");
+    }
+}

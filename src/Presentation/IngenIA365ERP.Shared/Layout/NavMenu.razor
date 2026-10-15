@@ -156,6 +156,13 @@
             <PermissionGate Required="Lending.Loans.Read">
                 <NavLink href="/cartera/condonaciones" class="nav-subitem">Condonaciones</NavLink>
             </PermissionGate>
+            @* K3, US14 (T0918): los lotes de castigo y la evaluación de cartera; los decide el consejo (y el comité de riesgos) en Actas. *@
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/castigos" class="nav-subitem">Castigos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Ratings.Read">
+                <NavLink href="/cartera/evaluaciones" class="nav-subitem">Evaluación de cartera</NavLink>
+            </PermissionGate>
             @* US13 (T0793): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) y la verificación de su código. *@
             <PermissionGate Required="Lending.Documents.Read">
                 <NavLink href="/cartera/documentos" class="nav-subitem">Documentos</NavLink>

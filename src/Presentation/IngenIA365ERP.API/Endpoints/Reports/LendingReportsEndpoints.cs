@@ -83,6 +83,8 @@ public class LendingReportsEndpoints : ICarterModule
             (f, q) => new PayrollDeductionReconciliationReportQuery(f, Id(q, "agreement"), Entero(q, "year"), Entero(q, "month")));
         // K3 (US11, T0887, T0890): los reestructurados al corte, con el filtro propio mechanism.
         group.MapVistaDeCartera(RestructuredReportQueryHandler.Vista, (f, q) => new RestructuredReportQuery(f, Texto(q, "mechanism")));
+        // K3 (US14, T0911, T0915): la cartera castigada hasta `to`, con lo recuperado en el rango.
+        group.MapVistaDeCartera(ChargeOffsReportQueryHandler.Vista, (f, _) => new ChargeOffsReportQuery(f));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

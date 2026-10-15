@@ -70,6 +70,9 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // en el detalle del crédito (se comprueba aparte).
         ("Pages/Cartera/Novedades.razor", "/cartera/novedades", "Lending.Novelties.Read"),
         ("Pages/Cartera/Condonaciones.razor", "/cartera/condonaciones", "Lending.Loans.Read"),
+        // Fase 17, US14 (T0917, T0918; K3): los lotes de castigo y la evaluación de cartera.
+        ("Pages/Cartera/Castigos.razor", "/cartera/castigos", "Lending.Loans.Read"),
+        ("Pages/Cartera/Evaluaciones.razor", "/cartera/evaluaciones", "Lending.Ratings.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>

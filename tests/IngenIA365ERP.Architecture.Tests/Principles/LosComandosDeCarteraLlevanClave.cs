@@ -69,6 +69,9 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/NoveltiesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/WaiversEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/DebtorEventsEndpoints.cs",
+        // K3, US14 (bloque C, T0915): el lote de castigo con el reporte al supervisor. La evaluación de cartera (/risk/evaluations) vive en
+        // RiskEndpoints.cs, que ya está en la lista.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/WriteOffBatchesEndpoints.cs",
     ];
 
     /// <summary>
@@ -229,7 +232,7 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.DebtorEvents.OpenInsolvencyProceedingCommand),
         typeof(IngenIA365ERP.Application.Lending.DebtorEvents.RecordInsolvencyFailureCommand),
         // K3 (US14, bloque B; T0901): el lote de castigo (armar, agregar y quitar créditos, enviar, aplicar, el reporte al supervisor) y la evaluación de
-        // cartera (preparar y aplicar). Sus archivos de rutas (WriteOffBatchesEndpoints y /risk/evaluations en RiskEndpoints) los suma el bloque C (T0915).
+        // cartera (preparar y aplicar). Sus archivos de rutas (WriteOffBatchesEndpoints y /risk/evaluations en RiskEndpoints) están en Archivos desde el bloque C (T0915).
         typeof(IngenIA365ERP.Application.Lending.WriteOffs.CreateWriteOffBatchCommand),
         typeof(IngenIA365ERP.Application.Lending.WriteOffs.AddWriteOffBatchItemCommand),
         typeof(IngenIA365ERP.Application.Lending.WriteOffs.RemoveWriteOffBatchItemCommand),

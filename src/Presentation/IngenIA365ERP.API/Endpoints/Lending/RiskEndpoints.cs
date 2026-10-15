@@ -2,6 +2,7 @@ using System.Text.Json;
 using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Risk;
+using IngenIA365ERP.Application.Lending.Risk.Evaluations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 
@@ -34,6 +35,8 @@ public class RiskEndpoints : ICarterModule
     public const string Cerrar = "Lending.MonthlyClose.Execute";
     public const string Reabrir = "Lending.MonthlyClose.Reopen";
     public const string VerConciliacion = "Lending.Reconciliation.View";
+    public const string PrepararEvaluacion = "Lending.PortfolioEvaluations.Prepare";
+    public const string AplicarEvaluacion = "Lending.PortfolioEvaluations.Apply";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -149,6 +152,34 @@ public class RiskEndpoints : ICarterModule
             .WithName("Lending_Risk_ArrearsHistory_Completeness")
             .RequirePermission(LeerCalificaciones);
 
+        // ------------------------------------------------------------------------------- evaluación de cartera (§12.6, K3) --
+        // La recomienda el comité de riesgos y la aprueba el consejo por sus puntos de acta (AsuntoDeEvaluacionDeCartera); aquí sólo se lee,
+        // se prepara y se aplica con esos dos puntos.
+        riesgo.MapGet("/evaluations", async (PortfolioEvaluationStatus? status, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListPortfolioEvaluationsQuery(status), ct))
+            .WithName("Lending_Risk_Evaluations_List")
+            .RequirePermission(LeerCalificaciones);
+
+        riesgo.MapGet("/evaluations/{id:guid}", async (Guid id, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetPortfolioEvaluationQuery(id, page ?? 1, pageSize ?? 50), ct))
+            .WithName("Lending_Risk_Evaluations_Get")
+            .RequirePermission(LeerCalificaciones);
+
+        riesgo.MapPost("/evaluations", async (EvaluacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                LendingGroup.Creado(await sender.Send(new PreparePortfolioEvaluationCommand(body.CutoffDate, body.EffectMonth ?? string.Empty,
+                    Criterios(body.Criteria), body.Loans ?? []) { OperationKey = http.ClaveDeOperacion() }, ct),
+                    e => $"{LendingGroup.Prefijo}/risk/evaluations/{e.PublicId}"))
+            .WithName("Lending_Risk_Evaluations_Prepare")
+            .ConClaveDeOperacion()
+            .RequirePermission(PrepararEvaluacion);
+
+        riesgo.MapPost("/evaluations/{id:guid}/apply", async (Guid id, AplicarEvaluacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApplyPortfolioEvaluationCommand(id, body.RecommendationSessionItemPublicId, body.ApprovalSessionItemPublicId)
+                    { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_Risk_Evaluations_Apply")
+            .ConClaveDeOperacion()
+            .RequirePermission(AplicarEvaluacion);
+
         // --------------------------------------------------------------------------------- la calificación de un crédito --
         var creditos = LendingGroup.Grupo(app, "/loans", "Cartera Riesgo y cierres");
         creditos.MapGet("/{id:guid}/rating", async (Guid id, DateOnly? date, DateTime? recordedAsOf, ISender sender, CancellationToken ct) =>
@@ -156,6 +187,21 @@ public class RiskEndpoints : ICarterModule
             .WithName("Lending_Loans_Rating")
             .RequirePermission(LeerCalificaciones);
     }
+
+    /// <summary><c>{ cutoffDate, effectMonth (AAAA-MM), criteria (objeto JSON o su texto), loans: [{ loanPublicId, proposedCategory, reason, … }] }</c> (§12.6).</summary>
+    public sealed record EvaluacionRequest(DateOnly CutoffDate, string? EffectMonth, JsonElement? Criteria, IReadOnlyList<PortfolioEvaluationLoanInput>? Loans);
+
+    /// <summary><c>{ recommendationSessionItemPublicId, approvalSessionItemPublicId }</c> (§12.6).</summary>
+    public sealed record AplicarEvaluacionRequest(Guid RecommendationSessionItemPublicId, Guid ApprovalSessionItemPublicId);
+
+    /// <summary>Los criterios llegan como objeto JSON o como su texto; ausentes, nulos.</summary>
+    private static string? Criterios(JsonElement? criterios) => criterios switch
+    {
+        null => null,
+        { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+        { ValueKind: JsonValueKind.String } c => c.GetString(),
+        { } c => c.GetRawText(),
+    };
 
     /// <summary><c>{ validFrom, overrides (esquema parcial del Anexo 1: el objeto o su texto JSON), reason }</c> (§12.1).</summary>
     public sealed record VersionDePoliticaRequest(DateOnly ValidFrom, JsonElement? Overrides, string? Reason);
