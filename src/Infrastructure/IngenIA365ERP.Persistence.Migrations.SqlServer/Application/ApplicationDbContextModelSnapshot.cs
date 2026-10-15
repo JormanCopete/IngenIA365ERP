@@ -27164,6 +27164,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<int?>("NoveltyCause")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("NoveltyMechanism")
+                        .HasColumnType("int");
+
                     b.Property<int>("Order")
                         .HasColumnType("int");
 

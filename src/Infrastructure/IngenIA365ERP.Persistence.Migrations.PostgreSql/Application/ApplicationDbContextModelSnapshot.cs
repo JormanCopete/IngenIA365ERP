@@ -26944,6 +26944,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<int?>("NoveltyCause")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("NoveltyMechanism")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Order")
                         .HasColumnType("integer");
 

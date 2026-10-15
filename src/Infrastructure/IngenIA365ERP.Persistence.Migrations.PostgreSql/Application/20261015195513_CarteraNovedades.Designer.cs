@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261015173250_CarteraNovedades")]
+    [Migration("20261015195513_CarteraNovedades")]
     partial class CarteraNovedades
     {
         /// <inheritdoc />
@@ -26946,6 +26946,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("ModalityCode")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
+
+                    b.Property<int?>("NoveltyCause")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("NoveltyMechanism")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");
