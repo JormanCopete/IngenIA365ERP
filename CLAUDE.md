@@ -701,12 +701,16 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/013-cartera-financiera/plan.md](specs/013-cartera-financiera/plan.md)
+[specs/014-ahorros-aportes-cdt/plan.md](specs/014-ahorros-aportes-cdt/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/013-cartera-financiera/spec.md)
-- [research.md](specs/013-cartera-financiera/research.md)
-- [data-model.md](specs/013-cartera-financiera/data-model.md)
-- [quickstart.md](specs/013-cartera-financiera/quickstart.md)
-- [decisiones-transversales.md](specs/013-cartera-financiera/decisiones-transversales.md)
-- [contracts/](specs/013-cartera-financiera/contracts/)
+- [spec.md](specs/014-ahorros-aportes-cdt/spec.md)
+- [investigacion-financiera.md](specs/014-ahorros-aportes-cdt/investigacion-financiera.md)
+- [research.md](specs/014-ahorros-aportes-cdt/research.md)
+- [data-model.md](specs/014-ahorros-aportes-cdt/data-model.md)
+- [quickstart.md](specs/014-ahorros-aportes-cdt/quickstart.md)
+- [contracts/](specs/014-ahorros-aportes-cdt/contracts/)
+
+The 014 extends the Cartera of the 013: also read
+[specs/013-cartera-financiera/plan.md](specs/013-cartera-financiera/plan.md) and
+[decisiones-transversales.md](specs/013-cartera-financiera/decisiones-transversales.md).
 <!-- SPECKIT END -->

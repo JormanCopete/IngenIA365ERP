@@ -1,0 +1,632 @@
+# Research: Cartera financiera — captaciones (feature 014)
+
+**Fecha**: 2026-10-14 · **Spec**: [spec.md](spec.md) · **Fundamento financiero**:
+[investigacion-financiera.md](investigacion-financiera.md)
+
+Formato de cada decisión: **Decisión** · **Por qué** · **Alternativas descartadas** · **Trazas** (FR, D,
+preguntas). La sección §0 fija los **nombres canónicos**: manda sobre cualquier otra redacción de
+nombres en `data-model.md`, `contracts/` y `quickstart.md`.
+
+Punto de partida verificado en el código (rama `013-cartera-financiera`, `c6ba3f2c`): la 014 se construye
+**cuando la 013 esté completa** (Q3). Si al empezar la 013 cambió algo de lo que aquí se nombra (nombres de
+enums, la clave de la matriz, el ciclo diario), manda el código y esta investigación se enmienda antes de
+`/speckit-tasks`.
+
+No queda ningún `NEEDS CLARIFICATION` técnico: el stack es el del repositorio y las preguntas de negocio
+están resueltas en la spec (Clarifications 2026-10-14) o tienen decisión por defecto.
+
+---
+
+## 0. Nombres canónicos
+
+### 0.1 Espacios y carpetas
+
+| Capa | Ruta | Contenido |
+|---|---|---|
+| Dominio puro | `src/Core/IngenIA365ERP.Domain/Lending/Deposits/` | Motores de captaciones (§0.4) |
+| Entidades | `src/Core/IngenIA365ERP.Domain/Entities/Lending/Deposits/` | Cuentas, CDAT, libro, retenciones, cargos, retiro, asamblea, liquidez |
+| Enums | `src/Core/IngenIA365ERP.Domain/Enums/Lending/DepositEnums.cs` | Enums nuevos (§0.3) |
+| Aplicación | `src/Core/IngenIA365ERP.Application/Lending/Deposits/` | `Lines`, `Accounts`, `Operations`, `Accrual`, `TermDeposits`, `Contributions`, `Holds`, `Charges`, `Withdrawals`, `Assembly`, `Liquidity`, `Integration`, `Documents`, `Reports`, `Migration`, `Activation` |
+| Puertos | `src/Core/IngenIA365ERP.Application/Common/Integration/Lending/` | `IContratoDeCuentas` (nuevo); `IConsultaDeAportes` se mueve aquí desde `Common/Integration/Savings` |
+| Contabilidad | `src/Core/IngenIA365ERP.Application/Accounting/Lending/` | Roles, hechos y dimensiones nuevos en lo existente |
+| Persistencia | `src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/Deposits/` | Configuraciones EF |
+| API | `src/Presentation/IngenIA365ERP.API/Endpoints/Lending/Deposits/` | Grupos de rutas |
+| Pantallas | `src/Presentation/IngenIA365ERP.Shared/Pages/Cartera/Captaciones/` | Pantallas `/cartera/ahorros*`, `/cartera/cdat*`, `/cartera/aportes*`, `/cartera/retiros-asociado*` |
+| Casos dorados | `tests/IngenIA365ERP.Domain.Tests/Lending/Deposits/Casos/*.json` | §R12 |
+
+### 0.2 Tablas (prefijo `LND_`, ningún nombre heredado)
+
+Los nombres heredados que **no** se pueden reutilizar: `LND_SavingsAccounts`, `LND_SavingsParameters`,
+`LND_DepositAccounts`, `LND_DepositAudit`, `LND_DepositEntries`, `LND_DepositSeals`, `LND_DepositSignatures`,
+`LND_ContributionReductions`, `LND_ContributionReductionParams`, `LND_AssociateWithdrawals`,
+`LND_WithdrawalStatuses`, `LND_TransactionCodes`, `LND_Documents`, `LND_Checkbooks`, `LND_CheckClearing`,
+`LND_Cashiers`, `LND_CashBases` y los `CDT_*`. Por eso la cuenta se llama **`MemberAccount`** («cuenta del
+asociado»), neutral entre ahorro, CDAT y aportes.
+
+| Tabla | Entidad | Qué es | Entrega |
+|---|---|---|---|
+| `LND_CreditLines` (existente) | `CreditLine` | Identidad común de la línea; **columna nueva `Nature`** | K7 |
+| `LND_DepositLineVersions` | `DepositLineVersion` | Versión inmutable de una línea de captación | K8 |
+| `LND_DepositLineRateTiers` | `DepositLineRateTier` | Tramos de tasa por saldo, plazo y monto | K8 |
+| `LND_DepositLineCharges` | `DepositLineCharge` | Catálogo de cargos de la línea (FR-128) | K8 |
+| `LND_NegotiatedRateRules` | `NegotiatedRateRule` | Reglas de tasa negociada (FR-127) | K9 |
+| `LND_ContributionLineVersions` | `ContributionLineVersion` | Versión inmutable de la línea de aportes | K7 |
+| `LND_MemberAccounts` | `MemberAccount` | Cuenta (ahorro, contractual, permanente, CDAT, aportes) | K7 |
+| `LND_MemberAccountParties` | `MemberAccountParty` | Titulares, cotitulares, firmantes, representantes, beneficiarios | K7 |
+| `LND_MemberAccountTermsVersions` | `MemberAccountTermsVersion` | Condiciones selladas (CDAT, contractual, tasa negociada) | K9 |
+| `LND_TermDepositSchedules` | `TermDepositScheduleItem` | Plan de intereses del CDAT, por versión de condiciones | K9 |
+| `LND_MemberAccountOperations` | `MemberAccountOperation` | Hecho primario de cada operación (recaudador, clave, medio) | K7 |
+| `LND_MemberAccountTransactions` | `MemberAccountTransaction` | Libro por concepto, tres fechas, reverso espejo (bigint) | K7 |
+| `LND_MemberAccountDailyPositions` | `MemberAccountDailyPosition` | Posición diaria versionada | K7 |
+| `LND_MemberAccountControls` | `MemberAccountControl` | Marca de agua de causación y última liquidación | K7 |
+| `LND_InterestSettlements` | `InterestSettlement` | Liquidación de intereses de un período (H) | K8 |
+| `LND_WithholdingAccumulations` | `WithholdingAccumulation` | Rendimientos y retención por titular, año y concepto | K8 |
+| `LND_GmfMonthlyUsage` | `GmfMonthlyUsage` | Acumulado exento del mes por persona | K8 |
+| `LND_GmfExemptAccounts` | `GmfExemptAccount` | Cuenta marcada exenta, con vigencia | K8 |
+| `LND_AccountInstallments` | `AccountInstallment` | Cuotas exigibles (aportes, permanente, contractual) | K7 |
+| `LND_AccountHolds` | `AccountHold` | Bloqueos | K8 |
+| `LND_Garnishments` | `Garnishment` | Embargos y sus respuestas | K8 |
+| `LND_AccountCharges` | `AccountCharge` | Cargos causados (FR-128) | K8 |
+| `LND_DirectDebitMandates` | `DirectDebitMandate` | Autorización de débito automático | K8 |
+| `LND_MembershipWithdrawals` | `MembershipWithdrawal` | Trámite del retiro del asociado (FR-076) | K7 |
+| `LND_MembershipWithdrawalLines` | `MembershipWithdrawalLine` | Liquidación: aportes, ahorros, cruces, pérdidas, devolución | K7 |
+| `LND_AssemblyDistributions` | `AssemblyDistribution` | Revalorización y excedentes (FR-045, FR-046) | K10 |
+| `LND_AssemblyDistributionLines` | `AssemblyDistributionLine` | Por asociado | K10 |
+| `LND_DeceasedHolderCases` | `DeceasedHolderCase` | Fallecimiento y entrega a beneficiarios | K10 |
+| `LND_UnclaimedBalances` | `UnclaimedBalance` | No reclamados | K10 |
+| `LND_LiquidityFundSnapshots` | `LiquidityFundSnapshot` | Base y requerido del fondo de liquidez (H) | K11 |
+| `LND_LiquidityFundHoldings` | `LiquidityFundHolding` | Constituido que registra el tesorero | K11 |
+| `LND_PayrollAgreementFileGroups` | `PayrollAgreementFileGroup` | Grupos de archivo del convenio (FR-125) | K7 |
+| `LND_PayrollAgreementConceptEquivalences` | `PayrollAgreementConceptEquivalence` | Conceptos equivalentes y reparto | K7 |
+| `LND_MigrationAccountRows` y hermanas | `MigrationAccountRow`… | Preparación de la migración (§R27) | K7–K9 |
+
+`LND_Setup` (`LendingSetup`) suma `DepositsActivationDate`/`…Id`/`…At` y `ContributionsActivationDate`/
+`…Id`/`…At`. `LND_UserCreditLineScopes` sirve igual (la línea es común).
+
+### 0.3 Enums nuevos (valores fijos, nunca se renumeran)
+
+| Enum | Valores |
+|---|---|
+| `LineNature` | `Placement` 1, `Deposit` 2, `Contribution` 3 |
+| `DepositClass` | `Demand` 1 (a la vista), `Contractual` 2, `Permanent` 3, `TermDeposit` 4 (CDAT) |
+| `BalanceMethod` | `DailyBalance` 1, `AverageBalance` 2, `MinimumBalance` 3 |
+| `RateTierMode` | `WholeBalance` 1, `Stepped` 2 |
+| `InterestTiming` | `Arrears` 1 (vencido), `Advance` 2 (anticipado) |
+| `RolloverRateRule` | `SameRate` 1, `CurrentTableRate` 2, `Agreed` 3 |
+| `AfterMaturityTreatment` | `StopAccruing` 1, `MoveToDemand` 2 |
+| `MemberAccountStatus` | `Opening` 1, `Active` 2, `Inactive` 3, `Matured` 4, `Closing` 5, `Closed` 6 |
+| `MemberAccountPartyRole` | `Holder` 1, `CoHolder` 2, `Signatory` 3, `LegalRepresentative` 4, `Beneficiary` 5 |
+| `HandlingMode` | `Indistinct` 1, `Joint` 2 |
+| `MemberAccountConcept` | `Principal` 1, `InterestPayable` 2, `Withholding` 3, `Gmf` 4, `ContributionMinimum` 5, `ContributionOrdinary` 6, `ContributionExtraordinary` 7, `ContributionRevaluation` 8, `ChargeReceivable` 9, `Bonus` 10 |
+| `MemberAccountTransactionKind` | `OpeningBalance` 1, `Deposit` 2, `Withdrawal` 3, `TransferIn` 4, `TransferOut` 5, `InterestAccrued` 6, `AccrualAdjustment` 7, `InterestCredited` 8, `InterestPaid` 9, `WithholdingApplied` 10, `GmfCharged` 11, `ChargeApplied` 12, `PenaltyApplied` 13, `Capitalization` 14, `Reclassification` 15, `InternalOffset` 16, `Refund` 17, `ToUnclaimed` 18, `GarnishmentConsigned` 19 |
+| `GmfExemptionPolicy` | `SingleMarkedAccount` 1, `PerHolderLimit` 2, `NotApplicable` 3 |
+| `WithholdingThresholdScope` | `AllDepositClasses` 1, `ExceptTermDeposit` 2, `None` 3 |
+| `HoldReason` | `Internal` 1, `LoanCollateral` 2, `SignaturePending` 3, `Deceased` 4, `ScreeningMatch` 5, `Other` 99 |
+| `ChargeKind` | `MaintenanceFee` 1, `ExtraOperation` 2, `ExtraDocument` 3, `MediumReplacement` 4, `Inactivity` 5, `Other` 99 |
+| `MembershipWithdrawalCause` | `Voluntary` 1, `Exclusion` 2, `Death` 3, `Other` 99 |
+| `MembershipWithdrawalStatus` | `Filed` 1, `Approved` 2, `Settled` 3, `Paid` 4, `Desisted` 5, `Rejected` 6, `ToRedo` 7 |
+| `AssemblyDistributionKind` | `Revaluation` 1, `SurplusDistribution` 2, `Amortization` 3 |
+| `ContributionClass` | `Minimum` 1, `Ordinary` 2, `Extraordinary` 3, `Revalued` 4 |
+| `IssueTermBand` | `UnderSixMonths` 1, `SixToTwelve` 2, `TwelveToEighteen` 3, `EighteenOrMore` 4 |
+
+Valores **agregados al final** de enums existentes:
+- `LendingProcessKind`: `DepositsDailyCycle` 7 sólo si el plan de la 013 cambió el ciclo; por defecto
+  **no** se agrega: el ciclo diario suma un paso (§R10).
+- `IssuedDocumentKind`: `AccountStatement` 7, `AccountBalanceCertificate` 8, `DepositTaxCertificate` 9,
+  `WithholdingCertificate` 10, `TermDepositTitle` 11, `ContributionCertificate` 12,
+  `ContributionClearance` 13, `MembershipWithdrawalSettlement` 14.
+- `ClaseDeMedioDeRecaudo`: sin cambios (los cruces usan `InternalOffset` 22).
+- `IntegrationParticipantClass`: sin cambios; `Contributions` 3 queda sin uso nuevo (C3 de la spec).
+- `AttributionKind` (o su equivalente en `Governance`): `DepositWithdrawal`, `NegotiatedRate`,
+  `MembershipWithdrawal`, `DeceasedDelivery`, `ChargeWaiver`.
+
+### 0.4 Motores puros (`Domain/Lending/Deposits/`)
+
+| Motor | Hace | Reutiliza |
+|---|---|---|
+| `MotorDeCaptaciones` | Fachada, como `MotorDeCartera` | — |
+| `InteresDeCaptacion` | Interés diario por método de saldo y tramos | `EquivalenciaDeTasas`, `ContadorDeDias`, `Causacion.Acumulado/DelDia`, `RedondeoDeCartera`, `TasaDelDia.TasaVariable` |
+| `RetencionSobreRendimientos` | Umbral diario, total, componente inflacionario, perfil | `AritmeticaDecimal` |
+| `GravamenMovimientosFinancieros` | GMF con política, tope, hechos generadores, tarifa cero | — |
+| `PlanDeCdat` | Plan vencido o anticipado, cuadre de causación, prórroga, renovación, redención | `EquivalenciaDeTasas`, `CalendarioHabil` |
+| `AhorroContractual` | Valor final, bonificación, incumplimiento | `AritmeticaDecimal` |
+| `TasaNegociada` | Regla aplicable y margen máximo | — |
+| `CargosDeCuenta` | Cargo, gratuitos, exoneraciones | — |
+| `RevalorizacionYExcedentes` | Base, límite IPC, prorrateo al fondo | — |
+| `FondoDeLiquidez` | Base y requerido por categoría, bandas y transición | — |
+| `ReconstruccionDeCuenta` | Saldo por concepto a D con información hasta R | patrón de `ReconstruccionDeCredito` |
+| `LimiteInembargable` | Saldo embargable sumando cuentas, salvo alimentos | — |
+
+### 0.5 Puertos y escritores únicos
+
+- **`IContratoDeCuentas`** (nuevo, `Common/Integration/Lending`): `ConsultarAsync`, `ListarExigiblesAsync`,
+  `SimularAsync`, `ConsignarAsync`, `RetirarAsync`, `TrasladarAsync`, `ReversarAsync`. `VersionDelContrato = 1`.
+  Implementación real `Application/Lending/Integration/ContratoDeCuentasDeCartera`; antes de activar,
+  `ContratoDeCuentasSinActivar`.
+- **`IConsultaDeAportes`** (existente): se mueve a `Common/Integration/Lending` y su implementación real es
+  `Application/Lending/Integration/ConsultaDeAportesDeCartera`; `ConsultaDeAportesNoDisponible` queda para
+  cooperativas sin aportes activados.
+- **`IConsultasDeCartera`**: suma `ProductosDeCaptacionAsync` (FR-095).
+- **Escritor único del libro de cuentas**: `Application/Lending/Deposits/Ledger/RegistroDeCuentas`
+  (`NadieEscribeElLibroDeCuentasFueraDelRegistro`).
+- **Cerrojo**: `CerrojoDeCartera` gana el nivel «cuenta» en el orden fijo: setup → persona → crédito →
+  cuenta, por `Id` (§R08).
+
+### 0.6 Rutas
+
+API (todas bajo `RequirePermission`):
+- `/api/lending/lines` (nuevo nombre de lectura común, con filtro `nature`; `/api/lending/credit-lines`
+  sigue para colocación) · `/api/lending/lines/{id}/deposit-versions` · `/contribution-versions` ·
+  `/negotiated-rate-rules` · `/charges`
+- `/api/lending/accounts` (cuentas de captación y aportes), `/api/lending/accounts/{id}/operations`,
+  `/holds`, `/parties`, `/charges`, `/settlements`, `/statement`
+- `/api/lending/term-deposits` (constituir, prorrogar, renovar, redimir)
+- `/api/lending/contributions` (cuotas, extraordinarios)
+- `/api/lending/garnishments`, `/api/lending/direct-debits`, `/api/lending/gmf-exemptions`
+- `/api/lending/membership-withdrawals`, `/api/lending/assembly-distributions`,
+  `/api/lending/deceased-cases`, `/api/lending/unclaimed`
+- `/api/lending/liquidity-fund`
+- `/api/lending/deposits/migration/*`, `/api/lending/deposits/activation`
+- `/api/reports/lending/{vista}` con vistas nuevas (§R24)
+
+Pantallas: `/cartera/lineas` (catálogo común con naturaleza), `/cartera/ahorros`, `/cartera/ahorros/{id}`,
+`/cartera/cdat`, `/cartera/cdat/nuevo`, `/cartera/cdat/{id}`, `/cartera/aportes`, `/cartera/aportes/{id}`,
+`/cartera/retiros-asociado`, `/cartera/retiros-asociado/{id}`, `/cartera/embargos`,
+`/cartera/asamblea`, `/cartera/fallecimientos`, `/cartera/no-reclamados`, `/cartera/fondo-de-liquidez`,
+`/cartera/captaciones/migracion`, `/cartera/captaciones/activacion`. Las rutas heredadas `/cartera/cdt*`,
+`/cartera/depositos`, `/cartera/retiros`, `/cartera/extractos`, `/cartera/parametros-ahorro`,
+`/cartera/parametros-sipla`, `/cartera/codigos-movimiento`, `/cartera/zonas`, `/cartera/tipos-zona`,
+`/cartera/estados-retiro` se retiran (FR-120).
+
+### 0.7 Permisos (catálogo `Lending.*`, sembrado por la API al arrancar)
+
+`Lending.DepositLines.View/Manage`, `Lending.ContributionLines.View/Manage`, `Lending.Accounts.View/Read/Open/Close`,
+`Lending.Accounts.Deposit/Withdraw/Transfer/Reverse`, `Lending.Accounts.Parties.Manage`,
+`Lending.TermDeposits.Constitute/Renew/Redeem`, `Lending.NegotiatedRates.Request/Approve`,
+`Lending.Contributions.Manage`, `Lending.Holds.Manage`, `Lending.Garnishments.Register/Release`,
+`Lending.DirectDebits.Manage`, `Lending.GmfExemptions.Manage`, `Lending.Charges.Manage/Waive`,
+`Lending.Interest.Settle`, `Lending.MembershipWithdrawals.File/Approve/Settle`,
+`Lending.Assembly.Register/Approve`, `Lending.DeceasedCases.Register/Approve`, `Lending.Unclaimed.Manage`,
+`Lending.LiquidityFund.View/Manage`, `Lending.Deposits.Migration`, `Lending.Deposits.Activate`. `Read`
+implica datos del titular; `View`, no (convención de la 013).
+
+---
+
+## 1. Decisiones
+
+### R01 · La línea común conserva `LND_CreditLines` y suma `Nature`
+
+- **Decisión**: la identidad común de toda línea es la entidad existente `CreditLine` (`LND_CreditLines`)
+  con una columna nueva `Nature` (`LineNature`, por defecto `Placement` para todas las existentes). La
+  versión de condiciones depende de la naturaleza: `CreditLineVersion` (colocación, sin cambios),
+  `DepositLineVersion` y `ContributionLineVersion`. `CreditLine.Code` sigue siendo la dimensión de la
+  matriz para las tres naturalezas, y `UserCreditLineScope` da el alcance por línea sin cambios.
+- **Por qué**: el dueño pidió el concepto de línea común. Reutilizar la identidad conserva el alcance,
+  la clave de la matriz, la unicidad del código en el catálogo y las pantallas del catálogo. Renombrar la
+  tabla a `LND_Lines` tocaría cientos de referencias de la 013 ya verificadas, sin cambio funcional.
+- **Alternativas descartadas**: tabla de identidad nueva `LND_Lines` (renombre masivo); una sola versión
+  con columnas de las tres naturalezas (vuelve opcionales la modalidad y la usura y debilita las
+  invariantes de crédito); catálogo de captaciones separado (contradice el pedido del dueño).
+- **Riesgo**: el método `Activar` de `CreditLine` exige usura; se condiciona a `Nature == Placement`, y
+  `BloquearPorUsura` no aplica a las demás. Pruebas: los 32 casos dorados de crédito siguen verdes (SC-019).
+- **Trazas**: FR-027, FR-028, FR-029, FR-121, D2.
+
+### R02 · Una sola entidad de cuenta para captación y aportes
+
+- **Decisión**: `MemberAccount` con `LineNature` (`Deposit` o `Contribution`) y `DepositClass` (nulo en
+  aportes). Los conceptos (`MemberAccountConcept`) cubren capital, interés, retención, GMF y clases de
+  aporte; un aporte no causa intereses porque su versión de línea no tiene tasa.
+- **Por qué**: libro, posición, cerrojo, contrato, documentos y migración son iguales; separar duplicaría
+  todo. El nombre neutral evita los nombres heredados.
+- **Alternativas**: tablas separadas `Deposit` y `ContributionAccount` (doble escritor, doble contrato).
+- **Trazas**: FR-001, FR-040 a FR-049.
+
+### R03 · Libro propio con las reglas del libro del crédito
+
+- **Decisión**: `MemberAccountOperation` es el hecho primario (recaudador, clave, medio, payload, reverso
+  de operación) y `MemberAccountTransaction` el libro por concepto, `bigint`, sólo inserción, con
+  `ValueDate`, `AccountingDate`, `RegisteredAt`, `ReversesTransactionId`, signo + = la Cartera le debe al
+  titular. `MemberAccountDailyPosition` es instantánea versionada (I-6 de la 013). `MemberAccountControl`
+  guarda `LastAccruedDate` y `LastSettledThrough`. Único escritor `RegistroDeCuentas`.
+- **Por qué**: `LoanTransaction` tiene FK al crédito y conceptos de crédito; generalizarla rompe la 013.
+- **Alternativas**: un libro genérico común a créditos y cuentas (reescribe la 013 ya verificada).
+- **Trazas**: FR-001, FR-002, FR-011, I-2.
+
+### R04 · Reconstrucción de la cuenta a D con información hasta R
+
+- **Decisión**: `ReconstruccionDeCuenta` (puro) recibe operaciones y versiones de línea hasta R y devuelve
+  saldos por concepto e intereses día por día hasta D. La causación diaria del proceso es idempotente por
+  diferencia de acumulados (`Causacion.DelDia`), como en el crédito.
+- **Por qué**: reproducibilidad (FR-011, SC-001) y ajuste por fecha valor sin reescribir (FR-062).
+- **Trazas**: FR-011, FR-060 a FR-062.
+
+### R05 · Interés de captación
+
+- **Decisión**: `i_d = (1 + EA)^(1/B) − 1` con `EquivalenciaDeTasas.TasaDiaria` (compuesta por defecto),
+  `B` según la convención de la versión. Saldo diario por defecto (D31): el interés del día es
+  `saldo con fecha valor del cierre × i_d`. Promedio: igual con interés simple. Mínimo: `saldo mínimo del
+  período × ((1+EA)^(n/B) − 1)` al liquidar. Tramos `WholeBalance` o `Stepped`. Día bajo el mínimo para
+  interés: cero. Tasa variable con `TasaDelDia.TasaVariable` si la versión lo declara. La causación guarda
+  hasta 6 decimales; la liquidación redondea al peso y la diferencia se ajusta en la misma operación.
+- **Por qué**: investigación §3.3; reutiliza motores verificados.
+- **Trazas**: FR-020, FR-060, FR-061, D7, D9, D31.
+
+### R06 · Retención en la fuente
+
+- **Decisión**: `RetencionSobreRendimientos` recibe los intereses diarios del período a liquidar y aplica:
+  1. perfil tributario de la persona (012): no contribuyente o autorretenedor → cero;
+  2. umbral diario `UMBRAL_RETENCION_UVT_DIA` (0,055 UVT) × UVT vigente: si ningún día lo alcanza → cero;
+     si alguno lo alcanza → base = total del período. El alcance del umbral es el parámetro
+     `RETENCION_ALCANCE_UMBRAL` (`ExceptTermDeposit` por defecto, D10);
+  3. componente inflacionario (`RETENCION_COMPONENTE_INFLACIONARIO_APLICA`, por defecto sí para persona
+     natural no obligada a llevar contabilidad, P27) con el último porcentaje publicado
+     (`COMPONENTE_INFLACIONARIO`, valor nacional nuevo);
+  4. tarifa por clase de línea (`RETENCION_TARIFA_CDAT` 4 %, `RETENCION_TARIFA_AHORRO` 7 %).
+  Se practica en cada abono o pago, antes de capitalizar (FR-063).
+- **Por qué**: DUR 1625 arts. 1.2.4.2.6 y 1.2.4.2.83; Decreto 572 de 2025; Decreto 898 de 2026.
+- **Trazas**: FR-021, FR-063, D10, P2, P27.
+
+### R07 · GMF
+
+- **Decisión**: `GravamenMovimientosFinancieros` con parámetros con vigencia `GMF_TARIFA` (0,004; admite 0),
+  `GMF_TOPE_EXENCION_UVT` (350), `GMF_POLITICA_EXENCION` (`SingleMarkedAccount` por defecto, P25) y la tabla
+  `GMF_HECHOS_GENERADORES` (por defecto gravados: retiro, traslado a otro titular, traslado ahorro↔CDAT,
+  redención de CDAT abonada en cuenta, cancelación; exento: traslado entre cuentas de ahorro del mismo
+  titular). Con tarifa cero o política `NotApplicable` desde una fecha, no se calcula desde esa fecha. El
+  acumulado exento es por persona y mes (`LND_GmfMonthlyUsage`); la cuenta marcada vive en
+  `LND_GmfExemptAccounts` con vigencia; marcar una segunda se rechaza (`Lending.Gmf.AlreadyMarked`).
+- **Por qué**: ET arts. 871, 879, 881-1; decisión del dueño (P25).
+- **Trazas**: FR-022, FR-036, FR-053, FR-066, D32.
+
+### R08 · Concurrencia
+
+- **Decisión**: `CerrojoDeCartera` toma la cuenta después del crédito en el orden fijo, por `Id`. Las
+  operaciones que tocan crédito y cuenta (cruce, débito automático) toman ambos en ese orden. El
+  consecutivo de número de cuenta usa `LND_NumberSequences` con una clase nueva por línea.
+- **Trazas**: FR-019, FR-077, FR-090.
+
+### R09 · Contrato de cuentas
+
+- **Decisión**: puerto propio `IContratoDeCuentas` en vez de agrandar `IContratoDeObligaciones`. Mismas
+  reglas: síncrono en la unidad de trabajo del recaudador (exige transacción en curso), registro de
+  participantes con `ContractName = ProveedorDeCuentas`, versión adoptada, clave con la gramática de la
+  Cartera, validador y evento de auditoría (desviación T101 de la 013). `ListarExigibles` devuelve cuotas de
+  aportes, permanente y contractual. Un retiro en efectivo lo autoriza la Cartera y lo entrega Recaudo.
+- **Por qué**: el contrato de obligaciones tiene cinco métodos fijados por prueba y semántica de deuda
+  (prelación, anticipos); depósitos es otra semántica. Un puerto más en la lista cerrada es la enmienda
+  mínima.
+- **Alternativas**: agregar métodos a `IContratoDeObligaciones` (rompe `LaCarteraSoloSeTocaPorSusInterfaces`
+  y mezcla semánticas).
+- **Trazas**: FR-086 a FR-093, E-01.
+
+### R10 · Ciclo diario y cierre mensual
+
+- **Decisión**: `CicloDiarioDeCartera` suma un paso «captaciones» después de la causación de créditos,
+  ejecutado por `PasoDeCaptaciones` en tandas de `Lending:Process:BatchSize`: causación, liquidación,
+  cuotas, vencimientos y gracia, prórrogas, contractual, inactividad, cargos periódicos, mayoría de edad.
+  Errores a `LND_ProcessRunErrors`. `CierreMensualDeCartera` suma la sección de captaciones (cierre de
+  causación y posición, sin SARC), y la guarda de Contabilidad `LendingNotClosed` la cubre. Sólo corre en
+  cooperativas con captaciones o aportes activados.
+- **Por qué**: un solo proceso por cooperativa (una corrida a la vez) evita competencia por cerrojos y
+  reutiliza la puesta al día.
+- **Trazas**: FR-031, FR-100, FR-017.
+
+### R11 · CDAT
+
+- **Decisión**: el CDAT es una `MemberAccount` de clase `TermDeposit` con `MemberAccountTermsVersion`
+  (sellada) y su plan `LND_TermDepositSchedules`. Fórmulas de la investigación §3.2 en `PlanDeCdat`. La
+  causación diaria reparte el interés de cada período con la fórmula compuesta por día y el último día
+  absorbe el redondeo contra el plan. Gracia en días hábiles (`CalendarioHabil`). Prórroga: nueva versión
+  de condiciones con la regla de tasa de la línea; renovación: misma cuenta, nueva versión con monto,
+  plazo o tasa nuevos y título nuevo (el número del título lleva sufijo de versión). Reclasificación por
+  `IssueTermBand` como hecho.
+- **Por qué**: una cuenta por CDAT conserva el libro y el historial; la versión sellada repite el patrón
+  `LoanTermsVersion`.
+- **Alternativas**: cuenta nueva por renovación (pierde trazabilidad y multiplica cuentas).
+- **Trazas**: FR-023, FR-067 a FR-073, D17, D19.
+
+### R12 · Casos dorados
+
+- **Decisión**: JSON en `Domain.Tests/Lending/Deposits/Casos/`, con el mismo formato que los de crédito y
+  un `calcular.py` que los recalcula. Mínimo 40 (SC-002), incluidos los de la investigación con sus
+  valores: 481.244; 488.088; 79.741 × 6 = 478.446; 79.111; 6.884; 3.649; 2.465.306; 2.486.777; 6.676;
+  41.952; más retención con y sin umbral, con y sin componente inflacionario, persona exenta, prórroga con
+  capitalización, redención anticipada, tramos, bisiesto, cambio de tasa, revalorización limitada y
+  prorrateada, fondo de liquidez por bandas, tasa negociada, cargos con gratuitos y exoneración.
+- **Trazas**: FR-026, SC-002, SC-019.
+
+### R13 · Tasa negociada
+
+- **Decisión**: `NegotiatedRateRule` por línea con criterios (antigüedad mínima, rangos de monto y plazo,
+  tasa base, saldo total del titular, oficina, canal) y margen máximo en puntos EA. `TasaNegociada` (puro)
+  elige la regla más específica. La aprobación usa la matriz de atribuciones de la Cartera con el tipo
+  `NegotiatedRate` (dimensiones: puntos y monto); por encima, aprobador presente con segundo factor o
+  sesión con acta. Lo sellado: tasa de tabla, margen, regla, aprobador, motivo.
+- **Trazas**: FR-127, D34.
+
+### R14 · Cargos
+
+- **Decisión**: `DepositLineCharge` (catálogo por versión de línea, apagado por defecto) y `AccountCharge`
+  (causado: cobrado, pendiente, condonado, reversado). Si está gravado, la Cartera emite
+  `CargoDeCaptacionCausadoV1` a Comercial, que factura; el reverso emite `CargoDeCaptacionReversadoV1` para
+  la nota crédito. Comercial devuelve el estado de la factura por mensaje (`FacturaDeCargoRegistradaV1`),
+  sólo informativo.
+- **Por qué**: decisión del dueño (pregunta 4) y D20 de la 013.
+- **Trazas**: FR-128, D35.
+
+### R15 · Retiro del asociado
+
+- **Decisión**: `MembershipWithdrawal` con estados `Filed → Approved → Settled → Paid` (y `Desisted`,
+  `Rejected`, `ToRedo`). La aprobación es un `SessionItem` de un órgano de la Cartera (consejo o junta).
+  Al aprobar se emite `RetiroDeAsociadoAprobadoV1` a Asociados (Core), que cambia el estado. La
+  liquidación arma `MembershipWithdrawalLine` por concepto; el cruce usa la aplicación de pagos del crédito
+  con medio `InternalOffset`, en una operación que toma cerrojos de crédito y cuentas; el reverso del pago
+  arrastra el débito y deja el retiro en `ToRedo`. La devolución sale por orden de giro.
+- **Trazas**: FR-076 a FR-080, FR-124, D16.
+
+### R16 · Débito automático
+
+- **Decisión**: `DirectDebitMandate` (cuenta, crédito o todos los del titular, débito parcial sí/no,
+  vigencia). El paso diario, en la fecha exigible, debita y aplica el pago como operación interna
+  (`InternalOffset`), con la clave `CAR:debito-automatico:{loanPublicId:N}:{fecha}`.
+- **Trazas**: FR-090, D25.
+
+### R17 · Pagadurías
+
+- **Decisión**: el convenio de pagaduría de K2 (`PayrollAgreement`, `PayrollAgreementVersion`) suma
+  `PayrollAgreementFileGroup` (formato de envío y de respuesta como `COR_BankFileFormats` con `Scope`
+  nuevo `PaymasterDeduction` —**reemplazado por C01**—, calendario) y `PayrollAgreementConceptEquivalence` (código de la pagaduría →
+  lista de líneas y conceptos, regla de reparto `Priority` o `Proportional`, prelación). El generador de
+  archivos de K2 agrupa por grupo de archivo; la carga de respuesta reparte por la equivalencia y aplica:
+  créditos por el contrato de obligaciones, cuotas de cuentas por el contrato de cuentas, en la misma
+  unidad de trabajo. Lo no mapeado va a «no aplicados». El motor de archivos planos es el de la plataforma
+  (`FlatFileWriter`), con lectura de respuesta nueva (`FlatFileReader`).
+- **Trazas**: FR-125, FR-126 (E-05).
+
+### R18 · Nómina
+
+- **Decisión**: dos conceptos nuevos `DESC_APORTES` y `DESC_AHORROS` (`WellKnownConceptCodes`), cuyo
+  valor sale de `ListarExigibles` del contrato de cuentas para el empleado y que se aplican por
+  `ConsignarAsync` al aprobar la corrida, en la misma unidad de trabajo, como `DESC_CARTERA`. Lo no
+  descontado queda exigible con motivo.
+- **Trazas**: FR-089, FR-122 (E-02).
+
+### R19 · Contabilidad
+
+- **Decisión**: mismos mensajes de la Cartera (emisor `CAR`), con contratos nuevos en
+  `Application/Common/Integration/Contracts/Lending/Deposits/*V1.cs`. La matriz `ACC_LendingPostingRules`
+  suma **dimensiones** al final de la clave posicional (`LineNature`, `DepositClass`, `IssueTermBand`,
+  `ContributionClass`, `AccountFlag`) y **roles** al final de `RolesDeCuentaDeCartera`:
+  `DepositPrincipal`, `DepositInactivePrincipal`, `InterestPayable`, `InterestExpense`, `WithholdingPayable`,
+  `GmfPayable`, `BonusExpense`, `ChargeIncome`, `ChargeReceivable`, `ContributionCapital`
+  (por clase), `RevaluationFund`, `SurplusFund`, `RefundPayable`, `UnclaimedPayable`,
+  `GarnishmentPayable`, `PenaltyIncome`. Los pesos de especificidad de la 013 no cambian; las dimensiones
+  nuevas son exigidas por igualdad cuando el rol las declara. Tipos de comprobante nuevos: `MA`
+  (movimientos de cuentas), `CC` (causación de captaciones, por lotes resumido por día), `TD` (CDAT),
+  `AO` (aportes y asamblea), `RA` (retiro de asociado). La plantilla sugiere las cuentas CUIF de la
+  investigación §3.9 sin activarlas.
+- **Por qué**: reutiliza consumidor, resolutor, validación previa, conciliación y guarda de cierre.
+- **Alternativas**: matriz propia de captaciones (duplica todo el lado contable).
+- **Trazas**: FR-096 a FR-100, FR-123 (E-03).
+
+### R20 · Consulta de aportes
+
+- **Decisión**: `ConsultaDeAportesDeCartera` responde desde `MemberAccountDailyPosition` (o reconstrucción
+  si la fecha no tiene posición) en cooperativas con aportes activados. El DTO suma `Minimum` y
+  `InstallmentsInArrears` al final (versión del contrato 2; la 1 sigue para quien no la adopte).
+  `ContextoDeAportes` (D19 de la 013) deja de forzar los parámetros a falso: los lee de los parámetros de
+  Cartera `Riesgo.ExcepcionAportesArrastre` y `Riesgo.DescuentoAportesDeterioro`.
+- **Trazas**: FR-094, C2.
+
+### R21 · Activación por naturaleza
+
+- **Decisión**: `ActivateDepositsCommand` y `ActivateContributionsCommand` con la misma regla de
+  `ActivateLendingCommand` (corte + 1, acta de diferencias, cuadre recalculado, plazo de fecha valor, mes
+  abierto). Requisitos: créditos activados primero (los cruces y la consulta los necesitan), participantes
+  registrados (Recaudo, Tesorería, Nómina) y, en producción, las entregas K7 a K11 completas (Q1).
+- **Trazas**: FR-116, FR-093, Q1, Q3.
+
+### R22 · Mayoría de edad
+
+- **Decisión**: el paso diario compara la fecha de nacimiento de la persona (Personas) con el parámetro
+  `MAYORIA_DE_EDAD_ANIOS` (18, con fuente); al cumplir, cierra la vigencia del representante, marca la
+  cuenta `RequiresDataUpdate` y avisa a ambos. Retiros del representante en espera se anulan.
+- **Trazas**: FR-033.
+
+### R23 · Inembargabilidad
+
+- **Decisión**: `LimiteInembargable` suma los saldos de ahorro de la persona en la cooperativa y retiene
+  lo que excede `LIMITE_INEMBARGABLE` (valor nacional nuevo) salvo embargo por alimentos; el orden de
+  cuentas lo da el parámetro `EMBARGO_ORDEN_CUENTAS`. Los aportes nunca. Cada respuesta al juzgado se
+  emite como documento.
+- **Trazas**: FR-055, D20.
+
+### R24 · Informes y documentos
+
+- **Decisión**: vistas nuevas de `VistaDeInformeDeCartera`: `deposit-balances`, `deposit-transactions`,
+  `deposit-accounts-by-status`, `term-deposit-maturities`, `depositor-concentration`,
+  `interest-and-withholding`, `gmf`, `contributions-by-member`, `installments-in-arrears`, `unclaimed`,
+  `garnishments`, `negotiated-rates`, `charges`, `liquidity-fund`, `insured-deposits`,
+  `deposits-reconciliation`, `sicses-captaciones`, `sicses-saldos-diarios`, `sicses-fondo-liquidez`,
+  `exogena-1019`, `exogena-1020`. Los formatos regulatorios son layouts versionados como dato
+  (`Domain/Common/Layouts`), con `verified = false` y alerta «formato sin cotejar» hasta cotejarlos.
+  Documentos con `IssuedDocumentKind` nuevos y QuestPDF, con la mecánica de la 013.
+- **Trazas**: FR-101 a FR-112.
+
+### R25 · Fondo de liquidez
+
+- **Decisión**: parámetros con vigencia por categoría (`FONDO_LIQUIDEZ_*`) con la tabla del Decreto 976 de
+  2026 y su transición; `FondoDeLiquidez` calcula por clase y madurez residual (intereses causados y por
+  causar hasta el vencimiento contractual en plenas). Instantánea inmutable por fecha.
+- **Trazas**: FR-025, FR-109.
+
+### R26 · Valores nacionales y parámetros nuevos
+
+- **Valores nacionales** (`CodigosDeValorNacional`, replicados): `COMPONENTE_INFLACIONARIO`,
+  `LIMITE_INEMBARGABLE`, `TOPE_ENTREGA_SIN_SUCESION`. Ya existen `UVT`, `IPC`, `SMMLV`, `FESTIVO`.
+- **Parámetros de la Cartera con vigencia y fuente** (módulo `LND`, «pendiente de validar» al sembrar):
+  `RETENCION_TARIFA_AHORRO`, `RETENCION_TARIFA_CDAT`, `RETENCION_TARIFA_CONTRACTUAL`,
+  `RETENCION_TARIFA_PERMANENTE`, `UMBRAL_RETENCION_UVT_DIA`, `RETENCION_ALCANCE_UMBRAL`,
+  `RETENCION_COMPONENTE_INFLACIONARIO_APLICA`, `GMF_TARIFA`, `GMF_TOPE_EXENCION_UVT`,
+  `GMF_POLITICA_EXENCION`, `GMF_HECHOS_GENERADORES`, `FONDO_LIQUIDEZ_*`, `TOPE_CUOTA_FONDO_EMPLEADOS_PCT`,
+  `FRACCION_MINIMA_APORTES`, `LIMITE_PARTICIPACION_APORTES_PN`, `LIMITE_PARTICIPACION_APORTES_PJ`,
+  `MAYORIA_DE_EDAD_ANIOS`, `EMBARGO_ORDEN_CUENTAS`, `FECHA_VALOR_DIAS_CAPTACIONES`.
+- `LaCarteraNoTieneValoresLegalesFijos` cubre `Domain/Lending/Deposits` y `Application/Lending/Deposits`.
+- **Trazas**: FR-014, FR-015.
+
+### R27 · Migración
+
+- **Decisión**: plantillas nuevas en el registro de plantillas de la plataforma: `lending.deposit-lines`,
+  `lending.contribution-lines`, `lending.member-accounts`, `lending.member-account-parties`,
+  `lending.term-deposits`, `lending.contribution-accounts`, `lending.account-installments`,
+  `lending.holds-and-garnishments`, `lending.gmf-exemptions`, `lending.tax-year-to-date`. Filas de
+  preparación `LND_Migration*Row`. Revisión previa, todo o nada, errores por fila y columna, saldo inicial
+  por concepto sin hechos, cuadre contra los saldos contables de las cuentas mapeadas por la matriz, carga
+  reemplazable. La plantilla `lending.contribution-balances` de la 013 se acepta como fuente de los saldos
+  de aportes.
+- **Trazas**: FR-113 a FR-118.
+
+### R28 · Retiro de lo heredado
+
+- **Decisión**: una migración par destructiva con guarda `RetiroDeCaptacionesHeredadas` que borra las 38
+  tablas conservadas (lista de `CarteraHeredada` menos las de crédito ya retiradas) y las 7 `CDT_*`. Se niega
+  si alguna tiene filas sin la fila `COR_SystemSettings` `LND.CaptacionesHeredadas.RetiroAprobado`;
+  diagnóstico SQL en `specs/014-ahorros-aportes-cdt/diagnostico-captaciones-heredadas.sql`. Se retiran el
+  código de `Domain/Entities/Savings`, `Domain/Entities/CDT`, `Application/Savings`, `Application/CDT`,
+  `Endpoints/Savings`, `Endpoints/CDT`, `Pages/AhorrosYAportes`, el módulo de auditoría `Savings` y la
+  exención por nombre de `/api/savings/*`. `LND_SiplaGroupParameters`, `LND_SiplaParameters`,
+  `LND_MoneyLaunderingDeclarations`, `LND_UnusualTransactions*` y `LND_Blacklist` también se retiran (Q2:
+  lo que esta feature necesita de SIPLA se renueva como parámetros de efectivo y origen de fondos).
+- **Por qué**: Q2 (retirar todo y renovar lo necesario); Principio XII.
+- **Trazas**: FR-119, FR-120.
+
+### R29 · Pruebas de arquitectura
+
+- **Se enmiendan**: `ElEspacioLendingEsSoloCartera` (ya no hay conservado: se convierte en
+  `LaCarteraHeredadaNoVuelve` ampliada a las 45 tablas), `LaCarteraSoloSeTocaPorSusInterfaces` (seis
+  puertos: suma `IContratoDeCuentas`; `IConsultaDeAportes` pasa a la lista),
+  `CarteraNoConoceContabilidad` (sin cambios, cubre el espacio nuevo), `ElMotorDeCarteraEsDecimal`
+  (cubre `Domain/Lending/Deposits`), `EnumeracionesDeCarteraTests` (enums nuevos).
+- **Nuevas**: `NadieEscribeElLibroDeCuentasFueraDelRegistro`, `LasCuentasSeTocanSoloPorElContrato`
+  (Nómina, Recaudo, Tesorería), `LaRetencionYElGmfSoloLosCalculanSusMotores`,
+  `LasCaptacionesNoUsanLaUsura` (ninguna ruta de captación llama a `ControlDeUsura`).
+- **Trazas**: FR-008, FR-121.
+
+### R30 · Pruebas de integración
+
+- **Decisión**: colección «Captaciones e2e» sobre `CentralIdentityApiFixture` con una cooperativa aislada
+  (créditos activados primero), en PostgreSQL y SQL Server. Cubre cada historia por HTTP con el recaudador
+  y la tesorería de prueba, y una prueba de volumen (`RUN_PERF_TESTS=1`) para la causación de 100.000
+  cuentas (SC-006).
+- **Trazas**: SC-001 a SC-019.
+
+### R31 · Pantallas
+
+- **Decisión**: pantallas en `Pages/Cartera/Captaciones` con `IndicadorDeCarga` por zona, `PersonSearchPicker`,
+  `PermissionGate` y los componentes de la Cartera; el catálogo de líneas común (`/cartera/lineas`) filtra
+  por naturaleza y abre el editor de la versión que corresponde. `LasPantallasDicenQueEstanCargando` suma
+  el módulo. Todo enlace del menú tiene su página (`TodoEnlaceDelMenuTieneSuPagina`).
+- **Trazas**: FR-016.
+
+---
+
+## 2. Conciliación con data-model.md (2026-10-14)
+
+`data-model.md` se verificó contra el código y estas decisiones **reemplazan** lo dicho arriba donde
+choquen:
+
+- **C01 · Ámbito de archivo de pagaduría** (enmienda R17): se reutilizan los ámbitos de `BankFileScope`
+  que la 013 fija para K2 (valores 5 y 6, que nacen con K2); no se agrega `PaymasterDeduction`.
+- **C02 · Claves de parámetro** (enmienda R26): siguen la convención `Grupo.Nombre` del catálogo de la
+  013; las que son pisos o techos legales se registran como límites (`LIMITE`). Los códigos en mayúsculas
+  de R26 son nombres de referencia; los definitivos están en `data-model.md` §9.
+- **C03 · Clave de la matriz** (R19): por posición, como `LendingPostingRule.ClaveDe` en el código; las
+  cinco dimensiones nuevas van al final y la clave de las filas existentes se recalcula en la migración.
+- **C04 · `AccountFlag`**: un solo valor con precedencia `Garnished` > `Inactive` > `GmfExempt`; si la
+  contadora necesita combinarlas, pasa a tres booleanos (queda para su validación de la matriz).
+- **C05 · Órdenes de giro de cuentas**: tabla propia `LND_AccountPayoutOrders`, con el mismo mensaje de
+  orden de giro de la 013; `LND_DisbursementOrders` no se generaliza.
+- **C06 · Sujetos de atribución**: no hay enum `AttributionKind`; los sujetos son textos de
+  `LendingDecisionSubjects` (se agregan `DepositWithdrawal`, `NegotiatedRate`, `MembershipWithdrawal`,
+  `DeceasedDelivery`, `ChargeWaiver`, `TermDepositRedemption`, `ContributionRefund`,
+  `AssemblyDistribution`, `GarnishmentRegistration`).
+- **C07 · Tablas agregadas**: `LND_AccountInstallmentNonDeductions`, `LND_AccountPayoutOrders`,
+  `LND_IssuedDocumentAccounts`, `LND_GarnishmentResponses`, `LND_AccountChargeExemptions` y **nueve** filas de
+  preparación de migración (`data-model.md` §7.1, incluida `LND_MigrationTermDepositRows` de K9). Total: **46 tablas nuevas** (K7 19, K8 17, K9 4, K10 4,
+  K11 2) y 19 tablas existentes con columnas o valores nuevos.
+- **C08 · Migraciones pares por entrega**: `CaptacionesAportes`, `CaptacionesAhorro`, `CaptacionesCdat`,
+  `CaptacionesAsamblea`, `CaptacionesLiquidez`, más `RetiroDeCaptacionesHeredadas`; reemplazan el nombre
+  único `CarteraCaptaciones` del plan.
+- **C09 · Valor nacional adicional**: `TOPE_SEGURO_DEPOSITOS`; parámetros adicionales de efectivo, mínimo
+  irreducible de la entidad, soportes de entrega sin sucesión y traslado de cuentas abandonadas.
+
+## 3. Conciliación con contracts/ (2026-10-14)
+
+- **C10 · Idioma de los roles de la matriz**: el código de la 013 nombra sus 26 roles en español
+  (`Capital`, `InteresPorCobrar`…). Los roles nuevos se implementan **en español** con esta
+  correspondencia; los nombres en inglés de R19 y de `contracts/contabilidad.md` son referencias:
+
+  | Referencia (R19, contracts) | Nombre en el código |
+  |---|---|
+  | `DepositPrincipal` | `CapitalDeCaptacion` |
+  | `DepositInactivePrincipal` | `CapitalDeCaptacionInactiva` |
+  | `InterestPayable` (rol) | `InteresPorPagar` |
+  | `InterestExpense` | `GastoPorIntereses` |
+  | `WithholdingPayable` | `RetencionPorPagar` |
+  | `GmfPayable` | `GmfPorPagar` |
+  | `BonusExpense` | `GastoPorBonificacion` |
+  | `ChargeIncome` | `IngresoPorCargos` |
+  | `ChargeReceivable` | `CargoDeCuentaPorCobrar` |
+  | `ContributionCapital` | `AportesSociales` |
+  | `RevaluationFund` | `FondoDeRevalorizacion` |
+  | `SurplusFund` | `FondoDeExcedentes` |
+  | `RefundPayable` | `DevolucionPorPagar` |
+  | `UnclaimedPayable` | `NoReclamadosPorPagar` |
+  | `GarnishmentPayable` | `EmbargosPorConsignar` |
+  | `PenaltyIncome` | `IngresoPorPenalidad` |
+  | `AbsorbedLoss` | `PerdidaAbsorbida` |
+
+  Los nombres de concepto del libro (`MemberAccountConcept.InterestPayable`…) siguen en inglés: son otro
+  enum.
+- **C11 · Orden de giro**: `OrdenDeGiroEmitida` v2 (tipo de orden y cuenta); los desembolsos siguen en v1.
+- **C12 · Hechos genéricos**: `CaptacionReclasificada` (con causa: plazo de emisión, inactividad,
+  embargo, exención) y `OperacionDeCuentaReversada` (reverso de cualquier operación de cuenta).
+- **C13 · Recaudador nuevo**: `ClaseDeRecaudador.Treasury = 6` al final, para transferencias que recibe
+  Tesorería; `PagoAplicado` pasa a `AdmiteProceso = true` sólo para `OwnLoanPayoff` (débito automático).
+- **C14 · Canje**: se libera solo al cumplirse los días hábiles de la clase de medio
+  (`Captaciones.DiasDeCanjePorClaseDeMedio`); el contrato v1 no tiene «confirmar».
+- **C15 · Comercial es el destino `Inventory`** (la 012 vive en ese módulo): `CargoDeCaptacionCausado`
+  y `…Reversado` van `CAR → Inventory`; la respuesta `FacturaDeCargoRegistrada` va `INV → Lending`.
+- **C16 · Asociados como destino**: destino `Associates` con consumidor `DestinoAsociados`, participante
+  `ASO` y recibo `COR_AssociateInboundMessages` (enmienda E-04).
+- **C17 · Tipos de comprobante heredados**: `AH` y `CD` de la semilla de la 009 quedan inactivos; los
+  nuevos son `MA`, `CC`, `TD`, `AO`, `RA`.
+- **C18 · Cifras de contratos**: 168 rutas nuevas en `/api/lending` y `/api/reports/lending` más 1 en
+  Nómina; 74 retiradas sin alias; 39 permisos nuevos; 41 mensajes (33 hechos); 17 roles; 5 dimensiones
+  (14 a 18); 5 tipos de comprobante; tabla de Nómina `PAY_PayrollAccountDeductions`.
+- **C19 · Orden del retiro de lo heredado**: va **al principio** (fase fundacional), antes de crear las
+  tablas nuevas, como el retiro de la 013: las pantallas nuevas reutilizan las rutas `/cartera/ahorros*` y
+  `/cartera/aportes` de las heredadas, y el diagnóstico de DEV, QA y producción se hace antes de construir.
+
+## 4. Correcciones tras /speckit-analyze (2026-10-15)
+
+- **C20 · `AccountFlag`** (reemplaza C04): valores `Standard`, `GmfExempt`, `Garnished`, precedencia `Garnished` >
+  `GmfExempt` > `Standard`, exigido por el rol del capital. La **inactividad cambia el rol** del capital
+  (`CapitalDeCaptacionInactiva`, CUIF 210510), no la marca. Así queda en data-model, mensajes y contabilidad.
+- **C21 · Layouts regulatorios**: viven en `Application/Lending/Regulatory/Layouts/` con el catálogo
+  `CatalogoDeLayoutsDeCartera` (como dice `contracts/plantillas-y-archivos.md`), sobre el motor de layouts de
+  `Domain/Common/Layouts`; reemplaza la ubicación de R24 y de la tarea de K11.
+- **C22 · K2 de la 013 es prerrequisito**: las pagadurías configurables (FR-125, E-05) extienden el convenio de
+  pagaduría de K2 (`PayrollAgreement`, ámbitos 5 y 6). Como la 014 empieza con la 013 completa (Q3), K2 existe;
+  si al empezar no existiera, las tareas de E-05 pasan a la 013.
+- **C23 · Código corto `CAV`** para `CaptacionesActivadas` (el `CTA` chocaba con el documento cruce `CTA`).
+- **C24 · Prefijos de error**: además de `Lending.Savings.*`, `Lending.TermDeposit.*` y `Lending.Contributions.*`
+  (FR-013) se admiten `Lending.Gmf.*`, `Lending.Holds.*`, `Lending.Garnishment.*` y `Lending.DepositLine.*`, como
+  fija `contracts/api.md`.
+- **C25 · Desviaciones constitucionales** (registradas en plan.md, Complexity Tracking): las mismas que aprobó la
+  013 (T101 y la causación por lotes), extendidas a captaciones.
+- **C26 · Parámetros agregados**: `Captaciones.AnticipacionAvisoCambioDeTasaDias` (FR-038),
+  `Captaciones.DiasPlazoDevolucionAportes` (FR-079, plazo estatutario), `Captaciones.DiasParaNoReclamados`
+  (FR-081) y `Riesgo.DescuentoAportesDeterioro` (FR-094, junto al existente de arrastre). La confirmación de la
+  contadora sobre cuentas abandonadas (FR-084) es el parámetro `CuentasAbandonadas.TrasladoHabilitado` (falso).
+- **C27 · Tipos de documento**: son **9** (`IssuedDocumentKind` 7 a 15, incluida la respuesta al juzgado).
