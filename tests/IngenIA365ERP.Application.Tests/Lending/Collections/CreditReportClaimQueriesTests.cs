@@ -93,7 +93,7 @@ public sealed class CreditReportClaimQueriesTests : IDisposable
     }
 
     [Fact]
-    public void En_K1_Cartera_no_expone_comandos_que_escriban_reclamos()
+    public void Los_comandos_que_escriben_reclamos_son_los_de_K4()
     {
         var comandos = typeof(ListCreditReportClaimsQuery).Assembly.GetTypes()
             .Where(t => t.Namespace?.StartsWith("IngenIA365ERP.Application.Lending", StringComparison.Ordinal) == true)
@@ -102,6 +102,7 @@ public sealed class CreditReportClaimQueriesTests : IDisposable
             .Select(t => t.Name)
             .ToList();
 
-        comandos.Should().Equal(nameof(ListCreditReportClaimsQuery));
+        comandos.Should().BeEquivalentTo(nameof(ListCreditReportClaimsQuery), "RegisterCreditReportClaimCommand", "ExtendCreditReportClaimCommand",
+            "AnswerCreditReportClaimCommand", "WithdrawCreditReportClaimCommand");
     }
 }

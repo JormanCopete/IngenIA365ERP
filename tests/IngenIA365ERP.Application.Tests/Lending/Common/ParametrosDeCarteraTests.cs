@@ -55,6 +55,7 @@ public class ParametrosDeCarteraTests
         { "Castigo.ExigeDeterioroTotal", "true", [N], EntregaDeCartera.K3 },
         { "Castigo.DiasMinimosDeMora", "", [N], EntregaDeCartera.K3 },
         { "Castigo.GestionesMinimas", "0", [N], EntregaDeCartera.K3 },
+        { "Cobranza.ToleranciaDePromesa", "0", [N], EntregaDeCartera.K4 },
         { "Cobranza.HorarioLunesAViernes", "07:00-19:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.HorarioSabado", "08:00-15:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.ContactosPorDia", "1", [N], EntregaDeCartera.K1 },
@@ -93,13 +94,13 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K3_vigente_se_ofrecen_las_de_libranza_y_ninguna_posterior()
+    public void Con_K4_vigente_se_ofrecen_todas_las_claves_hasta_K4()
     {
         // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; las de K4 en adelante siguen sin ofrecerse.
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K3);
-        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K3).ToList();
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K4);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K4).ToList();
 
-        posteriores.Select(d => d.Clave).Should().BeEquivalentTo(["AvisoPrevio.DiasMinimos", "AvisoPrevio.UmbralDosComunicaciones"]);
+        posteriores.Should().BeEmpty("ninguna clave es de K5 en adelante");
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Castigo.", StringComparison.Ordinal)).Should().HaveCount(3)
             .And.OnlyContain(d => d.DisponibleEnLaEntrega() && d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K3 && d.PendienteDeValidar != null);

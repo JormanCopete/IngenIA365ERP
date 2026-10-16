@@ -76,8 +76,8 @@ public sealed class LoteDeCastigoTests : IAsyncLifetime
 
         r.Value.Items.Should().BeEmpty();
         r.Value.Rejected.Single().Missing.Should().BeEquivalentTo(
-            [RequisitosDeCastigo.AportesCruzados, RequisitosDeCastigo.InformeMotivado, RequisitosDeCastigo.ConceptoDeIrrecuperabilidad,
-                RequisitosDeCastigo.GestionesAgotadas], "un soporte de otro crédito no cuenta y sin informe tampoco se acreditan las gestiones");
+            [RequisitosDeCastigo.AportesCruzados, RequisitosDeCastigo.InformeMotivado, RequisitosDeCastigo.ConceptoDeIrrecuperabilidad],
+            "un soporte de otro crédito no cuenta; desde K4 las gestiones se cuentan del registro y con el mínimo en cero se cumplen");
     }
 
     [Fact]

@@ -67,13 +67,13 @@ public class EntregaDeModuloTests
 
         CatalogoDeParametros.EntregaVigenteDe("INV").Should().Be((EntregaDeModulo)CatalogoDeParametros.EntregaVigente);
         CatalogoDeParametros.EntregaVigenteDe("LND").Should().Be((EntregaDeModulo)CatalogoDeCartera.EntregaVigente);
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K3, "T0849 la subió a K2 y T0889 a K3");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K4, "T0849 la subió a K2, T0889 a K3 y T0955 a K4");
     }
 
     [Fact]
-    public async Task Una_clave_de_Cartera_de_K4_no_se_acepta_con_la_entrega_vigente_en_K2()
+    public async Task Una_clave_de_Cartera_de_K4_no_se_acepta_con_la_entrega_vigente_en_K3()
     {
-        var r = await Alta().Handle(Comando("LND", ParametrosDeCartera.AvisoPrevioDiasMinimos, "3"), CancellationToken.None);
+        var r = await Alta(EntregaDeCartera.K3).Handle(Comando("LND", ParametrosDeCartera.AvisoPrevioDiasMinimos, "3"), CancellationToken.None);
 
         r.Error.Code.Should().Be("Lending.Parameter.NotYetAvailable");
         var datos = JsonSerializer.SerializeToElement(r.Error.Should().BeOfType<ErrorConDatos>().Subject.Data);
@@ -98,14 +98,14 @@ public class EntregaDeModuloTests
     }
 
     [Fact]
-    public async Task Una_clave_de_Cartera_de_K4_no_se_ofrece_y_las_de_K1_a_K3_si()
+    public async Task Una_clave_de_Cartera_de_K4_se_ofrece_con_K4_vigente_junto_a_las_de_K1_a_K3()
     {
         var claves = (await Listar("LND")).Select(p => p.Key).ToList();
 
         claves.Should().Contain(ParametrosDeCartera.PagosDiasMaximosFechaValor).And.Contain(ParametrosDeCartera.CobranzaHorarioLunesAViernes)
             .And.Contain(ParametrosDeCartera.LibranzaVentanaDeGiroDias).And.Contain(ParametrosDeCartera.CastigoExigeDeterioroTotal);
-        claves.Should().NotContain(ParametrosDeCartera.AvisoPrevioDiasMinimos);
-        (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1" || p.AvailableFrom == "K2" || p.AvailableFrom == "K3");
+        claves.Should().Contain(ParametrosDeCartera.AvisoPrevioDiasMinimos).And.Contain(ParametrosDeCartera.CobranzaToleranciaDePromesa);
+        (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1" || p.AvailableFrom == "K2" || p.AvailableFrom == "K3" || p.AvailableFrom == "K4");
     }
 
     [Fact]

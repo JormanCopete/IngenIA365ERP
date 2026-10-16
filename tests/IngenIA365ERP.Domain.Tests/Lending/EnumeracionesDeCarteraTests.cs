@@ -38,7 +38,7 @@ public class EnumeracionesDeCarteraTests
         [typeof(LoanNumberReservationStatus)] = [("Reserved", 1), ("Used", 2), ("Released", 3), ("Expired", 4)],
         [typeof(LendingNumberKind)] = [("Loan", 1), ("Operation", 2), ("Application", 3), ("DisbursementOrder", 4), ("DisbursementFile", 5),
             ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11),
-            ("WriteOffBatch", 12), ("PortfolioEvaluation", 13)],
+            ("WriteOffBatch", 12), ("PortfolioEvaluation", 13), ("PaymentAgreement", 14), ("LegalProcess", 15)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
@@ -230,7 +230,7 @@ public class EnumeracionesDeCarteraTests
     {
         Enum.GetValues<EntregaDeCartera>().Select(e => (e.ToString(), (int)e)).Should().Equal(
             ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7));
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K3, "T0889 la subió a K3");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K4, "T0955 la subió a K4");
     }
 
     [Fact]
