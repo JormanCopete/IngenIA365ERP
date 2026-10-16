@@ -139,5 +139,5 @@ análisis, arrastre, reestructurado, evaluación) y el reporte de cambios dice l
 - La contadora: las cuentas de `CastigadaEnOrden`, `ContraOrdenControl` y `GastoDeCastigoOCondonacion` (motivo
   `WriteOff`) en la matriz (C7, C81). Desde el 2026-10-15 la plantilla de la matriz las trae como filas sugeridas sin cuenta.
 - No hay ruta para **editar las líneas** de una evaluación en borrador (la entidad lo admite): se descarta y se prepara otra.
-- Las plantillas suben soportes (`Attachments.Upload`) pero no traen `Attachments.Download`, que pide la lista de soportes del
-  diálogo para elegirlos: la cooperativa lo suma en el rol si hace falta.
+- Las plantillas que suben soportes (`cartera.administrador`, `cartera.jefe`, `cartera.consejo`) traen `Attachments.Upload` y
+  `Attachments.Download` (la lista de soportes del diálogo para elegirlos la pide); la lectura sigue sujeta al dueño del adjunto.

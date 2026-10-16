@@ -122,8 +122,8 @@ En la pestaña «Eventos y reclamaciones» del crédito:
 ## 9. Pendiente de decidir (dueño)
 
 - Desde el 2026-10-15 las plantillas `cartera.analista` y `cartera.gerente` traen `Lending.Novelties.Read` (deciden
-  novedades) y `cartera.jefe` trae `Attachments.Upload` (sube los consentimientos). Ninguna trae `Attachments.Download`,
-  que pide la lista de soportes para elegirlos: la cooperativa lo suma en el rol si hace falta.
+  novedades) y `cartera.jefe` trae `Attachments.Upload` y `Attachments.Download` (sube los consentimientos y lista los
+  soportes para elegirlos).
 - El soporte de eventos e insolvencia usa el dueño de adjunto `LendingDebtorEventSupport` (la persona), que no estaba en el
   contrato de adjuntos (§9 de adaptadores-y-archivos); se agregó allí.
 - Los roles contables `IngresoDiferido` y `GastoDeCastigoOCondonacion` siguen sin cuenta hasta que la contadora los valide
