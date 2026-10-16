@@ -647,7 +647,20 @@ la excepción de cobertura la aprueba **otra persona**; el fracaso de la insolve
 y el acuerdo lo levanta solo. Castigo por **lote** que decide el consejo: al aplicar, el crédito que ya no cumple se
 excluye y el resto se castiga; el castigado sigue causando en suspenso y concilia contra cuentas de orden. La evaluación
 de cartera (comité y consejo) entra al cierre desde su mes de efecto y la última aplicada reemplaza a las anteriores.
-Recetas: `docs/manual/cartera-novedades-y-condonaciones.md`, `docs/manual/cartera-castigo-y-evaluacion.md`. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+Recetas: `docs/manual/cartera-novedades-y-condonaciones.md`, `docs/manual/cartera-castigo-y-evaluacion.md`.
+**K4, cobranza (fase 18, 2026-10-16)**: migraciones aditivas `CarteraCobranza` (11 tablas) y `CarteraCobranzaSalida`
+(`CollectorUserId` nulo en gestiones y asignaciones). Etapas versionadas por días de mora (semilla de cuatro «pendiente de
+validar», Order 92), reparto por reglas, agenda, gestiones, promesas, acuerdos de pago, cobro jurídico, campañas, aviso
+previo por episodio y reclamos ante centrales; el paso de cobranza es el paso 7 del ciclo diario (`CobranzaDelCicloDiario`).
+Reglas: la **ventana de la Ley 2300 cuenta también las gestiones con contacto directo**; la cobranza nunca contacta
+referencias; el ciclo **propone** el gasto y lo avisa (`GASTOCOBR`), y lo **causa una persona** sólo tras el aviso
+`Sent`/`Delivered` (`Charge` por `RegistroDeCartera`); el tope del gasto es parámetro (`Cobranza.TopeGasto.Porcentaje` y
+`.ValorMaximo`, sin semilla = sin tope); el crédito que se pone al día **sale de la cobranza** (historia `Source = Exit`,
+gestión de sistema `LeftCollection` no anulable, asignación cerrada) y si recae es un episodio nuevo; el proceso jurídico
+suspendido por insolvencia se reanuda **a mano** (`/resume`, nunca mientras la insolvencia negocia); la etapa migrada se
+registra con una corrida (`process-runs` con `kind: MigratedCollectionStages` y motivo, o la tarea de una sola vez
+`cartera.etapas-migradas-k4`), no con la semilla. SMS y WhatsApp reales siguen `SIMULADO` hasta que haya proveedor
+(T0931/T0952). Recetas: `docs/manual/cartera-cobranza-y-aviso-previo.md`, `docs/operaciones/cartera-despliegue-k4.md`. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
   pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.
