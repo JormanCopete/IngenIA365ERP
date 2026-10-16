@@ -9,8 +9,8 @@ namespace IngenIA365ERP.Domain.Tests.Lending.Collections;
 /// Feature 013, T0269 (T74, Ley 2300; <c>adaptadores-y-archivos.md</c> §4.5; quickstart §1.4; SC-011): <see cref="VentanaLegalDeContacto"/>
 /// coincide con las decisiones hechas a mano de <c>Casos/</c>: las once reglas en su orden (primero las exclusiones, después la
 /// exención de la entrega de documentos, después el aplazamiento), el aplazamiento día por día hasta 14 días, la semana de lunes a
-/// domingo, el techo nacional ∩ la restricción de la cooperativa y los festivos nacionales (no los «Manual» de Nómina). Los casos de
-/// contacto directo (<c>WeeklyChannelLocked</c> por gestiones) los suma K4.
+/// domingo, el techo nacional ∩ la restricción de la cooperativa y los festivos nacionales (no los «Manual» de Nómina). K4 (T0921) suma los
+/// casos 16 a 19 de contacto directo (<c>WeeklyChannelLocked</c> por gestiones, la anulada que deja de contar).
 /// </summary>
 public class CasosDoradosDeVentanaLegalTests
 {
@@ -18,7 +18,7 @@ public class CasosDoradosDeVentanaLegalTests
         CasoDoradoDeVentanaLegal.Archivos().Select(f => new object[] { Path.GetFileName(f) });
 
     [Fact]
-    public void Estan_los_quince_casos_de_K1()
+    public void Estan_los_quince_casos_de_K1_y_los_cuatro_de_K4()
     {
         CasoDoradoDeVentanaLegal.Archivos().Select(Path.GetFileNameWithoutExtension).Should().BeEquivalentTo(
         [
@@ -26,6 +26,9 @@ public class CasosDoradosDeVentanaLegalTests
             "05-carta-sin-autorizacion-de-canal", "06-cobranza-sin-evidencia", "07-sin-destino", "08-entrega-de-documento-exenta",
             "09-domingo-difiere-al-lunes", "10-festivo-nacional-difiere", "11-fuera-de-horario", "12-tope-diario-cuenta-informativos",
             "13-informativo-no-fija-canal-semanal", "14-sin-ventana-en-14-dias", "15-horario-de-la-cooperativa-mas-estricto",
+            // K4 (T0921): los contactos directos de las gestiones (adaptadores-y-archivos.md §4.8, US12-2).
+            "16-contacto-directo-por-telefono-fija-el-canal", "17-carta-tras-contacto-directo", "18-aviso-de-gasto-sujeto-al-canal-semanal",
+            "19-gestion-anulada-deja-de-contar",
         ]);
     }
 

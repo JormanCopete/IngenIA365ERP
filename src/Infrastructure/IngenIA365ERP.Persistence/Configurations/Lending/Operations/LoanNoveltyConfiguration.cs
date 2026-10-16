@@ -51,6 +51,9 @@ public class LoanNoveltyConfiguration : IEntityTypeConfiguration<LoanNovelty>
         builder.HasOne(e => e.NewScheduleVersion).WithMany().HasForeignKey(e => e.NewScheduleVersionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.ResultingLoan).WithMany().HasForeignKey(e => e.ResultingLoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(e => e.AppliedByUserId).OnDelete(DeleteBehavior.Restrict);
+        // K4 (T0939; FR-120): el acuerdo de pago que, por cambiar condiciones, se tramita como novedad.
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement>().WithMany()
+            .HasForeignKey(e => e.PaymentAgreementId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName("UK_LND_LoanNovelties_Number");
         builder.HasIndex(e => new { e.LoanId, e.Status }).HasDatabaseName("IX_LND_LoanNovelties_Loan_Status");
@@ -63,6 +66,7 @@ public class LoanNoveltyConfiguration : IEntityTypeConfiguration<LoanNovelty>
         builder.HasIndex(e => e.NewScheduleVersionId).HasDatabaseName("IX_LND_LoanNovelties_NewScheduleVersionId");
         builder.HasIndex(e => e.ResultingLoanId).HasDatabaseName("IX_LND_LoanNovelties_ResultingLoanId");
         builder.HasIndex(e => e.AppliedByUserId).HasDatabaseName("IX_LND_LoanNovelties_AppliedByUserId");
+        builder.HasIndex(e => e.PaymentAgreementId).HasDatabaseName("IX_LND_LoanNovelties_PaymentAgreementId");
     }
 }
 

@@ -30,6 +30,9 @@ public sealed record BorradorDeMensajeAlDeudor(
     public int? PriorNoticeId { get; init; }
     public int? IssuedDocumentId { get; init; }
     public int? InstallmentNonDeductionId { get; init; }
+
+    /// <summary>K4: la campaña que lo programa.</summary>
+    public int? CampaignId { get; init; }
     public Guid? AuthorizationConsentPublicId { get; init; }
     public bool IsManualImmediate { get; init; }
     public DateTime? ScheduledFor { get; init; }

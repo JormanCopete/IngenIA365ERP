@@ -1,0 +1,23 @@
+// K4 (T0921, C90): la carta no exige autorización de canal (sólo la de tratamiento general y la dirección), pero un aviso previo por
+// carta es cobranza y respeta el canal de la semana: tras un contacto directo por teléfono el lunes 9 de noviembre de 2026, la carta
+// del miércoles 11 se difiere al martes 17 (el lunes 16 es festivo). Si el contacto directo del lunes fue por carta, la del miércoles
+// sale.
+{
+  "caso": "17-carta-tras-contacto-directo",
+  "reglas": { "horario": { "lunesAViernes": ["07:00", "19:00"], "sabado": ["08:00", "15:00"] }, "contactosPorDia": 1, "noHabiles": ["2026-11-02", "2026-11-16"] },
+  "titular": { "canalesAutorizados": [], "destinos": ["Letter"] },
+  "escenarios": [
+    { "nombre": "carta sin autorización de canal y sin contactos",
+      "historial": [],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Letter", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } },
+    { "nombre": "carta tras un contacto directo por teléfono",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Phone", "directo": true } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Letter", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Diferido", "siguiente": "2026-11-17T07:00", "motivos": ["WeeklyChannelLocked"] } },
+    { "nombre": "carta tras un contacto directo por carta",
+      "historial": [ { "id": 1, "en": "2026-11-09T10:15", "canal": "Letter", "directo": true } ],
+      "solicitud": { "pedido": "2026-11-11T09:00", "canal": "Letter", "proposito": "PriorNotice" },
+      "esperado": { "decision": "Permitido", "en": "2026-11-11T09:00" } }
+  ]
+}

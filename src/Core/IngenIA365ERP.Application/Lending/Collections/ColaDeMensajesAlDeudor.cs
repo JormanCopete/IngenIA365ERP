@@ -603,7 +603,7 @@ public sealed class ColaDeMensajesAlDeudor(
     /// <summary>
     /// Los contactos del titular que cuentan para la ventana (§4.5): cada mensaje una vez, por el primer evento que dice que salió —<c>Sent</c>,
     /// <c>Delivered</c> y, fuera de producción, <c>Simulated</c>—, desde el lunes de la semana pedida hasta los días que el motor busca. K4
-    /// suma las gestiones con contacto directo.
+    /// suma las gestiones con contacto directo que nadie anuló (T0938, <c>HistorialDeContactos.Componer</c>).
     /// </summary>
     private async Task<HistorialDeContactos> HistorialAsync(int personId, DateOnly lunes, DateOnly dia, TimeSpan desfase, int? sinElMensaje,
         CancellationToken ct)
@@ -625,7 +625,19 @@ public sealed class ColaDeMensajesAlDeudor(
             .OrderBy(f => f.OccurredAt)
             .Select(f => ContactoRegistrado.DeMensaje(ALocal(DateTime.SpecifyKind(f.OccurredAt, DateTimeKind.Utc), desfase), f.Channel, f.Purpose))
             .ToList();
-        return new HistorialDeContactos(contactos);
+
+        // K4 (T0938, §4.8): las gestiones del titular en la ventana —las directas y las que anulan otra, para descontar las anuladas—.
+        var gestiones = await db.CollectionActions.AsNoTracking()
+            .Where(a => a.PersonId == personId && a.OccurredAt >= desdeUtc && a.OccurredAt < hastaUtc
+                        && (a.IsDirectContact || a.VoidsActionId != null))
+            .Select(a => new { a.Id, a.OccurredAt, a.Channel, a.IsDirectContact, a.VoidsActionId })
+            .ToListAsync(ct);
+        // Una corrección es posterior a lo que corrige y la ventana llega hasta 15 días adelante: las que anulan algo de la ventana están en ella.
+        var paraHistorial = gestiones
+            .Select(a => new GestionParaHistorial(a.Id, ALocal(DateTime.SpecifyKind(a.OccurredAt, DateTimeKind.Utc), desfase), a.Channel,
+                a.IsDirectContact, a.VoidsActionId))
+            .ToList();
+        return HistorialDeContactos.Componer(contactos, paraHistorial);
     }
 
     private async Task<NotificationTemplate?> PlantillaVigenteAsync(string templateCode, MessageChannel canal, DateOnly hoy, CancellationToken ct)

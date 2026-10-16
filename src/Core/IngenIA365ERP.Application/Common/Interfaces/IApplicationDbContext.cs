@@ -531,6 +531,18 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans { get; }
+    // K4 (feature 013, CarteraCobranza; data-model §26.3–§26.10).
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign> MessageCampaigns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage> CollectionStages { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStageHistoryEntry> CollectionStageHistory { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule> CollectorAssignmentRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignment> CollectorAssignments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionAction> CollectionActions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentPromise> PaymentPromises { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement> PaymentAgreements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreementInstallment> PaymentAgreementInstallments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess> LegalProcesses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcessAction> LegalProcessActions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition> LoanDailyPositions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment> RepaymentInstallments { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion> RepaymentScheduleVersions { get; }

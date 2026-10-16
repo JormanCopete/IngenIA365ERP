@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Collections;
 /// <summary>
 /// <c>LND_DebtorMessages</c> (feature 013, C.3; data-model §26.1; FR-122, FR-123, SC-011, I-5; T74, T75): un mensaje al deudor o
 /// a un codeudor obligado (nunca a referencias). Hecho de sólo inserción (<see cref="IHechoInmutable"/>): su estado es el último
-/// <see cref="DebtorMessageEvent"/>. Canal, adaptador y plantilla quedan sellados. La columna <c>CampaignId</c> nace con K4
+/// <see cref="DebtorMessageEvent"/>. Canal, adaptador y plantilla quedan sellados. La columna <c>CampaignId</c> nació con K4
 /// (<c>CarteraCobranza</c>).
 ///
 /// <para>
@@ -64,6 +64,9 @@ public class DebtorMessage : AuditableEntity, IHechoInmutable
     public int? IssuedDocumentId { get; init; }
 
     public int? InstallmentNonDeductionId { get; init; }
+
+    /// <summary>K4 (T0939; data-model §26.1): la campaña que lo programó (<c>LND_MessageCampaigns</c>).</summary>
+    public int? CampaignId { get; init; }
 
     /// <summary>Autorización por canal vigente al programar (T69); <c>Letter</c> no la exige (C90).</summary>
     public Guid? AuthorizationConsentPublicId { get; init; }
@@ -147,6 +150,7 @@ public class DebtorMessage : AuditableEntity, IHechoInmutable
             PriorNoticeId = m.PriorNoticeId,
             IssuedDocumentId = m.IssuedDocumentId,
             InstallmentNonDeductionId = m.InstallmentNonDeductionId,
+            CampaignId = m.CampaignId,
             AuthorizationConsentPublicId = m.AuthorizationConsentPublicId,
             IsManualImmediate = m.IsManualImmediate,
             RequestedAt = m.RequestedAt,

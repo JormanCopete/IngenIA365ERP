@@ -41,8 +41,11 @@ public sealed class CasoDoradoDeVentanaLegal
 
     public static string DirectorioDeCasos => Path.Combine(AppContext.BaseDirectory, "Lending", "Collections", "Casos");
 
+    /// <summary>Los casos de la ventana: los que empiezan con su número (los <c>reparto-*.json</c> de K4 son de otro motor).</summary>
     public static IEnumerable<string> Archivos() =>
-        Directory.EnumerateFiles(DirectorioDeCasos, "*.json").OrderBy(f => f, StringComparer.Ordinal);
+        Directory.EnumerateFiles(DirectorioDeCasos, "*.json")
+            .Where(f => char.IsAsciiDigit(Path.GetFileName(f)[0]))
+            .OrderBy(f => f, StringComparer.Ordinal);
 
     public static CasoDoradoDeVentanaLegal Cargar(string ruta) =>
         JsonSerializer.Deserialize<CasoDoradoDeVentanaLegal>(File.ReadAllText(ruta), Opciones)
@@ -67,8 +70,17 @@ public sealed class CasoDoradoDeVentanaLegal
 
     public EstadoDelTitular TitularDelMotor(EscenarioJson escenario) => (escenario.Titular ?? Titular).DelMotor();
 
-    public HistorialDeContactos HistorialDelMotor(EscenarioJson escenario) =>
-        new((escenario.Historial ?? Historial).Select(c => c.DelMotor()).ToList());
+    /// <summary>
+    /// K4 (T0938): los mensajes del historial y las gestiones pasan por <see cref="HistorialDeContactos.Componer"/>, que deja sólo las
+    /// gestiones con contacto directo que nadie anuló.
+    /// </summary>
+    public HistorialDeContactos HistorialDelMotor(EscenarioJson escenario)
+    {
+        var historial = escenario.Historial ?? Historial;
+        return HistorialDeContactos.Componer(
+            historial.Where(c => c.Proposito is not null).Select(c => c.DelMotor()),
+            historial.Where(c => c.Proposito is null).Select(c => c.Gestion()));
+    }
 
     internal static DateTime Instante(string texto) =>
         DateTime.ParseExact(texto, ["yyyy-MM-dd'T'HH:mm", "yyyy-MM-dd'T'HH:mm:ss"], CultureInfo.InvariantCulture, DateTimeStyles.None);
@@ -121,7 +133,8 @@ public sealed class CasoDoradoDeVentanaLegal
 
     /// <summary>
     /// Un contacto de la semana: con <c>proposito</c> es un mensaje enviado (<c>canal</c> es un <see cref="MessageChannel"/>); sin él,
-    /// una gestión (K4; <c>canal</c> es un <see cref="CollectionActionChannel"/> y <c>directo</c> dice si hubo contacto directo).
+    /// una gestión (K4; <c>canal</c> es un <see cref="CollectionActionChannel"/>, <c>directo</c> dice si hubo contacto directo, <c>id</c> la
+    /// identifica y <c>anula</c> es el <c>id</c> de la gestión que corrige).
     /// </summary>
     public sealed class ContactoJson
     {
@@ -129,6 +142,11 @@ public sealed class CasoDoradoDeVentanaLegal
         public string Canal { get; set; } = string.Empty;
         public DebtorMessagePurpose? Proposito { get; set; }
         public bool Directo { get; set; }
+        public int Id { get; set; }
+        public int? Anula { get; set; }
+
+        public GestionParaHistorial Gestion() =>
+            new(Id, Instante(En), Enum.Parse<CollectionActionChannel>(Canal), Directo, Anula);
 
         public ContactoRegistrado DelMotor() => Proposito is { } p
             ? ContactoRegistrado.DeMensaje(Instante(En), Enum.Parse<MessageChannel>(Canal), p)

@@ -22,6 +22,10 @@ namespace IngenIA365ERP.Application.Tests.Lending.Common;
 ///
 /// <para>K3 (fases 16 y 17, T0875): suma las nueve tablas de <c>CarteraNovedades</c> (data-model §25.1–§25.6, §23.7); ninguna es hecho: las
 /// novedades, condonaciones, lotes y evaluaciones avanzan de estado.</para>
+///
+/// <para>K4 (fase 18, T0939): suma las once tablas de <c>CarteraCobranza</c> (data-model §26.3–§26.10). Son hechos la historia de etapas, la
+/// asignación, la gestión, la promesa, la cuota del acuerdo y la actuación jurídica; la etapa, la regla, el acuerdo, el proceso y la campaña
+/// cambian de vigencia o de estado.</para>
 /// </summary>
 public class ModeloDeCarteraNucleoTests
 {
@@ -67,6 +71,10 @@ public class ModeloDeCarteraNucleoTests
         // Novedades, condonaciones, castigo y evaluación (K3, CarteraNovedades; data-model §25.1–§25.6, §23.7)
         "LND_LoanNovelties", "LND_LoanNoveltyLoans", "LND_LoanNoveltyConsents", "LND_Waivers", "LND_WaiverLines", "LND_WriteOffBatches",
         "LND_WriteOffBatchItems", "LND_PortfolioEvaluations", "LND_PortfolioEvaluationLoans",
+        // Cobranza (K4, CarteraCobranza; data-model §26.3–§26.10)
+        "LND_MessageCampaigns", "LND_CollectionStages", "LND_CollectionStageHistory", "LND_CollectorAssignmentRules", "LND_CollectorAssignments",
+        "LND_CollectionActions", "LND_PaymentPromises", "LND_PaymentAgreements", "LND_PaymentAgreementInstallments", "LND_LegalProcesses",
+        "LND_LegalProcessActions",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -90,7 +98,9 @@ public class ModeloDeCarteraNucleoTests
         "LendingInboundMessageEvaluation", "AccountingFactPart", "DebtorMessage", "DebtorMessageEvent", "PriorNotice",
         "IssuedLendingDocument", "IssuedDocumentLoan", "IssuedDocumentEvent", "MigrationLoadDifference", "ProvisionalCollection",
         "LendingActivation", "MonthlyClose", "MonthlyCloseLoan", "MonthlyCloseGeneralImpairment", "MonthlyCloseReopening", "LoanArrearsHistoryEntry",
-        "RiskPolicyVersion", "PayrollDeductionFileLine", "PayrollDeductionResult", "NonDeductionFollowUp", .. Preparacion,
+        "RiskPolicyVersion", "PayrollDeductionFileLine", "PayrollDeductionResult", "NonDeductionFollowUp",
+        "CollectionStageHistoryEntry", "CollectorAssignment", "CollectionAction", "PaymentPromise", "PaymentAgreementInstallment", "LegalProcessAction",
+        .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
@@ -121,9 +131,9 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(117,
+        Tablas.Should().HaveCount(128,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
-            + " + 9 de CarteraNovedades (K3)");
+            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4)");
     }
 
     [Theory]

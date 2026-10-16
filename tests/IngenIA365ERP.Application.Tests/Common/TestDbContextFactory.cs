@@ -468,6 +468,18 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>();
+    // K4 (feature 013, CarteraCobranza).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign> MessageCampaigns => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage> CollectionStages => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStageHistoryEntry> CollectionStageHistory => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStageHistoryEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule> CollectorAssignmentRules => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignment> CollectorAssignments => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionAction> CollectionActions => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionAction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentPromise> PaymentPromises => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentPromise>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement> PaymentAgreements => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreementInstallment> PaymentAgreementInstallments => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreementInstallment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess> LegalProcesses => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcessAction> LegalProcessActions => Set<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcessAction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose> MonthlyCloses => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyClose>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan> MonthlyCloseLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseLoan>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment> MonthlyCloseGeneralImpairments => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.MonthlyCloseGeneralImpairment>();
@@ -612,6 +624,17 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.MessageCampaign>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStage>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionStageHistoryEntry>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignmentRule>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectorAssignment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.CollectionAction>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentPromise>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.PaymentAgreementInstallment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcess>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Collections.LegalProcessAction>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Projections.LoanDailyPosition>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentInstallment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Lending.Schedules.RepaymentScheduleVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

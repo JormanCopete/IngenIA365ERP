@@ -105,6 +105,21 @@ public class LoanNovelty : AuditableEntity
 
     public string? CancelReason { get; private set; }
 
+    /// <summary>
+    /// K4 (T0939; data-model §25.1; FR-120): el acuerdo de pago que, por cambiar las condiciones, se tramita como esta novedad
+    /// (<c>Lending.PaymentAgreement.ChangesTerms</c>). Se vincula en borrador (<see cref="VincularAcuerdo"/>).
+    /// </summary>
+    public int? PaymentAgreementId { get; private set; }
+
+    /// <summary>Vincula el acuerdo que originó la novedad; sólo en borrador y una vez.</summary>
+    public void VincularAcuerdo(int acuerdoId)
+    {
+        if (Status != LoanNoveltyStatus.Draft || PaymentAgreementId is not null)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoNoEditable,
+                "El acuerdo se vincula a la novedad en borrador y una sola vez.", "status", Status.ToString()));
+        PaymentAgreementId = acuerdoId;
+    }
+
     // ------------------------------------------------------------------------------------------- comportamiento (T0871) --
 
     private static readonly IReadOnlyDictionary<LoanNoveltyStatus, LoanNoveltyStatus[]> Transiciones =

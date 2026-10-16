@@ -43,6 +43,16 @@ public class LaCarteraNoTieneValoresLegalesFijos
     }
 
     [Fact]
+    public void La_cobranza_esta_en_la_regla()
+    {
+        // K4 (T0932, T0937): los motores puros de la cobranza (Domain/Lending/Collections) están entre los archivos que se revisan.
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => a.Replace('\\', '/')).ToList();
+        foreach (var motor in new[] { "EtapasDeCobranza", "RepartoDeGestores", "EstadoDePromesa", "CumplimientoDeAcuerdo", "AvisoPrevioPorEpisodio",
+                     "VentanaLegalDeContacto" })
+            Assert.Contains(archivos, a => a.EndsWith($"Domain/Lending/Collections/{motor}.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void El_motor_de_Cartera_no_lleva_valores_legales_fijos()
     {
         var root = RepoPath.FindRepoRoot();
