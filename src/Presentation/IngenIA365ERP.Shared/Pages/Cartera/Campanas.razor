@@ -1,0 +1,260 @@
+@page "/cartera/campanas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject CobranzaClient Cliente
+@inject MensajesAlDeudorClient Mensajes
+@inject INotificationService Notification
+
+<PageTitle>Campañas de cobranza - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K4, US12 (T0958; contracts/api.md §14.9; US12-4): campañas de mensajes de cobranza a los deudores de un grupo de créditos (por etapa,
+   oficina, línea o mora mínima). La vista previa dice quiénes recibirían el mensaje y a quiénes se excluye y por qué —no autorizó el canal, falleció,
+   está en insolvencia, la cobranza está suspendida o ya se le contactó por otro canal esa semana—. Programar crea un mensaje por destinatario, con la
+   constancia de la exclusión del que no cabe; cada envío respeta la ventana legal de la Ley 2300 y sale en la primera hora permitida. Sólo se escribe
+   al deudor o a un codeudor. Todo exige Lending.Campaigns.Manage. *@
+<PermissionGate Required="Lending.Campaigns.Manage" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Campañas de cobranza</h3>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevaAsync">Nueva campaña</SfButton>
+    </div>
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @for (var i = 1; i <= 5; i++) { <option value="@i">@TextosDeCobranza.EstadoDeCampana(i)</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Canal</th><th>Plantilla</th><th>Sale</th><th>Estado</th><th>Destinatarios</th><th>En cola</th><th>Diferidos</th><th>Excluidos</th><th>Enviados</th><th>Fallidos</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _filas)
+                    {
+                        var campana = c;
+                        <tr>
+                            <td>@campana.Code</td>
+                            <td>@campana.Name</td>
+                            <td>@TextosDeCobranza.CanalDeMensaje(campana.Channel)</td>
+                            <td>@campana.TemplateCode</td>
+                            <td>@campana.ScheduledFor.LocalDateTime.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@TextosDeCobranza.EstadoDeCampana(campana.Status)@(campana.CancelReason is { } r ? $" · {r}" : "")</td>
+                            <td>@campana.TargetCount</td>
+                            <td>@campana.Counts.Queued</td>
+                            <td>@campana.Counts.Deferred</td>
+                            <td>@campana.Counts.Excluded</td>
+                            <td>@campana.Counts.Sent</td>
+                            <td>@campana.Counts.Failed</td>
+                            <td>
+                                <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => VistaPreviaAsync(campana))">Vista previa</SfButton>
+                                @if (campana.Status == 1)
+                                {
+                                    <SfButton CssClass="e-flat e-small e-primary" Disabled="@_accion.Activa" OnClick="@(() => ProgramarAsync(campana))">Programar</SfButton>
+                                }
+                                @if (campana.Status is 1 or 2 or 3)
+                                {
+                                    <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirCancelacion(campana))">Cancelar…</SfButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay campañas con ese filtro.</p> }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarNueva" Header="Nueva campaña" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_codigo" maxlength="10" /></label>
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombre" maxlength="100" /></label>
+                    <label class="campo">Canal *
+                        <select class="e-input" value="@_canal" @onchange="@(e => CambiarCanalAsync(e.Value?.ToString()))">
+                            @foreach (var c in TextosDeCobranza.CanalesDeMensaje.Where(c => c.Nombre != "Letter")) { <option value="@c.Nombre">@c.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Plantilla *
+                        <select class="e-input" @bind="_plantilla">
+                            <option value="">Elija…</option>
+                            @foreach (var p in _plantillas) { <option value="@p.Code">@p.Code · @(p.Subject ?? p.Body[..Math.Min(40, p.Body.Length)])</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Sale el * <input class="e-input" type="datetime-local" @bind="_sale" /></label>
+                    <label class="campo">Sólo la etapa
+                        <select class="e-input" @bind="_etapa">
+                            <option value="">Cualquiera</option>
+                            @foreach (var e in _etapas) { <option value="@e.Code">@e.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Línea de crédito <SelectorDeLineaDeCredito @bind-Value="_linea" /></label>
+                    <label class="campo">Mora mínima (días) <input class="e-input" type="number" min="0" @bind="_moraMinima" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre) || string.IsNullOrEmpty(_plantilla))" OnClick="@CrearAsync">Crear en borrador</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarNueva = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarPrevia" Header="@($"Vista previa de {_elegida?.Name}")" Width="820px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Calculando…">
+                @if (_previa is { } p)
+                {
+                    <p>@p.Recipients.Count recibirían el mensaje; @p.Excluded.Count quedan excluidos.</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Deudor</th><th>Crédito</th><th>Resultado</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in p.Recipients)
+                                {
+                                    <tr><td>@d.Debtor.FullName</td><td>@d.Loan.Number</td><td>@TextosDeCartera.DecisionDeContacto(d.Decision)@(d.SendsAt is { } s ? $" · sale el {s.LocalDateTime:dd/MM/yyyy HH:mm}" : "")</td></tr>
+                                }
+                                @foreach (var x in p.Excluded)
+                                {
+                                    <tr><td>@x.Debtor.FullName</td><td>@x.Loan.Number</td><td>Excluido: @TextosDeCobranza.MotivoDeExclusion(x.Reason)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                <div class="toolbar"><SfButton CssClass="e-outline" OnClick="@(() => _mostrarPrevia = false)">Cerrar</SfButton></div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarCancelacion" Header="@($"Cancelar la campaña {_elegida?.Name}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Cancelando…">
+                <p class="texto-tenue">Los mensajes que siguen en cola quedan cancelados; los que ya salieron no se retiran.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CancelarAsync">Cancelar campaña</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCancelacion = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private List<CampanaDeMensajesDto> _filas = [];
+    private List<EtapaDeCobranzaDto> _etapas = [];
+    private List<VersionDePlantillaDeMensajeDto> _plantillas = [];
+    private VistaPreviaDeCampanaDto? _previa;
+    private CampanaDeMensajesDto? _elegida;
+    private string? _estado, _error, _motivo, _codigo, _nombre, _plantilla, _etapa, _canal = "Sms";
+    private bool _mostrarNueva, _mostrarPrevia, _mostrarCancelacion;
+    private DateTime _sale = DateTime.Now.AddHours(1);
+    private Guid? _linea;
+    private int? _moraMinima;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.CampanasAsync(int.TryParse(_estado, out var e) ? e : null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las campañas."); return; }
+        _filas = [.. r.Value ?? []];
+    }
+
+    private async Task AbrirNuevaAsync()
+    {
+        _error = _codigo = _nombre = _plantilla = _etapa = null;
+        _linea = null;
+        _moraMinima = null;
+        _canal = "Sms";
+        _sale = DateTime.Now.AddHours(1);
+        _clave = new ClaveDeOperacion();
+        var e = await Cliente.EtapasAsync();
+        if (e.IsSuccess) _etapas = [.. e.Value?.Stages ?? []];
+        await CargarPlantillasAsync();
+        _mostrarNueva = true;
+    }
+
+    private async Task CambiarCanalAsync(string? canal)
+    {
+        _canal = canal ?? "Sms";
+        _plantilla = null;
+        await CargarPlantillasAsync();
+    }
+
+    private async Task CargarPlantillasAsync()
+    {
+        var canal = TextosDeCobranza.CanalesDeMensaje.FirstOrDefault(c => c.Nombre == _canal).Valor;
+        var r = await Mensajes.PlantillasAsync(1, canal);
+        _plantillas = r.IsSuccess ? [.. r.Value ?? []] : [];
+    }
+
+    private async Task CrearAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var filtros = new FiltrosDeCampanaDto(string.IsNullOrEmpty(_etapa) ? null : _etapa, null, _linea, _moraMinima, null);
+        var sale = new DateTimeOffset(DateTime.SpecifyKind(_sale, DateTimeKind.Local));
+        var r = await Cliente.CrearCampanaAsync(new CampanaRequest(_codigo!.Trim(), _nombre!.Trim(), _plantilla!, _canal!, "Collection", filtros, sale), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo crear la campaña."; return; }
+        _mostrarNueva = false;
+        await Notification.SuccessAsync("Campaña creada en borrador: revise la vista previa antes de programarla.");
+        await CargarAsync();
+    }
+
+    private async Task VistaPreviaAsync(CampanaDeMensajesDto campana)
+    {
+        using var carga = _accion.Iniciar();
+        _elegida = campana;
+        var r = await Cliente.VistaPreviaDeCampanaAsync(campana.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular la vista previa."); return; }
+        _previa = r.Value;
+        _mostrarPrevia = true;
+    }
+
+    private async Task ProgramarAsync(CampanaDeMensajesDto campana)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cliente.ProgramarCampanaAsync(campana.PublicId, null, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo programar la campaña."); return; }
+        await Notification.SuccessAsync($"Campaña programada: {r.Value?.Counts.Queued + r.Value?.Counts.Deferred} mensajes en cola, {r.Value?.Counts.Excluded} excluidos.");
+        await CargarAsync();
+    }
+
+    private void AbrirCancelacion(CampanaDeMensajesDto campana)
+    {
+        _elegida = campana;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarCancelacion = true;
+    }
+
+    private async Task CancelarAsync()
+    {
+        if (_elegida is not { } c || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.CancelarCampanaAsync(c.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo cancelar la campaña."; return; }
+        _mostrarCancelacion = false;
+        await Notification.SuccessAsync("Campaña cancelada.");
+        await CargarAsync();
+    }
+}

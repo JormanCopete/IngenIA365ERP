@@ -72,6 +72,17 @@ public class LosComandosDeCarteraLlevanClave
         // K3, US14 (bloque C, T0915): el lote de castigo con el reporte al supervisor. La evaluación de cartera (/risk/evaluations) vive en
         // RiskEndpoints.cs, que ya está en la lista.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/WriteOffBatchesEndpoints.cs",
+        // K4, US12 (bloque C, T0956): la cobranza —etapas, reparto, gestiones, acuerdos, jurídico, campañas, gastos, avisos previos y reclamos—. La vista
+        // previa de la campaña es una consulta por POST (sin clave).
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectionStagesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectorAssignmentsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectionActionsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PaymentAgreementsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/LegalProcessesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CampaignsEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectionFeesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/PriorNoticesEndpoints.cs",
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/CreditReportClaimsEndpoints.cs",
     ];
 
     /// <summary>
@@ -87,7 +98,9 @@ public class LosComandosDeCarteraLlevanClave
             // US5 (bloque 9C): simular un pago, la vista previa de su reverso y la simulación del recaudador de prueba (no escriben).
             "/payment-simulations\"", "/reversal-preview\"", "\"/collector/simulations\"",
             // K3 (bloque C, T0890): simular la novedad (api.md §11.1, «sin clave»: no escribe).
-            "/simulate\""];
+            "/simulate\"",
+            // K4 (bloque C, T0956): la vista previa de una campaña (api.md §14.9: «sin clave», no escribe).
+            "/{id:guid}/preview\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -245,6 +258,31 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Novelties.ApproveNoveltyCoverageExceptionCommand),
         typeof(IngenIA365ERP.Application.Lending.WriteOffs.VoidWriteOffBatchCommand),
         typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.DiscardPortfolioEvaluationCommand),
+        // K4 (US12, bloques B y C; T0932): la cobranza. La vista previa de la campaña (consulta) y las listas no son comandos.
+        typeof(IngenIA365ERP.Application.Lending.Collections.Stages.AddCollectionStageVersionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.CreateCollectorAssignmentRuleCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.CloseCollectorAssignmentRuleCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.AssignCollectorCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Assignments.DistributeCollectionsCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Actions.RecordCollectionActionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Actions.VoidCollectionActionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.CreatePaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.ApprovePaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.RejectPaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Agreements.CancelPaymentAgreementCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Legal.OpenLegalProcessCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Legal.RecordLegalProcessActionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Legal.CloseLegalProcessCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Fees.CauseCollectionFeesCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Campaigns.CreateMessageCampaignCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Campaigns.ScheduleMessageCampaignCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Campaigns.CancelMessageCampaignCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.PriorNotices.SendPriorNoticeCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.PriorNotices.RegisterPriorNoticeEvidenceCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.RegisterCreditReportClaimCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.ExtendCreditReportClaimCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.AnswerCreditReportClaimCommand),
+        typeof(IngenIA365ERP.Application.Lending.Collections.Claims.WithdrawCreditReportClaimCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

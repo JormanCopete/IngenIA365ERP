@@ -163,6 +163,30 @@
             <PermissionGate Required="Lending.Ratings.Read">
                 <NavLink href="/cartera/evaluaciones" class="nav-subitem">Evaluación de cartera</NavLink>
             </PermissionGate>
+            @* K4, US12 (T0959): la cobranza —etapas y reparto, cartera por gestor, agenda del día, acuerdos de pago, campañas, avisos previos y
+               reclamos sobre el reporte, y el cobro jurídico—. *@
+            <span class="nav-subgroup-title">Cobranza</span>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/etapas-de-cobranza" class="nav-subitem">Etapas de cobranza</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/cobranza" class="nav-subitem">Cobranza</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/agenda" class="nav-subitem">Agenda</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/acuerdos-de-pago" class="nav-subitem">Acuerdos de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Campaigns.Manage">
+                <NavLink href="/cartera/campanas" class="nav-subitem">Campañas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.PriorNotices.Read">
+                <NavLink href="/cartera/avisos-previos" class="nav-subitem">Avisos previos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Collections.Read">
+                <NavLink href="/cartera/juridico" class="nav-subitem">Cobro jurídico</NavLink>
+            </PermissionGate>
             @* US13 (T0793): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) y la verificación de su código. *@
             <PermissionGate Required="Lending.Documents.Read">
                 <NavLink href="/cartera/documentos" class="nav-subitem">Documentos</NavLink>

@@ -1,0 +1,289 @@
+@page "/cartera/cobranza"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject CobranzaClient Cliente
+@inject InventarioClient Inventario
+@inject INotificationService Notification
+
+<PageTitle>Cobranza - IngenIA365ERP</PageTitle>
+
+@* Feature 013, K4, US12 (T0958; contracts/api.md §14.5; FR-118, FR-121): la cartera en mora por gestor. «Asignaciones» es la historia (sólo
+   inserción: reasignar agrega una fila con la anterior enlazada), «Repartir» aplica las reglas de reparto a los créditos que se piden con vista previa
+   antes de escribir, «Asignar a mano» pone un crédito en manos de un gestor con motivo, y «Gastos por causar» lista los gastos de cobranza ya
+   informados al deudor: sólo se causan los que tienen su aviso enviado o entregado. Leer exige Lending.Collections.Read; asignar y repartir,
+   Lending.Collections.Assign; causar gastos, Lending.CollectionStages.Manage. *@
+<PermissionGate Required="Lending.Collections.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cobranza</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_pestana == 0 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(0))">Asignaciones</SfButton>
+            <SfButton CssClass="@(_pestana == 1 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(1))">Repartir</SfButton>
+            <SfButton CssClass="@(_pestana == 2 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(2))">Asignar a mano</SfButton>
+            <SfButton CssClass="@(_pestana == 3 ? "e-primary" : "e-outline")" OnClick="@(() => CambiarAsync(3))">Gastos por causar</SfButton>
+        </div>
+    </div>
+
+    @if (_pestana == 0)
+    {
+        <div class="toolbar">
+            <label class="campo">Gestor
+                <select class="e-input" @bind="_filtroGestor">
+                    <option value="">Todos</option>
+                    @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsignacionesAsync(1))">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Desde</th><th>Crédito</th><th>Deudor</th><th>Gestor</th><th>Origen</th><th>Motivo</th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _asignaciones)
+                        {
+                            <tr>
+                                <td>@a.AssignedOn.ToString("dd/MM/yyyy")</td>
+                                <td>@if (a.Loan is { } c) { <a href="/cartera/creditos/@c.LoanPublicId">@c.Number</a> } else { <span>Todo el deudor</span> }</td>
+                                <td>@a.Debtor.FullName</td>
+                                <td>@a.Collector.Name</td>
+                                <td>@(a.RulePublicId is not null ? "Regla de reparto" : $"A mano por {a.AssignedBy?.Name ?? "—"}")@(a.PreviousAssignmentPublicId is not null ? " · reasignado" : "")</td>
+                                <td>@(a.Reason ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_asignaciones.Count == 0) { <p class="texto-tenue">No hay asignaciones con ese filtro.</p> }
+            @if (_total > TamanoDePagina)
+            {
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsignacionesAsync(_pagina - 1))">Anterior</SfButton>
+                    <span>Página @_pagina de @((_total + TamanoDePagina - 1) / TamanoDePagina)</span>
+                    <SfButton CssClass="e-flat e-small" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsignacionesAsync(_pagina + 1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else if (_pestana == 1)
+    {
+        <PermissionGate Required="Lending.Collections.Assign" MostrarAviso="true">
+            <div class="info-card">
+                <h4>Qué créditos se reparten</h4>
+                <div class="form-grid">
+                    <label class="campo">Etapa
+                        <select class="e-input" @bind="_etapa">
+                            <option value="">Cualquiera</option>
+                            @foreach (var e in _etapas) { <option value="@e.Code">@e.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Línea de crédito <SelectorDeLineaDeCredito @bind-Value="_linea" /></label>
+                    <label class="campo">Saldo desde ($) <input class="e-input" type="number" min="0" @bind="_saldoDesde" /></label>
+                    <label class="campo">Saldo hasta ($) <input class="e-input" type="number" min="0" @bind="_saldoHasta" /></label>
+                    <label class="campo">Reparte
+                        <select class="e-input" @bind="_porSaldo">
+                            <option value="false">Por cantidad de créditos</option>
+                            <option value="true">Por saldo</option>
+                        </select>
+                    </label>
+                </div>
+                <h4>Entre quiénes</h4>
+                <div class="toolbar">
+                    @foreach (var u in _usuarios)
+                    {
+                        var id = u.PublicId;
+                        <label class="campo"><input type="checkbox" checked="@_gestoresElegidos.Contains(id)" @onchange="@(e => Alternar(id, e.Value is true))" /> @u.Username</label>
+                    }
+                </div>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || _gestoresElegidos.Count == 0 || string.IsNullOrWhiteSpace(_motivo))" OnClick="@(() => RepartirAsync(true))">Vista previa</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _reparto is not { PreviewOnly: true })" OnClick="@(() => RepartirAsync(false))">Aplicar el reparto</SfButton>
+                </div>
+            </div>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Calculando el reparto…">
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                @if (_reparto is { } rp)
+                {
+                    <p>@(rp.PreviewOnly ? "Así quedaría el reparto (todavía no se escribió):" : "Reparto aplicado.")
+                        @rp.Assignments.Count(a => !a.Kept) asignaciones nuevas, @rp.Assignments.Count(a => a.Kept) se mantienen, @rp.Unassigned.Count sin gestor.</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Deudor</th><th>Créditos</th><th>Gestor</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var a in rp.Assignments)
+                                {
+                                    <tr><td>@a.Debtor.FullName</td><td>@string.Join(", ", a.Loans.Select(l => l.Number))</td><td>@a.Collector.Name</td><td>@(a.Kept ? "Se mantiene" : "Nueva")</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (rp.Unassigned.Count > 0)
+                    {
+                        <p class="texto-tenue">Sin gestor (ninguna regla los cubre): @string.Join(", ", rp.Unassigned.Select(l => l.Number)).</p>
+                    }
+                }
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+    else if (_pestana == 2)
+    {
+        <PermissionGate Required="Lending.Collections.Assign" MostrarAviso="true">
+            <div class="info-card">
+                <h4>Asignar un crédito a un gestor</h4>
+                <SelectorDeCredito @bind-Value="_credito" MoraMinima="1" />
+                <label class="campo">Gestor *
+                    <select class="e-input" @bind="_gestor">
+                        <option value="">Elija un gestor…</option>
+                        @foreach (var u in _usuarios) { <option value="@u.PublicId">@u.Username</option> }
+                    </select>
+                </label>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Asignando…">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _credito is null || string.IsNullOrEmpty(_gestor) || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AsignarAsync">Asignar</SfButton>
+                </IndicadorDeCarga>
+            </div>
+        </PermissionGate>
+    }
+    else
+    {
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarGastosAsync">Consultar</SfButton>
+        </div>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Deudor</th><th>Crédito</th><th>Etapa</th><th>Origen</th><th class="numero">Valor</th><th>Aviso</th><th>Informado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var g in _gastos)
+                        {
+                            var gasto = g;
+                            <tr>
+                                <td>@gasto.Debtor.FullName</td>
+                                <td><a href="/cartera/creditos/@gasto.Loan.LoanPublicId">@gasto.Loan.Number</a></td>
+                                <td>@gasto.StageCode</td>
+                                <td>@TextosDeCobranza.OrigenDelGasto(gasto.Origin)</td>
+                                <td class="numero">@TextosDeCreditos.Pesos(gasto.Amount)</td>
+                                <td>@TextosDeCobranza.EstadoDelAvisoDeGasto(gasto.NoticeStatus)</td>
+                                <td>@(gasto.InformedAt?.ToString("dd/MM/yyyy HH:mm") ?? "Sin informar")</td>
+                                <td>
+                                    @if (gasto.Causable)
+                                    {
+                                        <PermissionGate Required="Lending.CollectionStages.Manage">
+                                            <SfButton CssClass="e-flat e-small e-primary" Disabled="@_accion.Activa" OnClick="@(() => CausarAsync(gasto))">Causar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                    else { <span class="texto-tenue">Se causa cuando el aviso salga</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_gastos.Count == 0) { <p class="texto-tenue">No hay gastos de cobranza pendientes de causar.</p> }
+        </IndicadorDeCarga>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    private readonly EstadoDeCarga _carga = new(), _accion = new();
+    private int _pestana, _pagina = 1;
+    private long _total;
+    private List<AsignacionDeGestorDto> _asignaciones = [];
+    private List<EtapaDeCobranzaDto> _etapas = [];
+    private List<PersonaDeLaCooperativaDto> _usuarios = [];
+    private List<GastoPorCausarDto> _gastos = [];
+    private readonly HashSet<Guid> _gestoresElegidos = [];
+    private RepartoDto? _reparto;
+    private string? _filtroGestor, _etapa, _gestor, _motivo, _error;
+    private Guid? _linea, _credito;
+    private decimal? _saldoDesde, _saldoHasta;
+    private bool _porSaldo;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var u = await Inventario.ListarPersonasParaContarAsync();
+        if (u.IsSuccess) _usuarios = [.. (u.Value?.Items ?? []).Where(x => x.IsActive).OrderBy(x => x.Username, StringComparer.OrdinalIgnoreCase)];
+        var e = await Cliente.EtapasAsync();
+        if (e.IsSuccess) _etapas = [.. e.Value?.Stages ?? []];
+        await CargarAsignacionesAsync(1);
+    }
+
+    private async Task CambiarAsync(int pestana)
+    {
+        _pestana = pestana;
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        if (pestana == 0) await CargarAsignacionesAsync(1);
+        else if (pestana == 3) await CargarGastosAsync();
+    }
+
+    private void Alternar(Guid id, bool marcado)
+    {
+        if (marcado) _gestoresElegidos.Add(id); else _gestoresElegidos.Remove(id);
+        _reparto = null;
+    }
+
+    private async Task CargarAsignacionesAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.AsignacionesAsync(Guid.TryParse(_filtroGestor, out var g) ? g : null, null, pagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las asignaciones."); return; }
+        _asignaciones = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private async Task RepartirAsync(bool vistaPrevia)
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var filtros = new FiltrosDeRepartoRequest(null, string.IsNullOrEmpty(_etapa) ? null : _etapa, _linea, null, _saldoDesde, _saldoHasta);
+        var r = await Cliente.RepartirAsync(new RepartirRequest(_porSaldo ? "ByBalance" : "ByCount", filtros, [.. _gestoresElegidos], vistaPrevia, _motivo!.Trim()),
+            vistaPrevia ? new ClaveDeOperacion() : _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo repartir."; return; }
+        _reparto = r.Value;
+        if (!vistaPrevia)
+        {
+            _clave = new ClaveDeOperacion();
+            await Notification.SuccessAsync("Reparto aplicado.");
+        }
+    }
+
+    private async Task AsignarAsync()
+    {
+        if (_credito is not { } credito || !Guid.TryParse(_gestor, out var gestor)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.AsignarAsync(new AsignarGestorRequest([credito], gestor, _motivo!.Trim()), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo asignar."; return; }
+        _clave = new ClaveDeOperacion();
+        _credito = null;
+        _motivo = null;
+        await Notification.SuccessAsync("Crédito asignado.");
+    }
+
+    private async Task CargarGastosAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.GastosPorCausarAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los gastos."); return; }
+        _gastos = [.. r.Value ?? []];
+    }
+
+    private async Task CausarAsync(GastoPorCausarDto gasto)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Cliente.CausarGastosAsync(new CausarGastosRequest(gasto.Debtor.PersonPublicId, [gasto.NoticePublicId]), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo causar el gasto."); return; }
+        await Notification.SuccessAsync($"Gasto causado: {TextosDeCreditos.Pesos(r.Value?.Sum(c => c.Amount) ?? 0)}.");
+        await CargarGastosAsync();
+    }
+}

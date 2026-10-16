@@ -73,6 +73,15 @@ public class LasPantallasDeCarteraEstanEnElMenu
         // Fase 17, US14 (T0917, T0918; K3): los lotes de castigo y la evaluación de cartera.
         ("Pages/Cartera/Castigos.razor", "/cartera/castigos", "Lending.Loans.Read"),
         ("Pages/Cartera/Evaluaciones.razor", "/cartera/evaluaciones", "Lending.Ratings.Read"),
+        // Fase 18, US12 (T0958, T0959; K4): la cobranza —etapas y reparto, cartera por gestor, agenda, acuerdos, campañas, avisos previos con
+        // reclamos y cobro jurídico—. Ninguna deja elegir una referencia personal (LaCobranzaNuncaContactaReferencias).
+        ("Pages/Cartera/EtapasDeCobranza.razor", "/cartera/etapas-de-cobranza", "Lending.Collections.Read"),
+        ("Pages/Cartera/Cobranza.razor", "/cartera/cobranza", "Lending.Collections.Read"),
+        ("Pages/Cartera/Agenda.razor", "/cartera/agenda", "Lending.Collections.Read"),
+        ("Pages/Cartera/AcuerdosDePago.razor", "/cartera/acuerdos-de-pago", "Lending.Collections.Read"),
+        ("Pages/Cartera/Campanas.razor", "/cartera/campanas", "Lending.Campaigns.Manage"),
+        ("Pages/Cartera/AvisosPrevios.razor", "/cartera/avisos-previos", "Lending.PriorNotices.Read"),
+        ("Pages/Cartera/Juridico.razor", "/cartera/juridico", "Lending.Collections.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>
