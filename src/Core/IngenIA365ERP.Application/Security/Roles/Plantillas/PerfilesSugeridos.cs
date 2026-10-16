@@ -130,7 +130,8 @@ public static class PerfilesSugeridos
         // ----------------------------------------------------------------- Cartera (feature 013, T0221; api.md §2.5; C85, C86) --
         new("cartera.administrador", ModuloCartera, "Administrador de Cartera",
             "Parametriza y opera toda la Cartera, pero no decide créditos ni vota en sesiones: administrar no es aprobar crédito.",
-            ["Lending.*"],
+            // K3, bloque D (decisión del dueño del 2026-10-15): Attachments.Upload, porque sube los soportes de novedades, eventos del deudor y castigo.
+            ["Lending.*", "Attachments.Upload"],
             "Todas las oficinas y líneas (trae Lending.Scope.AllOffices y AllLines); sin límite de monto.",
             // US5 (T0555, api.md §2.5): Lending.TestDoubles.Operate no lo trae ninguna plantilla; se concede a mano fuera de producción.
             ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.TestDoubles.Operate"]),
@@ -153,6 +154,8 @@ public static class PerfilesSugeridos
                 "Lending.Applications.Read", "Lending.Applications.Analyze", "Lending.Decisions.Analyst", "Lending.CreditBureau.Query",
                 "Lending.CreditBureau.ReadReports", "Lending.Guarantees.Read", "Lending.CreditLimits.Read", "Lending.Loans.Read",
                 "Lending.Payoffs.Read", "Lending.Ratings.Read",
+                // K3, bloque D (decisión del dueño del 2026-10-15): decide novedades en su nivel, y la ruta de decisiones de novedades exige verlas.
+                "Lending.Novelties.Read",
             ],
             "Sus oficinas y líneas."),
 
@@ -168,6 +171,8 @@ public static class PerfilesSugeridos
                 "Lending.Migration.Load", "Lending.PayrollNotApplied.Manage", "Lending.Collections.Read", "Lending.Collections.Assign",
                 "Lending.CollectionStages.Manage", "Lending.Alerts.*", "Lending.Reports.View", "Lending.Reports.Export",
                 "Lending.Parameters.View", "Lending.Templates.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+                // K3, bloque D (decisión del dueño del 2026-10-15): sube los soportes de novedades (consentimientos) y del lote de castigo.
+                "Attachments.Upload",
             ],
             "Todas las oficinas y líneas; límite de monto en Lending.Disbursements.Execute y Lending.CreditLimits.Assign si la cooperativa lo fija."),
 
@@ -193,6 +198,8 @@ public static class PerfilesSugeridos
                 "Lending.Decisions.Management", "Lending.Decisions.Exceptions", "Lending.Condonations.Request", "Lending.ValidationFailures.Confirm",
                 "Lending.Payments.BackdateBeforeClose", "Lending.Applications.Read", "Lending.Loans.Read", "Lending.Payoffs.Read",
                 "Lending.Ratings.Read", "Lending.Reports.View", "Lending.Dashboard.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+                // K3, bloque D (decisión del dueño del 2026-10-15): decide novedades (y la excepción de cobertura), y esas rutas exigen verlas.
+                "Lending.Novelties.Read",
             ],
             "Todas las oficinas y líneas; límites operativos si la cooperativa los fija."),
 
@@ -202,6 +209,9 @@ public static class PerfilesSugeridos
                 "Lending.Sessions.Read", "Lending.Sessions.Manage", "Lending.Sessions.RecordVotes", "Lending.Sessions.Close",
                 "Lending.RelatedParties.Read", "Lending.WriteOffs.Apply", "Lending.PortfolioEvaluations.Apply", "Lending.ImpairmentModel.Manage",
                 "Lending.RiskPolicy.Validate", "Lending.Migration.AcceptDifferences", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
+                // K3, bloque D (decisión del dueño del 2026-10-15): las pantallas de castigo y evaluación que aplica leen créditos y calificaciones, y
+                // el reporte de castigos al supervisor se sube como soporte del lote.
+                "Lending.Loans.Read", "Lending.Ratings.Read", "Attachments.Upload",
             ],
             "Todas las oficinas y líneas."),
 

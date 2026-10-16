@@ -22,15 +22,16 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <list type="bullet">
 /// <item>una prórroga pedida «a petición del deudor» sobre un crédito en mora se clasifica <b>reestructuración</b> (US11-1); se simula (plan nuevo,
 /// calificación, conteo) y se radica al nivel ANALISTA; el codeudor sin aceptación firmada no la deja aplicar (<c>ConsentMissing</c> con
-/// <c>parties[]</c>); la primera salida, <c>DoNotApply</c>, la anula sin tocar el crédito; en una segunda, <c>ApplyWithGuaranteeExtinguished</c> la
-/// aplica: el crédito conserva su número, el plan anterior queda como versión, queda marcado reestructurado y su <c>CreditoReestructurado</c> se
+/// <c>parties[]</c>); la primera salida, <c>DoNotApply</c>, la anula sin tocar el crédito; en una segunda, con la excepción de cobertura aprobada por
+/// otra persona —el gerente; quien la radicó no puede, bloque D—, <c>ApplyWithGuaranteeExtinguished</c> la aplica: el crédito conserva su número, el plan anterior queda como versión, queda marcado reestructurado y su <c>CreditoReestructurado</c> se
 /// contabiliza en un <c>CN</c> (US11-2, US11-3); la vista <c>restructured</c> lo lista;</item>
 /// <item>una novación deja el anterior <c>Novated</c> y un crédito enlazado con otro número, marcado reestructurado (US11-3);</item>
 /// <item>una condonación de interés de mora que la matriz lleva por regla a GERENCIA (el nivel siguiente al del analista): más que el saldo del
 /// concepto responde <c>ExceedsBalance</c> con el saldo; quien la pidió no la decide (<c>Segregation.Conflict</c>), la decisión exige motivo, y
 /// aplicada emite <c>CondonacionAprobada</c> (US11-5);</item>
 /// <item>la insolvencia abre en <c>Negotiating</c> con el bloqueo <c>Insolvency</c>, no se abre dos veces (<c>AlreadyOpen</c>) y su fracaso la
-/// deja <c>Failed</c> (después, <c>NotNegotiating</c>);</item>
+/// deja <c>Failed</c> (después, <c>NotNegotiating</c>) con el bloqueo vigente, que una persona levanta a mano con motivo (decisión del dueño del
+/// 2026-10-15);</item>
 /// <item>el fallecimiento abre la reclamación <c>InProcess</c> con la aseguradora del seguro de vida deudores de la línea, no se registra dos
 /// veces (<c>Duplicate</c>) y el pago de la aseguradora por el recaudador de prueba, con ella como pagadora, la cierra <c>Paid</c> con la
 /// operación (T102).</item>
@@ -92,12 +93,10 @@ public sealed class NovedadesYCondonacionesTests(CentralIdentityApiFixture fx)
         var creditoDeMarta = await CierreE2E.DesembolsadoAsync(http, esc, marta, 1_000_000m, lineaVida);
         var numeroDeAna = (await CarteraE2E.GetAsync(http, admin, $"{Creditos}/{creditoDeAna}")).GetProperty("number").GetString();
 
-        // Quien decide la condonación en GERENCIA (el gerente la pide: por la segregación no la decide). La plantilla cartera.analista no trae
-        // Lending.Novelties.Read, que la ruta de decisiones de novedades exige (api.md §11.1): el ensayo se lo da aparte (decisión del dueño).
+        // Quien decide la condonación en GERENCIA (el gerente la pide: por la segregación no la decide). La plantilla cartera.analista trae
+        // Lending.Novelties.Read desde el bloque D (decisión del dueño del 2026-10-15), que la ruta de decisiones de novedades exige (api.md §11.1).
         var gerencia = await OriginacionE2E.RolPropioAsync(http, admin, "ENS-NOV-GERENCIA", "Lending.Decisions.Management");
         await OriginacionE2E.DarRolAsync(http, admin, u.Jefe, gerencia);
-        var verNovedades = await OriginacionE2E.RolPropioAsync(http, admin, "ENS-NOV-ANALISTA", "Lending.Novelties.Read");
-        await OriginacionE2E.DarRolAsync(http, admin, u.Analista, verNovedades);
 
         var enMora = (await ExigibleAsync(http, admin, creditoDeAna)).AddDays(15);
         using (RelojEn(fx, enMora))
@@ -155,7 +154,23 @@ public sealed class NovedadesYCondonacionesTests(CentralIdentityApiFixture fx)
             var segunda = await PedirAsync(http, u.Jefe.Token, creditoDeAna, "Extension", "Hardship", new { installments = 36, capitalizeInterest = true });
             var idSegunda = segunda.GetProperty("publicId").GetGuid();
             await RadicarYAprobarAsync(http, u, idSegunda);
-            var salida = new[] { new { partyPersonPublicId = codeudor, decision = "ApplyWithGuaranteeExtinguished", reason = "Se libera al codeudor (e2e)" } };
+            // Bloque D (decisión del dueño del 2026-10-15): la excepción de cobertura la aprueba antes otra persona con el nivel de excepción (el
+            // gerente), nunca quien la radicó, y una sola vez; quien aplica la usa.
+            var delQueRadica = await CarteraE2E.ConClaveAsync(http, u.Jefe.Token, HttpMethod.Post, $"{Novedades}/{idSegunda}/coverage-exception",
+                new { reason = "Libranza con descuento directo (e2e)" });
+            (await CarteraE2E.CodigoDeErrorAsync(delQueRadica)).Should().Be("Lending.Segregation.Conflict");
+            var excepcion = await CarteraE2E.ConClaveAsync(http, u.Gerente.Token, HttpMethod.Post, $"{Novedades}/{idSegunda}/coverage-exception",
+                new { reason = "Libranza con descuento directo (e2e)" });
+            excepcion.StatusCode.Should().Be(HttpStatusCode.OK, await excepcion.Content.ReadAsStringAsync());
+            (await CarteraE2E.LeerAsync(excepcion)).GetProperty("decisions").EnumerateArray()
+                .Should().Contain(d => d.GetProperty("policyException").GetBoolean(), "queda la decisión por excepción del gerente");
+            var otraExcepcion = await CarteraE2E.ConClaveAsync(http, u.Gerente.Token, HttpMethod.Post, $"{Novedades}/{idSegunda}/coverage-exception",
+                new { reason = "Otra vez (e2e)" });
+            (await CarteraE2E.CodigoDeErrorAsync(otraExcepcion)).Should().Be("Lending.Novelty.CoverageExceptionExists");
+            var salida = new[]
+            {
+                new { partyPersonPublicId = codeudor, decision = "ApplyWithGuaranteeExtinguished", reason = "Se libera al codeudor (e2e)", useCoverageException = true },
+            };
             var propia = await AplicarAsync(http, u.Jefe.Token, idSegunda, salida);
             propia.IsSuccessStatusCode.Should().BeFalse("quien la radica no la aplica");
             var aplicada = await AplicarAsync(http, u.Administrador.Token, idSegunda, salida);
@@ -263,6 +278,15 @@ public sealed class NovedadesYCondonacionesTests(CentralIdentityApiFixture fx)
                 date = enMora, reason = "Otra vez (e2e)", supportAttachmentPublicId = soporteDeFabio,
             });
             (await CarteraE2E.CodigoDeErrorAsync(otroFracaso)).Should().Be("Lending.Insolvency.NotNegotiating");
+            // Decisión del dueño (2026-10-15): el fracaso no levanta el bloqueo; lo levanta a mano, con motivo, quien tenga Lending.Blocks.Manage.
+            var vigentes = (await CarteraE2E.GetAsync(http, admin, $"/api/lending/blocks?personPublicId={fabio}&kind=Insolvency&active=true")).GetProperty("items");
+            vigentes.GetArrayLength().Should().Be(1, "el fracaso mantiene el bloqueo de crédito nuevo");
+            vigentes[0].GetProperty("canLiftManually").GetBoolean().Should().BeTrue();
+            var levantado = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post,
+                $"/api/lending/blocks/{vigentes[0].GetProperty("publicId").GetGuid()}/lift", new { reason = "Revisado con jurídica (e2e)" });
+            levantado.IsSuccessStatusCode.Should().BeTrue(await levantado.Content.ReadAsStringAsync());
+            (await CarteraE2E.GetAsync(http, admin, $"/api/lending/blocks?personPublicId={fabio}&kind=Insolvency&active=true"))
+                .GetProperty("items").GetArrayLength().Should().Be(0);
             (await CarteraE2E.GetAsync(http, admin, $"{Insolvencias}?personPublicId={fabio}")).GetProperty("items").GetArrayLength().Should().Be(1);
 
             // =========================================================================== (5) fallecimiento (T102) ==

@@ -56,6 +56,11 @@ public sealed class NovedadesClient(HttpClient http, CentralAuthClient auth)
         CancellationToken ct = default) =>
         Enviar<DecisionRegistradaDto>(HttpMethod.Post, $"{RutaDeNovedades}/{novedad}/decisions", request, clave, ct);
 
+    /// <summary>La excepción de cobertura (bloque D): la aprueba otra persona, con el nivel de excepción, antes de aplicar.</summary>
+    public Task<ResultadoDeInventario<NovedadDeCreditoDto>> AprobarExcepcionDeCoberturaAsync(Guid novedad, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<NovedadDeCreditoDto>(HttpMethod.Post, $"{RutaDeNovedades}/{novedad}/coverage-exception", new MotivoDeCarteraRequest(motivo), clave, ct);
+
     public Task<ResultadoDeInventario<NovedadAplicadaDto>> AplicarNovedadAsync(Guid novedad, AplicarNovedadRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
         Enviar<NovedadAplicadaDto>(HttpMethod.Post, $"{RutaDeNovedades}/{novedad}/apply", request, clave, ct);

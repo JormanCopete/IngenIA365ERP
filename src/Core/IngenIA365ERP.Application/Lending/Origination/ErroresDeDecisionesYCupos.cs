@@ -135,7 +135,7 @@ public static class ErroresDeDecisionesYCupos
         DebtorBlockReason.RestrictiveListMatch => "se levanta cuando el oficial de cumplimiento libera la coincidencia en listas.",
         DebtorBlockReason.AssociateWithdrawal => "se levanta cuando la persona se reafilia en el maestro.",
         DebtorBlockReason.Deceased => "no se levanta: la persona falleció.",
-        DebtorBlockReason.Insolvency => "se levanta cuando termina el proceso de insolvencia.",
+        DebtorBlockReason.Insolvency => "se levanta solo al aplicar el acuerdo como novedad; si la negociación fracasa, lo levanta a mano quien tenga el permiso, con motivo.",
         DebtorBlockReason.LimitRevalidation => "se levanta al revalidar el cupo cuando ya cumple (o con la decisión del consejo).",
         _ => "lo levanta a mano quien tenga el permiso, con motivo.",
     };

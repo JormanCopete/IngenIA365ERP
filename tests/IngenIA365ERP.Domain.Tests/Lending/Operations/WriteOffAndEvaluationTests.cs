@@ -123,4 +123,58 @@ public class WriteOffAndEvaluationTests
         descartada.Status.Should().Be(PortfolioEvaluationStatus.Discarded);
         ((Action)(() => descartada.Recomendar(1))).Should().Throw<ReglaDeCarteraException>();
     }
+
+    [Fact]
+    public void Al_aplicar_el_que_ya_no_cumple_se_excluye_con_su_motivo_y_los_totales_quedan_con_los_que_siguen()
+    {
+        // Bloque D (decisión del dueño del 2026-10-15).
+        var lote = new WriteOffBatch { Number = "CAS-3" };
+        var sigue = Item(true, 1_000_000m);
+        var yaNo = Item(true, 500_000m);
+        lote.Recalcular([sigue, yaNo]);
+        lote.Enviar();
+        lote.Aprobar(79);
+
+        yaNo.Excluir("Al aplicar ya no cumple: el deudor volvió a ser asociado", "{\"x\":1}");
+        (yaNo.Status, yaNo.RejectionReason, yaNo.RequirementsJson)
+            .Should().Be((WriteOffItemStatus.Rejected, "Al aplicar ya no cumple: el deudor volvió a ser asociado", "{\"x\":1}"));
+        ((Action)(() => yaNo.Excluir("otra vez"))).Should().Throw<ReglaDeCarteraException>("sólo se excluye uno incluido");
+        sigue.Castigar(new LoanOperation { Kind = LoanOperationKind.WriteOff });
+        lote.RecalcularAlAplicar([sigue, yaNo]);
+        (lote.LoanCount, lote.TotalPrincipal).Should().Be((1, 1_000_000m));
+        lote.Aplicar(9, Ahora, false, null);
+        ((Action)(() => lote.RecalcularAlAplicar([sigue]))).Should().Throw<ReglaDeCarteraException>("ya se aplicó");
+    }
+
+    [Fact]
+    public void El_lote_se_anula_mientras_no_se_aplique_y_la_evaluacion_se_descarta_mientras_no_se_aplique()
+    {
+        var aprobado = new WriteOffBatch { Number = "CAS-4" };
+        aprobado.Recalcular([Item(true)]);
+        aprobado.Enviar();
+        aprobado.Aprobar(80);
+        aprobado.Cancelar();
+        aprobado.Status.Should().Be(WriteOffBatchStatus.Cancelled);
+
+        var aplicado = new WriteOffBatch { Number = "CAS-5" };
+        aplicado.Recalcular([Item(true)]);
+        aplicado.Enviar();
+        aplicado.Aprobar(81);
+        aplicado.Aplicar(9, Ahora, false, null);
+        ((Action)aplicado.Cancelar).Should().Throw<ReglaDeCarteraException>("lo aplicado no se anula");
+
+        var aprobada = new PortfolioEvaluation { Number = "EVA-5" };
+        aprobada.Recalcular([PortfolioEvaluationLoan.Nueva(0, 6, RatingCategory.B, RatingCategory.C, null, "Mora en otras entidades")]);
+        aprobada.Recomendar(53);
+        aprobada.Aprobar(54);
+        aprobada.Descartar();
+        aprobada.Status.Should().Be(PortfolioEvaluationStatus.Discarded);
+
+        var aplicada = new PortfolioEvaluation { Number = "EVA-6" };
+        aplicada.Recalcular([PortfolioEvaluationLoan.Nueva(0, 6, RatingCategory.B, RatingCategory.C, null, "Mora en otras entidades")]);
+        aplicada.Recomendar(55);
+        aplicada.Aprobar(56);
+        aplicada.Aplicar(9, Ahora);
+        ((Action)aplicada.Descartar).Should().Throw<ReglaDeCarteraException>("lo aplicado no se descarta");
+    }
 }

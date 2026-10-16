@@ -173,6 +173,13 @@ public class RiskEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(PrepararEvaluacion);
 
+        // Bloque D (decisión del dueño del 2026-10-15): descartar la evaluación mientras no se aplique, con motivo (va a la auditoría).
+        riesgo.MapPost("/evaluations/{id:guid}/discard", async (Guid id, MotivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new DiscardPortfolioEvaluationCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_Risk_Evaluations_Discard")
+            .ConClaveDeOperacion()
+            .RequirePermission(PrepararEvaluacion);
+
         riesgo.MapPost("/evaluations/{id:guid}/apply", async (Guid id, AplicarEvaluacionRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ApplyPortfolioEvaluationCommand(id, body.RecommendationSessionItemPublicId, body.ApprovalSessionItemPublicId)
                     { OperationKey = http.ClaveDeOperacion() }, ct))

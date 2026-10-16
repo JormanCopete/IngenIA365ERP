@@ -40,7 +40,11 @@ public sealed class EvaluacionDeCarteraTests : IAsyncLifetime
     }
 
     private PreparePortfolioEvaluationCommandHandler Preparar() =>
-        new(_c.Db, _c.D.Numerador(), _c.G.Perfil, new LectorDeDocumentoNormativo(_c.Db), _c.G.Alcance, _c.G.Auditoria, _c.G.Actor, _c.G.Reloj);
+        new(_c.Db, _c.D.Numerador(), _c.G.Perfil, new LectorDeDocumentoNormativo(_c.Db),
+            new NormaPendienteDeCartera(_c.D.Parametros(), _c.G.Perfil, new LectorDeDocumentoNormativo(_c.Db)), _c.G.Alcance, _c.G.Auditoria, _c.G.Actor,
+            _c.G.Reloj);
+
+    private DiscardPortfolioEvaluationCommandHandler Descartar() => new(_c.Db);
 
     private ApplyPortfolioEvaluationCommandHandler Aplicar() => new(_c.Db, new PuntoDeActaCerrado(_c.Db), _c.G.Actor, _c.G.Reloj);
 
@@ -220,5 +224,31 @@ public sealed class EvaluacionDeCarteraTests : IAsyncLifetime
         (deEnero.FinalRating, deEnero.RatingCause).Should().Be((RatingCategory.D, RatingCause.Evaluation));
         var deDiciembre = await Application.Lending.Integration.CategoriaContableDeCartera.LineasDe(_c.Db, diciembre).SingleAsync(l => l.LoanId == _c.Credito.Id);
         deDiciembre.RatingCause.Should().NotBe(RatingCause.Evaluation, "la evaluación rige desde el cierre de su mes de efecto y nunca reescribe cierres anteriores");
+    }
+
+    [Fact]
+    public async Task Descartarla_mientras_no_se_aplique_exige_motivo_y_libera_el_corte()
+    {
+        var r = await PrepararAsync();
+        new DiscardPortfolioEvaluationCommandValidator().Validate(new DiscardPortfolioEvaluationCommand(r.Value.PublicId, "")).IsValid.Should().BeFalse();
+        await AprobadaAsync(r.Value.PublicId);
+
+        var descartada = await Descartar().Handle(new DiscardPortfolioEvaluationCommand(r.Value.PublicId, "El consejo pidió rehacerla")
+            { OperationKey = Guid.NewGuid() }, default);
+        _c.Db.ChangeTracker.Clear();
+
+        descartada.IsSuccess.Should().BeTrue(descartada.IsFailure ? $"{descartada.Error.Code}: {descartada.Error.Message}" : string.Empty);
+        descartada.Value.Status.Should().Be(PortfolioEvaluationStatus.Discarded);
+        (await Descartar().Handle(new DiscardPortfolioEvaluationCommand(r.Value.PublicId, "Otra vez") { OperationKey = Guid.NewGuid() }, default))
+            .Error.Code.Should().Be(EvaluacionesDeCartera.CodigoEstadoInvalido);
+        (await PrepararAsync()).IsSuccess.Should().BeTrue("descartada, se prepara otra del mismo corte");
+    }
+
+    [Fact]
+    public async Task Prepararla_avisa_la_periodicidad_de_la_norma_si_sigue_pendiente()
+    {
+        var r = await PrepararAsync();
+
+        r.Value.Warnings!.Select(a => a.Code).Should().BeEquivalentTo([NormaPendienteDeCartera.PeriodicidadDeLaEvaluacion]);
     }
 }

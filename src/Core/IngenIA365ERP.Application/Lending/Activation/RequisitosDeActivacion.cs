@@ -45,7 +45,8 @@ namespace IngenIA365ERP.Application.Lending.Activation;
 /// queda <c>Waived</c>: no bloquea.</item>
 /// </list>
 /// Avisos que no bloquean: <c>CommercialParametersToAdjust</c>, <c>PayrollConceptAccounts</c> (lo pregunta la pantalla a Nómina; el comando no lee
-/// <c>PAY_</c>) y <c>UsersWithoutScope</c>. El carácter de producción es el del despliegue (<see cref="IAmbienteDeDespliegue"/>, que la API toma de
+/// <c>PAY_</c>), <c>UsersWithoutScope</c> y, desde el bloque D de K3, lo de la norma pendiente de validar (<c>WriteOffReportTermPending</c>,
+/// <c>PortfolioEvaluationPeriodicityPending</c>, <c>WriteOffMinimumArrearsPending</c>; <see cref="Common.NormaPendienteDeCartera"/>). El carácter de producción es el del despliegue (<see cref="IAmbienteDeDespliegue"/>, que la API toma de
 /// <c>IHostEnvironment.IsProduction()</c>), nunca el de la cooperativa. Las dependencias que suma US8 son opcionales: sin ellas sus requisitos quedan
 /// <c>NotApplicable</c> (las pruebas de la activación sin cartera previa las omiten). Sólo lee. (nuevo)
 /// </summary>
@@ -56,7 +57,8 @@ public sealed class RequisitosDeActivacion(
     IApplicationDbContext? db = null,
     INormativaVigente? normativa = null,
     IPerfilRegulatorio? perfiles = null,
-    IValoresNacionales? valores = null)
+    IValoresNacionales? valores = null,
+    Common.NormaPendienteDeCartera? normaPendiente = null)
 {
     public const string CargaAplicada = "LoadApplied";
     public const string DiferenciasAceptadas = "DifferencesAccepted";
@@ -173,7 +175,7 @@ public sealed class RequisitosDeActivacion(
         requisitos.Add(await OficinasAsync(carga, ct));
         requisitos.Add(await PuenteDeNominaAsync(fechaDeActivacion, ct));
 
-        return new EvaluacionDeActivacion(requisitos, [.. avisosDelMes, .. await AvisosAsync(ct)], sinModeloObligatorio);
+        return new EvaluacionDeActivacion(requisitos, [.. avisosDelMes, .. await AvisosAsync(fechaDeActivacion, ct)], sinModeloObligatorio);
     }
 
     // ------------------------------------------------------------------------------------------------- pérdida esperada --
@@ -316,7 +318,7 @@ public sealed class RequisitosDeActivacion(
 
     // ----------------------------------------------------------------------------------------------------------- avisos --
 
-    private async Task<IReadOnlyList<AvisoDeActivacionDto>> AvisosAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<AvisoDeActivacionDto>> AvisosAsync(DateOnly fecha, CancellationToken ct)
     {
         var avisos = new List<AvisoDeActivacionDto>
         {
@@ -339,6 +341,10 @@ public sealed class RequisitosDeActivacion(
                     string.Create(CultureInfo.InvariantCulture, $"{sinAlcance} usuarios con roles de Cartera no tienen alcance de líneas asignado."),
                     new QuienCorrigeDto("Cartera", "/cartera/alcances", "Lending.Scopes.Manage")));
         }
+        // Bloque D (decisión del dueño del 2026-10-15): lo de la norma y la política de K3 que sigue vacío y pendiente de validar avisa, sin bloquear.
+        if (normaPendiente is not null)
+            avisos.AddRange((await normaPendiente.AvisosAsync(fecha, Common.AvisosDeNorma.Todos, ct)).Select(a => new AvisoDeActivacionDto(a.Code, a.Message,
+                a.WhoFixes)));
         return avisos;
     }
 

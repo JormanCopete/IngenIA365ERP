@@ -24,7 +24,8 @@ namespace IngenIA365ERP.Application.Lending.Risk.Evaluations;
 /// si el documento <c>TiposDeOrganizacion</c> vigente dice la periodicidad del tipo de entidad del perfil regulatorio (semestral o anual), tienen que ser
 /// los suyos (<c>Lending.PortfolioEvaluation.PeriodInvalid</c>); otra evaluación sin aplicar del mismo corte → <c>Lending.PortfolioEvaluation.Overlaps</c>;
 /// cada crédito, vivo al corte y del alcance, con su calificación por las reglas al corte (la oficial del cierre de ese día, <c>RuleRatingAtCutoff</c>),
-/// la propuesta y su justificación. Nace en borrador, numerada (<c>EVC-</c>). (nuevo)
+/// la propuesta y su justificación. Nace en borrador, numerada (<c>EVC-</c>); <c>warnings[]</c> trae la periodicidad de la norma si sigue pendiente de
+/// validar (bloque D, <see cref="NormaPendienteDeCartera"/>; no bloquea). (nuevo)
 /// </summary>
 public sealed record PreparePortfolioEvaluationCommand(
     DateOnly CutoffDate,
@@ -81,6 +82,7 @@ public sealed class PreparePortfolioEvaluationCommandHandler(
     NumeradorDeCartera numerador,
     IPerfilRegulatorio perfiles,
     INormativaVigente normativa,
+    NormaPendienteDeCartera norma,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
@@ -142,7 +144,8 @@ public sealed class PreparePortfolioEvaluationCommandHandler(
         db.PortfolioEvaluationLoans.AddRange(lineas);
         evaluacion.Recalcular(lineas);
         await db.SaveChangesAsync(ct);
-        return Result.Success(await EvaluacionesDeCartera.DtoAsync(db, evaluacion, lineas, 1, lineas.Count, ct));
+        var avisos = await norma.AvisosAsync(corte, AvisosDeNorma.Evaluacion, ct);
+        return Result.Success((await EvaluacionesDeCartera.DtoAsync(db, evaluacion, lineas, 1, lineas.Count, ct)) with { Warnings = avisos });
     }
 
     private static Result<PortfolioEvaluationDto> Falla(Error e) => Result.Failure<PortfolioEvaluationDto>(e);
@@ -207,4 +210,43 @@ public sealed class ApplyPortfolioEvaluationCommandHandler(
     }
 
     private static Result<PortfolioEvaluationDto> Falla(Error e) => Result.Failure<PortfolioEvaluationDto>(e);
+}
+
+/// <summary>
+/// Descarta una evaluación de cartera que no se aplicó (feature 013, K3, bloque D; decisión del dueño del 2026-10-15; api.md §12.6,
+/// <c>POST /api/lending/risk/evaluations/{id}/discard</c>, <c>Lending.PortfolioEvaluations.Prepare</c> —quien la prepara, mínimo privilegio—, con clave y
+/// motivo): en borrador, recomendada o aprobada pasa a <c>Discarded</c>; aplicada, rechazada o ya descartada responde
+/// <c>Lending.PortfolioEvaluation.InvalidStatus</c>. La tabla no guarda el motivo: va a la auditoría del comando (<see cref="IConMotivo"/>). Descartada,
+/// se puede preparar otra del mismo corte. (nuevo)
+/// </summary>
+public sealed record DiscardPortfolioEvaluationCommand(Guid PortfolioEvaluationPublicId, string Reason)
+    : IRequest<Result<PortfolioEvaluationDto>>, IOperacionIdempotente, IConMotivo
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class DiscardPortfolioEvaluationCommandValidator : ValidadorConMotivo<DiscardPortfolioEvaluationCommand>
+{
+    public DiscardPortfolioEvaluationCommandValidator() => RuleFor(x => x.PortfolioEvaluationPublicId).NotEmpty();
+}
+
+public sealed class DiscardPortfolioEvaluationCommandHandler(IApplicationDbContext db)
+    : IRequestHandler<DiscardPortfolioEvaluationCommand, Result<PortfolioEvaluationDto>>
+{
+    public async Task<Result<PortfolioEvaluationDto>> Handle(DiscardPortfolioEvaluationCommand request, CancellationToken ct)
+    {
+        var leida = await EvaluacionesDeCartera.LeerAsync(db, request.PortfolioEvaluationPublicId, seguir: true, ct);
+        if (leida.IsFailure) return Result.Failure<PortfolioEvaluationDto>(leida.Error);
+        var e = leida.Value;
+        try
+        {
+            e.Descartar();
+        }
+        catch (ReglaDeCarteraException ex)
+        {
+            return Result.Failure<PortfolioEvaluationDto>(ErroresDeGobierno.De(ex.Problema));
+        }
+        await db.SaveChangesAsync(ct);
+        return Result.Success(await EvaluacionesDeCartera.DtoAsync(db, e, [], 1, 0, ct));
+    }
 }

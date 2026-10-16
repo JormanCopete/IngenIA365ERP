@@ -20,10 +20,10 @@ public class WriteOffBatchItem : AuditableEntity
     public WriteOffItemStatus Status { get; private set; }
 
     /// <summary>Cada requisito con resultado y evidencia (de la norma y de la política).</summary>
-    public string RequirementsJson { get; init; } = "{}";
+    public string RequirementsJson { get; private set; } = "{}";
 
     /// <summary>Qué falta (<c>Lending.WriteOff.RequirementMissing</c>).</summary>
-    public string? RejectionReason { get; init; }
+    public string? RejectionReason { get; private set; }
 
     public Guid? ReportAttachmentPublicId { get; init; }
 
@@ -79,6 +79,22 @@ public class WriteOffBatchItem : AuditableEntity
         Status = WriteOffItemStatus.WrittenOff;
         WriteOffOperation = operacion;
         if (operacion.Id > 0) WriteOffOperationId = operacion.Id;
+    }
+
+    /// <summary>
+    /// <c>Included</c> → <c>Rejected</c> al aplicar el lote (bloque D, decisión del dueño del 2026-10-15): el crédito ya no cumple los requisitos a la
+    /// fecha de aplicación (o ya no está vigente) y se excluye con su motivo; el resto del lote se castiga. Con la verificación nueva, sus requisitos
+    /// quedan como se verificaron al aplicar.
+    /// </summary>
+    public void Excluir(string motivo, string? requisitosJson = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(motivo);
+        if (Status != WriteOffItemStatus.Included)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(RequisitosDeCastigo.CodigoRequisitoFaltante,
+                "Sólo se excluye un crédito incluido en el lote.", "status", Status.ToString()));
+        Status = WriteOffItemStatus.Rejected;
+        RejectionReason = Recortar(motivo.Trim());
+        if (!string.IsNullOrWhiteSpace(requisitosJson)) RequirementsJson = requisitosJson;
     }
 
     private static string Recortar(string texto) => texto.Length <= 500 ? texto : texto[..500];

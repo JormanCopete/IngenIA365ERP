@@ -34,7 +34,10 @@ public sealed record PortfolioEvaluationLoanDto(
 public sealed record PortfolioEvaluationSessionItemDto(Guid ItemPublicId, Guid SessionPublicId, string? MinutesNumber, int Order, SessionItemKind Kind,
     CreditDecisionOutcome? Outcome);
 
-/// <summary>Una evaluación de cartera (api.md §12.6): lista (sin créditos) y detalle (con la página de créditos pedida). (nuevo)</summary>
+/// <summary>
+/// Una evaluación de cartera (api.md §12.6): lista (sin créditos) y detalle (con la página de créditos pedida). <c>Warnings</c> (bloque D) trae, al
+/// prepararla, lo de la norma que sigue pendiente de validar (<see cref="NormaPendienteDeCartera"/>): no bloquea. (nuevo)
+/// </summary>
 public sealed record PortfolioEvaluationDto(
     Guid PublicId,
     string Number,
@@ -51,7 +54,8 @@ public sealed record PortfolioEvaluationDto(
     DateTime? AppliedAt,
     IReadOnlyList<PortfolioEvaluationLoanDto> Loans,
     int Page,
-    int PageSize);
+    int PageSize,
+    IReadOnlyList<AvisoDeNormaPendienteDto>? Warnings = null);
 
 /// <summary>
 /// Lo común de la evaluación de cartera (feature 013, K3, US14, T0912; FR-102; data-model §23.7): el expediente, el prefijo, los códigos y mensajes, los

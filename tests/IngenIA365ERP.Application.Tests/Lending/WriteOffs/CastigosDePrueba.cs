@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Integration.Savings;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
+using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Sessions;
 using IngenIA365ERP.Application.Lending.WriteOffs;
 using IngenIA365ERP.Application.Tests.Common;
@@ -62,8 +63,10 @@ internal sealed class CastigosDePrueba : IDisposable
     // ------------------------------------------------------------------------------------------------------------ piezas --
 
     public CastigosDeCartera Castigos() => new(Db, P.C.Cargador(), Aportes, D.Parametros());
+    public NormaPendienteDeCartera Norma() => new(D.Parametros(), G.Perfil, D.O.L.Normativa());
     public CreateWriteOffBatchCommandHandler Crear() =>
-        new(Db, Castigos(), D.Numerador(), G.Intervenciones(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Actor, G.Reloj);
+        new(Db, Castigos(), D.Numerador(), G.Intervenciones(), Norma(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Actor, G.Reloj);
+    public VoidWriteOffBatchCommandHandler Anular() => new(Db, Castigos(), G.Alcance, G.Auditoria);
     public AddWriteOffBatchItemCommandHandler Agregar() => new(Db, Castigos(), G.Intervenciones(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
     public RemoveWriteOffBatchItemCommandHandler Quitar() => new(Db, Castigos(), G.Alcance, G.Auditoria);
     public SubmitWriteOffBatchCommandHandler Enviar() => new(Db, Castigos(), G.Alcance, G.Auditoria);

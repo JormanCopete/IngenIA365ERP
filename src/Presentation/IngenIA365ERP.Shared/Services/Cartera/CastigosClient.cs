@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Shared.Services.Cartera;
 /// <summary>
 /// Cliente tipado de US14 (feature 013, K3, T0916; contracts/api.md §11.3 y §12.6): los lotes de castigo (lista, detalle, armar, agregar y quitar
 /// créditos, enviar al consejo, aplicar con el punto del acta, registrar el reporte al supervisor) y la evaluación de cartera (lista, detalle,
-/// preparar, aplicar con los puntos del comité y del consejo). Las decisiones del consejo y del comité se toman en Actas. Sin <c>Authorization</c>
+/// preparar, aplicar con los puntos del comité y del consejo) y, desde el bloque D, anular el lote y descartar la evaluación con motivo. Las decisiones del consejo y del comité se toman en Actas. Sin <c>Authorization</c>
 /// a mano: la pone el handler; toda escritura con su <see cref="ClaveDeOperacion"/>. (nuevo)
 /// </summary>
 public sealed class CastigosClient(HttpClient http, CentralAuthClient auth)
@@ -49,6 +49,10 @@ public sealed class CastigosClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<LoteDeCastigoDto>> EnviarAlConsejoAsync(Guid lote, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<LoteDeCastigoDto>(HttpMethod.Post, $"{RutaDeLotes}/{lote}/submit", null, clave, ct);
 
+    /// <summary>Anula el lote mientras no se aplique (bloque D), con motivo.</summary>
+    public Task<ResultadoDeInventario<LoteDeCastigoDto>> AnularAsync(Guid lote, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<LoteDeCastigoDto>(HttpMethod.Post, $"{RutaDeLotes}/{lote}/void", new MotivoDeCarteraRequest(motivo), clave, ct);
+
     public Task<ResultadoDeInventario<CastigoAplicadoDto>> AplicarAsync(Guid lote, AplicarCastigoRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
         Enviar<CastigoAplicadoDto>(HttpMethod.Post, $"{RutaDeLotes}/{lote}/apply", request, clave, ct);
@@ -67,6 +71,11 @@ public sealed class CastigosClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<EvaluacionDeCarteraDto>> PrepararAsync(EvaluacionRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<EvaluacionDeCarteraDto>(HttpMethod.Post, RutaDeEvaluaciones, request, clave, ct);
+
+    /// <summary>Descarta la evaluación mientras no se aplique (bloque D), con motivo.</summary>
+    public Task<ResultadoDeInventario<EvaluacionDeCarteraDto>> DescartarEvaluacionAsync(Guid evaluacion, string motivo, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<EvaluacionDeCarteraDto>(HttpMethod.Post, $"{RutaDeEvaluaciones}/{evaluacion}/discard", new MotivoDeCarteraRequest(motivo), clave, ct);
 
     public Task<ResultadoDeInventario<EvaluacionDeCarteraDto>> AplicarEvaluacionAsync(Guid evaluacion, AplicarEvaluacionRequest request,
         ClaveDeOperacion clave, CancellationToken ct = default) =>

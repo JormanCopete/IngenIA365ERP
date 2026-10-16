@@ -243,6 +243,9 @@ public static class AuditEventTypes
     // US8 (T0752): la activación de Cartera con sus requisitos, conteos y huellas; no es lectura.
     public const string LendingActivationRegistered = "Lending.Activation.Registered";
 
+    // K3, bloque D (decisión del dueño del 2026-10-15): el crédito que se excluye de un lote de castigo al aplicarlo porque ya no cumple; no es lectura.
+    public const string LendingWriteOffItemExcluded = "Lending.WriteOffItem.Excluded";
+
     // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
     // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.
     public const string LendingDocumentIssued = "Lending.Document.Issued";

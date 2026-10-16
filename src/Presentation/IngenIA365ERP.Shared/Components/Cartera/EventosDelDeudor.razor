@@ -9,8 +9,9 @@
 @* Feature 013, K3, US11 (T0892; contracts/api.md §11.4; FR-097, FR-098, T102): en el expediente del crédito, los eventos del deudor (fallecimiento,
    retiro de la cooperativa, embargo), sus procesos de insolvencia y las reclamaciones al seguro de vida deudores del crédito. «Registrar evento del
    deudor» (Lending.DebtorEvents.Manage) bloquea el cupo y, si es el fallecimiento, abre la reclamación y suspende el cobro; «Insolvencia»
-   (Lending.Insolvency.Manage) abre el proceso —suspende la causación y el cobro y mantiene la calificación— o registra su fracaso. El acuerdo se
-   tramita como novedad de reestructuración. La reclamación la cierra pagada sólo el contrato, cuando la aseguradora paga; aquí se niega o se
+   (Lending.Insolvency.Manage) abre el proceso —suspende la causación y el cobro y mantiene la calificación— o registra su fracaso; el fracaso no levanta el
+   bloqueo de crédito nuevo: lo levanta a mano, con motivo, quien tenga Lending.Blocks.Manage en Cupos (decisión del dueño del 2026-10-15). El
+   acuerdo se tramita como novedad de reestructuración y al aplicarse sí levanta el bloqueo. La reclamación la cierra pagada sólo el contrato, cuando la aseguradora paga; aquí se niega o se
    desiste. El soporte se sube a la persona y no se borra. *@
 <div class="info-card">
     <div class="toolbar">
@@ -125,6 +126,7 @@
                     {
                         <label class="campo">Fecha del fracaso * <input class="e-input" type="date" @bind="_fecha" /></label>
                         <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                        <p class="texto-tenue campo-ancho">El bloqueo de crédito nuevo por insolvencia se mantiene: lo levanta, con motivo, quien tenga el permiso de bloqueos en Cupos.</p>
                     }
                     else if (_dialogo == Dialogo.Reclamacion)
                     {

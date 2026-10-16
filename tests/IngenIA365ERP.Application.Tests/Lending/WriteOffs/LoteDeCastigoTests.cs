@@ -1,6 +1,7 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Alerts;
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Segregation;
@@ -206,16 +207,84 @@ public sealed class LoteDeCastigoTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Los_requisitos_se_vuelven_a_verificar_al_aplicar()
+    public async Task Los_requisitos_se_vuelven_a_verificar_al_aplicar_y_si_ninguno_cumple_el_lote_no_se_aplica()
     {
+        // Bloque D (decisión del dueño del 2026-10-15): el que ya no cumple se excluye; si no queda ninguno, el lote no se aplica.
         var lote = await _c.EnviadoAsync(await _c.CastigableAsync());
         var punto = await _c.AprobadoAsync(lote);
         await _c.AsociadoAsync(_c.Credito, asociado: true);
 
         var r = await _c.AplicarAsync(lote.PublicId, punto.PublicId);
 
-        r.Error.Code.Should().Be(RequisitosDeCastigo.CodigoRequisitoFaltante);
-        CastigosDePrueba.Datos(r.Error).GetProperty("loanNumber").GetString().Should().Be(_c.Credito.Number);
+        r.Error.Code.Should().Be(ErroresDeCastigo.CodigoNingunoCumple);
+        var excluido = CastigosDePrueba.Datos(r.Error).GetProperty("excluded")[0];
+        excluido.GetProperty("loanNumber").GetString().Should().Be(_c.Credito.Number);
+        excluido.GetProperty("missing")[0].GetString().Should().Be(RequisitosDeCastigo.NoEsAsociado);
+        (await _c.Db.WriteOffBatches.AsNoTracking().SingleAsync(b => b.PublicId == lote.PublicId)).Status.Should().Be(WriteOffBatchStatus.Approved);
+        (await _c.Db.WriteOffBatchItems.AsNoTracking().SingleAsync()).Status.Should().Be(WriteOffItemStatus.Included, "no se guardó nada");
+    }
+
+    [Fact]
+    public async Task Al_aplicar_el_que_ya_no_cumple_se_excluye_con_su_motivo_y_el_resto_se_castiga()
+    {
+        var dario = await _c.P.C.DesembolsarAsync(_c.D.O.Solicitud(1_000_000m, 12, _c.D.O.Dario));
+        var lote = await _c.EnviadoAsync(await _c.CastigableAsync(), await _c.CastigableAsync(dario, 1_000_000m, 100_000m));
+        lote.LoanCount.Should().Be(2);
+        var punto = await _c.AprobadoAsync(lote);
+        await _c.AsociadoAsync(dario, asociado: true);
+
+        var r = await _c.AplicarAsync(lote.PublicId, punto.PublicId);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        r.Value.Operations.Should().ContainSingle(o => o.LoanPublicId == _c.Credito.PublicId);
+        var excluido = r.Value.Excluded.Should().ContainSingle().Subject;
+        excluido.LoanPublicId.Should().Be(dario.PublicId);
+        excluido.Missing.Should().Equal(RequisitosDeCastigo.NoEsAsociado);
+        excluido.Reason.Should().Contain("ya no cumple");
+        var item = await _c.Db.WriteOffBatchItems.AsNoTracking().SingleAsync(i => i.LoanId == dario.Id);
+        (item.Status, item.RejectionReason).Should().Be((WriteOffItemStatus.Rejected, excluido.Reason));
+        (await _c.Db.Loans.AsNoTracking().SingleAsync(l => l.Id == dario.Id)).Status.Should().Be(LoanStatus.Active);
+        var aplicado = await _c.Db.WriteOffBatches.AsNoTracking().SingleAsync(b => b.PublicId == lote.PublicId);
+        (aplicado.Status, aplicado.LoanCount, aplicado.TotalPrincipal).Should().Be((WriteOffBatchStatus.Applied, 1, 3_000_000m));
+        var eventos = (await _c.Db.AuditOutbox.AsNoTracking().ToListAsync()).Select(f => AuditoriaEncadenada.LeerCarga(f.PayloadJson!))
+            .Where(e => e.Action == AuditEventTypes.LendingWriteOffItemExcluded).ToList();
+        eventos.Should().ContainSingle().Which.EntityPublicId.Should().Be(lote.PublicId.ToString());
+        var detalle = (await _c.Leer().Handle(new GetWriteOffBatchQuery(lote.PublicId), default)).Value;
+        detalle.Rejected.Should().ContainSingle(x => x.LoanPublicId == dario.PublicId && x.Reason == excluido.Reason);
+        await _c.P.ElLibroCuadraAsync();
+    }
+
+    [Fact]
+    public async Task Anular_el_lote_mientras_no_se_aplique_libera_sus_creditos_y_exige_motivo()
+    {
+        var lote = await _c.EnviadoAsync(await _c.CastigableAsync());
+        await _c.AprobadoAsync(lote);
+        new VoidWriteOffBatchCommandValidator().Validate(new VoidWriteOffBatchCommand(lote.PublicId, " ")).IsValid.Should().BeFalse("sin motivo no se anula");
+
+        var r = await _c.Anular().Handle(new VoidWriteOffBatchCommand(lote.PublicId, "El consejo pidió revisarlo") { OperationKey = Guid.NewGuid() }, default);
+        _c.Db.ChangeTracker.Clear();
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        r.Value.Status.Should().Be(WriteOffBatchStatus.Cancelled);
+        (await _c.Anular().Handle(new VoidWriteOffBatchCommand(lote.PublicId, "Otra vez") { OperationKey = Guid.NewGuid() }, default))
+            .Error.Code.Should().Be(ErroresDeCastigo.CodigoEstadoInvalido);
+        (await _c.ArmarAsync(await _c.SoportesAsync())).IsSuccess.Should().BeTrue("el crédito quedó libre para otro lote");
+    }
+
+    [Fact]
+    public async Task Armarlo_avisa_lo_de_la_norma_que_sigue_pendiente_sin_bloquear()
+    {
+        var sinNorma = await _c.ArmarAsync(await _c.CastigableAsync());
+
+        sinNorma.IsSuccess.Should().BeTrue(sinNorma.IsFailure ? $"{sinNorma.Error.Code}: {sinNorma.Error.Message}" : string.Empty);
+        sinNorma.Value.Warnings!.Select(a => a.Code).Should().BeEquivalentTo([NormaPendienteDeCartera.PlazoDelReporteDeCastigos,
+            NormaPendienteDeCartera.AlturaMinimaDelCastigo]);
+
+        await _c.TipoDeEntidadAsync();
+        await _c.ParametroAsync(ParametrosDeCartera.CastigoDiasMinimosDeMora, "360");
+        var dario = await _c.P.C.DesembolsarAsync(_c.D.O.Solicitud(1_000_000m, 12, _c.D.O.Dario));
+        var conNorma = await _c.ArmarAsync(await _c.SoportesAsync(dario));
+        conNorma.Value.Warnings.Should().BeEmpty();
     }
 
     [Fact]

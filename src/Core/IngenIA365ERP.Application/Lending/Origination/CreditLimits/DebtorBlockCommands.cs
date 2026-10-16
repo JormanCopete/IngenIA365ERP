@@ -53,7 +53,8 @@ public sealed record DebtorBlockDto(
     UsuarioRefDto? LiftedBy,
     string? LiftReason,
     Guid? Support,
-    string HowItLifts);
+    string HowItLifts,
+    bool CanLiftManually = false);
 
 /// <summary>Arma los DTO de bloqueos. (nuevo)</summary>
 public static class ConsultasDeBloqueos
@@ -62,10 +63,23 @@ public static class ConsultasDeBloqueos
     {
         var personas = await ReferenciasDeGobierno.PersonasAsync(db, bloqueos.Select(b => b.PersonId), ct);
         var usuarios = await ReferenciasDeGobierno.UsuariosAsync(db, bloqueos.Where(b => b.LiftedByUserId is not null).Select(b => b.LiftedByUserId!.Value), ct);
+        var deInsolvencia = bloqueos.Where(b => b.Reason == DebtorBlockReason.Insolvency).Select(b => b.PersonId).Distinct().ToList();
+        var negociando = deInsolvencia.Count == 0
+            ? new HashSet<int>()
+            : (await db.InsolvencyProceedings.AsNoTracking()
+                .Where(p => deInsolvencia.Contains(p.PersonId) && p.Status == InsolvencyProceedingStatus.Negotiating && !p.IsDeleted)
+                .Select(p => p.PersonId).ToListAsync(ct)).ToHashSet();
         return bloqueos.Select(b => new DebtorBlockDto(b.PublicId, personas[b.PersonId], b.Reason, b.IsAutomatic ? "Automatic" : "Manual", b.Notes,
             b.StartedOn, b.LiftedAt, b.LiftedByUserId is { } u ? usuarios.GetValueOrDefault(u) : null, b.LiftReason, b.SupportAttachmentPublicId,
-            ErroresDeDecisionesYCupos.ComoSeLevanta(b.Reason))).ToList();
+            ErroresDeDecisionesYCupos.ComoSeLevanta(b.Reason), b.Vigente && SeLevantaAMano(b, negociando.Contains(b.PersonId)))).ToList();
     }
+
+    /// <summary>
+    /// ¿Lo levanta una persona con <c>Lending.Blocks.Manage</c>? El manual y el embargo siempre; el de insolvencia cuando la persona ya no tiene una
+    /// negociación abierta (decisión del dueño del 2026-10-15: el fracaso no lo levanta solo; el acuerdo aplicado como novedad sí).
+    /// </summary>
+    public static bool SeLevantaAMano(DebtorBlock b, bool negociacionAbierta) =>
+        !b.IsAutomatic || (b.Reason == DebtorBlockReason.Insolvency && !negociacionAbierta);
 }
 
 /// <summary>
@@ -119,7 +133,8 @@ public sealed class RegisterDebtorBlockCommandHandler(
 /// <summary>
 /// Levanta un bloqueo manual o un embargo (api.md §7.2, <c>POST /{id}/lift</c>, <c>Lending.Blocks.Manage</c>, con clave y motivo): el
 /// levantamiento se escribe una sola vez (<c>[EscrituraUnica]</c>; <c>Lending.Block.AlreadyLifted</c>). Uno automático no se levanta a mano:
-/// <c>Lending.Block.Automatic</c> con <c>{ kind, howItLifts }</c>. (nuevo)
+/// <c>Lending.Block.Automatic</c> con <c>{ kind, howItLifts }</c>; salvo el de insolvencia cuando la negociación ya no está abierta —la fracasada, cuyo
+/// bloqueo se mantiene hasta que una persona autorizada lo levanta con motivo (decisión del dueño del 2026-10-15)—. (nuevo)
 /// </summary>
 public sealed record LiftDebtorBlockCommand(Guid BlockPublicId, string Reason) : IRequest<Result>, IOperacionIdempotente, IConMotivo
 {
@@ -140,7 +155,9 @@ public sealed class LiftDebtorBlockCommandHandler(IApplicationDbContext db, IAct
         if (actor.UserId is not { } usuario) return Result.Failure(ErroresDeGobierno.SinUsuario());
         var bloqueo = await db.DebtorBlocks.FirstOrDefaultAsync(b => b.PublicId == request.BlockPublicId && !b.IsDeleted, ct);
         if (bloqueo is null) return Result.Failure(ErroresDeDecisionesYCupos.BloqueoInexistente());
-        if (bloqueo.IsAutomatic) return Result.Failure(ErroresDeDecisionesYCupos.BloqueoAutomatico(bloqueo.Reason));
+        var negociando = bloqueo.Reason == DebtorBlockReason.Insolvency && await db.InsolvencyProceedings.AsNoTracking()
+            .AnyAsync(p => p.PersonId == bloqueo.PersonId && p.Status == InsolvencyProceedingStatus.Negotiating && !p.IsDeleted, ct);
+        if (!ConsultasDeBloqueos.SeLevantaAMano(bloqueo, negociando)) return Result.Failure(ErroresDeDecisionesYCupos.BloqueoAutomatico(bloqueo.Reason));
         if (!bloqueo.Vigente)
             return Result.Failure(new ErrorConDatos(ErroresDeDecisionesYCupos.CodigoBloqueoYaLevantado, "El bloqueo ya se levantó.",
                 new { liftedOn = bloqueo.LiftedOn is { } d ? ErroresDeOriginacion.Fecha(d) : null }));

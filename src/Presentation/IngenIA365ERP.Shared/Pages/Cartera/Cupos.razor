@@ -149,7 +149,7 @@
                         <td>@bloqueo.Since.ToString("dd/MM/yyyy")</td>
                         <td>@(bloqueo.LiftedAt?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</td>
                         <td>
-                            @if (bloqueo.LiftedAt is null && bloqueo.Origin == "Manual")
+                            @if (bloqueo.LiftedAt is null && (bloqueo.Origin == "Manual" || bloqueo.CanLiftManually))
                             {
                                 <PermissionGate Required="Lending.Blocks.Manage">
                                     <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirLevantar(bloqueo))">Levantar…</SfButton>

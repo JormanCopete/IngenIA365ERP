@@ -22,7 +22,8 @@ namespace IngenIA365ERP.Application.Lending.WriteOffs;
 /// clave; FR-095, US14-1, C98): sobre créditos vigentes del alcance que no estén en otro lote abierto, verifica a hoy los requisitos de la norma y de la
 /// política de cada uno (<see cref="CastigosDeCartera.VerificarAsync"/>); los que cumplen quedan <c>Included</c> con sus montos al corte y el deterioro del
 /// último cierre (<c>ImpairmentAtCutoff</c>) y los que no, <c>Rejected</c> con lo que falta. Numera el lote (<c>LCA-</c>), registra la intervención
-/// <c>ArmarLoteDeCastigo</c> y responde 201 con el lote en borrador. (nuevo)
+/// <c>ArmarLoteDeCastigo</c> y responde 201 con el lote en borrador y, en <c>warnings[]</c>, lo de la norma y la política del castigo que sigue pendiente
+/// de validar (bloque D, <see cref="NormaPendienteDeCartera"/>; no bloquea). (nuevo)
 /// </summary>
 public sealed record CreateWriteOffBatchCommand(IReadOnlyList<Guid> LoanPublicIds, string Reason, IReadOnlyList<WriteOffSupportInput>? Reports = null)
     : IRequest<Result<WriteOffBatchDto>>, IOperacionIdempotente
@@ -48,6 +49,7 @@ public sealed class CreateWriteOffBatchCommandHandler(
     CastigosDeCartera castigos,
     NumeradorDeCartera numerador,
     RegistroDeIntervenciones intervenciones,
+    NormaPendienteDeCartera norma,
     ICerrojoDeCartera cerrojo,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
@@ -66,6 +68,7 @@ public sealed class CreateWriteOffBatchCommandHandler(
             AccionesDeSegregacion.ArmarLoteDeCastigo, hoy, ct);
         if (verificada.IsFailure) return Falla(verificada.Error);
         var soportes = (request.Reports ?? []).ToDictionary(r => r.LoanPublicId);
+        var avisos = await norma.AvisosAsync(hoy, AvisosDeNorma.Castigo, ct);
 
         return await TransaccionExplicita.EjecutarAsync(db, async () =>
         {
@@ -88,7 +91,7 @@ public sealed class CreateWriteOffBatchCommandHandler(
             intervenciones.Registrar(verificada.Value with { Expediente = new ExpedienteDeCartera(CastigosDeCartera.Expediente, lote.PublicId) },
                 LendingDecisionSubjects.WriteOffBatch, lote.PublicId);
             await db.SaveChangesAsync(ct);
-            return Result.Success(await castigos.DtoAsync(lote, items, ct));
+            return Result.Success((await castigos.DtoAsync(lote, items, ct)) with { Warnings = avisos });
         }, ct);
     }
 
@@ -222,6 +225,47 @@ public sealed class SubmitWriteOffBatchCommandHandler(
         try
         {
             lote.Enviar();
+        }
+        catch (ReglaDeCarteraException ex)
+        {
+            return Result.Failure<WriteOffBatchDto>(ErroresDeGobierno.De(ex.Problema));
+        }
+        await db.SaveChangesAsync(ct);
+        return Result.Success(await castigos.DtoAsync(lote, items, ct));
+    }
+}
+
+/// <summary>
+/// Anula un lote de castigo que no se aplicó (feature 013, K3, bloque D; decisión del dueño del 2026-10-15; api.md §11.3,
+/// <c>POST /api/lending/write-off-batches/{id}/void</c>, <c>Lending.WriteOffs.Prepare</c> —quien arma el lote, mínimo privilegio—, con clave y motivo):
+/// en borrador, enviado o ya aprobado por el consejo pasa a <c>Cancelled</c>; aplicado, rechazado o ya anulado responde
+/// <c>Lending.WriteOffBatch.InvalidStatus</c>. La tabla no guarda el motivo: va a la auditoría del comando (<see cref="IConMotivo"/>). Sus créditos
+/// quedan libres para otro lote. (nuevo)
+/// </summary>
+public sealed record VoidWriteOffBatchCommand(Guid WriteOffBatchPublicId, string Reason) : IRequest<Result<WriteOffBatchDto>>, IOperacionIdempotente, IConMotivo
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class VoidWriteOffBatchCommandValidator : ValidadorConMotivo<VoidWriteOffBatchCommand>
+{
+    public VoidWriteOffBatchCommandValidator() => RuleFor(x => x.WriteOffBatchPublicId).NotEmpty();
+}
+
+public sealed class VoidWriteOffBatchCommandHandler(
+    IApplicationDbContext db,
+    CastigosDeCartera castigos,
+    IAlcanceDeCartera alcance,
+    LendingAuditEmitter auditoria) : IRequestHandler<VoidWriteOffBatchCommand, Result<WriteOffBatchDto>>
+{
+    public async Task<Result<WriteOffBatchDto>> Handle(VoidWriteOffBatchCommand request, CancellationToken ct)
+    {
+        var leido = await CastigosDeCartera.LeerAsync(db, alcance, auditoria, request.WriteOffBatchPublicId, seguir: true, ct);
+        if (leido.IsFailure) return Result.Failure<WriteOffBatchDto>(leido.Error);
+        var (lote, items) = leido.Value;
+        try
+        {
+            lote.Cancelar();
         }
         catch (ReglaDeCarteraException ex)
         {

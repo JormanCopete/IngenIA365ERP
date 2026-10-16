@@ -128,6 +128,15 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirActivacionRegistradaAsync(Guid activationPublicId, object detalle, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingActivationRegistered, "LendingActivation", activationPublicId, detalle, ct);
 
+    /// <summary>
+    /// K3, bloque D: el crédito que se excluye de un lote de castigo al aplicarlo porque ya no cumple, con lo que le falta y el motivo, en la transacción del
+    /// lote (se llama después de su guardado). No es una lectura sensible: no va en <see cref="LecturasSensibles"/>.
+    /// </summary>
+    public Task<Guid?> EmitirCreditoExcluidoDelCastigoAsync(Guid batchPublicId, string lote, string credito, IReadOnlyList<string> faltan, string motivo,
+        CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingWriteOffItemExcluded, "WriteOffBatch", batchPublicId,
+            new { batch = lote, loanNumber = credito, missing = faltan, reason = motivo }, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try

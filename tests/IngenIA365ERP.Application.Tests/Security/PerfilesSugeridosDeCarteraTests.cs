@@ -53,7 +53,9 @@ public class PerfilesSugeridosDeCarteraTests
 
         codigos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal));
         codigos.Should().NotContain("Lending.Sessions.Vote");
-        codigos.Should().HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 6, "todo Lending.* menos los cuatro Decisions, el voto y los dobles de prueba");
+        codigos.Where(c => c.StartsWith("Lending.", StringComparison.Ordinal)).Should()
+            .HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 6, "todo Lending.* menos los cuatro Decisions, el voto y los dobles de prueba");
+        codigos.Where(c => !c.StartsWith("Lending.", StringComparison.Ordinal)).Should().Equal(["Attachments.Upload"], "sube soportes (bloque D)");
     }
 
     /// <summary>
@@ -104,5 +106,24 @@ public class PerfilesSugeridosDeCarteraTests
         Codigos("cartera.analista").Should().Contain("Lending.Decisions.Analyst");
         Codigos("cartera.jefe").Should().Contain("Lending.Decisions.Coordinator");
         Codigos("cartera.gerente").Should().Contain(["Lending.Decisions.Management", "Lending.Decisions.Exceptions"]);
+    }
+
+    /// <summary>
+    /// K3, bloque D (decisión del dueño del 2026-10-15): los roles sugeridos hacen su propio trabajo con mínimo privilegio —analista y gerente deciden
+    /// novedades (la ruta de decisiones exige verlas), quien sube soportes de novedades, eventos del deudor y castigo trae <c>Attachments.Upload</c> y el
+    /// consejo lee los créditos y las calificaciones de lo que aplica—, sin descargar ni borrar adjuntos.
+    /// </summary>
+    [Fact]
+    public void Los_roles_de_Cartera_pueden_hacer_su_propio_trabajo_de_K3()
+    {
+        Codigos("cartera.analista").Should().Contain("Lending.Novelties.Read");
+        Codigos("cartera.gerente").Should().Contain("Lending.Novelties.Read");
+        Codigos("cartera.consejo").Should().Contain(["Lending.Loans.Read", "Lending.Ratings.Read", "Attachments.Upload"]);
+        foreach (var clave in new[] { "cartera.administrador", "cartera.jefe", "cartera.consejo" })
+            Codigos(clave).Should().Contain("Attachments.Upload", $"«{clave}» sube soportes");
+        foreach (var plantilla in PerfilesSugeridos.DelModulo("Lending"))
+            Codigos(plantilla.Key).Should().NotContain(["Attachments.Delete"], $"«{plantilla.Key}» no borra adjuntos");
+        foreach (var clave in new[] { "cartera.asesor", "cartera.analista", "cartera.gerente", "cartera.gestor-cobranza", "cartera.auditor" })
+            Codigos(clave).Should().NotContain("Attachments.Upload", $"«{clave}» no sube soportes de K3");
     }
 }

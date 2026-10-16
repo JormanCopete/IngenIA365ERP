@@ -280,8 +280,9 @@ public sealed class OpenInsolvencyProceedingCommandHandler(
 /// Registra el fracaso de la negociación (feature 013, K3, T0885; api.md §11.4, <c>POST /api/lending/insolvency-proceedings/{id}/failure</c>,
 /// <c>Lending.Insolvency.Manage</c>, con clave y motivo; FR-098): <c>Negotiating</c> → <c>Failed</c> desde <c>date</c>; desde otro estado,
 /// <c>Lending.Insolvency.NotNegotiating</c>. Desde esa fecha la causación se reanuda y rige la calificación que fija la norma. Lo migrado sin régimen o
-/// autoridad se completa aquí (C64). El bloqueo <c>Insolvency</c> de crédito nuevo se levanta en la misma transacción (bloque B2, 2026-10-15): la
-/// negociación terminó (<see cref="CierreDeInsolvencia"/>). (nuevo)
+/// autoridad se completa aquí (C64). El bloqueo <c>Insolvency</c> de crédito nuevo <b>se mantiene</b> (decisión del dueño del 2026-10-15, bloque D): lo
+/// levanta a mano una persona autorizada, con motivo, por el flujo de bloqueos; sólo el acuerdo aplicado como novedad lo levanta solo
+/// (<see cref="CierreDeInsolvencia"/>). (nuevo)
 /// </summary>
 public sealed record RecordInsolvencyFailureCommand(
     Guid ProceedingPublicId,
@@ -305,7 +306,7 @@ public sealed class RecordInsolvencyFailureCommandValidator : ValidadorConMotivo
     }
 }
 
-public sealed class RecordInsolvencyFailureCommandHandler(IApplicationDbContext db, ICerrojoDeCartera cerrojo, IActorActual actorActual, IDateTimeService reloj)
+public sealed class RecordInsolvencyFailureCommandHandler(IApplicationDbContext db, ICerrojoDeCartera cerrojo, IDateTimeService reloj)
     : IRequestHandler<RecordInsolvencyFailureCommand, Result<InsolvencyProceedingDto>>
 {
     public async Task<Result<InsolvencyProceedingDto>> Handle(RecordInsolvencyFailureCommand request, CancellationToken ct)
@@ -338,9 +339,8 @@ public sealed class RecordInsolvencyFailureCommandHandler(IApplicationDbContext 
             {
                 return Falla(ErroresDeGobierno.De(ex.Problema));
             }
-            var actor = await actorActual.ObtenerAsync(ct);
-            await CierreDeInsolvencia.LevantarBloqueosAsync(db, proceso.PersonId, request.Date, reloj.UtcNow, actor.UserId,
-                $"La negociación de insolvencia fracasó el {request.Date:yyyy-MM-dd}: {request.Reason.Trim()}", ct);
+            // Decisión del dueño (2026-10-15): el fracaso no levanta el bloqueo Insolvency; lo levanta una persona autorizada, con motivo, por el flujo
+            // de bloqueos.
             await db.SaveChangesAsync(ct);
             return Result.Success((await ConsultasDeEventosDelDeudor.ProcesosAsync(db, [proceso], ct))[0]);
         }, ct);
@@ -350,10 +350,11 @@ public sealed class RecordInsolvencyFailureCommandHandler(IApplicationDbContext 
 }
 
 /// <summary>
-/// Lo que pasa con los bloqueos al terminar una negociación de insolvencia (feature 013, K3, bloque B2; FR-098): por fracaso
-/// (<see cref="RecordInsolvencyFailureCommand"/>) o por el acuerdo aplicado como novedad (<c>ApplyLoanNoveltyCommand</c>), el bloqueo
+/// Lo que pasa con los bloqueos al terminar una negociación de insolvencia (feature 013, K3, bloque B2; FR-098): por el acuerdo aplicado como novedad
+/// (<c>ApplyLoanNoveltyCommand</c>) el bloqueo
 /// <c>Insolvency</c> de crédito nuevo de la persona se levanta —el abierto por pantalla y el migrado—, sin guardar. Hay a lo sumo una negociación
-/// abierta por persona (<c>Lending.Insolvency.AlreadyOpen</c>). (nuevo)
+/// abierta por persona (<c>Lending.Insolvency.AlreadyOpen</c>). El fracaso no lo levanta (decisión del dueño del 2026-10-15): lo levanta una persona
+/// autorizada por el flujo de bloqueos. (nuevo)
 /// </summary>
 public static class CierreDeInsolvencia
 {

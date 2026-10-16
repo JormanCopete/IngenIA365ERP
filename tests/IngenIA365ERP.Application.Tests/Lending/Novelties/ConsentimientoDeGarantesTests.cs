@@ -158,44 +158,84 @@ public sealed class ConsentimientoDeGarantesTests : IAsyncLifetime
         (datos.GetProperty("required").GetDecimal(), datos.GetProperty("remaining").GetDecimal()).Should().Be((1m, 0m));
     }
 
-    [Fact]
-    public async Task Con_la_excepcion_aprobada_por_el_nivel_de_excepcion_se_extingue_aunque_falte_cobertura()
+    private async Task<Application.Common.Models.Result<LoanNoveltyDto>> AprobarExcepcionAsync(Guid novedad, Domain.Entities.Security.User quien,
+        params string[] permisos)
     {
-        // FR-092 (bloque B2): «sólo si la cobertura restante cumple la línea o se aprueba la excepción».
+        _n.G.ActuarComo(quien);
+        _n.G.Conceder(permisos);
+        var r = await _n.AprobarExcepcion().Handle(new ApproveNoveltyCoverageExceptionCommand(novedad, "El deudor ofrece pagar por libranza")
+            { OperationKey = Guid.NewGuid() }, default);
+        _n.Db.ChangeTracker.Clear();
+        return r;
+    }
+
+    [Fact]
+    public async Task La_excepcion_de_cobertura_la_aprueba_otra_persona_con_el_nivel_de_excepcion_antes_de_aplicar()
+    {
+        // FR-092 con cuatro ojos (bloque D, decisión del dueño del 2026-10-15): «sólo si la cobertura restante cumple la línea o se aprueba la
+        // excepción»; la aprueba otra persona, no quien aplica.
         await _n.D.VersionDesdeMananaAsync(new CollateralRuleInput(AmountFrom: 1m, AmountTo: 30_000_000m, TermFrom: 1, CoDebtors: 1));
         var credito = await ConCodeudorAsync();
         var aprobada = await _n.AprobadaAsync(NoveltyMechanism.Extension, Prorroga, NoveltyRequestMotive.Hardship, credito);
         var sinConsentimiento = new WithoutConsentInput(_n.D.O.Beto.PublicId, ConsentRefusalResolution.ApplyWithGuaranteeExtinguished, "El codeudor no firma",
-            ApproveCoverageException: true);
+            UseCoverageException: true);
 
-        // Sin la atribución del nivel de excepción, no se aprueba.
-        _n.G.ActuarComo(_n.Tesorera);
+        // Sin la excepción aprobada, no se aplica.
+        var sinExcepcion = await _n.AplicarAsync(aprobada.PublicId, [sinConsentimiento]);
+        sinExcepcion.Error.Code.Should().Be(ErroresDeNovedades.CodigoExcepcionFaltante);
+        var datos = NovedadesDePrueba.Datos(sinExcepcion.Error);
+        (datos.GetProperty("required").GetDecimal(), datos.GetProperty("remaining").GetDecimal()).Should().Be((1m, 0m));
+
+        // Quien la radicó no la aprueba; sin la atribución del nivel de excepción, tampoco.
+        (await AprobarExcepcionAsync(aprobada.PublicId, _n.D.O.Asesora, "Lending.Novelties.Read", "Lending.Decisions.Exceptions"))
+            .Error.Code.Should().Be(ReglasDeSegregacionCodigo);
+        (await AprobarExcepcionAsync(aprobada.PublicId, _n.Tesorera, "Lending.Novelties.Read"))
+            .Error.Code.Should().Be(ErroresDeDecisionesYCupos.CodigoNivelRequerido);
+
+        // La aprueba el analista (otra persona, con el nivel de excepción); una segunda vez, no.
+        var excepcion = await AprobarExcepcionAsync(aprobada.PublicId, _n.D.O.Analista, "Lending.Novelties.Read", "Lending.Decisions.Exceptions");
+        excepcion.IsSuccess.Should().BeTrue(excepcion.IsFailure ? $"{excepcion.Error.Code}: {excepcion.Error.Message}" : string.Empty);
+        excepcion.Value.Decisions.Should().Contain(d => d.PolicyException && d.Outcome == CreditDecisionOutcome.Approve);
+        (await AprobarExcepcionAsync(aprobada.PublicId, _n.D.O.Analista, "Lending.Novelties.Read", "Lending.Decisions.Exceptions"))
+            .Error.Code.Should().Be(ErroresDeNovedades.CodigoExcepcionYaAprobada);
+
+        // Quien la aprobó no aplica.
+        _n.G.ActuarComo(_n.D.O.Analista);
         _n.G.Conceder("Lending.Novelties.Read", "Lending.Novelties.Apply");
-        var sinAtribucion = await _n.Aplicar().Handle(new ApplyLoanNoveltyCommand(aprobada.PublicId, [sinConsentimiento], true) { OperationKey = Guid.NewGuid() },
-            default);
+        var mismo = await _n.Aplicar().Handle(new ApplyLoanNoveltyCommand(aprobada.PublicId, [sinConsentimiento], true) { OperationKey = Guid.NewGuid() }, default);
         _n.Db.ChangeTracker.Clear();
-        sinAtribucion.Error.Code.Should().Be(ErroresDeDecisionesYCupos.CodigoNivelRequerido);
+        mismo.Error.Code.Should().Be(ErroresDeNovedades.CodigoExcepcionDeQuienAplica);
 
-        _n.G.Conceder("Lending.Novelties.Read", "Lending.Novelties.Apply", "Lending.Decisions.Exceptions");
-        var r = await _n.Aplicar().Handle(new ApplyLoanNoveltyCommand(aprobada.PublicId, [sinConsentimiento], true) { OperationKey = Guid.NewGuid() }, default);
-        _n.Db.ChangeTracker.Clear();
-
+        // La tesorera aplica con la excepción del analista.
+        var r = await _n.AplicarAsync(aprobada.PublicId, [sinConsentimiento]);
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
         var consentimiento = await _n.Db.LoanNoveltyConsents.AsNoTracking().SingleAsync();
         consentimiento.ExceptionDecisionId.Should().NotBeNull();
         consentimiento.CoverageAfterJson.Should().Contain("\"exception\":true");
-        var excepcion = await _n.Db.CreditDecisions.AsNoTracking().SingleAsync(d => d.Id == consentimiento.ExceptionDecisionId);
-        (excepcion.SubjectType, excepcion.SubjectPublicId, excepcion.Outcome, excepcion.IsPolicyException)
-            .Should().Be((LendingDecisionSubjects.Novelty, aprobada.PublicId, CreditDecisionOutcome.Approve, true));
-        (await _n.Db.AttributionLevels.AsNoTracking().SingleAsync(l => l.Id == excepcion.LevelId)).IsExceptionLevel.Should().BeTrue();
+        var decision = await _n.Db.CreditDecisions.AsNoTracking().SingleAsync(d => d.Id == consentimiento.ExceptionDecisionId);
+        (decision.SubjectType, decision.SubjectPublicId, decision.Outcome, decision.IsPolicyException, decision.DecidedByUserId)
+            .Should().Be((LendingDecisionSubjects.Novelty, aprobada.PublicId, CreditDecisionOutcome.Approve, true, (int?)_n.D.O.Analista.Id));
+        (await _n.Db.AttributionLevels.AsNoTracking().SingleAsync(l => l.Id == decision.LevelId)).IsExceptionLevel.Should().BeTrue();
         (await _n.Db.LoanParties.AsNoTracking().SingleAsync(p => p.LoanId == credito.Id && p.PersonId == _n.D.O.Beto.Id)).ExtinguishedOn.Should().Be(_n.G.HoyLocal);
     }
+
+    [Fact]
+    public async Task La_excepcion_de_cobertura_solo_se_aprueba_con_la_novedad_aprobada()
+    {
+        var credito = await ConCodeudorAsync();
+        var radicada = await _n.RadicadaAsync(NoveltyMechanism.Extension, Prorroga, NoveltyRequestMotive.Hardship, credito);
+
+        (await AprobarExcepcionAsync(radicada.PublicId, _n.D.O.Analista, "Lending.Novelties.Read", "Lending.Decisions.Exceptions"))
+            .Error.Code.Should().Be(ErroresDeNovedades.CodigoNoAprobada);
+    }
+
+    private const string ReglasDeSegregacionCodigo = Domain.Lending.Segregation.ReglasDeSegregacion.CodigoDeError;
 
     [Fact]
     public void La_excepcion_de_cobertura_solo_va_con_la_garantia_extinguida()
     {
         var v = new ApplyLoanNoveltyCommandValidator().Validate(new ApplyLoanNoveltyCommand(Guid.NewGuid(),
-            [new WithoutConsentInput(Guid.NewGuid(), ConsentRefusalResolution.DoNotApply, "No firma", ApproveCoverageException: true)]));
+            [new WithoutConsentInput(Guid.NewGuid(), ConsentRefusalResolution.DoNotApply, "No firma", UseCoverageException: true)]));
         v.IsValid.Should().BeFalse();
     }
 }

@@ -104,7 +104,7 @@ public static class NovedadesDeCartera
             .OrderBy(d => d.DecidedAt).ToListAsync(ct);
         var usuarios = await ReferenciasDeGobierno.UsuariosAsync(db, decisiones.Where(d => d.DecidedByUserId is not null).Select(d => d.DecidedByUserId!.Value), ct);
         return decisiones.Select(d => new SubjectDecisionDto(d.PublicId, d.Outcome, d.Reason, d.DecidedAt, d.EsColegiada,
-            d.DecidedByUserId is { } u ? usuarios.GetValueOrDefault(u)?.Name : null)).ToList();
+            d.DecidedByUserId is { } u ? usuarios.GetValueOrDefault(u)?.Name : null, d.IsPolicyException)).ToList();
     }
 
     /// <summary>El punto del acta que aprobó el asunto, si lo decidió un órgano (para <c>sessionItemPublicId</c> de los hechos).</summary>

@@ -63,9 +63,7 @@ public sealed class CastigoYRecuperacionTests(CentralIdentityApiFixture fx)
             scopeKind = 0, value = "false", validFrom = hoy, reason = "El ensayo castiga sin deterioro total (e2e)",
         });
 
-        // Quien arma el lote sube los soportes: la plantilla cartera.jefe no trae Attachments.Upload (ninguna de Cartera lo trae; anotado para el dueño).
-        var subir = await OriginacionE2E.RolPropioAsync(http, admin, "ENS-CAS-ADJUNTOS", "Attachments.Upload");
-        await OriginacionE2E.DarRolAsync(http, admin, u.Jefe, subir);
+        // Quien arma el lote sube los soportes con su plantilla cartera.jefe (Attachments.Upload desde el bloque D, decisión del dueño del 2026-10-15).
 
         var (retirado, _) = await DeudorAsync(http, admin, "Retirado");
         var aCastigar = await CierreE2E.DesembolsadoAsync(http, esc, retirado, 1_000_000m);
@@ -73,13 +71,12 @@ public sealed class CastigoYRecuperacionTests(CentralIdentityApiFixture fx)
         var deAsociado = await CierreE2E.DesembolsadoAsync(http, esc, vigente, 1_000_000m);
         var (socio, _) = await DeudorAsync(http, admin, "Socio");
         var deSocio = await CierreE2E.DesembolsadoAsync(http, esc, socio, 1_000_000m);
+        // Bloque D: uno que entra al lote y, antes de aplicarlo, vuelve a ser asociado: se excluye al aplicar y el resto se castiga.
+        var (reafiliado, _) = await DeudorAsync(http, admin, "Reafiliado");
+        var deReafiliado = await CierreE2E.DesembolsadoAsync(http, esc, reafiliado, 1_000_000m);
         // El retiro del asociado: sin ruta en Core todavía (feature 014), se escribe en el maestro.
-        await EnLaBaseAsync(fx, esc, async db =>
-        {
-            var persona = await db.People.SingleAsync(p => p.PublicId == retirado);
-            persona.IsAssociate = false;
-            return await db.SaveChangesAsync(CancellationToken.None);
-        });
+        await AsociadoAsync(fx, esc, retirado, false);
+        await AsociadoAsync(fx, esc, reafiliado, false);
 
         var castigo = (await ExigibleAsync(http, admin, aCastigar)).AddDays(30);
         using (RelojEn(fx, castigo))
@@ -89,7 +86,7 @@ public sealed class CastigoYRecuperacionTests(CentralIdentityApiFixture fx)
 
             // ============================================================ el lote: incluido y rechazado (US14-1, C98) ==
             var soportes = new List<object>();
-            foreach (var credito in new[] { aCastigar, deAsociado })
+            foreach (var credito in new[] { aCastigar, deAsociado, deReafiliado })
                 soportes.Add(new
                 {
                     loanPublicId = credito,
@@ -99,14 +96,19 @@ public sealed class CastigoYRecuperacionTests(CentralIdentityApiFixture fx)
                 });
             var armado = await CarteraE2E.ConClaveAsync(http, u.Jefe.Token, HttpMethod.Post, Lotes, new
             {
-                loanPublicIds = new[] { aCastigar, deAsociado }, reason = "Deudores irrecuperables según el informe de cobranza (e2e)", reports = soportes,
+                loanPublicIds = new[] { aCastigar, deAsociado, deReafiliado }, reason = "Deudores irrecuperables según el informe de cobranza (e2e)",
+                reports = soportes,
             });
             armado.StatusCode.Should().Be(HttpStatusCode.Created, await armado.Content.ReadAsStringAsync());
             var lote = await CarteraE2E.LeerAsync(armado);
             var idLote = lote.GetProperty("publicId").GetGuid();
             lote.GetProperty("status").GetInt32().Should().Be((int)WriteOffBatchStatus.Draft);
-            lote.GetProperty("items").EnumerateArray().Should().ContainSingle()
-                .Which.GetProperty("loanPublicId").GetGuid().Should().Be(aCastigar, "el que ya no es asociado cumple");
+            lote.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("loanPublicId").GetGuid())
+                .Should().BeEquivalentTo([aCastigar, deReafiliado], "los que ya no son asociados cumplen");
+            // Bloque D: la altura mínima de mora del castigo sigue pendiente de validar y armar el lote lo avisa, sin bloquear; el plazo del reporte sí
+            // lo trae la norma del ensayo.
+            var avisos = lote.GetProperty("warnings").EnumerateArray().Select(a => a.GetProperty("code").GetString()).ToList();
+            avisos.Should().Contain("WriteOffMinimumArrearsPending").And.NotContain("WriteOffReportTermPending");
             var rechazado = lote.GetProperty("rejected").EnumerateArray().Should().ContainSingle().Subject;
             rechazado.GetProperty("loanPublicId").GetGuid().Should().Be(deAsociado);
             rechazado.GetProperty("missing").EnumerateArray().Select(m => m.GetString()).Should().Equal("NotAnAssociate");
@@ -125,6 +127,7 @@ public sealed class CastigoYRecuperacionTests(CentralIdentityApiFixture fx)
             (await CarteraE2E.LeerAsync(enviado)).GetProperty("status").GetInt32().Should().Be((int)WriteOffBatchStatus.Submitted);
 
             var punto = await ActasE2E.DecididoAsync(http, esc, esc.Originacion.Consejo, LendingDecisionSubjects.WriteOffBatch, idLote, castigo, "Decision");
+            await AsociadoAsync(fx, esc, reafiliado, true);
             var aprobado = await CarteraE2E.GetAsync(http, u.Jefe.Token, $"{Lotes}/{idLote}");
             aprobado.GetProperty("status").GetInt32().Should().Be((int)WriteOffBatchStatus.Approved, aprobado.ToString());
             aprobado.GetProperty("sessionItem").GetProperty("itemPublicId").GetGuid().Should().Be(punto);
@@ -140,6 +143,10 @@ public sealed class CastigoYRecuperacionTests(CentralIdentityApiFixture fx)
             var aplicado = await CarteraE2E.LeerAsync(aplicar);
             aplicado.GetProperty("operations").EnumerateArray().Should().ContainSingle()
                 .Which.GetProperty("loanPublicId").GetGuid().Should().Be(aCastigar);
+            var excluido = aplicado.GetProperty("excluded").EnumerateArray().Should().ContainSingle().Subject;
+            excluido.GetProperty("loanPublicId").GetGuid().Should().Be(deReafiliado, "volvió a ser asociado antes de aplicar el lote");
+            excluido.GetProperty("missing").EnumerateArray().Select(m => m.GetString()).Should().Equal("NotAnAssociate");
+            (await EstadoAsync(fx, esc, deReafiliado)).Should().Be(LoanStatus.Active, "el excluido no se castiga");
             aplicado.GetProperty("supervisorReportRequired").GetBoolean().Should().BeTrue("el tipo de entidad debe reportar los castigos");
             aplicado.GetProperty("supervisorReportDueDate").GetString().Should().Be(castigo.AddDays(30).ToString("yyyy-MM-dd"));
             (await EstadoAsync(fx, esc, aCastigar)).Should().Be(LoanStatus.WrittenOff);
@@ -181,6 +188,15 @@ public sealed class CastigoYRecuperacionTests(CentralIdentityApiFixture fx)
             }
         }
     }
+
+    /// <summary>La condición de asociado en el maestro de personas: sin ruta en Core hasta la feature 014, se escribe en la base.</summary>
+    private static Task<int> AsociadoAsync(CentralIdentityApiFixture fx, Escenario esc, Guid persona, bool asociado) =>
+        EnLaBaseAsync(fx, esc, async db =>
+        {
+            var p = await db.People.SingleAsync(x => x.PublicId == persona);
+            p.IsAssociate = asociado;
+            return await db.SaveChangesAsync(CancellationToken.None);
+        });
 }
 
 /// <summary>

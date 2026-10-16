@@ -241,6 +241,10 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.WriteOffs.RegisterWriteOffSupervisorReportCommand),
         typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.PreparePortfolioEvaluationCommand),
         typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.ApplyPortfolioEvaluationCommand),
+        // K3, bloque D (decisiones del dueño del 2026-10-15): la excepción de cobertura que aprueba otra persona, anular el lote y descartar la evaluación.
+        typeof(IngenIA365ERP.Application.Lending.Novelties.ApproveNoveltyCoverageExceptionCommand),
+        typeof(IngenIA365ERP.Application.Lending.WriteOffs.VoidWriteOffBatchCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.Evaluations.DiscardPortfolioEvaluationCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

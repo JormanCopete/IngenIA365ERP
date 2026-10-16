@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 
@@ -48,7 +49,10 @@ public sealed record WriteOffRejectedDto(
 /// <summary>El punto del acta que decidió el lote: la sesión, su número y el orden del punto. (nuevo)</summary>
 public sealed record WriteOffSessionItemDto(Guid ItemPublicId, Guid SessionPublicId, string? MinutesNumber, int Order, CreditDecisionOutcome? Outcome);
 
-/// <summary>Un lote de castigo (api.md §11.3): lista y detalle. (nuevo)</summary>
+/// <summary>
+/// Un lote de castigo (api.md §11.3): lista y detalle. <c>Warnings</c> (bloque D) trae, al armarlo, lo de la norma y la política que sigue pendiente de
+/// validar (<see cref="NormaPendienteDeCartera"/>): no bloquea. (nuevo)
+/// </summary>
 public sealed record WriteOffBatchDto(
     Guid PublicId,
     string Number,
@@ -71,7 +75,8 @@ public sealed record WriteOffBatchDto(
     string? SupervisorReportReference,
     Guid? SupervisorReportAttachmentPublicId,
     IReadOnlyList<WriteOffBatchItemDto> Items,
-    IReadOnlyList<WriteOffRejectedDto> Rejected);
+    IReadOnlyList<WriteOffRejectedDto> Rejected,
+    IReadOnlyList<AvisoDeNormaPendienteDto>? Warnings = null);
 
 /// <summary>Un crédito castigado al aplicar el lote: su operación, lo castigado y lo que salió contra el deterioro. (nuevo)</summary>
 public sealed record WriteOffOperationDto(
@@ -85,10 +90,17 @@ public sealed record WriteOffOperationDto(
     decimal SuspenseWrittenOff,
     Guid MessagePublicId);
 
-/// <summary>Lo que dejó aplicar el lote (api.md §11.3, <c>POST /{id}/apply</c>). (nuevo)</summary>
+/// <summary>
+/// Un crédito que se excluyó del lote al aplicarlo porque ya no cumplía (bloque D, decisión del dueño del 2026-10-15): lo que falta y el motivo. El resto
+/// del lote se castigó. (nuevo)
+/// </summary>
+public sealed record WriteOffExclusionDto(Guid LoanPublicId, string LoanNumber, IReadOnlyList<string> Missing, string Reason);
+
+/// <summary>Lo que dejó aplicar el lote (api.md §11.3, <c>POST /{id}/apply</c>); <c>Excluded</c>, los que ya no cumplían (bloque D). (nuevo)</summary>
 public sealed record ApplyWriteOffBatchResultDto(
     IReadOnlyList<WriteOffOperationDto> Operations,
     IReadOnlyList<string> Messages,
     bool SupervisorReportRequired,
     DateOnly? SupervisorReportDueDate,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<WriteOffExclusionDto>? Excluded = null);

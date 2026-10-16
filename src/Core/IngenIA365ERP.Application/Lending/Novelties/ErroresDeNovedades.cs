@@ -15,6 +15,9 @@ public static class ErroresDeNovedades
     public const string CodigoParteDesconocida = "Lending.Novelty.PartyUnknown";
     public const string CodigoConsentimientoFaltante = "Lending.Novelty.ConsentMissing";
     public const string CodigoCoberturaInsuficiente = "Lending.Novelty.CoverageInsufficient";
+    public const string CodigoExcepcionFaltante = "Lending.Novelty.CoverageExceptionMissing";
+    public const string CodigoExcepcionDeQuienAplica = "Lending.Novelty.CoverageExceptionSameUser";
+    public const string CodigoExcepcionYaAprobada = "Lending.Novelty.CoverageExceptionExists";
     public const string CodigoNoAprobada = LoanNovelty.CodigoNoAprobada;
     public const string CodigoYaAplicada = LoanNovelty.CodigoYaAplicada;
     public const string CodigoCondicionesInvalidas = Domain.Lending.Schedules.GeneradorDePlan.CodigoNovedadInvalida;
@@ -39,8 +42,22 @@ public static class ErroresDeNovedades
         new { parties = partes });
 
     public static Error CoberturaInsuficiente(decimal exigida, decimal restante) => new ErrorConDatos(CodigoCoberturaInsuficiente,
-        $"Sin esa garantía la cobertura que queda ({restante:0.####}) no cumple la que exige la línea ({exigida:0.####}). No aplique la novedad o "
-        + "constituya otra garantía.", new { required = exigida, remaining = restante });
+        $"Sin esa garantía la cobertura que queda ({restante:0.####}) no cumple la que exige la línea ({exigida:0.####}). No aplique la novedad, "
+        + "constituya otra garantía o pida que otra persona apruebe la excepción de cobertura.", new { required = exigida, remaining = restante });
+
+    public static Error ExcepcionFaltante(decimal exigida, decimal restante) => new ErrorConDatos(CodigoExcepcionFaltante,
+        $"Sin esa garantía la cobertura que queda ({restante:0.####}) no cumple la que exige la línea ({exigida:0.####}) y nadie aprobó la excepción de "
+        + "cobertura. Otra persona con la atribución del nivel de excepción debe aprobarla en la novedad («Aprobar excepción de cobertura») antes de aplicar.",
+        new { required = exigida, remaining = restante });
+
+    public static Error ExcepcionDeQuienAplica() => new(CodigoExcepcionDeQuienAplica,
+        "La excepción de cobertura la aprobó usted: quien la aprueba no aplica la novedad. Pida a otra persona que la aplique.");
+
+    public static Error ExcepcionYaAprobada(string numero) => new(CodigoExcepcionYaAprobada,
+        $"La excepción de cobertura de la novedad {numero} ya está aprobada: ya se puede aplicar con la garantía extinguida.");
+
+    public static Error SinNivelDeExcepcion() => new(CodigoCoberturaInsuficiente,
+        "La matriz de atribuciones vigente no tiene nivel de excepción: la cobertura que falta no se puede aprobar por excepción.");
 
     public static Error RechazoSinResolver() => new(CodigoNoRechazada,
         "Sólo se decide qué hacer ante un rechazo cuando la parte no consintió.");

@@ -64,7 +64,16 @@ public sealed record RechazoDeCastigoDto(
 public sealed record PuntoDeCastigoDto(Guid ItemPublicId, Guid SessionPublicId, string? MinutesNumber, int Order, int? Outcome);
 
 /// <summary>
-/// Un lote de castigo. <c>Status</c>: 1 borrador, 2 enviado al consejo, 3 aprobado, 4 rechazado, 5 aplicado, 6 anulado.
+/// Un aviso que no bloquea: un valor de la norma o de la política que sigue pendiente de validar (bloque D); <c>WhoFixes</c> dice dónde se corrige.
+/// </summary>
+public sealed record AvisoDeNormaPendienteDto(string Code, string Message, QuienCorrigeDeCarteraDto? WhoFixes);
+
+/// <summary>Dónde se corrige un aviso: el módulo, la página y el permiso.</summary>
+public sealed record QuienCorrigeDeCarteraDto(string Module, string? Page, string? Permission);
+
+/// <summary>
+/// Un lote de castigo. <c>Status</c>: 1 borrador, 2 enviado al consejo, 3 aprobado, 4 rechazado, 5 aplicado, 6 anulado. <c>Warnings</c>, al armarlo,
+/// lo de la norma que sigue pendiente (bloque D).
 /// </summary>
 public sealed record LoteDeCastigoDto(
     Guid PublicId,
@@ -88,7 +97,8 @@ public sealed record LoteDeCastigoDto(
     string? SupervisorReportReference,
     Guid? SupervisorReportAttachmentPublicId,
     IReadOnlyList<ItemDeCastigoDto> Items,
-    IReadOnlyList<RechazoDeCastigoDto> Rejected);
+    IReadOnlyList<RechazoDeCastigoDto> Rejected,
+    IReadOnlyList<AvisoDeNormaPendienteDto>? Warnings = null);
 
 /// <summary>Un crédito castigado al aplicar: la operación, lo castigado y lo que salió contra el deterioro.</summary>
 public sealed record OperacionDeCastigoDto(
@@ -102,13 +112,17 @@ public sealed record OperacionDeCastigoDto(
     decimal SuspenseWrittenOff,
     Guid MessagePublicId);
 
-/// <summary>Lo que dejó aplicar el lote.</summary>
+/// <summary>Un crédito que se excluyó al aplicar el lote porque ya no cumplía (bloque D): lo que falta y el motivo.</summary>
+public sealed record ExclusionDeCastigoDto(Guid LoanPublicId, string LoanNumber, IReadOnlyList<string> Missing, string Reason);
+
+/// <summary>Lo que dejó aplicar el lote; <c>Excluded</c>, los que ya no cumplían (bloque D).</summary>
 public sealed record CastigoAplicadoDto(
     IReadOnlyList<OperacionDeCastigoDto> Operations,
     IReadOnlyList<string> Messages,
     bool SupervisorReportRequired,
     DateOnly? SupervisorReportDueDate,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<ExclusionDeCastigoDto>? Excluded = null);
 
 // ------------------------------------------------------------------------------------------ §12.6 evaluación de cartera --
 
@@ -137,7 +151,8 @@ public sealed record CreditoEvaluadoDto(
 public sealed record PuntoDeEvaluacionDto(Guid ItemPublicId, Guid SessionPublicId, string? MinutesNumber, int Order, int Kind, int? Outcome);
 
 /// <summary>
-/// Una evaluación de cartera. <c>Status</c>: 1 borrador, 2 recomendada, 3 aprobada, 4 aplicada, 5 rechazada, 6 descartada.
+/// Una evaluación de cartera. <c>Status</c>: 1 borrador, 2 recomendada, 3 aprobada, 4 aplicada, 5 rechazada, 6 descartada. <c>Warnings</c>, al
+/// prepararla, la periodicidad de la norma si sigue pendiente (bloque D).
 /// </summary>
 public sealed record EvaluacionDeCarteraDto(
     Guid PublicId,
@@ -155,4 +170,5 @@ public sealed record EvaluacionDeCarteraDto(
     DateTime? AppliedAt,
     IReadOnlyList<CreditoEvaluadoDto> Loans,
     int Page,
-    int PageSize);
+    int PageSize,
+    IReadOnlyList<AvisoDeNormaPendienteDto>? Warnings = null);

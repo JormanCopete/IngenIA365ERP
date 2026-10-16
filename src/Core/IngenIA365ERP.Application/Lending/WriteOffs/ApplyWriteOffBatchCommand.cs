@@ -68,14 +68,16 @@ public sealed record DecisionDeCastigo(
 /// <item>sin la aprobación del consejo, <c>Lending.WriteOff.ApprovalRequired</c>; un punto que no es el que lo aprobó (cerrado, que decide, aprobatorio,
 /// sobre este lote), <c>Lending.Session.ItemMismatch</c>; quien armó el lote no lo aplica si el par <c>ArmarLoteDeCastigo × AplicarCastigo</c> está
 /// activo (<c>Lending.Segregation.Conflict</c>);</item>
-/// <item>en una transacción, con los créditos bloqueados: los requisitos se <b>vuelven a verificar</b> a hoy (uno que ya no cumple detiene el lote:
-/// <c>Lending.WriteOff.RequirementMissing</c>) y la validación previa contable de pantalla de todos los <c>CreditoCastigado</c> (A8);</item>
+/// <item>en una transacción, con los créditos bloqueados: los requisitos se <b>vuelven a verificar</b> a hoy; el que ya no cumple (o ya no está vigente)
+/// se <b>excluye</b> con su motivo —ítem <c>Rejected</c>, evento <c>Lending.WriteOffItem.Excluded</c>, <c>excluded[]</c> en la respuesta— y el resto se
+/// castiga; si no queda ninguno, el lote no se aplica (<c>Lending.WriteOff.NoLoansLeft</c> con <c>data.excluded[]</c>) (bloque D, decisión del dueño
+/// del 2026-10-15); y la validación previa contable de pantalla de todos los <c>CreditoCastigado</c> (A8);</item>
 /// <item>por crédito: la puesta al día hasta hoy, la operación <c>WriteOff</c> por <see cref="RegistroDeCartera"/> (sin filas propias: el castigo no
 /// cambia lo que se debe; la causación pasa a suspenso desde mañana por la fecha del castigo), el crédito <c>WrittenOff</c> con <c>WrittenOffOn</c>, el
 /// ítem castigado, <c>CreditoCastigado</c> en línea (<c>PV</c>) con lo que sale contra el deterioro individual del último cierre
 /// (<c>impairmentApplied</c>), el faltante al gasto (<c>impairmentShortfall</c>) y el suspenso a control (<c>suspenseWrittenOff</c>, C81) y, si el
 /// crédito ya estaba suspendido, <c>CausacionSuspendida</c> con causa <c>WriteOff</c> (si causaba normal, la emite el ciclo de mañana);</item>
-/// <item>el lote <c>Applied</c> con quién y cuándo, y del perfil regulatorio vigente si el tipo de entidad debe reportar los castigos al supervisor y su
+/// <item>el lote <c>Applied</c> con quién y cuándo, el conteo y los totales de lo castigado, y del perfil regulatorio vigente si el tipo de entidad debe reportar los castigos al supervisor y su
 /// plazo (documento <c>TiposDeOrganizacion</c>); si debe, la alerta <c>Cartera.PlazoRegulatorioPorVencer</c>.</item>
 /// </list>
 /// (nuevo)
@@ -146,27 +148,45 @@ public sealed class ApplyWriteOffBatchCommandHandler(
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearDeudoresAsync(creditos.Values.Select(c => c.DebtorPersonId).Distinct().ToList(), ModoDeEspera.Esperar, ct);
             await cerrojo.BloquearCreditosAsync(ids, ModoDeEspera.Esperar, ct);
-            if (creditos.Values.OrderBy(c => c.Number, StringComparer.Ordinal).FirstOrDefault(c => c.Status != LoanStatus.Active) is { } inactivo)
-                return Falla(ErroresDeCastigo.CreditoNoActivo(inactivo.Number, inactivo.Status.ToString()));
-
-            // Los requisitos se vuelven a verificar a hoy con los soportes con que entró cada crédito.
-            var soportes = incluidos.ToDictionary(i => creditos[i.LoanId].PublicId, i => CastigosDeCartera.SoportesDe(i, creditos[i.LoanId].PublicId));
-            var verificados = await castigos.VerificarAsync(incluidos.Select(i => creditos[i.LoanId]).ToList(), soportes, v, ct);
+            // Los requisitos se vuelven a verificar a hoy con los soportes con que entró cada crédito. Bloque D (decisión del dueño del 2026-10-15): el
+            // que ya no está vigente o ya no cumple se excluye con su motivo (ítem rechazado, auditado) y el resto se castiga; si no queda ninguno, el
+            // lote no se aplica.
+            var excluidos = new List<WriteOffExclusionDto>();
+            foreach (var item in incluidos.Where(i => creditos[i.LoanId].Status != LoanStatus.Active).OrderBy(i => creditos[i.LoanId].Number, StringComparer.Ordinal))
+            {
+                var c = creditos[item.LoanId];
+                var motivo = $"Al aplicar el lote el crédito ya no está vigente ({c.Status}): se excluye del castigo.";
+                item.Excluir(motivo);
+                excluidos.Add(new WriteOffExclusionDto(c.PublicId, c.Number, [], motivo));
+            }
+            var vigentes = incluidos.Where(i => creditos[i.LoanId].Status == LoanStatus.Active).ToList();
+            var soportes = vigentes.ToDictionary(i => creditos[i.LoanId].PublicId, i => CastigosDeCartera.SoportesDe(i, creditos[i.LoanId].PublicId));
+            var verificados = vigentes.Count == 0
+                ? Result.Success<IReadOnlyList<CreditoVerificadoParaCastigo>>([])
+                : await castigos.VerificarAsync(vigentes.Select(i => creditos[i.LoanId]).ToList(), soportes, v, ct);
             if (verificados.IsFailure) return Falla(verificados.Error);
-            if (verificados.Value.FirstOrDefault(x => !x.Verificacion.Cumple) is { } noCumple)
-                return Falla(ErroresDeCastigo.RequisitoFaltante(noCumple.Credito.Number, noCumple.Verificacion));
-            var porCredito = verificados.Value.ToDictionary(x => x.Credito.Id);
+            foreach (var noCumple in verificados.Value.Where(x => !x.Verificacion.Cumple).OrderBy(x => x.Credito.Number, StringComparer.Ordinal))
+            {
+                var motivo = $"Al aplicar el lote ya no cumple: falta {string.Join(", ", noCumple.Verificacion.Faltantes.Select(ErroresDeCastigo.Requisito))}.";
+                vigentes.First(i => i.LoanId == noCumple.Credito.Id).Excluir(motivo, noCumple.Verificacion.RequisitosJson);
+                excluidos.Add(new WriteOffExclusionDto(noCumple.Credito.PublicId, noCumple.Credito.Number, noCumple.Verificacion.Faltantes, motivo));
+            }
+            if (excluidos.Count == incluidos.Count) return Falla(ErroresDeCastigo.NingunoCumple(lote.Number, excluidos));
+            var cumplen = verificados.Value.Where(x => x.Verificacion.Cumple).ToList();
+            var porCredito = cumplen.ToDictionary(x => x.Credito.Id);
+            var aCastigarItems = incluidos.Where(i => porCredito.ContainsKey(i.LoanId)).ToList();
+            var idsACastigar = aCastigarItems.Select(i => i.LoanId).ToList();
 
             // Lo que sale de cada crédito y la validación previa contable de pantalla de todos los castigos (A8).
             var contable = await fechaContable.CalcularAsync(v, ct);
             if (contable.IsFailure) return Falla(contable.Error);
-            var datos = await partes.DatosAsync(verificados.Value.Select(x => x.Cargado), ct);
-            var categorias = await new CategoriaContableDeCartera(db).VigentesAsync(ids, contable.Value, ct);
+            var datos = await partes.DatosAsync(cumplen.Select(x => x.Cargado), ct);
+            var categorias = await new CategoriaContableDeCartera(db).VigentesAsync(idsACastigar, contable.Value, ct);
             var ahora = reloj.UtcNow;
             var aCastigar = new List<(WriteOffBatchItem Item, CreditoVerificadoParaCastigo Credito, HechoDeCredito Hecho, IReadOnlyList<ConceptAmountV1> Castigado,
                 IReadOnlyList<ConceptAmountV1> Deterioro, IReadOnlyList<ConceptAmountV1> Suspenso)>();
             var previos = new List<MensajeContableDto>();
-            foreach (var item in incluidos)
+            foreach (var item in aCastigarItems)
             {
                 var c = porCredito[item.LoanId];
                 var hecho = datos[item.LoanId].Hecho(contable.Value);
@@ -185,8 +205,8 @@ public sealed class ApplyWriteOffBatchCommandHandler(
             if (decision.Bloqueo is { } bloqueo) return Falla(bloqueo);
 
             // La puesta al día hasta hoy (el día del castigo se causa normal) y, por crédito, la operación, el estado y el hecho.
-            await puestaAlDia.PrepararAsync(ids, v, ct);
-            var controles = await db.LoanControls.Where(c => ids.Contains(c.LoanId)).ToDictionaryAsync(c => c.LoanId, ct);
+            await puestaAlDia.PrepararAsync(idsACastigar, v, ct);
+            var controles = await db.LoanControls.Where(c => idsACastigar.Contains(c.LoanId)).ToDictionaryAsync(c => c.LoanId, ct);
             var hechos = new List<(LoanOperation Operacion, WriteOffBatchItem Item, Guid Mensaje, decimal Castigado, decimal Deterioro, decimal Suspenso)>();
             foreach (var (item, c, hecho, castigado, deterioro, suspenso) in aCastigar)
             {
@@ -237,6 +257,7 @@ public sealed class ApplyWriteOffBatchCommandHandler(
             var (reporte, plazo) = await ReporteAlSupervisorAsync(v, ct);
             try
             {
+                lote.RecalcularAlAplicar(items);
                 lote.Aplicar(usuario, ahora, reporte, plazo);
             }
             catch (ReglaDeCarteraException ex)
@@ -255,6 +276,8 @@ public sealed class ApplyWriteOffBatchCommandHandler(
                     EntityType: CastigosDeCartera.Expediente, EntityPublicId: lote.PublicId, DedupKey: ClaveDeAlerta(lote),
                     RecipientPermissions: ["Lending.WriteOffs.Apply"], ModuloDeOrigen: "Lending"), ct);
 
+            foreach (var e in excluidos)
+                await auditoria.EmitirCreditoExcluidoDelCastigoAsync(lote.PublicId, lote.Number, e.LoanNumber, e.Missing, e.Reason, ct);
             foreach (var h in hechos)
                 await auditoria.EmitirOperacionRegistradaAsync(h.Operacion.PublicId, h.Operacion.Number, nameof(LoanOperationKind.WriteOff), new
                 {
@@ -263,7 +286,7 @@ public sealed class ApplyWriteOffBatchCommandHandler(
             var operaciones = hechos.Select(h => new WriteOffOperationDto(creditos[h.Item.LoanId].PublicId, creditos[h.Item.LoanId].Number, h.Operacion.PublicId,
                 h.Operacion.Number, h.Castigado, h.Deterioro, h.Castigado - h.Deterioro, h.Suspenso, h.Mensaje)).ToList();
             return Result.Success(new ApplyWriteOffBatchResultDto(operaciones, hechos.Select(h => h.Mensaje.ToString()).ToList(), lote.SupervisorReportRequired,
-                lote.SupervisorReportDueDate, decision.Avisos));
+                lote.SupervisorReportDueDate, decision.Avisos, excluidos));
         }, ct);
     }
 

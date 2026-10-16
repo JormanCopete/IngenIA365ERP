@@ -12,8 +12,8 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// <summary>
 /// Las novedades de crédito (feature 013, K3, US11, T0890; contracts/api.md §11.1, FR-090–FR-093): la lista y el detalle
 /// (<c>Lending.Novelties.Read</c>), pedirla, simularla, radicarla, registrar consentimientos y anularla (<c>Lending.Novelties.Request</c>), decidirla
-/// por el mismo <see cref="RecordCreditDecisionCommand"/> de §4.3 (sujeto <c>Novelty</c>; la ruta exige verla y el handler el permiso del nivel) y
-/// aplicarla (<c>Lending.Novelties.Apply</c>). Toda escritura lleva <c>Idempotency-Key</c>; la simulación es una consulta por POST y va sin clave.
+/// por el mismo <see cref="RecordCreditDecisionCommand"/> de §4.3 (sujeto <c>Novelty</c>; la ruta exige verla y el handler el permiso del nivel),
+/// aprobar la excepción de cobertura (bloque D: otra persona, con el nivel de excepción) y aplicarla (<c>Lending.Novelties.Apply</c>). Toda escritura lleva <c>Idempotency-Key</c>; la simulación es una consulta por POST y va sin clave.
 /// Fuera del alcance de oficina o línea, el mismo 404 que si la novedad no existiera (§1.3). Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class NoveltiesEndpoints : ICarterModule
@@ -74,6 +74,14 @@ public class NoveltiesEndpoints : ICarterModule
                 LendingGroup.Creado(await sender.Send(new RecordCreditDecisionCommand(LendingDecisionSubjects.Novelty, id, body.Outcome, body.Reason,
                     body.Conditions, body.ExpectedContentSha256) { OperationKey = http.ClaveDeOperacion() }, ct), $"/api/lending/novelties/{id}"))
             .WithName("Lending_Novelties_Decide")
+            .ConClaveDeOperacion()
+            .RequirePermission(Leer);
+
+        // Bloque D (decisión del dueño del 2026-10-15): la excepción de cobertura la aprueba otra persona antes de aplicar; la ruta exige ver la novedad y
+        // el handler la atribución del nivel de excepción.
+        novedades.MapPost("/{id:guid}/coverage-exception", async (Guid id, MotivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApproveNoveltyCoverageExceptionCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_Novelties_CoverageException")
             .ConClaveDeOperacion()
             .RequirePermission(Leer);
 

@@ -73,8 +73,9 @@ internal sealed class NovedadesDePrueba : IDisposable
         new(Db, Condonaciones(), G.Intervenciones(), D.O.Atribucion(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
     public RecordCreditDecisionCommandHandler Decidir() => new([DecisionDeNovedad(), DecisionDeCondonacion()]);
     public ApplyLoanNoveltyCommandHandler Aplicar() => new(Db, Calculo(), Hechos(), D.Emision(), D.PuestaAlDia(), P.C.Cargador(), D.Registro(), D.Numerador(),
-        G.Intervenciones(), new VersionVigenteDeLinea(Db), D.FechaContable(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Actor, G.Reloj,
-        new MatrizVigenteDeAtribuciones(Db), D.O.Atribucion());
+        G.Intervenciones(), new VersionVigenteDeLinea(Db), D.FechaContable(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Actor, G.Reloj);
+    public ApproveNoveltyCoverageExceptionCommandHandler AprobarExcepcion() =>
+        new(Db, G.Intervenciones(), new MatrizVigenteDeAtribuciones(Db), D.O.Atribucion(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
 
     public RequestWaiverCommandHandler PedirCondonacion() =>
         new(Db, Condonaciones(), P.C.Cargador(), new VinculadosVigentes(Db), D.Numerador(), G.Intervenciones(), D.O.Cerrojo, G.Alcance, G.Auditoria, G.Actor,
@@ -93,7 +94,7 @@ internal sealed class NovedadesDePrueba : IDisposable
     public ChangeInsuranceClaimStatusCommandHandler CambiarReclamacion() => new(Db, D.O.Cerrojo, G.Alcance, G.Auditoria, G.Reloj);
     public ListInsuranceClaimsQueryHandler Reclamaciones() => new(Db, G.Alcance);
     public OpenInsolvencyProceedingCommandHandler AbrirInsolvencia() => new(Db, D.O.BloqueosReales(), Cola(), D.O.Cerrojo, G.Actor, G.Reloj);
-    public RecordInsolvencyFailureCommandHandler Fracaso() => new(Db, D.O.Cerrojo, G.Actor, G.Reloj);
+    public RecordInsolvencyFailureCommandHandler Fracaso() => new(Db, D.O.Cerrojo, G.Reloj);
     public ListInsolvencyProceedingsQueryHandler Procesos() => new(Db);
 
     // ------------------------------------------------------------------------------------------------------------ flujo --

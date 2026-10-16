@@ -59,6 +59,13 @@ public class WriteOffBatchesEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(Preparar);
 
+        // Bloque D (decisión del dueño del 2026-10-15): anular el lote mientras no se aplique, con motivo (va a la auditoría).
+        lotes.MapPost("/{id:guid}/void", async (Guid id, MotivoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new VoidWriteOffBatchCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_WriteOffBatches_Void")
+            .ConClaveDeOperacion()
+            .RequirePermission(Preparar);
+
         lotes.MapPost("/{id:guid}/apply", async (Guid id, AplicarRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ApplyWriteOffBatchCommand(id, body.SessionItemPublicId, body.AcknowledgeWarnings ?? false)
                     { OperationKey = http.ClaveDeOperacion() }, ct))
@@ -85,5 +92,7 @@ public class WriteOffBatchesEndpoints : ICarterModule
     public sealed record AplicarRequest(Guid SessionItemPublicId, bool? AcknowledgeWarnings);
 
     /// <summary><c>{ reference, attachmentPublicId? }</c>: el radicado del reporte al supervisor y su soporte.</summary>
+    public sealed record MotivoRequest(string? Reason);
+
     public sealed record ReporteRequest(string? Reference, Guid? AttachmentPublicId);
 }

@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Risk;
 /// <code>
 /// Draft ──punto del comité──▶ Recommended ──punto del consejo──▶ Approved ──aplicar──▶ Applied
 /// Draft · Recommended ──punto que la rechaza──▶ Rejected
-/// Draft ──descartar──▶ Discarded
+/// Draft · Recommended · Approved ──descartar (el motivo va a la auditoría; bloque D, decisión del dueño del 2026-10-15)──▶ Discarded
 /// </code>
 /// Sus líneas (<see cref="PortfolioEvaluationLoan"/>) se editan sólo en <c>Draft</c>. Aplicada, es la candidata <c>Evaluation</c> de cada
 /// crédito evaluado desde el cierre del mes de efecto hasta la siguiente evaluación aplicada; nunca reescribe cierres anteriores. No es hecho.
@@ -62,8 +62,8 @@ public class PortfolioEvaluation : AuditableEntity
         new Dictionary<PortfolioEvaluationStatus, PortfolioEvaluationStatus[]>
         {
             [PortfolioEvaluationStatus.Draft] = [PortfolioEvaluationStatus.Recommended, PortfolioEvaluationStatus.Rejected, PortfolioEvaluationStatus.Discarded],
-            [PortfolioEvaluationStatus.Recommended] = [PortfolioEvaluationStatus.Approved, PortfolioEvaluationStatus.Rejected],
-            [PortfolioEvaluationStatus.Approved] = [PortfolioEvaluationStatus.Applied],
+            [PortfolioEvaluationStatus.Recommended] = [PortfolioEvaluationStatus.Approved, PortfolioEvaluationStatus.Rejected, PortfolioEvaluationStatus.Discarded],
+            [PortfolioEvaluationStatus.Approved] = [PortfolioEvaluationStatus.Applied, PortfolioEvaluationStatus.Discarded],
         };
 
     public static bool PuedePasar(PortfolioEvaluationStatus desde, PortfolioEvaluationStatus hacia) =>
@@ -139,7 +139,10 @@ public class PortfolioEvaluation : AuditableEntity
         AppliedAt = instante;
     }
 
-    /// <summary><c>Draft</c> → <c>Discarded</c>.</summary>
+    /// <summary>
+    /// Descartar mientras no se aplique (<c>Draft</c>, <c>Recommended</c> o <c>Approved</c> → <c>Discarded</c>; bloque D); la tabla no guarda el motivo:
+    /// va a la auditoría del comando (<c>DiscardPortfolioEvaluationCommand</c>).
+    /// </summary>
     public void Descartar()
     {
         ReglaDeCarteraException.SiHay(PuedeIrA(PortfolioEvaluationStatus.Discarded));

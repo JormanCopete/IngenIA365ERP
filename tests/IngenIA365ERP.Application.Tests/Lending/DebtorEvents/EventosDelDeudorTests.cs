@@ -2,6 +2,8 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Lending.Collections;
 using IngenIA365ERP.Application.Lending.Configuration;
 using IngenIA365ERP.Application.Lending.DebtorEvents;
+using IngenIA365ERP.Application.Lending.Origination;
+using IngenIA365ERP.Application.Lending.Origination.CreditLimits;
 using IngenIA365ERP.Application.Tests.Lending.Novelties;
 using IngenIA365ERP.Application.Tests.Lending.Origination;
 using IngenIA365ERP.Domain.Entities.Lending.Collections;
@@ -156,6 +158,11 @@ public sealed class EventosDelDeudorTests : IAsyncLifetime
         abierto.Value.Status.Should().Be(InsolvencyProceedingStatus.Negotiating);
         _n.Db.ChangeTracker.Clear();
         (await _n.D.O.BloqueosReales().VigentesAsync([_n.D.O.Ana.Id], default)).Should().ContainSingle(b => b.Reason == DebtorBlockReason.Insolvency);
+        // Mientras negocia, el bloqueo no se levanta a mano.
+        var mientras = await _n.Db.DebtorBlocks.AsNoTracking().SingleAsync(b => b.Reason == DebtorBlockReason.Insolvency);
+        (await new LiftDebtorBlockCommandHandler(_n.Db, _n.G.Actor, _n.G.Reloj).Handle(new LiftDebtorBlockCommand(mientras.PublicId, "Antes de tiempo")
+            { OperationKey = Guid.NewGuid() }, default)).Error.Code.Should().Be(ErroresDeDecisionesYCupos.CodigoBloqueoAutomatico);
+        _n.Db.ChangeTracker.Clear();
 
         var repetido = await _n.AbrirInsolvencia().Handle(new OpenInsolvencyProceedingCommand(_n.D.O.Ana.PublicId, inicio,
             InsolvencyRegime.NaturalPersonDebtNegotiation, "Juzgado", null, Guid.NewGuid()) { OperationKey = Guid.NewGuid() }, default);
@@ -173,11 +180,18 @@ public sealed class EventosDelDeudorTests : IAsyncLifetime
         fracaso.IsSuccess.Should().BeTrue(fracaso.IsFailure ? fracaso.Error.Message : string.Empty);
         (fracaso.Value.Status, fracaso.Value.FailedOn).Should().Be((InsolvencyProceedingStatus.Failed, (DateOnly?)_n.G.HoyLocal));
         _n.Db.ChangeTracker.Clear();
-        // Bloque B2: terminada la negociación, el bloqueo de crédito nuevo se levanta en la misma transacción.
-        (await _n.D.O.BloqueosReales().VigentesAsync([_n.D.O.Ana.Id], default)).Should().NotContain(b => b.Reason == DebtorBlockReason.Insolvency);
+        // Decisión del dueño (2026-10-15): el fracaso no levanta el bloqueo de crédito nuevo; lo levanta a mano una persona autorizada, con motivo.
+        (await _n.D.O.BloqueosReales().VigentesAsync([_n.D.O.Ana.Id], default)).Should().ContainSingle(b => b.Reason == DebtorBlockReason.Insolvency);
+        var bloqueo = await _n.Db.DebtorBlocks.AsNoTracking().SingleAsync(b => b.Reason == DebtorBlockReason.Insolvency);
+        bloqueo.LiftedOn.Should().BeNull();
+        var dto = (await ConsultasDeBloqueos.DtosAsync(_n.Db, [bloqueo], default)).Single();
+        dto.CanLiftManually.Should().BeTrue("fracasada la negociación, el bloqueo de insolvencia lo levanta una persona");
+        var levantar = new LiftDebtorBlockCommandHandler(_n.Db, _n.G.Actor, _n.G.Reloj);
+        (await levantar.Handle(new LiftDebtorBlockCommand(bloqueo.PublicId, "Revisado con el área jurídica") { OperationKey = Guid.NewGuid() }, default))
+            .IsSuccess.Should().BeTrue();
+        _n.Db.ChangeTracker.Clear();
         var levantado = await _n.Db.DebtorBlocks.AsNoTracking().SingleAsync(b => b.Reason == DebtorBlockReason.Insolvency);
-        (levantado.LiftedOn, levantado.LiftReason).Should().Be(((DateOnly?)_n.G.HoyLocal, "La negociación de insolvencia fracasó el "
-            + $"{_n.G.HoyLocal:yyyy-MM-dd}: No hubo acuerdo"));
+        (levantado.LiftedOn, levantado.LiftReason).Should().Be(((DateOnly?)_n.G.HoyLocal, "Revisado con el área jurídica"));
 
         var otraVez = await _n.Fracaso().Handle(new RecordInsolvencyFailureCommand(abierto.Value.PublicId, _n.G.HoyLocal, "Otra vez", null)
             { OperationKey = Guid.NewGuid() }, default);

@@ -98,8 +98,12 @@ public sealed record SubjectRoutingDto(
     IReadOnlyList<RoutingReasonDto> Reasons,
     string ContentSha256);
 
-/// <summary>Una decisión sobre el asunto (individual o de acta). (nuevo)</summary>
-public sealed record SubjectDecisionDto(Guid DecisionPublicId, CreditDecisionOutcome Outcome, string? Reason, DateTime DecidedAt, bool Collegiate, string? DecidedBy);
+/// <summary>
+/// Una decisión sobre el asunto (individual o de acta); <c>PolicyException</c>, si es una aprobación por excepción (en una novedad, la excepción de
+/// cobertura, bloque D). (nuevo)
+/// </summary>
+public sealed record SubjectDecisionDto(Guid DecisionPublicId, CreditDecisionOutcome Outcome, string? Reason, DateTime DecidedAt, bool Collegiate, string? DecidedBy,
+    bool PolicyException = false);
 
 /// <summary>Una novedad en la lista (api.md §11.1). (nuevo)</summary>
 public sealed record LoanNoveltyListItemDto(
@@ -151,14 +155,14 @@ public sealed record ApplyNoveltyResultDto(
     IReadOnlyList<string> Messages,
     IReadOnlyList<string> Warnings);
 
-/// <summary>La decisión de quien aplica ante un codeudor o garante que no consintió (api.md §11.1, <c>withoutConsent[]</c>). (nuevo)</summary>
 /// <summary>
 /// La decisión de quien aplica ante una parte que no consintió (FR-092, api.md §11.1 <c>withoutConsent[]</c>). Con
-/// <see cref="ApproveCoverageException"/> (bloque B2), si la cobertura restante no cumple la línea, quien aplica aprueba la excepción —con la
-/// atribución del nivel de excepción de la matriz vigente— en lugar de recibir <c>Lending.Novelty.CoverageInsufficient</c>.
+/// <see cref="UseCoverageException"/> (bloque D, decisión del dueño del 2026-10-15), si la cobertura restante no cumple la línea, se usa la excepción de
+/// cobertura que aprobó <b>otra persona</b> con la atribución del nivel de excepción (<see cref="ApproveNoveltyCoverageExceptionCommand"/>) en lugar de
+/// recibir <c>Lending.Novelty.CoverageInsufficient</c>.
 /// </summary>
 public sealed record WithoutConsentInput(Guid PartyPersonPublicId, ConsentRefusalResolution Decision, string Reason, Guid? CollateralPublicId = null,
-    bool ApproveCoverageException = false);
+    bool UseCoverageException = false);
 
 /// <summary>El motivo por el que el deudor pide la novedad (para la causa; no se guarda como columna). (nuevo)</summary>
 public static class MotivosDeNovedad

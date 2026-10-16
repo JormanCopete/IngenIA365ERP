@@ -22,6 +22,7 @@ public static class ErroresDeCastigo
     public const string CodigoCreditoNoActivo = Payments.ErroresDePagos.CodigoCreditoNoActivo;
     public const string CodigoSinConsejo = "Lending.WriteOff.BoardMissing";
     public const string CodigoSoporteInvalido = "Lending.WriteOff.AttachmentInvalid";
+    public const string CodigoNingunoCumple = "Lending.WriteOff.NoLoansLeft";
 
     public static Error Inexistente() => new(CodigoInexistente, "El lote de castigo no existe.");
 
@@ -44,6 +45,18 @@ public static class ErroresDeCastigo
         RequisitosDeCastigo.GestionesAgotadas => "agotar las gestiones de cobro",
         _ => clave,
     };
+
+    /// <summary>
+    /// Bloque D: al aplicar, ningún crédito del lote cumple ya los requisitos; el lote no se aplica. <c>data.excluded[]</c> con cada crédito, lo que le
+    /// falta y el motivo. Anule el lote o espere a que vuelvan a cumplir.
+    /// </summary>
+    public static Error NingunoCumple(string lote, IReadOnlyList<WriteOffExclusionDto> excluidos) => new ErrorConDatos(CodigoNingunoCumple,
+        $"Ningún crédito del lote {lote} cumple ya los requisitos del castigo: el lote no se aplica. Revise lo que falta en cada uno o anule el lote.",
+        new
+        {
+            batchNumber = lote,
+            excluded = excluidos.Select(e => new { loanPublicId = e.LoanPublicId, loanNumber = e.LoanNumber, missing = e.Missing, reason = e.Reason }).ToList(),
+        });
 
     public static Error YaIncluido(string numero) => new ErrorConDatos(CodigoYaIncluido,
         $"El crédito {numero} ya está en este lote de castigo.", new { loanNumber = numero });

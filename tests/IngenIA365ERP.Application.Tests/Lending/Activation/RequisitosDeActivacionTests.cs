@@ -423,4 +423,29 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
                 or RequisitosDeActivacion.PerdidaEsperadaDisponible)
             .Should().OnlyContain(r => r.Status == EstadosDeRequisito.NotApplicable);
     }
+
+    [Fact]
+    public async Task Lo_de_la_norma_de_K3_que_sigue_pendiente_avisa_sin_bloquear()
+    {
+        // K3, bloque D (decisión del dueño del 2026-10-15): el plazo del reporte de castigos, la periodicidad de la evaluación y la altura mínima de
+        // mora del castigo quedan vacíos y pendientes de validar, pero la activación lo avisa.
+        Recaudador(IntegrationParticipantClass.Test);
+        Tesoreria(doble: true);
+        var perfil = new LectorDePerfilRegulatorio(Db);
+        var norma = new Application.Lending.Common.NormaPendienteDeCartera(
+            new Application.Lending.Common.ReglasDeParametrosDeCartera(_l.G.Valores, _l.G.Parametros()), perfil, _l.Normativa());
+
+        var e = await new RequisitosDeActivacion(_registro, _contabilidad, _ambiente, Db, _l.Normativa(), perfil, _l.Valores(), norma)
+            .EvaluarConAvisosAsync(_carga, Hoy, Hoy, default);
+
+        string[] pendientes =
+        [
+            Application.Lending.Common.NormaPendienteDeCartera.PlazoDelReporteDeCastigos,
+            Application.Lending.Common.NormaPendienteDeCartera.PeriodicidadDeLaEvaluacion,
+            Application.Lending.Common.NormaPendienteDeCartera.AlturaMinimaDelCastigo,
+        ];
+        e.Avisos.Select(a => a.Code).Should().Contain(pendientes);
+        e.Avisos.Where(a => pendientes.Contains(a.Code)).Should().OnlyContain(a => a.WhoFixes != null && a.Detail.Contains("pendiente de validar"));
+        e.Requisitos.Should().NotContain(r => pendientes.Contains(r.Code), "no bloquean");
+    }
 }

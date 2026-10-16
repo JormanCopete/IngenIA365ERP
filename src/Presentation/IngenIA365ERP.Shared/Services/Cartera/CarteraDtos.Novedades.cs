@@ -74,7 +74,9 @@ public sealed record EnrutamientoDeAsuntoDto(
     IReadOnlyList<RazonDeEnrutamientoDto> Reasons,
     string ContentSha256);
 
-public sealed record DecisionDeAsuntoDto(Guid DecisionPublicId, int Outcome, string? Reason, DateTime DecidedAt, bool Collegiate, string? DecidedBy);
+/// <summary>Una decisión sobre el asunto; <c>PolicyException</c>, si es una aprobación por excepción (en una novedad, la excepción de cobertura).</summary>
+public sealed record DecisionDeAsuntoDto(Guid DecisionPublicId, int Outcome, string? Reason, DateTime DecidedAt, bool Collegiate, string? DecidedBy,
+    bool PolicyException = false);
 
 public sealed record NovedadResumenDto(
     Guid PublicId,
@@ -118,9 +120,9 @@ public sealed record ConsentimientoRequest(Guid PartyPersonPublicId, bool Consen
     Guid? CollateralPublicId = null);
 
 /// <summary>Lo que decide quien aplica ante una parte que no consintió: <c>Decision</c> por nombre (<c>DoNotApply</c>,
-/// <c>ApplyWithGuaranteeExtinguished</c>).</summary>
+/// <c>ApplyWithGuaranteeExtinguished</c>); <c>UseCoverageException</c> usa la excepción de cobertura que aprobó otra persona.</summary>
 public sealed record SinConsentimientoRequest(Guid PartyPersonPublicId, string Decision, string Reason, Guid? CollateralPublicId = null,
-    bool ApproveCoverageException = false);
+    bool UseCoverageException = false);
 
 public sealed record AplicarNovedadRequest(IReadOnlyList<SinConsentimientoRequest>? WithoutConsent = null, bool? AcknowledgeWarnings = null);
 

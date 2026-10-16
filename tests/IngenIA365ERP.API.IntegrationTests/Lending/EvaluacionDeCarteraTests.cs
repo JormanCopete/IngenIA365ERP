@@ -22,6 +22,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <item>el cierre de M+1 (el mes de efecto) califica el crédito en D con la causa <c>Evaluation</c> y el reporte de cambios lo dice; el cierre de M
 /// no cambia (la evaluación nunca reescribe un cierre anterior).</item>
 /// </list>
+/// Bloque D (decisiones del dueño del 2026-10-15): prepararla avisa la periodicidad de la norma si sigue pendiente (<c>warnings[]</c>), y una
+/// evaluación sin aplicar se descarta con motivo (<c>POST /{id}/discard</c>), lo que libera su corte.
 /// Si M es diciembre, el ensayo abre el ejercicio contable siguiente: así no depende del día en que corre. (nuevo)
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
@@ -88,6 +90,23 @@ public sealed class EvaluacionDeCarteraTests(CentralIdentityApiFixture fx)
                 cutoffDate = finDeM, effectMonth = mesDeEfecto, criteria = new { capacidadDePago = "deteriorada", fuente = "Evaluación semestral (e2e)" },
                 loans = new[] { new { loanPublicId = credito, proposedCategory = "D", reason = "Pérdida del empleo del deudor (e2e)" } },
             };
+            // Bloque D: una primera que se descarta con motivo (libera el corte) y el aviso de la periodicidad pendiente de la norma.
+            var descartable = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Evaluaciones, cuerpo);
+            descartable.StatusCode.Should().Be(HttpStatusCode.Created, await descartable.Content.ReadAsStringAsync());
+            var aDescartar = await CarteraE2E.LeerAsync(descartable);
+            aDescartar.GetProperty("warnings").EnumerateArray().Select(a => a.GetProperty("code").GetString())
+                .Should().Contain("PortfolioEvaluationPeriodicityPending", "la periodicidad de la norma sigue pendiente de validar");
+            var idDescartable = aDescartar.GetProperty("publicId").GetGuid();
+            var sinMotivo = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Evaluaciones}/{idDescartable}/discard", new { reason = "" });
+            sinMotivo.StatusCode.Should().Be(HttpStatusCode.BadRequest, await sinMotivo.Content.ReadAsStringAsync());
+            var descartada = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Evaluaciones}/{idDescartable}/discard",
+                new { reason = "Se rehace con otros criterios (e2e)" });
+            descartada.StatusCode.Should().Be(HttpStatusCode.OK, await descartada.Content.ReadAsStringAsync());
+            (await CarteraE2E.LeerAsync(descartada)).GetProperty("status").GetInt32().Should().Be((int)PortfolioEvaluationStatus.Discarded);
+            var otraVezDescartada = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Evaluaciones}/{idDescartable}/discard",
+                new { reason = "Otra vez (e2e)" });
+            (await CarteraE2E.CodigoDeErrorAsync(otraVezDescartada)).Should().Be("Lending.PortfolioEvaluation.InvalidStatus");
+
             var preparada = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Evaluaciones, cuerpo);
             preparada.StatusCode.Should().Be(HttpStatusCode.Created, await preparada.Content.ReadAsStringAsync());
             var leida = await CarteraE2E.LeerAsync(preparada);

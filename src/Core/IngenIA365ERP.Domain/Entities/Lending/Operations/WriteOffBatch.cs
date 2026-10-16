@@ -10,8 +10,10 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Operations;
 /// <code>
 /// Draft ──enviar al consejo──▶ Submitted ──punto del acta──▶ Approved ──aplicar──▶ Applied ──reporte al supervisor (una vez)
 ///                                         └──────────────▶ Rejected
-/// Draft · Submitted ──anular (el motivo va a la auditoría)──▶ Cancelled
+/// Draft · Submitted · Approved ──anular (el motivo va a la auditoría)──▶ Cancelled
 /// </code>
+/// Bloque D (decisión del dueño del 2026-10-15): se anula mientras no se aplique, también aprobado; al aplicar, el crédito que ya no cumple se excluye
+/// con su motivo (<see cref="WriteOffBatchItem.Excluir"/>) y el resto se castiga; los totales quedan con los castigados.
 /// Los ítems se agregan y quitan sólo en <c>Draft</c>; enviarlo lo congela. Los totales salen de los ítems incluidos. Aplicarlo sella si el
 /// tipo de entidad debe reportar los castigos al supervisor y hasta cuándo; el reporte se registra una sola vez. No es hecho. Su
 /// comportamiento de aplicación lo completa US14. (nuevo)
@@ -72,7 +74,7 @@ public class WriteOffBatch : AuditableEntity
         {
             [WriteOffBatchStatus.Draft] = [WriteOffBatchStatus.Submitted, WriteOffBatchStatus.Cancelled],
             [WriteOffBatchStatus.Submitted] = [WriteOffBatchStatus.Approved, WriteOffBatchStatus.Rejected, WriteOffBatchStatus.Cancelled],
-            [WriteOffBatchStatus.Approved] = [WriteOffBatchStatus.Applied],
+            [WriteOffBatchStatus.Approved] = [WriteOffBatchStatus.Applied, WriteOffBatchStatus.Cancelled],
         };
 
     public static bool PuedePasar(WriteOffBatchStatus desde, WriteOffBatchStatus hacia) =>
@@ -130,6 +132,21 @@ public class WriteOffBatch : AuditableEntity
     }
 
     /// <summary>
+    /// Al aplicar (con el lote aprobado), el conteo y los totales con los créditos que quedan después de excluir los que ya no cumplen: los incluidos y
+    /// los ya castigados.
+    /// </summary>
+    public void RecalcularAlAplicar(IEnumerable<WriteOffBatchItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ReglaDeCarteraException.SiHay(PuedeIrA(WriteOffBatchStatus.Applied));
+        var quedan = items.Where(i => i.Status is WriteOffItemStatus.Included or WriteOffItemStatus.WrittenOff).ToList();
+        LoanCount = quedan.Count;
+        TotalPrincipal = quedan.Sum(i => i.PrincipalAmount);
+        TotalInterest = quedan.Sum(i => i.InterestAmount);
+        TotalOther = quedan.Sum(i => i.OtherAmount);
+    }
+
+    /// <summary>
     /// <c>Approved</c> → <c>Applied</c>: quién y cuándo, y si el tipo de entidad debe reportar los castigos al supervisor con su plazo
     /// (sellado del perfil regulatorio vigente).
     /// </summary>
@@ -160,7 +177,10 @@ public class WriteOffBatch : AuditableEntity
         SupervisorReportAttachmentPublicId = adjunto;
     }
 
-    /// <summary>Anular antes de la decisión del consejo; la tabla no guarda el motivo: va a la auditoría del comando.</summary>
+    /// <summary>
+    /// Anular mientras no se aplique —en borrador, enviado o ya aprobado (bloque D)—; la tabla no guarda el motivo: va a la auditoría del comando
+    /// (<c>VoidWriteOffBatchCommand</c>).
+    /// </summary>
     public void Cancelar()
     {
         ReglaDeCarteraException.SiHay(PuedeIrA(WriteOffBatchStatus.Cancelled));
