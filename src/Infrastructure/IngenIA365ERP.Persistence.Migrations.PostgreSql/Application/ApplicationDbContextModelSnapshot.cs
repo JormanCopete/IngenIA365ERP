@@ -24641,7 +24641,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("Channel")
                         .HasColumnType("integer");
 
-                    b.Property<int>("CollectorUserId")
+                    b.Property<int?>("CollectorUserId")
                         .HasColumnType("integer");
 
                     b.Property<int>("ContactRole")
@@ -24966,7 +24966,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("CollectorAssignmentRuleId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("CollectorUserId")
+                    b.Property<int?>("CollectorUserId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
@@ -55812,8 +55812,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
                         .HasForeignKey("CollectorUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Collections.DebtorMessage", null)
                         .WithMany()
@@ -55882,8 +55881,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
                         .HasForeignKey("CollectorUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Loans.Loan", null)
                         .WithMany()
