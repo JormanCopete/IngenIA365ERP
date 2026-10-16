@@ -95,8 +95,12 @@ public sealed class CobranzaDelCicloDiario(
     {
         ArgumentNullException.ThrowIfNull(corrida);
         if (!Habilitada) return ResultadoDeCobranzaDelDia.Vacio;
-        var creditos = causados.ToList();
-        if (otros.Count > 0) creditos.AddRange(await ReconstruirAsync(corrida, otros, dia, ct));
+        // Cada crédito una sola vez: uno causado en la tanda ya trae su estado y no se reconstruye (T0933 lo destapó: el ciclo lo pasaba en las dos
+        // listas y el reparto fallaba con la clave repetida, dejando la tanda entera sin guardar).
+        var creditos = causados.DistinctBy(c => c.Credito.Id).ToList();
+        var yaCausados = creditos.Select(c => c.Credito.Id).ToHashSet();
+        var porReconstruir = otros.Where(id => !yaCausados.Contains(id)).Distinct().ToList();
+        if (porReconstruir.Count > 0) creditos.AddRange(await ReconstruirAsync(corrida, porReconstruir, dia, ct));
         creditos = creditos.Where(c => c.Credito.Status is LoanStatus.Active or LoanStatus.WrittenOff).ToList();
         if (creditos.Count == 0) return ResultadoDeCobranzaDelDia.Vacio;
 

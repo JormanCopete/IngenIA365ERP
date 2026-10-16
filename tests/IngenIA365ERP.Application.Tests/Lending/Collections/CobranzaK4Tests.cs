@@ -150,4 +150,17 @@ public sealed class CobranzaK4Tests : IDisposable
         regla.Calcular(0m, 0m).Should().Be(0m);
         (regla with { Rate = 0m }).Validar("ADMIN").Should().NotBeNull();
     }
+
+    [Fact]
+    public void La_fila_del_cargo_de_un_gasto_causado_la_registra_el_libro_como_hecho()
+    {
+        // T0933 lo destapó: el cargo (LoanTransactionKind.Charge) no estaba entre las clases de hecho y causar un gasto informado respondía 500.
+        var fila = new IngenIA365ERP.Domain.Lending.Replay.MovimientoDeLibro(new DateOnly(2026, 11, 25), LoanTransactionKind.Charge, LoanConcept.CollectionFee,
+            null, 4_000m);
+
+        var t = IngenIA365ERP.Application.Lending.Ledger.RegistroDeCartera.FilaDeHecho(7, fila, null, 3, new DateOnly(2026, 11, 25),
+            new DateTime(2026, 11, 25, 15, 0, 0, DateTimeKind.Utc), Guid.NewGuid());
+
+        (t.Kind, t.Concept, t.Amount, t.LoanId).Should().Be((LoanTransactionKind.Charge, LoanConcept.CollectionFee, 4_000m, 7));
+    }
 }

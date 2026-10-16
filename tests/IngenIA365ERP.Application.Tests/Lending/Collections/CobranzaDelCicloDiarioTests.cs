@@ -116,6 +116,23 @@ public sealed class CobranzaDelCicloDiarioTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task El_credito_causado_que_tambien_llega_como_al_dia_cuenta_una_sola_vez()
+    {
+        // T0933 lo destapó: el ciclo pasaba cada crédito causado también entre los «al día» (su control ya tenía la marca en el día) y, con una regla
+        // de reparto vigente, el reparto fallaba con la clave repetida y la tanda entera no se guardaba.
+        await _c.ReglaDeUnGestorAsync(_c.Gestora);
+        var corrida = await _c.CorridaAsync();
+        var credito = _c.EnMora(15);
+
+        var r = await _c.Ciclo().CreditosAsync(corrida, _c.Hoy, [credito], [credito.Credito.Id], default);
+        await _c.Db.SaveChangesAsync();
+
+        (r.CambiosDeEtapa, r.Asignaciones).Should().Be((1, 1));
+        (await HistoriaAsync()).Should().ContainSingle();
+        (await _c.Db.CollectorAssignments.CountAsync()).Should().Be(1);
+    }
+
+    [Fact]
     public async Task Sin_reglas_no_se_reparte_y_el_credito_igual_cambia_de_etapa()
     {
         var r = await _c.CorrerAsync(_c.EnMora(15));

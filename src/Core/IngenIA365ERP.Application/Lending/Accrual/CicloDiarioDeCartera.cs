@@ -193,7 +193,9 @@ public sealed class CicloDiarioDeCartera(
                 }
                 catch (Exception otra) when (otra is not OperationCanceledException)
                 {
-                    Soltar(corrida, []);
+                    // Se conservan los errores ya guardados de los créditos anteriores: soltarlos y volver a adjuntarlos perdía su token de
+                    // concurrencia (xmin) y el guardado de su alerta fallaba por concurrencia (T0933).
+                    Soltar(corrida, errores);
                     var error = Error(corrida, id, 2, PasosDelCiclo.Causacion, otra.GetType().Name, otra.Message, null);
                     db.LendingProcessRunErrors.Add(error);
                     corrida.FailedLoans += 1;
@@ -428,7 +430,9 @@ public sealed class CicloDiarioDeCartera(
         if (cobranza is not { Habilitada: true }) return;
         corrida.CurrentStep = PasosDelCiclo.Cobranza;
         var conEstado = causados.Select(c => new Collections.CreditoParaCobranza(c.Cargado.Credito, c.Dias[^1].Estado)).ToList();
-        var alDia = controles.Values.Where(c => c.LastAccruedDate >= d).Select(c => c.LoanId).ToList();
+        // Los controles están seguidos: la causación de la tanda ya les movió la marca a d. Los causados van con su estado, no como «al día».
+        var causadosIds = causados.Select(c => c.Control.LoanId).ToHashSet();
+        var alDia = controles.Values.Where(c => c.LastAccruedDate >= d && !causadosIds.Contains(c.LoanId)).Select(c => c.LoanId).ToList();
         var r = await cobranza.CreditosAsync(corrida, d, conEstado, alDia, ct);
         foreach (var a in r.Alertas) alertasPendientes.Add(new AlertaPendiente(a, null));
     }

@@ -316,6 +316,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         LoanTransactionKind.CommercialAdjustment,
         // K3 (T0874, T0881, T0884): la capitalización y el traslado al enlazado de una novedad, y la condonación.
         LoanTransactionKind.Capitalization, LoanTransactionKind.TransferToLinkedLoan, LoanTransactionKind.TransferFromLinkedLoan, LoanTransactionKind.Waiver,
+        // K4 (T0948): el cargo de un gasto de cobranza causado. Faltaba: causar un gasto informado respondía 500 (lo destapó la e2e T0933).
+        LoanTransactionKind.Charge,
     };
 
     /// <summary>
