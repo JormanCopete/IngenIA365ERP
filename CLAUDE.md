@@ -638,7 +638,16 @@ elegidos **por referencia** (ámbitos 5 y 6 de `COR_BankFileFormats`, genéricos
 el inverso de `FlatFileWriter`), archivo de descuentos inmutable por pagaduría y período que va a Recaudo como
 `DescuentosPorPagaduria`, y lo **descontado y no girado no causa mora** al deudor mientras la pagaduría esté dentro del
 umbral `LIBRANZA_UMBRAL_MORA_PAGADURIA` (sin valor sembrado: sin él nunca se imputa); el giro se aplica por el contrato con
-`DeductionFileLinePublicId` y fecha valor del descuento. Receta: `docs/manual/cartera-libranza-y-pagadurias.md`. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+`DeductionFileLinePublicId` y fecha valor del descuento. Receta: `docs/manual/cartera-libranza-y-pagadurias.md`.
+**K3 (fases 16–17, 2026-10-15)**: migración aditiva `CarteraNovedades` (9 tablas; mecanismo y causa en
+`LND_AttributionRules`). Las novedades se clasifican por su **causa** (reestructuración o modificación,
+`ClasificadorDeNovedad` sobre el `Anexo1`) y regeneran el plan; novación y refinanciación **trasladan** el saldo a un crédito
+enlazado (`TransferToLinkedLoan`/`FromLinkedLoan`), no lo recogen por pago, y no giran dinero nuevo (decisión del dueño);
+la excepción de cobertura la aprueba **otra persona**; el fracaso de la insolvencia mantiene el bloqueo (se levanta a mano)
+y el acuerdo lo levanta solo. Castigo por **lote** que decide el consejo: al aplicar, el crédito que ya no cumple se
+excluye y el resto se castiga; el castigado sigue causando en suspenso y concilia contra cuentas de orden. La evaluación
+de cartera (comité y consejo) entra al cierre desde su mes de efecto y la última aplicada reemplaza a las anteriores.
+Recetas: `docs/manual/cartera-novedades-y-condonaciones.md`, `docs/manual/cartera-castigo-y-evaluacion.md`. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
   pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.
