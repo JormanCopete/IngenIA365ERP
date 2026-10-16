@@ -38,6 +38,27 @@ public class VigenciaDeDocumentosTests
         VigenciaDeDocumentos.AAnular(documentos, Credito, RegistroDelPago).Should().BeEmpty();
     }
 
+    /// <summary>
+    /// K5 (T0965; T80, FR-132): el reverso de un pago con fecha valor dentro del año certificado y registrado antes de la emisión anula el certificado
+    /// tributario y el extracto del período que lo contenía (los dos lo vieron: su <c>InformationCutoff</c> es posterior al registro); el extracto de
+    /// un período anterior emitido antes del registro del pago no lo conocía y sigue vigente.
+    /// </summary>
+    [Fact]
+    public void El_reverso_anula_el_certificado_tributario_y_el_extracto_que_vieron_el_pago_y_no_el_extracto_anterior()
+    {
+        const int certificadoTributario = 10;
+        const int extractoDelPeriodo = 11;
+        const int extractoAnterior = 12;
+        DocumentoQueCubre[] documentos =
+        [
+            new(certificadoTributario, [Credito, 9], RegistroDelPago.AddDays(45), false),
+            new(extractoDelPeriodo, [Credito], RegistroDelPago.AddDays(5), false),
+            new(extractoAnterior, [Credito], RegistroDelPago.AddDays(-20), false),
+        ];
+
+        VigenciaDeDocumentos.AAnular(documentos, Credito, RegistroDelPago).Should().Equal(certificadoTributario, extractoDelPeriodo);
+    }
+
     [Fact]
     public void Un_documento_ya_anulado_no_se_anula_dos_veces()
     {
