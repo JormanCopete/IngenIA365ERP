@@ -94,6 +94,15 @@ public static class ParametrosDeCartera
 
     /// <summary>K4 (US12, T0943; data-model §26.8): lo que se perdona, en pesos, para dar por cumplida una promesa de pago. (nuevo)</summary>
     public const string CobranzaToleranciaDePromesa = "Cobranza.ToleranciaDePromesa";
+
+    /// <summary>
+    /// K4, bloque D (decisión del dueño del 2026-10-16): el tope del gasto de cobranza como fracción de la base del gasto (lo vencido o el capital
+    /// vencido, la base de la regla de la etapa). Vacío = sin tope. (nuevo)
+    /// </summary>
+    public const string CobranzaTopeGastoPorcentaje = "Cobranza.TopeGasto.Porcentaje";
+
+    /// <summary>K4, bloque D: el tope del gasto de cobranza en pesos. Vacío = sin máximo. Con los dos, rige el menor. (nuevo)</summary>
+    public const string CobranzaTopeGastoValorMaximo = "Cobranza.TopeGasto.ValorMaximo";
     public const string AvisoPrevioDiasMinimos = "AvisoPrevio.DiasMinimos";
     public const string AvisoPrevioUmbralDosComunicaciones = "AvisoPrevio.UmbralDosComunicaciones";
     public const string MensajesReintentos = "Mensajes.Reintentos";
@@ -292,6 +301,19 @@ public static class ParametrosDeCartera
         {
             Minimo = 0m,
             PendienteDeValidar = "Defecto de data-model §26.8 (sin tolerancia), sembrado pendiente de validar por el dueño y la contadora (T0962).",
+        },
+        NumeroDecimal(Modulo, CobranzaTopeGastoPorcentaje,
+            "Tope del gasto de cobranza como fracción (de 0 a 1) de la base del gasto: lo vencido o el capital vencido, según la regla de "
+            + "la etapa. Ninguna regla de etapa puede tener una tarifa mayor y el gasto propuesto se recorta a él. Vacío: sin tope.", "", K4, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m, Maximo = 1m,
+            PendienteDeValidar = "Sin valor (sin tope) hasta que el dueño y la contadora lo fijen (decisión del dueño del 2026-10-16, K4 bloque D).",
+        },
+        NumeroDecimal(Modulo, CobranzaTopeGastoValorMaximo,
+            "Tope del gasto de cobranza en pesos por gasto propuesto. Con el porcentaje, rige el menor. Vacío: sin valor máximo.", "", K4, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m,
+            PendienteDeValidar = "Sin valor (sin máximo) hasta que el dueño y la contadora lo fijen (decisión del dueño del 2026-10-16, K4 bloque D).",
         },
         Entero(Modulo, AvisoPrevioDiasMinimos, "Días calendario mínimos entre el aviso previo y el reporte negativo.", "20", K4, General) with
         {

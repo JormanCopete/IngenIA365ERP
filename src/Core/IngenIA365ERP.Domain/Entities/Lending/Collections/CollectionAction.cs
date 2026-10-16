@@ -33,7 +33,11 @@ public class CollectionAction : AuditableEntity, IHechoInmutable
 
     public string? Notes { get; init; }
 
-    public int CollectorUserId { get; init; }
+    /// <summary>Quien la registró; nulo en una gestión de sistema (<see cref="CollectionActionChannel.System"/>, K4 bloque D).</summary>
+    public int? CollectorUserId { get; init; }
+
+    /// <summary>¿La dejó el sistema y no una persona? (K4, bloque D)</summary>
+    public bool EsDeSistema => Channel == CollectionActionChannel.System;
 
     /// <summary>Si la gestión fue un mensaje.</summary>
     public int? DebtorMessageId { get; init; }
@@ -61,6 +65,8 @@ public class CollectionAction : AuditableEntity, IHechoInmutable
     {
         if (!Enum.IsDefined(rol) || !Enum.IsDefined(canal) || !Enum.IsDefined(resultado))
             throw new ArgumentException("Papel, canal o resultado de gestión desconocido.");
+        if (canal == CollectionActionChannel.System || resultado == CollectionActionResult.LeftCollection)
+            throw new ArgumentException("El canal y el resultado de sistema sólo los escribe el sistema (DeSistema).", nameof(canal));
         if (rol == ContactRole.Paymaster && contactoDirecto)
             throw new ArgumentException("La gestión ante la pagaduría no es contacto directo con el titular.", nameof(contactoDirecto));
         if (anulaA is null != string.IsNullOrWhiteSpace(motivoDeAnulacion))
@@ -99,6 +105,28 @@ public class CollectionAction : AuditableEntity, IHechoInmutable
             VoidReason = string.IsNullOrWhiteSpace(motivoDeAnulacion) ? null : motivoDeAnulacion.Trim(),
             WindowDecision = decisionTexto,
             WindowReasonCodes = motivos,
+        };
+    }
+
+    /// <summary>
+    /// Una gestión de sistema (K4, bloque D): la deja el ciclo diario sobre el crédito y su deudor, sin gestor, sin contacto directo —no cuenta en la ventana
+    /// legal— y con la observación del motivo (p. ej. «Sale de cobranza: se puso al día el dd/mm/aaaa»). No se anula.
+    /// </summary>
+    public static CollectionAction DeSistema(int creditoId, int deudorId, DateTime ocurrioEnUtc, CollectionActionResult resultado, string observacion)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(observacion);
+        if (!Enum.IsDefined(resultado)) throw new ArgumentOutOfRangeException(nameof(resultado), resultado, "Resultado de gestión desconocido.");
+        if (observacion.Length > LargoDeLasNotas) throw new ArgumentException($"Las notas son de hasta {LargoDeLasNotas} caracteres.", nameof(observacion));
+        return new CollectionAction
+        {
+            LoanId = creditoId,
+            PersonId = deudorId,
+            ContactRole = ContactRole.Debtor,
+            Channel = CollectionActionChannel.System,
+            OccurredAt = ocurrioEnUtc,
+            IsDirectContact = false,
+            Result = resultado,
+            Notes = observacion.Trim(),
         };
     }
 

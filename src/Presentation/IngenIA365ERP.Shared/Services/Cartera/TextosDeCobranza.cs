@@ -23,7 +23,13 @@ public static class TextosDeCobranza
         ("Visit", 7, "Visita"),
     ];
 
-    public static string CanalDeGestion(int v) => De(CanalesDeGestion, v);
+    /// <summary>K4, bloque D: el canal de la gestión que deja el proceso diario (la salida de cobranza); no se ofrece para registrar.</summary>
+    public const int CanalDeSistema = 8;
+
+    /// <summary>K4, bloque D: el resultado «salió de cobranza» de esa gestión; no se ofrece para registrar.</summary>
+    public const int ResultadoSalioDeCobranza = 9;
+
+    public static string CanalDeGestion(int v) => v == CanalDeSistema ? "Sistema" : De(CanalesDeGestion, v);
 
     /// <summary>Los resultados de una gestión (<c>CollectionActionResult</c>).</summary>
     public static IReadOnlyList<(string Nombre, int Valor, string Texto)> ResultadosDeGestion { get; } =
@@ -33,7 +39,7 @@ public static class TextosDeCobranza
         ("ReportsDeceased", 7, "Informa que el deudor falleció"), ("Other", 8, "Otro"),
     ];
 
-    public static string ResultadoDeGestion(int v) => De(ResultadosDeGestion, v);
+    public static string ResultadoDeGestion(int v) => v == ResultadoSalioDeCobranza ? "Salió de cobranza (al día)" : De(ResultadosDeGestion, v);
 
     public static string RolDeContacto(int v) => v switch { 1 => "Deudor", 2 => "Codeudor", 3 => "Pagaduría", _ => Numero(v) };
 

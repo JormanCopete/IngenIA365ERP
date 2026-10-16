@@ -56,6 +56,9 @@ public class ParametrosDeCarteraTests
         { "Castigo.DiasMinimosDeMora", "", [N], EntregaDeCartera.K3 },
         { "Castigo.GestionesMinimas", "0", [N], EntregaDeCartera.K3 },
         { "Cobranza.ToleranciaDePromesa", "0", [N], EntregaDeCartera.K4 },
+        // K4, bloque D (decisión del dueño del 2026-10-16): el tope del gasto de cobranza, sin valor sembrado (vacío = sin tope).
+        { "Cobranza.TopeGasto.Porcentaje", "", [N], EntregaDeCartera.K4 },
+        { "Cobranza.TopeGasto.ValorMaximo", "", [N], EntregaDeCartera.K4 },
         { "Cobranza.HorarioLunesAViernes", "07:00-19:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.HorarioSabado", "08:00-15:00", [N], EntregaDeCartera.K1 },
         { "Cobranza.ContactosPorDia", "1", [N], EntregaDeCartera.K1 },

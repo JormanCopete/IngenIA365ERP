@@ -123,7 +123,27 @@ public class PerfilesSugeridosDeCarteraTests
             Codigos(clave).Should().Contain(["Attachments.Upload", "Attachments.Download"], $"«{clave}» sube y elige soportes");
         foreach (var plantilla in PerfilesSugeridos.DelModulo("Lending"))
             Codigos(plantilla.Key).Should().NotContain(["Attachments.Delete"], $"«{plantilla.Key}» no borra adjuntos");
-        foreach (var clave in new[] { "cartera.asesor", "cartera.analista", "cartera.gerente", "cartera.gestor-cobranza", "cartera.auditor" })
+        // El gestor de cobranza sube desde K4, bloque D, la guía de la carta del aviso previo (abajo); los soportes de K3 le siguen vedados por permiso del dueño.
+        foreach (var clave in new[] { "cartera.asesor", "cartera.analista", "cartera.gerente", "cartera.auditor" })
             Codigos(clave).Should().NotContain("Attachments.Upload", $"«{clave}» no sube soportes de K3");
+        Codigos("cartera.gestor-cobranza").Should().NotContain(["Lending.Novelties.Request", "Lending.WriteOffs.Prepare", "Lending.DebtorEvents.Manage"],
+            "el gestor no sube soportes de novedades, castigo ni eventos del deudor");
+    }
+
+    /// <summary>
+    /// K4, bloque D (decisión del dueño del 2026-10-16): el jefe aprueba acuerdos, lleva el cobro jurídico y las campañas y envía y registra avisos
+    /// previos; el gestor envía avisos previos y registra la carta (sube la guía). La segregación de los acuerdos sigue en pie: quien propone (el gestor)
+    /// no aprueba, y el jefe, que aprueba, no propone; aunque una cooperativa le dé los dos a la misma persona, el comando rechaza aprobar lo propio.
+    /// </summary>
+    [Fact]
+    public void Los_roles_de_Cartera_pueden_hacer_su_propio_trabajo_de_K4()
+    {
+        Codigos("cartera.jefe").Should().Contain(["Lending.PaymentAgreements.Approve", "Lending.LegalProcesses.Manage", "Lending.Campaigns.Manage",
+            "Lending.PriorNotices.Send", "Lending.PriorNotices.RegisterEvidence"]);
+        Codigos("cartera.jefe").Should().NotContain("Lending.PaymentAgreements.Create", "quien aprueba no propone");
+        Codigos("cartera.gestor-cobranza").Should().Contain(["Lending.PriorNotices.Send", "Lending.PriorNotices.RegisterEvidence", "Attachments.Upload",
+            "Attachments.Download"]);
+        Codigos("cartera.gestor-cobranza").Should().NotContain(["Lending.PaymentAgreements.Approve", "Lending.LegalProcesses.Manage", "Lending.Campaigns.Manage"],
+            "el gestor propone y gestiona; aprobar, el cobro jurídico y las campañas son del jefe");
     }
 }

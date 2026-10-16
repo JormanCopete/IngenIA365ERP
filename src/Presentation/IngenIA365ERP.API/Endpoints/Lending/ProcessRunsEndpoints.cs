@@ -35,7 +35,7 @@ public class ProcessRunsEndpoints : ICarterModule
 
         corridas.MapPost("/", async (OrdenDeCorridaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var r = await sender.Send(new RequestLendingProcessRunCommand(body.Kind, body.Date) { OperationKey = http.ClaveDeOperacion() }, ct);
+                var r = await sender.Send(new RequestLendingProcessRunCommand(body.Kind, body.Date, body.Reason) { OperationKey = http.ClaveDeOperacion() }, ct);
                 return r.IsSuccess ? (object)Results.Accepted($"{LendingGroup.Prefijo}/process-runs/{r.Value.ProcessRunPublicId}", r.Value) : r;
             })
             .WithName("Lending_ProcessRuns_Request")
@@ -52,8 +52,8 @@ public class ProcessRunsEndpoints : ICarterModule
             .RequirePermission(Correr);
     }
 
-    /// <summary><c>{ kind: DailyCycle, date? }</c> (§16.4); sin fecha, hoy.</summary>
-    public sealed record OrdenDeCorridaRequest(LendingProcessKind Kind = LendingProcessKind.DailyCycle, DateOnly? Date = null);
+    /// <summary><c>{ kind, date?, reason? }</c> (§16.4); sin fecha, hoy. El motivo lo exige <c>MigratedCollectionStages</c> (K4, bloque D).</summary>
+    public sealed record OrdenDeCorridaRequest(LendingProcessKind Kind = LendingProcessKind.DailyCycle, DateOnly? Date = null, string? Reason = null);
 
     /// <summary>El motivo del reintento.</summary>
     public sealed record ReintentoRequest(string? Reason);

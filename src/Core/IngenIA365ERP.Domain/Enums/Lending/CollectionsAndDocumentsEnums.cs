@@ -71,6 +71,9 @@ public enum CollectionActionChannel
     WhatsApp = 5,
     Letter = 6,
     Visit = 7,
+
+    /// <summary>K4, bloque D: una gestión que deja el sistema (la salida de cobranza), no un contacto; ninguna persona la registra.</summary>
+    System = 8,
 }
 
 /// <summary>Resultado de una gestión de cobranza (K4).</summary>
@@ -84,6 +87,9 @@ public enum CollectionActionResult
     RequestsAgreement = 6,
     ReportsDeceased = 7,
     Other = 8,
+
+    /// <summary>K4, bloque D: el crédito salió de cobranza porque se puso al día (sólo en una gestión de sistema).</summary>
+    LeftCollection = 9,
 }
 
 /// <summary>Reparto de cartera entre gestores (K4).</summary>

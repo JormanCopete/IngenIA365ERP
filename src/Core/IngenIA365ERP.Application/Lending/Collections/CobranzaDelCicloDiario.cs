@@ -42,6 +42,9 @@ public sealed record ResultadoDeCobranzaDelDia(
     IReadOnlyList<AlertaALevantar> Alertas)
 {
     public static ResultadoDeCobranzaDelDia Vacio { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, []);
+
+    /// <summary>Los créditos que salieron de cobranza por ponerse al día (K4, bloque D).</summary>
+    public int Salidas { get; init; }
 }
 
 /// <summary>
@@ -53,6 +56,11 @@ public sealed record ResultadoDeCobranzaDelDia(
 /// (<see cref="EtapasDeCobranza"/>); el crédito <b>entra</b> a una etapa cuando cambia de etapa o vuelve a la misma después de haber salido (el día
 /// anterior estaba fuera de su rango), con una entrada <c>Source = DailyCycle</c> y la corrida. Un crédito con un acuerdo de pago aprobado y al día no
 /// avanza; el día en que el acuerdo se incumple vuelve a la etapa que le corresponde (FR-120). No entra dos veces el mismo día.</item>
+/// <item><b>Salida</b> (K4, bloque D, decisión del dueño del 2026-10-16): el crédito con etapa vigente que ya no está en mora (días de mora en cero) y al
+/// que por los días que faltan para su próximo vencimiento no le toca ninguna etapa (es decir, ninguna preventiva) <b>sale</b> de cobranza: una entrada
+/// <c>Source = Exit</c> con la etapa de la que sale y el motivo «Salida por pago al día», una gestión de sistema (<c>System</c>,
+/// <c>LeftCollection</c>, sin contacto directo) con la observación y el cierre de su asignación de gestor. Fuera de cobranza no tiene etapa vigente
+/// (agendas, campañas por etapa, informe <c>collection-stages</c>); si vuelve a caer en mora, entra como episodio nuevo.</item>
 /// <item><b>Reparto</b>: los que entraron se reparten con las reglas vigentes (<see cref="RepartoDeGestores"/>); quien ya tiene a un gestor de la regla lo
 /// conserva.</item>
 /// <item><b>Mensajes de la etapa</b> (sus plantillas, por el primer canal que la ley y el titular permiten), el <b>aviso previo</b> del episodio si la etapa
@@ -81,6 +89,9 @@ public sealed class CobranzaDelCicloDiario(
     /// <summary>El motivo de la entrada de etapa cuando un acuerdo se incumple.</summary>
     public const string MotivoAcuerdoIncumplido = "Acuerdo de pago incumplido";
 
+    /// <summary>La observación de la gestión de sistema de la salida (K4, bloque D).</summary>
+    public static string ObservacionDeSalida(DateOnly dia) => $"Sale de cobranza: se puso al día el {ErroresDeCobranza.Fecha(dia)}";
+
     /// <summary>¿La entrega vigente ya trae la cobranza? (K4)</summary>
     public bool Habilitada => (entrega ?? CatalogoDeCartera.EntregaVigente) >= EntregaDeCartera.K4;
 
@@ -107,7 +118,7 @@ public sealed class CobranzaDelCicloDiario(
         var etapas = await CobranzaDeCartera.EtapasVigentesAsync(db, dia, ct);
         var ids = creditos.Select(c => c.Credito.Id).ToList();
         var excluidos = await ExcluidosAsync(creditos.Select(c => c.Credito).ToList(), dia, ct);
-        var vigentes = await CobranzaDeCartera.EtapaVigenteAsync(db, ids, ct);
+        var ultimas = await CobranzaDeCartera.UltimaEntradaAsync(db, ids, ct);
         var pagos = await CobranzaDeCartera.PagosVigentesAsync(db, ids, ct);
         var desfase = reloj.AhoraLocal.Offset;
         var alertas = new List<AlertaALevantar>();
@@ -119,16 +130,27 @@ public sealed class CobranzaDelCicloDiario(
             .GroupBy(a => a.LoanId).ToDictionary(g => g.Key, g => g.ToList());
 
         var entraron = new List<(CreditoParaCobranza Credito, CollectionStage Etapa, CollectionStageHistoryEntry Entrada, int Dias)>();
+        var salieron = new List<(CreditoParaCobranza Credito, CollectionStageHistoryEntry Vigente)>();
         if (etapas.Count > 0)
         {
             var definiciones = etapas.Select(e => e.Definicion()).ToList();
             foreach (var c in creditos.Where(c => !excluidos.Contains(c.Credito.Id)))
             {
-                if (CobranzaDeCartera.DiasParaEtapa(c.Estado, dia) is not { } dias) continue;
-                var def = EtapasDeCobranza.EtapaPara(definiciones, dias);
-                if (def is null) continue;
-                var actual = vigentes.GetValueOrDefault(c.Credito.Id);
-                if (actual?.EnteredOn == dia) continue;
+                var ultima = ultimas.GetValueOrDefault(c.Credito.Id);
+                if (ultima?.EnteredOn == dia) continue;
+                var actual = ultima is { EsSalida: false } ? ultima : null;
+                var diasParaEtapa = CobranzaDeCartera.DiasParaEtapa(c.Estado, dia);
+                var def = diasParaEtapa is { } d ? EtapasDeCobranza.EtapaPara(definiciones, d) : null;
+
+                // La salida (K4, bloque D): en cobranza, sin mora y sin una etapa (preventiva) que le toque por sus días.
+                if (actual is not null && c.Estado.AlturaDeMora.Dias <= 0 && def is null)
+                {
+                    var salida = CollectionStageHistoryEntry.Salir(actual, dia, diasParaEtapa ?? 0, corrida.Id, CollectionStageHistoryEntry.MotivoSalidaAlDia);
+                    db.CollectionStageHistory.Add(salida);
+                    salieron.Add((c, actual));
+                    continue;
+                }
+                if (diasParaEtapa is not { } dias || def is null) continue;
 
                 string? motivo = null;
                 if (acuerdos.TryGetValue(c.Credito.Id, out var delCredito))
@@ -146,14 +168,17 @@ public sealed class CobranzaDelCicloDiario(
 
                 var etapa = etapas.First(e => e.Code == def.Codigo);
                 var entrada = CollectionStageHistoryEntry.Registrar(c.Credito.Id, etapa, dia, dias,
-                    CollectionStageHistoryEntry.FuenteCicloDiario, corrida.Id, motivo: motivo, anteriorId: actual is { Id: > 0 } a ? a.Id : null);
+                    CollectionStageHistoryEntry.FuenteCicloDiario, corrida.Id, motivo: motivo, anteriorId: ultima is { Id: > 0 } a ? a.Id : null);
                 db.CollectionStageHistory.Add(entrada);
                 entraron.Add((c, etapa, entrada, dias));
                 cambios++;
             }
         }
 
+        await SalidasAsync(salieron, dia, ct);
         var asignaciones = await RepartirAsync(entraron.Select(e => e.Credito).ToList(), dia, ct);
+        // K4, bloque D: el tope del gasto de la cooperativa, vigente hoy (vacío = sin tope). Si no se puede leer, no se propone ningún gasto hoy.
+        var tope = entraron.Count == 0 ? null : await GastosDeCobranza.TopeAsync(parametros, dia, ct);
 
         foreach (var (c, etapa, entrada, dias) in entraron)
         {
@@ -185,7 +210,13 @@ public sealed class CobranzaDelCicloDiario(
             // El gasto de cobranza de la regla de la etapa: se propone e informa; lo causa una persona.
             if (ReglaDeGastoDeCobranza.Leer(etapa.CollectionFeeRuleJson) is { Moment: ReglaDeGastoDeCobranza.MomentoAlEntrar } regla && c.Credito.Status == LoanStatus.Active)
             {
-                var valor = regla.Calcular(CobranzaDeCartera.ValorVencido(c.Estado), c.Estado.CapitalVencido);
+                if (tope is null || tope.IsFailure)
+                {
+                    _log.LogWarning("[Cartera.TopeDeGastoIlegible] No se propuso el gasto de cobranza del crédito {Credito} en {Etapa}: el tope no se pudo leer ({Codigo}).",
+                        c.Credito.Number, etapa.Code, tope?.Error.Code);
+                    continue;
+                }
+                var valor = regla.Calcular(CobranzaDeCartera.ValorVencido(c.Estado), c.Estado.CapitalVencido, tope.Value);
                 if (valor > 0m)
                 {
                     var r = await GastosDeCobranza.InformarAsync(cola, c.Credito, new GastoPropuesto(valor, etapa.Code,
@@ -197,7 +228,10 @@ public sealed class CobranzaDelCicloDiario(
 
         var promesas = await PromesasIncumplidasAsync(creditos.Select(c => c.Credito).ToList(), pagos, dia, ct);
         alertas.AddRange(promesas);
-        return new ResultadoDeCobranzaDelDia(cambios, asignaciones, mensajes, avisos, gastos, promesas.Count, acuerdosRotos, 0, alertas);
+        return new ResultadoDeCobranzaDelDia(cambios, asignaciones, mensajes, avisos, gastos, promesas.Count, acuerdosRotos, 0, alertas)
+        {
+            Salidas = salieron.Count,
+        };
     }
 
     // ----------------------------------------------------------------------------------------------------- cierre del ciclo --
@@ -262,6 +296,28 @@ public sealed class CobranzaDelCicloDiario(
         return creditos.Where(c => conReclamacion.Contains(c.Id) || enInsolvencia.Contains(c.DebtorPersonId)).Select(c => c.Id).ToHashSet();
     }
 
+    /// <summary>
+    /// Lo que acompaña a cada salida de cobranza (K4, bloque D): la gestión de sistema con la observación y el cierre de la asignación vigente del gestor.
+    /// Sin guardar.
+    /// </summary>
+    private async Task SalidasAsync(IReadOnlyList<(CreditoParaCobranza Credito, CollectionStageHistoryEntry Vigente)> salieron, DateOnly dia, CancellationToken ct)
+    {
+        if (salieron.Count == 0) return;
+        var gestores = await CobranzaDeCartera.GestorVigenteAsync(db, salieron.Select(s => (s.Credito.Credito.Id, s.Credito.Credito.DebtorPersonId)).ToList(), ct);
+        var instante = dia == reloj.HoyLocal
+            ? reloj.UtcNow
+            : DateTime.SpecifyKind(dia.ToDateTime(TimeOnly.MinValue) - reloj.AhoraLocal.Offset, DateTimeKind.Utc);
+        foreach (var (c, _) in salieron)
+        {
+            var credito = c.Credito;
+            db.CollectionActions.Add(CollectionAction.DeSistema(credito.Id, credito.DebtorPersonId, instante, CollectionActionResult.LeftCollection,
+                ObservacionDeSalida(dia)));
+            if (gestores.GetValueOrDefault(credito.Id) is { } vigente)
+                db.CollectorAssignments.Add(CollectorAssignment.Cerrar(credito.Id, credito.DebtorPersonId, dia, CollectionStageHistoryEntry.MotivoSalidaAlDia,
+                    vigente.Id > 0 ? vigente.Id : null));
+        }
+    }
+
     /// <summary>El reparto de los que entraron a una etapa con las reglas vigentes; devuelve cuántas asignaciones escribió.</summary>
     private async Task<int> RepartirAsync(IReadOnlyList<CreditoParaCobranza> entraron, DateOnly dia, CancellationToken ct)
     {
@@ -317,7 +373,7 @@ public sealed class CobranzaDelCicloDiario(
             var c = porCredito[v.Promesa.LoanId];
             alertas.Add(new AlertaALevantar(TiposDeAlerta.PromesaIncumplida, $"Promesa incumplida: crédito {c.Number}",
                 $"La promesa de pago de {ErroresDeCobranza.Pesos(v.Promesa.PromisedAmount)} para el {ErroresDeCobranza.Fecha(v.Promesa.PromisedDate)} del crédito {c.Number} "
-                + $"venció sin el pago (abonado {ErroresDeCobranza.Pesos(estado.Abonado)}). Vuelve a la agenda de {usuarios[v.CollectorUserId].Name}.",
+                + $"venció sin el pago (abonado {ErroresDeCobranza.Pesos(estado.Abonado)}). Vuelve a la agenda de {ReferenciasDeGobierno.Usuario(usuarios, v.CollectorUserId)?.Name ?? "su gestor"}.",
                 EntityType: nameof(PaymentPromise), EntityPublicId: v.Promesa.PublicId,
                 DedupKey: $"{TiposDeAlerta.PromesaIncumplida}:{v.Promesa.PublicId:D}", ModuloDeOrigen: "Lending",
                 ScopeBranchPublicId: deOficina.TryGetValue(c.BranchId, out var o) ? o : null, ScopeCreditLinePublicId: deLinea.TryGetValue(c.CreditLineId, out var l) ? l : null));

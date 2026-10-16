@@ -174,6 +174,10 @@ public static class PerfilesSugeridos
                 "Lending.Parameters.View", "Lending.Templates.View", "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
                 // K3, bloque D (decisión del dueño del 2026-10-15): sube los soportes de novedades (consentimientos) y del lote de castigo.
                 "Attachments.Upload", "Attachments.Download",
+                // K4, bloque D (decisión del dueño del 2026-10-16): aprueba acuerdos de pago (no los propone: la segregación la verifica el comando),
+                // lleva el cobro jurídico y las campañas, y envía y registra los avisos previos.
+                "Lending.PaymentAgreements.Approve", "Lending.LegalProcesses.Manage", "Lending.Campaigns.Manage", "Lending.PriorNotices.Send",
+                "Lending.PriorNotices.RegisterEvidence",
             ],
             "Todas las oficinas y líneas; límite de monto en Lending.Disbursements.Execute y Lending.CreditLimits.Assign si la cooperativa lo fija."),
 
@@ -217,10 +221,13 @@ public static class PerfilesSugeridos
             "Todas las oficinas y líneas."),
 
         new("cartera.gestor-cobranza", ModuloCartera, "Gestor de cobranza",
-            "Gestiona la cobranza: registra gestiones, propone acuerdos y escribe al deudor.",
+            "Gestiona la cobranza: registra gestiones, propone acuerdos, escribe al deudor y envía los avisos previos con su constancia.",
             [
                 "Lending.Collections.Read", "Lending.Collections.RecordActivity", "Lending.PaymentAgreements.Create", "Lending.Loans.Read",
                 "Lending.Payoffs.Read", "Lending.DebtorMessages.Read", "Lending.DebtorMessages.Send", "Lending.PriorNotices.Read",
+                // K4, bloque D (decisión del dueño del 2026-10-16): envía el aviso previo y registra la carta; la guía escaneada se sube como adjunto
+                // (LendingPriorNoticeEvidence, que además exige RegisterEvidence), por eso sube y elige adjuntos.
+                "Lending.PriorNotices.Send", "Lending.PriorNotices.RegisterEvidence", "Attachments.Upload", "Attachments.Download",
             ],
             "Sus oficinas: hay que asignárselas."),
 

@@ -35,7 +35,7 @@ public sealed class CobroJuridicoTests : IAsyncLifetime
 
     private OpenLegalProcessCommandHandler Abrir() => new(_c.Db, _c.Numerador(), _c.Cerrojo, _c.G.Alcance, _c.G.Auditoria, _c.G.Reloj);
 
-    private RecordLegalProcessActionCommandHandler Actuar() => new(_c.Db, _c.E.Cola(), _c.G.Alcance, _c.G.Auditoria, _c.G.Actor, _c.G.Reloj);
+    private RecordLegalProcessActionCommandHandler Actuar() => new(_c.Db, _c.E.Cola(), _c.G.Alcance, _c.G.Auditoria, _c.G.Actor, _c.G.Reloj, _c.Parametros());
 
     private CloseLegalProcessCommandHandler Cerrar() => new(_c.Db, _c.G.Alcance, _c.G.Auditoria, _c.G.Reloj);
 

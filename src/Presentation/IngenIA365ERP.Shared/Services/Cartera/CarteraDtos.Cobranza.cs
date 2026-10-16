@@ -83,12 +83,12 @@ public sealed record ReglaDeRepartoRequest(
     decimal? MaxBalance = null,
     bool AssignWholeDebtor = false);
 
-/// <summary>Una asignación de la historia (sólo inserción).</summary>
+/// <summary>Una asignación de la historia (sólo inserción). Sin gestor es el cierre al salir de cobranza (K4, bloque D).</summary>
 public sealed record AsignacionDeGestorDto(
     Guid PublicId,
     CreditoRefDto? Loan,
     PersonaDeCarteraDto Debtor,
-    UsuarioDeCarteraDto Collector,
+    UsuarioDeCarteraDto? Collector,
     DateOnly AssignedOn,
     Guid? RulePublicId,
     UsuarioDeCarteraDto? AssignedBy,
@@ -143,7 +143,7 @@ public sealed record GestionDeCobranzaDto(
     bool IsDirectContact,
     int Result,
     string? Notes,
-    UsuarioDeCarteraDto Collector,
+    UsuarioDeCarteraDto? Collector,
     PromesaDePagoDto? Promise,
     Guid? VoidsActionPublicId,
     string? VoidReason,

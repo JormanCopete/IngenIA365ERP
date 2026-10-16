@@ -241,7 +241,8 @@ public sealed class RecordLegalProcessActionCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<RecordLegalProcessActionCommand, Result<LegalProcessDto>>
+    IDateTimeService reloj,
+    ReglasDeParametrosDeCartera parametros) : IRequestHandler<RecordLegalProcessActionCommand, Result<LegalProcessDto>>
 {
     public async Task<Result<LegalProcessDto>> Handle(RecordLegalProcessActionCommand request, CancellationToken ct)
     {
@@ -260,6 +261,22 @@ public sealed class RecordLegalProcessActionCommandHandler(
                 && a.OwnerEntityType == AdjuntosDeModulo.DocumentoDeProcesoJuridico && a.OwnerEntityPublicId == proceso.PublicId
                 && a.Status == EstadoDeAdjunto.Available, ct);
             if (validos != adjuntos.Count) return Falla(ErroresDeCobranza.SoporteJuridicoInvalido());
+        }
+
+        // K4, bloque D (decisión del dueño del 2026-10-16): lo que se cobra al deudor no pasa del tope del gasto de cobranza. La base es lo vencido de la
+        // última posición diaria del crédito; el honorario lo pone una persona, así que no se recorta en silencio: se rechaza diciendo el máximo.
+        if (request.ChargeableToDebtor && request.Amount is { } cobrable)
+        {
+            var tope = await GastosDeCobranza.TopeAsync(parametros, reloj.HoyLocal, ct);
+            if (tope.IsFailure) return Falla(tope.Error);
+            if (tope.Value.HayTope)
+            {
+                var p = await db.LoanDailyPositions.AsNoTracking().Where(x => x.LoanId == credito.Id).OrderByDescending(x => x.PositionDate)
+                    .ThenByDescending(x => x.Version).FirstOrDefaultAsync(ct);
+                var vencido = p is null ? 0m : p.PrincipalPastDue + p.DefaultInterest + p.DefaultInterestInSuspense + p.CollectionFee + p.OtherCharge;
+                if (tope.Value.Maximo(vencido) is { } maximo && cobrable > maximo)
+                    return Falla(ErroresDeCobranza.GastoSobreElTope(credito.Number, cobrable, maximo));
+            }
         }
 
         var actuacion = LegalProcessAction.Registrar(proceso.Id, request.Date, request.Kind, request.Description, usuario, request.Amount,
@@ -332,6 +349,61 @@ public sealed class CloseLegalProcessCommandHandler(IApplicationDbContext db, IA
         await db.SaveChangesAsync(ct);
         return Result.Success((await CobroJuridicoDeCartera.DtosAsync(db, [proceso], ct))[0]);
     }
+}
+
+// -------------------------------------------------------------------------------------------------------------- reanudar --
+
+/// <summary>
+/// Reanuda a mano un proceso de cobro jurídico suspendido (feature 013, K4, bloque D, decisión del dueño del 2026-10-16;
+/// <c>POST /api/lending/legal-processes/{id}/resume</c>, <c>Lending.LegalProcesses.Manage</c>, con clave y motivo; lo audita <c>AuditBehavior</c>). Nunca se
+/// reanuda solo al terminar la insolvencia: lo decide una persona. Se rechaza mientras la insolvencia que lo suspendió —o cualquier otra del deudor—
+/// siga en negociación (<c>Lending.LegalProcess.InsolvencyNegotiating</c>); uno que no está suspendido, <c>.InvalidStatus</c>. Vuelve al estado que tenía
+/// antes de suspenderse, el que dicen sus actuaciones (<see cref="LegalProcess.EstadoAlReanudar"/>). (nuevo)
+/// </summary>
+public sealed record ResumeLegalProcessCommand(Guid LegalProcessPublicId, string Reason) : IRequest<Result<LegalProcessDto>>, IOperacionIdempotente, IConMotivo
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class ResumeLegalProcessCommandValidator : ValidadorConMotivo<ResumeLegalProcessCommand>
+{
+    public ResumeLegalProcessCommandValidator() => RuleFor(x => x.LegalProcessPublicId).NotEmpty();
+}
+
+public sealed class ResumeLegalProcessCommandHandler(IApplicationDbContext db, IAlcanceDeCartera alcance, LendingAuditEmitter auditoria, IDateTimeService reloj)
+    : IRequestHandler<ResumeLegalProcessCommand, Result<LegalProcessDto>>
+{
+    public async Task<Result<LegalProcessDto>> Handle(ResumeLegalProcessCommand request, CancellationToken ct)
+    {
+        var leido = await CobroJuridicoDeCartera.LeerAsync(db, alcance, auditoria, request.LegalProcessPublicId, ct);
+        if (leido.IsFailure) return Falla(leido.Error);
+        var (proceso, _) = leido.Value;
+        if (proceso.Status != LegalProcessStatus.Suspended)
+            return Falla(ErroresDeGobierno.De(ProblemaDeCartera.Con(LegalProcess.CodigoEstadoInvalido,
+                "El proceso no está suspendido: sólo un proceso suspendido se reanuda.", "status", proceso.Status.ToString())));
+
+        var negociando = proceso.SuspendedByInsolvencyId is { } suspendidoPor
+            ? await db.InsolvencyProceedings.AsNoTracking().Where(i => i.Id == suspendidoPor && i.Status == InsolvencyProceedingStatus.Negotiating)
+                .Select(i => (Guid?)i.PublicId).FirstOrDefaultAsync(ct)
+            : null;
+        negociando ??= (await CobranzaDeCartera.InsolvenciaAsync(db, proceso.PersonId, reloj.HoyLocal, ct))?.PublicId;
+        if (negociando is { } insolvencia) return Falla(ErroresDeCobranza.InsolvenciaEnNegociacion(proceso.Number, insolvencia));
+
+        var clases = await db.LegalProcessActions.AsNoTracking().Where(a => a.LegalProcessId == proceso.Id && !a.IsDeleted)
+            .OrderBy(a => a.ActionDate).ThenBy(a => a.Id).Select(a => a.Kind).ToListAsync(ct);
+        try
+        {
+            proceso.Reanudar(LegalProcess.EstadoAlReanudar(clases));
+        }
+        catch (ReglaDeCarteraException ex)
+        {
+            return Falla(ErroresDeGobierno.De(ex.Problema));
+        }
+        await db.SaveChangesAsync(ct);
+        return Result.Success((await CobroJuridicoDeCartera.DtosAsync(db, [proceso], ct))[0]);
+    }
+
+    private static Result<LegalProcessDto> Falla(Error e) => Result.Failure<LegalProcessDto>(e);
 }
 
 // ---------------------------------------------------------------------------------------------------------------- lista --

@@ -138,6 +138,10 @@ public sealed class CobranzaClient(HttpClient http, CentralAuthClient auth)
         CancellationToken ct = default) =>
         Enviar<ProcesoJuridicoDto>(HttpMethod.Post, $"{RutaDeProcesos}/{proceso}/close", request, clave, ct);
 
+    /// <summary>K4, bloque D: reanuda a mano un proceso suspendido, con motivo.</summary>
+    public Task<ResultadoDeInventario<ProcesoJuridicoDto>> ReanudarProcesoAsync(Guid proceso, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ProcesoJuridicoDto>(HttpMethod.Post, $"{RutaDeProcesos}/{proceso}/resume", new MotivoDeCarteraRequest(motivo), clave, ct);
+
     // -------------------------------------------------------------------------------------------- campañas --
 
     public Task<ResultadoDeInventario<IReadOnlyList<CampanaDeMensajesDto>>> CampanasAsync(int? estado = null, CancellationToken ct = default) =>

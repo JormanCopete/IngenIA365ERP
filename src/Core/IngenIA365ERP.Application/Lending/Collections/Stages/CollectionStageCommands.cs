@@ -140,7 +140,7 @@ public sealed class AddCollectionStageVersionCommandValidator : ValidadorConMoti
     }
 }
 
-public sealed class AddCollectionStageVersionCommandHandler(IApplicationDbContext db, ICerrojoDeCartera cerrojo)
+public sealed class AddCollectionStageVersionCommandHandler(IApplicationDbContext db, ICerrojoDeCartera cerrojo, ReglasDeParametrosDeCartera parametros)
     : IRequestHandler<AddCollectionStageVersionCommand, Result<CollectionStagesVersionDto>>
 {
     public async Task<Result<CollectionStagesVersionDto>> Handle(AddCollectionStageVersionCommand request, CancellationToken ct)
@@ -156,6 +156,16 @@ public sealed class AddCollectionStageVersionCommandHandler(IApplicationDbContex
                 regla?.Serializar()));
         }
         if (EtapasDeCartera.Validar(nuevas) is { } problema) return Falla(ErroresDeGobierno.De(problema));
+
+        // K4, bloque D (decisión del dueño del 2026-10-16): ninguna regla de gasto con una tarifa por encima del tope de la cooperativa vigente al empezar.
+        if (nuevas.Any(s => s.CollectionFeeRuleJson is not null))
+        {
+            var tope = await Fees.GastosDeCobranza.TopeAsync(parametros, request.ValidFrom, ct);
+            if (tope.IsFailure) return Falla(tope.Error);
+            foreach (var s in nuevas)
+                if (ReglaDeGastoDeCobranza.Leer(s.CollectionFeeRuleJson) is { } regla && tope.Value.Validar(regla, s.Code) is { } encima)
+                    return Falla(ErroresDeGobierno.De(encima));
+        }
 
         // Las plantillas: códigos de Cartera de propósito cobranza que existen en algún canal.
         var codigos = nuevas.SelectMany(s => AccionesDeEtapa.Leer(s.TemplateCodesJson)).Distinct(StringComparer.Ordinal).ToList();

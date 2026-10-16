@@ -41,12 +41,15 @@ public sealed record CollectorAssignmentRuleDto(
 /// <summary>Un gestor de una regla, con su nombre. (nuevo)</summary>
 public sealed record CollectorWeightDto(Guid UserPublicId, string Name, decimal Weight);
 
-/// <summary>Una asignación de la historia (sólo inserción): el crédito o el deudor completo, el gestor, la regla o la persona y el motivo. (nuevo)</summary>
+/// <summary>
+/// Una asignación de la historia (sólo inserción): el crédito o el deudor completo, el gestor, la regla o la persona y el motivo. Sin gestor
+/// (<see cref="Collector"/> nulo) es el cierre de la asignación al salir de cobranza (K4, bloque D). (nuevo)
+/// </summary>
 public sealed record CollectorAssignmentDto(
     Guid PublicId,
     CreditoRefDto? Loan,
     PersonaRefDto Debtor,
-    UsuarioRefDto Collector,
+    UsuarioRefDto? Collector,
     DateOnly AssignedOn,
     Guid? RulePublicId,
     UsuarioRefDto? AssignedBy,
@@ -125,7 +128,7 @@ public static class AsignacionesDeCobranza
             .Select(v => new { v.LoanId, v.PaymasterPersonId }).ToListAsync(ct);
         var personas = creditos.Select(c => c.DebtorPersonId).Distinct().ToList();
         var deudores = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
-        var gestores = vigentes.Values.Select(v => v.CollectorUserId).Distinct().ToList();
+        var gestores = vigentes.Values.Where(v => v.CollectorUserId != null).Select(v => v.CollectorUserId!.Value).Distinct().ToList();
         var deGestor = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => gestores.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.PublicId, ct);
         return creditos.Select(c => new CreditoParaReparto(c.PublicId, deudores.GetValueOrDefault(c.DebtorPersonId), saldos.GetValueOrDefault(c.Id))
         {
@@ -133,7 +136,7 @@ public static class AsignacionesDeCobranza
             Etapa = etapas.GetValueOrDefault(c.Id)?.StageCode,
             Linea = c.CreditLineId,
             Pagaduria = pagadurias.FirstOrDefault(p => p.LoanId == c.Id)?.PaymasterPersonId,
-            GestorActual = vigentes.TryGetValue(c.Id, out var a) && deGestor.TryGetValue(a.CollectorUserId, out var g) ? g : null,
+            GestorActual = vigentes.TryGetValue(c.Id, out var a) && a.CollectorUserId is { } u && deGestor.TryGetValue(u, out var g) ? g : null,
         }).ToList();
     }
 
@@ -512,8 +515,7 @@ public sealed class ListCollectorAssignmentsQueryHandler(IApplicationDbContext d
         var creditos = await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => loanIds.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id, l => new CreditoRefDto(l.PublicId, l.Number), ct);
         var personas = await ReferenciasDeGobierno.PersonasAsync(db, filas.Select(f => f.PersonId), ct);
-        var usuarios = await ReferenciasDeGobierno.UsuariosAsync(db, filas.Select(f => f.CollectorUserId)
-            .Concat(filas.Where(f => f.ActorUserId != null).Select(f => f.ActorUserId!.Value)), ct);
+        var usuarios = await ReferenciasDeGobierno.UsuariosAsync(db, filas.Select(f => f.CollectorUserId).Concat(filas.Select(f => f.ActorUserId)), ct);
         var reglaIds = filas.Where(f => f.CollectorAssignmentRuleId != null).Select(f => f.CollectorAssignmentRuleId!.Value).Distinct().ToList();
         var reglas = await db.CollectorAssignmentRules.AsNoTracking().IgnoreQueryFilters().Where(r => reglaIds.Contains(r.Id))
             .ToDictionaryAsync(r => r.Id, r => r.PublicId, ct);
@@ -521,7 +523,7 @@ public sealed class ListCollectorAssignmentsQueryHandler(IApplicationDbContext d
         var anteriores = await db.CollectorAssignments.AsNoTracking().IgnoreQueryFilters().Where(a => anterioresIds.Contains(a.Id))
             .ToDictionaryAsync(a => a.Id, a => a.PublicId, ct);
         return filas.Select(f => new CollectorAssignmentDto(f.PublicId,
-            f.LoanId is { } l && creditos.TryGetValue(l, out var c) ? c : null, personas[f.PersonId], usuarios[f.CollectorUserId], f.AssignedOn,
+            f.LoanId is { } l && creditos.TryGetValue(l, out var c) ? c : null, personas[f.PersonId], ReferenciasDeGobierno.Usuario(usuarios, f.CollectorUserId), f.AssignedOn,
             f.CollectorAssignmentRuleId is { } r && reglas.TryGetValue(r, out var regla) ? regla : null,
             f.ActorUserId is { } u && usuarios.TryGetValue(u, out var quien) ? quien : null, f.Reason,
             f.PreviousAssignmentId is { } p && anteriores.TryGetValue(p, out var anterior) ? anterior : null)).ToList();
@@ -594,7 +596,8 @@ public sealed class GetCollectorAgendaQueryHandler(IApplicationDbContext db, IAl
             items.Add(Item(ClasesDeAgenda.CuotaDeAcuerdo, suyos[q.LoanId], dia, q.Amount, $"Cuota {q.Cuota} del acuerdo {q.Acuerdo}"));
 
         // Cambios de etapa del día.
-        var entradas = await db.CollectionStageHistory.AsNoTracking().Where(h => ids.Contains(h.LoanId) && h.EnteredOn == dia && !h.IsDeleted).ToListAsync(ct);
+        var entradas = await db.CollectionStageHistory.AsNoTracking()
+            .Where(h => ids.Contains(h.LoanId) && h.EnteredOn == dia && !h.IsDeleted && h.Source != CollectionStageHistoryEntry.FuenteSalida).ToListAsync(ct);
         foreach (var h in entradas)
             items.Add(Item(ClasesDeAgenda.Etapa, suyos[h.LoanId], dia, null, $"Entró a la etapa {h.StageCode} con {h.DaysPastDueAtEntry} días"));
 

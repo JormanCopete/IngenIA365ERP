@@ -380,6 +380,60 @@ public sealed class CobranzaYAvisoPrevioTests(CentralIdentityApiFixture fx)
         var suspendido = (await CobranzaE2E.ItemsAsync(http, cartera, $"/api/lending/legal-processes?loanPublicId={deGina}")).Should().ContainSingle().Subject;
         suspendido.GetProperty("status").GetInt32().Should().Be((int)LegalProcessStatus.Suspended, "la insolvencia suspende el cobro jurídico (FR-098)");
         suspendido.GetProperty("suspendedByInsolvencyPublicId").GetGuid().Should().Be(idInsolvencia);
+
+        // ===================================== K4, bloque D: reanudar a mano, sólo cuando la insolvencia ya no está en negociación ==
+        var idProceso = suspendido.GetProperty("publicId").GetGuid();
+        var antesDeTiempo = await CarteraE2E.ConClaveAsync(http, cartera, HttpMethod.Post, $"/api/lending/legal-processes/{idProceso}/resume",
+            new { reason = "Se intenta reanudar en plena negociación (e2e)" });
+        antesDeTiempo.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, await antesDeTiempo.Content.ReadAsStringAsync());
+        (await CarteraE2E.CodigoDeErrorAsync(antesDeTiempo)).Should().Be("Lending.LegalProcess.InsolvencyNegotiating");
+        var fracaso = await CarteraE2E.ConClaveAsync(http, cartera, HttpMethod.Post, $"/api/lending/insolvency-proceedings/{idInsolvencia}/failure", new
+        {
+            date = juridica, reason = "No hubo acuerdo (e2e)", supportAttachmentPublicId = soporte,
+        });
+        fracaso.StatusCode.Should().Be(HttpStatusCode.OK, await fracaso.Content.ReadAsStringAsync());
+        (await CobranzaE2E.ItemsAsync(http, cartera, $"/api/lending/legal-processes?loanPublicId={deGina}")).Single().GetProperty("status").GetInt32()
+            .Should().Be((int)LegalProcessStatus.Suspended, "terminar la insolvencia no reanuda el proceso solo");
+        var reanudado = await CarteraE2E.ExitoAsync(http, cartera, HttpMethod.Post, $"/api/lending/legal-processes/{idProceso}/resume",
+            new { reason = "La negociación de insolvencia fracasó (e2e)" });
+        reanudado.GetProperty("status").GetInt32().Should().Be((int)LegalProcessStatus.Assigned, "sin radicación vuelve a asignado");
+        reanudado.GetProperty("suspendedByInsolvencyPublicId").ValueKind.Should().Be(JsonValueKind.Null);
+
+        // ================================================= K4, bloque D: Fabio se pone al día y sale de cobranza al día siguiente ==
+        var vencidoDeFabio = (await CarteraE2E.GetAsync(http, await t.PruebasAsync(), $"{Recaudador}/obligations?personPublicId={fabio}"))
+            .GetProperty("value").GetProperty("obligations").EnumerateArray().Single(o => o.GetProperty("obligationPublicId").GetGuid() == deFabio)
+            .GetProperty("pastDue").GetDecimal();
+        vencidoDeFabio.Should().BePositive();
+        await t.PagarAsync(Pago(deFabio, fabio, "PastDue", vencidoDeFabio, juridica));
+        var alDia = juridica.AddDays(1);
+        reloj.Ir(alDia, 9);
+        await CicloAsync(http, t, tenant);
+        var salida = await EnLaBaseAsync(fx, esc, db => (from h in db.CollectionStageHistory.AsNoTracking()
+                                                         join l in db.Loans.AsNoTracking() on h.LoanId equals l.Id
+                                                         where l.PublicId == deFabio
+                                                         orderby h.EnteredOn descending, h.Id descending
+                                                         select new { h.Source, h.Reason, h.EnteredOn }).FirstAsync());
+        (salida.Source, salida.Reason, salida.EnteredOn).Should().Be(("Exit", "Salida por pago al día", alDia));
+        (await CobranzaE2E.EtapasDelInformeAsync(http, cartera, alDia)).Should().NotContainKey(deFabio, "fuera de cobranza no tiene etapa");
+        var deSistema = (await CobranzaE2E.ItemsAsync(http, cartera, $"/api/lending/collection-actions?loanPublicId={deFabio}"))
+            .Should().ContainSingle(g => g.GetProperty("channel").GetInt32() == (int)CollectionActionChannel.System).Subject;
+        deSistema.GetProperty("result").GetInt32().Should().Be((int)CollectionActionResult.LeftCollection);
+        deSistema.GetProperty("isDirectContact").GetBoolean().Should().BeFalse();
+        deSistema.GetProperty("collector").ValueKind.Should().Be(JsonValueKind.Null);
+        deSistema.GetProperty("notes").GetString().Should().Be($"Sale de cobranza: se puso al día el {alDia:dd/MM/yyyy}");
+        var gestionFuera = await CarteraE2E.ConClaveAsync(http, await t.GestorAsync(), HttpMethod.Post, "/api/lending/collection-actions", new
+        {
+            loanPublicId = deFabio, at = new DateTimeOffset(CobranzaE2E.Local(alDia, 8, 30), TimeSpan.FromHours(-5)), channel = "Phone",
+            contactedPersonPublicId = fabio, isDirectContact = true, resultCode = "ContactedNoCommitment",
+        });
+        (await CarteraE2E.CodigoDeErrorAsync(gestionFuera)).Should().Be("Lending.Collections.LoanNotInCollection");
+
+        // ================================== K4, bloque D (5a): la orden manual del registro de la etapa migrada lleva su motivo ==
+        var orden = await CarteraE2E.ConClaveAsync(http, cartera, HttpMethod.Post, "/api/lending/process-runs",
+            new { kind = "MigratedCollectionStages", reason = "Registro de la etapa migrada al desplegar K4 (e2e)" });
+        orden.StatusCode.Should().Be(HttpStatusCode.Accepted, await orden.Content.ReadAsStringAsync());
+        var sinMotivo = await CarteraE2E.ConClaveAsync(http, cartera, HttpMethod.Post, "/api/lending/process-runs", new { kind = "MigratedCollectionStages" });
+        sinMotivo.StatusCode.Should().Be(HttpStatusCode.BadRequest, "sin motivo la validación lo rechaza");
     }
 
     /// <summary>Ordena y corre el ciclo del día del reloj de la suite con el jefe (access fresco).</summary>

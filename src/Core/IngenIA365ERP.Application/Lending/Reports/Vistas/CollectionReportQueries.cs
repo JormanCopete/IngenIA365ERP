@@ -64,7 +64,9 @@ public sealed class CollectionStagesReportQueryHandler(IApplicationDbContext db,
         var ambito = await AmbitoDeInformeDeCartera.LeerAsync(db, alcanceDeLaPeticion, f, ct);
         var delAlcance = ambito.Creditos(db).Where(l => l.Status == LoanStatus.Active || l.Status == LoanStatus.WrittenOff).Select(l => l.Id);
         var entradas = (await db.CollectionStageHistory.AsNoTracking().Where(h => !h.IsDeleted && h.EnteredOn <= corte && delAlcance.Contains(h.LoanId)).ToListAsync(ct))
-            .GroupBy(h => h.LoanId).ToDictionary(g => g.Key, g => g.OrderBy(h => h.EnteredOn).ThenBy(h => h.Id).Last());
+            .GroupBy(h => h.LoanId).ToDictionary(g => g.Key, g => g.OrderBy(h => h.EnteredOn).ThenBy(h => h.Id).Last())
+            // K4, bloque D: el crédito cuya última entrada es la salida está fuera de cobranza al corte.
+            .Where(e => !e.Value.EsSalida).ToDictionary(e => e.Key, e => e.Value);
         if (!string.IsNullOrWhiteSpace(f.Stage))
         {
             var etapa = f.Stage.Trim().ToUpperInvariant();
@@ -91,7 +93,7 @@ public sealed class CollectionStagesReportQueryHandler(IApplicationDbContext db,
             [
                 x.Entrada.StageCode, x.Credito.Number, personas[x.Credito.DebtorPersonId].FullName, posiciones.GetValueOrDefault(x.Credito.Id)?.DaysPastDue ?? 0,
                 posiciones.GetValueOrDefault(x.Credito.Id)?.Principal ?? 0m,
-                gestores.TryGetValue(x.Credito.Id, out var g) && usuarios.TryGetValue(g.CollectorUserId, out var u) ? u.Name : string.Empty,
+                gestores.TryGetValue(x.Credito.Id, out var g) ? ReferenciasDeGobierno.Usuario(usuarios, g.CollectorUserId)?.Name ?? string.Empty : string.Empty,
                 ultimas.TryGetValue(x.Credito.Id, out var ultima) ? ultima : null, x.Credito.PublicId.ToString(),
             ])).ToList();
         return Result.Success(new TablaExportable("Cartera por etapa de cobranza", $"Al {corte:yyyy-MM-dd} · {ambito.Descripcion()}", Columnas, filas, null,
@@ -145,7 +147,7 @@ public sealed class PromisesReportQueryHandler(IApplicationDbContext db, IAlcanc
             if (filtro is { } e && estado != e) continue;
             var c = creditos[p.Promesa.LoanId];
             filas.Add(new FilaExportable([c.Number, personas[c.DebtorPersonId].FullName, p.Promesa.PromisedDate, p.Promesa.PromisedAmount, Texto(estado),
-                usuarios[p.CollectorUserId].Name, c.PublicId.ToString()]));
+                ReferenciasDeGobierno.Usuario(usuarios, p.CollectorUserId)?.Name ?? string.Empty, c.PublicId.ToString()]));
         }
         return Result.Success(new TablaExportable("Promesas de pago", $"A hoy {hoy:yyyy-MM-dd} · {ambito.Descripcion()}", Columnas, filas, null,
             ["Cumplida: lo pagado después de la promesa con fecha valor hasta la prometida llega a lo prometido menos la tolerancia. Incumplida: venció sin eso."]));

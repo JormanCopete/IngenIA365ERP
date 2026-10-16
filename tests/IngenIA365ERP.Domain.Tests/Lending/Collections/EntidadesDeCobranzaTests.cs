@@ -15,8 +15,8 @@ public class EntidadesDeCobranzaTests
     [Fact]
     public void Las_enumeraciones_de_K4_siguen_la_numeracion_del_modelo()
     {
-        Enum.GetValues<CollectionActionChannel>().Select(v => (int)v).Should().Equal(1, 2, 3, 4, 5, 6, 7);
-        Enum.GetValues<CollectionActionResult>().Select(v => (int)v).Should().Equal(1, 2, 3, 4, 5, 6, 7, 8);
+        Enum.GetValues<CollectionActionChannel>().Select(v => (int)v).Should().Equal(1, 2, 3, 4, 5, 6, 7, 8);
+        Enum.GetValues<CollectionActionResult>().Select(v => (int)v).Should().Equal(1, 2, 3, 4, 5, 6, 7, 8, 9);
         Enum.GetValues<AssignmentDistribution>().Select(v => v.ToString()).Should().Equal("ByCount", "ByBalance");
         Enum.GetValues<PaymentPromiseStatus>().Select(v => v.ToString()).Should().Equal("Pending", "Kept", "Broken");
         Enum.GetValues<PaymentAgreementStatus>().Select(v => v.ToString()).Should().Equal("Proposed", "Approved", "Rejected", "Cancelled");
@@ -164,5 +164,71 @@ public class EntidadesDeCobranzaTests
         campana.Status.Should().Be(MessageCampaignStatus.Cancelled);
         var aviso = () => MessageCampaign.Nueva("X", "X", DebtorMessagePurpose.PriorNotice, MessageChannel.Sms, 4, "{}", DateTime.UtcNow, 1);
         aviso.Should().Throw<ArgumentException>();
+    }
+
+    // ------------------------------------------------------------------------------------------- K4, bloque D (2026-10-16) --
+
+    [Fact]
+    public void Reanudar_vuelve_al_estado_que_dicen_las_actuaciones_y_suelta_la_insolvencia()
+    {
+        LegalProcess.EstadoAlReanudar([]).Should().Be(LegalProcessStatus.Assigned);
+        LegalProcess.EstadoAlReanudar([LegalActionKind.Fee, LegalActionKind.Other]).Should().Be(LegalProcessStatus.Assigned, "sin radicación sigue asignado");
+        LegalProcess.EstadoAlReanudar([LegalActionKind.Filing]).Should().Be(LegalProcessStatus.Filed);
+        LegalProcess.EstadoAlReanudar([LegalActionKind.Filing, LegalActionKind.Expense]).Should().Be(LegalProcessStatus.Filed, "un gasto no es actuación de fondo");
+        LegalProcess.EstadoAlReanudar([LegalActionKind.Filing, LegalActionKind.Order]).Should().Be(LegalProcessStatus.InProgress);
+
+        var proceso = LegalProcess.Abrir("PJ-3", 1, 2, 3, new DateOnly(2026, 11, 1));
+        proceso.Avanzar(LegalProcessStatus.Filed);
+        proceso.Suspender(insolvenciaId: 9);
+        proceso.Reanudar(LegalProcessStatus.Filed);
+        proceso.Status.Should().Be(LegalProcessStatus.Filed);
+        proceso.SuspendedByInsolvencyId.Should().BeNull();
+
+        var otraVez = () => proceso.Reanudar(LegalProcessStatus.Filed);
+        otraVez.Should().Throw<ReglaDeCarteraException>().Which.Codigo.Should().Be(LegalProcess.CodigoEstadoInvalido, "sólo uno suspendido se reanuda");
+        var aCerrado = () =>
+        {
+            proceso.Suspender(9);
+            proceso.Reanudar(LegalProcessStatus.Concluded);
+        };
+        aCerrado.Should().Throw<ArgumentOutOfRangeException>("reanudar no es cerrar");
+    }
+
+    [Fact]
+    public void La_salida_de_cobranza_lleva_la_etapa_de_la_que_sale_y_la_gestion_de_sistema_no_es_contacto()
+    {
+        var etapa = CollectionStage.Nueva("ADMIN", "Administrativa", 1, 1, 30, false, new DateOnly(2026, 1, 1));
+        var entrada = CollectionStageHistoryEntry.Registrar(7, etapa, new DateOnly(2026, 11, 2), 3, CollectionStageHistoryEntry.FuenteCicloDiario, 4);
+        entrada.EsSalida.Should().BeFalse();
+        var salida = CollectionStageHistoryEntry.Salir(entrada, new DateOnly(2026, 11, 10), -20, 5, CollectionStageHistoryEntry.MotivoSalidaAlDia);
+        salida.Should().BeEquivalentTo(new { LoanId = 7, StageCode = "ADMIN", Source = "Exit", DaysPastDueAtEntry = -20, ProcessRunId = 5, Reason = "Salida por pago al día" });
+        salida.EsSalida.Should().BeTrue();
+        var dosVeces = () => CollectionStageHistoryEntry.Salir(salida, new DateOnly(2026, 11, 11), -19, 6, "otra");
+        dosVeces.Should().Throw<ArgumentException>();
+
+        var gestion = CollectionAction.DeSistema(7, 2, DateTime.UtcNow, CollectionActionResult.LeftCollection, "Sale de cobranza: se puso al día el 10/11/2026");
+        gestion.Should().BeEquivalentTo(new { Channel = CollectionActionChannel.System, IsDirectContact = false, CollectorUserId = (int?)null, ContactRole = ContactRole.Debtor });
+        gestion.EsDeSistema.Should().BeTrue();
+        var aMano = () => CollectionAction.Registrar(7, 2, ContactRole.Debtor, CollectionActionChannel.System, DateTime.UtcNow, false, CollectionActionResult.Other, 3);
+        aMano.Should().Throw<ArgumentException>("el canal de sistema no lo registra una persona");
+
+        var cierre = CollectorAssignment.Cerrar(7, 2, new DateOnly(2026, 11, 10), CollectionStageHistoryEntry.MotivoSalidaAlDia, 11);
+        cierre.Should().BeEquivalentTo(new { CollectorUserId = (int?)null, PreviousAssignmentId = (int?)11, EsCierre = true, EsManual = false });
+    }
+
+    [Fact]
+    public void El_tope_del_gasto_recorta_al_menor_y_rechaza_una_tarifa_mayor()
+    {
+        var regla = new ReglaDeGastoDeCobranza { Rate = 0.10m, Cap = 50_000m };
+        regla.Calcular(300_000m, 100_000m, TopeDelGastoDeCobranza.SinTope).Should().Be(30_000m);
+        regla.Calcular(300_000m, 100_000m, new TopeDelGastoDeCobranza(0.05m, null)).Should().Be(15_000m, "5 % de la base");
+        regla.Calcular(300_000m, 100_000m, new TopeDelGastoDeCobranza(0.05m, 12_000m)).Should().Be(12_000m, "con los dos rige el menor");
+        regla.Calcular(300_000m, 100_000m, new TopeDelGastoDeCobranza(null, 40_000m)).Should().Be(30_000m, "por debajo del tope no cambia");
+
+        new TopeDelGastoDeCobranza(0.10m, null).Validar(regla, "ADMIN").Should().BeNull("igual al tope cabe");
+        var encima = new TopeDelGastoDeCobranza(0.08m, null).Validar(regla, "ADMIN");
+        encima!.Codigo.Should().Be(TopeDelGastoDeCobranza.CodigoPorEncimaDelTope);
+        encima.Datos!["capRate"].Should().Be(0.08m);
+        new TopeDelGastoDeCobranza(null, 1m).Validar(regla, "ADMIN").Should().BeNull("el valor máximo recorta, no rechaza");
     }
 }

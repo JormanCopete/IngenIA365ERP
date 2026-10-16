@@ -208,7 +208,8 @@ public static class CampanasDeCobranza
 /// <summary>
 /// Crea una campaña en borrador (feature 013, K4, T0949; api.md §14.9, <c>POST /api/lending/campaigns</c>, <c>Lending.Campaigns.Manage</c>, con clave): código
 /// de la cooperativa (único entre las vivas, <c>Lending.Campaign.CodeDuplicate</c>; data-model §26.3 lo trae y api.md no: T0956 lo suma al cuerpo), nombre,
-/// la plantilla vigente del canal y el propósito —cobranza o informativo— (<c>Lending.MessageTemplate.NotFound</c>), los criterios y el instante. (nuevo)
+/// la plantilla vigente del canal y el propósito —cobranza o informativo— (<c>Lending.MessageTemplate.NotFound</c>), los criterios —que tienen que poder
+/// casar con algo: <c>Lending.Campaign.FiltersInvalid</c>, K4 bloque D— y el instante. (nuevo)
 /// </summary>
 public sealed record CreateMessageCampaignCommand(
     string Code,
@@ -247,6 +248,9 @@ public sealed class CreateMessageCampaignCommandHandler(IApplicationDbContext db
         if (actor.UserId is not { } usuario) return Falla(ErroresDeGobierno.SinUsuario());
         var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
         if (await db.MessageCampaigns.AnyAsync(c => c.Code == codigo && !c.IsDeleted, ct)) return Falla(ErroresDeCobranza.CampanaDuplicada(codigo));
+        if (await CriteriosInvalidosAsync(request.Filters, DateOnly.FromDateTime(CobranzaDeCartera.ALocal(request.ScheduledFor.UtcDateTime,
+                reloj.AhoraLocal.Offset)), ct) is { } invalidos)
+            return Falla(invalidos);
         var plantilla = CodigoDeCatalogo.Normalizar(request.TemplateCode) ?? request.TemplateCode.Trim().ToUpperInvariant();
         var canal = request.Channel.ToString();
         var proposito = request.Purpose.ToString();
@@ -262,6 +266,31 @@ public sealed class CreateMessageCampaignCommandHandler(IApplicationDbContext db
         db.MessageCampaigns.Add(campana);
         await db.SaveChangesAsync(ct);
         return Result.Success((await CampanasDeCobranza.DtosAsync(db, [campana], reloj.AhoraLocal.Offset, ct))[0]);
+    }
+
+    /// <summary>
+    /// Los criterios que no pueden casar con nada (K4, bloque D; <c>Lending.Campaign.FiltersInvalid</c>): una etapa que no existe en la versión vigente
+    /// el día programado, una oficina, una línea o una pagaduría que no existen, o una mora mínima por encima del tope de la etapa elegida.
+    /// </summary>
+    private async Task<Error?> CriteriosInvalidosAsync(CampaignFilters f, DateOnly dia, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(f.StageCode))
+        {
+            var codigo = f.StageCode.Trim().ToUpperInvariant();
+            var etapa = (await CobranzaDeCartera.EtapasVigentesAsync(db, dia, ct)).FirstOrDefault(e => e.Code == codigo);
+            if (etapa is null)
+                return ErroresDeCobranza.CriteriosInvalidos($"La etapa {codigo} no existe en las etapas de cobranza vigentes el {ErroresDeCobranza.Fecha(dia)}.");
+            if (f.MinDaysPastDue is { } minimo && etapa.MaxDaysPastDue is { } tope && minimo > tope)
+                return ErroresDeCobranza.CriteriosInvalidos($"La etapa {codigo} llega hasta {tope} días de mora y la campaña pide al menos {minimo}: "
+                    + "ningún crédito cumpliría los dos criterios. Quite uno o ajústelo.");
+        }
+        if (f.OfficePublicId is { } oficina && !await db.Branches.AsNoTracking().AnyAsync(b => b.PublicId == oficina, ct))
+            return ErroresDeCobranza.CriteriosInvalidos("La oficina elegida no existe. Elíjala de la lista.");
+        if (f.CreditLinePublicId is { } linea && !await db.CreditLines.AsNoTracking().AnyAsync(l => l.PublicId == linea, ct))
+            return ErroresDeCobranza.CriteriosInvalidos("La línea de crédito elegida no existe. Elíjala de la lista.");
+        if (f.PaymasterPersonPublicId is { } pagaduria && !await db.People.AsNoTracking().AnyAsync(p => p.PublicId == pagaduria && !p.IsDeleted, ct))
+            return ErroresDeCobranza.CriteriosInvalidos("La pagaduría elegida no existe en el maestro de personas.");
+        return null;
     }
 
     private static Result<MessageCampaignDto> Falla(Error e) => Result.Failure<MessageCampaignDto>(e);

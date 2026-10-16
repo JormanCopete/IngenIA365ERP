@@ -42,8 +42,16 @@ public static class CobranzaDeCartera
             .ToListAsync(ct))
         .OrderBy(s => s.Order).ThenBy(s => s.Code, StringComparer.Ordinal).ToList();
 
-    /// <summary>La última entrada de etapa de cada crédito (la etapa vigente), por crédito.</summary>
+    /// <summary>
+    /// La etapa vigente de cada crédito: su última entrada, salvo que sea una salida de cobranza (K4, bloque D). Un crédito que salió —o que nunca
+    /// entró— no está en el diccionario: está fuera de cobranza.
+    /// </summary>
     public static async Task<IReadOnlyDictionary<int, CollectionStageHistoryEntry>> EtapaVigenteAsync(IApplicationDbContext db, IReadOnlyCollection<int> loanIds,
+        CancellationToken ct) =>
+        (await UltimaEntradaAsync(db, loanIds, ct)).Where(e => !e.Value.EsSalida).ToDictionary(e => e.Key, e => e.Value);
+
+    /// <summary>La última entrada de la historia de etapas de cada crédito, salidas incluidas (la que mira el ciclo diario).</summary>
+    public static async Task<IReadOnlyDictionary<int, CollectionStageHistoryEntry>> UltimaEntradaAsync(IApplicationDbContext db, IReadOnlyCollection<int> loanIds,
         CancellationToken ct)
     {
         if (loanIds.Count == 0) return new Dictionary<int, CollectionStageHistoryEntry>();
@@ -55,7 +63,8 @@ public static class CobranzaDeCartera
     }
 
     /// <summary>
-    /// La asignación vigente de cada crédito: la última del crédito o, si la última es del deudor completo (crédito nulo) y es más reciente, ésa.
+    /// La asignación vigente de cada crédito: la última del crédito o, si la última es del deudor completo (crédito nulo) y es más reciente, ésa. Si la
+    /// última es un cierre (sin gestor, K4 bloque D), el crédito no tiene gestor vigente.
     /// </summary>
     public static async Task<IReadOnlyDictionary<int, CollectorAssignment>> GestorVigenteAsync(IApplicationDbContext db,
         IReadOnlyCollection<(int LoanId, int PersonId)> creditos, CancellationToken ct)
@@ -72,7 +81,7 @@ public static class CobranzaDeCartera
         {
             var vigente = todas.Where(a => a.LoanId == loanId || (a.LoanId == null && a.PersonId == personId))
                 .OrderBy(a => a.AssignedOn).ThenBy(a => a.Id == 0 ? int.MaxValue : a.Id).LastOrDefault();
-            if (vigente is not null) salida[loanId] = vigente;
+            if (vigente is { EsCierre: false }) salida[loanId] = vigente;
         }
         return salida;
     }

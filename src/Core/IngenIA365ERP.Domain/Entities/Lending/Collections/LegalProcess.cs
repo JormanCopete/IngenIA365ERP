@@ -10,9 +10,11 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Collections;
 /// <code>
 /// Assigned ──▶ Filed ──▶ InProgress ──▶ Concluded
 ///    │           │           │
-///    └───────────┴───────────┴──▶ Suspended (la insolvencia, FR-098, o una persona) ──reanudar──▶ InProgress
+///    └───────────┴───────────┴──▶ Suspended (la insolvencia, FR-098) ──reanudar a mano──▶ Assigned · Filed · InProgress
 /// cualquiera abierto ──▶ Withdrawn · Concluded (cerrar con motivo)
 /// </code>
+/// Reanudar (K4, bloque D, decisión del dueño del 2026-10-16) es de una persona con motivo y nunca automático: el proceso vuelve al estado que dicen sus
+/// actuaciones (<see cref="EstadoAlReanudar"/>), que es el que tenía al suspenderse porque suspendido no recibe actuaciones que lo muevan.
 /// Sus actuaciones son hechos (<see cref="LegalProcessAction"/>). (nuevo)
 /// </summary>
 public class LegalProcess : AuditableEntity
@@ -51,7 +53,8 @@ public class LegalProcess : AuditableEntity
         [LegalProcessStatus.Assigned] = [LegalProcessStatus.Filed, LegalProcessStatus.Suspended, LegalProcessStatus.Withdrawn, LegalProcessStatus.Concluded],
         [LegalProcessStatus.Filed] = [LegalProcessStatus.InProgress, LegalProcessStatus.Suspended, LegalProcessStatus.Withdrawn, LegalProcessStatus.Concluded],
         [LegalProcessStatus.InProgress] = [LegalProcessStatus.Suspended, LegalProcessStatus.Withdrawn, LegalProcessStatus.Concluded],
-        [LegalProcessStatus.Suspended] = [LegalProcessStatus.InProgress, LegalProcessStatus.Withdrawn, LegalProcessStatus.Concluded],
+        [LegalProcessStatus.Suspended] = [LegalProcessStatus.Assigned, LegalProcessStatus.Filed, LegalProcessStatus.InProgress, LegalProcessStatus.Withdrawn,
+            LegalProcessStatus.Concluded],
     };
 
     public static bool PuedePasar(LegalProcessStatus desde, LegalProcessStatus hacia) =>
@@ -109,6 +112,39 @@ public class LegalProcess : AuditableEntity
         ReglaDeCarteraException.SiHay(PuedeIrA(LegalProcessStatus.Suspended));
         Status = LegalProcessStatus.Suspended;
         SuspendedByInsolvencyId = insolvenciaId;
+    }
+
+    /// <summary>
+    /// El estado al que vuelve un proceso suspendido al reanudarlo (K4, bloque D): el que tenía antes de suspenderse, derivado de sus actuaciones con
+    /// la misma regla que lo mueve al registrarlas —sin radicación, <c>Assigned</c>; radicado sin actuación de fondo después, <c>Filed</c>; con una,
+    /// <c>InProgress</c>—. No se guarda el estado anterior: las actuaciones son el hecho, y mientras está suspendido ninguna lo mueve.
+    /// </summary>
+    public static LegalProcessStatus EstadoAlReanudar(IEnumerable<LegalActionKind> actuacionesEnOrden)
+    {
+        ArgumentNullException.ThrowIfNull(actuacionesEnOrden);
+        var estado = LegalProcessStatus.Assigned;
+        foreach (var clase in actuacionesEnOrden)
+        {
+            if (clase == LegalActionKind.Filing && estado == LegalProcessStatus.Assigned) estado = LegalProcessStatus.Filed;
+            else if (estado == LegalProcessStatus.Filed && clase is not (LegalActionKind.Fee or LegalActionKind.Expense or LegalActionKind.Other))
+                estado = LegalProcessStatus.InProgress;
+        }
+        return estado;
+    }
+
+    /// <summary>
+    /// Reanuda a mano un proceso suspendido (K4, bloque D): vuelve a <paramref name="hacia"/> (<see cref="EstadoAlReanudar"/>) y suelta la insolvencia que lo
+    /// suspendió. Que esa insolvencia ya no esté en negociación lo comprueba el comando (<c>Lending.LegalProcess.InsolvencyNegotiating</c>).
+    /// </summary>
+    public void Reanudar(LegalProcessStatus hacia)
+    {
+        if (hacia is not (LegalProcessStatus.Assigned or LegalProcessStatus.Filed or LegalProcessStatus.InProgress))
+            throw new ArgumentOutOfRangeException(nameof(hacia), hacia, "Un proceso se reanuda asignado, radicado o en curso.");
+        if (Status != LegalProcessStatus.Suspended)
+            throw new ReglaDeCarteraException(new ProblemaDeCartera(CodigoEstadoInvalido, $"El proceso está en «{Status}»: sólo uno suspendido se reanuda.",
+                new Dictionary<string, object?> { ["status"] = Status.ToString(), ["requested"] = hacia.ToString() }));
+        Status = hacia;
+        SuspendedByInsolvencyId = null;
     }
 
     /// <summary>Cierra con resultado: <c>Concluded</c> o <c>Withdrawn</c>, con motivo.</summary>

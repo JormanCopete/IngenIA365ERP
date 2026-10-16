@@ -126,9 +126,9 @@
                                 <td>@TextosDeCobranza.CanalDeGestion(gestion.Channel)</td>
                                 <td>@TextosDeCobranza.ResultadoDeGestion(gestion.Result)@(gestion.VoidedByPublicId is not null ? " · anulada" : "")</td>
                                 <td>@(gestion.Notes ?? "—")</td>
-                                <td>@gestion.Collector.Name</td>
+                                <td>@(gestion.Collector?.Name ?? "Sistema")</td>
                                 <td>
-                                    @if (gestion.VoidedByPublicId is null && gestion.VoidsActionPublicId is null)
+                                    @if (gestion.VoidedByPublicId is null && gestion.VoidsActionPublicId is null && gestion.Channel != TextosDeCobranza.CanalDeSistema)
                                     {
                                         <PermissionGate Required="Lending.Collections.RecordActivity">
                                             <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirAnulacion(gestion))">Anular…</SfButton>

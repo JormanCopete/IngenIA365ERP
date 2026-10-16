@@ -30,6 +30,7 @@ public static class ErroresDeCobranza
     public const string CodigoContactoNoObligado = "Lending.CollectionAction.ContactNotObligated";
     public const string CodigoGestionInexistente = "Lending.CollectionAction.NotFound";
     public const string CodigoGestionYaAnulada = "Lending.CollectionAction.AlreadyVoided";
+    public const string CodigoGestionDeSistema = "Lending.CollectionAction.SystemRecord";
 
     // -------------------------------------------------------------------------------------------------------- acuerdos --
     public const string CodigoAcuerdoInexistente = "Lending.PaymentAgreement.NotFound";
@@ -47,11 +48,14 @@ public static class ErroresDeCobranza
     public const string CodigoProcesoAbierto = "Lending.LegalProcess.AlreadyOpen";
     public const string CodigoSoporteJuridicoInvalido = "Lending.LegalProcess.AttachmentInvalid";
     public const string CodigoAbogadoEsElDemandado = "Lending.LegalProcess.LawyerIsDebtor";
+    public const string CodigoInsolvenciaEnNegociacion = "Lending.LegalProcess.InsolvencyNegotiating";
 
     // ---------------------------------------------------------------------------------------------- gastos de cobranza --
     public const string CodigoGastoInexistente = "Lending.CollectionFee.NotFound";
     public const string CodigoAvisoDeGastoSinEnviar = "Lending.CollectionFee.NoticeNotSent";
     public const string CodigoGastoYaCausado = "Lending.CollectionFee.AlreadyCaused";
+    public const string CodigoGastoSobreElTope = "Lending.CollectionFee.AboveCap";
+    public const string CodigoTarifaSobreElTope = TopeDelGastoDeCobranza.CodigoPorEncimaDelTope;
 
     // -------------------------------------------------------------------------------------------------------- campañas --
     public const string CodigoCampanaInexistente = "Lending.Campaign.NotFound";
@@ -81,7 +85,8 @@ public static class ErroresDeCobranza
     // --------------------------------------------------------------------------------------------------------- etapas --
 
     public static Error SinEtapa(string credito) => new ErrorConDatos(CodigoSinEtapa,
-        $"El crédito {credito} no está en ninguna etapa de cobranza.", new { loanNumber = credito });
+        $"El crédito {credito} no está en cobranza: no tiene etapa vigente (nunca entró o salió al ponerse al día). Se gestiona cuando el proceso diario lo "
+        + "haga entrar a una etapa.", new { loanNumber = credito });
 
     // ---------------------------------------------------------------------------------------- reparto y asignaciones --
 
@@ -100,6 +105,9 @@ public static class ErroresDeCobranza
 
     public static Error GestionYaAnulada() => new(CodigoGestionYaAnulada,
         "La gestión ya fue anulada por otra: corrija la gestión que la anuló.");
+
+    public static Error GestionDeSistema() => new(CodigoGestionDeSistema,
+        "Esa gestión la dejó el proceso diario (la salida de cobranza): es la constancia de lo que pasó y no se anula.");
 
     // -------------------------------------------------------------------------------------------------------- acuerdos --
 
@@ -131,6 +139,10 @@ public static class ErroresDeCobranza
     public static Error AbogadoEsElDemandado() => new(CodigoAbogadoEsElDemandado,
         "El abogado no puede ser el deudor demandado. Elija como abogado a otra persona del maestro.");
 
+    public static Error InsolvenciaEnNegociacion(string proceso, Guid insolvencia) => new ErrorConDatos(CodigoInsolvenciaEnNegociacion,
+        $"El proceso {proceso} sigue suspendido: el deudor está en una negociación de insolvencia. Se reanuda cuando la insolvencia termine "
+        + "(con acuerdo o con su fracaso registrado).", new { number = proceso, insolvencyPublicId = insolvencia });
+
     public static Error SoporteJuridicoInvalido() => new(CodigoSoporteJuridicoInvalido,
         "El soporte no es un documento disponible de este proceso. Súbalo como documento del proceso y vuelva a intentarlo.");
 
@@ -145,6 +157,10 @@ public static class ErroresDeCobranza
     public static Error GastoYaCausado(string credito) => new ErrorConDatos(CodigoGastoYaCausado,
         $"El gasto de cobranza del crédito {credito} ya se causó.", new { loanNumber = credito });
 
+    public static Error GastoSobreElTope(string credito, decimal valor, decimal maximo) => new ErrorConDatos(CodigoGastoSobreElTope,
+        $"Lo que se cobraría al deudor del crédito {credito} ({Pesos(valor)}) supera el tope del gasto de cobranza de la cooperativa ({Pesos(maximo)}). "
+        + "Registre a cargo del deudor a lo sumo ese valor, o el resto sin cobrárselo.", new { loanNumber = credito, amount = valor, maxAmount = maximo });
+
     // -------------------------------------------------------------------------------------------------------- campañas --
 
     public static Error CampanaInexistente() => new(CodigoCampanaInexistente, "La campaña no existe.");
@@ -152,7 +168,7 @@ public static class ErroresDeCobranza
     public static Error CampanaDuplicada(string codigo) => new ErrorConDatos(CodigoCampanaDuplicada,
         $"Ya hay una campaña con el código {codigo}. Use otro código.", new { code = codigo });
 
-    public static Error CriteriosInvalidos(string motivo) => new ErrorConDatos(CodigoCriteriosInvalidos, motivo, new { });
+    public static Error CriteriosInvalidos(string motivo) => new ErrorConDatos(CodigoCriteriosInvalidos, motivo, new { reason = motivo });
 
     // --------------------------------------------------------------------------------------------------- avisos previos --
 

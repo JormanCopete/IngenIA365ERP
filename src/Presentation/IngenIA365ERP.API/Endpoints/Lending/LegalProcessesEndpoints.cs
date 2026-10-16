@@ -8,7 +8,7 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 
 /// <summary>
 /// El cobro jurídico (feature 013, K4, US12, T0956; contracts/api.md §14.8, FR-124): la lista (<c>Lending.Collections.Read</c>) y abrir, registrar
-/// actuaciones con adjuntos y cerrar (<c>Lending.LegalProcesses.Manage</c>, con <c>Idempotency-Key</c>). El abogado es una persona del maestro; una
+/// actuaciones con adjuntos, reanudar el suspendido y cerrar (<c>Lending.LegalProcesses.Manage</c>, con <c>Idempotency-Key</c>). El abogado es una persona del maestro; una
 /// insolvencia abierta suspende el proceso. Cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
 /// </summary>
 public class LegalProcessesEndpoints : ICarterModule
@@ -49,6 +49,13 @@ public class LegalProcessesEndpoints : ICarterModule
             .WithName("Lending_LegalProcesses_Close")
             .ConClaveDeOperacion()
             .RequirePermission(Administrar);
+
+        // K4, bloque D (decisión del dueño del 2026-10-16): reanudar a mano un proceso suspendido, con motivo; nunca solo al terminar la insolvencia.
+        procesos.MapPost("/{id:guid}/resume", async (Guid id, ReanudarRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ResumeLegalProcessCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_LegalProcesses_Resume")
+            .ConClaveDeOperacion()
+            .RequirePermission(Administrar);
     }
 
     /// <summary>Abrir el proceso sobre uno o varios créditos del mismo deudor (§14.8).</summary>
@@ -69,6 +76,9 @@ public class LegalProcessesEndpoints : ICarterModule
         decimal? Amount = null,
         bool ChargeableToDebtor = false,
         IReadOnlyList<Guid>? AttachmentPublicIds = null);
+
+    /// <summary>Reanudar un proceso suspendido, con motivo.</summary>
+    public sealed record ReanudarRequest(string? Reason);
 
     /// <summary>Cerrar el proceso, concluido o retirado.</summary>
     public sealed record CerrarRequest(LegalProcessStatus Outcome, string? Reason);

@@ -12,8 +12,9 @@
 @* Feature 013, K4, US12 (T0958; contracts/api.md §14.8; FR-124): los procesos de cobro jurídico. Sólo se abren para créditos que ya están en la etapa
    jurídica; el abogado es una persona del maestro. Cada actuación (radicación, auto, embargo, audiencia, sentencia, honorarios, gastos…) queda con sus
    adjuntos y es inmutable; los honorarios o gastos marcados «a cargo del deudor» siguen la regla de gastos de cobranza (se informan al deudor antes de
-   causarse). Una insolvencia abierta del deudor suspende el proceso solo. Cerrar es concluir o retirar, con motivo. Leer exige Lending.Collections.Read;
-   abrir, actuar y cerrar, Lending.LegalProcesses.Manage. *@
+   causarse). Una insolvencia abierta del deudor suspende el proceso solo; reanudarlo es de una persona, con motivo, cuando la insolvencia ya no está en
+   negociación (K4, bloque D: nunca se reanuda solo). Cerrar es concluir o retirar, con motivo. Leer exige Lending.Collections.Read; abrir, actuar,
+   reanudar y cerrar, Lending.LegalProcesses.Manage. *@
 <PermissionGate Required="Lending.Collections.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -54,6 +55,10 @@
                                 {
                                     <PermissionGate Required="Lending.LegalProcesses.Manage">
                                         <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirActuacionAsync(proceso))">Actuación…</SfButton>
+                                        @if (proceso.Status == 4)
+                                        {
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirReanudar(proceso))">Reanudar…</SfButton>
+                                        }
                                         <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirCierre(proceso))">Cerrar…</SfButton>
                                     </PermissionGate>
                                 }
@@ -147,6 +152,21 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+<SfDialog @bind-Visible="_mostrarReanudar" Header="@($"Reanudar el proceso {_elegido?.Number}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Reanudando…">
+                <p class="texto-tenue">El proceso vuelve al estado que tenía antes de suspenderse. No se reanuda mientras el deudor siga en negociación de insolvencia.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReanudarAsync">Reanudar proceso</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReanudar = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -158,7 +178,7 @@
     private ProcesoJuridicoDto? _elegido;
     private PersonSearchPicker.PersonSearchItem? _abogado;
     private string? _estado, _error, _motivo, _despacho, _radicado, _tipo, _adjunto, _clase = "Order", _descripcion, _resultado = "Concluded";
-    private bool _mostrarNuevo, _mostrarActuacion, _mostrarCierre, _aCargoDelDeudor;
+    private bool _mostrarNuevo, _mostrarActuacion, _mostrarCierre, _mostrarReanudar, _aCargoDelDeudor;
     private int _pagina = 1;
     private long _total;
     private Guid? _credito;
@@ -258,6 +278,26 @@
         if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo cerrar el proceso."; return; }
         _mostrarCierre = false;
         await Notification.SuccessAsync("Proceso cerrado.");
+        await CargarAsync(_pagina);
+    }
+
+    private void AbrirReanudar(ProcesoJuridicoDto proceso)
+    {
+        _elegido = proceso;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarReanudar = true;
+    }
+
+    private async Task ReanudarAsync()
+    {
+        if (_elegido is not { } p || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = await Cliente.ReanudarProcesoAsync(p.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo reanudar el proceso."; return; }
+        _mostrarReanudar = false;
+        await Notification.SuccessAsync("Proceso reanudado.");
         await CargarAsync(_pagina);
     }
 }

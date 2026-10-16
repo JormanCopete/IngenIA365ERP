@@ -35,9 +35,12 @@ public sealed record PaymentPromiseDto(
     decimal Paid,
     DateOnly? KeptOn,
     Guid ActionPublicId,
-    UsuarioRefDto Collector);
+    UsuarioRefDto? Collector);
 
-/// <summary>Una gestión de cobranza (api.md §14.6). <see cref="WindowDecision"/>: lo que decía la ventana legal al registrarla. (nuevo)</summary>
+/// <summary>
+/// Una gestión de cobranza (api.md §14.6). <see cref="WindowDecision"/>: lo que decía la ventana legal al registrarla. <see cref="Collector"/> es nulo en una
+/// gestión de sistema (canal <c>System</c>, K4 bloque D). (nuevo)
+/// </summary>
 public sealed record CollectionActionDto(
     Guid PublicId,
     CreditoRefDto? Loan,
@@ -48,7 +51,7 @@ public sealed record CollectionActionDto(
     bool IsDirectContact,
     CollectionActionResult Result,
     string? Notes,
-    UsuarioRefDto Collector,
+    UsuarioRefDto? Collector,
     PaymentPromiseDto? Promise,
     Guid? VoidsActionPublicId,
     string? VoidReason,
@@ -82,7 +85,7 @@ public static class GestionesDeCobranza
             return new CollectionActionDto(f.PublicId,
                 f.LoanId is { } l && creditos.TryGetValue(l, out var c) ? new CreditoRefDto(c.PublicId, c.Number) : null,
                 new DateTimeOffset(CobranzaDeCartera.ALocal(f.OccurredAt, desfase), desfase), f.Channel, personas[f.PersonId], f.ContactRole, f.IsDirectContact,
-                f.Result, f.Notes, usuarios[f.CollectorUserId], promesa,
+                f.Result, f.Notes, ReferenciasDeGobierno.Usuario(usuarios, f.CollectorUserId), promesa,
                 f.VoidsActionId is { } v && anulan.TryGetValue(v, out var anula) ? anula : null, f.VoidReason,
                 anuladas.TryGetValue(f.Id, out var por) ? por : null, f.WindowDecision,
                 string.IsNullOrWhiteSpace(f.WindowReasonCodes) ? [] : f.WindowReasonCodes.Split(',', StringSplitOptions.RemoveEmptyEntries));
@@ -94,7 +97,8 @@ public static class GestionesDeCobranza
     {
         var estado = EstadoDePromesa.Calcular(p.ParaEstado(gestion.OccurredAt, anulada), pagos, hoy);
         return new PaymentPromiseDto(p.PublicId, new CreditoRefDto(credito.PublicId, credito.Number), personas[credito.DebtorPersonId], p.PromisedDate,
-            p.PromisedAmount, p.ToleranceAmount, estado.Estado, estado.Anulada, estado.Abonado, estado.CumplidaEl, gestion.PublicId, usuarios[gestion.CollectorUserId]);
+            p.PromisedAmount, p.ToleranceAmount, estado.Estado, estado.Anulada, estado.Abonado, estado.CumplidaEl, gestion.PublicId,
+            ReferenciasDeGobierno.Usuario(usuarios, gestion.CollectorUserId));
     }
 }
 
@@ -129,8 +133,10 @@ public sealed class RecordCollectionActionCommandValidator : AbstractValidator<R
     {
         RuleFor(x => x.LoanPublicId).NotEmpty();
         RuleFor(x => x.ContactedPersonPublicId).NotEmpty().WithMessage("Indique con quién fue la gestión.");
-        RuleFor(x => x.Channel).IsInEnum();
-        RuleFor(x => x.ResultCode).IsInEnum();
+        RuleFor(x => x.Channel).IsInEnum().NotEqual(CollectionActionChannel.System)
+            .WithMessage("Elija el canal por el que fue la gestión: el canal «sistema» sólo lo usa el proceso diario.");
+        RuleFor(x => x.ResultCode).IsInEnum().NotEqual(CollectionActionResult.LeftCollection)
+            .WithMessage("Elija el resultado de la gestión: «salió de cobranza» sólo lo registra el proceso diario.");
         RuleFor(x => x.Notes).MaximumLength(CollectionAction.LargoDeLasNotas);
         RuleFor(x => x.Promise!.Amount).GreaterThan(0m).PrecisionScale(18, 2, true).When(x => x.Promise is not null)
             .WithMessage("Lo prometido es mayor que cero, con hasta dos decimales.");
@@ -172,6 +178,10 @@ public sealed class RecordCollectionActionCommandHandler(
         if (rol == ContactRole.Paymaster && request.IsDirectContact)
             return Falla(new ErrorConDatos(ErroresDeCobranza.CodigoContactoNoObligado,
                 "La gestión ante la pagaduría no es un contacto directo con el titular: márquela sin contacto directo.", new { loanNumber = credito.Number }));
+        // K4, bloque D: la gestión con el titular es de un crédito en cobranza (con etapa vigente); uno que nunca entró o que salió al ponerse al día no se
+        // gestiona hasta que vuelva a entrar. La gestión ante la pagaduría (libranza) no depende de la etapa.
+        if (rol != ContactRole.Paymaster && !(await CobranzaDeCartera.EtapaVigenteAsync(db, [credito.Id], ct)).ContainsKey(credito.Id))
+            return Falla(ErroresDeCobranza.SinEtapa(credito.Number));
 
         DecisionDeContacto? decision = null;
         if (rol != ContactRole.Paymaster)
@@ -260,6 +270,7 @@ public sealed class VoidCollectionActionCommandHandler(
                 "CollectionAction", gestion.PublicId, ct);
             if (dentro.IsFailure) return dentro;
         }
+        if (gestion.EsDeSistema) return Result.Failure(ErroresDeCobranza.GestionDeSistema());
         if (gestion.VoidsActionId is not null || await db.CollectionActions.AnyAsync(a => a.VoidsActionId == gestion.Id, ct))
             return Result.Failure(ErroresDeCobranza.GestionYaAnulada());
         db.CollectionActions.Add(CollectionAction.Registrar(gestion.LoanId, gestion.PersonId, gestion.ContactRole, gestion.Channel, gestion.OccurredAt,

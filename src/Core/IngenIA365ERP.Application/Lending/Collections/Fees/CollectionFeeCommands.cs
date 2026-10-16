@@ -23,6 +23,8 @@ using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Collections;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Replay;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -118,6 +120,19 @@ public static class GastosDeCobranza
         string.Create(CultureInfo.InvariantCulture, $"{loanPublicId:N}:{etapa}:{valor:0.00}");
 
     public static string ClaveDeActuacion(Guid loanPublicId, Guid actuacionPublicId) => $"{loanPublicId:N}:{MarcaJuridica}:{actuacionPublicId:N}";
+
+    /// <summary>
+    /// El tope del gasto de cobranza vigente el <paramref name="dia"/> (K4, bloque D): <c>Cobranza.TopeGasto.Porcentaje</c> y
+    /// <c>Cobranza.TopeGasto.ValorMaximo</c>; vacíos, sin tope.
+    /// </summary>
+    public static async Task<Result<TopeDelGastoDeCobranza>> TopeAsync(ReglasDeParametrosDeCartera parametros, DateOnly dia, CancellationToken ct)
+    {
+        var porcentaje = await parametros.LeerAsync(ParametrosDeCartera.CobranzaTopeGastoPorcentaje, dia, ct: ct);
+        if (porcentaje.IsFailure) return Result.Failure<TopeDelGastoDeCobranza>(porcentaje.Error);
+        var valor = await parametros.LeerAsync(ParametrosDeCartera.CobranzaTopeGastoValorMaximo, dia, ct: ct);
+        if (valor.IsFailure) return Result.Failure<TopeDelGastoDeCobranza>(valor.Error);
+        return Result.Success(new TopeDelGastoDeCobranza(porcentaje.Value.Valor as decimal?, valor.Value.Valor as decimal?));
+    }
 
     /// <summary>La clave de idempotencia de la operación <c>Charge</c> que causa el gasto de un aviso (una sola por aviso).</summary>
     public static string ClaveDeOperacion(Guid avisoPublicId) => $"{Origen}:{avisoPublicId:N}";

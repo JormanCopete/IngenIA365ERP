@@ -33,7 +33,8 @@ public sealed class CobranzaK4Tests : IDisposable
     [Fact]
     public async Task Una_version_nueva_cierra_la_anterior_y_los_rangos_cruzados_se_rechazan()
     {
-        var cmd = new AddCollectionStageVersionCommandHandler(_e.Db, Substitute.For<IngenIA365ERP.Application.Lending.Common.ICerrojoDeCartera>());
+        var cmd = new AddCollectionStageVersionCommandHandler(_e.Db, Substitute.For<IngenIA365ERP.Application.Lending.Common.ICerrojoDeCartera>(),
+            new IngenIA365ERP.Application.Lending.Common.ReglasDeParametrosDeCartera(_e.G.Valores, _e.G.Parametros()));
         var primera = await cmd.Handle(new AddCollectionStageVersionCommand([Etapa("ADMIN", 1, 30), Etapa("JURID", 31, null, true)],
             new DateOnly(2026, 1, 1), "Primera") { OperationKey = Guid.NewGuid() }, default);
         primera.IsSuccess.Should().BeTrue(primera.IsFailure ? primera.Error.Message : null);

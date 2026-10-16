@@ -48,8 +48,8 @@
                                 <td>@a.AssignedOn.ToString("dd/MM/yyyy")</td>
                                 <td>@if (a.Loan is { } c) { <a href="/cartera/creditos/@c.LoanPublicId">@c.Number</a> } else { <span>Todo el deudor</span> }</td>
                                 <td>@a.Debtor.FullName</td>
-                                <td>@a.Collector.Name</td>
-                                <td>@(a.RulePublicId is not null ? "Regla de reparto" : $"A mano por {a.AssignedBy?.Name ?? "—"}")@(a.PreviousAssignmentPublicId is not null ? " · reasignado" : "")</td>
+                                <td>@(a.Collector?.Name ?? "Sin gestor")</td>
+                                <td>@(a.Collector is null ? "Cierre: salió de cobranza" : a.RulePublicId is not null ? "Regla de reparto" : $"A mano por {a.AssignedBy?.Name ?? "—"}")@(a.PreviousAssignmentPublicId is not null ? " · reasignado" : "")</td>
                                 <td>@(a.Reason ?? "—")</td>
                             </tr>
                         }
