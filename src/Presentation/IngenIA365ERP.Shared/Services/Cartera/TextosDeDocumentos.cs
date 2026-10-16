@@ -11,7 +11,7 @@ public static class TextosDeDocumentos
 {
     private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
 
-    /// <summary>Las clases que se emiten hoy (K1); el extracto y el certificado tributario llegan con K5.</summary>
+    /// <summary>Las clases de K1: plan de pagos, paz y salvo de una obligación o general y certificado de saldo.</summary>
     public static IReadOnlyList<(string Valor, string Texto)> ClasesDeK1 { get; } =
     [
         ("PaymentPlan", "Plan de pagos"),
@@ -20,9 +20,23 @@ public static class TextosDeDocumentos
         ("BalanceCertificate", "Certificado de saldo"),
     ];
 
-    /// <summary>Todas las clases, para filtrar.</summary>
+    /// <summary>Todas las clases, las que se emiten hoy (K5, T0975: el extracto y el certificado tributario se suman a las de K1).</summary>
     public static IReadOnlyList<(string Valor, string Texto)> Clases { get; } =
         [.. ClasesDeK1, ("Statement", "Extracto"), ("TaxCertificate", "Certificado tributario")];
+
+    /// <summary>Las clases que la pantalla ofrece para emitir.</summary>
+    public static IReadOnlyList<(string Valor, string Texto)> ClasesQueSeEmiten => Clases;
+
+    /// <summary>¿La clase se pide sin crédito? (el paz y salvo general y el certificado tributario se emiten a nombre de la persona).</summary>
+    public static bool EsDeLaPersona(string clase) => clase is "GeneralClearance" or "TaxCertificate";
+
+    /// <summary>Lo que dice la verificación tras comparar un PDF (K5): nada si no se comparó.</summary>
+    public static string? ComparacionDelPdf(bool? coincide) => coincide switch
+    {
+        true => "El PDF es idéntico al emitido: su huella coincide con la guardada.",
+        false => "El PDF NO es el emitido: su huella no coincide con la guardada. Puede estar alterado o ser de otro documento.",
+        null => null,
+    };
 
     public static IReadOnlyList<(string Valor, string Texto)> Estados { get; } =
         [("Valid", "Vigente"), ("SubjectToFinality", "Sujeto a firmeza"), ("Voided", "Anulado")];
@@ -94,6 +108,15 @@ public static class TextosDeDocumentos
         "date" => "Fecha de la liquidación",
         "toPayOff" => "Para cancelar",
         "validUntil" => "Válido hasta",
+        "periodFrom" => "Desde",
+        "periodTo" => "Hasta",
+        "openingBalance" => "Saldo inicial",
+        "closingBalance" => "Saldo final",
+        "movements" => "Operaciones del período",
+        "year" => "Año",
+        "totalInterestPaid" => "Intereses pagados",
+        "totalHousingInterestPaid" => "Intereses pagados en vivienda",
+        "asOfDate" => "Fecha de la información",
         _ => clave,
     };
 
@@ -114,6 +137,9 @@ public static class TextosDeDocumentos
                 "number" => p.Value.GetString() ?? string.Empty,
                 "role" => p.Value.GetString() ?? string.Empty,
                 "balance" => $"saldo {Valor(p.Value)}",
+                "interestPaid" => $"intereses pagados {Valor(p.Value)}",
+                "balanceAtYearEnd" => $"saldo al 31/12 {Valor(p.Value)}",
+                "housing" => p.Value.ValueKind == JsonValueKind.True ? "vivienda" : string.Empty,
                 _ => Valor(p.Value),
             }))
         : Valor(e);

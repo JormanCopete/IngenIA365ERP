@@ -41,7 +41,10 @@ public sealed record DetalleDeDocumentoDto(DocumentoEmitidoDto Document, JsonEle
 /// <summary>El período de un extracto (K5).</summary>
 public sealed record PeriodoDeDocumentoRequest(DateOnly From, DateOnly To);
 
-/// <summary>El pedido de emisión: clase, titular, crédito, fecha de corte del certificado de saldo y la entrega (<c>Download</c> o <c>Email</c>).</summary>
+/// <summary>
+/// El pedido de emisión: clase, titular, crédito, fecha de corte del certificado de saldo, período del extracto o año del certificado tributario (K5)
+/// y la entrega (<c>Download</c> o <c>Email</c>).
+/// </summary>
 public sealed record EmitirDocumentoRequest(
     string Kind,
     Guid PersonPublicId,
@@ -73,9 +76,15 @@ public sealed record TitularVerificadoDto(string FullName, string DocumentNumber
 /// <summary>La anulación como la muestra la verificación.</summary>
 public sealed record AnulacionVerificadaDto(DateTime At, string Reason);
 
-/// <summary>La respuesta de la verificación de un código.</summary>
+/// <summary>
+/// La respuesta de la verificación de un código. <see cref="PdfMatches"/> (K5) sólo viene si se comparó la huella de un PDF: <c>true</c> si es la del
+/// PDF guardado.
+/// </summary>
 public sealed record DocumentoVerificadoDto(bool Authentic, string Status, string Kind, string Number, DateTime IssuedAt, TitularVerificadoDto Holder,
-    JsonElement EssentialData, AnulacionVerificadaDto? Voided);
+    JsonElement EssentialData, AnulacionVerificadaDto? Voided, bool? PdfMatches = null);
+
+/// <summary>Lo que devuelve <c>huellaDeArchivo.calcular</c> (K5): el nombre, el tamaño y la huella SHA-256 en hexadecimal; nunca los bytes.</summary>
+public sealed record HuellaDeArchivoDto(string Name, long Size, string Sha256);
 
 /// <summary>Una obligación con saldo que niega el paz y salvo (<c>Lending.Document.ClearanceDenied</c>, <c>data.obligations[]</c>).</summary>
 public sealed record ObligacionQueNiegaDto(Guid LoanPublicId, string Number, decimal Balance);

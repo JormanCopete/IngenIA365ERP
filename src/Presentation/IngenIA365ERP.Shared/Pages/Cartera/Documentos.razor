@@ -13,9 +13,9 @@
 <PageTitle>Documentos de Cartera - IngenIA365ERP</PageTitle>
 
 @* Feature 013, US13 (T0792; FR-131, FR-132; contracts/api.md §15): los documentos al deudor emitidos —plan de pagos, paz y salvo de una obligación o
-   general y certificado de saldo— buscados por crédito o deudor, clase, estado y fecha de emisión, sólo los del alcance de quien mira. «Emitir» es
-   un diálogo de un paso con una confirmación: la clase, el crédito y el titular (deudor o codeudor), la fecha de corte del certificado de saldo y si
-   se descarga o se envía por correo. Una negativa del paz y salvo dice qué obligaciones tienen saldo o qué facturas siguen en reproceso. El detalle
+   general, certificado de saldo y, desde K5 (T0975), extracto de un período y certificado tributario de un año terminado— buscados por crédito o deudor, clase, estado y fecha de emisión, sólo los del alcance de quien mira. «Emitir» es
+   un diálogo de un paso con una confirmación: la clase, el crédito y el titular (deudor o codeudor), la fecha de corte del certificado de saldo, el
+   período del extracto o el año del certificado tributario, y si se descarga o se envía por correo. Una negativa del paz y salvo dice qué obligaciones tienen saldo o qué facturas siguen en reproceso. El detalle
    muestra los eventos (emisión, entrega, anulación con su motivo y operación causa) y, según los permisos, reimprimir —el mismo PDF guardado—,
    enviar por correo y anular con motivo. Llega con ?credito= desde el expediente del crédito (y ?emitir=true abre el diálogo con él elegido). *@
 <PermissionGate Required="Lending.Documents.Read" MostrarAviso="true">
@@ -180,10 +180,9 @@
                 {
                     <label class="campo campo-ancho">Clase *
                         <select class="e-input" @bind="_claseAEmitir">
-                            @foreach (var c in TextosDeDocumentos.ClasesDeK1) { <option value="@c.Valor">@c.Texto</option> }
+                            @foreach (var c in TextosDeDocumentos.ClasesQueSeEmiten) { <option value="@c.Valor">@c.Texto</option> }
                         </select>
                     </label>
-                    <p class="texto-tenue">El extracto y el certificado tributario llegan con una entrega posterior.</p>
                     <div class="toolbar">
                         <label class="campo">Crédito o deudor * <input class="e-input" @bind="_buscarCredito" placeholder="CR-000123 o nombre" /></label>
                         <SfButton CssClass="e-outline" IconCss="e-icons e-search" OnClick="@BuscarCreditosAsync">Buscar</SfButton>
@@ -206,12 +205,38 @@
                         {
                             <p class="texto-tenue">El paz y salvo general cubre todas las obligaciones de crédito del titular; el crédito sólo sirve para elegirlo.</p>
                         }
+                        @if (_claseAEmitir == "TaxCertificate")
+                        {
+                            <p class="texto-tenue">El certificado tributario cubre todos los créditos en que el titular es deudor; el crédito sólo sirve para elegirlo.</p>
+                        }
                     }
                     @if (_claseAEmitir == "BalanceCertificate")
                     {
                         <label class="campo">Fecha de corte (vacía = hoy)
                             <input type="date" class="e-input" value="@(_corte?.ToString("yyyy-MM-dd"))" @onchange="@(e => _corte = LeerFecha(e.Value))" />
                         </label>
+                    }
+                    @if (_claseAEmitir == "Statement")
+                    {
+                        <div class="toolbar">
+                            <label class="campo">Desde *
+                                <input type="date" class="e-input" value="@(_periodoDesde?.ToString("yyyy-MM-dd"))" @onchange="@(e => _periodoDesde = LeerFecha(e.Value))" />
+                            </label>
+                            <label class="campo">Hasta *
+                                <input type="date" class="e-input" value="@(_periodoHasta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _periodoHasta = LeerFecha(e.Value))" />
+                            </label>
+                        </div>
+                        <p class="texto-tenue">Saldo inicial, operaciones por fecha valor y saldo final del período; hasta cinco años y no después de hoy.</p>
+                        @if (ErrorDelPeriodo is { } malPeriodo) { <p class="aviso aviso-alerta">@malPeriodo</p> }
+                    }
+                    @if (_claseAEmitir == "TaxCertificate")
+                    {
+                        <label class="campo">Año *
+                            <select class="e-input" @bind="_anio">
+                                @foreach (var a in AniosCertificables) { <option value="@a">@a</option> }
+                            </select>
+                        </label>
+                        <p class="texto-tenue">Intereses pagados en el año y saldo al 31 de diciembre de cada crédito; sólo años ya terminados.</p>
                     }
                     <div class="toolbar">
                         <label class="campo"><input type="radio" name="entrega" checked="@(_entrega == "Download")" @onchange="@(() => _entrega = "Download")" /> Descargar</label>
@@ -228,6 +253,8 @@
                         Se emitirá <strong>@TextosDeDocumentos.Clase(_claseAEmitir)</strong> a nombre de <strong>@NombreDelTitular</strong>
                         @if (TextosDeDocumentos.LlevaCredito(_claseAEmitir)) { <span> del crédito <strong>@_credito?.Number</strong></span> }
                         @if (_claseAEmitir == "BalanceCertificate") { <span> con corte al @TextosDeDocumentos.Fecha(_corte ?? DateOnly.FromDateTime(DateTime.Today))</span> }
+                        @if (_claseAEmitir == "Statement") { <span> del @TextosDeDocumentos.Fecha(_periodoDesde) al @TextosDeDocumentos.Fecha(_periodoHasta)</span> }
+                        @if (_claseAEmitir == "TaxCertificate") { <span> del año @_anio</span> }
                         y se @(_entrega == "Email" ? "enviará a su correo" : "descargará").
                         Queda numerado, con su código de verificación, y no se edita: si algo está mal se anula y se emite otro.
                     </p>
@@ -287,12 +314,23 @@
     private long _total;
     private int _pagina = 1;
     private string? _clase, _estado, _buscarFiltro, _buscarCredito, _numeroDelFiltro, _errorEmision, _errorAnulacion, _motivo;
-    private DateOnly? _desde, _hasta, _corte;
+    private DateOnly? _desde, _hasta, _corte, _periodoDesde, _periodoHasta;
+    private int _anio = DateTime.Today.Year - 1;
     private Guid? _filtroDeCredito, _titular;
     private string _claseAEmitir = "PaymentPlan", _entrega = "Download";
     private bool _mostrarEmision, _mostrarAnulacion, _confirmando;
 
-    private bool PuedeEmitir => _credito is not null && _titular is not null;
+    private bool PuedeEmitir => _credito is not null && _titular is not null && (_claseAEmitir != "Statement" || ErrorDelPeriodo is null);
+
+    /// <summary>K5: los años que se pueden certificar (los cinco anteriores al actual; el año en curso no ha terminado).</summary>
+    private static IEnumerable<int> AniosCertificables => Enumerable.Range(1, 5).Select(i => DateTime.Today.Year - i);
+
+    /// <summary>K5: lo que le falta al período del extracto antes de continuar (la API lo vuelve a validar).</summary>
+    private string? ErrorDelPeriodo => _periodoDesde is not { } d || _periodoHasta is not { } h ? "Elija la fecha inicial y la final del período."
+        : d > h ? "La fecha inicial es posterior a la final."
+        : h > DateOnly.FromDateTime(DateTime.Today) ? "El período no puede terminar después de hoy."
+        : h >= d.AddYears(5) ? "El período no puede abarcar más de cinco años."
+        : null;
 
     private string NombreDelTitular => _credito is not { } c ? "—"
         : c.Debtor.PublicId == _titular ? c.Debtor.Name
@@ -363,6 +401,10 @@
         _claseAEmitir = "PaymentPlan";
         _entrega = "Download";
         _corte = null;
+        var hoy = DateOnly.FromDateTime(DateTime.Today);
+        _periodoDesde = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(-1);
+        _periodoHasta = new DateOnly(hoy.Year, hoy.Month, 1).AddDays(-1);
+        _anio = hoy.Year - 1;
         _credito = null;
         _titular = null;
         _buscarCredito = null;
@@ -406,7 +448,9 @@
         using var carga = _emitiendo.Iniciar();
         LimpiarNegativa();
         var pedido = new EmitirDocumentoRequest(_claseAEmitir, titular, TextosDeDocumentos.LlevaCredito(_claseAEmitir) ? credito.PublicId : null,
-            _claseAEmitir == "BalanceCertificate" ? _corte : null, null, null, _entrega);
+            _claseAEmitir == "BalanceCertificate" ? _corte : null,
+            _claseAEmitir == "Statement" && _periodoDesde is { } desde && _periodoHasta is { } hasta ? new PeriodoDeDocumentoRequest(desde, hasta) : null,
+            _claseAEmitir == "TaxCertificate" ? (short)_anio : null, _entrega);
         var r = await Cartera.EmitirDocumentoAsync(pedido, _clave);
         if (!r.IsSuccess)
         {
