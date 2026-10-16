@@ -4091,7 +4091,7 @@ verdes en los dos motores tras `CarteraCobranza`.
   - Hecho (2026-10-16): `cartera.jefe` suma `PaymentAgreements.Approve`, `LegalProcesses.Manage`, `Campaigns.Manage`, `PriorNotices.Send` y
     `.RegisterEvidence` (no trae `PaymentAgreements.Create`: la segregación sigue); `cartera.gestor-cobranza` suma `PriorNotices.Send`,
     `.RegisterEvidence` y `Attachments.Upload`/`.Download` —la carta exige subir la guía (`LendingPriorNoticeEvidence`, que además pide
-    `RegisterEvidence`)—, decisión propia que el dueño puede revertir. `PerfilesSugeridosDeCarteraTests` al día.
+    `RegisterEvidence`)—, confirmado por el dueño el 2026-10-16. `PerfilesSugeridosDeCarteraTests` al día.
 - [X] D4 Tope del gasto de cobranza como parámetro
   - Hecho (2026-10-16): `Cobranza.TopeGasto.Porcentaje` (fracción de 0 a 1 de la base del gasto) y `.ValorMaximo` (pesos), K4, sin valor, «pendiente de
     validar»; `TopeDelGastoDeCobranza` (Domain): `AddCollectionStageVersionCommand` rechaza una tarifa mayor (`Lending.CollectionStage.FeeAboveCap`, en
