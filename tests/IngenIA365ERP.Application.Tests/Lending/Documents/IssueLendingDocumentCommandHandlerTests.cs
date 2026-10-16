@@ -22,7 +22,7 @@ namespace IngenIA365ERP.Application.Tests.Lending.Documents;
 
 /// <summary>
 /// Feature 013, US13, T0765 (FR-131; adaptadores-y-archivos.md §8.1–§8.7; api.md §15): la emisión en un paso. Antes de activar
-/// <c>Lending.NotActivated</c>; extracto y certificado tributario <c>KindNotAvailable</c> con <c>availableFrom = "K5"</c>; sin firmante
+/// <c>Lending.NotActivated</c>; antes de K5, extracto y certificado tributario <c>KindNotAvailable</c> (desde K5, <c>DocumentosDeK5Tests</c>); sin firmante
 /// <c>SignerMissing</c>; fuera del alcance el 404 genérico. El paz y salvo de una obligación con saldo se niega con la obligación y en cero se emite
 /// sujeto a firmeza (registro del pago que canceló + días hábiles de su clase de medio), con el pago en la línea; el general mira las codeudas sólo
 /// con el parámetro, se niega con una venta en reproceso y menciona la aceptada sin migrar; el certificado de saldo es la liquidación a (D, R =
@@ -60,18 +60,6 @@ public sealed class IssueLendingDocumentCommandHandlerTests : IAsyncLifetime
 
         r.Error.Code.Should().Be("Lending.NotActivated");
         _d.Subidas.Should().BeEmpty();
-    }
-
-    [Theory]
-    [InlineData(IssuedDocumentKind.Statement)]
-    [InlineData(IssuedDocumentKind.TaxCertificate)]
-    public async Task El_extracto_y_el_certificado_tributario_llegan_con_K5(IssuedDocumentKind clase)
-    {
-        var r = await _d.EmitirAsync(DocumentosDePrueba.Pedido(clase, _d.Ana.PublicId, _d.Credito.PublicId));
-
-        r.Error.Code.Should().Be("Lending.Document.KindNotAvailable");
-        Datos(r.Error).GetProperty("availableFrom").GetString().Should().Be("K5");
-        r.Error.Message.Should().Be("Este documento estará disponible en una entrega posterior de Cartera.");
     }
 
     [Fact]

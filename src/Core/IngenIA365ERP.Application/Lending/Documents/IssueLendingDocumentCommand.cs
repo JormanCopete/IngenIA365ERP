@@ -20,6 +20,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Documents;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Documents;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -47,8 +48,10 @@ public sealed record IssuedLendingDocumentDto(
 /// <c>POST /api/lending/documents</c> (feature 013, US13, T0784; api.md §15, adaptadores-y-archivos.md §8.1–§8.7, <c>Lending.Documents.Issue</c>, con
 /// clave; T80, FR-013, FR-131): emite un documento <b>en un paso</b> —un diálogo con una confirmación—:
 /// <list type="number">
-/// <item>Cartera activada (si no, <c>Lending.NotActivated</c>); el extracto y el certificado tributario responden
-/// <c>Lending.Document.KindNotAvailable</c> (<c>data.availableFrom = "K5"</c>, C88); sin <c>Documentos.Firmante.Nombre</c>/<c>.Cargo</c>,
+/// <item>Cartera activada (si no, <c>Lending.NotActivated</c>); antes de K5 el extracto y el certificado tributario responden
+/// <c>Lending.Document.KindNotAvailable</c> (<c>data.availableFrom = "K5"</c>, C88; T0969 subió la entrega a K5); el extracto exige un período de
+/// hasta cinco años que no termine después de hoy (<c>Lending.Document.PeriodInvalid</c>) y el certificado tributario un año terminado
+/// (<c>Lending.Document.TaxYearNotClosed</c>; sin año, el anterior); sin <c>Documentos.Firmante.Nombre</c>/<c>.Cargo</c>,
 /// <c>Lending.Document.SignerMissing</c>;</item>
 /// <item>el titular existe; el crédito, si la clase lo lleva, está en el alcance de oficina y línea (fuera, el 404 genérico) y el titular es su
 /// deudor o un codeudor vigente; con <c>Email</c>, el correo y la autorización de tratamiento general antes de pintar nada
@@ -90,6 +93,9 @@ public sealed class IssueLendingDocumentCommandValidator : AbstractValidator<Iss
         RuleFor(x => x.CutoffDate).Null().When(x => x.Kind != IssuedDocumentKind.BalanceCertificate)
             .WithMessage("Sólo el certificado de saldo lleva fecha de corte.");
         RuleFor(x => x.Period).Must(p => p is null || p.From <= p.To).WithMessage("La fecha inicial del período no puede ser posterior a la final.");
+        RuleFor(x => x.Period).Null().When(x => x.Kind != IssuedDocumentKind.Statement).WithMessage("Sólo el extracto lleva período.");
+        RuleFor(x => x.Year).Null().When(x => x.Kind != IssuedDocumentKind.TaxCertificate).WithMessage("Sólo el certificado tributario lleva año.");
+        RuleFor(x => x.Year).InclusiveBetween((short)2000, (short)2100).When(x => x.Year is not null).WithMessage("El año del certificado no es válido.");
     }
 }
 
@@ -110,7 +116,8 @@ public sealed class IssueLendingDocumentCommandHandler(
     IDateTimeService reloj,
     IOptions<IdentityEmailOptions>? aplicacion = null,
     IAmbienteDeDespliegue? ambiente = null,
-    IAttachmentCipher? cifrado = null) : IRequestHandler<IssueLendingDocumentCommand, Result<IssuedLendingDocumentDto>>
+    IAttachmentCipher? cifrado = null,
+    EntregaDeCartera? entregaVigente = null) : IRequestHandler<IssueLendingDocumentCommand, Result<IssuedLendingDocumentDto>>
 {
     /// <summary>Cuántas veces se genera otro código ante una colisión antes de rendirse (80 bits: no debería pasar nunca).</summary>
     public const int IntentosDeCodigo = 5;
@@ -123,9 +130,17 @@ public sealed class IssueLendingDocumentCommandHandler(
         if (actor.UserId is not { } usuario) return Falla(ErroresDeGobierno.SinUsuario());
         if (!await db.LendingSetups.AsNoTracking().AnyAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica && s.ActivationDate != null, ct))
             return Falla(ErroresDeMensajesAlDeudor.CarteraSinActivar());
-        if (!PrefijosDeDocumentosDeCartera.DeK1.Contains(request.Kind)) return Falla(DocumentErrors.ClaseNoDisponible(request.Kind));
+        if (!PrefijosDeDocumentosDeCartera.Disponible(request.Kind, entregaVigente ?? CatalogoDeCartera.EntregaVigente))
+            return Falla(DocumentErrors.ClaseNoDisponible(request.Kind));
 
         var hoy = reloj.HoyLocal;
+        short? año = null;
+        if (request.Kind == IssuedDocumentKind.Statement && PeriodoInvalido(request.Period, hoy) is { } malPeriodo) return Falla(malPeriodo);
+        if (request.Kind == IssuedDocumentKind.TaxCertificate)
+        {
+            año = request.Year ?? (short)(hoy.Year - 1);
+            if (año >= hoy.Year) return Falla(DocumentErrors.AñoNoTerminado(año.Value));
+        }
         var firmante = await constructor.FirmanteAsync(hoy, ct);
         if (firmante.IsFailure) return Falla(firmante.Error);
 
@@ -147,7 +162,7 @@ public sealed class IssueLendingDocumentCommandHandler(
         // Primero el correo y la autorización (sin pintar ni subir nada): un envío que no puede salir no deja un PDF huérfano.
         if (request.Delivery == DocumentDeliveryMode.Email && await entrega.PrevalidarAsync(titular, credito?.Id, ct) is { } rechazo) return Falla(rechazo);
 
-        var emitido = await TransaccionExplicita.EjecutarAsync(db, () => EmitirAsync(request, titular, credito, firmante.Value, usuario, hoy, ct), ct);
+        var emitido = await TransaccionExplicita.EjecutarAsync(db, () => EmitirAsync(request, titular, credito, firmante.Value, usuario, hoy, año, ct), ct);
         if (emitido.IsFailure) return Falla(emitido.Error);
 
         var (documento, mensaje) = emitido.Value;
@@ -165,7 +180,7 @@ public sealed class IssueLendingDocumentCommandHandler(
     }
 
     private async Task<Result<(IssuedLendingDocument Documento, Guid? Mensaje)>> EmitirAsync(IssueLendingDocumentCommand request, Person titular, Loan? credito,
-        FirmanteDeDocumentos firmante, int usuario, DateOnly hoy, CancellationToken ct)
+        FirmanteDeDocumentos firmante, int usuario, DateOnly hoy, short? año, CancellationToken ct)
     {
         // El cerrojo (T34): setup compartido y los créditos que el documento puede cubrir, en orden de Id; la numeración, al final.
         await cerrojo.TomarSetupAsync(exclusivo: false, ct);
@@ -179,7 +194,7 @@ public sealed class IssueLendingDocumentCommandHandler(
             : await db.LoanControls.AsNoTracking().Where(c => aBloquear.Contains(c.LoanId)).MaxAsync(c => (DateTime?)c.LastRegisteredAt, ct);
         var ahora = reloj.UtcNow;
         var emision = ultimoRegistro is { } u && u > ahora ? DateTime.SpecifyKind(u, DateTimeKind.Utc) : ahora;
-        var armado = await constructor.ArmarAsync(new PedidoDeDocumentoDeCartera(request.Kind, titular, credito, request.CutoffDate, emision, hoy), ct);
+        var armado = await constructor.ArmarAsync(new PedidoDeDocumentoDeCartera(request.Kind, titular, credito, request.CutoffDate, emision, hoy, request.Period, año), ct);
         if (armado.IsFailure) return Result.Failure<(IssuedLendingDocument, Guid?)>(armado.Error);
         var a = armado.Value;
 
@@ -210,7 +225,7 @@ public sealed class IssueLendingDocumentCommandHandler(
             AsOfDate = a.AsOfDate,
             PeriodFrom = request.Period?.From,
             PeriodTo = request.Period?.To,
-            TaxYear = request.Year,
+            TaxYear = año,
             InformationCutoff = emision,
             VerificationCode = codigo,
             ContentSha256 = sha256,
@@ -306,6 +321,21 @@ public sealed class IssueLendingDocumentCommandHandler(
         if (vigente is not { } id) return (null, null);
         var leido = await ContenidoDeAdjunto.LeerAsync(db, store, cifrado, id, ct);
         return leido is null ? (null, null) : (leido.Bytes, id);
+    }
+
+    /// <summary>
+    /// K5 (T0971): el período del extracto —obligatorio, la fecha inicial no posterior a la final, que no termine después de hoy y de hasta
+    /// <see cref="DocumentErrors.AñosMaximosDelExtracto"/> años—; nulo si sirve.
+    /// </summary>
+    public static Error? PeriodoInvalido(PeriodoDeDocumento? periodo, DateOnly hoy)
+    {
+        if (periodo is null) return DocumentErrors.PeriodoInvalido("elija la fecha inicial y la final", null, null);
+        if (periodo.From > periodo.To)
+            return DocumentErrors.PeriodoInvalido("la fecha inicial es posterior a la final", periodo.From, periodo.To);
+        if (periodo.To > hoy) return DocumentErrors.PeriodoInvalido("no puede terminar después de hoy", periodo.From, periodo.To);
+        if (periodo.To >= periodo.From.AddYears(DocumentErrors.AñosMaximosDelExtracto))
+            return DocumentErrors.PeriodoInvalido($"abarca más de {DocumentErrors.AñosMaximosDelExtracto} años", periodo.From, periodo.To);
+        return null;
     }
 
     /// <summary>¿La persona es deudora o codeudora vigente del crédito?</summary>

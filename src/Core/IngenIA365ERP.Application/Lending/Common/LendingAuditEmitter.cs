@@ -52,9 +52,12 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirDocumentoReimpresoAsync(Guid documentPublicId, string clase, string formato, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingDocumentReprinted, "IssuedLendingDocument", documentPublicId, new { kind = clase, format = formato }, ct);
 
-    /// <summary>La verificación de un documento emitido (por su código de verificación) y su resultado.</summary>
-    public Task<Guid?> EmitirDocumentoVerificadoAsync(Guid documentPublicId, bool valido, CancellationToken ct = default) =>
-        EmitAsync(AuditEventTypes.LendingDocumentVerified, "IssuedLendingDocument", documentPublicId, new { valid = valido }, ct);
+    /// <summary>
+    /// La verificación de un documento emitido (por su código de verificación) y su resultado; en K5 (T0972), si se comparó la huella de un PDF, si
+    /// coincidió con la guardada (<c>pdfMatches</c>, nulo si no se comparó).
+    /// </summary>
+    public Task<Guid?> EmitirDocumentoVerificadoAsync(Guid documentPublicId, bool valido, CancellationToken ct = default, bool? pdfCoincide = null) =>
+        EmitAsync(AuditEventTypes.LendingDocumentVerified, "IssuedLendingDocument", documentPublicId, new { valid = valido, pdfMatches = pdfCoincide }, ct);
 
     /// <summary>
     /// US13 (T0784): la emisión de un documento al deudor, con su clase, número, entrega y el SHA-256 del PDF guardado. La emisión muestra los datos

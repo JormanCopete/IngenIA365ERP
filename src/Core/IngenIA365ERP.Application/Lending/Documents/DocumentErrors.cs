@@ -25,6 +25,11 @@ public static class DocumentErrors
     public const string CodigoYaAnulado = "Lending.Document.AlreadyVoided";
     public const string CodigoTitularNoObligado = "Lending.Document.HolderNotObligated";
     public const string CodigoNadaQueCertificar = "Lending.Document.NothingToCertify";
+    public const string CodigoPeriodoInvalido = "Lending.Document.PeriodInvalid";
+    public const string CodigoAñoNoTerminado = "Lending.Document.TaxYearNotClosed";
+
+    /// <summary>El período más largo de un extracto (T0971): cinco años.</summary>
+    public const int AñosMaximosDelExtracto = 5;
 
     /// <summary>La entrega de Cartera en la que llegan el extracto y el certificado tributario (C88).</summary>
     public const string EntregaDeK5 = "K5";
@@ -76,6 +81,18 @@ public static class DocumentErrors
 
     public static Error NadaQueCertificar(string motivo) => new ErrorConDatos(CodigoNadaQueCertificar,
         $"No hay nada que certificar: {motivo}.", new { reason = motivo });
+
+    /// <summary>
+    /// K5 (T0971): el extracto sin período, con la fecha inicial después de la final, que termina después de hoy o más largo que
+    /// <see cref="AñosMaximosDelExtracto"/> años. (nuevo)
+    /// </summary>
+    public static Error PeriodoInvalido(string motivo, DateOnly? desde, DateOnly? hasta) => new ErrorConDatos(CodigoPeriodoInvalido,
+        $"El período del extracto no es válido: {motivo}.", new { periodFrom = desde, periodTo = hasta, maxYears = AñosMaximosDelExtracto });
+
+    /// <summary>K5 (T0971): el certificado tributario de un año que no ha terminado (el en curso o uno futuro). (nuevo)</summary>
+    public static Error AñoNoTerminado(int año) => new ErrorConDatos(CodigoAñoNoTerminado,
+        $"El certificado tributario de {año} se emite cuando el año termine: desde el 1 de enero de {año + 1}.",
+        new { year = año, availableFrom = new DateOnly(año + 1, 1, 1) });
 
     /// <summary>El nombre de la clase como lo lee la persona.</summary>
     public static string NombreDeLaClase(IssuedDocumentKind clase) => clase switch

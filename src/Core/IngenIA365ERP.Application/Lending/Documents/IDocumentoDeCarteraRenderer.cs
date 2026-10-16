@@ -115,6 +115,56 @@ public sealed record CuerpoDeCertificadoDeSaldo(
     string HuellaDeLaLiquidacion,
     string VersionDeReglas) : CuerpoDeDocumentoDeCartera;
 
+/// <summary>
+/// Una línea del extracto impresa (K5): fecha valor, descripción y el movimiento con signo (+ aumenta lo que se debe, − lo disminuye) en capital,
+/// intereses (corrientes y de mora, con sus suspensos) y los demás conceptos, y su total; un reverso lleva lo reversado como valor informativo. (nuevo)
+/// </summary>
+public sealed record LineaDeExtractoImpresa(DateOnly Fecha, string Descripcion, decimal Capital, decimal Intereses, decimal Otros, decimal Total,
+    decimal? ValorInformativo);
+
+/// <summary>
+/// El extracto de un período (K5, T0973; §8.6): el crédito, el período, el saldo inicial por concepto, las operaciones por fecha valor y el saldo
+/// final por concepto, con R = la emisión. (nuevo)
+/// </summary>
+public sealed record CuerpoDeExtracto(
+    string NumeroDelCredito,
+    string Linea,
+    DateOnly Desde,
+    DateOnly Hasta,
+    IReadOnlyList<ConceptoCertificado> SaldoInicial,
+    IReadOnlyList<LineaDeExtractoImpresa> Lineas,
+    IReadOnlyList<ConceptoCertificado> SaldoFinal,
+    decimal TotalInicial,
+    decimal TotalFinal) : CuerpoDeDocumentoDeCartera;
+
+/// <summary>Un crédito del certificado tributario: los intereses pagados en el año y el saldo al 31 de diciembre. (nuevo)</summary>
+public sealed record CreditoCertificadoTributario(
+    string Numero,
+    string Linea,
+    decimal InteresCorriente,
+    decimal InteresDeMora,
+    decimal InteresesPagados,
+    decimal SaldoDeCapital,
+    decimal SaldoDeIntereses,
+    decimal SaldoDeOtros,
+    decimal SaldoTotal);
+
+/// <summary>
+/// El certificado tributario del año (K5, T0973; §8.6; FR-131): los créditos con sus intereses pagados y su saldo al 31 de diciembre y, aparte, la
+/// sección «Créditos de vivienda» (vacía hasta K6b). Siempre lleva la leyenda de que certifica sólo las obligaciones de crédito de la cooperativa. (nuevo)
+/// </summary>
+public sealed record CuerpoDeCertificadoTributario(
+    short Año,
+    IReadOnlyList<CreditoCertificadoTributario> Creditos,
+    IReadOnlyList<CreditoCertificadoTributario> Vivienda,
+    decimal TotalInteresesPagados,
+    decimal TotalInteresesDeVivienda,
+    decimal TotalSaldo) : CuerpoDeDocumentoDeCartera
+{
+    public const string TituloDeVivienda = "Créditos de vivienda";
+    public const string SinVivienda = "La persona no tuvo créditos de vivienda con la cooperativa en el año.";
+}
+
 /// <summary>Los nombres de las clases y sus leyendas (§8.10). (nuevo)</summary>
 public static class ModelosDeDocumentoDeCartera
 {
@@ -123,6 +173,13 @@ public static class ModelosDeDocumentoDeCartera
     public const string LeyendaConCodeudas = "Incluye las obligaciones en las que la persona es codeudora.";
     public const string LeyendaSinCodeudas = "No incluye las obligaciones en las que la persona es codeudora.";
     public const string LeyendaDeProyeccion = "Liquidación proyectada sin pagos: válida hasta el {0}.";
+
+    /// <summary>K5: cómo se cuentan los intereses del certificado tributario (la definición que valida la contadora, quickstart §12).</summary>
+    public const string LeyendaDeInteresesPagados =
+        "Intereses pagados: lo aplicado a intereses corrientes y de mora con fecha valor en el año, neto de los pagos reversados.";
+
+    /// <summary>K5: el extracto informa con la información disponible al emitirlo.</summary>
+    public const string LeyendaDelExtracto = "Extracto con la información registrada al momento de su emisión; los valores van con signo: + aumenta la deuda, − la disminuye.";
 
     /// <summary>El título que lleva el documento.</summary>
     public static string Titulo(IssuedDocumentKind clase) => clase switch

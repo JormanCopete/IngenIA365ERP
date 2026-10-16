@@ -64,6 +64,8 @@ public static class DocumentosDeCarteraReport
             CuerpoDePlanDePagos plan => TextosDelPlan(plan),
             CuerpoDePazYSalvo paz => TextosDelPazYSalvo(paz),
             CuerpoDeCertificadoDeSaldo certificado => TextosDelCertificado(certificado),
+            CuerpoDeExtracto extracto => TextosDelExtracto(extracto),
+            CuerpoDeCertificadoTributario tributario => TextosDelCertificadoTributario(tributario),
             _ => [],
         });
         textos.Add(e.Firmante);
@@ -120,6 +122,8 @@ public static class DocumentosDeCarteraReport
                     case CuerpoDePlanDePagos plan: Plan(col, plan); break;
                     case CuerpoDePazYSalvo paz: PazYSalvo(col, paz); break;
                     case CuerpoDeCertificadoDeSaldo certificado: Certificado(col, certificado); break;
+                    case CuerpoDeExtracto extracto: Extracto(col, extracto); break;
+                    case CuerpoDeCertificadoTributario tributario: CertificadoTributario(col, tributario); break;
                 }
 
                 col.Item().PaddingTop(24).Row(row =>
@@ -248,6 +252,162 @@ public static class DocumentosDeCarteraReport
         col.Item().PaddingTop(6).Text(textos[1]);
         col.Item().Text(textos[2]).FontSize(7).FontColor(Colors.Grey.Darken1);
     }
+
+    // --------------------------------------------------------------------------------------------------------- K5 (T0973) --
+
+    private static void Extracto(ColumnDescriptor col, CuerpoDeExtracto x)
+    {
+        var textos = TextosDelExtracto(x);
+        col.Item().Text(textos[0]);
+        col.Item().PaddingTop(6).Text("Saldo inicial").SemiBold();
+        TablaDeConceptos(col, x.SaldoInicial, "Saldo inicial", x.TotalInicial);
+        col.Item().PaddingTop(8).Text("Operaciones del período").SemiBold();
+        col.Item().PaddingTop(4).Table(table =>
+        {
+            table.ColumnsDefinition(c =>
+            {
+                c.RelativeColumn(2);
+                c.RelativeColumn(5);
+                c.RelativeColumn(2);
+                c.RelativeColumn(2);
+                c.RelativeColumn(2);
+                c.RelativeColumn(2);
+            });
+            table.Header(h =>
+            {
+                foreach (var titulo in new[] { "Fecha valor", "Descripción", "Capital", "Intereses", "Otros", "Total" })
+                    h.Cell().Element(EncabezadoDeTabla).Text(titulo);
+            });
+            foreach (var l in x.Lineas)
+            {
+                table.Cell().Element(Celda).Text(Fecha(l.Fecha));
+                table.Cell().Element(Celda).Text(DescripcionDeLinea(l));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(l.Capital));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(l.Intereses));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(l.Otros));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(l.Total));
+            }
+        });
+        if (x.Lineas.Count == 0) col.Item().PaddingTop(4).Text("El crédito no tuvo operaciones en el período.").Italic();
+        col.Item().PaddingTop(8).Text("Saldo final").SemiBold();
+        TablaDeConceptos(col, x.SaldoFinal, "Saldo final", x.TotalFinal);
+    }
+
+    private static string DescripcionDeLinea(LineaDeExtractoImpresa l) =>
+        l.ValorInformativo is { } v ? $"{l.Descripcion} ({Pesos(v)}, sin efecto en el saldo)" : l.Descripcion;
+
+    private static void TablaDeConceptos(ColumnDescriptor col, IReadOnlyList<ConceptoCertificado> conceptos, string total, decimal valor)
+    {
+        col.Item().PaddingTop(4).Table(table =>
+        {
+            table.ColumnsDefinition(d =>
+            {
+                d.RelativeColumn(4);
+                d.RelativeColumn(2);
+            });
+            foreach (var concepto in conceptos)
+            {
+                table.Cell().Element(Celda).Text(Concepto(concepto.Concepto));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(concepto.Valor));
+            }
+            table.Cell().Element(Celda).Text(total).SemiBold();
+            table.Cell().Element(Celda).AlignRight().Text(Pesos(valor)).SemiBold();
+        });
+    }
+
+    private static void CertificadoTributario(ColumnDescriptor col, CuerpoDeCertificadoTributario c)
+    {
+        var textos = TextosDelCertificadoTributario(c);
+        col.Item().Text(textos[0]);
+        TablaTributaria(col, c.Creditos);
+        if (c.Creditos.Count == 0) col.Item().PaddingTop(4).Text("La persona no tuvo otros créditos con la cooperativa en el año.").Italic();
+        col.Item().PaddingTop(4).Text(TotalTributario(c)).SemiBold();
+        col.Item().PaddingTop(10).Text(CuerpoDeCertificadoTributario.TituloDeVivienda).SemiBold();
+        if (c.Vivienda.Count == 0)
+        {
+            col.Item().PaddingTop(2).Text(CuerpoDeCertificadoTributario.SinVivienda).Italic();
+        }
+        else
+        {
+            TablaTributaria(col, c.Vivienda);
+            col.Item().PaddingTop(4).Text(TotalDeVivienda(c)).SemiBold();
+        }
+    }
+
+    private static void TablaTributaria(ColumnDescriptor col, IReadOnlyList<CreditoCertificadoTributario> creditos)
+    {
+        if (creditos.Count == 0) return;
+        col.Item().PaddingTop(6).Table(table =>
+        {
+            table.ColumnsDefinition(c =>
+            {
+                c.RelativeColumn(2);
+                c.RelativeColumn(3);
+                c.RelativeColumn(2);
+                c.RelativeColumn(2);
+                c.RelativeColumn(2);
+                c.RelativeColumn(2);
+                c.RelativeColumn(2);
+            });
+            table.Header(h =>
+            {
+                foreach (var titulo in new[]
+                         {
+                             "Crédito", "Línea", "Interés corriente pagado", "Interés de mora pagado", "Saldo de capital al 31/12",
+                             "Saldo de intereses al 31/12", "Saldo total al 31/12",
+                         })
+                    h.Cell().Element(EncabezadoDeTabla).Text(titulo);
+            });
+            foreach (var x in creditos)
+            {
+                table.Cell().Element(Celda).Text(x.Numero);
+                table.Cell().Element(Celda).Text(x.Linea);
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(x.InteresCorriente));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(x.InteresDeMora));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(x.SaldoDeCapital));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(x.SaldoDeIntereses));
+                table.Cell().Element(Celda).AlignRight().Text(Pesos(x.SaldoTotal));
+            }
+        });
+    }
+
+    private static IReadOnlyList<string> TextosDelExtracto(CuerpoDeExtracto x)
+    {
+        var textos = new List<string>
+        {
+            $"Crédito {x.NumeroDelCredito} · {x.Linea} · extracto del {Fecha(x.Desde)} al {Fecha(x.Hasta)}",
+            $"Saldo inicial {Pesos(x.TotalInicial)}",
+        };
+        textos.AddRange(x.SaldoInicial.Select(c => $"{Concepto(c.Concepto)} {Pesos(c.Valor)}"));
+        textos.AddRange(x.Lineas.Select(l => $"{Fecha(l.Fecha)} {DescripcionDeLinea(l)} {Pesos(l.Total)}"));
+        textos.Add($"Saldo final {Pesos(x.TotalFinal)}");
+        textos.AddRange(x.SaldoFinal.Select(c => $"{Concepto(c.Concepto)} {Pesos(c.Valor)}"));
+        return textos;
+    }
+
+    private static IReadOnlyList<string> TextosDelCertificadoTributario(CuerpoDeCertificadoTributario c)
+    {
+        var año = c.Año.ToString(CultureInfo.InvariantCulture);
+        var textos = new List<string> { $"Intereses pagados durante el año {año} y saldo de la deuda al 31/12/{año}, por crédito." };
+        textos.AddRange(c.Creditos.Select(x => $"{x.Numero} {x.Linea} {Pesos(x.InteresesPagados)} {Pesos(x.SaldoTotal)}"));
+        textos.Add(TotalTributario(c));
+        textos.Add(CuerpoDeCertificadoTributario.TituloDeVivienda);
+        if (c.Vivienda.Count == 0)
+        {
+            textos.Add(CuerpoDeCertificadoTributario.SinVivienda);
+        }
+        else
+        {
+            textos.AddRange(c.Vivienda.Select(x => $"{x.Numero} {x.Linea} {Pesos(x.InteresesPagados)} {Pesos(x.SaldoTotal)}"));
+            textos.Add(TotalDeVivienda(c));
+        }
+        return textos;
+    }
+
+    private static string TotalTributario(CuerpoDeCertificadoTributario c) => $"Total de intereses pagados: {Pesos(c.TotalInteresesPagados)}";
+
+    private static string TotalDeVivienda(CuerpoDeCertificadoTributario c) =>
+        $"Total de intereses pagados en créditos de vivienda: {Pesos(c.TotalInteresesDeVivienda)}";
 
     // ------------------------------------------------------------------------------------------------------------ textos --
 

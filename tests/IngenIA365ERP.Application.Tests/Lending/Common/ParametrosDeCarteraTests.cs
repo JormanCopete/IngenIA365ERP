@@ -97,13 +97,14 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K4_vigente_se_ofrecen_todas_las_claves_hasta_K4()
+    public void Con_K5_vigente_se_ofrecen_todas_las_claves_hasta_K5()
     {
-        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; las de K4 en adelante siguen sin ofrecerse.
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K4);
-        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K4).ToList();
+        // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; T0955 sube a K4 y T0969 a K5 (fase 19: el
+        // extracto y el certificado tributario no traen claves nuevas); las de K6a en adelante siguen sin ofrecerse.
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K5);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K5).ToList();
 
-        posteriores.Should().BeEmpty("ninguna clave es de K5 en adelante");
+        posteriores.Should().BeEmpty("ninguna clave es de K6a en adelante");
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Castigo.", StringComparison.Ordinal)).Should().HaveCount(3)
             .And.OnlyContain(d => d.DisponibleEnLaEntrega() && d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K3 && d.PendienteDeValidar != null);

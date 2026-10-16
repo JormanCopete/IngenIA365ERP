@@ -60,15 +60,63 @@ public class DocumentosDeCarteraReportTests
             [new ConceptoCertificado("Principal", 2_030_000m), new ConceptoCertificado("CurrentInterest", 12_345.67m), new ConceptoCertificado("Insurance", 3_000m)],
             2_045_345.67m, 5, false, null, new string('a', 64), "R-2026.1"));
 
+    private static DocumentoDeCarteraParaImprimir Extracto() => new(
+        Encabezado(IssuedDocumentKind.Statement, "EX-000001", true, ModelosDeDocumentoDeCartera.LeyendaDelExtracto),
+        new CuerpoDeExtracto("CR-000123", "Consumo libre inversión", new DateOnly(2026, 10, 1), new DateOnly(2026, 12, 31),
+            [new ConceptoCertificado("Principal", 3_000_000m)],
+            [
+                new LineaDeExtractoImpresa(new DateOnly(2026, 10, 31), "Causación de octubre de 2026", 0m, 54_000m, 0m, 54_000m, null),
+                new LineaDeExtractoImpresa(new DateOnly(2026, 11, 2), "Pago PAG-000004", -970_000m, -54_000m, 0m, -1_024_000m, null),
+                new LineaDeExtractoImpresa(new DateOnly(2026, 11, 20), "Pago PAG-000005 reversado por REV-000001", 0m, 0m, 0m, 0m, 50_000m),
+            ],
+            [new ConceptoCertificado("Principal", 2_030_000m)], 3_000_000m, 2_030_000m));
+
+    private static DocumentoDeCarteraParaImprimir Tributario(bool conVivienda = false) => new(
+        Encabezado(IssuedDocumentKind.TaxCertificate, "CT-000001", true, CuerpoDePazYSalvo.LeyendaDeAlcance, ModelosDeDocumentoDeCartera.LeyendaDeInteresesPagados),
+        new CuerpoDeCertificadoTributario(2026,
+            [new CreditoCertificadoTributario("CR-000123", "Consumo", 120_000m, 1_500m, 121_500m, 2_030_000m, 12_000m, 0m, 2_042_000m)],
+            conVivienda ? [new CreditoCertificadoTributario("CR-000777", "Vivienda", 800_000m, 0m, 800_000m, 50_000_000m, 0m, 0m, 50_000_000m)] : [],
+            121_500m, conVivienda ? 800_000m : 0m, conVivienda ? 52_042_000m : 2_042_000m));
+
+    [Fact]
+    public void El_extracto_lleva_el_periodo_el_saldo_inicial_las_operaciones_y_el_saldo_final()
+    {
+        var textos = DocumentosDeCarteraReport.TextosImpresos(Extracto());
+
+        textos.Should().Contain("Crédito CR-000123 · Consumo libre inversión · extracto del 01/10/2026 al 31/12/2026");
+        textos.Should().Contain("Saldo inicial $ 3.000.000,00").And.Contain("Saldo final $ 2.030.000,00");
+        textos.Should().Contain(t => t.StartsWith("02/11/2026 Pago PAG-000004") && t.EndsWith("-1.024.000,00"));
+        textos.Should().Contain(t => t.Contains("reversado por REV-000001") && t.Contains("sin efecto en el saldo"));
+        textos.Should().Contain(ModelosDeDocumentoDeCartera.LeyendaDelExtracto);
+    }
+
+    [Fact]
+    public void El_certificado_tributario_lleva_los_intereses_la_seccion_de_vivienda_y_su_alcance()
+    {
+        var sin = DocumentosDeCarteraReport.TextosImpresos(Tributario());
+        sin.Should().Contain("Intereses pagados durante el año 2026 y saldo de la deuda al 31/12/2026, por crédito.");
+        sin.Should().Contain(t => t.StartsWith("CR-000123 Consumo $ 121.500,00"));
+        sin.Should().Contain("Total de intereses pagados: $ 121.500,00");
+        sin.Should().Contain("Créditos de vivienda").And.Contain(CuerpoDeCertificadoTributario.SinVivienda, "vacía hasta K6b");
+        sin.Should().Contain("Certifica sólo las obligaciones de crédito de la cooperativa.");
+
+        var con = DocumentosDeCarteraReport.TextosImpresos(Tributario(conVivienda: true));
+        con.Should().Contain(t => t.StartsWith("CR-000777 Vivienda $ 800.000,00"));
+        con.Should().Contain("Total de intereses pagados en créditos de vivienda: $ 800.000,00");
+        Pintar(Tributario(conVivienda: true)).Should().NotEqual(Pintar(Tributario()));
+    }
+
     private static byte[] Pintar(DocumentoDeCarteraParaImprimir d) => new DocumentoDeCarteraPdfRenderer().Render(d);
 
-    public static TheoryData<string> Clases => new() { "plan", "paz", "general", "certificado" };
+    public static TheoryData<string> Clases => new() { "plan", "paz", "general", "certificado", "extracto", "tributario" };
 
     private static DocumentoDeCarteraParaImprimir Modelo(string clase) => clase switch
     {
         "plan" => Plan(),
         "paz" => PazYSalvo(new DateOnly(2026, 12, 10)),
         "general" => General(),
+        "extracto" => Extracto(),
+        "tributario" => Tributario(),
         _ => Certificado(),
     };
 

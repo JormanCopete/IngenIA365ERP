@@ -1,4 +1,5 @@
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Application.Lending.Documents;
 
@@ -23,6 +24,16 @@ public static class PrefijosDeDocumentosDeCartera
     {
         IssuedDocumentKind.PaymentPlan, IssuedDocumentKind.LoanClearance, IssuedDocumentKind.GeneralClearance, IssuedDocumentKind.BalanceCertificate,
     };
+
+    /// <summary>Las clases que llegan con K5 (T0969, C88): el extracto y el certificado tributario. (nuevo)</summary>
+    public static IReadOnlySet<IssuedDocumentKind> DeK5 { get; } = new HashSet<IssuedDocumentKind>
+    {
+        IssuedDocumentKind.Statement, IssuedDocumentKind.TaxCertificate,
+    };
+
+    /// <summary>¿La clase se emite en la entrega <paramref name="entrega"/>? Las de K1 siempre; el extracto y el certificado tributario desde K5.</summary>
+    public static bool Disponible(IssuedDocumentKind clase, EntregaDeCartera entrega) =>
+        DeK1.Contains(clase) || (DeK5.Contains(clase) && entrega >= EntregaDeCartera.K5);
 
     /// <summary>El prefijo de la clase.</summary>
     public static string De(IssuedDocumentKind clase) => clase switch
