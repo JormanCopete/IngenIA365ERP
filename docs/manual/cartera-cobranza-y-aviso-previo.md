@@ -24,16 +24,20 @@ cobranza causado sale como hecho `GastoDeCobranzaCausado` (comprobante `CA`) y l
 | Gastos por causar y causarlos | pestaña «Gastos por causar» de `/cartera/cobranza` | `Lending.Collections.Read` · `Lending.CollectionStages.Manage` |
 | Agenda del día, promesas y gestiones; registrar y anular gestiones | `/cartera/agenda` | `Lending.Collections.Read` · `Lending.Collections.RecordActivity` |
 | Acuerdos de pago: proponer, cancelar · aprobar, rechazar | `/cartera/acuerdos-de-pago` | `Lending.PaymentAgreements.Create` · `Lending.PaymentAgreements.Approve` |
-| Cobro jurídico: abrir, actuaciones, cerrar | `/cartera/juridico` | `Lending.Collections.Read` · `Lending.LegalProcesses.Manage` |
+| Cobro jurídico: abrir, actuaciones, reanudar, cerrar | `/cartera/juridico` | `Lending.Collections.Read` · `Lending.LegalProcesses.Manage` |
 | Campañas | `/cartera/campanas` | `Lending.Campaigns.Manage` (también para verlas) |
 | Avisos previos: ver · enviar · registrar la carta | pestaña «Avisos previos» de `/cartera/avisos-previos` | `Lending.PriorNotices.Read` · `.Send` · `.RegisterEvidence` |
 | Reclamos sobre el reporte | pestaña «Reclamos sobre el reporte» de la misma pantalla | `Lending.CreditReportClaims.Read` · `.Manage` |
 | Informes `collection-stages`, `promises`, `payment-agreements`, `prior-notices` | `/cartera/informes?vista=` | `Lending.Reports.View` (+ `Lending.Loans.Read` y `ExportPersonalData` para los datos personales) |
 
-Plantillas de rol: `cartera.gestor-cobranza` lee, registra gestiones, propone acuerdos y lee avisos; `cartera.jefe` lee, asigna,
-reparte, versiona etapas y causa gastos; `cartera.oficial-cumplimiento` tramita los reclamos. Aprobar acuerdos, el cobro jurídico, las
-campañas y enviar o registrar avisos previos sólo los trae hoy `cartera.administrador` (`Lending.*`): ver §11. Las consultas se filtran
-en silencio por el alcance de oficina y línea; lo de fuera responde el mismo 404 que lo inexistente.
+Plantillas de rol (bloque D, decisión del dueño del 2026-10-16): `cartera.gestor-cobranza` lee, registra gestiones, propone acuerdos,
+lee, **envía** avisos previos y **registra la carta** (por eso sube y elige adjuntos: la guía escaneada; los soportes de novedades, castigo o
+eventos del deudor le siguen vedados por permiso); `cartera.jefe` lee, asigna, reparte, versiona etapas, causa gastos y además **aprueba
+acuerdos**, lleva el **cobro jurídico** y las **campañas** y envía y registra avisos previos; `cartera.oficial-cumplimiento` tramita los
+reclamos; `cartera.administrador` trae todo `Lending.*`. Quien propone un acuerdo no lo aprueba: el gestor propone y el jefe aprueba, y si una
+cooperativa le da los dos permisos a la misma persona, el comando rechaza aprobar lo propio (`Lending.Segregation.Conflict`). Cada
+cooperativa ajusta sus roles en Seguridad › Roles. Las consultas se filtran en silencio por el alcance de oficina y línea; lo de fuera
+responde el mismo 404 que lo inexistente.
 
 ## 2. Etapas
 
@@ -65,8 +69,21 @@ en mora (§9) y propone el gasto si la etapa tiene regla (§6). No entra dos vec
 día no avanza**; el día en que el acuerdo se incumple vuelve a la etapa que le corresponde (motivo «Acuerdo de pago incumplido»).
 La cobranza no toca al deudor fallecido con reclamación al seguro en trámite ni al que está en negociación de insolvencia.
 
-La etapa vigente de un crédito es **su última entrada**: un crédito que se pone al día conserva la última etapa a la que entró hasta que
-entre a otra.
+La etapa vigente de un crédito es **su última entrada**, salvo que sea una **salida** (bloque D, decisión del dueño del 2026-10-16):
+
+- **Cuándo sale**: el ciclo encuentra un crédito con etapa vigente que **ya no está en mora** (días de mora en cero) y al que, por los días que
+  faltan para su próximo vencimiento, **no le toca ninguna etapa** —es decir, ninguna preventiva—. Si le toca la preventiva (en la semilla,
+  faltan de 0 a 5 días), no sale: pasa a la preventiva como cualquier cambio de etapa. Un crédito en la preventiva que paga a tiempo y deja de
+  estar en su rango también sale.
+- **Qué deja**: una entrada `Source = Exit` con la etapa de la que sale y el motivo «Salida por pago al día»; una **gestión de sistema**
+  (canal «Sistema», resultado «Salió de cobranza (al día)», sin gestor ni contacto directo, con la observación «Sale de cobranza: se puso al
+  día el dd/mm/aaaa»), que no cuenta en la ventana legal y no se anula (`Lending.CollectionAction.SystemRecord`); y el **cierre de la
+  asignación** del gestor (una fila sin gestor).
+- **Qué cambia**: el crédito queda **fuera de cobranza**: no tiene etapa ni gestor vigentes, sale de la agenda, de las campañas filtradas por
+  etapa y del informe `collection-stages`, y no admite gestiones con el titular (`Lending.Collections.LoanNotInCollection`).
+- **Si recae** en mora, entra a la etapa que le toque como **episodio nuevo** (la entrada enlaza la salida) y se reparte de nuevo por las reglas.
+
+No sale el crédito que la cobranza no toca (fallecido con reclamación en trámite, insolvencia en negociación).
 
 ## 3. Reparto y agenda
 
@@ -82,7 +99,9 @@ si ya estaba cerrada); sus asignaciones quedan.
   asignación por crédito que cambia de gestor, con el motivo.
 - **Asignar a mano**: uno o varios créditos a un gestor, con motivo; la que ya es de ese gestor no se repite.
 
-Cada asignación es un hecho con la anterior enlazada: la historia sólo crece.
+Cada asignación es un hecho con la anterior enlazada: la historia sólo crece. Cuando el crédito sale de cobranza, el ciclo escribe el
+**cierre** de su asignación (una fila sin gestor, motivo «Salida por pago al día»; en «Asignaciones» se ve «Sin gestor · Cierre: salió de
+cobranza»).
 
 La **agenda** (`/cartera/agenda`, «Agenda») muestra al gestor —o a quien elija quien tiene `Collections.Read`— sobre sus créditos
 asignados: promesas que vencen ese día, promesas incumplidas que esperan una gestión nueva («vuelve a la agenda»), cuotas de acuerdos
@@ -96,6 +115,9 @@ referencia), si hubo **contacto directo**, el resultado y notas. Antes de guarda
 
 - La persona contactada es el deudor, un codeudor vigente o la **pagaduría** del crédito (gestión de libranza, nunca como contacto
   directo); cualquier otra responde `Lending.CollectionAction.ContactNotObligated`.
+- La gestión con el titular es de un crédito **en cobranza** (con etapa vigente): uno que nunca entró o que salió al ponerse al día responde
+  `Lending.Collections.LoanNotInCollection` (bloque D). La gestión ante la pagaduría no depende de la etapa. Los canales y resultados de
+  sistema no se registran a mano.
 - La ventana juzga la gestión **en el instante en que ocurrió**: fuera de horario, domingo o festivo nacional, sobre el tope del día
   (`Cobranza.ContactosPorDia`) o por otro canal que el de la semana se rechaza con los códigos de los mensajes
   (`Lending.DebtorMessage.OutsideLegalWindow`, `.WeeklyChannelUsed`, `.ChannelNotAuthorized`). La decisión queda **sellada** en la
@@ -133,8 +155,18 @@ El gasto de cobranza nunca se cobra sin avisarle primero al deudor. Tiene dos or
 
 1. **La regla de la etapa** (`feeRule`): base (`PastDueAmount`, todo lo vencido, o `PastDuePrincipal`, el capital vencido), tarifa
    como fracción entre 0 y 1, tope en pesos opcional y momento (`OnStageEntry`, al entrar a la etapa). El gasto es base × tarifa al
-   centavo, sin pasar del tope.
+   centavo, sin pasar del tope de la regla ni del **tope de la cooperativa** (abajo).
 2. **Un honorario o gasto del cobro jurídico** marcado «se cobra al deudor» (§7).
+
+**Tope del gasto de la cooperativa** (bloque D, decisión del dueño del 2026-10-16; parámetros con vigencia en `/cartera/parametros`, sin
+valor sembrado = sin tope, «pendiente de validar»):
+
+- `Cobranza.TopeGasto.Porcentaje`: fracción de 0 a 1 **de la base del gasto** (lo vencido o el capital vencido, según la regla). Ninguna
+  versión de etapas acepta una regla con una tarifa mayor (`Lending.CollectionStage.FeeAboveCap`, con la tarifa y el tope).
+- `Cobranza.TopeGasto.ValorMaximo`: pesos por gasto.
+- Con los dos rige **el menor**: el gasto propuesto por la etapa se recorta a él. Un honorario o gasto jurídico **a cargo del deudor** por encima
+  del tope (base: lo vencido de la última posición diaria del crédito) se rechaza diciendo el máximo (`Lending.CollectionFee.AboveCap`): se
+  registra a cargo del deudor a lo sumo ese valor y el resto sin cobrárselo. No se recorta en silencio porque el valor lo puso una persona.
 
 El ciclo (o la actuación) **sólo propone e informa**: encola el aviso `CollectionFeeNotice` con la plantilla `GASTOCOBR` por el primer
 canal que la ley y el titular permiten. Ese aviso es de cobranza: respeta el horario, el tope y el canal de la semana. **Lo causa una
@@ -152,6 +184,14 @@ despacho, el radicado y la fecha. Sólo un crédito vivo **en una etapa jurídic
 proceso abierto (`.AlreadyOpen`). Si el deudor está en negociación de insolvencia, el proceso **nace suspendido**; una insolvencia que se
 abre después suspende los procesos abiertos del deudor.
 
+**Reanudar** (bloque D, decisión del dueño del 2026-10-16): «Reanudar…», con motivo, en un proceso suspendido
+(`POST /api/lending/legal-processes/{id}/resume`, `Lending.LegalProcesses.Manage`). **Nunca se reanuda solo** al terminar la insolvencia: lo
+decide una persona. Mientras la insolvencia que lo suspendió —o cualquier otra del deudor— siga en negociación responde
+`Lending.LegalProcess.InsolvencyNegotiating`; cuando terminó (con acuerdo o con su fracaso registrado), el proceso vuelve **al estado que tenía
+antes de suspenderse**, que es el que dicen sus actuaciones con la misma regla que lo mueve: sin radicación, **asignado**; radicado sin
+actuación de fondo después, **radicado**; con alguna, **en curso**. Suspendido no recibe actuaciones que lo muevan, así que el estado que
+vuelve es el que tenía. Uno que no está suspendido responde `.InvalidStatus`.
+
 «Actuación…»: fecha, clase (radicación, auto, embargo, audiencia, sentencia, honorario, gasto, cambio de estado, otra), descripción y,
 si es honorario o gasto, el valor y si se cobra al deudor. Los soportes se suben como documentos del proceso
 (`LendingLegalProcessDocument`, no se borran; otro responde `.AttachmentInvalid`). La radicación pasa el proceso de **asignado** a
@@ -163,6 +203,8 @@ si es honorario o gasto, el valor y si se cobra al deudor. Los soportes se suben
 «Nueva campaña»: código propio (único, `Lending.Campaign.CodeDuplicate`), nombre, la plantilla vigente del canal y su propósito
 (cobranza o informativo), criterios (etapa, oficina, línea, días de mora mínimos, pagaduría) y el instante.
 
+- Los criterios tienen que poder casar con algo: una etapa que no existe en la versión vigente el día programado, una mora mínima por encima
+  del tope de la etapa elegida o una oficina, línea o pagaduría inexistentes responden `Lending.Campaign.FiltersInvalid` con el motivo.
 - **Vista previa** (no escribe): los créditos del alcance que casan y, por cada deudor, si el mensaje sale, se difiere o queda
   **excluido** con su motivo (`ChannelNotAuthorized`, fallecido, insolvencia, cobro suspendido…).
 - **Programar**: un mensaje por crédito al deudor, con la campaña. Cada uno nace en cola, **diferido** al primer instante permitido (un
@@ -211,10 +253,11 @@ está en el código) y nace **en trámite**: desde ahí el reporte lleva la marc
   acciones y plantillas, sembradas «pendiente de validar». La cooperativa las confirma o versiona en `/cartera/etapas-de-cobranza`.
 - **Reglas de gasto** (T0962): la semilla no trae ninguna; cada cooperativa define base, tarifa, tope y momento por etapa.
 - **`Cobranza.ToleranciaDePromesa`** (T0962): 0 pesos por defecto, sembrado «pendiente de validar».
-- **Techo nacional del gasto de cobranza**: el catálogo de límites legales no trae uno, así que hoy la regla de la etapa no se compara
-  contra ningún techo. No se inventa: lo decide el dueño.
+- **Tope del gasto de cobranza** (bloque D): ya es configurable por la cooperativa (`Cobranza.TopeGasto.Porcentaje` y `.ValorMaximo`, §6),
+  sin valor sembrado. Falta que el dueño y la contadora fijen el valor de cada cooperativa; el catálogo de límites legales sigue sin un techo
+  nacional y no se inventa.
 - **SMS y WhatsApp reales**: pendientes de proveedor. Hoy esos canales salen por `SIMULADO`, que en producción **no** es constancia del
   aviso previo; mientras tanto, el aviso previo con efecto legal en producción sale por correo o por carta con guía. Ver el runbook.
-- **Permisos de las plantillas de rol**: ninguna plantilla salvo `cartera.administrador` trae `Lending.PaymentAgreements.Approve`,
-  `Lending.LegalProcesses.Manage`, `Lending.Campaigns.Manage`, `Lending.PriorNotices.Send` ni `.RegisterEvidence`; la alerta
-  `Cartera.AvisoPrevioSinConstancia` va a quien tenga este último. Cada cooperativa los asigna en Seguridad › Roles.
+- **Permisos de las plantillas de rol** (resuelto en el bloque D): el jefe trae aprobar acuerdos, el cobro jurídico, las campañas y los avisos
+  previos; el gestor, enviar y registrar avisos previos (y subir la guía). La alerta `Cartera.AvisoPrevioSinConstancia` va a quien registra la
+  constancia. Una cooperativa que ya creó sus roles desde las plantillas **no** los recibe sola: los agrega en Seguridad › Roles.

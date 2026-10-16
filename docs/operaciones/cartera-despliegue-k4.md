@@ -6,7 +6,8 @@
 > [data-model.md](../../specs/013-cartera-financiera/data-model.md) §22.1 y §26, decisión C64.
 
 K4 llega con la migración aditiva `CarteraCobranza` (once tablas `LND_` de cobranza y las columnas nulas `LND_DebtorMessages.CampaignId` y
-`LND_LoanNovelties.PaymentAgreementId`) y con `CatalogoDeCartera.EntregaVigente = K4`, que enciende el paso 7 del ciclo diario (etapas,
+`LND_LoanNovelties.PaymentAgreementId`), seguida de `CarteraCobranzaSalida` (bloque D: `CollectorUserId` de `LND_CollectionActions` y de
+`LND_CollectorAssignments` pasa a nulo, para la gestión de sistema y el cierre de la asignación cuando un crédito sale de cobranza) y con `CatalogoDeCartera.EntregaVigente = K4`, que enciende el paso 7 del ciclo diario (etapas,
 reparto, mensajes, aviso previo, gastos, promesas, reclamos). Al desplegar hay **tres cosas distintas**:
 
 | | Quién la hace | Cuándo |
@@ -18,7 +19,9 @@ reparto, mensajes, aviso previo, gastos, promesas, reclamos). Al desplegar hay *
 ## 1. Antes de desplegar
 
 1. Respaldo de cada base de cooperativa (Principio XII), aunque la migración sea aditiva.
-2. Que `CarteraCobranza` esté en los dos proyectos de migraciones (PostgreSQL y SQL Server) detrás de `CarteraNovedades`.
+2. Que `CarteraCobranza` y `CarteraCobranzaSalida` estén en los dos proyectos de migraciones (PostgreSQL y SQL Server) detrás de
+   `CarteraNovedades`. La segunda sólo relaja dos columnas a nulas; su `Down` las vuelve obligatorias y falla si ya hay gestiones de sistema
+   o cierres de asignación (filas con `CollectorUserId` nulo): no se revierte en una base que ya corrió el ciclo con K4.
 3. Que las plantillas de mensaje de Cartera ya estén sembradas (`LendingMessageTemplatesSeeder`, Order 91): las etapas citan
    `RECORDPREV`, `MORAADMIN` y `PREJURID`, y la cobranza usa `AVISOPREV` y `GASTOCOBR`.
 
@@ -65,12 +68,9 @@ Idempotency-Key: <guid>
 { "kind": "MigratedCollectionStages", "reason": "Registro de la etapa migrada al desplegar K4" }
 ```
 
-Responde 202 con la corrida; si hay otra de la misma clase pedida o corriendo, `Lending.Process.AlreadyRunning`. La pantalla no tiene
-botón para esto.
-
-> **Aviso (2026-10-16):** el comando exige `reason` para esta clase, pero el cuerpo de la ruta (`OrdenDeCorridaRequest`) sólo lee `kind`
-> y `date`, así que hoy la orden manual responde 400 «Indique el motivo del registro de la etapa migrada». Mientras no se corrija, use la
-> tarea de una sola vez.
+Responde 202 con la corrida; si hay otra de la misma clase pedida o corriendo, `Lending.Process.AlreadyRunning`; sin `reason`, 400
+«Indique el motivo del registro de la etapa migrada». La pantalla no tiene botón para esto. (Hasta el bloque D la ruta no leía `reason` y
+respondía siempre 400; corregido el 2026-10-16.)
 
 ### 3.2 Saber que terminó, cooperativa por cooperativa
 
@@ -140,12 +140,18 @@ Con el jefe de cartera y la contadora (T0962), en `/cartera/etapas-de-cobranza`:
 
 1. Rangos de días, acciones (sobre todo cuál etapa abre el **aviso previo**) y plantillas de cada etapa; si cambian, «Nueva versión»
    desde una fecha, con motivo. La versión nueva deja de mostrarse «pendiente de validar».
-2. **Reglas de gasto** por etapa (base, tarifa, tope): la semilla no trae ninguna, y no hay techo nacional cargado contra el cual
-   compararlas.
+2. **Reglas de gasto** por etapa (base, tarifa, tope): la semilla no trae ninguna. El **tope de la cooperativa**
+   (`Cobranza.TopeGasto.Porcentaje` y `.ValorMaximo`, bloque D) nace vacío = sin tope; si se fija, hacerlo **antes** de versionar etapas con
+   gasto: una regla con tarifa mayor que el porcentaje se rechaza (`Lending.CollectionStage.FeeAboveCap`) y el gasto propuesto se recorta.
 3. Parámetros: `Cobranza.ToleranciaDePromesa` (0 por defecto, pendiente de validar), `AvisoPrevio.DiasMinimos` (20) y
    `AvisoPrevio.UmbralDosComunicaciones` (vacío = límite legal), y el horario y el tope diario de la Ley 2300.
-4. **Reglas de reparto** y gestores (`cartera.gestor-cobranza`, con sus oficinas), y asignar en Seguridad › Roles los permisos que
-   ninguna plantilla trae salvo la del administrador (aprobar acuerdos, cobro jurídico, campañas, enviar y registrar avisos previos).
+4. **Reglas de reparto** y gestores (`cartera.gestor-cobranza`, con sus oficinas). Desde el bloque D las plantillas traen al jefe aprobar
+   acuerdos, cobro jurídico, campañas y avisos previos, y al gestor enviar y registrar avisos previos (con subir adjuntos); los roles que una
+   cooperativa ya creó desde las plantillas **no** se actualizan solos: agregar esos permisos en Seguridad › Roles.
+5. **Salida de cobranza** (bloque D): desde el despliegue, el ciclo saca de cobranza a los créditos que se pusieron al día (entrada `Exit`,
+   gestión de sistema y cierre de la asignación). El primer ciclo después de desplegar puede sacar de una vez a muchos créditos que la versión
+   anterior dejaba con su última etapa: es lo esperado. Para contarlos:
+   `SELECT COUNT(*) FROM LND_CollectionStageHistory WHERE Source = 'Exit'` (en PostgreSQL con las comillas de los nombres).
 
 ## 6. Problemas frecuentes
 
@@ -156,3 +162,5 @@ Con el jefe de cartera y la contadora (T0962), en `/cartera/etapas-de-cobranza`:
 | La corrida queda `Requested` | el procesador está apagado (`Lending:Process:Enabled`) o no tiene el arrendamiento `lending.process`: ver [cartera-proceso-diario.md](cartera-proceso-diario.md) |
 | `unmatched` mayor que cero | códigos de origen sin etapa y días de mora fuera de todos los rangos: versionar las etapas y dejar que el ciclo los ubique |
 | El ciclo no mueve etapas | `EntregaVigente` menor que K4 en el despliegue, o el crédito está excluido (fallecido con reclamación, insolvencia en negociación) |
+| Un crédito al día desapareció de la cartera por etapa | salió de cobranza (bloque D): su historia termina en `Exit` y tiene la gestión de sistema; vuelve a entrar solo si recae en mora |
+| Un proceso jurídico sigue suspendido aunque la insolvencia terminó | es a propósito: se reanuda a mano con motivo en `/cartera/juridico` («Reanudar…») |

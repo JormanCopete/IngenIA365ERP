@@ -4072,6 +4072,37 @@ directos; ningún dato negativo queda listo para reportarse sin aviso con consta
 dan por aceptados al vencer. Pruebas de US12 verdes; `CobranzaYAvisoPrevioTests` y `NingunMensajeSaleFueraDeLaVentanaTests`
 verdes en los dos motores tras `CarteraCobranza`.
 
+### Bloque D (decisiones del dueño del 2026-10-16)
+
+- [X] D1 Reanudar a mano un proceso jurídico suspendido por insolvencia
+  - Hecho (2026-10-16): `ResumeLegalProcessCommand` (`POST /api/lending/legal-processes/{id}/resume`, motivo, clave, `Lending.LegalProcesses.Manage`;
+    audita `AuditBehavior`), botón «Reanudar…» en `Juridico.razor` y `CobranzaClient.ReanudarProcesoAsync`. Mientras la insolvencia que lo suspendió (o
+    cualquier otra del deudor) negocia: `Lending.LegalProcess.InsolvencyNegotiating`; nunca se reanuda solo. Vuelve al estado que dicen sus actuaciones
+    (`LegalProcess.EstadoAlReanudar`: sin radicación `Assigned`, radicado sin actuación de fondo `Filed`, con una `InProgress`), que es el que tenía al
+    suspenderse porque suspendido nada lo mueve; así no hizo falta guardar el estado anterior. `Suspended` admite volver a `Assigned` y `Filed`.
+- [X] D2 El crédito que se pone al día sale de la cobranza
+  - Hecho (2026-10-16): en `CobranzaDelCicloDiario`, un crédito con etapa vigente, sin mora (días de mora en cero) y sin etapa que le toque por los días a
+    su próximo vencimiento (o sea, ninguna preventiva) **sale**: entrada `Source = Exit` con la etapa de la que sale y «Salida por pago al día», gestión
+    de sistema (`CollectionActionChannel.System` = 8, `CollectionActionResult.LeftCollection` = 9, sin gestor ni contacto directo, «Sale de cobranza: se
+    puso al día el dd/mm/aaaa», no se anula: `Lending.CollectionAction.SystemRecord`) y cierre de la asignación (fila sin gestor). `EtapaVigenteAsync` y el
+    informe `collection-stages` excluyen a los salidos; `GestorVigenteAsync` ignora el cierre; recaer es episodio nuevo enlazado a la salida. Migración
+    aditiva `CarteraCobranzaSalida` (los dos `CollectorUserId` a nulos). `CobranzaBloqueDTests` y la e2e (Fabio se pone al día y sale).
+- [X] D3 Permisos en las plantillas sugeridas
+  - Hecho (2026-10-16): `cartera.jefe` suma `PaymentAgreements.Approve`, `LegalProcesses.Manage`, `Campaigns.Manage`, `PriorNotices.Send` y
+    `.RegisterEvidence` (no trae `PaymentAgreements.Create`: la segregación sigue); `cartera.gestor-cobranza` suma `PriorNotices.Send`,
+    `.RegisterEvidence` y `Attachments.Upload`/`.Download` —la carta exige subir la guía (`LendingPriorNoticeEvidence`, que además pide
+    `RegisterEvidence`)—, decisión propia que el dueño puede revertir. `PerfilesSugeridosDeCarteraTests` al día.
+- [X] D4 Tope del gasto de cobranza como parámetro
+  - Hecho (2026-10-16): `Cobranza.TopeGasto.Porcentaje` (fracción de 0 a 1 de la base del gasto) y `.ValorMaximo` (pesos), K4, sin valor, «pendiente de
+    validar»; `TopeDelGastoDeCobranza` (Domain): `AddCollectionStageVersionCommand` rechaza una tarifa mayor (`Lending.CollectionStage.FeeAboveCap`, en
+    lugar del `BelowLegalFloor` de T0923), el gasto propuesto se recorta al menor y el honorario jurídico cobrable por encima se rechaza diciendo el
+    máximo (`Lending.CollectionFee.AboveCap`; base: lo vencido de la última posición). Lo causado es lo informado. data-model §10.1 y §12.1, manual §6.
+- [X] D5 Correcciones
+  - Hecho (2026-10-16): (a) `OrdenDeCorridaRequest` lee `Reason` y la orden manual `MigratedCollectionStages` responde 202 (e2e); aviso del runbook
+    retirado. (b) `Lending.Collections.LoanNotInCollection` en `RecordCollectionActionCommand` (gestión con el titular de un crédito sin etapa vigente; la de
+    la pagaduría no) y `Lending.Campaign.FiltersInvalid` al crear una campaña con etapa inexistente, mora mínima sobre el tope de la etapa u oficina,
+    línea o pagaduría inexistentes; data-model §10.1 sin «hoy sin escritor».
+
 ---
 
 ## Phase 19: User Story 13 (resto) - Extracto y certificado tributario (Priority: P2) — entrega K5

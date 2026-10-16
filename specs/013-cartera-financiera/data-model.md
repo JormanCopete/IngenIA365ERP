@@ -3255,12 +3255,17 @@ Semilla «pendiente de validar»: preventiva, administrativa, prejurídica y jur
 | `LoanId` | int FK | no | |
 | `CollectionStageId` · `StageCode` | int FK · nvarchar(10) | no | la versión de la etapa y su código |
 | `EnteredOn` · `DaysPastDueAtEntry` | date · int | no | |
-| `Source` | nvarchar(20) | no | `DailyCycle` (paso 7), `Manual`, `Migration` |
+| `Source` | nvarchar(20) | no | `DailyCycle` (paso 7), `Manual`, `Migration`, `Exit` (salida de cobranza, K4 bloque D) |
 | `ProcessRunId` · `ActorUserId` · `Reason` | int FK · int FK · nvarchar(300) | sí | |
 | `PreviousEntryId` | int FK (misma tabla) | sí | |
 
-`(LoanId, EnteredOn)`. La etapa vigente es la última entrada. Al desplegar K4, la etapa migrada (`LND_MigrationLoans`)
-de los créditos vivos se registra como primera entrada con `Source = Migration` (paso de despliegue de K4, C64).
+`(LoanId, EnteredOn)`. La etapa vigente es la última entrada, **salvo que sea una salida** (`Source = Exit`, K4 bloque D,
+decisión del dueño del 2026-10-16): el ciclo diario la escribe cuando el crédito con etapa vigente queda sin mora y ninguna
+etapa (preventiva) le corresponde por los días que faltan a su próximo vencimiento; lleva la etapa de la que sale, sus días
+(cero o negativos), la corrida y el motivo «Salida por pago al día». Un crédito salido no tiene etapa vigente; si recae,
+entra como episodio nuevo (enlazado a la salida por `PreviousEntryId`). Al desplegar K4, la etapa migrada
+(`LND_MigrationLoans`) de los créditos vivos se registra como primera entrada con `Source = Migration` (paso de despliegue
+de K4, C64).
 
 ### 26.6 `LND_CollectorAssignmentRules` — `CollectorAssignmentRule` **(nuevo)** (K4) y `LND_CollectorAssignments` — `CollectorAssignment` (H; K4; FR-118)
 
@@ -3276,14 +3281,15 @@ de los créditos vivos se registra como primera entrada con `Source = Migration`
 | Columna (`CollectorAssignment`) | Tipo | Nulo | Notas |
 |---|---|---|---|
 | `LoanId` · `PersonId` | int FK | sí · no | crédito, o el deudor completo si `LoanId` es nulo |
-| `CollectorUserId` | int FK `SEC_Users` | no | |
+| `CollectorUserId` | int FK `SEC_Users` | sí **(K4 bloque D, migración `CarteraCobranzaSalida`)** | nulo = **cierre** de la asignación del crédito al salir de cobranza |
 | `AssignedOn` | date | no | |
 | `CollectorAssignmentRuleId` | int FK | sí | nulo = asignación manual |
 | `Reason` | nvarchar(300) | sí | obligatorio en manual y en reasignación |
 | `ActorUserId` | int FK | sí | `Lending.Collections.Assign`; nulo = proceso |
 | `PreviousAssignmentId` | int FK (misma tabla) | sí | |
 
-`(LoanId, AssignedOn)`; `(CollectorUserId, AssignedOn)`. La vigente es la última; la agenda del gestor es una consulta.
+`(LoanId, AssignedOn)`; `(CollectorUserId, AssignedOn)`. La vigente es la última; si la última es un cierre (sin gestor), el
+crédito no tiene gestor vigente. La agenda del gestor es una consulta.
 
 ### 26.7 `LND_CollectionActions` — `CollectionAction` (H; K4; FR-119, FR-122)
 
@@ -3291,12 +3297,12 @@ de los créditos vivos se registra como primera entrada con `Source = Migration`
 |---|---|---|---|
 | `LoanId` | int FK | sí | |
 | `PersonId` · `ContactRole` | int FK · int (`ContactRole`) | no | `Debtor`, `CoDebtor` o `Paymaster` (gestión ante la pagaduría, FR-114) |
-| `Channel` | int (`CollectionActionChannel`) **(nuevo)** | no | `Phone`, `InPerson`, `Email`, `Sms`, `WhatsApp`, `Letter`, `Visit` |
+| `Channel` | int (`CollectionActionChannel`) **(nuevo)** | no | `Phone`, `InPerson`, `Email`, `Sms`, `WhatsApp`, `Letter`, `Visit`; `System` (K4 bloque D: la gestión que deja el ciclo, nunca una persona) |
 | `OccurredAt` | datetime | no | |
 | `IsDirectContact` | bit | no | comunicación efectiva con el titular: fija el canal de la semana (Ley 2300) |
-| `Result` | int (`CollectionActionResult`) **(nuevo)** | no | `NoAnswer`, `WrongNumber`, `ContactedNoCommitment`, `PromiseToPay`, `Refused`, `RequestsAgreement`, `ReportsDeceased`, `Other` |
+| `Result` | int (`CollectionActionResult`) **(nuevo)** | no | `NoAnswer`, `WrongNumber`, `ContactedNoCommitment`, `PromiseToPay`, `Refused`, `RequestsAgreement`, `ReportsDeceased`, `Other`; `LeftCollection` (K4 bloque D, sólo en la gestión de sistema) |
 | `Notes` | nvarchar(2000) | sí | |
-| `CollectorUserId` | int FK | no | `Lending.Collections.RecordActivity` |
+| `CollectorUserId` | int FK | sí **(K4 bloque D, migración `CarteraCobranzaSalida`)** | `Lending.Collections.RecordActivity`; nulo en la gestión de sistema (sin contacto directo: no cuenta en la ventana legal; no se anula) |
 | `DebtorMessageId` | int FK | sí | si la gestión fue un mensaje |
 | `VoidsActionId` · `VoidReason` | int FK (misma tabla) · nvarchar(500) | sí | una corrección es una gestión nueva que anula la anterior |
 
@@ -3345,7 +3351,7 @@ esto: es una novedad (`LND_LoanNovelties.PaymentAgreementId`).
 | `LawyerPersonId` | int FK `COR_People` | no | el abogado es una persona del maestro |
 | `AssignedOn` | date | no | |
 | `Authority` · `CaseNumber` · `ProcessType` | nvarchar(150) · nvarchar(60) · nvarchar(60) | sí | juzgado, radicado, clase de proceso |
-| `Status` | int (`LegalProcessStatus`) **(nuevo)** | no | `Assigned`, `Filed`, `InProgress`, `Suspended`, `Concluded`, `Withdrawn` |
+| `Status` | int (`LegalProcessStatus`) **(nuevo)** | no | `Assigned`, `Filed`, `InProgress`, `Suspended`, `Concluded`, `Withdrawn`; `Suspended` se **reanuda a mano** (K4 bloque D, `ResumeLegalProcessCommand`, con motivo) cuando la insolvencia ya no negocia, al estado que dicen sus actuaciones |
 | `SuspendedByInsolvencyId` | int FK `LND_InsolvencyProceedings` | sí | la insolvencia lo suspende (FR-098) |
 | `FeeAgreementJson` | nvarchar(max) | sí | honorarios pactados |
 | `ClosedAt` · `CloseReason` | datetime · nvarchar(500) | sí | |
@@ -3875,8 +3881,8 @@ completa (§23.10).
   `WriteOffItemStatus { Included, Rejected, WrittenOff }`
 - `InsolvencyRegime { BusinessReorganization, NaturalPersonDebtNegotiation }`
 - `ContactRole { Debtor, CoDebtor, Paymaster }`
-- `CollectionActionChannel { Phone, InPerson, Email, Sms, WhatsApp, Letter, Visit }`
-- `CollectionActionResult { NoAnswer, WrongNumber, ContactedNoCommitment, PromiseToPay, Refused, RequestsAgreement, ReportsDeceased, Other }`
+- `CollectionActionChannel { Phone, InPerson, Email, Sms, WhatsApp, Letter, Visit, System }` (`System` = 8, K4 bloque D)
+- `CollectionActionResult { NoAnswer, WrongNumber, ContactedNoCommitment, PromiseToPay, Refused, RequestsAgreement, ReportsDeceased, Other, LeftCollection }` (`LeftCollection` = 9, K4 bloque D)
 - `AssignmentDistribution { ByCount, ByBalance }`
 - `PaymentPromiseStatus { Pending, Kept, Broken }` (calculado) · `PaymentAgreementStatus { Proposed, Approved, Rejected, Cancelled }` ·
   `PaymentAgreementPerformance { Current, Fulfilled, Broken }` (calculado)
@@ -3889,11 +3895,11 @@ completa (§23.10).
 
 **Valores de texto cerrados**: `LND_ProcessRunErrors.Step` (§22.2); `LND_DebtorMessages.OriginKind` (§26.1);
 `LND_PayrollAgreementContacts.Role` (`Payroll`, `Treasury`, `Legal`, `Other`); `LND_CollectionStageHistory.Source`
-(`DailyCycle`, `Manual`, `Migration`); `LND_RegulatoryFileLines.ExclusionReason` (§28.2);
+(`DailyCycle`, `Manual`, `Migration`, `Exit`); `LND_RegulatoryFileLines.ExclusionReason` (§28.2);
 `LND_MigrationRiskData.RecordKind` (`LOAN`, `GENERAL`); `LND_ProcessRuns.ExecutionOrigin` (§22.1).
 
-**Parámetro** (`ParametrosDeCartera`, módulo `LND`): `Cobranza.ToleranciaDePromesa` (decimal en pesos, defecto 0,
-ámbito `None`, K4).
+**Parámetros** (`ParametrosDeCartera`, módulo `LND`): `Cobranza.ToleranciaDePromesa` (decimal en pesos, defecto 0,
+ámbito `None`, K4); `Cobranza.TopeGasto.Porcentaje` y `Cobranza.TopeGasto.ValorMaximo` (K4 bloque D, sin valor; §12.1).
 
 **Códigos de error**: `Lending.PayrollFile.Superseded`; `Lending.MonthlyClose.PreviousMissing`, `.AlreadyClosed`,
 `.AccountingPeriodClosed`, `.AccrualBehind`, `.ReplicationUnavailable`, `.NotLast`, `.BaseNotReopenable`;
@@ -5369,15 +5375,17 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.Insolvency.NotNegotiating` **(K3, T0888)** | 422 | «El proceso de insolvencia ya no está en negociación.» (`data.status`) | registrar el fracaso o cerrar con acuerdo un proceso que no está `Negotiating` | FR-098 |
 | `Lending.CollectionStage.RangesInvalid` **(K4, T0954)** | 422 | «La etapa «{etapa}» empieza en {n} días y «{anterior}» llega hasta {m}: se cruzan.» y equivalentes (`data: { kind, stage, previous }`, `kind` = `Empty`, `DuplicateCode`, `Inverted`, `Overlap`, `Gap`, `OpenNotLast`, `OrderMismatch`) | versión de etapas cuyos rangos de días se cruzan, dejan huecos, no siguen el orden o tienen una sin tope que no es la última | FR-117 |
 | `Lending.CollectionStage.FeeRuleInvalid` **(K4, T0954, fijado aquí)** | 422 | «La tarifa del gasto de la etapa «{etapa}» es una fracción mayor que cero y hasta uno.» y equivalentes (`data.field` = `base`, `rate`, `cap`, `moment`) | regla de gasto con base o momento desconocidos, tarifa fuera de (0, 1] o tope no positivo | FR-121, T77 |
+| `Lending.CollectionStage.FeeAboveCap` **(nuevo, K4 bloque D)** | 422 | «La tarifa del gasto de la etapa «{etapa}» ({tarifa}) supera el tope de la cooperativa ({tope} de la base del gasto). Baje la tarifa o cambie el tope en los parámetros de Cartera.» (`data: { field: rate, stage, rate, capRate, capAmount }`) | versión de etapas con una regla de gasto cuya tarifa supera `Cobranza.TopeGasto.Porcentaje` vigente desde su inicio | FR-121 |
 | `Lending.CollectionStage.ValidityInvalid` **(K4, T0954, fijado aquí)** | 422 | «Ya hay una versión de etapas desde el {fecha}: la nueva empieza después.» (`data.validFrom`) | versión que no empieza después de la vigente; cerrar una etapa ya cerrada o antes de su inicio | FR-117 |
 | `Lending.CollectorAssignmentRule.Invalid` **(K4, T0954, fijado aquí)** | 422 | «La regla de reparto necesita al menos un gestor.» · «Un gestor está dos veces en la regla.» · «El peso de cada gestor es mayor que cero.» · «El saldo máximo de la regla es menor que el mínimo.» | crear una regla de reparto inválida | FR-118 |
 | `Lending.CollectorAssignmentRule.ValidityInvalid` **(K4, T0954, fijado aquí)** | 422 | «La regla ya está cerrada o se pide cerrarla antes de empezar.» (`data.validFrom`) | cerrar la vigencia de una regla ya cerrada o antes de su inicio | FR-118 |
 | `Lending.CollectorAssignmentRule.NotFound` **(K4, T0954, fijado aquí)** | 404 | «La regla de reparto no existe.» | cerrar una regla inexistente | FR-118 |
 | `Lending.Collections.CollectorNotFound` **(K4, T0954, fijado aquí)** | 422 | «El gestor no es un usuario activo de esta cooperativa. Elíjalo de la lista de usuarios.» | regla, asignación o reparto con un gestor que no es usuario activo | FR-118 |
-| `Lending.Collections.LoanNotInCollection` **(K4, T0954, fijado aquí; hoy sin escritor)** | 422 | «El crédito {numero} no está en ninguna etapa de cobranza.» (`data.loanNumber`) | reservado en `ErroresDeCobranza`; ninguna ruta lo responde todavía | FR-117 |
+| `Lending.Collections.LoanNotInCollection` **(K4, T0954; escritor desde el bloque D)** | 422 | «El crédito {numero} no está en cobranza: no tiene etapa vigente (nunca entró o salió al ponerse al día). Se gestiona cuando el proceso diario lo haga entrar a una etapa.» (`data.loanNumber`) | registrar una gestión con el titular (no ante la pagaduría) sobre un crédito sin etapa vigente | FR-117 |
 | `Lending.CollectionAction.ContactNotObligated` **(K4, T0954)** | 422 | «La gestión sólo se hace con el deudor o un codeudor obligado del crédito {numero}, o ante su pagaduría. Nunca con una referencia.» (`data.loanNumber`) | gestión con una persona que no es deudor, codeudor vigente ni la pagaduría; la pagaduría marcada como contacto directo | FR-119, FR-122 |
 | `Lending.CollectionAction.NotFound` **(K4, T0954, fijado aquí)** | 404 | «La gestión de cobranza no existe.» | anular una gestión inexistente o fuera del alcance | T62 |
 | `Lending.CollectionAction.AlreadyVoided` **(K4, T0954, fijado aquí)** | 422 | «La gestión ya fue anulada por otra: corrija la gestión que la anuló.» | anular dos veces, o anular una gestión que anula | FR-119, T77 |
+| `Lending.CollectionAction.SystemRecord` **(nuevo, K4 bloque D)** | 422 | «Esa gestión la dejó el proceso diario (la salida de cobranza): es la constancia de lo que pasó y no se anula.» | anular la gestión de sistema | FR-119 |
 | `Lending.PaymentAgreement.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El acuerdo de pago no existe.» | inexistente o fuera del alcance | T62 |
 | `Lending.PaymentAgreement.ChangesTerms` **(K4, T0954)** | 422 | «El acuerdo suma {acordado} y lo vencido es {vencido}: un acuerdo de pago es sólo sobre lo vencido, sin cambiar las condiciones del crédito. Para cambiar plazo, cuota o tasa, tramite una novedad.» (`data: { agreed, pastDue }`) | calendario que suma más que lo vencido, o crédito sin nada vencido | FR-120, FR-090 |
 | `Lending.PaymentAgreement.NotProposed` **(K4, T0954)** | 422 | «Sólo se aprueba un acuerdo propuesto.» · «Sólo se rechaza un acuerdo propuesto.» (`data.status`) | aprobar o rechazar uno que no está `Proposed` | FR-120 |
@@ -5389,14 +5397,16 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.LegalProcess.AlreadyOpen` **(K4, T0954, fijado aquí)** | 422 | «El crédito {numero} ya está en el proceso de cobro jurídico {proceso}, que sigue abierto.» (`data: { loanNumber, number }`) | abrir un segundo proceso para el mismo crédito | FR-124 |
 | `Lending.LegalProcess.InvalidStatus` **(K4, T0954, fijado aquí)** | 422 | «El proceso está en «{estado}» y no puede pasar a «{hacia}».» · «El proceso de cobro jurídico ya terminó.» (`data: { status, requested }`) | actuación o cierre de un proceso concluido o retirado; transición fuera de `LegalProcessStatus` | FR-124 |
 | `Lending.LegalProcess.LawyerIsDebtor` **(K4, T0954, fijado aquí)** | 422 | «El abogado no puede ser el deudor demandado. Elija como abogado a otra persona del maestro.» | abrir con el demandado como abogado | FR-124 |
+| `Lending.LegalProcess.InsolvencyNegotiating` **(nuevo, K4 bloque D)** | 422 | «El proceso {numero} sigue suspendido: el deudor está en una negociación de insolvencia. Se reanuda cuando la insolvencia termine (con acuerdo o con su fracaso registrado).» (`data: { number, insolvencyPublicId }`) | reanudar un proceso suspendido mientras el deudor negocia | FR-098, FR-124 |
 | `Lending.LegalProcess.AttachmentInvalid` **(K4, T0954, fijado aquí)** | 422 | «El soporte no es un documento disponible de este proceso. Súbalo como documento del proceso y vuelva a intentarlo.» | actuación con un adjunto que no es `LendingLegalProcessDocument` disponible del proceso | FR-124 |
 | `Lending.CollectionFee.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El gasto de cobranza no existe o no es de este deudor.» | causar un aviso que no es un gasto de la persona | FR-121 |
 | `Lending.CollectionFee.NoticeNotSent` **(K4, T0954, fijado aquí)** | 422 | «El gasto de cobranza del crédito {numero} todavía no se le informó al deudor: se causa sólo después de que el aviso salga. Espere a que el aviso quede enviado.» (`data.loanNumber`) | causar un gasto cuyo `CollectionFeeNotice` no tiene `Sent` ni `Delivered` | FR-121, T77 |
 | `Lending.CollectionFee.AlreadyCaused` **(K4, T0954, fijado aquí)** | 422 | «El gasto de cobranza del crédito {numero} ya se causó.» (`data.loanNumber`) | causar dos veces el gasto de un aviso | FR-121 |
+| `Lending.CollectionFee.AboveCap` **(nuevo, K4 bloque D)** | 422 | «Lo que se cobraría al deudor del crédito {numero} ({valor}) supera el tope del gasto de cobranza de la cooperativa ({maximo}). Registre a cargo del deudor a lo sumo ese valor, o el resto sin cobrárselo.» (`data: { loanNumber, amount, maxAmount }`) | honorario o gasto jurídico a cargo del deudor por encima del tope (base: lo vencido de la última posición diaria) | FR-121 |
 | `Lending.Campaign.NotFound` **(K4, T0954, fijado aquí)** | 404 | «La campaña no existe.» | inexistente | FR-122 |
 | `Lending.Campaign.CodeDuplicate` **(K4, T0954, fijado aquí)** | 422 | «Ya hay una campaña con el código {codigo}. Use otro código.» (`data.code`) | crear una campaña con el código de otra viva | FR-122 |
 | `Lending.Campaign.InvalidStatus` **(K4, T0954, fijado aquí)** | 422 | «La campaña está en «{estado}» y no puede pasar a «{hacia}».» | programar una que no está en borrador; cancelar una terminada o cancelada | FR-122 |
-| `Lending.Campaign.FiltersInvalid` **(K4, T0954, fijado aquí; hoy sin escritor)** | 422 | {motivo} | reservado en `ErroresDeCobranza` para criterios de campaña inválidos | FR-122 |
+| `Lending.Campaign.FiltersInvalid` **(K4, T0954; escritor desde el bloque D)** | 422 | {motivo} (`data.reason`): la etapa no existe en la versión vigente el día programado; la mora mínima supera el tope de la etapa elegida; la oficina, la línea o la pagaduría no existen | crear una campaña con criterios que no pueden casar con nada | FR-122 |
 | `Lending.PriorNotice.NotFound` **(K4, T0954, fijado aquí)** | 404 | «El aviso previo no existe.» | inexistente o fuera del alcance | T62 |
 | `Lending.PriorNotice.AlreadyEvidenced` **(K4, T0954)** | 422 | «El aviso previo del crédito {numero} ya tiene las constancias que exige este episodio: no hace falta otra comunicación.» (`data.loanNumber`) | enviar o registrar la carta de un aviso `Valid` | FR-123 |
 | `Lending.PriorNotice.EvidenceDuplicate` **(K4, T0954)** | 422 | «La comunicación {n} de este aviso ya tiene su constancia.» (`data.communicationNumber`) | registrar dos veces la carta de la misma comunicación | FR-123 |
@@ -5640,6 +5650,8 @@ transversales deja a este documento.
 | `Cobranza.HorarioSabado` | Text | `HH:mm-HH:mm` | `08:00-15:00` (techo) | None | `COBRANZA_HORA_INICIO_SAB`, `COBRANZA_HORA_FIN_SAB` | K1 / K4 | F-05 |
 | `Cobranza.ContactosPorDia` | Int | ≥ 1 | 1 (techo) | None | `COBRANZA_CONTACTOS_DIA` | K1 / K4 | F-05 |
 | `Cobranza.ToleranciaDePromesa` **(nuevo, K4, T0962)** | Decimal | pesos, ≥ 0 | 0 (PV) | None | — | K4 | §26.8, FR-119 |
+| `Cobranza.TopeGasto.Porcentaje` **(nuevo, K4 bloque D)** | Decimal | fracción de 0 a 1 de la base del gasto | vacío = sin tope (PV) | None | — | K4 | decisión del dueño del 2026-10-16, FR-121 |
+| `Cobranza.TopeGasto.ValorMaximo` **(nuevo, K4 bloque D)** | Decimal | pesos, ≥ 0 | vacío = sin máximo (PV) | None | — | K4 | decisión del dueño del 2026-10-16, FR-121 |
 | `AvisoPrevio.DiasMinimos` | Int | días calendario | 20 (piso) | None | `AVISO_PREVIO_DIAS` | K4 | F-09 |
 | `AvisoPrevio.UmbralDosComunicaciones` | Decimal | veces el SMMLV | el nacional (PV) | None | `AVISO_PREVIO_UMBRAL_SMMLV` | K4 | F-09 |
 | `Mensajes.Reintentos` | Int | ≥ 0 | 3 **(fijado aquí)** | None | — | K1 | F-06 |
