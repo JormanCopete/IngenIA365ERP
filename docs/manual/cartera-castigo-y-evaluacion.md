@@ -17,15 +17,18 @@ contabiliza por la matriz (`CreditoCastigado` en un `PV`).
 | Qué | Dónde | Permiso |
 |---|---|---|
 | Ver lotes de castigo | `/cartera/castigos` | `Lending.Loans.Read` |
-| Armar el lote, agregar y quitar créditos, enviarlo al consejo | `/cartera/castigos` | `Lending.WriteOffs.Prepare` (plantilla `cartera.jefe`) |
-| Subir los soportes de cada crédito | diálogo del lote | `Attachments.Upload` (ver §8) |
+| Armar el lote, agregar y quitar créditos, enviarlo al consejo, anularlo | `/cartera/castigos` | `Lending.WriteOffs.Prepare` (plantilla `cartera.jefe`) |
+| Subir los soportes de cada crédito | diálogo del lote | `Attachments.Upload` (plantillas `cartera.jefe`, `cartera.consejo` y `cartera.administrador`) |
 | Decidir el lote | `/cartera/actas`, punto «Decisión» del consejo | miembros del consejo (votos), `Lending.Sessions.*` para la secretaría |
 | Aplicar el lote y registrar el reporte al supervisor | `/cartera/castigos` | `Lending.WriteOffs.Apply` (plantilla `cartera.consejo`) |
 | Cartera castigada y recuperaciones | `/cartera/informes?vista=charge-offs` | `Lending.Reports.View` |
 | Ver evaluaciones | `/cartera/evaluaciones` | `Lending.Ratings.Read` |
-| Preparar una evaluación | `/cartera/evaluaciones` | `Lending.PortfolioEvaluations.Prepare` (plantilla `cartera.comite-riesgos`) |
+| Preparar una evaluación y descartarla | `/cartera/evaluaciones` | `Lending.PortfolioEvaluations.Prepare` (plantilla `cartera.comite-riesgos`) |
 | Recomendarla y aprobarla | `/cartera/actas`: punto «Recomendación» del comité de riesgos, punto «Decisión» del consejo | miembros de cada órgano |
 | Aplicarla | `/cartera/evaluaciones` | `Lending.PortfolioEvaluations.Apply` (plantilla `cartera.consejo`) |
+
+La plantilla `cartera.consejo` trae también `Lending.Loans.Read` y `Lending.Ratings.Read`, que piden las dos pantallas (desde
+el 2026-10-15).
 
 Todo lo que escribe lleva su clave de operación: un doble clic no arma dos lotes ni aplica dos veces.
 
@@ -59,12 +62,21 @@ Las tres claves `Castigo.*` están en **Parámetros** (`/cartera/parametros`), c
    se puede crear (`Lending.WriteOff.BoardMissing`).
 5. Al cerrarse el acta el lote queda **aprobado** con su punto (o **negado**).
 
+Al armarlo, la pantalla **avisa** —sin bloquear— lo de la norma y la política que sigue vacío y pendiente de validar: el plazo
+del reporte de castigos al supervisor (`WriteOffReportTermPending`) y la altura mínima de mora (`WriteOffMinimumArrearsPending`),
+con el enlace para corregirlo.
+
+**Anular el lote**: mientras no se aplique (en borrador, enviado o ya aprobado por el consejo), «Anular lote» con el motivo,
+que queda en la auditoría. Sus créditos quedan libres para otro lote; un lote aplicado no se anula.
+
 ## 4. Aplicar
 
 «Aplicar el castigo» en el lote aprobado. Lo hace la secretaría del consejo, **no quien armó el lote** (segregación
 «armar × aplicar»). Al aplicar:
 
-- se vuelven a verificar los requisitos de cada crédito a hoy (uno que ya no cumple detiene el lote);
+- se vuelven a verificar los requisitos de cada crédito a hoy: el que ya no cumple (o ya no está vigente) se **excluye** con su
+  motivo —queda rechazado en el lote, lo dice la pantalla y queda en la auditoría— y **el resto se castiga**; si no queda
+  ninguno, el lote no se aplica (`Lending.WriteOff.NoLoansLeft`, con cada crédito y lo que le falta) y se puede anular;
 - la validación previa contable: con `Contabilidad.FaltaDeRegla = Bloquear` y sin regla en la matriz, no se aplica
   (`Lending.Prevalidation.NotPostable`);
 - cada crédito queda **castigado** (`WrittenOff`) con la fecha y la operación `WriteOff` (`CAS-`), referida al punto del acta;
@@ -108,22 +120,24 @@ castigado y lo recuperado en el rango. Gestiones y último contacto llegan con l
    (`Lending.PortfolioEvaluation.RecommendationRequired`). Quien la preparó no vota.
 4. **Aplicar** con los dos puntos (los de otra cosa responden `Lending.Session.ItemMismatch`).
 
+Al prepararla, la pantalla avisa —sin bloquear— si la periodicidad de la norma sigue pendiente de validar
+(`PortfolioEvaluationPeriodicityPending`). **Descartar**: mientras no se aplique (borrador, recomendada o aprobada),
+«Descartar evaluación» con el motivo, que queda en la auditoría; libera el corte para preparar otra.
+
 Aplicada, la calificación propuesta es la candidata **«Evaluación de cartera»** de cada crédito en el **cierre de su mes de
 efecto** y en los siguientes, hasta la próxima evaluación aplicada; el cierre se queda con la peor de las candidatas (mora,
 análisis, arrastre, reestructurado, evaluación) y el reporte de cambios dice la causa. **Nunca reescribe un cierre anterior.**
 
 ## 8. Lo que falta o decide el dueño
 
-- **El retiro del asociado no tiene ruta.** Ninguna pantalla de Core apaga la marca de asociado: hasta que llegue con Ahorros
-  y aportes (feature 014), el requisito «ya no es asociado» no se puede cumplir por la aplicación.
-- **Ninguna plantilla de rol de Cartera trae `Attachments.Upload`**: quien arma el lote necesita un rol propio con él para
-  subir los soportes (igual en novedades y eventos del deudor). La secretaría del consejo (`cartera.consejo`) tampoco trae
-  `Lending.Loans.Read` ni `Lending.Ratings.Read`, que piden `/cartera/castigos` y `/cartera/evaluaciones`: hoy aplica
-  desde la pantalla sólo con un rol que los sume.
+- **El retiro del asociado no tiene ruta.** Ninguna pantalla de Core apaga la marca de asociado: llega con Ahorros y aportes
+  (feature 014); hasta entonces el requisito «ya no es asociado» no se puede cumplir por la aplicación.
 - Fijar `Castigo.DiasMinimosDeMora` y confirmar `Castigo.ExigeDeterioroTotal` y `Castigo.GestionesMinimas`.
 - Aportar `writeOffReport` (si se reporta y en cuántos días) y `portfolioEvaluation` (meses de corte y de efecto) del tipo de
-  entidad en el documento **Tipos de organización**.
+  entidad en el documento **Tipos de organización**. Decisión del dueño del 2026-10-15: mientras falten se quedan vacíos y el
+  sistema **avisa** en la activación de Cartera, al armar un lote y al preparar una evaluación.
 - La contadora: las cuentas de `CastigadaEnOrden`, `ContraOrdenControl` y `GastoDeCastigoOCondonacion` (motivo
   `WriteOff`) en la matriz (C7, C81). Desde el 2026-10-15 la plantilla de la matriz las trae como filas sugeridas sin cuenta.
-- No hay ruta para **anular un lote**, ni para **editar las líneas** o **descartar** una evaluación en borrador (la entidad lo
-  admite; api.md §11.3 y §12.6 no traen las rutas).
+- No hay ruta para **editar las líneas** de una evaluación en borrador (la entidad lo admite): se descarta y se prepara otra.
+- Las plantillas suben soportes (`Attachments.Upload`) pero no traen `Attachments.Download`, que pide la lista de soportes del
+  diálogo para elegirlos: la cooperativa lo suma en el rol si hace falta.

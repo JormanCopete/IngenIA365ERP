@@ -277,6 +277,7 @@ Lo que el diseño adopta con la propuesta por defecto y espera su visto bueno (e
 | **C10** (pregunta) | Las comisiones y costos de originación **no** se difieren (`Contabilidad.DiferirComisiones` = no); si se decide diferirlos, harán falta un hecho de amortización y otra entrega | — |
 | **C77** | El hecho va en `*` en los roles de saldo, orden, pasivo, puente, diferido y contingentes (peso 2 sólo en resultados), y el centro de costo se asigna sin pesar | §2 |
 | **C81** | Al castigar, el interés en suspenso sale de `SuspensoEnOrden` y entra a `CastigadaEnOrden` (contra `ContraOrdenControl`) | Ejemplo 14 |
+| Fallecimiento (K3, decisión del dueño del 2026-10-15) | Si el parámetro `Causacion.ContinuaTrasFallecimiento` de la línea dice que no, desde el fallecimiento la causación pasa a suspenso y sale `CausacionSuspendida` con el motivo **`Deceased`** (el interés va a la orden contingente como en la mora). El motivo se queda; falta confirmar que ese tratamiento contable es el que corresponde | `CausacionSuspendida`, motivo `Deceased`; [cartera-novedades-y-condonaciones](cartera-novedades-y-condonaciones.md) §8 |
 | Capitalización (propuesta del 2026-10-13) | Al capitalizar interés **en suspenso** en una reestructuración, modificación o novación, además de llevarlo a `Capital` contra `IngresoDiferido`, se **cancela su orden**: débito `ContraOrdenContingente`, crédito `SuspensoEnOrden` | §5, capitalización |
 
 También quedan a su criterio, sin ser preguntas: la orientación de cuentas del CUIF de las filas sugeridas, si las

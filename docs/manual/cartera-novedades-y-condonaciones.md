@@ -18,15 +18,17 @@ por la matriz (comprobante `CN` para las novedades).
 |---|---|---|
 | Novedades: lista, pedir, simular, consentimientos, radicar, anular | `/cartera/novedades` (y el botón «Novedad» del crédito) | `Lending.Novelties.Read` · `.Request` |
 | Decidir una novedad | detalle en `/cartera/novedades` o «Mis pendientes» (`/cartera/aprobaciones`) | `Lending.Novelties.Read` + el permiso del nivel (`Lending.Decisions.*`) |
+| Aprobar la excepción de cobertura (otra persona, antes de aplicar) | detalle en `/cartera/novedades` | `Lending.Novelties.Read` + el nivel de excepción (`Lending.Decisions.Exceptions`) |
 | Aplicar una novedad aprobada | detalle en `/cartera/novedades` | `Lending.Novelties.Apply` |
+| Levantar el bloqueo de una insolvencia fracasada | `/cartera/cupos` | `Lending.Blocks.Manage` |
 | Condonaciones: lista, pedir, anular | `/cartera/condonaciones` (y el botón «Condonar» del crédito) | `Lending.Loans.Read` · `Lending.Condonations.Request` |
 | Decidir y aplicar una condonación | `/cartera/condonaciones` o «Mis pendientes» | `Lending.Loans.Read` + nivel · `Lending.Condonations.Apply` |
 | Eventos del deudor y reclamaciones al seguro | pestaña «Eventos y reclamaciones» de `/cartera/creditos/{id}` | `Lending.Loans.Read` · `Lending.DebtorEvents.Manage` |
 | Insolvencia | botón «Insolvencia» de la misma pestaña | `Lending.Insolvency.Manage` |
 | Informe de reestructurados | `/cartera/informes?vista=restructured` | `Lending.Reports.View` + `Lending.Loans.Read` |
 
-Las plantillas de rol traen `Novelties.Read` y `.Request` sólo en `cartera.jefe`; quien decide una novedad (el analista,
-el gerente) necesita además **ver** novedades: hoy hay que darle `Lending.Novelties.Read` en un rol propio (ver §9).
+`Novelties.Request` lo trae `cartera.jefe`; `Novelties.Read`, también `cartera.analista` y `cartera.gerente`, que deciden
+novedades (desde el 2026-10-15; antes hacía falta un rol propio).
 
 ## 2. La causa y el mecanismo
 
@@ -76,8 +78,12 @@ Con la novedad aprobada, «Aplicar» (otra persona, con `Lending.Novelties.Apply
 
 - Si una parte no aceptó, elija por cada una: **no aplicar la novedad** (queda anulada y el crédito no cambia) o
   **aplicarla con la garantía extinguida**. Lo segundo exige que la cobertura que queda cumpla la línea; si no, se
-  responde `Lending.Novelty.CoverageInsufficient` con lo exigido y lo que queda, salvo que quien aplica apruebe la
-  **excepción de cobertura** con la atribución del nivel de excepción de la matriz (sin ella, `Lending.Attribution.LevelRequired`).
+  responde `Lending.Novelty.CoverageInsufficient` con lo exigido y lo que queda, salvo que haya **excepción de cobertura**
+  aprobada por **otra persona** (cuatro ojos, decisión del dueño del 2026-10-15): con la novedad aprobada, quien tenga la
+  atribución del nivel de excepción de la matriz (`Lending.Decisions.Exceptions`, plantilla `cartera.gerente`) la aprueba
+  con motivo en el detalle («Aprobar excepción de cobertura»; sin ese nivel, `Lending.Attribution.LevelRequired`; quien la
+  radicó no puede; una sola vez). Después, quien aplica marca «Usar la excepción de cobertura aprobada»; si nadie la aprobó
+  responde `Lending.Novelty.CoverageExceptionMissing`, y si la aprobó él mismo, `Lending.Novelty.CoverageExceptionSameUser`.
 - **Prórroga, fecha o tasa**: el crédito conserva su número y su historial; el plan anterior queda como versión.
 - **Novación o refinanciación**: nace un **crédito enlazado** con otro número que hereda marca, conteo, calificación e
   historial de mora; el anterior queda `Novado`. Sus garantías se constituyen aparte.
@@ -108,13 +114,16 @@ En la pestaña «Eventos y reclamaciones» del crédito:
 - **Insolvencia**: abre el proceso en negociación (fecha, régimen, autoridad, radicado y el auto como soporte): suspende la
   causación y el cobro de todos los créditos del deudor, bloquea crédito nuevo y mantiene la calificación del último
   cierre anterior. El **acuerdo** se tramita como una novedad de reestructuración ligada al proceso («Acuerdo como
-  novedad»): al aplicarla, el proceso queda con acuerdo. El **fracaso** («Registrar fracaso…») lo cierra y la calificación
-  pasa a la que fija la norma desde esa fecha.
+  novedad»): al aplicarla, el proceso queda con acuerdo y **se levanta solo** el bloqueo de crédito nuevo. El **fracaso**
+  («Registrar fracaso…») lo cierra y la calificación pasa a la que fija la norma desde esa fecha, pero **el bloqueo se
+  mantiene** (decisión del dueño del 2026-10-15): lo levanta a mano, con motivo, quien tenga `Lending.Blocks.Manage` en
+  **Cupos** (`/cartera/cupos`, «Levantar…» sobre el bloqueo de insolvencia).
 
 ## 9. Pendiente de decidir (dueño)
 
-- Las plantillas `cartera.analista` y `cartera.gerente` deciden en sus niveles pero no traen `Lending.Novelties.Read`,
-  que la ruta de decisiones de novedades exige: sin un rol propio con ese permiso no pueden decidir una novedad.
+- Desde el 2026-10-15 las plantillas `cartera.analista` y `cartera.gerente` traen `Lending.Novelties.Read` (deciden
+  novedades) y `cartera.jefe` trae `Attachments.Upload` (sube los consentimientos). Ninguna trae `Attachments.Download`,
+  que pide la lista de soportes para elegirlos: la cooperativa lo suma en el rol si hace falta.
 - El soporte de eventos e insolvencia usa el dueño de adjunto `LendingDebtorEventSupport` (la persona), que no estaba en el
   contrato de adjuntos (§9 de adaptadores-y-archivos); se agregó allí.
 - Los roles contables `IngresoDiferido` y `GastoDeCastigoOCondonacion` siguen sin cuenta hasta que la contadora los valide

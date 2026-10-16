@@ -973,7 +973,7 @@ vivos − reservas vigentes − aprobadas sin desembolsar (FR-058).
 |---|---|---|---|---|---|
 | `GET /?personPublicId=&kind=&active=&page=` | Loans.Read | `ListDebtorBlocksQuery` | → lista `{ publicId, person, kind, origin: Manual \| Automatic, reason, since, liftedAt?, liftedBy?, support? }` | | K1 |
 | `POST /` | Blocks.Manage | `RegisterDebtorBlockCommand` | `{ personPublicId, kind: Manual \| Garnishment, reason, supportAttachmentPublicId? }` → 201 | `Lending.Block.Duplicate` | K1 |
-| `POST /{id}/lift` | Blocks.Manage | `LiftDebtorBlockCommand` | `{ reason }` → 204 | `Lending.Block.Automatic` (`data: { kind, howItLifts }`): un bloqueo automático se levanta solo cuando desaparece su causa | K1 |
+| `POST /{id}/lift` | Blocks.Manage | `LiftDebtorBlockCommand` | `{ reason }` → 204 | `Lending.Block.Automatic` (`data: { kind, howItLifts }`): un bloqueo automático se levanta solo cuando desaparece su causa; salvo el de insolvencia con la negociación fracasada (K3, decisión del dueño del 2026-10-15), que lo levanta una persona —la lista lo marca `canLiftManually: true`— | K1 |
 
 `DebtorBlockReason` (`data-model.md`): `Manual`, `Arrears`, `ValidationFailed`, `WrittenOff`, `RestrictiveListMatch`,
 `AssociateWithdrawal`, `Deceased`, `Insolvency`, `Garnishment`, `LimitRevalidation`. Un bloqueo
@@ -1195,7 +1195,8 @@ sea el mecanismo; si no, `Modification`). Enums de `data-model.md` (§27): `Nove
 | `POST /{id}/submit` | Novelties.Request | `SubmitLoanNoveltyCommand` | → `LoanNoveltyDto` en `Submitted` con `routing` (vinculados: consejo) | `Lending.Usury.Exceeded`, `Lending.Concentration.LimitExceeded` | K3 |
 | `POST /{id}/consents` | Novelties.Request | `RegisterNoveltyConsentCommand` | `{ partyPersonPublicId, consented, attachmentPublicId, addendumAttachmentPublicId? }` → 201 (adjunto `LendingNoveltyConsent`) | `Lending.Novelty.PartyUnknown` | K3 |
 | `POST /{id}/decisions` | Novelties.Read (+ nivel) | `RecordCreditDecisionCommand` | §4.3 | §4.3 | K3 |
-| `POST /{id}/apply` | Novelties.Apply | `ApplyLoanNoveltyCommand` | `{ withoutConsent?: [{ partyPersonPublicId, decision: DoNotApply \| ApplyWithGuaranteeExtinguished, reason, collateralPublicId?, approveCoverageException? }], acknowledgeWarnings? }` (`approveCoverageException`, bloque B2: si la cobertura restante no cumple la línea, quien aplica aprueba la excepción con la atribución del nivel de excepción de la matriz —sin ella, `Lending.Attribution.LevelRequired`—; queda como decisión `Approve` con `isPolicyException` sobre la novedad y en `ExceptionDecisionId` del consentimiento) → `{ operationPublicId, scheduleVersion, newLoanPublicId?, messages[] }`; emite `CreditoReestructurado`, `CreditoModificado` o `CreditoNovado` | `Lending.Novelty.NotApproved`, `.ConsentMissing` (`data: { parties[] }`), `.CoverageInsufficient` (`data: { required, remaining }`), `Lending.Prevalidation.NotPostable`, `Lending.Segregation.Conflict` | K3 |
+| `POST /{id}/coverage-exception` | Novelties.Read (+ nivel de excepción) | `ApproveNoveltyCoverageExceptionCommand` | `{ reason }` (con clave) → `LoanNoveltyDto`. Bloque D (decisión del dueño del 2026-10-15): la excepción de cobertura la aprueba **otra persona** antes de aplicar, con la atribución del nivel de excepción de la matriz vigente; queda como decisión individual `Approve` con `isPolicyException` sobre la novedad (en `decisions[]` con `policyException: true`). Sólo con la novedad `Approved`, una vez, y quien la radicó no la aprueba | `Lending.Novelty.NotApproved`, `.AlreadyApplied`, `.CoverageExceptionExists`, `.CoverageInsufficient` (la matriz no tiene nivel de excepción), `Lending.Attribution.LevelRequired`, `Lending.Segregation.Conflict` | K3 |
+| `POST /{id}/apply` | Novelties.Apply | `ApplyLoanNoveltyCommand` | `{ withoutConsent?: [{ partyPersonPublicId, decision: DoNotApply \| ApplyWithGuaranteeExtinguished, reason, collateralPublicId?, useCoverageException? }], acknowledgeWarnings? }` (`useCoverageException`, bloque D: si la cobertura restante no cumple la línea, usa la excepción que aprobó otra persona por `/coverage-exception` y la sella en `ExceptionDecisionId` del consentimiento; sin ella, `Lending.Novelty.CoverageExceptionMissing`; si la aprobó quien aplica —usuario o persona—, `.CoverageExceptionSameUser`) → `{ operationPublicId, scheduleVersion, newLoanPublicId?, messages[] }`; emite `CreditoReestructurado`, `CreditoModificado` o `CreditoNovado` | `Lending.Novelty.NotApproved`, `.ConsentMissing` (`data: { parties[] }`), `.CoverageInsufficient` (`data: { required, remaining }`), `.CoverageExceptionMissing` (`data: { required, remaining }`), `.CoverageExceptionSameUser`, `Lending.Prevalidation.NotPostable`, `Lending.Segregation.Conflict` | K3 |
 | `POST /{id}/cancel` | Novelties.Request | `CancelLoanNoveltyCommand` | `{ reason }` → 204 | `Lending.Novelty.AlreadyApplied` | K3 |
 
 Una novación o refinanciación crea un crédito enlazado que hereda marca, conteo, calificación e historial de
@@ -1217,11 +1218,12 @@ deudor (FR-091).
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /?status=&page=` | Loans.Read | `ListWriteOffBatchesQuery` | → lista `{ publicId, number, status: Draft \| Submitted \| Approved \| Rejected \| Applied \| Cancelled, items, total, preparedBy, sessionItem?, appliedAt? }` | | K3 |
-| `GET /{id}` | Loans.Read | `GetWriteOffBatchQuery` | → el lote con `items: [{ loan, balance, impairment, daysPastDue, requirements: [{ code, met, evidence? }] }]` y `rejected: [{ loan, missing[] }]` | `Lending.WriteOffBatch.NotFound` | K3 |
-| `POST /` | WriteOffs.Prepare | `CreateWriteOffBatchCommand` | `{ loanPublicIds[], reason, reports: [{ loanPublicId, irrecoverabilityAttachmentPublicId, reportAttachmentPublicId }] }` → 201; los que no cumplen quedan en `rejected` con lo que falta | | K3 |
+| `GET /{id}` | Loans.Read | `GetWriteOffBatchQuery` | → el lote con `items: [{ loan, balance, impairment, daysPastDue, requirements: [{ code, met, evidence? }] }]` y `rejected: [{ loan, missing[], reason }]` (también los excluidos al aplicar) | `Lending.WriteOffBatch.NotFound` | K3 |
+| `POST /` | WriteOffs.Prepare | `CreateWriteOffBatchCommand` | `{ loanPublicIds[], reason, reports: [{ loanPublicId, irrecoverabilityAttachmentPublicId, reportAttachmentPublicId }] }` → 201; los que no cumplen quedan en `rejected` con lo que falta; `warnings: [{ code, message, whoFixes? }]` (bloque D) con lo de la norma y la política que sigue pendiente de validar —`WriteOffReportTermPending`, `WriteOffMinimumArrearsPending`—, sin bloquear | | K3 |
 | `POST /{id}/items` · `DELETE /{id}/items/{itemId}` | WriteOffs.Prepare | `AddWriteOffBatchItemCommand` · `RemoveWriteOffBatchItemCommand` | ídem por crédito, sólo en `Draft` | `Lending.WriteOff.RequirementMissing` (`data: { missing[] }`, C98), `Lending.WriteOffBatch.NotDraft` | K3 |
 | `POST /{id}/submit` | WriteOffs.Prepare | `SubmitWriteOffBatchCommand` | → el lote en `Submitted` (congelado para llevarlo al consejo, §5) | | K3 |
-| `POST /{id}/apply` | WriteOffs.Apply | `ApplyWriteOffBatchCommand` | `{ sessionItemPublicId }` → `{ operations[], messages: [CreditoCastigado] }`; si el tipo de entidad debe reportar castigos, alerta `Cartera.PlazoRegulatorioPorVencer` | `Lending.WriteOff.ApprovalRequired`, `Lending.Session.ItemMismatch`, `Lending.Segregation.Conflict` (`ArmarLoteDeCastigo × AplicarCastigo`), `Lending.Prevalidation.NotPostable` | K3 |
+| `POST /{id}/void` | WriteOffs.Prepare | `VoidWriteOffBatchCommand` | `{ reason }` (con clave) → el lote en `Cancelled`. Bloque D: se anula mientras no se aplique (`Draft`, `Submitted` o `Approved`); el motivo va a la auditoría del comando; sus créditos quedan libres para otro lote | `Lending.WriteOffBatch.InvalidStatus`, `Validation.Invalid` (sin motivo) | K3 |
+| `POST /{id}/apply` | WriteOffs.Apply | `ApplyWriteOffBatchCommand` | `{ sessionItemPublicId }` → `{ operations[], messages: [CreditoCastigado], excluded: [{ loanPublicId, loanNumber, missing[], reason }] }`; los requisitos se vuelven a verificar y el crédito que ya no cumple (o ya no está vigente) se **excluye** con su motivo —ítem `Rejected`, evento `Lending.WriteOffItem.Excluded`— y el resto se castiga (bloque D); si no queda ninguno, el lote no se aplica. Si el tipo de entidad debe reportar castigos, alerta `Cartera.PlazoRegulatorioPorVencer` | `Lending.WriteOff.ApprovalRequired`, `Lending.WriteOff.NoLoansLeft` (`data: { batchNumber, excluded[] }`), `Lending.Session.ItemMismatch`, `Lending.Segregation.Conflict` (`ArmarLoteDeCastigo × AplicarCastigo`), `Lending.Prevalidation.NotPostable` | K3 |
 
 La cartera castigada sigue en cobranza; sus pagos entran por el contrato y emiten `RecuperacionDeCastigada`
 desde K1 (FR-096); la vista `charge-offs` la sigue (§17).
@@ -1239,10 +1241,10 @@ bloquea; su registro y trámite por pantalla son de K3. En K1 se leen en el esta
 | `POST /insurance-claims/{id}/status` | DebtorEvents.Manage | `ChangeInsuranceClaimStatusCommand` | `{ status: Denied \| Withdrawn, reason, supportAttachmentPublicId? }` → la reclamación. `Paid` lo pone sólo el contrato cuando la aseguradora paga | `Lending.InsuranceClaim.NotInProcess` | K3 |
 | `GET /insolvency-proceedings?status=&personPublicId=&page=` | Loans.Read | `ListInsolvencyProceedingsQuery` | → lista `{ publicId, person, status: Negotiating \| Agreement \| Failed, startDate, authority, loans[], noveltyPublicId? }` | | K1 |
 | `POST /insolvency-proceedings` | Insolvency.Manage | `OpenInsolvencyProceedingCommand` | `{ personPublicId, startDate, authority, fileNumber, supportAttachmentPublicId }` → 201 en `Negotiating`: suspende causación y cobro y mantiene la calificación | `Lending.Insolvency.AlreadyOpen` | K3 |
-| `POST /insolvency-proceedings/{id}/failure` | Insolvency.Manage | `RecordInsolvencyFailureCommand` | `{ date, reason, supportAttachmentPublicId }` → en `Failed`; la calificación pasa a la que fija la norma | `Lending.Insolvency.NotNegotiating` | K3 |
+| `POST /insolvency-proceedings/{id}/failure` | Insolvency.Manage | `RecordInsolvencyFailureCommand` | `{ date, reason, supportAttachmentPublicId }` → en `Failed`; la calificación pasa a la que fija la norma. El bloqueo `Insolvency` de crédito nuevo **se mantiene** (decisión del dueño del 2026-10-15): lo levanta una persona con `Lending.Blocks.Manage` y motivo por `POST /blocks/{id}/lift` (§7.2) | `Lending.Insolvency.NotNegotiating` | K3 |
 
 El acuerdo de insolvencia es una novedad `Restructuring` ligada al proceso (`LND_LoanNovelties.InsolvencyProceedingId`,
-§11.1) que, al aplicarse, cierra el proceso en `Agreement`.
+§11.1) que, al aplicarse, cierra el proceso en `Agreement` y levanta solo el bloqueo `Insolvency` de crédito nuevo.
 
 ---
 
@@ -1314,7 +1316,8 @@ voluntariamente (FR-105).
 |---|---|---|---|---|---|
 | `GET /?status=` | Ratings.Read | `ListPortfolioEvaluationsQuery` | → arreglo `{ publicId, cutoffDate, effectMonth, status: Draft \| Recommended \| Approved \| Applied \| Rejected \| Discarded, loans, recommendationItem?, approvalItem? }` | | K3 |
 | `GET /{id}?page=` | Ratings.Read | `GetPortfolioEvaluationQuery` | → la evaluación con sus créditos (`proposedCategory`, `reason`) | `Lending.PortfolioEvaluation.NotFound` | K3 |
-| `POST /` | PortfolioEvaluations.Prepare | `PreparePortfolioEvaluationCommand` | `{ cutoffDate, effectMonth, criteria, loans: [{ loanPublicId, proposedCategory, reason }] }` → 201 | `Lending.PortfolioEvaluation.Overlaps` | K3 |
+| `POST /` | PortfolioEvaluations.Prepare | `PreparePortfolioEvaluationCommand` | `{ cutoffDate, effectMonth, criteria, loans: [{ loanPublicId, proposedCategory, reason }] }` → 201; `warnings: [{ code, message, whoFixes? }]` (bloque D) con `PortfolioEvaluationPeriodicityPending` si la periodicidad de la norma sigue pendiente de validar, sin bloquear | `Lending.PortfolioEvaluation.Overlaps` | K3 |
+| `POST /{id}/discard` | PortfolioEvaluations.Prepare | `DiscardPortfolioEvaluationCommand` | `{ reason }` (con clave) → la evaluación `Discarded`. Bloque D: se descarta mientras no se aplique (`Draft`, `Recommended` o `Approved`); el motivo va a la auditoría del comando; libera su corte | `Lending.PortfolioEvaluation.InvalidStatus`, `Validation.Invalid` (sin motivo) | K3 |
 | `POST /{id}/apply` | PortfolioEvaluations.Apply | `ApplyPortfolioEvaluationCommand` | `{ recommendationSessionItemPublicId, approvalSessionItemPublicId }` → la evaluación `Applied`; la recalificación se refleja en el cierre del mes de efecto y dura hasta la siguiente | `Lending.Session.ItemMismatch` | K3 |
 
 ---
@@ -1682,7 +1685,10 @@ que se decide en el ERP); las reclamaciones al seguro y las insolvencias viajan 
 bloquean: `CommercialParametersToAdjust` (fecha de habilitación, política sin respuesta, quién registra la
 cuenta por cobrar), `PayrollConceptAccounts` (la pantalla pregunta a Nómina por
 `GET /api/payroll/concept-definitions/DESC_CARTERA/accounts`), `UsersWithoutScope` y `AccountingMonthClosed` (el mes de C+1
-cerrado o sin crear en Contabilidad: la activación procede y lo que emite queda en el primer mes abierto; 2026-10-14). La
+cerrado o sin crear en Contabilidad: la activación procede y lo que emite queda en el primer mes abierto; 2026-10-14) y,
+desde K3 (bloque D, decisión del dueño del 2026-10-15), lo de la norma y la política que sigue vacío y pendiente de validar:
+`WriteOffReportTermPending` (plazo del reporte de castigos, `writeOffReport` del tipo de entidad), `PortfolioEvaluationPeriodicityPending`
+(`portfolioEvaluation`) y `WriteOffMinimumArrearsPending` (`Castigo.DiasMinimosDeMora`). La
 respuesta de `POST /activation` lleva los mismos avisos en `warnings`.
 
 **Cómo corre la activación** (C60): `ActivateLendingCommand` abre una transacción explícita y guarda **por tandas
