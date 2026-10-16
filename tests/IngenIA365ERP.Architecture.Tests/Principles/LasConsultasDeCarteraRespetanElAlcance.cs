@@ -118,6 +118,19 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/WriteOffs/WriteOffBatchQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/PortfolioEvaluationQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ChargeOffsReportQuery.cs",
+        // K4 (US12, bloque B; T0932): la cobranza. La historia de asignaciones y la agenda por la oficina y la línea del crédito (las del deudor
+        // completo, sólo con el alcance total); las gestiones, las promesas, los acuerdos, el cobro jurídico, los gastos por causar y los avisos previos
+        // por la oficina y la línea de su crédito (la lista filtra en silencio; el detalle responde el 404 del asunto); la vista previa de una campaña
+        // selecciona sólo créditos del alcance (la lista de campañas trae conteos, sin deudores); las cuatro vistas de la cobranza por
+        // AmbitoDeInformeDeCartera.
+        "Core/IngenIA365ERP.Application/Lending/Collections/Assignments/CollectorAssignmentCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Actions/CollectionActionCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Agreements/PaymentAgreementCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Legal/LegalProcessCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Fees/CollectionFeeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Campaigns/MessageCampaignCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/PriorNotices/PriorNoticeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/CollectionReportQueries.cs",
     ];
 
     /// <summary>
@@ -225,6 +238,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // K3 (US11, bloque B; T0868): los eventos del deudor se guardan como bloqueos de la persona y el proceso de insolvencia es de la persona.
         ["ListDebtorEventsQuery"] = "los eventos del deudor son bloqueos de la persona, no de una oficina (como ListDebtorBlocksQuery)",
         ["ListInsolvencyProceedingsQuery"] = "el proceso de insolvencia es de la persona y alcanza todos sus créditos, de cualquier oficina (FR-098)",
+        // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
+        ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
+        ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

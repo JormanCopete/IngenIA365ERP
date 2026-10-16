@@ -717,6 +717,9 @@ public static class DependencyInjection
         // Feature 013 (T0306, C108): la cola de mensajes al deudor, único escritor de LND_DebtorMessages y LND_DebtorMessageEvents. Nunca
         // guarda: encola en la unidad de trabajo de quien lo motiva. Sus tareas (cartera.mensajes, cartera.entregas) las registra Program.cs.
         services.AddScoped<Lending.Collections.ColaDeMensajesAlDeudor>();
+        // Feature 013, K4 (T0943, T0944): el paso (7) del ciclo diario —la cobranza— y el ejecutor de la corrida que registra la etapa migrada (C64).
+        services.AddScoped<Lending.Collections.CobranzaDelCicloDiario>();
+        services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Collections.Stages.EjecutorDeEtapasMigradas>();
 
         // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
         services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();

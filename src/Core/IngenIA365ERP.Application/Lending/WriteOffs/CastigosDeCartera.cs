@@ -118,7 +118,10 @@ public sealed class CastigosDeCartera(
 
     // --------------------------------------------------------------------------------------------------------- política --
 
-    /// <summary>La política de castigo vigente a <paramref name="fecha"/> (T0910). Sin registro de gestiones (K4), el informe motivado las acredita.</summary>
+    /// <summary>
+    /// La política de castigo vigente a <paramref name="fecha"/> (T0910). Sin registro de gestiones (antes de K4), el informe motivado las acredita; desde K4
+    /// (T0945) se cuentan las gestiones registradas del crédito contra <c>Castigo.GestionesMinimas</c>.
+    /// </summary>
     public async Task<PoliticaDeCastigo> PoliticaAsync(DateOnly fecha, CancellationToken ct)
     {
         var deterioro = await parametros.LeerAsync(ParametrosDeCartera.CastigoExigeDeterioroTotal, fecha, ct: ct);
@@ -126,7 +129,7 @@ public sealed class CastigosDeCartera(
         var gestiones = await parametros.LeerAsync(ParametrosDeCartera.CastigoGestionesMinimas, fecha, ct: ct);
         var exige = deterioro.IsFailure || deterioro.Value.Valor is not bool b ? !string.Equals(deterioro.IsSuccess ? deterioro.Value.Texto?.Trim() : null,
             "false", StringComparison.OrdinalIgnoreCase) : b;
-        return new PoliticaDeCastigo(exige, Entero(dias), Entero(gestiones) ?? 0) { GestionesRegistradas = false };
+        return new PoliticaDeCastigo(exige, Entero(dias), Entero(gestiones) ?? 0) { GestionesRegistradas = CatalogoDeCartera.EntregaVigente >= EntregaDeCartera.K4 };
     }
 
     private static int? Entero(Result<ParametroDeCartera> leido) =>
@@ -165,6 +168,15 @@ public sealed class CastigosDeCartera(
                 .GroupBy(l => l.LoanId).Select(g => new { LoanId = g.Key, Total = g.Sum(l => l.TotalImpairment) })
                 .ToDictionaryAsync(x => x.LoanId, x => x.Total, ct);
 
+        // K4 (T0945): las gestiones registradas hasta la fecha que nadie anuló (la que anula no cuenta como gestión).
+        var hasta = DateTime.SpecifyKind(fecha.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
+        var gestiones = !politica.GestionesRegistradas
+            ? new Dictionary<int, int>()
+            : await db.CollectionActions.AsNoTracking()
+                .Where(a => a.LoanId != null && ids.Contains(a.LoanId.Value) && !a.IsDeleted && a.VoidsActionId == null && a.OccurredAt < hasta
+                            && !db.CollectionActions.Any(x => x.VoidsActionId == a.Id))
+                .GroupBy(a => a.LoanId!.Value).Select(g => new { LoanId = g.Key, Total = g.Count() }).ToDictionaryAsync(x => x.LoanId, x => x.Total, ct);
+
         var salida = new List<CreditoVerificadoParaCastigo>();
         foreach (var credito in creditos)
         {
@@ -199,7 +211,7 @@ public sealed class CastigosDeCartera(
                 SoporteDeCruceDeAportes = DelCredito(soporte?.ContributionsOffsetAttachmentPublicId),
                 InformeMotivado = informe,
                 ConceptoDeIrrecuperabilidad = concepto,
-                Gestiones = 0,
+                Gestiones = gestiones.GetValueOrDefault(credito.Id),
             }, politica);
             salida.Add(new CreditoVerificadoParaCastigo(credito, verificacion, capital, intereses, otros, deterioro, estado.AlturaDeMora.Dias, informe, concepto,
                 cargado, estado));

@@ -265,6 +265,8 @@ public static class ReconstruccionDeCredito
         // condonación (T0884).
         [LoanOperationKind.TermsChange] = new InterpreteDeNovedad(),
         [LoanOperationKind.Waiver] = new InterpreteDeCondonacion(),
+        // K4 (T0948): el gasto de cobranza ya informado al deudor.
+        [LoanOperationKind.Charge] = new InterpreteDeCargo(),
     };
 
     /// <summary>Las tasas del día ya calculadas: la raíz de cada EA es cara y los créditos comparten tasas y usuras (memo puro).</summary>

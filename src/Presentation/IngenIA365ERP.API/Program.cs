@@ -286,6 +286,10 @@ try
         IngenIA365ERP.Application.Lending.Payroll.Tasks.TareaDeArchivosDeDescuento>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Lending.Payroll.Tasks.TareaDeGirosDePagaduria>();
+    // Feature 013, K4 (T0944; C64): cartera.etapas-migradas-k4, la tarea de una sola vez del despliegue de K4: pide la corrida que registra la etapa
+    // de cobranza migrada si la cooperativa está activada y todavía no la tiene; después no hace nada.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Lending.Collections.Stages.TareaDeEtapasMigradas>();
     builder.Services.AddSingleton<IngenIA365ERP.API.Integration.ProgramadorDeTareas>();
     if (integracion.ScheduledTasks.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.ProgramadorDeTareas>());

@@ -270,6 +270,36 @@ public static class VentanaLegalDeContacto
             : new Excluido(ContactWindowReason.NoWindow);
     }
 
+    /// <summary>
+    /// K4 (T0945; <c>adaptadores-y-archivos.md</c> §4.8; Ley 2300): la decisión para una gestión que <b>no es un mensaje</b> —una llamada, una
+    /// visita o una atención en persona— en el instante en que ocurrió (local). Aplica las reglas 1 a 3 (obligado, fallecido con reclamación,
+    /// insolvencia o cobro suspendido) y después el horario: domingo, festivo o fuera de la franja. Una gestión con <b>contacto directo</b>
+    /// además cuenta para el tope del día y respeta el canal fijado en la semana. La atención en persona (el titular vino a la cooperativa) no
+    /// tiene horario: sólo las reglas 1 a 3. No busca otra ventana: lo que ya ocurrió fuera de la ley se rechaza (<see cref="Diferido"/> con el
+    /// siguiente instante permitido, para decirlo). (nuevo)
+    /// </summary>
+    public static DecisionDeContacto EvaluarGestion(DateTime instante, CollectionActionChannel canal, bool contactoDirecto, ReglasDeContacto reglas,
+        HistorialDeContactos historial, EstadoDelTitular titular)
+    {
+        ArgumentNullException.ThrowIfNull(reglas);
+        ArgumentNullException.ThrowIfNull(historial);
+        ArgumentNullException.ThrowIfNull(titular);
+        if (!Enum.IsDefined(canal)) throw new ArgumentOutOfRangeException(nameof(canal), canal, "Canal de gestión desconocido.");
+
+        if (!titular.Obligado) return new Excluido(ContactWindowReason.RecipientNotObligated);
+        if (titular.DeudorFallecidoConReclamacion) return new Excluido(ContactWindowReason.DebtorDeceased);
+        if (titular.EnInsolvencia) return new Excluido(ContactWindowReason.Insolvency);
+        if (titular.CobroSuspendido) return new Excluido(ContactWindowReason.CollectionSuspended);
+        if (canal == CollectionActionChannel.InPerson) return new Permitido(instante);
+
+        var noHabiles = reglas.NoHabiles.ToHashSet();
+        var motivos = Motivos(instante, reglas, noHabiles, historial, cobranza: contactoDirecto, canal);
+        if (!contactoDirecto) motivos.RemoveAll(m => m is ContactWindowReason.DailyLimitReached or ContactWindowReason.WeeklyChannelLocked);
+        if (motivos.Count == 0) return new Permitido(instante);
+        var siguiente = Buscar(instante, reglas, noHabiles, historial, contactoDirecto, canal);
+        return siguiente is { } en ? new Diferido(en, motivos) : new Excluido(ContactWindowReason.NoWindow);
+    }
+
     private static List<ContactWindowReason> Motivos(
         DateTime instante, ReglasDeContacto reglas, HashSet<DateOnly> noHabiles, HistorialDeContactos historial, bool cobranza,
         CollectionActionChannel canal)

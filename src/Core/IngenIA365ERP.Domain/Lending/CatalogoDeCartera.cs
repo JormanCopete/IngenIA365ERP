@@ -28,5 +28,5 @@ public static class CatalogoDeCartera
     public const string Modulo = "LND";
 
     /// <summary>La entrega de Cartera en producción en esta versión del programa.</summary>
-    public const EntregaDeCartera EntregaVigente = EntregaDeCartera.K3;
+    public const EntregaDeCartera EntregaVigente = EntregaDeCartera.K4;
 }

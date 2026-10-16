@@ -240,6 +240,9 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.Waiver => db.Waivers.IgnoreQueryFilters().AnyAsync(w => w.Number == numero, ct),
         LendingNumberKind.WriteOffBatch => db.WriteOffBatches.IgnoreQueryFilters().AnyAsync(b => b.Number == numero, ct),
         LendingNumberKind.PortfolioEvaluation => db.PortfolioEvaluations.IgnoreQueryFilters().AnyAsync(e => e.Number == numero, ct),
+        // K4 (T0946, T0947): el acuerdo de pago y el proceso de cobro jurídico.
+        LendingNumberKind.PaymentAgreement => db.PaymentAgreements.IgnoreQueryFilters().AnyAsync(a => a.Number == numero, ct),
+        LendingNumberKind.LegalProcess => db.LegalProcesses.IgnoreQueryFilters().AnyAsync(p => p.Number == numero, ct),
         // K5 (archivos regulatorios): su tabla nace con su entrega.
         _ => Task.FromResult(false),
     };

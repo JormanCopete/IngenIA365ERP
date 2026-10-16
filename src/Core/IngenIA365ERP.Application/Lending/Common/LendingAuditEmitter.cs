@@ -137,6 +137,13 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
         EmitAsync(AuditEventTypes.LendingWriteOffItemExcluded, "WriteOffBatch", batchPublicId,
             new { batch = lote, loanNumber = credito, missing = faltan, reason = motivo }, ct);
 
+    /// <summary>
+    /// K4 (T0944; C64): el resumen del registro de la etapa migrada de una cooperativa —cuántos créditos, la equivalencia de códigos de origen a etapas,
+    /// los que no casaron y los que ya estaban—, al terminar la corrida. No es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirEtapasMigradasRegistradasAsync(Guid processRunPublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingMigratedCollectionStagesRegistered, "LendingProcessRun", processRunPublicId, resumen, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try

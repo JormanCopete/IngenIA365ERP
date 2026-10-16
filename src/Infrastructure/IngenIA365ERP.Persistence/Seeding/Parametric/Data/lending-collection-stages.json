@@ -1,0 +1,14 @@
+// Feature 013, K4 (T0941; data-model §26.4; FR-117): las cuatro etapas de cobranza por defecto, «pendiente de validar» con la cooperativa
+// (T0962). Rangos en días de mora: la preventiva cuenta los días que faltan para el vencimiento con signo menos. Sin regla de gasto: el gasto
+// de cobranza lo configura la cooperativa por etapa (base, tarifa, tope y momento). Acciones sugeridas: Call, Message, Visit, PriorNotice
+// (abre el aviso previo del episodio), PaymentAgreement, LegalHandover. Plantillas: códigos de cobranza de lending-message-templates.json.
+[
+  { "code": "PREVENTIVA", "name": "Preventiva", "daysFrom": -5, "daysTo": 0, "isLegal": false,
+    "suggestedActions": ["Message"], "templateCodes": ["RECORDPREV"] },
+  { "code": "ADMIN", "name": "Administrativa", "daysFrom": 1, "daysTo": 30, "isLegal": false,
+    "suggestedActions": ["Call", "Message", "PriorNotice", "PaymentAgreement"], "templateCodes": ["MORAADMIN"] },
+  { "code": "PREJURID", "name": "Prejurídica", "daysFrom": 31, "daysTo": 90, "isLegal": false,
+    "suggestedActions": ["Call", "Visit", "Message", "PaymentAgreement"], "templateCodes": ["PREJURID"] },
+  { "code": "JURIDICA", "name": "Jurídica", "daysFrom": 91, "daysTo": null, "isLegal": true,
+    "suggestedActions": ["LegalHandover"], "templateCodes": [] }
+]

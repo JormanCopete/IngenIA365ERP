@@ -48,7 +48,7 @@ public class LaCarteraNoTieneValoresLegalesFijos
         // K4 (T0932, T0937): los motores puros de la cobranza (Domain/Lending/Collections) están entre los archivos que se revisan.
         var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => a.Replace('\\', '/')).ToList();
         foreach (var motor in new[] { "EtapasDeCobranza", "RepartoDeGestores", "EstadoDePromesa", "CumplimientoDeAcuerdo", "AvisoPrevioPorEpisodio",
-                     "VentanaLegalDeContacto" })
+                     "VentanaLegalDeContacto", "GastoDeCobranza", "AccionesDeEtapa" })
             Assert.Contains(archivos, a => a.EndsWith($"Domain/Lending/Collections/{motor}.cs", StringComparison.Ordinal));
     }
 

@@ -14,8 +14,8 @@ namespace IngenIA365ERP.Application.Lending.Reports.Vistas;
 /// La vista <c>charge-offs</c> de <c>/api/reports/lending</c> (feature 013, US14, K3, T0911; FR-096; contracts/api.md §17): el <b>seguimiento de la
 /// cartera castigada</b>. Una fila por crédito castigado hasta <c>to</c> (por el ERP, con su lote y el punto del acta del consejo, o migrado ya castigado):
 /// la fecha del castigo, el saldo castigado (lo que salió del activo al castigarlo; el saldo inicial en lo migrado), lo <b>recuperado</b> en el rango
-/// (<c>from</c>–<c>to</c>, las filas <c>Recovery</c> del libro por fecha valor, netas de reversos), y las gestiones y el último contacto —vacíos hasta que
-/// exista el registro de gestiones de K4—. Trae datos del deudor (PD); el alcance va en la consulta de créditos (<see cref="AmbitoDeInformeDeCartera"/>).
+/// (<c>from</c>–<c>to</c>, las filas <c>Recovery</c> del libro por fecha valor, netas de reversos), y las gestiones registradas y el último contacto directo
+/// (K4, T0953). Trae datos del deudor (PD); el alcance va en la consulta de créditos (<see cref="AmbitoDeInformeDeCartera"/>).
 /// Columna oculta <c>_credito</c>. (nuevo)
 /// </summary>
 public sealed record ChargeOffsReportQuery(FiltrosDeInformeDeCartera Filtros) : IRequest<Result<TablaExportable>>;
@@ -79,6 +79,15 @@ public sealed class ChargeOffsReportQueryHandler(IApplicationDbContext db, IAlca
             .GroupBy(t => t.LoanId).Select(g => new { LoanId = g.Key, Total = g.Sum(t => t.Amount) })
             .ToDictionaryAsync(x => x.LoanId, x => -x.Total, ct);
         var (personas, _, _) = await ListLoansQueryHandler.ReferenciasAsync(db, deLaModalidad.Values.ToList(), ct);
+        // K4 (T0945, T0953): las gestiones registradas que nadie anuló y el último contacto directo, hasta el final del rango.
+        var desfase = reloj.AhoraLocal.Offset;
+        var hastaUtc = DateTime.SpecifyKind(hasta.AddDays(1).ToDateTime(TimeOnly.MinValue) - desfase, DateTimeKind.Utc);
+        var gestiones = (await db.CollectionActions.AsNoTracking()
+                .Where(a => a.LoanId != null && ids.Contains(a.LoanId.Value) && !a.IsDeleted && a.VoidsActionId == null && a.OccurredAt < hastaUtc
+                            && !db.CollectionActions.Any(x => x.VoidsActionId == a.Id))
+                .Select(a => new { LoanId = a.LoanId!.Value, a.OccurredAt, a.IsDirectContact }).ToListAsync(ct))
+            .GroupBy(a => a.LoanId)
+            .ToDictionary(g => g.Key, g => (Total: g.Count(), Ultimo: g.Where(a => a.IsDirectContact).Select(a => (DateTime?)a.OccurredAt).Max()));
 
         var filas = new List<FilaExportable>();
         foreach (var c in deLaModalidad.Values.OrderBy(c => c.WrittenOffOn).ThenBy(c => c.Number, StringComparer.Ordinal))
@@ -90,14 +99,16 @@ public sealed class ChargeOffsReportQueryHandler(IApplicationDbContext db, IAlca
             filas.Add(new FilaExportable(
             [
                 c.Number, personas.TryGetValue(c.DebtorPersonId, out var p) ? p.Name : string.Empty, c.WrittenOffOn, punto,
-                castigo?.Amount ?? saldoInicial.GetValueOrDefault(c.Id), recuperado.GetValueOrDefault(c.Id), null, null, c.PublicId.ToString(),
+                castigo?.Amount ?? saldoInicial.GetValueOrDefault(c.Id), recuperado.GetValueOrDefault(c.Id),
+                gestiones.TryGetValue(c.Id, out var g) ? g.Total : 0,
+                g.Ultimo is { } ultimo ? DateOnly.FromDateTime(Collections.CobranzaDeCartera.ALocal(ultimo, desfase)) : (DateOnly?)null, c.PublicId.ToString(),
             ]));
         }
         var notas = new List<string>
         {
             "Créditos castigados hasta el final del rango (por el ERP con su lote y su acta, o migrados ya castigados). Saldo castigado: lo que salió del activo al castigar; en lo migrado, el saldo inicial.",
             "Recuperado: los pagos aplicados como recuperación de cartera castigada en el rango, netos de reversos.",
-            "Gestiones y último contacto: llegan con el registro de gestiones de cobranza (entrega K4).",
+            "Gestiones: las gestiones de cobranza registradas hasta el final del rango que nadie anuló. Último contacto: la última gestión con contacto directo.",
         };
         return Result.Success(new TablaExportable("Cartera castigada", $"Del {desde:yyyy-MM-dd} al {hasta:yyyy-MM-dd} · {ambito.Descripcion()}", Columnas, filas,
             null, notas));

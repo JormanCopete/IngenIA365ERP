@@ -246,6 +246,10 @@ public static class AuditEventTypes
     // K3, bloque D (decisión del dueño del 2026-10-15): el crédito que se excluye de un lote de castigo al aplicarlo porque ya no cumple; no es lectura.
     public const string LendingWriteOffItemExcluded = "Lending.WriteOffItem.Excluded";
 
+    // K4 (T0944; C64): el evento resumen del registro de la etapa de cobranza migrada al desplegar K4, por cooperativa, con la tabla de equivalencia
+    // de códigos; no es lectura.
+    public const string LendingMigratedCollectionStagesRegistered = "Lending.CollectionStages.MigratedRegistered";
+
     // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
     // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.
     public const string LendingDocumentIssued = "Lending.Document.Issued";

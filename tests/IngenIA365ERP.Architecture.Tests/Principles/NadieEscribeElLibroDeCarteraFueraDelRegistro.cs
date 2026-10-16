@@ -129,4 +129,23 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
         Assert.Contains("RegistroDeCartera.CambiarEstado(", fuente);
         Assert.DoesNotContain("RegistrarTransacciones(", fuente);
     }
+
+    /// <summary>
+    /// K4 (US12, bloque B; T0932, T0948): el gasto de cobranza causado escribe la operación <c>Charge</c> y sus filas <c>Charge</c> sólo por
+    /// <c>RegistroDeCartera</c>, dentro del recorrido de la regla, y emite su hecho por <c>EmisionDeCartera</c> (Cartera no escribe asientos).
+    /// </summary>
+    [Fact]
+    public void El_gasto_de_cobranza_escribe_la_operacion_Charge_por_el_registro()
+    {
+        var recorridos = ReglaSobreFuente.ArchivosEn(Carpetas).ToList();
+        var nombrados = ReglaSobreFuente.ArchivosNombrados(["Core/IngenIA365ERP.Application/Lending/Collections/Fees/CollectionFeeCommands.cs"]).ToList();
+        Assert.Single(nombrados);
+        var archivo = nombrados[0];
+        Assert.Contains(archivo, recorridos);
+        var fuente = FuenteSinComentarios.Leer(archivo);
+        Assert.Contains("LoanOperationKind.Charge", fuente);
+        Assert.Contains("registro.RegistrarOperacion(", fuente);
+        Assert.Contains("registro.RegistrarTransacciones(", fuente);
+        Assert.Contains("emision.GastoDeCobranzaAsync(", fuente);
+    }
 }

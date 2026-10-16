@@ -85,6 +85,11 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(RestructuredReportQueryHandler.Vista, (f, q) => new RestructuredReportQuery(f, Texto(q, "mechanism")));
         // K3 (US14, T0911, T0915): la cartera castigada hasta `to`, con lo recuperado en el rango.
         group.MapVistaDeCartera(ChargeOffsReportQueryHandler.Vista, (f, _) => new ChargeOffsReportQuery(f));
+        // K4 (US12, T0953): la cartera por etapa al corte (stage, collector), las promesas, los acuerdos de pago y los avisos previos (status).
+        group.MapVistaDeCartera(CollectionStagesReportQueryHandler.Vista, (f, _) => new CollectionStagesReportQuery(f));
+        group.MapVistaDeCartera(PromisesReportQueryHandler.Vista, (f, q) => new PromisesReportQuery(f, Texto(q, "status")));
+        group.MapVistaDeCartera(PaymentAgreementsReportQueryHandler.Vista, (f, q) => new PaymentAgreementsReportQuery(f, Texto(q, "status")));
+        group.MapVistaDeCartera(PriorNoticesReportQueryHandler.Vista, (f, q) => new PriorNoticesReportQuery(f, Texto(q, "status")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

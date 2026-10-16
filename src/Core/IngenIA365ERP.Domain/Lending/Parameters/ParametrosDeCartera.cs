@@ -91,6 +91,9 @@ public static class ParametrosDeCartera
     public const string CobranzaHorarioLunesAViernes = "Cobranza.HorarioLunesAViernes";
     public const string CobranzaHorarioSabado = "Cobranza.HorarioSabado";
     public const string CobranzaContactosPorDia = "Cobranza.ContactosPorDia";
+
+    /// <summary>K4 (US12, T0943; data-model §26.8): lo que se perdona, en pesos, para dar por cumplida una promesa de pago. (nuevo)</summary>
+    public const string CobranzaToleranciaDePromesa = "Cobranza.ToleranciaDePromesa";
     public const string AvisoPrevioDiasMinimos = "AvisoPrevio.DiasMinimos";
     public const string AvisoPrevioUmbralDosComunicaciones = "AvisoPrevio.UmbralDosComunicaciones";
     public const string MensajesReintentos = "Mensajes.Reintentos";
@@ -283,12 +286,20 @@ public static class ParametrosDeCartera
             Minimo = 1m,
             LimitesLegales = [CatalogoDeLimitesLegales.CobranzaContactosDia],
         },
+        NumeroDecimal(Modulo, CobranzaToleranciaDePromesa,
+            "Valor, en pesos, que se perdona para dar por cumplida una promesa de pago: la promesa se cumple si lo pagado llega a lo prometido menos "
+            + "esta tolerancia. Se sella en la promesa al registrarla.", "0", K4, General) with
+        {
+            Minimo = 0m,
+            PendienteDeValidar = "Defecto de data-model §26.8 (sin tolerancia), sembrado pendiente de validar por el dueño y la contadora (T0962).",
+        },
         Entero(Modulo, AvisoPrevioDiasMinimos, "Días calendario mínimos entre el aviso previo y el reporte negativo.", "20", K4, General) with
         {
             LimitesLegales = [CatalogoDeLimitesLegales.AvisoPrevioDias],
         },
         NumeroDecimal(Modulo, AvisoPrevioUmbralDosComunicaciones,
-            "Saldo, en veces el SMMLV, desde el que el aviso previo exige dos comunicaciones. Vacío: rige el límite legal.", "", K4, General) with
+            "Saldo de la obligación, en veces el SMMLV, hasta el cual (inferior o igual) el aviso previo exige dos comunicaciones en días distintos "
+            + "(Ley 2157 de 2021); por encima basta una. Vacío: rige el límite legal.", "", K4, General) with
         {
             AdmiteVacio = true,
             LimitesLegales = [CatalogoDeLimitesLegales.AvisoPrevioUmbralSmmlv],

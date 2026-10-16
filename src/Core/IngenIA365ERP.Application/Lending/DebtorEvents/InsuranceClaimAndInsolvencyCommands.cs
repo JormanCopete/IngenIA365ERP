@@ -269,6 +269,8 @@ public sealed class OpenInsolvencyProceedingCommandHandler(
             var creditos = await db.Loans.AsNoTracking().Where(l => l.DebtorPersonId == persona.Id && !l.IsDeleted).Select(l => l.Id).ToListAsync(ct);
             await cola.CancelarCobrosDelDeudorAsync(persona.Id, creditos, "Proceso de insolvencia en negociación", actor.Kind, usuario, ct);
             await db.SaveChangesAsync(ct);
+            // K4 (T0947; FR-098, FR-124): la insolvencia suspende el cobro jurídico abierto del deudor, dejándose dicha.
+            if (await Collections.Legal.CobroJuridicoDeCartera.SuspenderPorInsolvenciaAsync(db, persona.Id, proceso.Id, ct) > 0) await db.SaveChangesAsync(ct);
             return Result.Success((await ConsultasDeEventosDelDeudor.ProcesosAsync(db, [proceso], ct))[0]);
         }, ct);
     }

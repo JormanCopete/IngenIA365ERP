@@ -123,6 +123,25 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/WriteOffBatch.cs",
         "Core/IngenIA365ERP.Domain/Entities/Lending/Risk/PortfolioEvaluation.cs",
         "Core/IngenIA365ERP.Domain/Lending/Risk/RequisitosDeCastigo.cs",
+        // K4 (US12, bloque B; T0954): los errores de la cobranza y los textos que lee la persona (alertas del ciclo, variables de los mensajes,
+        // asuntos de las vistas, motivos de las entradas de etapa).
+        "Core/IngenIA365ERP.Application/Lending/Collections/ErroresDeCobranza.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/CobranzaDelCicloDiario.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Stages/CollectionStageCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Stages/RegisterMigratedCollectionStagesCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Assignments/CollectorAssignmentCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Actions/CollectionActionCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Agreements/PaymentAgreementCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Legal/LegalProcessCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Fees/CollectionFeeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Campaigns/MessageCampaignCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/PriorNotices/PriorNoticeCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Collections/Claims/CreditReportClaimCommands.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/CollectionReportQueries.cs",
+        "Core/IngenIA365ERP.Domain/Lending/Collections/GastoDeCobranza.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/PaymentAgreement.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/LegalProcess.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/MessageCampaign.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

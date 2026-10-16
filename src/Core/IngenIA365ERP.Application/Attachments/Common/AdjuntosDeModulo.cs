@@ -247,6 +247,34 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string ReporteDeCastigos = "LendingWriteOffSupervisorReport";
 
+    /// <summary>
+    /// Feature 013, K4 (US12, T0947): un documento del cobro jurídico —demanda, auto, embargo, sentencia, cuenta de honorarios—, con dueño el
+    /// <b>proceso</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.Collections.Read</c>; lo sube quien tiene
+    /// <c>Lending.LegalProcesses.Manage</c> mientras el proceso esté abierto; no se borra: respalda la actuación.
+    /// </summary>
+    public const string DocumentoDeProcesoJuridico = "LendingLegalProcessDocument";
+
+    /// <summary>
+    /// Feature 013, K4 (US12, T0950): la guía de envío de la carta de un aviso previo al reporte negativo, con dueño el <b>aviso</b>
+    /// (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Se lee con <c>Lending.PriorNotices.Read</c>; lo sube quien tiene
+    /// <c>Lending.PriorNotices.RegisterEvidence</c> sobre un aviso que exista; no se borra: es la constancia (Leyes 1266 y 2157).
+    /// </summary>
+    public const string ConstanciaDeAvisoPrevio = "LendingPriorNoticeEvidence";
+
+    /// <summary>
+    /// Feature 013, K4 (US12, T0951): un soporte de un reclamo o una suplantación sobre el reporte a centrales —lo que trae el titular y la
+    /// respuesta—, con dueño la <b>persona</b> (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>: el reclamo todavía no existe al subirlo). Se lee con
+    /// <c>Lending.CreditReportClaims.Read</c>; lo sube quien tiene <c>Lending.CreditReportClaims.Manage</c>; no se borra: es evidencia del titular.
+    /// </summary>
+    public const string SoporteDeReclamoSobreElReporte = "LendingCreditReportClaimSupport";
+
+    private const string LeerCobranza = "Lending.Collections.Read";
+    private const string GestionarCobroJuridico = "Lending.LegalProcesses.Manage";
+    private const string LeerAvisosPrevios = "Lending.PriorNotices.Read";
+    private const string RegistrarConstanciaDeAviso = "Lending.PriorNotices.RegisterEvidence";
+    private const string LeerReclamos = "Lending.CreditReportClaims.Read";
+    private const string TramitarReclamos = "Lending.CreditReportClaims.Manage";
+
     private const string ArmarLotesDeCastigo = "Lending.WriteOffs.Prepare";
     private const string AplicarLotesDeCastigo = "Lending.WriteOffs.Apply";
 
@@ -325,6 +353,9 @@ public static class AdjuntosDeModulo
             SoporteDeEventoDelDeudor or SoporteDeCastigo or ReporteDeCastigos => LeerCreditos,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
+            DocumentoDeProcesoJuridico => LeerCobranza,
+            ConstanciaDeAvisoPrevio => LeerAvisosPrevios,
+            SoporteDeReclamoSobreElReporte => LeerReclamos,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -470,6 +501,33 @@ public static class AdjuntosDeModulo
                     "El lote no espera el soporte del reporte al supervisor: no está aplicado, no debe reportarse o el reporte ya se registró.",
                     new { ownerEntityType });
         }
+        if (ownerEntityType == DocumentoDeProcesoJuridico)
+        {
+            // Feature 013, K4 (US12): los documentos de un proceso de cobro jurídico abierto.
+            var proceso = await db.LegalProcesses.AsNoTracking().Where(p => p.PublicId == ownerEntityPublicId && !p.IsDeleted)
+                .Select(p => (Domain.Enums.Lending.LegalProcessStatus?)p.Status).FirstOrDefaultAsync(ct);
+            if (proceso is null || !await permisos.HasPermissionAsync(GestionarCobroJuridico, ct))
+                return new Error("Generic.NotFound", "Proceso de cobro jurídico no encontrado.");
+            return proceso is Domain.Enums.Lending.LegalProcessStatus.Concluded or Domain.Enums.Lending.LegalProcessStatus.Withdrawn
+                ? new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "El proceso de cobro jurídico ya terminó: no recibe más documentos.",
+                    new { ownerEntityType })
+                : null;
+        }
+        if (ownerEntityType == ConstanciaDeAvisoPrevio)
+        {
+            // Feature 013, K4 (US12): la guía de la carta de un aviso previo.
+            if (!await permisos.HasPermissionAsync(RegistrarConstanciaDeAviso, ct)
+                || !await db.PriorNotices.AnyAsync(n => n.PublicId == ownerEntityPublicId && !n.IsDeleted, ct))
+                return new Error("Generic.NotFound", "Aviso previo no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeReclamoSobreElReporte)
+        {
+            // Feature 013, K4 (US12): los soportes de un reclamo sobre el reporte a centrales, de la persona que reclama.
+            if (!await permisos.HasPermissionAsync(TramitarReclamos, ct) || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
         {
             if (contentType is not null && !TiposDeImagenDeCartera.Contains(contentType))
@@ -519,6 +577,12 @@ public static class AdjuntosDeModulo
         if (ownerEntityType is SoporteDeCastigo or ReporteDeCastigos)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es un soporte del castigo de cartera (informe, concepto, cruce de aportes o reporte al supervisor): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 013, K4 (US12): los documentos del cobro jurídico, la guía de la carta del aviso previo y los soportes de un reclamo sobre el reporte
+        // son evidencia: se conservan.
+        if (ownerEntityType is DocumentoDeProcesoJuridico or ConstanciaDeAvisoPrevio or SoporteDeReclamoSobreElReporte)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es evidencia de la cobranza (documento del cobro jurídico, constancia del aviso previo o soporte de un reclamo): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 013 (T0361): el soporte del concepto tributario respalda una versión sellada de la línea.
         if (ownerEntityType == SoporteTributarioDeLinea)

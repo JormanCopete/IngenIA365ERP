@@ -347,6 +347,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
         // K3 (T0874, T0884): la novedad (en el crédito, en el anterior o en el enlazado) y la condonación, con su decisión.
         LoanOperationKind.TermsChange => Novelties.DecisionDeNovedad.Leer(o.Payload)?.Contenido(o.NoveltyId),
         LoanOperationKind.Waiver => Novelties.DecisionDeCondonacion.Leer(o.Payload)?.Contenido(),
+        // K4 (T0948): el gasto de cobranza informado, con su decisión.
+        LoanOperationKind.Charge => Collections.Fees.DecisionDeCargo.Leer(o.Payload)?.Contenido(),
         _ => null,
     };
 

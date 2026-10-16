@@ -182,4 +182,10 @@ public enum LendingNumberKind
 
     /// <summary>K3 (US14, T0912): la evaluación de cartera (columna entera: sin migración).</summary>
     PortfolioEvaluation = 13,
+
+    /// <summary>K4 (US12, T0946): el acuerdo de pago (columna entera: sin migración).</summary>
+    PaymentAgreement = 14,
+
+    /// <summary>K4 (US12, T0947): el proceso de cobro jurídico (columna entera: sin migración).</summary>
+    LegalProcess = 15,
 }

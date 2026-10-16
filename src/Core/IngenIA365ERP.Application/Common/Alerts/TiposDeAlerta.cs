@@ -93,6 +93,12 @@ public static class TiposDeAlerta
     public const string GiroDePagaduriaAtrasado = "Cartera.GiroDePagaduriaAtrasado";
     public const string ArchivoDeDescuentosPendiente = "Cartera.ArchivoDeDescuentosPendiente";
     public const string AvisoPrevioSinConstancia = "Cartera.AvisoPrevioSinConstancia";
+
+    /// <summary>
+    /// K4 (US12, T0943, T0954; data-model §26.8): una promesa de pago venció sin el pago; el ciclo diario (paso 7) la levanta para el gestor del
+    /// crédito, con el alcance de su oficina y su línea, y la promesa vuelve a la agenda. (nuevo)
+    /// </summary>
+    public const string PromesaIncumplida = "Cartera.PromesaIncumplida";
     public const string PeriodoInexistente = "Contabilidad.PeriodoInexistente";
     public const string GrupoNiifDistinto = "Contabilidad.GrupoNiifDistinto";
     public const string ValorNacionalDistinto = "Nomina.ValorNacionalDistinto";
@@ -230,6 +236,8 @@ public static class TiposDeAlerta
             ["Lending.PayrollDeductionFiles.Generate"], SoloApp, AlertSeverity.Warning, "K2"),
         new(AvisoPrevioSinConstancia, Cartera, "Un episodio de mora sigue sin constancia del aviso previo.",
             ["Lending.PriorNotices.RegisterEvidence"], SoloApp, AlertSeverity.Warning, "K4"),
+        new(PromesaIncumplida, Cartera, "Una promesa de pago venció sin el pago: vuelve a la agenda del gestor.",
+            ["Lending.Collections.RecordActivity"], SoloApp, AlertSeverity.Warning, "K4"),
         new(PeriodoInexistente, "Accounting", "Llegó un hecho con fecha contable en un período que no existe.",
             ["Accounting.Periods.CloseYear"], AppYCorreo, AlertSeverity.Critical, "K1"),
         new(GrupoNiifDistinto, "Accounting", "El perfil regulatorio y el grupo NIIF de la configuración contable difieren.",

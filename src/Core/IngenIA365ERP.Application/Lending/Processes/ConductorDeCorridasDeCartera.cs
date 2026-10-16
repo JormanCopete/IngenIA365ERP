@@ -46,13 +46,15 @@ public sealed class ConductorDeCorridasDeCartera(
     IArrendamientos? arrendamientos = null,
     Accrual.ParametrosDeLaTandaDeCartera? tanda = null)
 {
-    /// <summary>Las cuatro clases que conduce el procesador, en su orden de prioridad después de la que ya corre (§22.1, C59).</summary>
+    /// <summary>Las clases que conduce el procesador, en su orden de prioridad después de la que ya corre (§22.1, C59; K4 suma la etapa migrada).</summary>
     public static IReadOnlyList<LendingProcessKind> Clases { get; } =
     [
         LendingProcessKind.NationalValueCorrection,
         LendingProcessKind.DailyCycle,
         LendingProcessKind.MonthlyClose,
         LendingProcessKind.CloseReopen,
+        // K4 (T0944; C64): el registro de la etapa de cobranza migrada, una vez al desplegar K4.
+        LendingProcessKind.MigratedCollectionStages,
     ];
 
     /// <summary>El paso que se anota en el error de una corrida que falló entera.</summary>
