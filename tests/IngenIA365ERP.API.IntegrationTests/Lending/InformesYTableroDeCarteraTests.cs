@@ -38,6 +38,9 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
     /// <summary>K3: los reestructurados (fase 16, T0890) y la cartera castigada (fase 17, T0915), con datos del deudor.</summary>
     private static readonly string[] VistasDeK3 = ["restructured", "charge-offs"];
 
+    /// <summary>K4 (fase 18, T0953): las cuatro vistas de la cobranza, con datos del deudor.</summary>
+    private static readonly string[] VistasDeK4 = ["collection-stages", "promises", "payment-agreements", "prior-notices"];
+
     [Fact]
     public async Task K1_registro_permisos_exportacion_auditada_alcance_y_columnas()
     {
@@ -67,12 +70,13 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
 
         // (1) El registro: las siete de K1 para quien lee créditos; sin las de datos del deudor para quien no.
         var registro = (await CarteraE2E.GetAsync(http, contadora, Informes)).EnumerateArray().ToList();
-        registro.Select(v => v.GetProperty("key").GetString()).Should().BeEquivalentTo(VistasDeK1.Concat(VistasDeK2).Concat(VistasDeK3));
+        registro.Select(v => v.GetProperty("key").GetString()).Should().BeEquivalentTo(VistasDeK1.Concat(VistasDeK2).Concat(VistasDeK3).Concat(VistasDeK4));
         registro.Where(v => v.GetProperty("personalData").GetBoolean()).Select(v => v.GetProperty("key").GetString())
-            .Should().BeEquivalentTo(ConDatosDelDeudor.Append("payroll-deduction-reconciliation").Concat(VistasDeK3));
+            .Should().BeEquivalentTo(ConDatosDelDeudor.Append("payroll-deduction-reconciliation").Concat(VistasDeK3).Concat(VistasDeK4));
         registro.Where(v => VistasDeK1.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 1);
         registro.Where(v => VistasDeK2.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 2);
         registro.Where(v => VistasDeK3.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 3);
+        registro.Where(v => VistasDeK4.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 4);
         var delOficial = (await CarteraE2E.GetAsync(http, oficial, Informes)).EnumerateArray().Select(v => v.GetProperty("key").GetString()).ToList();
         delOficial.Should().BeEquivalentTo(["placement", "receipts", "payroll-agreements"], "sin Lending.Loans.Read no se ofrecen las vistas con datos del deudor");
         foreach (var vista in ConDatosDelDeudor)
