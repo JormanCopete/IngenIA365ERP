@@ -3425,8 +3425,8 @@ dueño acepta I6, el logo y la imagen de la firma de los documentos son adjuntos
 | `Number` | nvarchar(30) | no | prefijo por clase + `NextValue` de `LND_NumberSequences`; `UK` |
 | `PersonId` | int FK `COR_People` | no | titular |
 | `HolderTaxIdType` · `HolderTaxId` · `HolderName` | nvarchar(10) · nvarchar(30) · nvarchar(300) | no | **copia** de la identificación tal como se emitió (I-1) |
-| `AsOfDate` | date | sí | corte (paz y salvo, certificado de saldo, plan) |
-| `PeriodFrom` · `PeriodTo` · `TaxYear` | date · date · smallint | sí | extracto; certificado tributario |
+| `AsOfDate` | date | sí | corte (paz y salvo, certificado de saldo, plan); el 31 de diciembre del año en el certificado tributario; nulo en el extracto (K5) |
+| `PeriodFrom` · `PeriodTo` · `TaxYear` | date · date · smallint | sí | extracto (período de hasta cinco años que no termina después de la emisión); certificado tributario (año terminado; sin año, el anterior) |
 | `InformationCutoff` | datetime | no | R de la liquidación que respalda el documento |
 | `VerificationCode` | char(16) | no | Crockford base32 aleatorio (80 bits), se muestra `XXXX-XXXX-XXXX-XXXX` con QR a `/cartera/verificar?codigo=`; `UK` |
 | `ContentSha256` | char(64) | no | del PDF guardado |
@@ -3445,6 +3445,17 @@ Estado **calculado** (`IssuedDocumentStatus`): `Voided` si tiene evento `Voided`
 `FinalityUntil`; `Valid` en otro caso. Un paz y salvo con saldo, o con una venta en reproceso, se niega con la
 obligación o la factura (`Lending.Document.ClearanceDenied`). Un anulado no se reemite: se emite otro
 (`Lending.Document.VoidedCannotReissue`).
+
+**K5 (fase 19, T0970–T0972, sin migración: las columnas ya estaban en `CarteraNucleo`)**: el **extracto** (`EX-`) guarda el período,
+`SettlementSha256`/`RulesVersion` del estado al último día y una línea por crédito con su saldo final; el **certificado tributario**
+(`CT-`) guarda el año, `AsOfDate` = 31/12, una línea por crédito certificado con su saldo a esa fecha y `SettlementSha256` nulo (cubre
+varios créditos). Sus `EssentialDataJson`: extracto `{ asOfDate, loan, periodFrom, periodTo, openingBalance, closingBalance, movements }`;
+certificado `{ asOfDate, year, loans: [{ number, housing, interestPaid, balanceAtYearEnd }], totalInterestPaid, totalHousingInterestPaid }`.
+**Intereses pagados (definición nueva, la valida la contadora, quickstart §12)**: las filas `PaymentAllocation` y `PaymentReallocation`
+del libro teórico sobre `CurrentInterest`, `DefaultInterest` y sus suspensos con fecha valor en el año, reconstruidas con R = la emisión
+(lo reversado antes de emitir no está; lo reversado después anula el certificado por `VigenciaDeDocumentos`). Vivienda = segmento SARC
+`VIVIENDA` del catálogo de modalidades vigente al 31/12 (vacía hasta K6b). La verificación compara, si se pide, el SHA-256 de un PDF
+calculado en el navegador con `ContentSha256` (`pdfMatches`).
 
 ### 27.2 `LND_IssuedDocumentLoans` — `IssuedDocumentLoan` (H)
 
@@ -5258,7 +5269,9 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.Document.NotFound` **(nuevo, US13, C111)** | 404 | «El documento no existe.» · al verificar: «El código no corresponde a un documento de esta cooperativa.» | documento inexistente o fuera del alcance de oficina y línea de los créditos que cubre; código desconocido o de otra cooperativa (D21) | T80 |
 | `Lending.Document.AlreadyVoided` **(nuevo, US13, C111)** | 422 | «El documento {número} ya está anulado: una anulación no se repite.» (`data: { number, voidedAt }`) | `VoidLendingDocumentCommand` sobre un anulado (una sola anulación por documento) | T80 |
 | `Lending.Document.HolderNotObligated` **(nuevo, US13, C111)** | 422 | «{persona} no es deudora ni codeudora del crédito {número}: el documento se emite a nombre de quien está obligado.» (`data.loanNumber`) | plan de pagos, paz y salvo o certificado de saldo a nombre de quien no es deudor ni codeudor vigente del crédito | T80 |
-| `Lending.Document.NothingToCertify` **(nuevo, US13, C111)** | 422 | «No hay nada que certificar: {motivo}.» (`data.reason`) | plan de pagos de un crédito no vigente o sin plan; paz y salvo o certificado de saldo de un crédito sin desembolso; certificado a una fecha anterior al desembolso. K5 lo usa también para el extracto sin movimientos | T80 |
+| `Lending.Document.NothingToCertify` **(nuevo, US13, C111)** | 422 | «No hay nada que certificar: {motivo}.» (`data.reason`) | plan de pagos de un crédito no vigente o sin plan; paz y salvo o certificado de saldo de un crédito sin desembolso; certificado a una fecha anterior al desembolso. K5: extracto de un período sin movimientos ni saldo o en que el crédito no existía; certificado tributario de una persona sin créditos en el año | T80 |
+| `Lending.Document.PeriodInvalid` **(nuevo, K5, T0971)** | 422 | «El período del extracto no es válido: {motivo}.» (`data: { periodFrom, periodTo, maxYears }`) | extracto sin período, con la fecha inicial posterior a la final, que termina después de hoy o de cinco años o más | C88 |
+| `Lending.Document.TaxYearNotClosed` **(nuevo, K5, T0971)** | 422 | «El certificado tributario de {año} se emite cuando el año termine: desde el 1 de enero de {año + 1}.» (`data: { year, availableFrom }`) | certificado tributario del año en curso o de uno futuro (fecha local de la cooperativa) | C88 |
 | `Lending.PayrollFile.AlreadySent` | 422 | «El archivo ya se envió a la pagaduría: la corrección va como novedad del período siguiente.» | K2 | T78 |
 | `Lending.Regulatory.LayoutSinCotejar` | aviso | «El formato {codigo} tiene campos sin cotejar contra el instructivo vigente.» | K5 | T79 |
 | `Lending.Regulatory.BlockingIssues` | 422 | «Hay {n} inconsistencias que impiden generar el archivo. Revise el detalle.» | K5 | T79 |

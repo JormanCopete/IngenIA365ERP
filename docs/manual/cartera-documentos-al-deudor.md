@@ -1,13 +1,15 @@
 # Cartera: documentos al deudor y su verificación
 
-> Feature 013 (cartera financiera), fase 14 (US13, entrega K1). Complementa
+> Feature 013 (cartera financiera), fase 14 (US13, entrega K1) y fase 19 (US13, entrega K5: extracto, certificado tributario y
+> comparación del PDF). Complementa
 > [contracts/api.md](../../specs/013-cartera-financiera/contracts/api.md) §15 (documentos al deudor y verificación),
 > [contracts/adaptadores-y-archivos.md](../../specs/013-cartera-financiera/contracts/adaptadores-y-archivos.md) §8 (documentos emitidos con
 > código de verificación) y §9 (adjuntos de Cartera), y [data-model.md](../../specs/013-cartera-financiera/data-model.md) §27. Aquellos son el
 > contrato; esto es la receta para quien atiende al deudor en la oficina y para quien configura Cartera.
 
-Cartera emite a nombre de una persona tres documentos: el **plan de pagos** de un crédito, el **paz y salvo** (de una obligación o
-general) y el **certificado de saldo**. Cada uno sale **en un paso** —se elige, se confirma una vez y queda emitido—, con su
+Cartera emite a nombre de una persona cinco documentos: el **plan de pagos** de un crédito, el **paz y salvo** (de una obligación o
+general), el **certificado de saldo** y, desde la entrega K5, el **extracto** de un período y el **certificado tributario** de un
+año. Cada uno sale **en un paso** —se elige, se confirma una vez y queda emitido—, con su
 número, un **código de verificación** y un **QR** que lleva a la página de verificación. El PDF se pinta una sola vez, al
 emitir, y se guarda con su huella (SHA-256): reimprimir es bajar ese mismo archivo. Un documento emitido no se edita: si algo
 está mal se anula y se emite otro.
@@ -17,20 +19,20 @@ está mal se anula y se emite otro.
 | Qué | Dónde | Permiso |
 |---|---|---|
 | Buscar documentos (crédito o deudor, clase, estado, fecha de emisión) y ver su detalle con los eventos | Cartera → Documentos (`/cartera/documentos`) | `Lending.Documents.Read` |
-| Emitir (plan de pagos, paz y salvo, certificado de saldo) y enviar por correo | botón «Emitir» y «Enviar por correo» del detalle | `Lending.Documents.Issue` |
+| Emitir (plan de pagos, paz y salvo, certificado de saldo, extracto, certificado tributario) y enviar por correo | botón «Emitir» y «Enviar por correo» del detalle | `Lending.Documents.Issue` |
 | Volver a descargar el PDF (reimprimir) | «Descargar PDF» del detalle | `Lending.Documents.Reprint` |
 | Anular con motivo | «Anular…» del detalle | `Lending.Documents.Void` |
-| Verificar un código | Cartera → Verificar documento (`/cartera/verificar`) y el QR del PDF | `Lending.Documents.Verify` |
+| Verificar un código y comparar un PDF con el emitido | Cartera → Verificar documento (`/cartera/verificar`) y el QR del PDF | `Lending.Documents.Verify` |
 | Firmante, logotipo e imagen de la firma | Cartera → Parámetros (pestaña «Parámetros» y pestaña «Documentos») | `Lending.Parameters.View` / `.Manage` |
 
 Desde el expediente de un crédito (`/cartera/creditos/{id}`), el botón **«Documentos»** abre la lista de ese crédito con el
 diálogo de emitir ya en él. Un documento se ve sólo si **todos** los créditos que cubre están en el alcance de oficina y línea
 de quien consulta; fuera del alcance no existe (el mismo «no encontrado»).
 
-Antes de activar Cartera no se emite nada. El **extracto** y el **certificado tributario** llegan con la entrega K5: hoy la
-pantalla no los ofrece y la API responde «disponible en una entrega posterior» (`Lending.Document.KindNotAvailable`).
+Antes de activar Cartera no se emite nada. El **extracto** y el **certificado tributario** se emiten desde la entrega K5; una
+versión anterior del programa los rechaza con «disponible en una entrega posterior» (`Lending.Document.KindNotAvailable`).
 
-## 2. Las tres clases y cuándo se niegan
+## 2. Las clases y cuándo se niegan
 
 | Clase | Número | Qué certifica | Se niega cuando |
 |---|---|---|---|
@@ -38,9 +40,47 @@ pantalla no los ofrece y la API responde «disponible en una entrega posterior»
 | Paz y salvo de una obligación | `PS-000001` | Que el crédito está **cancelado**: su saldo es cero hoy, con todo lo registrado hasta el instante de emitir. | Queda saldo: la negativa dice el crédito y cuánto debe. |
 | Paz y salvo general | `PSG-000001` | Que la persona está a paz y salvo por **todas** sus obligaciones de crédito con la cooperativa. Cubre las obligaciones como deudora y, si el parámetro `Documentos.PazYSalvoIncluyeCodeudas` lo dice, también como codeudora (el documento dice si las incluyó). | Alguna obligación tiene saldo (dice cuáles), o hay una **venta a crédito de Comercial en reproceso** para la persona (dice la factura): esa venta todavía puede convertirse en un crédito. |
 | Certificado de saldo | `CS-000001` | La liquidación del crédito a una fecha de corte (hoy si no se elige otra) con la información hasta el instante de emitir, por concepto y con lo que cuesta cancelar. Si la fecha es futura, la liquidación se proyecta sin pagos y el documento dice **hasta cuándo vale**. | El crédito no tenía saldo a esa fecha o no se ha desembolsado. |
+| Extracto (K5) | `EX-000001` | Un período de un crédito (§2a): saldo inicial por concepto, las operaciones por fecha valor y el saldo final, con la información hasta el instante de emitir. | Sin período, con la fecha inicial después de la final, que termine después de hoy o de más de cinco años («El período del extracto no es válido…», `Lending.Document.PeriodInvalid`); un período sin operaciones **y** sin saldo —por ejemplo, después de cancelado el crédito— no tiene nada que certificar. |
+| Certificado tributario (K5) | `CT-000001` | Un año terminado (§2b): por cada crédito en que la persona es **deudora**, los intereses pagados en el año y el saldo al 31 de diciembre. | El año no ha terminado: el de 2026 se emite desde el 1 de enero de 2027 (`Lending.Document.TaxYearNotClosed`); la persona no tuvo créditos ese año. Si no se elige año, es el anterior. |
 
 Cada clase lleva su propio consecutivo. El documento guarda una **copia** del nombre y la identificación del titular tal como
 estaban al emitir: si después se corrige la persona en el maestro, el documento no cambia.
+
+### 2a. El extracto
+
+Se pide desde el diálogo de emitir con la clase **Extracto**, el crédito, el titular y el período (por defecto, el mes anterior).
+El documento tiene tres partes:
+
+1. **Saldo inicial**: lo que se debía la víspera del primer día del período, por concepto (capital, interés corriente, interés de
+   mora, sus suspensos, seguros, gastos de cobranza, otros cargos, anticipo y saldo a favor).
+2. **Operaciones del período**, ordenadas por **fecha valor**: el desembolso, cada pago con lo que aplicó a capital, intereses y
+   otros conceptos, los cargos, condonaciones, ajustes y traslados, y la **causación** —los intereses y seguros que el crédito
+   fue generando— agregada en un renglón por mes. Los valores van con signo: **+** aumenta la deuda, **−** la disminuye.
+3. **Saldo final**: lo que se debía el último día del período, por concepto.
+
+Saldo inicial + operaciones = saldo final, al centavo, en cada concepto: si no cuadrara, el documento no se emite. Un pago
+**reversado** ya no hace parte del crédito: el extracto lo informa en su propio renglón («Pago … reversado por …», con su valor y
+«sin efecto en el saldo») para que el deudor entienda lo que vio en su recibo. El extracto se arma con lo registrado **al emitir**:
+si después se reversa un pago del período, el extracto queda anulado (§7) y se emite otro.
+
+### 2b. El certificado tributario
+
+Se pide con la clase **Certificado tributario**, el titular (el crédito sólo sirve para elegirlo) y el año. Lista cada crédito en
+que la persona es **deudora** con:
+
+- **Intereses pagados en el año**: lo que los pagos aplicaron a **interés corriente** y a **interés de mora** —incluidos los que
+  estaban en suspenso— con **fecha valor dentro del año**, **neto de los pagos reversados** que la cooperativa conocía al emitir.
+  Así, un pago de diciembre reversado en enero, antes de emitir, no cuenta; uno reversado después de emitir anula el certificado
+  (§7). Esta definición es nueva y la **valida la contadora** con los casos de ejemplo antes de entregarle el certificado a los
+  asociados (quickstart §12). No cuentan los intereses causados y no pagados, ni los seguros ni los gastos de cobranza.
+- **Saldo al 31 de diciembre** de capital, de intereses y de los demás conceptos, menos el anticipo, con la información al emitir.
+
+Un crédito **cancelado en el año** aparece con saldo cero y sus intereses pagados; uno desembolsado **después** del año o cancelado
+**antes** no aparece. Los créditos de **vivienda** —los de segmento SARC `VIVIENDA` según el catálogo de modalidades vigente al 31
+de diciembre— van en su propia sección, «Créditos de vivienda», con su total: es la que el asociado usa para la deducción por
+intereses de vivienda. **Hasta la entrega K6b no hay créditos de vivienda**, así que esa sección dice «La persona no tuvo créditos
+de vivienda con la cooperativa en el año». El certificado lleva la leyenda «Certifica sólo las obligaciones de crédito de la
+cooperativa.» y cómo se cuentan los intereses.
 
 **El paz y salvo general certifica sólo las obligaciones de crédito de Cartera** y lo dice en el PDF. Las ventas a crédito que
 la cooperativa aceptó **fuera de Cartera** al ponerla en marcha (las que la migración no trajo y quedaron con su acta) no lo
@@ -75,6 +115,14 @@ código de otra no existe aquí), su clase, número, fecha, estado —vigente, s
 fecha**—, el titular con el documento enmascarado (sólo los cuatro últimos dígitos) y los datos esenciales que el documento
 certificó. No muestra el expediente. Cada verificación queda en la auditoría (`Lending.Document.Verified`).
 
+### Comparar con un PDF (K5)
+
+Un código auténtico prueba que el documento existe, no que el PDF que alguien presenta sea el mismo: pudo editarse. Con el código
+verificado, **«Comparar con un PDF…»** pide el archivo que la persona tiene en su equipo, el **navegador** calcula su huella
+(SHA-256) y sólo esa huella se envía; el archivo **no se sube**. La respuesta dice «El PDF es idéntico al emitido» o «El PDF NO es
+el emitido: … puede estar alterado o ser de otro documento». La comparación queda en la misma lectura auditada, con su resultado.
+Por la API es `GET /api/lending/documents/verify/{código}?sha256={huella en hexadecimal}`, que responde `pdfMatches`.
+
 ## 6. Descargar, reimprimir y enviar
 
 - Al emitir con **descarga**, el navegador baja el PDF de inmediato (`{número}.pdf`).
@@ -95,7 +143,9 @@ certificó. No muestra el expediente. Cada verificación queda en la auditoría 
 - **Automática**: cuando se **reversa** un pago (desde el expediente del crédito o por el recaudador, con el contrato de
   obligaciones) o un desembolso, en la misma operación se anula **todo documento que cubra ese crédito emitido después del
   registro de lo reversado** —un paz y salvo que se apoyaba en el pago devuelto, un certificado de saldo que lo contaba—. El
-  motivo dice «Se reversó el pago {número} del crédito {número}.» y la operación causa es el reverso. La vista previa del
+  motivo dice «Se reversó el pago {número} del crédito {número}.» y la operación causa es el reverso. Vale igual para el
+  **extracto** del período que contenía el pago y para el **certificado tributario** del año: los dos se emitieron después del pago
+  reversado y lo contaban; un extracto de un período anterior emitido antes del pago no se anula. La vista previa del
   reverso lista los documentos que va a anular y la respuesta los devuelve. Lo emitido **antes** del pago reversado (por ejemplo,
   el plan de pagos que se imprimió al desembolsar) no se toca.
 
@@ -116,6 +166,7 @@ certificó. No muestra el expediente. Cada verificación queda en la auditoría 
 
 ## 9. Lo que llega después
 
-- **K5**: el extracto del crédito por período y el certificado tributario del año, y la vista de informe «documentos emitidos»
-  del centro de informes de Cartera.
+- **K5** (fase 20): la vista de informe «documentos emitidos» del centro de informes de Cartera.
+- **K6b**: los créditos de vivienda con la Ley 546 y la UVR; la sección «Créditos de vivienda» del certificado tributario se llena
+  sola cuando existan.
 - La firma digital certificada del PDF no está en el alcance de la feature.

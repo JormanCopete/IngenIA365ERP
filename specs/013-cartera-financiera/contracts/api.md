@@ -1467,17 +1467,18 @@ corte o período, `InformationCutoff` (R), código de verificación de 16 caract
 `LendingIssuedDocument`, no borrable). El estado se **calcula**: `Voided` si hay anulación; `SubjectToFinality`
 mientras hoy < `FinalityUntil`; `Valid` en otro caso. Clases (`IssuedDocumentKind`): `PaymentPlan`,
 `LoanClearance`, `GeneralClearance` y `BalanceCertificate` en K1 (propuesta I5); `Statement` y `TaxCertificate`
-en K5.
+en K5 (fase 19: la ruta de emisión no cambia; `period` es obligatorio en el extracto y `year` opcional en el
+certificado tributario —sin él, el año anterior—).
 
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /?kind=&personPublicId=&loanPublicId=&status=&from=&to=&page=` | Documents.Read | `ListIssuedLendingDocumentsQuery` | → lista `IssuedDocumentDto { publicId, kind, number, holder { personPublicId, fullName, documentNumber }, loans[], cutoffDate?, period?, year?, issuedAt, issuedBy, status, finalityUntil?, coversCoDebts?, verificationCode }` | | K1 |
 | `GET /{id}` | Documents.Read | `GetIssuedLendingDocumentQuery` | → `IssuedDocumentDto` + `essentialData` + `events: [{ kind: Issued \| Delivered \| Voided, at, by, reason?, causeOperation? }]` | `Lending.Document.NotFound` | K1 |
-| `POST /` | Documents.Issue | `IssueLendingDocumentCommand` | `{ kind, personPublicId, loanPublicId?, cutoffDate?, period?: { from, to }, year?, delivery: Download \| Email }` → 201 `{ documentPublicId, number, verificationCode, status, download?: { url, expiresAt }, debtorMessagePublicId? }` en **un paso** (FR-013) | `Lending.Document.ClearanceDenied` (`data: { obligations?: [{ loanPublicId, number, balance }], pendingSales?: [{ invoice, messagePublicId }] }`), `.KindNotAvailable` (`data: { availableFrom: "K5" }`), `.SignerMissing` (sin `Documentos.Firmante.*`), `Lending.DebtorMessage.ChannelNotAuthorized` (correo), `NationalValues.Missing` | K1 |
+| `POST /` | Documents.Issue | `IssueLendingDocumentCommand` | `{ kind, personPublicId, loanPublicId?, cutoffDate?, period?: { from, to }, year?, delivery: Download \| Email }` → 201 `{ documentPublicId, number, verificationCode, status, download?: { url, expiresAt }, debtorMessagePublicId? }` en **un paso** (FR-013) | `Lending.Document.ClearanceDenied` (`data: { obligations?: [{ loanPublicId, number, balance }], pendingSales?: [{ invoice, messagePublicId }] }`), `.KindNotAvailable` (`data: { availableFrom: "K5" }`, antes de K5), `.SignerMissing` (sin `Documentos.Firmante.*`), `.NothingToCertify`, **K5**: `.PeriodInvalid` (`data: { periodFrom, periodTo, maxYears }`: extracto sin período, al revés, que termina después de hoy o de cinco años o más), `.TaxYearNotClosed` (`data: { year, availableFrom }`); `Lending.DebtorMessage.ChannelNotAuthorized` (correo), `NationalValues.Missing` | K1 · K5 |
 | `POST /{id}/download-link` | Documents.Reprint | `IssueLendingDocumentDownloadLinkCommand` | → `{ url, expiresAt }` del PDF guardado (idéntico); auditado `Lending.Document.Reprinted` | | K1 |
 | `POST /{id}/send` | Documents.Issue | `SendLendingDocumentCommand` | `{ recipientPersonPublicId? }` → 201 `{ debtorMessagePublicId }` (propósito `DocumentDelivery`, exento de ventanas si lo pidió el titular, I3) | `Lending.Document.VoidedCannotReissue`, `Lending.DebtorMessage.ChannelNotAuthorized` | K1 |
 | `POST /{id}/void` | Documents.Void | `VoidLendingDocumentCommand` | `{ reason }` → 204 | `Lending.Document.AlreadyVoided` | K1 |
-| `GET /verify/{code}` | Documents.Verify | `VerifyLendingDocumentQuery` | → `{ authentic, status, kind, number, issuedAt, holder { fullName, documentNumberMasked }, essentialData, voidedReason? }`; auditado `Lending.Document.Verified` | `Lending.Document.NotFound` (código inexistente, con el mensaje «el código no corresponde a un documento de esta cooperativa») | K1 |
+| `GET /verify/{code}?sha256=` | Documents.Verify | `VerifyLendingDocumentQuery` | → `{ authentic, status, kind, number, issuedAt, holder { fullName, documentNumberMasked }, essentialData, voided?: { at, reason }, pdfMatches? }`; auditado `Lending.Document.Verified` (con `pdfMatches` si se comparó). **K5 (T0972, T0974)**: `sha256` opcional, la huella SHA-256 en hexadecimal de un PDF calculada en el navegador (el archivo nunca sube); `pdfMatches = true` sólo si es la del PDF guardado | `Lending.Document.NotFound` (código inexistente, con el mensaje «el código no corresponde a un documento de esta cooperativa»); `Validation.Invalid` (huella que no son 64 caracteres hexadecimales) | K1 · K5 |
 | `GET /images` | Parameters.View | `GetLendingDocumentImagesQuery` | → `{ setupPublicId, logoOwnerType, signatureOwnerType, logo?, signature? }` (`{ attachmentPublicId, fileName, contentType, uploadedAt }`): el dueño de los adjuntos `LendingLogo` y `LendingSignatureImage` (la fila única de `LND_Setup`) y la imagen vigente de cada uno, para su carga en `/cartera/parametros` (I6, propuesta por defecto; bloque 14B). La subida va por `POST /api/attachments/uploads` con `Lending.Parameters.Manage` | | K1 |
 
 - **Paz y salvo** (FR-131): sólo con saldo cero y sujeto a firmeza (D23); el general certifica sólo las
@@ -1485,6 +1486,12 @@ en K5.
   ventas aceptadas fuera de Cartera y aplica `Documentos.PazYSalvoIncluyeCodeudas`.
 - **Certificado de saldo** (FR-068): es la liquidación a una fecha impresa; la liquidación en pantalla (§8.1)
   no emite documento.
+- **Extracto** (K5): saldo inicial a la víspera, operaciones del período por fecha valor (causación agregada por mes y
+  concepto; los reversos conocidos, informativos) y saldo final, todo con R = la emisión; saldo inicial + movimientos =
+  saldo final al centavo.
+- **Certificado tributario** (K5): por crédito de la persona como deudora, los intereses pagados con fecha valor en el
+  año (corriente y mora con sus suspensos, netos de los reversos conocidos a la emisión) y el saldo al 31 de diciembre;
+  los de vivienda en su propia sección (vacía hasta K6b).
 - **Anulación automática** (T80): el comando que reversa un pago anula, en la misma transacción, todo documento
   cuyo `InformationCutoff` sea igual o posterior al registro de lo reversado (`VigenciaDeDocumentos`).
 - **Verificación sólo interna** (D21): no hay ruta anónima; fuera de producción el PDF lleva «AMBIENTE DE

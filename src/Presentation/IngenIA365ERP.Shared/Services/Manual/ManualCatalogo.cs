@@ -630,17 +630,19 @@ public static class ManualCatalogo
             ["cartera-migracion"], [], TipoDeTema.Proceso));
 
         // ------------------------------------------------------ Cartera: documentos al deudor --
-        // Feature 013, US13 (T0793): el plan de pagos, el paz y salvo y el certificado de saldo con su código de verificación. El detalle, en
-        // docs/manual/cartera-documentos-al-deudor.md.
+        // Feature 013, US13 (T0793): el plan de pagos, el paz y salvo y el certificado de saldo con su código de verificación; K5 (T0976) suma el
+        // extracto, el certificado tributario y la comparación del PDF. El detalle, en docs/manual/cartera-documentos-al-deudor.md.
         t.Add(Proceso("cartera-documentos", "Documentos al deudor y su verificación", Modulos.Cartera, "/cartera/documentos",
-            "Emitir en un paso el plan de pagos, el paz y salvo de una obligación o general y el certificado de saldo, con número, código de verificación y QR; reimprimir el mismo PDF, enviarlo por correo, anularlo y verificar un código.",
+            "Emitir en un paso el plan de pagos, el paz y salvo de una obligación o general, el certificado de saldo, el extracto de un período y el certificado tributario de un año, con número, código de verificación y QR; reimprimir el mismo PDF, enviarlo por correo, anularlo, verificar un código y comparar un PDF con el emitido.",
             [
                 P("Cartera → Documentos", "Lista de documentos emitidos por crédito o deudor, clase, estado y fecha. El estado se calcula: vigente, sujeto a firmeza hasta la fecha que dice o anulado. Desde el expediente del crédito, el botón «Documentos» abre esta pantalla con el crédito elegido.", "/cartera/documentos", "Abrir Documentos"),
-                P("Emitir", "Elegí la clase, el crédito y el titular (deudor o codeudor), la fecha de corte si es un certificado de saldo, y si se descarga o se envía al correo del titular. Se confirma una vez. El paz y salvo se niega si queda saldo o si hay una venta a crédito en reproceso, y dice cuáles."),
+                P("Emitir", "Elegí la clase, el crédito y el titular (deudor o codeudor), la fecha de corte si es un certificado de saldo, el período si es un extracto o el año si es un certificado tributario, y si se descarga o se envía al correo del titular. Se confirma una vez. El paz y salvo se niega si queda saldo o si hay una venta a crédito en reproceso, y dice cuáles."),
+                P("Extracto y certificado tributario", "El extracto trae el saldo inicial, las operaciones del período por fecha valor (la causación agregada por mes) y el saldo final; hasta cinco años y no después de hoy. El certificado tributario trae, por crédito, los intereses pagados con fecha valor en el año, netos de los pagos reversados, y el saldo al 31 de diciembre; sólo de años terminados, con los créditos de vivienda aparte."),
                 P("Reimprimir, enviar y anular", "Desde el detalle: «Descargar PDF» baja el mismo archivo que se emitió (idéntico); «Enviar por correo» lo pone en la cola de mensajes al deudor; «Anular» pide motivo. Reversar el pago o el desembolso que respaldaba un documento lo anula solo."),
-                P("Verificar un código", "Cartera → Verificar documento, o el QR del PDF con sesión iniciada: dice si el documento es auténtico, su estado y sus datos esenciales. Sólo verifican usuarios de la cooperativa.", "/cartera/verificar", "Abrir Verificar documento"),
+                P("Verificar un código", "Cartera → Verificar documento, o el QR del PDF con sesión iniciada: dice si el documento es auténtico, su estado y sus datos esenciales. «Comparar con un PDF…» dice si el archivo que tenés es idéntico al emitido: el navegador calcula su huella y el archivo no se sube. Sólo verifican usuarios de la cooperativa.", "/cartera/verificar", "Abrir Verificar documento"),
             ],
-            ["documentos", "paz y salvo", "plan de pagos", "certificado de saldo", "codigo de verificacion", "qr", "verificar", "reimprimir", "anular documento", "firmeza"],
+            ["documentos", "paz y salvo", "plan de pagos", "certificado de saldo", "codigo de verificacion", "qr", "verificar", "reimprimir", "anular documento", "firmeza",
+                "extracto", "certificado tributario", "intereses pagados", "declaracion de renta", "comparar pdf", "huella"],
             ["Cartera activada.", "Firmante configurado en los parámetros (Documentos.Firmante.Nombre y .Cargo).", "Permisos Lending.Documents.Read, .Issue, .Reprint, .Void y .Verify según la acción."],
             ["cartera-activacion"], ["/cartera/verificar"], TipoDeTema.Proceso));
         // Feature 013, US15 (T0800): el centro de informes de Cartera.
