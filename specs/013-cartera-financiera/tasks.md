@@ -4102,6 +4102,10 @@ verdes en los dos motores tras `CarteraCobranza`.
     retirado. (b) `Lending.Collections.LoanNotInCollection` en `RecordCollectionActionCommand` (gestión con el titular de un crédito sin etapa vigente; la de
     la pagaduría no) y `Lending.Campaign.FiltersInvalid` al crear una campaña con etapa inexistente, mora mínima sobre el tope de la etapa u oficina,
     línea o pagaduría inexistentes; data-model §10.1 sin «hoy sin escritor».
+  - Verde al cerrar el bloque D (2026-10-16): Domain 2.113, Application 5.539, Architecture 631, Shared 453; e2e de Cartera en PostgreSQL 101 + 5
+    omitidas; en SQL Server 100 + 5 omitidas y una caída, `ConcurrenciaPagoYCausacionTests.Dos_recaudadores_a_la_vez…` (interbloqueo de SQL Server al
+    levantar la alerta de la validación previa, y el `ROLLBACK` del punto de guardado sin transacción), que **también cae en el commit anterior al bloque
+    (`99f1e4ad`)**: no la trae el bloque D y queda abierta.
 
 ---
 
