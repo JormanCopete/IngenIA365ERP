@@ -301,7 +301,8 @@ public sealed class RegisterRegulatoryDocumentCommandHandler(
     {
         if (!Enum.TryParse<RegulatoryDocumentKind>(request.Kind, ignoreCase: false, out var clase) || !Enum.IsDefined(clase))
             return Result.Failure<(RegulatoryDocumentKind, string)>(ErroresDeValoresNacionales.ClaseNoDisponible(request.Kind, "no es una clase de documento normativo"));
-        if (clase == RegulatoryDocumentKind.SarcAnexo2)
+        if (clase == RegulatoryDocumentKind.SarcAnexo2
+            && !Domain.Lending.Risk.SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(Domain.Lending.CatalogoDeCartera.EntregaVigente))
             return Result.Failure<(RegulatoryDocumentKind, string)>(ErroresDeValoresNacionales.ClaseNoDisponible(request.Kind, "el Anexo 2 llega con la entrega K6a"));
         var validador = validadores.FirstOrDefault(v => v.Clase == clase);
         if (validador is null)

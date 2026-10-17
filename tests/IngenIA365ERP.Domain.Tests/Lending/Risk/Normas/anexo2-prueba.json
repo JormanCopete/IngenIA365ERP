@@ -1,0 +1,111 @@
+{
+  // Feature 013, K6a (T1013, T1016; pe07): un Anexo 2 de PRUEBA. Copia la forma y las cifras de la semilla (sarc-anexo-2.json, CE 68 de 2024)
+  // en lo que comparte y SUMA la tabla de PI de la clave VOLUNTARIA, que la semilla no trae porque no se consiguió el texto de la Circular
+  // Externa 100. Las cifras VOLUNTARIA de este archivo son INVENTADAS para probar el camino de la aplicación voluntaria: no son norma y
+  // no deben copiarse a la semilla.
+  "scoreDecimals": 4,
+  "singleInstallmentDefaultDaysPastDue": 7,
+  "suspendedConceptsFullyImpaired": true,
+  "variables": [
+    { "code": "EA", "kind": "ActiveAssociate", "description": "Asociado activo." },
+    { "code": "FE", "kind": "EmployeeFund", "description": "Fondo de empleados." },
+    { "code": "VALCUOTA", "kind": "InstallmentAtMostSmmlvFraction", "fraction": 0.10, "onlyEmployeeFund": true, "description": "Cuota hasta el 10 % del SMMLV." },
+    { "code": "FONDPLAZO", "kind": "TermAtMostMonths", "months": 6, "onlyEmployeeFund": true, "description": "Plazo hasta seis meses." },
+    { "code": "MORA1230", "kind": "ArrearsHistory", "description": "12 meses, 31–60.", "conditions": [ { "months": 12, "measure": "Max", "fromDays": 31, "toDays": 60 } ] },
+    { "code": "MORA1260", "kind": "ArrearsHistory", "description": "12 meses, más de 60.", "conditions": [ { "months": 12, "measure": "Max", "fromDays": 61 } ] },
+    { "code": "MORA2430N", "kind": "ArrearsHistory", "description": "24 meses 31–60 y 12 meses hasta 30.",
+      "conditions": [ { "months": 24, "measure": "Max", "fromDays": 31, "toDays": 60 }, { "months": 12, "measure": "Max", "fromDays": 0, "toDays": 30 } ] },
+    { "code": "MORA3660", "kind": "ArrearsHistory", "description": "36 meses más de 60 y 24 meses hasta 60.",
+      "conditions": [ { "months": 36, "measure": "Max", "fromDays": 61 }, { "months": 24, "measure": "Max", "fromDays": 0, "toDays": 60 } ] },
+    { "code": "SINMORA", "kind": "ArrearsHistory", "description": "36 meses hasta 30.", "conditions": [ { "months": 36, "measure": "Max", "fromDays": 0, "toDays": 30 } ] },
+    { "code": "MORA315", "kind": "ArrearsHistory", "description": "3 meses, 16–30.", "conditions": [ { "months": 3, "measure": "Max", "fromDays": 16, "toDays": 30 } ] },
+    { "code": "MORTRIM", "kind": "ArrearsHistory", "description": "Algún mes de 3 con 31–60.", "conditions": [ { "months": 3, "measure": "AnyMonth", "fromDays": 31, "toDays": 60 } ] }
+  ],
+  "segments": [
+    {
+      "code": "CONSUMO_LIBRANZA", "name": "Consumo con libranza", "sarcSegment": "CONSUMO", "defaultDaysPastDue": 90, "intercept": -1.523,
+      "terms": [
+        { "variable": "EA", "coefficient": -2.081 }, { "variable": "FE", "coefficient": -0.916 }, { "variable": "VALCUOTA", "coefficient": -0.165 },
+        { "variable": "FONDPLAZO", "coefficient": -0.632 }, { "variable": "MORA1230", "coefficient": 2.495 }, { "variable": "MORA1260", "coefficient": 3.062 },
+        { "variable": "SINMORA", "coefficient": -0.575 }, { "variable": "MORA2430N", "coefficient": 0.319 }, { "variable": "MORA3660", "coefficient": 1.615 }
+      ],
+      "cutoffs": [ { "rating": "A", "upTo": 0.1648 }, { "rating": "B", "upTo": 0.2481 }, { "rating": "C", "upTo": 0.3677 }, { "rating": "D", "upTo": 0.5230 }, { "rating": "E", "upTo": 1 } ],
+      "performingLossGivenDefault": [ { "collateralType": "NO_IDONEA", "rate": 0.45 }, { "collateralType": "SIN_GARANTIA", "rate": 0.45 } ]
+    },
+    {
+      "code": "CONSUMO_SIN_LIBRANZA", "name": "Consumo sin libranza", "sarcSegment": "CONSUMO", "defaultDaysPastDue": 90, "intercept": -2.189,
+      "terms": [
+        { "variable": "EA", "coefficient": -1.186 }, { "variable": "MORA1230", "coefficient": 1.999 }, { "variable": "MORA1260", "coefficient": 2.906 },
+        { "variable": "SINMORA", "coefficient": -0.35 }, { "variable": "MORA2430N", "coefficient": 0.18 }, { "variable": "MORA315", "coefficient": 0.624 }
+      ],
+      "cutoffs": [ { "rating": "A", "upTo": 0.0732 }, { "rating": "B", "upTo": 0.2017 }, { "rating": "C", "upTo": 0.3849 }, { "rating": "D", "upTo": 0.5931 }, { "rating": "E", "upTo": 1 } ],
+      "performingLossGivenDefault": [ { "collateralType": "NO_IDONEA", "rate": 0.45 }, { "collateralType": "SIN_GARANTIA", "rate": 0.50 } ]
+    },
+    {
+      "code": "COMERCIAL_PN", "name": "Comercial persona natural", "sarcSegment": "COMERCIAL_PN", "defaultDaysPastDue": 120, "intercept": -3.133,
+      "terms": [
+        { "variable": "EA", "coefficient": -0.752 }, { "variable": "MORA1230", "coefficient": 2.347 }, { "variable": "MORA1260", "coefficient": 3.722 },
+        { "variable": "SINMORA", "coefficient": -0.234 }, { "variable": "MORTRIM", "coefficient": 0.449 }, { "variable": "MORA2430N", "coefficient": 0.881 }
+      ],
+      "cutoffs": [ { "rating": "A", "upTo": 0.0208 }, { "rating": "B", "upTo": 0.1768 }, { "rating": "C", "upTo": 0.5441 }, { "rating": "D", "upTo": 0.7626 }, { "rating": "E", "upTo": 1 } ],
+      "performingLossGivenDefault": [ { "collateralType": "NO_IDONEA", "rate": 0.45 }, { "collateralType": "SIN_GARANTIA", "rate": 0.50 } ]
+    }
+  ],
+  "probabilityOfDefault": [
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "COOP_MULTIACTIVA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0116 }, { "rating": "B", "rate": 0.0209 }, { "rating": "C", "rate": 0.0407 }, { "rating": "D", "rate": 0.0737 }, { "rating": "E", "rate": 0.2013 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "COOP_MULTIACTIVA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0354 }, { "rating": "B", "rate": 0.0819 }, { "rating": "C", "rate": 0.165 }, { "rating": "D", "rate": 0.363 }, { "rating": "E", "rate": 0.4227 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "COOP_MULTIACTIVA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.0211 }, { "rating": "B", "rate": 0.0706 }, { "rating": "C", "rate": 0.2344 }, { "rating": "D", "rate": 0.3933 }, { "rating": "E", "rate": 0.6027 } ] },
+    // INVENTADAS (prueba): la PI de la aplicación voluntaria.
+    { "segment": "CONSUMO_LIBRANZA", "organizationType": "VOLUNTARIA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.01 }, { "rating": "B", "rate": 0.03 }, { "rating": "C", "rate": 0.08 }, { "rating": "D", "rate": 0.15 }, { "rating": "E", "rate": 0.35 } ] },
+    { "segment": "CONSUMO_SIN_LIBRANZA", "organizationType": "VOLUNTARIA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.02 }, { "rating": "B", "rate": 0.06 }, { "rating": "C", "rate": 0.12 }, { "rating": "D", "rate": 0.25 }, { "rating": "E", "rate": 0.45 } ] },
+    { "segment": "COMERCIAL_PN", "organizationType": "VOLUNTARIA", "defaultRate": 1,
+      "ratings": [ { "rating": "A", "rate": 0.02 }, { "rating": "B", "rate": 0.07 }, { "rating": "C", "rate": 0.2 }, { "rating": "D", "rate": 0.4 }, { "rating": "E", "rate": 0.6 } ] }
+  ],
+  "lossGivenDefault": [
+    { "collateralType": "PRENDARIA", "name": "Prendarias", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.50 }, { "fromDaysAfterDefault": 270, "rate": 0.70 }, { "fromDaysAfterDefault": 540, "rate": 1 } ] },
+    { "collateralType": "HIPOTECARIA", "name": "Hipotecaria", "idoneous": true,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.40 }, { "fromDaysAfterDefault": 360, "rate": 0.70 }, { "fromDaysAfterDefault": 720, "rate": 1 } ] },
+    { "collateralType": "NO_IDONEA", "name": "Garantía no idónea", "idoneous": false,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.60 }, { "fromDaysAfterDefault": 210, "rate": 0.70 }, { "fromDaysAfterDefault": 420, "rate": 1 } ] },
+    { "collateralType": "SIN_GARANTIA", "name": "Sin garantía", "idoneous": false,
+      "brackets": [ { "fromDaysAfterDefault": 0, "rate": 0.75 }, { "fromDaysAfterDefault": 30, "rate": 0.85 }, { "fromDaysAfterDefault": 90, "rate": 1 } ] }
+  ],
+  "homologation": [
+    {
+      "segments": [ "CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA" ],
+      "rows": [
+        { "modelRating": "A", "fromCurrentDaysPastDue": 0, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 31, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 31, "accountingRating": "C" },
+        { "modelRating": "D", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "E", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 91, "toCurrentDaysPastDue": 180, "accountingRating": "D" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 181, "accountingRating": "E" }
+      ]
+    },
+    {
+      "segments": [ "COMERCIAL_PN" ],
+      "rows": [
+        { "modelRating": "A", "fromCurrentDaysPastDue": 0, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "A" },
+        { "modelRating": "B", "fromCurrentDaysPastDue": 31, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 0, "toCurrentDaysPastDue": 30, "accountingRating": "B" },
+        { "modelRating": "C", "fromCurrentDaysPastDue": 31, "accountingRating": "C" },
+        { "modelRating": "D", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "E", "fromCurrentDaysPastDue": 0, "accountingRating": "C" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 121, "toCurrentDaysPastDue": 150, "accountingRating": "D" },
+        { "modelRating": "Default", "fromCurrentDaysPastDue": 151, "accountingRating": "E" }
+      ]
+    }
+  ],
+  "generalImpairment": [ { "organizationType": "*", "appliesToExpectedLoss": true }, { "organizationType": "COOP_MULTIACTIVA", "appliesToExpectedLoss": false } ],
+  "provenance": [ { "table": "probabilityOfDefault", "verified": false, "source": "Documento de prueba: la PI VOLUNTARIA es inventada" } ]
+}

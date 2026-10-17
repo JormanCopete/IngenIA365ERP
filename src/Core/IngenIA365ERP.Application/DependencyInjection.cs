@@ -130,7 +130,7 @@ public static class DependencyInjection
         // Feature 013 (T0204): los documentos normativos de Cartera (Anexo 1 y regla de pérdida esperada); el Anexo 2 lo suma K6a.
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Anexo1);
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.ReglaDePerdidaEsperada);
-        // US9 (T0691): el del Anexo 2 rechaza todo contenido hasta K6a.
+        // US9 (T0691): el del Anexo 2 rechaza todo contenido hasta K6a; desde K6a (T1025) lee el documento tipado.
         services.AddSingleton<Domain.Common.NationalValues.IValidadorDeDocumentoNormativo>(Lending.Risk.ValidadorDeDocumentoNormativoDeCartera.Anexo2);
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Payroll.NationalValues.EfectoDeReplicacionEnNomina>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Common.NationalValues.EfectoDeReplicacionLimitesLegales>();
