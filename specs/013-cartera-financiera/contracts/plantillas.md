@@ -690,9 +690,10 @@ activar prevalece.
 
 **Opcional**, salvo para los créditos de los segmentos cubiertos de una cooperativa obligada a la pérdida esperada a
 la fecha de activación, o con una obligación registrada desde una fecha posterior (FR-139, FR-142): para ellos, el
-historial debe estar completo en los meses que pide `ReglaDePerdidaEsperada`, o la carga no se aplica
-(`Lending.Migration.ArrearsHistoryRequired`, con la lista de créditos y meses). Después de aplicar, la carga complementaria
-de §7 completa lo que falte (K6a).
+historial debe estar completo en los meses que pide `ReglaDePerdidaEsperada` para **activar** (`ArrearsHistoryComplete`,
+US8-10). Al aplicar, lo que falte queda como **aviso** `Lending.Migration.ArrearsHistoryRequired` por crédito y meses —no niega,
+porque la carga complementaria de §7 sólo se admite sobre una carga aplicada (FR-140)— y la carga complementaria lo completa antes
+de activar (K6a; corregido en la corrida final, T1064, 2026-10-17).
 
 ### 5.4 Validaciones entre partes al aplicar (`ApplyMigrationLoadCommand`)
 
