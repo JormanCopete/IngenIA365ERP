@@ -1262,6 +1262,34 @@ IX `(PersonId)`, `(RelatedThroughPersonId)`. **Reglas**. Un vínculo vigente lle
 novedad o la condonación al consejo con la regla calificada (T63, T64). Dos vigencias del mismo vínculo no se
 cruzan (lo valida el comando). Leerla es lectura sensible (`Lending.RelatedParties.Read`, auditada). **H**: no.
 
+### 3.12a `LND_ConnectedGroups` · `LND_ConnectedGroupMembers` — `ConnectedGroup` · `ConnectedGroupMember` (K1, H; FR-041, SC-022, C112)
+
+> Llevado aquí en la fase 24 (T1090, C111): las dos tablas nacieron en `CarteraNucleo` (T0213) con la decisión C112 y no tenían su ficha.
+
+Grupos conectados que registra el jefe de cartera con su fundamento; la concentración se mide por deudor **y** por grupo con el mismo
+límite (`GrupoConectadoDelDeudor` arma el grupo transitivo con los grupos registrados, los vinculados y los codeudores comunes).
+
+| Columna (`LND_ConnectedGroups`) | Tipo | Nulo | Notas |
+|---|---|---|---|
+| `Name` | nvarchar(120) | no | |
+| `Basis` | int (`ConnectedGroupBasis`, parte 3 §9.1) | no | `EconomicLink` 1, `LegalLink` 2, `CommonCoDebtor` 3, `RelatedParty` 4 |
+| `Grounds` | nvarchar(1000) | no | fundamento escrito, obligatorio |
+| `SupportAttachmentPublicId` | uniqueidentifier | sí | soporte |
+| `RegisteredByUserId` | int FK `SEC_Users` | no | |
+| `ValidFrom` | date | no | |
+| `EndedAt` · `EndReason` | datetime · nvarchar(500) | sí | escritura única (`[EscrituraUnica]`): terminar el grupo |
+
+| Columna (`LND_ConnectedGroupMembers`) | Tipo | Nulo | Notas |
+|---|---|---|---|
+| `GroupId` | int FK `LND_ConnectedGroups` | no | |
+| `PersonId` | int FK `COR_People` | no | UK `UK_LND_ConnectedGroupMembers_Group_Person (GroupId, PersonId)` filtrado `[EndedAt] IS NULL` |
+| `ValidFrom` | date | no | |
+| `EndedAt` | datetime | sí | escritura única: retirar a la persona del grupo |
+
+**Reglas**. Vigente en D si empezó y no terminó antes de que acabe D (`EndedAt` ≤ D no cuenta). Errores
+`Lending.ConnectedGroup.NotFound` y `.Ended`. Leerlos es lectura sensible (`Lending.RelatedParties.Read`, auditada como
+`Lending.RelatedParty.Viewed`). **H**: sí (sólo la terminación se escribe después).
+
 ### 3.13 `LND_CaseParticipations` — `CaseParticipation` (K1, H; FR-005, T66)
 
 Registro único de intervenciones para la segregación; lo escribe sólo `RegistroDeIntervenciones` en la misma
@@ -5036,6 +5064,7 @@ partes 1 y 2 la usan (§0.7.1 la copia); los enums que esas partes fijan llevan 
 | `LoanOperationKind` | `Disbursement = 1`, `OpeningBalance = 2`, `Payment = 3`, `PaymentReversal = 4`, `DisbursementReversal = 5`, `RateReset = 6`, `TermsChange = 7`, `Charge = 8`, `Waiver = 9`, `CommercialAdjustment = 10`, `WriteOff = 11`, `PreferenceChange = 12`, `CreditBalanceResolution = 13`, `ProvisionalCollection = 14` | `LND_LoanOperations` | M, FR-048, FR-142 |
 | `LoanStatus` | `PendingDisbursement = 1`, `Active = 2`, `PaidOff = 3`, `WrittenOff = 4`, `Voided = 5`, `Novated = 6` | `LND_Loans` | spec |
 | `LoanOrigin` | `Origination = 1`, `Commercial = 2`, `Migration = 3` | `LND_Loans` | spec |
+| `ConnectedGroupBasis` **(C112; llevado aquí en la fase 24, T1090)** | `EconomicLink = 1`, `LegalLink = 2`, `CommonCoDebtor = 3`, `RelatedParty = 4` | `LND_ConnectedGroups` | FR-041 |
 | `DisbursementOrderStatus` | `Issued = 1`, `Disbursed = 2`, `Rejected = 3`, `CheckNotCashed = 4`, `Voided = 5` | `LND_DisbursementOrders` | FR-045 |
 | `CollateralStatus` | `Constituted = 1`, `Valid = 2`, `Released = 3`, `Extinguished = 4`, `Executed = 5` | `LND_Collaterals` | FR-043 |
 | `DayCountConvention` | `Thirty360 = 1`, `Actual365 = 2`, `Actual360 = 3` | versión de línea y condiciones selladas | M |
@@ -5351,6 +5380,7 @@ financiera el consejo lleva la fracción de vinculados—, `RelatedPartyFraction
 | `Lending.Collateral.CoDebtorsInsufficient` **(nuevo, C123; US2)** | validación `Blocking` · 422 (desembolso, US3) | «La línea exige {required} codeudores para este monto y plazo; la solicitud tiene {present}.» (`data: { required, present, ruleOrder }`) | menos codeudores de los que pide la regla de `LND_CreditLineCollateralRules` que casa por monto y plazo | FR-026 |
 | `Lending.DebtorMessage.DestinationMissing` **(nuevo, US2, C111)** | 422 | «{persona} no tiene correo registrado en el maestro de personas. Regístrelo para enviarle la simulación.» (`data.personPublicId`) | enviar una simulación a una persona sin correo | C87 |
 | `Lending.ConnectedGroup.NotFound` **(nuevo, US2, C111)** | 404 | «El grupo conectado no existe.» | grupo inexistente o sin `Lending.RelatedParties.Manage` en las escrituras | C112 |
+| `Lending.ConnectedGroup.Ended` **(nuevo, US2, C111; llevado aquí en la fase 24, T1090)** | 422 | «El grupo ya está terminado.» (`data.endedAt`) | terminar otra vez un grupo, o agregarle miembros | C112 |
 | `Lending.ConnectedGroup.MemberDuplicate` · `.MemberNotFound` · `.Ended` **(nuevo, US2, C111)** | 422 · 404 · 422 | «La persona ya está en el grupo.» · «La persona no está en el grupo.» · «El grupo ya está terminado: registre uno nuevo.» | agregar dos veces; retirar a quien no está; cambiar un grupo terminado | C112 |
 | `Lending.Screening.NotPending` **(fijado en tasks T0376, US2)** | 422 | «Este resultado no tiene una coincidencia pendiente de liberar.» (`data.outcome`) | liberar un resultado sin coincidencia o ya liberado | T70 |
 | `Lending.Block.AlreadyLifted` **(nuevo, US2, C111)** | 422 | «El bloqueo ya se levantó.» (`data.liftedOn`) | levantar dos veces (el levantamiento es `[EscrituraUnica]`) | FR-060 |

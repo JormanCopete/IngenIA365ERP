@@ -128,6 +128,7 @@ y las interpretaciones I-1–I-6 (D22). COOFLOPAL no recibe ahorros: no está ob
 | `LND_AttributionMatrices` · `LND_AttributionLevels` · `LND_AttributionRules` | `AttributionMatrix` · `AttributionLevel` · `AttributionRule` | K1 | Matriz de atribuciones versionada, niveles individuales o colegiados y reglas por sujeto (S4). |
 | `LND_GoverningBodies` · `LND_GoverningBodyMembers` | `GoverningBody` · `GoverningBodyMember` | K1 | Órganos (consejo, comités, gerencia) con quórum y mayorías con vigencia; miembros = personas del maestro (S5). |
 | `LND_RelatedParties` | `RelatedParty` | K1 | Personas vinculadas con su fundamento (S, FR-040). |
+| `LND_ConnectedGroups` · `LND_ConnectedGroupMembers` **(nuevas, C112; llevadas aquí en la fase 24, T1090)** | `ConnectedGroup` · `ConnectedGroupMember` | K1 | Grupos conectados con su fundamento (`ConnectedGroupBasis`) y sus miembros; la concentración se mide por deudor y por grupo (FR-041, SC-022). H. |
 | `LND_RiskPolicyVersions` | `RiskPolicyVersion` (H) | K1 | Política SARC del consejo, más estricta que la norma (R11). |
 | `LND_ContributionBalanceLoads` | `ContributionBalanceLoad` | K1 | Saldo de aportes y ahorro permanente por plantilla, con fecha (D19; R-06, F-16). |
 
@@ -314,6 +315,7 @@ Total: 101 tablas `LND_` de negocio más 17 de preparación de la migración, **
 | `LoanOperationKind` | `Disbursement`, `OpeningBalance`, `Payment`, `PaymentReversal`, `DisbursementReversal` (fijado aquí, FR-048), `RateReset`, `TermsChange`, `Charge`, `Waiver`, `CommercialAdjustment`, `WriteOff`, `PreferenceChange`, `CreditBalanceResolution`, `ProvisionalCollection` (fijado aquí, FR-142) | M |
 | `LoanStatus` (fijado aquí; estados de la spec) | `PendingDisbursement`, `Active`, `PaidOff`, `WrittenOff`, `Voided`, `Novated` | spec, Key Entities |
 | `LoanOrigin` (fijado aquí) | `Origination`, `Commercial`, `Migration` | spec |
+| `ConnectedGroupBasis` **(nuevo, C112; llevado aquí en la fase 24, T1090)** | `EconomicLink = 1`, `LegalLink = 2`, `CommonCoDebtor = 3`, `RelatedParty = 4` | FR-041 |
 | `DisbursementOrderStatus` (fijado aquí) | `Issued`, `Disbursed`, `Rejected`, `CheckNotCashed`, `Voided` | FR-045 |
 | `CollateralStatus` (fijado aquí) | `Constituted`, `Valid`, `Released`, `Extinguished`, `Executed` | FR-043 |
 | `DayCountConvention` | `Thirty360 = 1`, `Actual365 = 2`, `Actual360 = 3` | M |
@@ -325,7 +327,7 @@ Total: 101 tablas `LND_` de negocio más 17 de preparación de la migración, **
 | `RateKind` · `DefaultRateKind` | `Fixed`, `Variable` · `Fixed`, `RelativeToCurrent` | M |
 | `LoanNumberReservationStatus` | `Reserved = 1`, `Used = 2`, `Released = 3`, `Expired = 4` | PM |
 | `InboundMessageStatus` | `Processed = 1`, `ValidationFailed = 2`, `Rejected = 3`, `NotIncorporated = 4`, `ConfirmedByException = 5` | PM |
-| `LendingProcessKind` · `LendingProcessRunStatus` | `DailyCycle = 1`, `MonthlyClose = 2`, `CloseReopen = 3`, `NationalValueCorrection = 4` (fijado aquí, T28) · `Requested = 0`, `Running = 1`, `Completed = 2`, `CompletedWithErrors = 3`, `Failed = 4` | PM |
+| `LendingProcessKind` · `LendingProcessRunStatus` | `DailyCycle = 1`, `MonthlyClose = 2`, `CloseReopen = 3`, `NationalValueCorrection = 4` (fijado aquí, T28), `ScheduledTask = 5` y `MigratedCollectionStages = 6` (C123; llevados aquí en la fase 24, T1090: la marca de cada tarea diaria y el registro de la etapa migrada de K4) · `Requested = 0`, `Running = 1`, `Completed = 2`, `CompletedWithErrors = 3`, `Failed = 4` | PM |
 | `NonDeductionOrigin` (fijado aquí) | `Contract`, `Activation`, `PaymasterResult` (K2) | T92 |
 | `InsuranceClaimStatus` · `InsolvencyProceedingStatus` (fijados aquí) | `InProcess`, `Paid`, `Denied`, `Withdrawn` · `Negotiating`, `Agreement`, `Failed` | T102 |
 | `RatingCategory` · `RatingSubcategory` | `A`..`E` · `None`, `E1`, `E2` | R |
@@ -460,6 +462,9 @@ DTO de los puertos (español, `Application.Common.Integration.Lending`; entrada 
 | `SimuladorDeCredito` · `SimulacionEnAlcance` · `IRenderizadorDeSimulacion` (`SimulacionDeCreditoReport` en la API) (nuevos, US2, C111) | El plan de una versión de línea para quien todavía no tiene crédito (simulación, solicitud) y su PDF sin número | FR-034, T80 |
 | `ExposicionConsolidadaDelDeudor` · `CapacidadDePago` · `PersonaDeOriginacion` (nuevos, US2, C111) | Endeudamiento consolidado (deudor, codeudor, reservas, aprobadas); capacidad de pago y de descuento; afiliación, antigüedad y edad | FR-036, FR-041, FR-110 |
 | `GrupoConectadoDelDeudor` · `ValidacionDeConcentracion` (nuevos, US2, C111) | Grupo conectado transitivo (grupos registrados, vinculados, codeudores comunes); concentración por deudor y por grupo | FR-041, C112 |
+| `MarcaDeTareaDiariaDeCartera` **(nuevo, C123; llevado aquí en la fase 24, T1090)** | Único escritor de la marca de última ejecución de cada tarea diaria de Cartera (`LendingProcessKind.ScheduledTask`); la lee `cartera.vigilancia` para `Cartera.TareaDiariaNoCorrio` (K1) | SC-020, T0502 |
+| `DecisionDePago.WithinLegalPrepaymentCap` · `.LegalPrepaymentCap` **(nuevos, US5; llevados aquí en la fase 24, T1090)** | Si el prepago quedó dentro del tope legal y el tope en pesos, en la respuesta del contrato de obligaciones (K1) | FR-071, C115 |
+| `EfectoDeReplicacionCorreccionDeValorNacional.CodigosQueCorrigenLaCausacion` · `.CreditosAfectados` **(nuevos, fase 24)** | La corrección de una `USURA` o, desde la fase 24, de una `UVR` ya causada encola `NationalValueCorrection`; la de UVR mira y recorre sólo los créditos en UVR, y su corrección monetaria se registra como `MonetaryCorrection` (`LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria`, `RegistroDeCartera.DiferenciaDeCorreccionMonetaria`) (K6b) | T28, C05, D18 |
 | `ValidacionesDeOriginacion` · `EnrutamientoDeSolicitud` · `EvaluacionDeSolicitud` · `ArmadoDeSolicitud` (nuevos, US2, C111) | Las trece validaciones de FR-036 con su evidencia; enrutamiento con `RoutingSha256`; evaluación (validaciones, puntaje, enrutamiento); reglas de crear y editar la solicitud | FR-035–FR-038 |
 | `IConsultaDeListasDeCartera` · `IDisponibleDeCupo` · `IBloqueosDelDeudor` (nuevos, US2, C111) | Lo que las validaciones consumen de las piezas de 6B (`ConsultaDeListasDeCartera`, `DisponibleDeCupo`, `BloqueosDelDeudor`), que los implementan | T70, FR-058, FR-060 |
 | `ConsultaDeListasDeCartera` · `DisponibleDeCupo` · `BloqueosDelDeudor` · `SaldoDeAportesVigente` (nuevos, US2 bloque 6B, C111) | La consulta de listas de Cartera (canal vigente sellado, `ScreeningResult` sin guardar, bloqueo y alerta ante coincidencia, la ya liberada con las mismas versiones nace liberada); el disponible de cupo calculado al leer; el lector único de bloqueos vigentes; el lector único del saldo de aportes (Aportes primero, la carga por plantilla con «no disponible», D19) | T70, FR-058, FR-060, D19 |
@@ -735,6 +740,7 @@ enlace y grupo **«Ahorros y aportes»** con los 16 enlaces conservados (F-20, R
 | Reservas y ventas | `Lending.Reservation.KeyReused`, `.NotFound` (sólo en las rutas de reserva, C20); `Lending.Sale.NotIncorporated` (C63); `Lending.Payment.MeansClassNotAllowed` (C30) | PM-10 |
 | Migración, activación y cierre | los fija `data-model.md` §10 (C71) | DM3 |
 | Motor | `Lending.Usury.Exceeded`, `Lending.Schedule.PrincipalMismatch`, `Lending.Parameter.BelowLegalFloor` | M, R8 |
+| Llevados aquí en la fase 24 (T1090, C111) | `Lending.Collateral.CoDebtorsInsufficient` (K1, US2/US3), `Lending.Parameter.NotSupportedYet` (K1), `Lending.Payment.PreferenceAssumed` (aviso, K1, C115); `Lending.ConnectedGroup.NotFound`, `.Ended` (K1, C112). Su mensaje está en `data-model.md` §10 (`Lending.Housing.UvrTranchesNotSupported` no es un código de respuesta: es la guarda interna del tramo en UVR, que la regla de la línea ya impide) | C111, C112, C115, C123 |
 | Procesos | `Lending.Process.AlreadyRunning` | PM-13 |
 | Seguridad y actas | `Lending.Segregation.Conflict`, `Lending.Security.UserWithoutPerson`, `Lending.Session.VoterExcluded`, `.QuorumNotMet`, `.Closed`, `Lending.Attribution.NotExceptionable`, `.LevelRequired`, `Lending.Authorization.Missing`, `.WithoutEvidence` | S |
 | Mensajes al deudor | `Lending.DebtorMessage.ChannelNotAuthorized`, `.RecipientNotObligated`, `.OutsideLegalWindow`, `.WeeklyChannelUsed` (F-05 los llamó `Lending.Message.*`; CH32) | F-05 |
@@ -761,6 +767,8 @@ enlace y grupo **«Ahorros y aportes»** con los 16 enlaces conservados (F-20, R
   (FR-021), `Cartera.CuotaNoDescontadaPorNomina` (FR-112), `Cartera.CupoPorRevalidar` (FR-142),
   `Cartera.PlazoRegulatorioPorVencer` (FR-095, FR-136), `Cartera.PatrimonioTecnicoNoDisponible` (FR-041, T59; al
   contador).
+- **Cartera (llevado aquí en la fase 24, T1090)**: `Cartera.TareaDiariaNoCorrio` (C123, K1): una tarea diaria registrada de una
+  entrega vigente no corrió en su día (marca `LendingProcessKind.ScheduledTask` de `MarcaDeTareaDiariaDeCartera`).
 - **Otras áreas**: `Contabilidad.PeriodoInexistente` (DC-09); `Nomina.ValorNacionalDistinto` (fijado aquí: la fila
   que Nómina ya tenía difiere del valor nacional que la réplica adopta, T93); se reutilizan `Integracion.ValidacionFallida`
   (hoy sin escritor, lo levanta T17), `Integracion.MensajeRechazado` e `Integracion.MensajeSinEntregar`, con
@@ -926,6 +934,14 @@ propiedades `SumaDeCapitalDelPlanTests`, `ReproducibilidadDeLiquidacionTests`, `
 `ElReversoEnlazaCadaFilaConSuOriginalTests` (fijado aquí, T33), `CausacionIdempotenteTests`; `RendimientoDeCausacionTests` (50.000 créditos, motor solo, < 60 s); casos dorados
 de Nómina con la cuota de Cartera, tope y neto insuficiente (DE-19). Baterías de conformidad
 `ConformidadDeMensajeria`, `ConformidadDelDepositoDeValores`, `ConformidadDeCentral`; `TextosDeCarteraTests`.
+
+**Fase 24 (T1062, T1063, T1090)**: `NadieEscribeElLibroDeCarteraFueraDelRegistro.Quien_arma_una_fila_del_libro_se_la_entrega_al_registro`
+(el patrón `new LoanTransaction(` no mordía: las filas se arman con inicializador) y el `Set<>` del contexto como escritura;
+`ReglaSobreFuente.Faltantes` sin comentarios (un comentario con la llamada obligatoria ya no basta);
+`TextosDeCarteraTests.Nada_de_lo_que_se_lee_de_Cartera_nombra_el_sistema_anterior` (pantallas, menú, manual en línea, centro de
+reportes, plantillas, layouts, semillas, documentos y manuales); `RepoPath.ProductionRazorFiles` **(nuevo, T0008)**, el recorrido de las
+pantallas `.razor` de producción que usa `PrincipioIX_NoEmptyCatch`; de Domain, `DiferenciasConCorreccionMonetariaTests`. Rendimiento:
+`Lending/Performance/InformesYRegulatoriosPerformanceTests` (T1069) y `SiembraDeCarteraSintetica` (la cartera sintética compartida).
 
 **Integración** (colección «Cartera e2e» (fijado aquí), dos motores, cooperativas aisladas para lo que activa
 Cartera): `RetiroDeLaCarteraHeredadaTests`, `CarteraDesplegadaSinActivarTests` (definitiva, ordinaria, borrado de
