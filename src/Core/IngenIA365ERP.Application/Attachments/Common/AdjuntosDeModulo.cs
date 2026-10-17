@@ -276,6 +276,18 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDeReclamoSobreElReporte = "LendingCreditReportClaimSupport";
 
+    /// <summary>
+    /// Feature 013, K5 (US16; decisión del dueño del 2026-10-16): el comprobante del cargue en el portal de un archivo regulatorio (la constancia o el
+    /// pantallazo del radicado del SICSES o de la central), con dueño la <b>generación</b> (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> de la fila de
+    /// <c>LND_RegulatoryFiles</c>). Se lee con <c>Lending.RegulatoryFiles.Read</c>; lo sube quien tiene <c>Lending.RegulatoryFiles.MarkUploaded</c>
+    /// mientras la generación esté <c>Generated</c> (antes de marcarla cargada, que lo cita en <c>ReceiptAttachmentPublicId</c>); se borra sólo hasta
+    /// entonces: marcada cargada, es la evidencia del cargue y queda bloqueado (<c>Attachments.OwnerLocked</c>).
+    /// </summary>
+    public const string ComprobanteDeCargueRegulatorio = "LendingRegulatoryFileReceipt";
+
+    private const string LeerArchivosRegulatorios = "Lending.RegulatoryFiles.Read";
+    private const string MarcarArchivosRegulatoriosCargados = "Lending.RegulatoryFiles.MarkUploaded";
+
     private const string LeerCobranza = "Lending.Collections.Read";
     private const string GestionarCobroJuridico = "Lending.LegalProcesses.Manage";
     private const string LeerAvisosPrevios = "Lending.PriorNotices.Read";
@@ -365,6 +377,7 @@ public static class AdjuntosDeModulo
             DocumentoDeProcesoJuridico => LeerCobranza,
             ConstanciaDeAvisoPrevio => LeerAvisosPrevios,
             SoporteDeReclamoSobreElReporte => LeerReclamos,
+            ComprobanteDeCargueRegulatorio => LeerArchivosRegulatorios,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -537,6 +550,14 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Persona no encontrada.");
             return null;
         }
+        if (ownerEntityType == ComprobanteDeCargueRegulatorio)
+        {
+            // Feature 013, K5 (decisión del dueño del 2026-10-16): el comprobante del cargue, antes de marcar cargada la generación.
+            var archivo = await EstadoDelArchivoRegulatorioAsync(db, ownerEntityPublicId, ct);
+            if (archivo is null || !await permisos.HasPermissionAsync(MarcarArchivosRegulatoriosCargados, ct))
+                return new Error("Generic.NotFound", "Archivo regulatorio no encontrado.");
+            return archivo == Domain.Enums.Lending.RegulatoryFileStatus.Generated ? null : ComprobanteDeCargueBloqueado();
+        }
         if (ownerEntityType is LogotipoDeCartera or ImagenDeFirmaDeCartera)
         {
             if (contentType is not null && !TiposDeImagenDeCartera.Contains(contentType))
@@ -593,6 +614,15 @@ public static class AdjuntosDeModulo
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es evidencia de la cobranza (documento del cobro jurídico, constancia del aviso previo o soporte de un reclamo): se conserva y no se puede borrar.",
                 new { ownerEntityType });
+        // Feature 013, K5 (decisión del dueño del 2026-10-16): el comprobante del cargue se borra sólo antes de marcar cargada la generación.
+        if (ownerEntityType == ComprobanteDeCargueRegulatorio)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(MarcarArchivosRegulatoriosCargados, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await EstadoDelArchivoRegulatorioAsync(db, ownerEntityPublicId, ct) is Domain.Enums.Lending.RegulatoryFileStatus.Generated or null
+                ? null
+                : ComprobanteDeCargueBloqueado();
+        }
         // Feature 013 (T0361): el soporte del concepto tributario respalda una versión sellada de la línea.
         if (ownerEntityType == SoporteTributarioDeLinea)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
@@ -683,6 +713,16 @@ public static class AdjuntosDeModulo
                 new { ownerEntityType })
             : null;
     }
+
+    /// <summary>K5: el estado de una generación regulatoria por su <c>PublicId</c>, o nulo si no existe.</summary>
+    private static Task<Domain.Enums.Lending.RegulatoryFileStatus?> EstadoDelArchivoRegulatorioAsync(IApplicationDbContext db, Guid publicId, CancellationToken ct) =>
+        db.RegulatoryFiles.AsNoTracking().Where(f => f.PublicId == publicId && !f.IsDeleted)
+            .Select(f => (Domain.Enums.Lending.RegulatoryFileStatus?)f.Status).FirstOrDefaultAsync(ct);
+
+    /// <summary>K5: la generación ya no espera el comprobante (cargada, reemplazada o sin archivo): el que tenga se conserva.</summary>
+    public static Error ComprobanteDeCargueBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "El archivo regulatorio ya no espera el comprobante del cargue: sólo uno generado y sin marcar cargado lo recibe, y marcado cargado su comprobante "
+        + "es la evidencia del cargue y no se puede borrar.", new { ownerEntityType = ComprobanteDeCargueRegulatorio });
 
     /// <summary>K3: el estado de una novedad por su <c>PublicId</c>, o nulo si no existe.</summary>
     private static Task<Domain.Enums.Lending.LoanNoveltyStatus?> EstadoDeNovedadAsync(IApplicationDbContext db, Guid publicId, CancellationToken ct) =>

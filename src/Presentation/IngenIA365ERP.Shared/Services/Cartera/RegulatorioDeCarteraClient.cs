@@ -23,6 +23,9 @@ public sealed class RegulatorioDeCarteraClient(HttpClient http, CentralAuthClien
     /// <summary>Clase del archivo (<c>RegulatoryFileKind</c>): el SICSES o una central.</summary>
     public const int ClaseSicses = 1, ClaseCentral = 2;
 
+    /// <summary>El dueño de adjunto del comprobante del cargue en el portal (decisión del dueño del 2026-10-16).</summary>
+    public const string DuenoDeComprobantesDeCargue = "LendingRegulatoryFileReceipt";
+
     public Task<ResultadoDeInventario<IReadOnlyList<LayoutRegulatorioDto>>> LayoutsAsync(CancellationToken ct = default) =>
         Enviar<IReadOnlyList<LayoutRegulatorioDto>>(HttpMethod.Get, Ruta + "/layouts", null, null, ct);
 
@@ -117,7 +120,7 @@ public sealed record ValidacionRegulatoriaDto(
 
 public sealed record ConteosRegulatoriosDto(int Rows, int Blocking, int Warnings, int Excluded);
 
-public sealed record CargueRegulatorioDto(string FilingNumber, DateOnly? FilingDate, DateTime? At, string? By);
+public sealed record CargueRegulatorioDto(string FilingNumber, DateOnly? FilingDate, DateTime? At, string? By, Guid? ReceiptAttachmentPublicId = null);
 
 public sealed record ArchivoRegulatorioDto(
     Guid PublicId,

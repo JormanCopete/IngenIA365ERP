@@ -60,7 +60,8 @@ public sealed record RegulatoryValidationDto(
 
 public sealed record RegulatoryFileCountsDto(int Rows, int Blocking, int Warnings, int Excluded);
 
-public sealed record RegulatoryFileUploadDto(string FilingNumber, DateOnly? FilingDate, DateTime? At, string? By);
+/// <summary>El cargue en el portal: radicado, fecha, cuándo, quién y (decisión del dueño del 2026-10-16) el adjunto del comprobante, si se adjuntó.</summary>
+public sealed record RegulatoryFileUploadDto(string FilingNumber, DateOnly? FilingDate, DateTime? At, string? By, Guid? ReceiptAttachmentPublicId = null);
 
 /// <summary>Una generación regulatoria (api.md §18 <c>RegulatoryFileDto</c>). (nuevo)</summary>
 public sealed record RegulatoryFileDto(
@@ -143,6 +144,13 @@ public static class ErroresDeArchivosRegulatorios
 
     public static Error NoGenerado(RegulatoryFileStatus estado) => new ErrorConDatos(CodigoNoGenerado,
         $"Sólo un archivo generado se marca cargado; éste está «{estado}».", new { status = estado.ToString() });
+
+    /// <summary>Decisión del dueño del 2026-10-16: el comprobante del cargue no es un adjunto disponible de esta generación (422).</summary>
+    public const string CodigoComprobanteInvalido = "Lending.RegulatoryFile.ReceiptInvalid";
+
+    public static Error ComprobanteInvalido(Guid id) => new ErrorConDatos(CodigoComprobanteInvalido,
+        "El comprobante del cargue no es un archivo subido a esta generación (o todavía no terminó de subir): adjúntelo de nuevo y vuelva a marcar cargado.",
+        new { regulatoryFilePublicId = id });
 }
 
 // -------------------------------------------------------------------------------------------------------------------- preparación --
@@ -282,7 +290,7 @@ public static class ArchivosRegulatorios
             Advertencias(a), new RegulatoryFileCountsDto(a.LineCount, a.BlockingIssueCount, a.WarningCount, a.ExcludedCount), a.FileName, a.FileSha256,
             a.TieneArchivo, Nombre(a.GeneratedByUserId), a.GeneratedAt,
             a.FilingNumber is null ? null : new RegulatoryFileUploadDto(a.FilingNumber, a.FilingDate, a.UploadedAt,
-                a.UploadedByUserId is { } u ? Nombre(u) : null))).ToList();
+                a.UploadedByUserId is { } u ? Nombre(u) : null, a.ReceiptAttachmentPublicId))).ToList();
     }
 
     public static async Task<RegulatoryFileDetailDto> DetalleAsync(IApplicationDbContext db, RegulatoryFile f, CancellationToken ct)
@@ -507,7 +515,7 @@ public sealed class GeneracionDeArchivoRegulatorio(
                         PersonId = t.PersonId,
                         Included = t.Incluido,
                         ExclusionReason = t.MotivoDeExclusion,
-                        ReportedStatusCode = traduccion.Estado(t.Estado),
+                        ReportedStatusCode = traduccion.Novedad(t.Estado, t.RangoDeMora),
                         DaysPastDue = t.DiasDeMora,
                         BalanceReported = t.SaldoTotal,
                         IsNegative = t.Incluido && t.EsNegativo,
@@ -559,7 +567,9 @@ public sealed class GeneracionDeArchivoRegulatorio(
 /// <summary>
 /// Marca cargado en el portal un archivo generado (api.md §18, <c>POST /files/{id}/mark-uploaded</c>, <c>Lending.RegulatoryFiles.MarkUploaded</c>, con
 /// clave): sólo desde <c>Generated</c> (<c>Lending.RegulatoryFile.NotGenerated</c>), con el radicado y su fecha (la del cargue si no se da). Después el
-/// período de esa clase (y central) ya no se regenera. El comprobante del portal, si se adjuntó, queda en el evento. (nuevo)
+/// período de esa clase (y central) ya no se regenera. El comprobante del portal, si se adjuntó (decisión del dueño del 2026-10-16), es un adjunto
+/// <c>LendingRegulatoryFileReceipt</c> disponible de esta generación (si no, <c>Lending.RegulatoryFile.ReceiptInvalid</c>): queda en
+/// <c>ReceiptAttachmentPublicId</c> y en el evento, y desde ahí no se borra. (nuevo)
 /// </summary>
 public sealed record MarkRegulatoryFileUploadedCommand(
     Guid RegulatoryFilePublicId,
@@ -600,7 +610,12 @@ public sealed class MarkRegulatoryFileUploadedCommandHandler(
 
             var instante = request.UploadedAt.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(request.UploadedAt, DateTimeKind.Utc) : request.UploadedAt.ToUniversalTime();
             var fecha = request.FilingDate ?? DateOnly.FromDateTime(instante + reloj.AhoraLocal.Offset);
-            archivo.MarcarCargado(usuario, instante, request.FilingNumber, fecha);
+            // Decisión del dueño del 2026-10-16: el comprobante del portal, si se adjuntó, es un LendingRegulatoryFileReceipt de esta generación y disponible.
+            if (request.ReceiptAttachmentPublicId is { } comprobante
+                && !await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == comprobante && a.OwnerEntityType == AdjuntosDeModulo.ComprobanteDeCargueRegulatorio
+                                                                        && a.OwnerEntityPublicId == archivo.PublicId && a.Status == EstadoDeAdjunto.Available, ct))
+                return Result.Failure<RegulatoryFileDto>(ErroresDeArchivosRegulatorios.ComprobanteInvalido(archivo.PublicId));
+            archivo.MarcarCargado(usuario, instante, request.FilingNumber, fecha, request.ReceiptAttachmentPublicId);
             await db.SaveChangesAsync(ct);
 
             await auditoria.EmitirArchivoRegulatorioCargadoAsync(archivo.PublicId, new

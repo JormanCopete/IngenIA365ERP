@@ -101,6 +101,13 @@ public class RegulatoryFile : AuditableEntity
     [EscrituraUnica]
     public DateOnly? FilingDate { get; private set; }
 
+    /// <summary>
+    /// El comprobante del cargue en el portal (decisión del dueño del 2026-10-16): un adjunto <c>LendingRegulatoryFileReceipt</c> de esta generación, subido
+    /// por la pantalla al marcarla cargada (sin FK, como el archivo). Nulo si no se adjuntó. (nuevo)
+    /// </summary>
+    [EscrituraUnica]
+    public Guid? ReceiptAttachmentPublicId { get; private set; }
+
     /// <summary>¿Tiene archivo para descargar? Sólo lo generado (y lo que de ahí pasó a reemplazado o cargado).</summary>
     public bool TieneArchivo => FileAttachmentPublicId is not null;
 
@@ -118,9 +125,9 @@ public class RegulatoryFile : AuditableEntity
 
     /// <summary>
     /// Marcar cargado con el radicado (<c>MarkRegulatoryFileUploadedCommand</c>, <c>Lending.RegulatoryFiles.MarkUploaded</c>): sólo desde
-    /// <c>Generated</c> (<c>Lending.RegulatoryFile.NotGenerated</c>, lo responde el comando).
+    /// <c>Generated</c> (<c>Lending.RegulatoryFile.NotGenerated</c>, lo responde el comando), con el comprobante del portal si se adjuntó.
     /// </summary>
-    public void MarcarCargado(int usuarioId, DateTime instante, string radicado, DateOnly fechaDelRadicado)
+    public void MarcarCargado(int usuarioId, DateTime instante, string radicado, DateOnly fechaDelRadicado, Guid? comprobante = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(radicado);
         if (Status != RegulatoryFileStatus.Generated)
@@ -130,6 +137,7 @@ public class RegulatoryFile : AuditableEntity
         UploadedByUserId = usuarioId;
         FilingNumber = radicado.Trim();
         FilingDate = fechaDelRadicado;
+        ReceiptAttachmentPublicId = comprobante;
     }
 
     /// <summary>

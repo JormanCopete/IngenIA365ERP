@@ -10,6 +10,7 @@ using IngenIA365ERP.Domain.Common.Layouts;
 using IngenIA365ERP.Domain.Entities.Lending.Documents;
 using IngenIA365ERP.Domain.Enums.Lending;
 using Microsoft.EntityFrameworkCore;
+using NSubstitute;
 using static IngenIA365ERP.Application.Tests.Lending.Regulatory.RegulatoriosDePrueba;
 
 namespace IngenIA365ERP.Application.Tests.Lending.Regulatory;
@@ -184,6 +185,52 @@ public sealed class ArchivosRegulatoriosCommandsTests : IAsyncLifetime
         var otra = await SicsesAsync();
         otra.Error.Code.Should().Be("Lending.Regulatory.AlreadyUploaded");
         _r.Subidas.Should().ContainSingle("lo cargado no se regenera");
+    }
+
+    [Fact]
+    public async Task El_comprobante_del_cargue_se_sube_antes_de_marcar_cargado_y_despues_no_se_borra()
+    {
+        // Decisión del dueño del 2026-10-16: LendingRegulatoryFileReceipt, subido con MarkUploaded mientras la generación está Generated, leído con Read.
+        var g = Exito(await SicsesAsync()).File;
+        var permisos = NSubstitute.Substitute.For<IngenIA365ERP.Application.Payroll.Services.IPermissionChecker>();
+        permisos.HasPermissionAsync(NSubstitute.Arg.Any<string>(), NSubstitute.Arg.Any<CancellationToken>()).Returns(true);
+        const string Tipo = AdjuntosDeModulo.ComprobanteDeCargueRegulatorio;
+
+        (await AdjuntosDeModulo.PuedeSubirAsync(_r.Db, permisos, Tipo, g.PublicId, default)).Should().BeNull();
+        (await AdjuntosDeModulo.PuedeSubirAsync(_r.Db, permisos, Tipo, Guid.NewGuid(), default))!.Code.Should().Be("Generic.NotFound");
+        (await AdjuntosDeModulo.PuedeBorrarAsync(_r.Db, Tipo, g.PublicId, default, permisos)).Should().BeNull("antes de marcar cargado se puede cambiar");
+        await permisos.Received().HasPermissionAsync("Lending.RegulatoryFiles.MarkUploaded", NSubstitute.Arg.Any<CancellationToken>());
+        (await AdjuntosDeModulo.PuedeLeerAsync(permisos, Tipo, default)).Should().BeTrue();
+        await permisos.Received().HasPermissionAsync("Lending.RegulatoryFiles.Read", NSubstitute.Arg.Any<CancellationToken>());
+
+        var ajeno = await ComprobanteAsync(Guid.NewGuid());
+        var mal = await new MarkRegulatoryFileUploadedCommandHandler(_r.Db, _r.G.Auditoria, _r.G.Actor, _r.G.Reloj)
+            .Handle(new MarkRegulatoryFileUploadedCommand(g.PublicId, "RAD-2027-0002", _r.G.UtcNow, null, ajeno) { OperationKey = Guid.NewGuid() }, default);
+        mal.Error.Code.Should().Be(ErroresDeArchivosRegulatorios.CodigoComprobanteInvalido, "el comprobante es de otra generación");
+
+        var comprobante = await ComprobanteAsync(g.PublicId);
+        var cargado = await new MarkRegulatoryFileUploadedCommandHandler(_r.Db, _r.G.Auditoria, _r.G.Actor, _r.G.Reloj)
+            .Handle(new MarkRegulatoryFileUploadedCommand(g.PublicId, "RAD-2027-0002", _r.G.UtcNow, null, comprobante) { OperationKey = Guid.NewGuid() }, default);
+        _r.Db.ChangeTracker.Clear();
+
+        cargado.Value.Uploaded!.ReceiptAttachmentPublicId.Should().Be(comprobante);
+        (await _r.Db.RegulatoryFiles.AsNoTracking().SingleAsync(f => f.PublicId == g.PublicId)).ReceiptAttachmentPublicId.Should().Be(comprobante);
+        (await AdjuntosDeModulo.PuedeBorrarAsync(_r.Db, Tipo, g.PublicId, default, permisos))!.Code.Should().Be(AttachmentErrorCodes.OwnerLocked);
+        (await AdjuntosDeModulo.PuedeSubirAsync(_r.Db, permisos, Tipo, g.PublicId, default))!.Code.Should().Be(AttachmentErrorCodes.OwnerLocked);
+    }
+
+    private async Task<Guid> ComprobanteAsync(Guid dueno)
+    {
+        var adjunto = new IngenIA365ERP.Domain.Entities.Core.Attachment
+        {
+            OwnerEntityType = AdjuntosDeModulo.ComprobanteDeCargueRegulatorio, OwnerEntityPublicId = dueno, FileName = "radicado.pdf",
+            ContentType = "application/pdf", SizeBytes = 10, Sha256Hex = new string('a', 64), StoragePath = "x",
+            Status = IngenIA365ERP.Domain.Enums.Core.EstadoDeAdjunto.Available, CreatedBy = "test",
+        };
+        _r.Db.Attachments.Add(adjunto);
+        await _r.Db.SaveChangesAsync();
+        _r.Db.ChangeTracker.Clear();
+        return adjunto.PublicId;
     }
 
     [Fact]

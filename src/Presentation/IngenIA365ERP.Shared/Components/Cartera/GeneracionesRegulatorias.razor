@@ -29,7 +29,7 @@
                         @if (Clase == RegulatorioDeCarteraClient.ClaseCentral) { <td class="numero">@archivo.Counts.Excluded</td> }
                         <td>@(archivo.FileName ?? "—")<br /><span class="texto-tenue" title="@archivo.Sha256">SHA-256 @TextosRegulatorios.Huella(archivo.Sha256)</span></td>
                         <td>@archivo.GeneratedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @archivo.GeneratedBy</td>
-                        <td>@(archivo.Uploaded is { } u ? $"{u.FilingNumber} · {u.FilingDate?.ToString("dd/MM/yyyy")} · {u.By}" : "—")</td>
+                        <td>@(archivo.Uploaded is { } u ? $"{u.FilingNumber} · {u.FilingDate?.ToString("dd/MM/yyyy")} · {u.By}{(u.ReceiptAttachmentPublicId is null ? "" : " · con comprobante")}" : "—")</td>
                         <td class="acciones">
                             <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => VerAsync(archivo))">Ver</SfButton>
                             @if (archivo.DownloadAvailable)
@@ -81,6 +81,18 @@
                     <label class="campo campo-ancho">Radicado * <input class="e-input" @bind="_radicado" maxlength="100" /></label>
                     <label class="campo">Fecha del radicado <input type="date" class="e-input" @bind="_fechaRadicado" /></label>
                 </div>
+                @if (_aCargar is { } conComprobante)
+                {
+                    @* Decisión del dueño del 2026-10-16: el comprobante del cargue (constancia o pantallazo del radicado) sube directo al almacén. *@
+                    <SubirSoporte OwnerEntityType="@RegulatorioDeCarteraClient.DuenoDeComprobantesDeCargue" OwnerEntityPublicId="@conComprobante.PublicId"
+                                  Rotulo="Adjuntar comprobante" OnSubido="@CargarComprobantesAsync" />
+                    <label class="campo">Comprobante del cargue
+                        <select class="e-input" @bind="_comprobante">
+                            <option value="">Sin comprobante</option>
+                            @foreach (var x in _comprobantes) { <option value="@x.PublicId">@x.FileName</option> }
+                        </select>
+                    </label>
+                }
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_radicado))" OnClick="@MarcarCargadoAsync">Marcar cargado</SfButton>
@@ -107,7 +119,8 @@
     private ArchivoRegulatorioDetalleDto? _detalle;
     private ArchivoRegulatorioDto? _aCargar;
     private bool _mostrarCargue;
-    private string? _radicado, _error;
+    private string? _radicado, _error, _comprobante;
+    private List<AdjuntoDto> _comprobantes = [];
     private DateOnly? _fechaRadicado;
     private ClaveDeOperacion _clave = new();
     private string? _centralCargada;
@@ -156,21 +169,32 @@
         await Adjuntos.DescargarAsync(url, archivo.FileName ?? "archivo-regulatorio.txt");
     }
 
-    private void AbrirCargue(ArchivoRegulatorioDto archivo)
+    private async Task AbrirCargue(ArchivoRegulatorioDto archivo)
     {
         _aCargar = archivo;
-        _radicado = null;
+        _radicado = _comprobante = null;
+        _comprobantes = [];
+        await CargarComprobantesAsync();
         _fechaRadicado = DateOnly.FromDateTime(DateTime.Today);
         _error = null;
         _clave = new ClaveDeOperacion();
         _mostrarCargue = true;
     }
 
+    private async Task CargarComprobantesAsync()
+    {
+        if (_aCargar is not { } a) return;
+        var r = await Adjuntos.ListarAsync(RegulatorioDeCarteraClient.DuenoDeComprobantesDeCargue, a.PublicId);
+        _comprobantes = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_comprobante is null && _comprobantes.Count > 0) _comprobante = _comprobantes[^1].PublicId.ToString();
+    }
+
     private async Task MarcarCargadoAsync()
     {
         if (_aCargar is null || string.IsNullOrWhiteSpace(_radicado)) return;
         using var carga = _accion.Iniciar();
-        var r = await Regulatorio.MarcarCargadoAsync(_aCargar.PublicId, new MarcarCargadoRequest(_radicado.Trim(), DateTime.UtcNow, _fechaRadicado, null), _clave);
+        var comprobante = Guid.TryParse(_comprobante, out var c) ? c : (Guid?)null;
+        var r = await Regulatorio.MarcarCargadoAsync(_aCargar.PublicId, new MarcarCargadoRequest(_radicado.Trim(), DateTime.UtcNow, _fechaRadicado, comprobante), _clave);
         if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo marcar cargado."; return; }
         _mostrarCargue = false;
         await Notification.SuccessAsync($"{_aCargar.FileName} quedó cargado con el radicado {r.Value!.Uploaded?.FilingNumber}.");

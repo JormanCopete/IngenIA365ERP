@@ -27900,6 +27900,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ReceiptAttachmentPublicId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
