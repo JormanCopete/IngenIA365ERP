@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Carter;
+using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Lending.Risk;
 using IngenIA365ERP.Application.Lending.Risk.Evaluations;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -19,8 +21,9 @@ namespace IngenIA365ERP.API.Endpoints.Lending;
 /// <item><c>/risk/monthly-closes</c>: la lista, la preparación y la orden del cierre del mes (<c>Lending.MonthlyClose.Execute</c>, 202: sólo encola
 /// la corrida <c>MonthlyClose</c>), el encabezado, las líneas, el reporte de cambios, el cuadre con Contabilidad
 /// (<c>Lending.Reconciliation.View</c>) y la reapertura (<c>Lending.MonthlyClose.Reopen</c>, 202: encola la corrida <c>CloseReopen</c>);</item>
-/// <item><c>/risk/impairment-model</c> (sólo <c>GET</c>: <c>POST /elections</c> no existe hasta K6a y responde 404) y
-/// <c>/risk/arrears-history/completeness</c>;</item>
+/// <item><c>/risk/impairment-model</c> y, desde K6a (T1038), sus elecciones voluntarias (<c>GET /elections</c> con <c>Lending.Ratings.Read</c>;
+/// <c>POST /elections</c> con <c>Lending.ImpairmentModel.Manage</c>); <c>/risk/arrears-history/completeness</c> y, desde K6a, la plantilla
+/// <c>lending.arrears-history</c> (<c>GET /template.xlsx</c> y <c>POST /import?mode=review|apply</c> con <c>Lending.ArrearsHistory.Import</c>);</item>
 /// <item><c>GET /api/lending/loans/{id}/rating</c>: la informativa del crédito con sus candidatas, la oficial del último cierre y el análisis.</item>
 /// </list>
 /// Toda escritura lleva <c>Idempotency-Key</c> (<c>LosComandosDeCarteraLlevanClave</c>); cada ruta sólo reenvía al <see cref="ISender"/>. (nuevo)
@@ -37,6 +40,8 @@ public class RiskEndpoints : ICarterModule
     public const string VerConciliacion = "Lending.Reconciliation.View";
     public const string PrepararEvaluacion = "Lending.PortfolioEvaluations.Prepare";
     public const string AplicarEvaluacion = "Lending.PortfolioEvaluations.Apply";
+    public const string ElegirModelo = "Lending.ImpairmentModel.Manage";
+    public const string ImportarHistorial = "Lending.ArrearsHistory.Import";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -152,6 +157,36 @@ public class RiskEndpoints : ICarterModule
             .WithName("Lending_Risk_ArrearsHistory_Completeness")
             .RequirePermission(LeerCalificaciones);
 
+        // K6a (T1038; api.md §12.4): la adopción y el desistimiento voluntarios del modelo de pérdida esperada. La elección nace con el PublicId de la
+        // propuesta que el consejo decidió (el sujeto del punto del acta, ImpairmentModelChange).
+        riesgo.MapGet("/impairment-model/elections", async (ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListImpairmentModelElectionsQuery(), ct))
+            .WithName("Lending_Risk_ImpairmentModel_Elections_List")
+            .RequirePermission(LeerCalificaciones);
+
+        riesgo.MapPost("/impairment-model/elections", async (EleccionDelModeloRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                LendingGroup.Creado(await sender.Send(new RegisterImpairmentModelElectionCommand(body.ElectionPublicId, body.Kind, body.ValidFrom,
+                    body.Segments, body.SessionItemPublicId, body.ImpactStudyAttachmentPublicId, body.NoticeDate, body.NoticeAttachmentPublicId,
+                    body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct),
+                    $"{LendingGroup.Prefijo}/risk/impairment-model/elections"))
+            .WithName("Lending_Risk_ImpairmentModel_Elections_Register")
+            .ConClaveDeOperacion()
+            .RequirePermission(ElegirModelo);
+
+        // K6a (T1038; api.md §12.5, plantillas.md §7): la carga complementaria del historial de mora. La plantilla vacía y la importación con el mismo
+        // permiso; sin descarga con datos.
+        var historial = LendingGroup.Grupo(app, "/risk/arrears-history", "Cartera Riesgo y cierres");
+        historial.MapPlantilla(
+            () => PlantillaDeHistorialComplementario.Definicion,
+            "plantilla-cartera-historial-de-mora",
+            ImportarHistorial,
+            ImportarHistorial,
+            "Lending_Risk_ArrearsHistory",
+            "Lending.Reports.ExportPersonalData",
+            AuditEventTypes.LendingReportExported,
+            importar: (modo, archivo, motivo, clave) =>
+                new ImportArrearsHistoryCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
+
         // ------------------------------------------------------------------------------- evaluación de cartera (§12.6, K3) --
         // La recomienda el comité de riesgos y la aprueba el consejo por sus puntos de acta (AsuntoDeEvaluacionDeCartera); aquí sólo se lee,
         // se prepara y se aplica con esos dos puntos.
@@ -231,6 +266,14 @@ public class RiskEndpoints : ICarterModule
 
     /// <summary>El motivo de levantar la calificación por análisis.</summary>
     public sealed record MotivoRequest(string? Reason);
+
+    /// <summary>
+    /// <c>{ electionPublicId, kind: VoluntaryAdoption | VoluntaryWithdrawal, segments[]?, validFrom, sessionItemPublicId,
+    /// impactStudyAttachmentPublicId, noticeDate, noticeAttachmentPublicId, reason }</c> (api.md §12.4, K6a). <c>electionPublicId</c> es el sujeto
+    /// del punto del acta; sin segmentos, los tres de la pérdida esperada.
+    /// </summary>
+    public sealed record EleccionDelModeloRequest(Guid ElectionPublicId, ImpairmentModelElectionKind Kind, IReadOnlyList<string>? Segments, DateOnly ValidFrom,
+        Guid SessionItemPublicId, Guid ImpactStudyAttachmentPublicId, DateOnly NoticeDate, Guid NoticeAttachmentPublicId, string? Reason);
 
     /// <summary><c>{ reason? }</c> de la orden del cierre.</summary>
     public sealed record OrdenDeCierreRequest(string? Reason);

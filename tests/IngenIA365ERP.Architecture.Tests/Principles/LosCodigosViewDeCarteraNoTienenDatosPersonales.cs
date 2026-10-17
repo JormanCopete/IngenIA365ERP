@@ -66,6 +66,9 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         ("GET /api/lending/risk/monthly-closes/{id}/loans", "Lending.Ratings.Read", "RiskEndpoints.cs"),
         ("GET /api/lending/risk/monthly-closes/{id}/changes", "Lending.Ratings.Read", "RiskEndpoints.cs"),
         ("GET /api/lending/loans/{id}/rating", "Lending.Ratings.Read", "RiskEndpoints.cs"),
+        // K6a (bloque 3, T1038): la completitud del historial y la carga complementaria devuelven créditos con su número; la revisión, por fila.
+        ("GET /api/lending/risk/arrears-history/completeness", "Lending.Ratings.Read", "RiskEndpoints.cs"),
+        ("POST /api/lending/risk/arrears-history/import", "Lending.ArrearsHistory.Import", "RiskEndpoints.cs"),
         // K5, US16 (fase 21, T0994): los archivos regulatorios traen deudores (documento, saldos, mora, motivo de exclusión): listar, leer y descargar
         // van con RegulatoryFiles.Read, nunca con un View (DT §2.25).
         ("GET /api/lending/regulatory/files", "Lending.RegulatoryFiles.Read", "RegulatoryEndpoints.cs"),

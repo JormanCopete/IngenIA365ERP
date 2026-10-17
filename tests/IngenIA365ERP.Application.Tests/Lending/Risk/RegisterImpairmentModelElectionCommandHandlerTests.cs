@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
@@ -46,14 +47,30 @@ public class RegisterImpairmentModelElectionCommandHandlerTests : IAsyncLifetime
         return Task.CompletedTask;
     }
 
-    private Task<Result<ImpairmentModelElectionDto>> RegistrarAsync(ImpairmentModelElectionKind clase = ImpairmentModelElectionKind.VoluntaryAdoption,
-        DateOnly? desde = null, DateOnly? aviso = null, Guid? propuesta = null, Guid? punto = null)
+    private async Task<Result<ImpairmentModelElectionDto>> RegistrarAsync(ImpairmentModelElectionKind clase = ImpairmentModelElectionKind.VoluntaryAdoption,
+        DateOnly? desde = null, DateOnly? aviso = null, Guid? propuesta = null, Guid? punto = null, bool conSoportes = true)
     {
         var id = propuesta ?? Guid.NewGuid();
-        return new RegisterImpairmentModelElectionCommandHandler(_c.Db, new LectorDeDocumentoNormativo(_c.Db), _c.G.Perfil, new PuntoDeActaCerrado(_c.Db),
+        // Bloque 3 de K6a: el estudio y el aviso son adjuntos de la propuesta (dueño LendingImpairmentModelElectionSupport).
+        var estudio = conSoportes ? await SoporteAsync(id) : Guid.NewGuid();
+        var soporteDelAviso = conSoportes ? await SoporteAsync(id) : Guid.NewGuid();
+        return await new RegisterImpairmentModelElectionCommandHandler(_c.Db, new LectorDeDocumentoNormativo(_c.Db), _c.G.Perfil, new PuntoDeActaCerrado(_c.Db),
                 _c.G.Intervenciones(), _c.G.Auditoria, _c.G.Reloj)
             .Handle(new RegisterImpairmentModelElectionCommand(id, clase, desde ?? Enero, null, punto ?? PerdidaEsperadaDePrueba.Acta(_c.Db, CierreDePrueba.Hoy, id),
-                Guid.NewGuid(), aviso ?? Aviso, Guid.NewGuid(), "Decisión del consejo") { OperationKey = Guid.NewGuid() }, default);
+                estudio, aviso ?? Aviso, soporteDelAviso, "Decisión del consejo") { OperationKey = Guid.NewGuid() }, default);
+    }
+
+    private async Task<Guid> SoporteAsync(Guid propuesta)
+    {
+        var a = new Domain.Entities.Core.Attachment
+        {
+            OwnerEntityType = AdjuntosDeModulo.SoporteDeCambioDelModelo, OwnerEntityPublicId = propuesta, FileName = "soporte.pdf",
+            ContentType = "application/pdf", SizeBytes = 10, Sha256Hex = new string('c', 64), StoragePath = "x",
+            Status = Domain.Enums.Core.EstadoDeAdjunto.Available, CreatedBy = "test",
+        };
+        _c.Db.Attachments.Add(a);
+        await _c.Db.SaveChangesAsync();
+        return a.PublicId;
     }
 
     private Task AnexoConVoluntariaAsync() => PerdidaEsperadaDePrueba.Anexo2Async(_c.Db, _c.G.UtcNow, new DateOnly(2026, 1, 1), conVoluntaria: true);
@@ -189,5 +206,38 @@ public class RegisterImpairmentModelElectionCommandHandlerTests : IAsyncLifetime
     {
         SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(CatalogoDeCartera.EntregaVigente).Should().BeTrue("la entrega vigente es K6a");
         ErroresDeRiesgo.ModeloNoDisponible().Code.Should().Be("Lending.ImpairmentModel.NotAvailable");
+    }
+
+    [Fact]
+    public async Task Sin_el_estudio_ni_el_aviso_subidos_a_la_propuesta_responde_SupportInvalid()
+    {
+        await AnexoConVoluntariaAsync();
+
+        var r = await RegistrarAsync(conSoportes: false);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be(ErroresDeRiesgo.CodigoModeloSoporteInvalido);
+        (await _c.Db.ImpairmentModelElections.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Los_soportes_de_la_propuesta_se_suben_con_ImpairmentModel_Manage_y_registrada_la_eleccion_quedan_bloqueados()
+    {
+        await AnexoConVoluntariaAsync();
+        var permisos = NSubstitute.Substitute.For<IngenIA365ERP.Application.Payroll.Services.IPermissionChecker>();
+        NSubstitute.SubstituteExtensions.Returns(permisos.HasPermissionAsync("Lending.ImpairmentModel.Manage", NSubstitute.Arg.Any<CancellationToken>()), true);
+        var sinPermiso = NSubstitute.Substitute.For<IngenIA365ERP.Application.Payroll.Services.IPermissionChecker>();
+        var propuesta = Guid.NewGuid();
+
+        (await AdjuntosDeModulo.PuedeSubirAsync(_c.Db, permisos, AdjuntosDeModulo.SoporteDeCambioDelModelo, propuesta, default)).Should().BeNull();
+        (await AdjuntosDeModulo.PuedeSubirAsync(_c.Db, sinPermiso, AdjuntosDeModulo.SoporteDeCambioDelModelo, propuesta, default))!.Code
+            .Should().Be("Generic.NotFound");
+
+        Exito(await RegistrarAsync(propuesta: propuesta));
+
+        (await AdjuntosDeModulo.PuedeSubirAsync(_c.Db, permisos, AdjuntosDeModulo.SoporteDeCambioDelModelo, propuesta, default))!.Code
+            .Should().Be(AttachmentErrorCodes.OwnerLocked);
+        (await AdjuntosDeModulo.PuedeBorrarAsync(_c.Db, AdjuntosDeModulo.SoporteDeCambioDelModelo, propuesta, default, permisos))!.Code
+            .Should().Be(AttachmentErrorCodes.OwnerLocked);
     }
 }

@@ -131,6 +131,7 @@ public static class ErroresDeRiesgo
     public const string CodigoModeloFechaOcupada = "Lending.ImpairmentModel.ValidFromTaken";
     public const string CodigoModeloSinRegla = "Lending.ImpairmentModel.RuleMissing";
     public const string CodigoModeloRetroactivo = "Lending.ImpairmentModel.RetroactiveValidFrom";
+    public const string CodigoModeloSoporteInvalido = "Lending.ImpairmentModel.SupportInvalid";
     public const string CodigoHistorialFueraDeLaCarga = "Lending.ArrearsHistory.LoanNotInLoad";
     public const string CodigoHistorialMesCerrado = "Lending.ArrearsHistory.MonthClosed";
     public const string CodigoHistorialCargaCerrada = "Lending.ArrearsHistory.LoadClosed";
@@ -175,6 +176,12 @@ public static class ErroresDeRiesgo
     public static Error ModeloRetroactivo(DateOnly desde, DateOnly ultimoCierre) => new ErrorConDatos(CodigoModeloRetroactivo,
         $"El cambio no puede regir desde el {desde:yyyy-MM-dd}: el {ultimoCierre:yyyy-MM-dd} ya hay un cierre de Cartera y los cierres no se recalculan.",
         new { validFrom = desde, lastCloseDate = ultimoCierre });
+
+    /// <summary>K6a, bloque 3 (T1039): el estudio de impacto o el soporte del aviso no es un adjunto disponible de esta propuesta.</summary>
+    public static Error ModeloSoporteInvalido(IReadOnlyList<string> campos) => new ErrorConDatos(CodigoModeloSoporteInvalido,
+        "El estudio de impacto y el soporte del aviso se suben a la propuesta del cambio antes de registrarlo: "
+        + $"{string.Join(" y ", campos)} no es un archivo disponible de esta propuesta.",
+        new { fields = campos });
 
     public static string HistorialFueraDeLaCarga(string numero) =>
         $"El crédito {numero} no es de la carga de migración que se complementa.";

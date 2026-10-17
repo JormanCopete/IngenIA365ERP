@@ -285,6 +285,19 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string ComprobanteDeCargueRegulatorio = "LendingRegulatoryFileReceipt";
 
+    /// <summary>
+    /// Feature 013, K6a (T1039; api.md §12.4; FR-105): el estudio de impacto y el soporte del aviso a la Superintendencia de una adopción o un
+    /// desistimiento voluntario del modelo de pérdida esperada, con dueño la <b>propuesta</b> (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> que la
+    /// pantalla genera al proponer el cambio, que es el sujeto del punto del acta y el de la elección registrada). Se sube <b>antes</b> de registrar la
+    /// elección, que los cita en <c>ImpactStudyAttachmentPublicId</c> y <c>SupervisorNoticeAttachmentPublicId</c>. Se lee con
+    /// <c>Lending.Ratings.Read</c>; se sube y se borra con <c>Lending.ImpairmentModel.Manage</c> mientras no haya una elección con ese <c>PublicId</c>;
+    /// registrada, queda bloqueado (<c>Attachments.OwnerLocked</c>): es el soporte de un hecho de sólo inserción.
+    /// </summary>
+    public const string SoporteDeCambioDelModelo = "LendingImpairmentModelElectionSupport";
+
+    private const string LeerCalificaciones = "Lending.Ratings.Read";
+    private const string ElegirModeloDeDeterioro = "Lending.ImpairmentModel.Manage";
+
     private const string LeerArchivosRegulatorios = "Lending.RegulatoryFiles.Read";
     private const string MarcarArchivosRegulatoriosCargados = "Lending.RegulatoryFiles.MarkUploaded";
 
@@ -378,6 +391,7 @@ public static class AdjuntosDeModulo
             ConstanciaDeAvisoPrevio => LeerAvisosPrevios,
             SoporteDeReclamoSobreElReporte => LeerReclamos,
             ComprobanteDeCargueRegulatorio => LeerArchivosRegulatorios,
+            SoporteDeCambioDelModelo => LeerCalificaciones,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -567,6 +581,12 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Configuración de Cartera no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteDeCambioDelModelo)
+        {
+            // Feature 013, K6a (T1039): el estudio de impacto y el aviso de una propuesta de cambio del modelo, mientras no se registre la elección.
+            if (!await permisos.HasPermissionAsync(ElegirModeloDeDeterioro, ct)) return new Error("Generic.NotFound", "Propuesta no encontrada.");
+            return await EleccionRegistradaAsync(db, ownerEntityPublicId, ct) ? CambioDelModeloBloqueado() : null;
+        }
         if (ownerEntityType != Comprobante)
             return new Error(AttachmentErrorCodes.OwnerNotAllowed,
                 "Este tipo de documento todavía no admite soportes.");
@@ -668,6 +688,13 @@ public static class AdjuntosDeModulo
             return await EstadoDeNovedadAsync(db, ownerEntityPublicId, ct) is { } estadoDeLaNovedad && NovedadDecidida(estadoDeLaNovedad)
                 ? NovedadBloqueada()
                 : null;
+        }
+        // Feature 013, K6a (T1039): el soporte de un cambio del modelo se borra sólo antes de registrar la elección.
+        if (ownerEntityType == SoporteDeCambioDelModelo)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(ElegirModeloDeDeterioro, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            return await EleccionRegistradaAsync(db, ownerEntityPublicId, ct) ? CambioDelModeloBloqueado() : null;
         }
         // Feature 013 (T0638): el soporte de un indicador regulatorio se borra sólo antes de registrar el indicador que lo cita.
         if (ownerEntityType == SoporteDeIndicadorRegulatorio)
@@ -777,6 +804,15 @@ public static class AdjuntosDeModulo
         return adjuntos.Count > 0
             && await db.RegulatoryIndicators.AsNoTracking().AnyAsync(i => i.SupportAttachmentPublicId != null && adjuntos.Contains(i.SupportAttachmentPublicId.Value), ct);
     }
+
+    /// <summary>Feature 013, K6a (T1039): ¿ya hay una elección del modelo registrada con ese <c>PublicId</c>?</summary>
+    private static Task<bool> EleccionRegistradaAsync(IApplicationDbContext db, Guid dueno, CancellationToken ct) =>
+        db.ImpairmentModelElections.AsNoTracking().AnyAsync(e => e.PublicId == dueno, ct);
+
+    /// <summary>El estudio de impacto o el aviso de una elección ya registrada no se cambia ni se borra (K6a, T1039).</summary>
+    public static Error CambioDelModeloBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es el soporte de una adopción o un desistimiento del modelo de pérdida esperada ya registrado: se conserva con la elección y no se puede cambiar.",
+        new { ownerEntityType = SoporteDeCambioDelModelo });
 
     /// <summary>
     /// Feature 013, US13 (T0781): ¿<paramref name="adjunto"/> ya fue reemplazado? La imagen vigente de un tipo es la última disponible (la de mayor

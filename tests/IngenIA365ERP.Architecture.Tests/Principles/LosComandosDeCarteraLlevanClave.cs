@@ -293,6 +293,10 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Regulatory.GenerateSicsesFileCommand),
         typeof(IngenIA365ERP.Application.Lending.Regulatory.GenerateCreditBureauFileCommand),
         typeof(IngenIA365ERP.Application.Lending.Regulatory.MarkRegulatoryFileUploadedCommand),
+        // K6a (fase 22, bloque 3, T1038): la adopción o el desistimiento voluntario del modelo y la carga complementaria del historial de mora (sus
+        // rutas viven en RiskEndpoints.cs, que ya está en Archivos).
+        typeof(IngenIA365ERP.Application.Lending.Risk.RegisterImpairmentModelElectionCommand),
+        typeof(IngenIA365ERP.Application.Lending.Risk.ImportArrearsHistoryCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);

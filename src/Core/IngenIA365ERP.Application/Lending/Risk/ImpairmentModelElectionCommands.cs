@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using FluentValidation;
+using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -9,6 +10,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Application.Lending.Sessions;
 using IngenIA365ERP.Domain.Common.NationalValues;
+using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Risk;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
@@ -86,6 +88,9 @@ public sealed class RegisterImpairmentModelElectionCommandValidator : ValidadorC
 /// <item>al adoptar: el Anexo 2 vigente en <c>ValidFrom</c> trae la PI de la aplicación voluntaria en cada segmento (<c>.VoluntaryPdMissing</c>; la
 /// semilla no la trae: la de la CE 100 está por registrar) y los créditos vivos de esos segmentos tienen el historial completo a la fecha del primer
 /// cierre que la usa (<c>.IncompleteHistory</c>, con la lista);</item>
+/// <item>el estudio de impacto y el soporte del aviso son adjuntos disponibles de la propuesta (dueño
+/// <see cref="AdjuntosDeModulo.SoporteDeCambioDelModelo"/> con <see cref="RegisterImpairmentModelElectionCommand.ElectionPublicId"/>;
+/// <c>.SupportInvalid</c>, bloque 3 de K6a);</item>
 /// <item>el punto del acta: <c>Decision</c> aprobado de una sesión cerrada sobre <c>ImpairmentModelChange</c> y esta propuesta
 /// (<c>Lending.Session.ItemMismatch</c>); quien registra tiene persona (<c>Lending.Security.UserWithoutPerson</c>) y queda como radicador.</item>
 /// </list>
@@ -153,6 +158,16 @@ public sealed class RegisterImpairmentModelElectionCommandHandler(
             }
             if (incompletos.Count > 0) return Result.Failure<ImpairmentModelElectionDto>(ErroresDeRiesgo.ModeloHistorialIncompleto(incompletos));
         }
+
+        var soportes = await db.Attachments.AsNoTracking()
+            .Where(a => (a.PublicId == request.ImpactStudyAttachmentPublicId || a.PublicId == request.SupervisorNoticeAttachmentPublicId)
+                && a.OwnerEntityType == AdjuntosDeModulo.SoporteDeCambioDelModelo && a.OwnerEntityPublicId == request.ElectionPublicId
+                && a.Status == EstadoDeAdjunto.Available && !a.IsDeleted)
+            .Select(a => a.PublicId).ToListAsync(ct);
+        var invalidos = new List<string>();
+        if (!soportes.Contains(request.ImpactStudyAttachmentPublicId)) invalidos.Add("impactStudyAttachmentPublicId");
+        if (!soportes.Contains(request.SupervisorNoticeAttachmentPublicId)) invalidos.Add("noticeAttachmentPublicId");
+        if (invalidos.Count > 0) return Result.Failure<ImpairmentModelElectionDto>(ErroresDeRiesgo.ModeloSoporteInvalido(invalidos));
 
         var punto = await puntoDeActa.ValidarAsync(request.SessionItemPublicId, ClaseDeExpediente, request.ElectionPublicId, ct);
         if (punto.IsFailure) return Result.Failure<ImpairmentModelElectionDto>(punto.Error);
