@@ -98,6 +98,50 @@ public static class AritmeticaDecimal
     }
 
     /// <summary>
+    /// El número e (base del logaritmo natural) a la precisión de <c>decimal</c>, sumado por la serie <c>Σ 1/k!</c> hasta que el término
+    /// ya no cambia la suma (K6a, T1028). Se calcula una vez, sin literales.
+    /// </summary>
+    public static decimal E { get; } = SerieExponencial(1m);
+
+    /// <summary>
+    /// <c>e^x</c> sólo con <c>decimal</c> (K6a, T1028; research R55, T26): <b>reducción del argumento</b> a su parte entera <c>n</c> y su
+    /// fracción <c>f</c> en [0, 1) — <c>e^x = e^n · e^f</c> —, <c>e^n</c> por <see cref="Potencia"/> de <see cref="E"/> y <c>e^f</c> por la
+    /// serie de Taylor, que con |f| &lt; 1 converge en una treintena de términos. Con x negativo, el inverso; si <c>e^|x|</c> no cabe en
+    /// <c>decimal</c> (x mayor que unos 66), con x positivo lanza <see cref="OverflowException"/> y con x negativo devuelve cero, que es
+    /// lo que vale a 28 decimales. Lo usa <c>FuncionLogistica</c> del modelo de pérdida esperada.
+    /// </summary>
+    /// <exception cref="OverflowException">x tan grande que <c>e^x</c> no cabe en <c>decimal</c>.</exception>
+    public static decimal Exponencial(decimal x)
+    {
+        if (x == 0m) return 1m;
+        if (x < 0m)
+        {
+            try { return 1m / Exponencial(-x); }
+            catch (OverflowException) { return 0m; }
+        }
+        var entera = decimal.Truncate(x);
+        if (entera > int.MaxValue) throw new OverflowException("e^x no cabe en decimal.");
+        return Potencia(E, (int)entera) * SerieExponencial(x - entera);
+    }
+
+    /// <summary><c>Σ x^k / k!</c> hasta que el término no mueve la suma; para |x| ≤ 1.</summary>
+    private static decimal SerieExponencial(decimal x)
+    {
+        var suma = 1m;
+        var termino = 1m;
+        for (var k = 1; k <= MaximoDeTerminosDeLaSerie; k++)
+        {
+            termino = termino * x / k;
+            var siguiente = suma + termino;
+            if (siguiente == suma) break;
+            suma = siguiente;
+        }
+        return suma;
+    }
+
+    private const int MaximoDeTerminosDeLaSerie = 64;
+
+    /// <summary>
     /// La tasa periódica r que anula <c>Σ flujo[t] / (1 + r)^t</c> (t desde 0). Primero Newton desde <paramref name="semilla"/>
     /// (0,01 si no se da); si Newton no converge en <c>100</c> pasos, sale del dominio (<c>1 + r ≤ 0</c>) o la derivada se anula,
     /// cae a bisección sobre el primer intervalo que cambie el signo (desde [0, 1], agrandado hacia arriba o acercado hacia −1). Devuelve la tasa redondeada a 24 decimales.
