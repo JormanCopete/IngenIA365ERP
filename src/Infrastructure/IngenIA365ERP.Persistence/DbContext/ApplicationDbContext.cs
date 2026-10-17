@@ -532,6 +532,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent> IssuedDocumentEvents => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan> IssuedDocumentLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument> IssuedLendingDocuments => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile> RegulatoryFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine> RegulatoryFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel> AttributionLevels => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionMatrix> AttributionMatrices => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionMatrix>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionRule> AttributionRules => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionRule>();

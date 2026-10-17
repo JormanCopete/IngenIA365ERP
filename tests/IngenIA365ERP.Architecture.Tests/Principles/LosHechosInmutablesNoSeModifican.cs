@@ -246,6 +246,9 @@ public class LosHechosInmutablesNoSeModifican
         // que llega cuando el aviso del gasto salió (T77).
         ["CollectionStageHistoryEntry"] = [], ["CollectorAssignment"] = [], ["CollectionAction"] = [], ["PaymentPromise"] = [],
         ["PaymentAgreementInstallment"] = [], ["LegalProcessAction"] = ["ChargeOperationId"],
+        // K5 (T0997; data-model §28.2): la línea del archivo de una central no admite ninguna escritura después de insertarse. El archivo no es
+        // hecho: su contenido es de sólo init y sólo avanzan el estado, el reemplazo y la carga con su radicado.
+        ["RegulatoryFileLine"] = [],
     };
 
     [Fact]

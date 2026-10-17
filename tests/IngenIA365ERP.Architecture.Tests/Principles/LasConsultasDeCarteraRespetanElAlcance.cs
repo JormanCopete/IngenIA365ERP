@@ -249,6 +249,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
         ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
         ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",
+        // K5 (US16, T0999): los layouts regulatorios son documentos nacionales embebidos, iguales para todas las cooperativas.
+        ["ListRegulatoryLayoutsQuery"] = "layouts nacionales embebidos (SICSES y centrales): sin oficina, sin deudores, sin datos de la cooperativa",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

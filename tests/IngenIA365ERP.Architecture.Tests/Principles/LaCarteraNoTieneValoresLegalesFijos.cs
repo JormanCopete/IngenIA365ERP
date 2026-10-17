@@ -52,6 +52,23 @@ public class LaCarteraNoTieneValoresLegalesFijos
             Assert.Contains(archivos, a => a.EndsWith($"Domain/Lending/Collections/{motor}.cs", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// K5 (T0994; DT §2.25): los layouts del SICSES y de las centrales son JSON embebidos en <c>Application/Lending/Regulatory/Layouts/</c> —largos,
+    /// posiciones y códigos del instructivo, dato versionado con vigencia— y quedan fuera de la regla por ser <c>.json</c>, no por una exención; el
+    /// código que los carga y las proyecciones sí se revisan, y ninguna exención por archivo cae en esa carpeta.
+    /// </summary>
+    [Fact]
+    public void Los_layouts_regulatorios_son_dato_y_su_codigo_esta_en_la_regla()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => ReglaSobreFuente.Relativo(root, a).Replace('\\', '/')).ToList();
+        Assert.Contains(archivos, a => a.EndsWith("Application/Lending/Regulatory/CatalogoDeLayoutsDeCartera.cs", StringComparison.Ordinal));
+        Assert.DoesNotContain(archivos, a => a.EndsWith(".json", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(Exentos, e => e.Contains("/Lending/Regulatory/", StringComparison.Ordinal));
+        var layouts = Path.Combine(root, "src", "Core", "IngenIA365ERP.Application", "Lending", "Regulatory", "Layouts");
+        Assert.True(Directory.GetFiles(layouts, "*.json").Length >= 3, "los layouts del SICSES y de las centrales viven como JSON embebidos");
+    }
+
     [Fact]
     public void El_motor_de_Cartera_no_lleva_valores_legales_fijos()
     {

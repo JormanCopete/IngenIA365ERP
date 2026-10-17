@@ -434,6 +434,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent> IssuedDocumentEvents { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan> IssuedDocumentLoans { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument> IssuedLendingDocuments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile> RegulatoryFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine> RegulatoryFileLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel> AttributionLevels { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionMatrix> AttributionMatrices { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionRule> AttributionRules { get; }
