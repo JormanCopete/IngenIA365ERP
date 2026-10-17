@@ -49,6 +49,14 @@ El orden de carga de una cooperativa que inicia es el de plantillas.md §0.1:
 
 1. Lo de §1, que no tiene plantilla.
 2. Líneas de crédito (`/cartera/lineas`) y matriz contable, con la contadora, hasta dejar vacía la completitud.
+   **Con un corte en el pasado, las líneas se crean con la plantilla** `lending.credit-lines` (`/cartera/lineas` → «Importar»,
+   plantillas.md §1), no con la pantalla: la ruta (`POST /api/lending/credit-lines` y «Nueva versión») fecha toda versión **desde hoy**
+   aunque se le pida otra fecha, y los créditos migrados con desembolso o corte anteriores no tendrían versión vigente. Sólo la plantilla
+   admite un `ValidFrom` anterior a hoy, y sólo en una línea **sin uso** (sin solicitudes ni créditos; `admitirDesde` de
+   `RegistrarAsync`): por eso se cargan antes de la carga de migración, con `ValidFrom` en o antes del desembolso más antiguo que se va
+   a migrar en esa línea, y la usura y los límites de esa fecha replicados (la versión se controla a su `ValidFrom` y a hoy). Si la línea
+   ya tiene uso, la plantilla rechaza la fila (`Lending.CreditLine.RetroactiveVersion`: lo pactado no se reescribe) y la ruta la fecha
+   hoy; para un corte anterior hay que crear otra línea con la plantilla. (Brecha conocida, fase 24 de la feature 013.)
 3. Vinculados, saldos de aportes y listas restrictivas, en cualquier orden.
 4. **La carga de migración** (§3): crear la carga con su corte, importar las partes en el orden de §5.2, revisar y aplicar.
 5. Aceptar con acta las diferencias del cuadre y de la conciliación de ventas (§4).
