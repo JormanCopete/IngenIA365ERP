@@ -134,4 +134,112 @@ public class CertificadoTributarioTests
 
         armar.Should().Throw<ArgumentException>();
     }
+
+    // ------------------------------------------------------------------ decisiones del dueño del 2026-10-16: anticipo y saldo --
+
+    private static readonly LoanConcept[] Intereses =
+        [LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense, LoanConcept.DefaultInterestInSuspense];
+
+    private static decimal InteresDeAnticipos(EstadoDelCredito estado, int año) =>
+        estado.AnticiposAplicados.Where(a => a.Fecha.Year == año).SelectMany(a => a.Lineas).Where(l => Intereses.Contains(l.Concepto)).Sum(l => l.Monto);
+
+    /// <summary>Desembolsado el 20 de noviembre: un anticipo de 500.000 el 1 de diciembre cubre la cuota del 20 de diciembre y le sobra al cierre.</summary>
+    private static EstadoDelCredito ConAnticipoDeDiciembre() =>
+        MotorDeCartera.Reconstruir(Credito(new DateOnly(2027, 11, 20), Pago("A1", new DateOnly(2027, 12, 1), 500_000m, 10, PaymentModality.Advance)), Cierre);
+
+    [Fact]
+    public void El_interes_que_cubre_un_anticipo_ingresado_en_el_año_cuenta_como_pagado()
+    {
+        var alCierre = ConAnticipoDeDiciembre();
+        var conAnticipo = InteresDeAnticipos(alCierre, Año);
+        conAnticipo.Should().BeGreaterThan(0m, "el anticipo cubrió el interés de la cuota del 20 de diciembre");
+        InteresDe(alCierre, "A1").Should().Be(0m, "el pago que dejó el anticipo no cubrió intereses: su dinero quedó como anticipo");
+
+        var credito = CertificadoTributario.Armar(Año, [new CreditoParaCertificar("CR-1", "L", false, alCierre)]).Creditos.Single();
+
+        credito.InteresesPagados.Should().Be(conAnticipo, "sólo una vez: por la aplicación del anticipo, no por el pago que lo dejó");
+        credito.InteresesConAnticipo.Should().Be(conAnticipo);
+    }
+
+    [Fact]
+    public void El_interes_que_cubre_un_anticipo_ingresado_el_año_anterior_no_cuenta_aunque_se_aplique_en_el_año()
+    {
+        // Desembolso del 15 de noviembre de 2026; el 20 de diciembre paga la cuota vencida y deja anticipo, que cubre cuotas de 2027.
+        var entrada = Credito(new DateOnly(2026, 11, 15),
+            Pago("A1", new DateOnly(2026, 12, 20), 400_000m, 10, PaymentModality.Advance),
+            Pago("P2", new DateOnly(2027, 3, 15), 160_000m, 11));
+        var alCierre = MotorDeCartera.Reconstruir(entrada, Cierre);
+        InteresDeAnticipos(alCierre, Año).Should().BeGreaterThan(0m, "el anticipo de 2026 cubrió intereses de cuotas de 2027");
+
+        var credito = CertificadoTributario.Armar(Año, [new CreditoParaCertificar("CR-1", "L", false, alCierre)]).Creditos.Single();
+
+        credito.InteresesPagados.Should().Be(InteresDe(alCierre, "P2"), "sólo el pago de 2027: el anticipo ingresó en 2026");
+        credito.InteresesConAnticipo.Should().Be(0m);
+    }
+
+    [Fact]
+    public void De_una_cancelacion_que_usa_un_anticipo_del_año_anterior_se_resta_el_interes_que_cubrio_ese_anticipo()
+    {
+        var entrada = Credito(new DateOnly(2026, 11, 15),
+            Pago("A1", new DateOnly(2026, 12, 20), 300_000m, 10, PaymentModality.Advance),
+            Pago("P2", new DateOnly(2027, 1, 10), 4_000_000m, 11, PaymentModality.FullPayoff));
+        var alCierre = MotorDeCartera.Reconstruir(entrada, Cierre);
+        var cancelacion = alCierre.Pagos["P2"];
+        var usado = cancelacion.AnticipoUsado.Sum(u => u.Monto);
+        usado.Should().BeGreaterThan(0m, "la cancelación usó el anticipo de diciembre");
+        // El anticipo cubre primero, en el orden de las líneas (la prelación): lo que de él fue a intereses no cuenta en 2027.
+        var restante = usado;
+        var excluido = 0m;
+        foreach (var l in cancelacion.Lineas)
+        {
+            var t = Math.Min(restante, l.Monto);
+            if (Intereses.Contains(l.Concepto)) excluido += t;
+            restante -= t;
+        }
+        excluido.Should().BeGreaterThan(0m);
+
+        var credito = CertificadoTributario.Armar(Año, [new CreditoParaCertificar("CR-1", "L", false, alCierre)]).Creditos.Single();
+
+        credito.InteresesPagados.Should().Be(InteresDe(alCierre, "P2") - excluido);
+        credito.SaldoTotal.Should().Be(0m);
+    }
+
+    [Fact]
+    public void El_saldo_por_defecto_es_el_de_siempre_y_cada_cooperativa_elige_sus_conceptos()
+    {
+        var alCierre = ConAnticipoDeDiciembre();
+        alCierre.Anticipo.Should().BeGreaterThan(0m, "le sobró anticipo al 31 de diciembre");
+        var c = new CreditoParaCertificar("CR-1", "L", false, alCierre);
+
+        var defecto = CertificadoTributario.Armar(Año, [c]).Creditos.Single();
+        defecto.SaldoTotal.Should().Be(alCierre.ValorParaCancelar, "el defecto reproduce el saldo de antes del parámetro");
+        CertificadoTributario.Armar(Año, [c], ConceptosDelSaldoCertificado.Todos).Creditos.Single().Should().BeEquivalentTo(defecto);
+
+        var soloCapital = CertificadoTributario.Armar(Año, [c], ConceptosDelSaldoCertificado.Capital).Creditos.Single();
+        soloCapital.SaldoTotal.Should().Be(alCierre.Saldo(LoanConcept.Principal));
+        soloCapital.SaldoDeIntereses.Should().Be(0m);
+        soloCapital.SaldoDeOtros.Should().Be(0m);
+        soloCapital.InteresesPagados.Should().Be(defecto.InteresesPagados, "el parámetro sólo cambia el saldo");
+
+        var sinRestarAnticipo = CertificadoTributario.Armar(Año, [c], ConceptosDelSaldoCertificado.Todos & ~ConceptosDelSaldoCertificado.MenosAnticipo)
+            .Creditos.Single();
+        sinRestarAnticipo.SaldoTotal.Should().Be(alCierre.ValorParaCancelar + alCierre.Anticipo);
+
+        var sinMora = CertificadoTributario.Armar(Año, [c], ConceptosDelSaldoCertificado.Capital | ConceptosDelSaldoCertificado.InteresCorriente)
+            .Creditos.Single();
+        sinMora.SaldoDeIntereses.Should().Be(alCierre.Saldo(LoanConcept.CurrentInterest) + alCierre.Saldo(LoanConcept.CurrentInterestInSuspense));
+    }
+
+    [Theory]
+    [InlineData("Capital,InteresCorriente,InteresDeMora,OtrosCargos,MenosAnticipo", ConceptosDelSaldoCertificado.Todos)]
+    [InlineData("Capital", ConceptosDelSaldoCertificado.Capital)]
+    [InlineData("interesdemora, Capital", ConceptosDelSaldoCertificado.Capital | ConceptosDelSaldoCertificado.InteresDeMora)]
+    [InlineData("", null)]
+    [InlineData("Capital,Seguros", null)]
+    public void El_texto_del_parametro_se_lee_por_nombre(string texto, ConceptosDelSaldoCertificado? esperado)
+    {
+        SaldoDelCertificadoTributario.Leer(texto).Should().Be(esperado);
+        SaldoDelCertificadoTributario.Defecto.Should().MatchRegex(SaldoDelCertificadoTributario.Patron);
+        SaldoDelCertificadoTributario.Leer(SaldoDelCertificadoTributario.Defecto).Should().Be(ConceptosDelSaldoCertificado.Todos);
+    }
 }
