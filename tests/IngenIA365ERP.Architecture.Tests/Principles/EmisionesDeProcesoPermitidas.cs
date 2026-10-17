@@ -21,6 +21,8 @@ public class EmisionesDeProcesoPermitidas
         "CierreDeCarteraRealizado", "CierreDeCarteraReabierto",
         "ObligacionCreada", "ObligacionRechazada",
         "CreditoAprobadoSinDesembolsar", "CupoRotativoOtorgado", "GarantiaConstituida",
+        // K6b (T1056, E12): la corrección monetaria UVR la causa el ciclo diario, como el interés.
+        "CorreccionMonetariaUvrCausada",
     ];
 
     /// <summary>El archivo donde se declara la marca de Cartera (relativo a <c>src/</c>).</summary>

@@ -72,8 +72,21 @@ public sealed record PartesEmitidas(
 {
     public static PartesEmitidas Vacias { get; } = new([], [], new Dictionary<(int, DateOnly, LoanConcept), Guid>());
 
+    /// <summary>
+    /// K6b (T1056): el mensaje de cada (crédito, día, concepto) de las filas de corrección monetaria (<c>MonetaryCorrection</c>), que comparten
+    /// concepto con las de causación del mismo día y van en otro hecho.
+    /// </summary>
+    public IReadOnlyDictionary<(int LoanId, DateOnly Dia, LoanConcept Concepto), Guid> MensajePorCorreccion { get; init; } =
+        new Dictionary<(int, DateOnly, LoanConcept), Guid>();
+
     public Guid? Mensaje(int loanId, DateOnly dia, LoanConcept concepto) =>
         MensajePorFila.TryGetValue((loanId, dia, concepto), out var m) ? m : null;
+
+    /// <summary>El mensaje de una fila según su clase: la corrección monetaria (K6b) tiene el suyo; lo demás, el de su concepto.</summary>
+    public Guid? Mensaje(int loanId, DateOnly dia, LoanConcept concepto, LoanTransactionKind clase) =>
+        clase == LoanTransactionKind.MonetaryCorrection
+            ? MensajePorCorreccion.TryGetValue((loanId, dia, concepto), out var m) ? m : null
+            : Mensaje(loanId, dia, concepto);
 }
 
 /// <summary>
@@ -102,6 +115,13 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
     /// <summary>El tipo masivo de la causación de un concepto.</summary>
     public static string TipoDe(LoanConcept concepto) =>
         ConceptosDe.First(kv => kv.Value.Contains(concepto)).Key;
+
+    /// <summary>El tipo masivo de una fila de causación: la corrección monetaria de un crédito en UVR (K6b, T1056) va en el suyo, de cualquier concepto.</summary>
+    public static string TipoDe(MovimientoDeLibro fila)
+    {
+        ArgumentNullException.ThrowIfNull(fila);
+        return fila.Clase == LoanTransactionKind.MonetaryCorrection ? CorreccionMonetariaUvrCausadaV1.Type : TipoDe(fila.Concepto);
+    }
 
     /// <summary>Los datos de hecho de los créditos cargados, en bloque.</summary>
     public async Task<IReadOnlyDictionary<int, DatosDeHecho>> DatosAsync(IEnumerable<CreditoCargado> cargados, CancellationToken ct)
@@ -154,7 +174,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
     {
         ArgumentNullException.ThrowIfNull(origen);
         var porDia = origen.Fuente == AccountingFactPartSource.DailyCycleBatch;
-        var filas = lineas.SelectMany(l => l.Filas.Where(f => f.Monto != 0m).Select(f => (Linea: l, Fila: f, Tipo: tipoUnico ?? TipoDe(f.Concepto))));
+        var filas = lineas.SelectMany(l => l.Filas.Where(f => f.Monto != 0m).Select(f => (Linea: l, Fila: f, Tipo: tipoUnico ?? TipoDe(f))));
         var grupos = filas
             .GroupBy(x => (Dia: porDia ? x.Linea.Dia : DateOnly.MinValue, x.Linea.Datos.Credito.BranchId, x.Tipo))
             .OrderBy(g => g.Key.Dia).ThenBy(g => g.Key.BranchId).ThenBy(g => g.Key.Tipo, StringComparer.Ordinal)
@@ -162,6 +182,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         var partes = new List<AccountingFactPart>();
         var mensajes = new List<IntegrationMessage>();
         var mensajePorFila = new Dictionary<(int, DateOnly, LoanConcept), Guid>();
+        var mensajePorCorreccion = new Dictionary<(int, DateOnly, LoanConcept), Guid>();
         var ordinal = 0;
         foreach (var g in grupos)
         {
@@ -243,9 +264,11 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             db.AccountingFactParts.Add(parte);
             partes.Add(parte);
             mensajes.Add(emitido.Value);
-            foreach (var x in g) mensajePorFila[(x.Linea.Datos.Credito.Id, x.Linea.Dia, x.Fila.Concepto)] = emitido.Value.PublicId;
+            foreach (var x in g)
+                (x.Fila.Clase == LoanTransactionKind.MonetaryCorrection && tipoUnico is null ? mensajePorCorreccion : mensajePorFila)
+                    [(x.Linea.Datos.Credito.Id, x.Linea.Dia, x.Fila.Concepto)] = emitido.Value.PublicId;
         }
-        return Result.Success(new PartesEmitidas(partes, mensajes, mensajePorFila));
+        return Result.Success(new PartesEmitidas(partes, mensajes, mensajePorFila) { MensajePorCorreccion = mensajePorCorreccion });
     }
 
     /// <summary>
@@ -363,6 +386,12 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
             },
             SeguroCausadoV1.Type => new SeguroCausadoV1
+            {
+                RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
+                Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
+            },
+            // K6b (T1056): la corrección monetaria de los créditos en UVR.
+            CorreccionMonetariaUvrCausadaV1.Type => new CorreccionMonetariaUvrCausadaV1
             {
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,

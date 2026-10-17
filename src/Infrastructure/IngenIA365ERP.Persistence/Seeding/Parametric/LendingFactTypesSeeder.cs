@@ -12,7 +12,8 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <summary>
 /// Los tipos de hecho de Cartera (<c>LND_FactTypes</c>; feature 013, T0223; data-model §1.11; DC-11, T43, T56, C06, C110, C117;
 /// Order 90, CH36): una fila por cada tipo <c>CAR → Accounting</c> del catálogo de mensajes de Cartera
-/// (<see cref="CatalogoDeMensajesDeCarteraV1.HechosAContabilidad"/>, <b>35</b>, con los tres contingentes de A3); los 12 tipos
+/// (<see cref="CatalogoDeMensajesDeCarteraV1.HechosAContabilidad"/>, <b>36</b>, con los tres contingentes de A3 y, desde K6b, la corrección
+/// monetaria UVR); los 12 tipos
 /// restantes del catálogo no son hechos contables y no tienen fila. El <c>ShortCode</c> se lee de
 /// <see cref="TipoDeMensaje.CodigoCorto"/> (C117): un tipo sin código corto hace fallar el arranque. El resto —nombre, comprobante
 /// (contabilidad.md §2.1, §5), modo y disparador por defecto (D8, T56) y entrega— es la tabla <see cref="Datos"/>.
@@ -82,6 +83,8 @@ public sealed class LendingFactTypesSeeder : IDataSeeder
         [CreditoAprobadoSinDesembolsarV1.Type] = new("Crédito aprobado sin desembolsar", "CN", NoPasa, null, EntregaDeCartera.K1),
         [CupoRotativoOtorgadoV1.Type] = new("Cupo rotativo otorgado", "CN", NoPasa, null, EntregaDeCartera.K1),
         [GarantiaConstituidaV1.Type] = new("Garantía constituida", "CN", NoPasa, null, EntregaDeCartera.K1),
+        // K6b (T1056; pregunta E12, propuesta por defecto): la corrección monetaria de los créditos en UVR, por lotes como la causación.
+        [CorreccionMonetariaUvrCausadaV1.Type] = new("Corrección monetaria UVR causada", "CA", PorLotes, FinDeCausacion, EntregaDeCartera.K6b),
     };
 
     public async Task<int> SeedAsync(SeedContext context, CancellationToken ct)

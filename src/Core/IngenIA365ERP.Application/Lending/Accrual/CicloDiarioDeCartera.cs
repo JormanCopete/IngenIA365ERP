@@ -261,6 +261,8 @@ public sealed class CicloDiarioDeCartera(
 
         var causados = new List<(CreditoCargado Cargado, LoanControl Control, IReadOnlyList<DiaCausado> Dias)>();
         var sinUsura = new Dictionary<(string Modalidad, string? Clave), DateOnly>();
+        // K6b (T1054): los días sin UVR publicada de los créditos en UVR (un error de grupo y una alerta por día; esos créditos no se causan).
+        var sinUvr = new SortedSet<DateOnly>();
         foreach (var id in vivos.Order())
         {
             var control = controles[id];
@@ -294,7 +296,10 @@ public sealed class CicloDiarioDeCartera(
                 {
                     var faltante = dias.Count == 0 ? control.LastAccruedDate.AddDays(1) : dias[^1].Dia.AddDays(1);
                     if (cargado.Series is { ExigeUsura: true } s && s.UsuraDe(faltante).IsFailure)
-                        sinUsura.TryAdd((cargado.Pactadas.ModalityCode, s.ClaveDeUsura), faltante);
+                        sinUsura.TryAdd((cargado.Pactadas.ModalityCode, s.ClaveDeUsura ?? CodigosDeValorNacional.TopeTasaVivienda), faltante);
+                    else if (entrada.Uvr is { } serie && new[] { faltante.AddDays(-1), faltante }.FirstOrDefault(x => serie.Publicada(x) is null) is var sinPublicar
+                             && sinPublicar != default)
+                        sinUvr.Add(sinPublicar);
                     corrida.SkippedLoans += dias.Count == 0 ? 1 : 0;
                 }
                 if (dias.Count > 0) causados.Add((cargado, control, dias));
@@ -306,9 +311,21 @@ public sealed class CicloDiarioDeCartera(
             }
         }
 
-        // Una modalidad sin usura del día: un error de grupo por modalidad y fecha, con su alerta.
+        // Una modalidad sin usura del día: un error de grupo por modalidad y fecha, con su alerta. K6b: en vivienda, el tope de vivienda.
         foreach (var ((modalidad, clave), fecha) in sinUsura)
         {
+            if (clave == CodigosDeValorNacional.TopeTasaVivienda)
+            {
+                var tope = ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, fecha);
+                var errorDeTope = Error(corrida, null, intento, PasosDelCiclo.Causacion, tope.Code, tope.Message,
+                    JsonSerializer.Serialize(new { modality = modalidad, code = CodigosDeValorNacional.TopeTasaVivienda, date = fecha }, Json));
+                db.LendingProcessRunErrors.Add(errorDeTope);
+                errores.Add(errorDeTope);
+                alertasPendientes.Add(new AlertaPendiente(new AlertaALevantar(TiposDeAlerta.ValorNacionalFaltante, "Falta el tope de tasa de vivienda",
+                    $"{tope.Message} Los créditos de {modalidad} no se causan desde ese día hasta que se replique.", ModuloDeOrigen: "Lending",
+                    DedupKey: AlertasDeValoresNacionales.ClaveDeFaltante(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, fecha)), errorDeTope));
+                continue;
+            }
             var e = ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Usura, clave ?? modalidad, fecha);
             var error = Error(corrida, null, intento, PasosDelCiclo.Causacion, e.Code, e.Message,
                 JsonSerializer.Serialize(new { modality = modalidad, usuryKey = clave, date = fecha }, Json));
@@ -317,6 +334,18 @@ public sealed class CicloDiarioDeCartera(
             alertasPendientes.Add(new AlertaPendiente(new AlertaALevantar(TiposDeAlerta.ValorNacionalFaltante, $"Falta la usura de {modalidad}",
                 $"{e.Message} Los créditos de {modalidad} no se causan desde ese día hasta que se replique.", ModuloDeOrigen: "Lending",
                 DedupKey: AlertasDeValoresNacionales.ClaveDeFaltante(CodigosDeValorNacional.Usura, clave ?? modalidad, fecha)), error));
+        }
+        // K6b (T1054): un día sin UVR publicada: un error de grupo y su alerta; los créditos en UVR no se causan desde ese día (sólo ellos).
+        foreach (var fecha in sinUvr)
+        {
+            var e = ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Uvr, string.Empty, fecha);
+            var error = Error(corrida, null, intento, PasosDelCiclo.Causacion, e.Code, e.Message,
+                JsonSerializer.Serialize(new { code = CodigosDeValorNacional.Uvr, date = fecha }, Json));
+            db.LendingProcessRunErrors.Add(error);
+            errores.Add(error);
+            alertasPendientes.Add(new AlertaPendiente(new AlertaALevantar(TiposDeAlerta.ValorNacionalFaltante, "Falta la UVR del día",
+                $"{e.Message} Los créditos en UVR no se causan desde ese día hasta que se replique; los demás siguen.", ModuloDeOrigen: "Lending",
+                DedupKey: AlertasDeValoresNacionales.ClaveDeFaltante(CodigosDeValorNacional.Uvr, string.Empty, fecha)), error));
         }
         if (causados.Count == 0)
         {
@@ -338,7 +367,7 @@ public sealed class CicloDiarioDeCartera(
 
         var resumen = registro.CausarEnBloque(causados.SelectMany(c => c.Dias.Select(x => new CausacionAEscribir(c.Control, x.Dia,
             x.Filas.Where(f => f.Monto != 0m)
-                .Select(f => RegistroDeCartera.FilaDeCausacion(c.Control.LoanId, f, corrida.Id, null, x.Dia, ahora, masivas.Value.Mensaje(c.Control.LoanId, x.Dia, f.Concepto)))
+                .Select(f => RegistroDeCartera.FilaDeCausacion(c.Control.LoanId, f, corrida.Id, null, x.Dia, ahora, masivas.Value.Mensaje(c.Control.LoanId, x.Dia, f.Concepto, f.Clase)))
                 .ToList()))).ToList());
 
         // Las posiciones de cada día causado, con la calificación informativa del día (US9, T0701: el mismo motor del cierre).

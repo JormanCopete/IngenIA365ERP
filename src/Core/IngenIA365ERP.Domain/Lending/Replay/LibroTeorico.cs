@@ -9,6 +9,14 @@ namespace IngenIA365ERP.Domain.Lending.Replay;
 public sealed record MovimientoDeLibro(DateOnly Dia, LoanTransactionKind Clase, LoanConcept Concepto, int? Cuota, decimal Monto)
 {
     public string? OperacionId { get; init; }
+
+    /// <summary>
+    /// K6b (T1054, T1059): en un crédito en UVR, el valor de la fila en UVR (cero en la corrección monetaria, que es sólo el cambio de la UVR) y la
+    /// UVR del día con que se valoró en pesos; nulos en un crédito en pesos. El libro los copia en <c>UvrAmount</c> y <c>UvrValue</c>.
+    /// </summary>
+    public decimal? MontoEnUvr { get; init; }
+
+    public decimal? ValorUvr { get; init; }
 }
 
 /// <summary>Una diferencia del libro contra la reconstrucción por (día valor, concepto, cuota): lo que <c>Conciliar</c> registra.</summary>

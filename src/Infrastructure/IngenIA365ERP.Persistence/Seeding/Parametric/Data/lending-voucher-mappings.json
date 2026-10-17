@@ -36,5 +36,7 @@
   // A3 (C15): los contingentes, que nacen NoPasa. Salen si el dueño rechaza A3.
   { "operation": "CreditoAprobadoSinDesembolsar", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
   { "operation": "CupoRotativoOtorgado", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
-  { "operation": "GarantiaConstituida", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" }
+  { "operation": "GarantiaConstituida", "collectorClass": null, "voucherTypeCode": "CN", "crossDocumentTypeCode": "PG" },
+  // K6b (T1056; pregunta E12): la corrección monetaria de los créditos en UVR, en el comprobante de la causación.
+  { "operation": "CorreccionMonetariaUvrCausada", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" }
 ]

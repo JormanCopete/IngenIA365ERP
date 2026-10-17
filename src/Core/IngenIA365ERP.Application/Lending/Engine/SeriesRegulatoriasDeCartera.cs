@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Saas.NationalValues;
 using IngenIA365ERP.Domain.Common.NationalValues;
+using IngenIA365ERP.Domain.Lending.Housing;
 using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Lending.Risk.Normativa;
@@ -29,22 +30,34 @@ public sealed record SeriesDeModalidad(
     IReadOnlyList<ValorConVigencia<decimal>> Tolerancias,
     IReadOnlyList<DateOnly> DiasSinUsura)
 {
-    /// <summary>Si la modalidad tiene usura certificada (la vivienda tiene tope propio y no la exige).</summary>
-    public bool ExigeUsura => ClaveDeUsura is not null;
+    /// <summary>
+    /// K6b (T1053; FR-024, D18): el tope de tasa de vivienda (<c>TOPE_TASA_VIVIENDA</c>) de una combinación con tope de vivienda, bitemporal como la
+    /// usura; vacío en las demás. Rige el menor entre él y la usura (las reglas de vivienda del motor).
+    /// </summary>
+    public IReadOnlyList<ValorDeUsura> TopeDeVivienda { get; init; } = [];
+
+    /// <summary>K6b: la combinación tiene el tope de vivienda en vez de usura certificada (el catálogo de modalidades la marca).</summary>
+    public bool ConTopeDeVivienda { get; init; }
+
+    /// <summary>Si la modalidad exige una tasa máxima certificada del día: la usura o, en vivienda (K6b), el tope de vivienda.</summary>
+    public bool ExigeUsura => ClaveDeUsura is not null || ConTopeDeVivienda;
 
     /// <summary>
-    /// <c>NationalValues.Missing</c> si <paramref name="fecha"/> no tiene usura certificada para la modalidad (y la exige); éxito si la
-    /// tiene o no la exige.
+    /// <c>NationalValues.Missing</c> si <paramref name="fecha"/> no tiene usura certificada para la modalidad (o el tope de vivienda, K6b) y la
+    /// exige; éxito si la tiene o no la exige.
     /// </summary>
     public Result UsuraDe(DateOnly fecha) =>
         ExigeUsura && DiasSinUsura.Contains(fecha)
-            ? Result.Failure(ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Usura, ClaveDeUsura!, fecha))
+            ? Result.Failure(ClaveDeUsura is { } clave
+                ? ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Usura, clave, fecha)
+                : ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, fecha))
             : Result.Success();
 
     /// <summary>La entrada con estas series (sustituye las que traiga).</summary>
     public EntradaDeReconstruccion Aplicar(EntradaDeReconstruccion entrada) => entrada with
     {
         Usura = Usura,
+        TopeDeVivienda = TopeDeVivienda,
         Festivos = Festivos,
         UmbralesDeSuspension = UmbralesDeSuspension,
         Tolerancias = Tolerancias,
@@ -65,6 +78,14 @@ public interface ISeriesRegulatorias
     /// </summary>
     Task<Result<SeriesDeModalidad>> LeerAsync(string modalidad, string? subsegmento, DateOnly desde, DateOnly hasta, DateTime? informacionHasta,
         CancellationToken ct);
+
+    /// <summary>
+    /// K6b (T1054; FR-024, D18): la serie diaria de la UVR de <paramref name="desde"/> a <paramref name="hasta"/> con lo que se sabía hasta
+    /// <paramref name="informacionHasta"/>: un valor por día, el publicado <b>para ese día</b> (su vigencia empieza ese día); un día sin publicar no
+    /// trae valor (el motor lo proyecta sólo para mostrar y no lo causa).
+    /// </summary>
+    Task<SerieUvr> LeerUvrAsync(DateOnly desde, DateOnly hasta, DateTime? informacionHasta, CancellationToken ct) =>
+        Task.FromResult(new SerieUvr([]));
 }
 
 /// <summary>
@@ -81,6 +102,26 @@ public sealed class SeriesRegulatoriasDeCartera(
     ReglasDeParametrosDeCartera parametros) : ISeriesRegulatorias
 {
     private readonly Dictionary<(string, string?, DateTime?), SeriesDeModalidad> _leidas = [];
+    private readonly Dictionary<DateTime, (DateOnly Desde, DateOnly Hasta, SerieUvr Serie)> _uvr = [];
+
+    /// <inheritdoc />
+    public async Task<SerieUvr> LeerUvrAsync(DateOnly desde, DateOnly hasta, DateTime? informacionHasta, CancellationToken ct)
+    {
+        if (hasta < desde) (desde, hasta) = (hasta, desde);
+        var clave = informacionHasta ?? DateTime.MaxValue;
+        if (_uvr.TryGetValue(clave, out var leida))
+        {
+            if (leida.Desde <= desde && leida.Hasta >= hasta) return leida.Serie;
+            desde = desde < leida.Desde ? desde : leida.Desde;
+            hasta = hasta > leida.Hasta ? hasta : leida.Hasta;
+        }
+        var serie = await valores.LeerSerieAsync(CodigosDeValorNacional.Uvr, string.Empty, desde, hasta, informacionHasta, ct);
+        var uvr = new SerieUvr(serie.Dias
+            .Where(d => d.Value is { Valor: not null } v && v.ValidFrom == d.Key)
+            .Select(d => new ValorDeUvr(d.Key, d.Value!.Valor!.Value)));
+        _uvr[clave] = (desde, hasta, uvr);
+        return uvr;
+    }
 
     public async Task<Result<SeriesDeModalidad>> LeerAsync(string modalidad, string? subsegmento, DateOnly desde, DateOnly hasta, DateTime? informacionHasta,
         CancellationToken ct)
@@ -101,24 +142,28 @@ public sealed class SeriesRegulatoriasDeCartera(
         if (combinacion is null)
             return Result.Failure<SeriesDeModalidad>(ErroresDeValoresNacionales.Faltante(CodigosDeValorNacional.Usura, modalidad, hasta));
 
-        // Usura: la serie del rango en una consulta; cada valor distinto, una vez.
+        // Usura: la serie del rango en una consulta; cada valor distinto, una vez. K6b (T1053): una combinación con tope de vivienda lee el
+        // TOPE_TASA_VIVIENDA de la misma forma; sus días sin tope son los días sin usura de la modalidad.
         var usura = new List<ValorDeUsura>();
+        var topeDeVivienda = new List<ValorDeUsura>();
         var sinUsura = new List<DateOnly>();
-        if (combinacion.UsuryKey is { } claveDeUsura)
+        async Task LeerSerieAsync(string codigo, string claveDeLaSerie, List<ValorDeUsura> destino)
         {
-            var serie = await valores.LeerSerieAsync(CodigosDeValorNacional.Usura, claveDeUsura, desde, hasta, informacionHasta, ct);
+            var serie = await valores.LeerSerieAsync(codigo, claveDeLaSerie, desde, hasta, informacionHasta, ct);
             var vistos = new HashSet<Guid>();
             foreach (var (dia, valor) in serie.Dias.OrderBy(d => d.Key))
             {
                 if (valor?.Valor is not { } ea)
                 {
-                    sinUsura.Add(dia);
+                    if (!sinUsura.Contains(dia)) sinUsura.Add(dia);
                     continue;
                 }
                 if (vistos.Add(valor.PublicId))
-                    usura.Add(new ValorDeUsura(valor.ValidFrom, ea, valor.KnownAt, valor.Sequence, valor.SourcePublicId) { ValidTo = valor.ValidTo });
+                    destino.Add(new ValorDeUsura(valor.ValidFrom, ea, valor.KnownAt, valor.Sequence, valor.SourcePublicId) { ValidTo = valor.ValidTo });
             }
         }
+        if (combinacion.UsuryKey is { } claveDeUsura) await LeerSerieAsync(CodigosDeValorNacional.Usura, claveDeUsura, usura);
+        if (combinacion.HousingRateCap) await LeerSerieAsync(CodigosDeValorNacional.TopeTasaVivienda, string.Empty, topeDeVivienda);
 
         // Festivos nacionales: los no hábiles que no son domingo en el calendario del art. 829 (con margen para la fecha exigible).
         var cal = await calendario.ObtenerAsync(desde, hasta.AddDays(DiasDeMargenDeFestivos), DiasDeDescanso.SoloDomingo, informacionHasta, ct);
@@ -151,7 +196,11 @@ public sealed class SeriesRegulatoriasDeCartera(
         }
 
         var series = new SeriesDeModalidad(modalidad, subsegmento, combinacion.UsuryKey, combinacion.SarcSegment, desde, hasta, usura, festivos,
-            umbrales, tolerancias, sinUsura);
+            umbrales, tolerancias, sinUsura)
+        {
+            TopeDeVivienda = topeDeVivienda,
+            ConTopeDeVivienda = combinacion.HousingRateCap,
+        };
         _leidas[clave] = series;
         return Result.Success(series);
     }

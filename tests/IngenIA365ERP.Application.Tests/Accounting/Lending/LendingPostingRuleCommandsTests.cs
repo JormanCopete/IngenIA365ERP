@@ -327,7 +327,7 @@ public class LendingPostingRuleCommandsTests
         sinRegla.MissingCode.Should().Be("Accounting.LendingRule.Missing");
 
         var catalogo = (await new GetLendingRulesCatalogQueryHandler(e.M.Dimensiones).Handle(new GetLendingRulesCatalogQuery(), default)).Value;
-        catalogo.Operations.Should().HaveCount(35);
+        catalogo.Operations.Should().HaveCount(36);
         catalogo.Roles.Should().HaveCount(26);
         catalogo.Dimensions.CreditLines.Select(l => l.Code).Should().Contain("VIE01");
     }

@@ -47,7 +47,7 @@ public class ConstructorDeLineasDeCarteraTests
 
         e.Matriz.Should().HaveCountGreaterThan(60);
         e.Matriz.Should().OnlyContain(r => r.Operation == "*" || R.Buscar(r.Role)!.AdmiteHecho, "hecho * en los roles que no son de resultado (C77)");
-        e.D.Db.LendingVoucherMappings.Count().Should().Be(32, "29 hechos de negocio y las tres excepciones de Nómina en DN (§5)");
+        e.D.Db.LendingVoucherMappings.Count().Should().Be(33, "30 hechos de negocio (K6b suma la corrección monetaria UVR) y las tres excepciones de Nómina en DN (§5)");
         e.D.Db.AccountingPeriods.Count(p => p.Status == Domain.Enums.Accounting.PeriodStatus.Open && p.Month == 11).Should().BeGreaterThan(0);
         Casos().Should().HaveCountGreaterThanOrEqualTo(46);
     }

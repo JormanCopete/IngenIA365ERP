@@ -207,15 +207,16 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         DateTime registradoEn, Guid? mensaje)
     {
         ArgumentNullException.ThrowIfNull(fila);
-        if (fila.Clase != LoanTransactionKind.Accrual)
-            throw new InvalidOperationException("La causación sólo escribe filas Accrual.");
+        // K6b (T1054, T1056): la causación de un crédito en UVR escribe también su corrección monetaria (MonetaryCorrection).
+        if (fila.Clase is not (LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection))
+            throw new InvalidOperationException("La causación sólo escribe filas Accrual y, en UVR, MonetaryCorrection.");
         return new LoanTransaction
         {
             LoanId = loanId,
             ProcessRunId = operacion is null ? processRunId : null,
             Operation = operacion,
             OperationId = operacion is { Id: not 0 } op ? op.Id : null,
-            Kind = LoanTransactionKind.Accrual,
+            Kind = fila.Clase,
             Concept = fila.Concepto,
             InstallmentNumber = fila.Cuota,
             Amount = fila.Monto,
@@ -223,6 +224,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             AccountingDate = fechaContable,
             RegisteredAt = Utc(registradoEn),
             MessagePublicId = mensaje,
+            UvrAmount = fila.MontoEnUvr,
+            UvrValue = fila.ValorUvr,
         };
     }
 
@@ -345,6 +348,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             AccountingDate = fechaContable,
             RegisteredAt = Utc(registradoEn),
             MessagePublicId = mensaje,
+            UvrAmount = fila.MontoEnUvr,
+            UvrValue = fila.ValorUvr,
         };
     }
 
@@ -490,6 +495,10 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             UsuryCapped = estado.UsuraTopada,
             AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA,
             InputsSha256 = estado.Huella,
+            // K6b (T1059): la valoración de un crédito en UVR.
+            UvrValue = estado.Uvr?.Valor,
+            PrincipalUvr = estado.Uvr?.CapitalEnUvr,
+            PayoffAmountUvr = estado.Uvr?.Estado.ValorParaCancelar,
             // US9 (T0701): la copia de la calificación informativa del día (la calcula el ciclo con el mismo motor del cierre).
             DailyRating = calificacion?.Categoria,
             DailyRatingSubcategory = calificacion?.Subcategoria,

@@ -144,6 +144,9 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                                 .Select(p => new CuotaMigrada(p.InstallmentNumber, p.DueDate, p.Principal) { Desde = p.PeriodStart }).ToList()))
                         .ToList(),
                     r) { PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [] };
+                // K6b (T1054): un crédito en UVR lleva la serie diaria de la UVR del rango; la reconstrucción lo calcula en UVR y lo valora en pesos.
+                if (pactadas.DenominationUnit == DenominationUnit.Uvr)
+                    entrada = entrada with { Uvr = await series.LeerUvrAsync(origen, hasta, informacionHasta, ct) };
                 resultado[credito.Id] = new CreditoCargado(credito, pactadas, vigentes, ops, leidas.Value.Aplicar(entrada), leidas.Value, null);
             }
             catch (ReglaDeCarteraException ex)
@@ -319,6 +322,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             TratamientoDeGracia = p.GraceInterestTreatment,
             CuotasDeDistribucion = p.GraceDistributionInstallments,
             Seguros = Seguros(p.Insurances),
+            // K6b (T1053): el plan lleva la versión de reglas sellada (la de vivienda en un crédito de vivienda).
+            RulesVersion = VersionesDeReglas.EsConocida(p.RulesVersion) ? p.RulesVersion : VersionesDeReglas.Vigente,
         };
     }
 

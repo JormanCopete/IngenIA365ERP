@@ -219,8 +219,11 @@ public static class RolesDeCuentaDeCartera
         new(DesembolsoPorGirar, C, FamiliaDeRol.Puente, [Mot], [Lin, Suc], null, MotivosDelGiro, TerceroNaturalDeCartera.Beneficiario, CruceDeRol.Credito),
         new(PuenteComercial, C, FamiliaDeRol.Puente, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Factura),
         new(CuentaPorCobrarComercial, C, FamiliaDeRol.Puente, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Factura),
+        // K6b (T1056): el Ingreso admite también el capital, el anticipo y el saldo a favor, sólo para la corrección monetaria UVR (con su hecho
+        // fijado en la regla, la contadora elige la cuenta de la corrección monetaria).
         new(Ingreso, C, FamiliaDeRol.Resultado, [Mod, Con], [Op, Lin, Emp, Gra, Sub, Ree, Pca, Suc],
-            [CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge], null,
+            [CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge,
+                Principal, Advance, CreditBalance], null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Ninguno),
         new(GastoDeterioro, D, FamiliaDeRol.Resultado, [Mot], [Op, Lin, Emp, Gra, Sub, Suc], ConceptosDelActivo, MotivosDelGastoDeDeterioro,
             TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),

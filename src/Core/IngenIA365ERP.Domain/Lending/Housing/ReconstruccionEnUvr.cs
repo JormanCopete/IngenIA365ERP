@@ -213,15 +213,16 @@ public static class ReconstruccionEnUvr
                 }
                 else
                     pesos = ConversionUvr.APesos(f.Monto, u, modo);
-                if (pesos != 0m) enPesos.Add(f with { Monto = pesos });
+                if (pesos != 0m) enPesos.Add(f with { Monto = pesos, MontoEnUvr = f.Monto, ValorUvr = u });
             }
         }
 
         // La causación de cada día, a la UVR de ese día.
         foreach (var f in filasEnUvr.Where(f => DeCausacion(f.Clase)))
         {
-            var pesos = ConversionUvr.APesos(f.Monto, serie.Del(f.Dia).Valor, modo);
-            if (pesos != 0m) enPesos.Add(f with { Monto = pesos });
+            var u = serie.Del(f.Dia).Valor;
+            var pesos = ConversionUvr.APesos(f.Monto, u, modo);
+            if (pesos != 0m) enPesos.Add(f with { Monto = pesos, MontoEnUvr = f.Monto, ValorUvr = u });
         }
 
         if (libroDesde is { } desde) enPesos.AddRange(Correcciones(uvr, filasEnUvr, enPesos, serie, modo, fecha, desde > origen ? desde : origen));
@@ -276,7 +277,11 @@ public static class ReconstruccionEnUvr
             {
                 var correccion = Pesos(d) - Pesos(d.AddDays(-1)) - pesosPorDia.GetValueOrDefault((d, clave));
                 if (correccion != 0m)
-                    salida.Add(new MovimientoDeLibro(d, LoanTransactionKind.MonetaryCorrection, clave.Item1, clave.Item2, correccion));
+                    salida.Add(new MovimientoDeLibro(d, LoanTransactionKind.MonetaryCorrection, clave.Item1, clave.Item2, correccion)
+                    {
+                        MontoEnUvr = 0m,
+                        ValorUvr = serie.Del(d).Valor,
+                    });
             }
         }
         return salida;

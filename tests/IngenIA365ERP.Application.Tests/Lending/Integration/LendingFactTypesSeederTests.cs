@@ -30,14 +30,20 @@ public class LendingFactTypesSeederTests
     }
 
     [Fact]
-    public async Task Siembra_los_35_hechos_a_contabilidad_con_su_codigo_corto()
+    public async Task Siembra_los_36_hechos_a_contabilidad_con_su_codigo_corto()
     {
-        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(35);
+        // K6b (T1056): 35 hasta K6a y la corrección monetaria UVR.
+        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(36);
 
         var filas = await _db.LendingFactTypes.ToListAsync();
-        filas.Should().HaveCount(35);
+        filas.Should().HaveCount(36);
         filas.Select(f => f.Code).Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
-        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(41, "los 6 a otros destinos no son hechos contables y no tienen fila");
+        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(42, "los 6 a otros destinos no son hechos contables y no tienen fila");
+        filas.Single(f => f.Code == "CorreccionMonetariaUvrCausada").Should().BeEquivalentTo(new
+        {
+            ShortCode = "CMU", VoucherTypeCode = "CA", DefaultMode = "PorLotes", DefaultBatchTrigger = "FinDeCausacion", DeliveredIn = EntregaDeCartera.K6b,
+            IsInformational = false,
+        });
         filas.Select(f => f.ShortCode).Should().OnlyHaveUniqueItems()
             .And.OnlyContain(c => c.Length >= 3 && c.Length <= 4 && c.All(char.IsUpper));
         filas.Should().Contain(f => f.Code == "CreditoAprobadoSinDesembolsar" && f.ShortCode == "CAD" && f.DefaultMode == "NoPasa" && f.VoucherTypeCode == "CN");
@@ -88,6 +94,6 @@ public class LendingFactTypesSeederTests
         LendingFactTypesSeeder.Datos.Keys.Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => !string.IsNullOrWhiteSpace(t.CodigoCorto));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => t.Destination == IntegrationDestinations.Accounting);
-        LendingFactTypesSeeder.Catalogo().Should().HaveCount(35);
+        LendingFactTypesSeeder.Catalogo().Should().HaveCount(36);
     }
 }

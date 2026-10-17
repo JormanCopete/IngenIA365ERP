@@ -267,6 +267,7 @@ public static class ConstructorDeLineasDeCartera
         MoraCausadaV1 x => x.Lines,
         SeguroCausadoV1 x => x.Lines,
         AjusteDeCausacionPorFechaValorV1 x => x.Lines,
+        CorreccionMonetariaUvrCausadaV1 x => x.Lines,
         DeterioroCalculadoV1 x => x.Lines,
         CarteraReclasificadaPorCalificacionV1 x => x.Lines,
         ReversoDeCierreV1 x => x.Lines,
@@ -362,6 +363,11 @@ public static class ConstructorDeLineasDeCartera
                 case MoraCausadaV1 x: Causaciones(x.Lines); break;
                 case SeguroCausadoV1 x: Causaciones(x.Lines); break;
                 case AjusteDeCausacionPorFechaValorV1 x: Causaciones(x.Lines); break;
+                // K6b (T1056): la corrección monetaria de los créditos en UVR.
+                case CorreccionMonetariaUvrCausadaV1 x:
+                    foreach (var l in x.Lines)
+                        foreach (var a in l.Amounts) CorreccionMonetaria(l.Dimensions, a, l.Loan, l.DebtorPersonPublicId);
+                    break;
                 case PagoAplicadoV1 x: Pago(x); break;
                 case PagoReversadoV1 x: PagoReversado(x); break;
                 case AnticipoRecibidoV1 x: AnticipoRecibido(x); break;
@@ -712,6 +718,34 @@ public static class ConstructorDeLineasDeCartera
         /// La causación de un concepto (§2.1): interés por cobrar contra el ingreso; en suspenso, la orden contingente; castigado, la de control;
         /// el seguro contra la aseguradora; un cargo por cuenta del asociado contra el tercero del cargo y uno propio contra el ingreso.
         /// </summary>
+        /// <summary>
+        /// K6b (T1056; pregunta E12): la corrección monetaria de un concepto de un crédito en UVR. Lo que se debe (capital, intereses, cargos) contra el
+        /// <c>Ingreso</c> con el hecho fijado; el suspenso y la castigada contra su orden; el anticipo y el saldo a favor (pasivos con el deudor) con el
+        /// <c>Ingreso</c> al débito. Un importe negativo (la UVR bajó) invierte los lados.
+        /// </summary>
+        private void CorreccionMonetaria(LoanFactDimensionsV1 d, ConceptAmountV1 a, LoanRefV1 credito, Guid deudor)
+        {
+            var rol = R.RolDelConcepto(a.Concept, a.OnBehalfOfAssociate, d.WrittenOff);
+            if (rol is null)
+            {
+                ConceptoSinRol(a, credito);
+                return;
+            }
+            var saldo = L(rol, d, a, credito, deudor);
+            switch (rol)
+            {
+                case R.SuspensoEnOrden or R.CastigadaEnOrden:
+                    Asentar(saldo, L(R.ContraDeOrden(rol)!, d, a, credito, null), a.Amount);
+                    break;
+                case R.Anticipo or R.SaldoAFavor:
+                    Asentar(L(R.Ingreso, d, a, credito, deudor), saldo, a.Amount);
+                    break;
+                default:
+                    Asentar(saldo, L(R.Ingreso, d, a, credito, deudor), a.Amount);
+                    break;
+            }
+        }
+
         private void Causacion(LoanFactDimensionsV1 d, ConceptAmountV1 a, LoanRefV1 credito, Guid deudor, Guid? contraparte, bool invertir = false)
         {
             var rol = R.RolDelConcepto(a.Concept, a.OnBehalfOfAssociate, d.WrittenOff);
