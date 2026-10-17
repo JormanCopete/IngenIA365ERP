@@ -2437,7 +2437,9 @@ completa, uno a la vez, hasta `HoyLocal` (si ya pasó `StartTimeLocal`); por úl
 clases de corrida son cuatro (C59); la activación no es corrida (§30.1, C60). La `NationalValueCorrection` **la
 encola la réplica**, no el ciclo: `EfectoDeReplicacionCorreccionDeValorNacional` (un `IEfectoDeReplicacion`) inserta en
 la misma transacción una corrida `Requested` cuando llega una fila con `SupersedesPublicId` que cubre días ya causados,
-sólo si Cartera está activada (C05).
+sólo si Cartera está activada (C05). Reacciona a `USURA` (todos los créditos) y, desde la fase 24, a `UVR` (sólo los
+créditos con `LND_LoanTermsVersions.DenominationUnit = Uvr`, que son también los únicos que recorre la corrida; sus
+diferencias de corrección monetaria se registran como `MonetaryCorrection`).
 
 **Transiciones**: `Requested` → `Running` → `Completed` | `CompletedWithErrors` (créditos en `LND_ProcessRunErrors`) |
 `Failed` (error de la corrida entera). `Failed` y `CompletedWithErrors` vuelven a `Running` con

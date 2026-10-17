@@ -4658,6 +4658,15 @@ tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
 - **Pendiente de la corrida final**: `ViviendaConUvrTests` (escrita, compila, sin correr) en los dos motores.
 - **Defecto anotado, no corregido**: corregir una UVR ya replicada no encola la corrida `NationalValueCorrection` (sólo la corrección de una
   `USURA` lo hace, `EfectoDeReplicacionCorreccionDeValorNacional`); los días ya causados con la UVR vieja no se recalculan. Lo dice el runbook §3a.
+  - **Corregido en la fase 24 (2026-10-17)**: el efecto reacciona a `USURA` y a `UVR` (`CodigosQueCorrigenLaCausacion`); la de `UVR` mira sólo
+    la marca de los créditos en UVR (`CreditosAfectados`, por `LND_LoanTermsVersions.DenominationUnit`) y la corrida recorre sólo ésos. La
+    reconstrucción ya leía la serie UVR con la información de ahora; lo que faltaba además era el destino de la diferencia: la corrección
+    monetaria se compara aparte (`LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria`, `MotorDeCartera.VerificarSeparandoLaCorreccionMonetaria`)
+    y se registra como `MonetaryCorrection` con su hecho `CorreccionMonetariaUvrCausada` (`RegistroDeCartera.DiferenciaDeCorreccionMonetaria`);
+    como ajuste de causación su capital no tenía rol en Contabilidad. Pruebas: tres casos nuevos en `CorreccionDeValorNacionalTests` y
+    `DiferenciasConCorreccionMonetariaTests` (Domain). Runbook §3a, mensajes.md §7 (fila 48 y la parte de la corrida) y data-model §22.1 al
+    día. Límite que queda: la diferencia de un pago aplicado en un día corregido (hechos de la operación) no tiene hecho propio en esta corrida;
+    sin caso dorado de una corrección UVR de punta a punta (la e2e `ViviendaConUvrTests` no la recorre).
 - **No hecho**: el PDF de la simulación (`SimulacionDeCreditoReport`) no pinta el plan en UVR; la pantalla sí.
 - T1057 sigue del dueño (SICSES).
 

@@ -30,6 +30,12 @@ public sealed record DiferenciaDeLibro(DateOnly Dia, LoanConcept Concepto, int? 
     /// <see cref="LibroTeorico.DiferenciasPorFamilia"/> (US5).
     /// </summary>
     public bool DeHechos { get; init; }
+
+    /// <summary>
+    /// K6b (fase 24): la diferencia es de la <b>corrección monetaria</b> de un crédito en UVR (filas <c>MonetaryCorrection</c>) y no de la causación;
+    /// sólo la marca <see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/>.
+    /// </summary>
+    public bool DeCorreccionMonetaria { get; init; }
 }
 
 /// <summary>
@@ -108,5 +114,23 @@ public sealed class LibroTeorico
         var hechos = new LibroTeorico(_movimientos.Where(m => !EsDeCausacion(m.Clase)))
             .Diferencias(lista.Where(m => !EsDeCausacion(m.Clase)), hasta).Select(d => d with { DeHechos = true });
         return causacion.Concat(hechos).OrderBy(d => d.Dia).ThenBy(d => d.DeHechos).ThenBy(d => (int)d.Concepto).ThenBy(d => d.Cuota ?? 0).ToList();
+    }
+
+    /// <summary>
+    /// Como <see cref="Diferencias"/>, pero con la corrección monetaria de un crédito en UVR aparte (K6b, fase 24): las filas
+    /// <c>MonetaryCorrection</c> se comparan sólo entre sí y sus diferencias van marcadas con <see cref="DiferenciaDeLibro.DeCorreccionMonetaria"/>,
+    /// porque viajan en otro hecho (<c>CorreccionMonetariaUvrCausada</c>) y se registran con su clase. En un crédito en pesos no hay filas
+    /// <c>MonetaryCorrection</c> y el resultado es el de <see cref="Diferencias"/>.
+    /// </summary>
+    public IReadOnlyList<DiferenciaDeLibro> DiferenciasSeparandoLaCorreccionMonetaria(IEnumerable<MovimientoDeLibro> libro, DateOnly? hasta = null)
+    {
+        ArgumentNullException.ThrowIfNull(libro);
+        var lista = libro.ToList();
+        static bool Cmu(MovimientoDeLibro m) => m.Clase == LoanTransactionKind.MonetaryCorrection;
+        var resto = new LibroTeorico(_movimientos.Where(m => !Cmu(m))).Diferencias(lista.Where(m => !Cmu(m)), hasta);
+        var correccion = new LibroTeorico(_movimientos.Where(Cmu)).Diferencias(lista.Where(Cmu), hasta)
+            .Select(d => d with { DeCorreccionMonetaria = true });
+        return resto.Concat(correccion).OrderBy(d => d.Dia).ThenBy(d => d.DeCorreccionMonetaria).ThenBy(d => (int)d.Concepto).ThenBy(d => d.Cuota ?? 0)
+            .ToList();
     }
 }

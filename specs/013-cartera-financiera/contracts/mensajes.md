@@ -118,7 +118,7 @@ transversales; lo detalla `contabilidad.md`); en una unidad manda el del princip
 | 33 | `CreditoAprobadoSinDesembolsar` | CAD | Business | sí | `Confirmation` · `Confirmation:{tipoDeHecho:N}` · `Confirmation:{solicitud:N}` | La aprobación de la solicitud; aparte, cada tramo desembolsado y el desistimiento o la anulación; una parte del ciclo diario al vencer la aprobación (FR-042) | NoPasa | CN | K1 (A3) |
 | 34 | `CupoRotativoOtorgado` | CRO | Business | sí | `Confirmation` · `Confirmation:{tipoDeHecho:N}` · `Confirmation:{cupo:N}` | El otorgamiento, la ampliación o la reducción del cupo rotativo; una parte del ciclo diario al vencer el cupo (usarlo o pagarlo no lo mueve: 913005 mide el cupo otorgado, C92) | NoPasa | CN | K1 (A3) |
 | 35 | `GarantiaConstituida` | GCT | Business | sí | `Confirmation` · `Confirmation:{tipoDeHecho:N}` · `Confirmation:{garantía:N}` | La constitución, la revaluación, la extinción o la ejecución de la garantía; aparte, su liberación por la cancelación del crédito; una parte del ciclo diario cuando la liberación espera la firmeza (D23) | NoPasa | CN | K1 (A3) |
-| 48 | `CorreccionMonetariaUvrCausada` | CMU | Business | sí | `Confirmation:{parte:N}` | Parte de una tanda de la corrida `DailyCycle`, o de la puesta al día de una operación (C04), sólo de los créditos **en UVR** | PorLotes resumido, `FinDeCausacion` | CA | K6b (E12) |
+| 48 | `CorreccionMonetariaUvrCausada` | CMU | Business | sí | `Confirmation:{parte:N}` | Parte de una tanda de la corrida `DailyCycle` o `NationalValueCorrection` (corrección de una `UVR`, fase 24), o de la puesta al día de una operación (C04), sólo de los créditos **en UVR** | PorLotes resumido, `FinDeCausacion` | CA | K6b (E12) |
 
 `{parte:N}` es el `PublicId` de la parte (`LND_AccountingFactParts`); `{tipoDeHecho:N}`, el `PublicId` de la fila
 del tipo en `LND_FactTypes`; `{crédito:N}`, `{solicitud:N}`, `{cupo:N}` y `{garantía:N}`, el `PublicId` del crédito,
@@ -834,7 +834,9 @@ Dos orígenes con la misma forma masiva de §10.0 (C03):
   propio del tipo (por lotes, `FinDeCausacion`). La corrida la **encola la réplica**, no el ciclo:
   `EfectoDeReplicacionCorreccionDeValorNacional` (un `IEfectoDeReplicacion` de Cartera) inserta en la misma
   transacción una corrida `Requested` cuando llega un valor nacional con `SupersedesPublicId` que cubre días ya
-  causados, sólo si Cartera está activada (C05).
+  causados, sólo si Cartera está activada (C05). Los códigos que la encolan son `USURA` y, desde la fase 24
+  (2026-10-17), `UVR`: ésa sólo mira y recorre los créditos **en UVR**, y la diferencia de su corrección monetaria
+  no viaja aquí sino en un `CorreccionMonetariaUvrCausada` de la misma parte de la corrida (§10.25).
 
 Lo origina la persona de la operación o el proceso. Valores **con signo**: positivo causa más, negativo menos; incluye
 la reclasificación a suspenso que resulte de reconstruir (`CurrentInterest` negativo y `CurrentInterestInSuspense`

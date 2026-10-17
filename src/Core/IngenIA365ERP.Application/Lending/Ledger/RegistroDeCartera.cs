@@ -290,6 +290,32 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             MessagePublicId = mensaje,
         }).ToList();
 
+    /// <summary>
+    /// K6b (fase 24): la fila de una diferencia de la corrección monetaria de un crédito en UVR
+    /// (<see cref="DiferenciaDeLibro.DeCorreccionMonetaria"/>) que registra la corrida de corrección por valor nacional: clase
+    /// <c>MonetaryCorrection</c>, cero en UVR (es sólo el cambio de la UVR), con el mensaje de su hecho <c>CorreccionMonetariaUvrCausada</c>.
+    /// </summary>
+    public static LoanTransaction DiferenciaDeCorreccionMonetaria(int loanId, DiferenciaDeLibro d, int processRunId, DateOnly fechaContable,
+        DateTime registradoEn, Guid? mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        if (!d.DeCorreccionMonetaria) throw new InvalidOperationException("La diferencia no es de la corrección monetaria.");
+        return new LoanTransaction
+        {
+            LoanId = loanId,
+            ProcessRunId = processRunId,
+            Kind = LoanTransactionKind.MonetaryCorrection,
+            Concept = d.Concepto,
+            InstallmentNumber = d.Cuota,
+            Amount = d.Diferencia,
+            ValueDate = d.Dia,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+            UvrAmount = 0m,
+        };
+    }
+
     /// <summary>La clase de la fila que registra una diferencia de la conciliación.</summary>
     public static LoanTransactionKind ClaseDeDiferencia(DiferenciaDeLibro d, IReadOnlyList<DiferenciaDeLibro> todas)
     {

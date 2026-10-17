@@ -9,6 +9,7 @@ using IngenIA365ERP.Application.Tests.Lending.Configuration;
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Core.NationalValues;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
+using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
@@ -132,5 +133,83 @@ public class CorreccionDeValorNacionalTests : IAsyncLifetime
         liquidacionDespues.Value.Fingerprint.Should().Be(liquidacionAntes.Value.Fingerprint, "una liquidación con R anterior a la corrección no cambia (SC-002)");
         var ahora = await _c.Liquidar().Handle(new GetLoanSettlementQuery(_c.Credito.PublicId, Causado), default);
         ahora.Value.ByConcept["CurrentInterest"].Should().BeLessThan(liquidacionAntes.Value.ByConcept["CurrentInterest"]);
+    }
+    // ------------------------------------------------------------------------------------- K6b: la corrección de una UVR (fase 24) --
+
+    /// <summary>Una UVR de <paramref name="dia"/> que corrige la publicada (como la serie diaria: clave vacía, vigente sólo ese día).</summary>
+    private NationalValue CorreccionDeUvr(DateOnly dia, decimal valor = 407.9m) =>
+        CopiasDePrueba.Copia(CodigosDeValorNacional.Uvr, string.Empty, dia, valor, _c.D.G.UtcNow, hasta: dia, corrige: Guid.NewGuid(), unidad: "Pesos");
+
+    /// <summary>Sella el crédito de Ana como crédito en UVR (la unidad va en sus condiciones; aquí sólo importa para elegir a los afectados).</summary>
+    private async Task CreditoEnUvrAsync()
+    {
+        foreach (var t in await _c.Db.LoanTermsVersions.Where(t => t.LoanId == _c.Credito.Id).ToListAsync())
+            _c.Db.Entry(t).Property(x => x.DenominationUnit).CurrentValue = DenominationUnit.Uvr;
+        await _c.Db.SaveChangesAsync();
+        _c.Db.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public async Task La_correccion_de_una_UVR_ya_replicada_encola_la_corrida_solo_si_hay_creditos_en_UVR_causados_ese_dia()
+    {
+        (await ReplicarAsync(CorreccionDeUvr(Hoy.AddDays(3)))).Should().BeSameAs(EfectoAplicado.Nada,
+            "el crédito de Ana es en pesos: la UVR no lo toca");
+
+        await CreditoEnUvrAsync();
+        (await ReplicarAsync(CorreccionDeUvr(Causado.AddDays(1)))).Should().BeSameAs(EfectoAplicado.Nada, "el día corregido no está causado");
+        (await ReplicarAsync(CopiasDePrueba.Copia(CodigosDeValorNacional.Uvr, string.Empty, Hoy.AddDays(3), 407.9m, _c.D.G.UtcNow, hasta: Hoy.AddDays(3),
+            unidad: "Pesos"))).Should().BeSameAs(EfectoAplicado.Nada, "una UVR nueva no corrige nada");
+
+        var correccion = CorreccionDeUvr(Hoy.AddDays(3));
+        var efecto = await ReplicarAsync(correccion);
+
+        efecto.Conteos[EfectoDeReplicacionCorreccionDeValorNacional.ConteoCorridas].Should().Be(1);
+        var corrida = await _c.Db.LendingProcessRuns.SingleAsync(r => r.Kind == LendingProcessKind.NationalValueCorrection);
+        corrida.Should().BeEquivalentTo(new
+        {
+            Status = LendingProcessRunStatus.Requested, AffectedFrom = (DateOnly?)Hoy.AddDays(3), AffectedTo = (DateOnly?)Hoy.AddDays(3),
+            RequestedByKind = ActorKind.Process, ExecutionOrigin = $"Replica:{correccion.SourcePublicId:D}",
+        }, "la UVR de un día toca sólo ese día");
+    }
+
+    [Fact]
+    public async Task La_corrida_de_una_UVR_no_recorre_los_creditos_en_pesos()
+    {
+        var correccion = CorreccionDeUvr(Hoy.AddDays(3));
+        await CopiasDePrueba.SembrarAsync(_c.Db, _c.D.G.UtcNow, correccion);
+        _c.Db.ChangeTracker.Clear();
+        var corrida = new LendingProcessRun
+        {
+            Kind = LendingProcessKind.NationalValueCorrection, Status = LendingProcessRunStatus.Requested, AffectedFrom = Hoy.AddDays(3),
+            AffectedTo = Hoy.AddDays(3), RequestedByKind = ActorKind.Process, RequestedAt = _c.D.G.UtcNow,
+            ExecutionOrigin = EfectoDeReplicacionCorreccionDeValorNacional.PrefijoDeOrigen + correccion.SourcePublicId.ToString("D"),
+        };
+        _c.Db.LendingProcessRuns.Add(corrida);
+        await _c.Db.SaveChangesAsync();
+
+        var r = await _c.Corregir().Handle(new RunNationalValueCorrectionCommand(corrida.PublicId), default);
+
+        r.Value.Should().Be(AvanceDeCorrida.Terminada);
+        _c.Db.ChangeTracker.Clear();
+        var leida = await _c.Db.LendingProcessRuns.SingleAsync(x => x.Id == corrida.Id);
+        (leida.Status, leida.TotalLoans, leida.ProcessedLoans).Should().Be((LendingProcessRunStatus.Completed, 0, 0),
+            "el crédito de Ana es en pesos y la UVR no lo toca");
+        (await _c.Db.LoanTransactions.CountAsync(t => t.ProcessRunId == corrida.Id)).Should().Be(0);
+    }
+
+    [Fact]
+    public void La_diferencia_de_la_correccion_monetaria_se_registra_con_su_clase_y_cero_en_UVR()
+    {
+        var d = new IngenIA365ERP.Domain.Lending.Replay.DiferenciaDeLibro(Hoy.AddDays(3), LoanConcept.Principal, null, 1_000m, 1_250m)
+            { DeCorreccionMonetaria = true };
+        var mensaje = Guid.NewGuid();
+
+        var fila = IngenIA365ERP.Application.Lending.Ledger.RegistroDeCartera.DiferenciaDeCorreccionMonetaria(7, d, 9, Causado, _c.D.G.UtcNow, mensaje);
+
+        (fila.Kind, fila.Concept, fila.Amount, fila.UvrAmount, fila.ProcessRunId, fila.MessagePublicId, fila.ValueDate)
+            .Should().Be((LoanTransactionKind.MonetaryCorrection, LoanConcept.Principal, 250m, (decimal?)0m, (int?)9, (Guid?)mensaje, Hoy.AddDays(3)));
+        var invalida = () => IngenIA365ERP.Application.Lending.Ledger.RegistroDeCartera.DiferenciaDeCorreccionMonetaria(7, d with { DeCorreccionMonetaria = false },
+            9, Causado, _c.D.G.UtcNow, mensaje);
+        invalida.Should().Throw<InvalidOperationException>();
     }
 }

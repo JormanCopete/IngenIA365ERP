@@ -27,6 +27,10 @@ namespace IngenIA365ERP.Application.Lending.Accrual;
 /// (desde US5, un interés ya pagado que la corrección baja), lo reconoce como <c>CreditBalanceRecognized</c> con <c>SaldoAFavorReconocido</c> por
 /// crédito. Una liquidación con R anterior a la corrección no cambia (la reconstrucción es bitemporal). Cada día cambiado deja una versión nueva de
 /// su posición. (nuevo)
+/// <para>K6b (fase 24): la corrección de una <c>UVR</c> recorre sólo los créditos en UVR
+/// (<see cref="EfectoDeReplicacionCorreccionDeValorNacional.CreditosAfectados"/>), y la diferencia de su corrección monetaria se registra como
+/// <c>MonetaryCorrection</c> con el hecho <c>CorreccionMonetariaUvrCausada</c> (la corrida en <c>runKind</c>), no como ajuste de causación: el
+/// ajuste de causación no tiene rol para el capital y la corrección monetaria sí.</para>
 /// </summary>
 public sealed class CorreccionDeValorNacional(
     IApplicationDbContext db,
@@ -51,9 +55,9 @@ public sealed class CorreccionDeValorNacional(
         {
             corrida.InformationCutoffAt = reloj.UtcNow;
             corrida.NationalValueReplicationId ??= valor.ReplicationId;
-            corrida.TotalLoans = await db.LoanControls.AsNoTracking().CountAsync(c => c.LastAccruedDate >= desde, ct);
+            corrida.TotalLoans = await EfectoDeReplicacionCorreccionDeValorNacional.CreditosAfectados(db, valor.Code).CountAsync(c => c.LastAccruedDate >= desde, ct);
         }
-        var ids = await db.LoanControls.AsNoTracking()
+        var ids = await EfectoDeReplicacionCorreccionDeValorNacional.CreditosAfectados(db, valor.Code)
             .Where(c => c.LastAccruedDate >= desde && (corrida.CursorLoanId == null || c.LoanId > corrida.CursorLoanId))
             .OrderBy(c => c.LoanId).Select(c => c.LoanId).Take(Math.Max(1, tanda.TamanoDeTanda)).ToListAsync(ct);
         if (ids.Count == 0) return AvanceDeCorrida.Terminada;
@@ -80,7 +84,8 @@ public sealed class CorreccionDeValorNacional(
             {
                 if (!cargados.TryGetValue(id, out var cargado) || !cargado.Listo) { corrida.FailedLoans += 1; continue; }
                 var tope = controles[id].LastAccruedDate < hasta ? controles[id].LastAccruedDate : hasta;
-                var diferencias = MotorDeCartera.Verificar(cargado.Entrada!, tope, libros[id]).Where(x => x.Dia >= desde && x.Dia <= tope).ToList();
+                var diferencias = MotorDeCartera.VerificarSeparandoLaCorreccionMonetaria(cargado.Entrada!, tope, libros[id])
+                    .Where(x => x.Dia >= desde && x.Dia <= tope).ToList();
                 if (diferencias.Count > 0) conAjuste.Add((cargado, diferencias));
                 corrida.ProcessedLoans += 1;
             }
@@ -93,11 +98,19 @@ public sealed class CorreccionDeValorNacional(
             };
             var origen = new OrigenDePartes(AccountingFactPartSource.NationalValueCorrectionBatch, corrida, null,
                 new Dictionary<DateOnly, int> { [hasta] = corrida.BatchCount + 1 }, null) { FechaDeRegistro = hoy };
-            var lineas = conAjuste.SelectMany(c => c.Diferencias.Where(x => x.Concepto != LoanConcept.CreditBalance).GroupBy(x => x.Dia)
+            var lineas = conAjuste.SelectMany(c => c.Diferencias.Where(EsAjuste).GroupBy(x => x.Dia)
                 .Select(g => new LineaDeCausacion(datos[c.Cargado.Credito.Id], g.Key,
                     g.Select(x => new MovimientoDeLibro(x.Dia, LoanTransactionKind.AccrualAdjustment, x.Concepto, x.Cuota, x.Diferencia)).ToList()))).ToList();
             var masivas = await partes.MasivasAsync(origen, lineas, AjusteDeCausacionPorFechaValorV1.Type, corregido, ct);
             if (masivas.IsFailure) throw new InvalidOperationException($"{masivas.Error.Code}: {masivas.Error.Message}");
+            // K6b (fase 24): la corrección monetaria de los créditos en UVR, en su propio hecho.
+            var lineasCmu = conAjuste.SelectMany(c => c.Diferencias.Where(x => x.DeCorreccionMonetaria).GroupBy(x => x.Dia)
+                .Select(g => new LineaDeCausacion(datos[c.Cargado.Credito.Id], g.Key,
+                    g.Select(x => new MovimientoDeLibro(x.Dia, LoanTransactionKind.MonetaryCorrection, x.Concepto, x.Cuota, x.Diferencia)).ToList()))).ToList();
+            var cmu = lineasCmu.Count == 0
+                ? Result.Success(PartesEmitidas.Vacias)
+                : await partes.MasivasAsync(origen, lineasCmu, CorreccionMonetariaUvrCausadaV1.Type, corregido, ct);
+            if (cmu.IsFailure) throw new InvalidOperationException($"{cmu.Error.Code}: {cmu.Error.Message}");
 
             var hechos = new List<HechoPorCredito>();
             var filas = new List<LoanTransaction>();
@@ -106,9 +119,11 @@ public sealed class CorreccionDeValorNacional(
             foreach (var (cargado, diferencias) in conAjuste)
             {
                 var loanId = cargado.Credito.Id;
-                foreach (var x in diferencias.Where(x => x.Concepto != LoanConcept.CreditBalance))
+                foreach (var x in diferencias.Where(EsAjuste))
                     filas.AddRange(RegistroDeCartera.Diferencias(loanId, [x], null, corrida.Id, contable.Value, ahora, masivas.Value.Mensaje(loanId, x.Dia, x.Concepto)));
-                var aFavor = diferencias.Where(x => x.Concepto == LoanConcept.CreditBalance).ToList();
+                foreach (var x in diferencias.Where(x => x.DeCorreccionMonetaria))
+                    filas.Add(RegistroDeCartera.DiferenciaDeCorreccionMonetaria(loanId, x, corrida.Id, contable.Value, ahora, cmu.Value.Mensaje(loanId, x.Dia, x.Concepto)));
+                var aFavor = diferencias.Where(x => x.Concepto == LoanConcept.CreditBalance && !x.DeCorreccionMonetaria).ToList();
                 if (aFavor.Count > 0)
                 {
                     var dd = datos[loanId];
@@ -165,6 +180,9 @@ public sealed class CorreccionDeValorNacional(
         corrida.CursorLoanId = ids.Max();
         return AvanceDeCorrida.Pendiente;
     }
+
+    /// <summary>Lo que va como ajuste de causación: ni el saldo a favor (va por crédito) ni la corrección monetaria (va en su hecho).</summary>
+    private static bool EsAjuste(DiferenciaDeLibro x) => x.Concepto != LoanConcept.CreditBalance && !x.DeCorreccionMonetaria;
 
     private sealed record ValorLeido(string Code, string Key, DateOnly ValidFrom, Guid SourcePublicId, long SourceSequence, int? ReplicationId);
 

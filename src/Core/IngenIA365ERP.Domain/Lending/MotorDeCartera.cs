@@ -104,6 +104,21 @@ public static class MotorDeCartera
         return estado.Libro.Diferencias(libro, hasta);
     }
 
+    /// <summary>
+    /// Como <see cref="Verificar"/>, con la corrección monetaria de un crédito en UVR aparte
+    /// (<see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/>): la usa la corrida de corrección por valor nacional, que registra las
+    /// diferencias de la corrección monetaria como <c>MonetaryCorrection</c> y las demás como ajuste de causación (K6b, fase 24).
+    /// </summary>
+    public static IReadOnlyList<DiferenciaDeLibro> VerificarSeparandoLaCorreccionMonetaria(EntradaDeReconstruccion entrada, DateOnly hasta,
+        IEnumerable<MovimientoDeLibro> libro, IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes = null)
+    {
+        ArgumentNullException.ThrowIfNull(entrada);
+        var operaciones = ReconstruccionDeCredito.OperacionesVigentes(entrada, hasta);
+        if (operaciones.Count == 0) return LibroTeorico.Vacio.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta);
+        var estado = ReconstruccionDeCredito.Reconstruir(entrada, hasta, operaciones[0].FechaValor, interpretes);
+        return estado.Libro.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta);
+    }
+
     // ------------------------------------------------------------------------------------------------ US5 (T0534–T0536)
 
     /// <summary>

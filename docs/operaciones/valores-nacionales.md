@@ -88,10 +88,18 @@ siguiente no se cargó.
 en UVR desde el primer día sin UVR (no hay que reprocesar nada a mano). Una liquidación a una fecha **futura** sin UVR publicada se muestra
 con la UVR **proyectada** desde la última publicada, con aviso y sólo para mostrar: nunca se causa ni se contabiliza una proyección.
 
-**Corregir una UVR ya replicada**: «Corregir» con motivo, como cualquier valor. **Cuidado**: hoy la corrida `NationalValueCorrection`
-sólo la encola la corrección de una `USURA` (`EfectoDeReplicacionCorreccionDeValorNacional`); corregir una UVR que ya se causó **no**
-recalcula los días causados (la liquidación y lo que se cause después sí usan el valor corregido). Mientras eso no exista, verificar la
-UVR antes de que llegue su día y, si hay que corregir una ya usada, escalarlo a soporte (pendiente anotado en tasks.md, fase 23).
+**Corregir una UVR ya replicada**: «Corregir» con motivo, como cualquier valor. Desde la fase 24 (2026-10-17) la corrección se trata
+como la de la usura: al replicarla, cada cooperativa con Cartera activada que tenga **créditos en UVR** causados en o después del día
+corregido encola una corrida `NationalValueCorrection` (`EfectoDeReplicacionCorreccionDeValorNacional`; `ExecutionOrigin` =
+`Replica:{valor}`) con los días que toca —una UVR diaria toca sólo su día, hasta la última marca—. La corrida recorre **sólo los créditos en
+UVR** y registra cada diferencia: la de la corrección monetaria como `MonetaryCorrection` con su hecho `CorreccionMonetariaUvrCausada`
+(`runKind = NationalValueCorrection`), el resto como `AccrualAdjustment` con `AjusteDeCausacionPorFechaValor` (`cause =
+NationalValueCorrection`), fechadas en el período abierto. Sin créditos en UVR, o si el día corregido no está causado, no se encola nada
+(la liquidación y lo que se cause después ya usan el valor corregido). Qué revisar: en `/cartera/procesos` la corrida termina
+`Completed`; si la política `Contabilidad.FaltaDeRegla` está en «Bloquear» y falta la regla del hecho `CMU` o `AFV`, la tanda se detiene y
+alerta como cualquier proceso. Límite conocido: si un pago aplicado en un día corregido cambia su reparto en pesos, esa diferencia (de los hechos
+de la operación, no de la causación) no tiene un hecho propio en esta corrida y Contabilidad la rechazaría por concepto sin rol: verificar la
+UVR antes de que llegue su día y, si la corrección toca un día con pagos, escalarlo a soporte.
 
 Los **cinco límites de vivienda** (`VIVIENDA_PLAZO_MINIMO_MESES`, `VIVIENDA_PLAZO_MAXIMO_MESES`, `VIVIENDA_FINANCIABLE`,
 `VIVIENDA_FINANCIABLE_VIS`, `VIVIENDA_CUOTA_INGRESO`) son `LIMITE` y **sí** vienen sembrados, «pendiente de validar» (60 y 360 meses;
