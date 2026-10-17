@@ -48,7 +48,10 @@ public class LendingReportsEndpoints : ICarterModule
                 foreach (var vista in publicadas)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (vista.RequiredPermission is null || await PermissionAuthorizationFilter.TieneAsync(http, vista.RequiredPermission))
+                    // K5 (T0982): una vista con datos del deudor sólo en algunos valores de un filtro (concentration) se ofrece a todos; la ruta
+                    // pide el permiso adicional sólo en esos valores.
+                    if (vista.RequiredPermission is null || vista.PersonalDataExceptWhen is not null
+                        || await PermissionAuthorizationFilter.TieneAsync(http, vista.RequiredPermission))
                         visibles.Add(vista);
                 }
                 return Results.Ok(visibles);
@@ -61,7 +64,7 @@ public class LendingReportsEndpoints : ICarterModule
 
     /// <summary>
     /// Aquí registra cada entrega sus vistas, una línea por vista: <c>group.MapVistaDeCartera(…Handler.Vista, (f, q) =&gt; new …Query(f, …));</c>.
-    /// K1 (C109, T0798): las siete de la base; K2–K5 suman las suyas en sus fases.
+    /// K1 (C109, T0798): las siete de la base; K2–K4 sumaron las suyas en sus fases y K5 (T0982) las cuatro de US15.
     /// </summary>
     private static void MapVistas(RouteGroupBuilder group)
     {
@@ -90,6 +93,13 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(PromisesReportQueryHandler.Vista, (f, q) => new PromisesReportQuery(f, Texto(q, "status")));
         group.MapVistaDeCartera(PaymentAgreementsReportQueryHandler.Vista, (f, q) => new PaymentAgreementsReportQuery(f, Texto(q, "status")));
         group.MapVistaDeCartera(PriorNoticesReportQueryHandler.Vista, (f, q) => new PriorNoticesReportQuery(f, Texto(q, "status")));
+        // K5 (US15, T0982): la calidad (groupBy), las cosechas, la concentración (by, top, warnAt; con datos del deudor sólo por deudor y por grupo)
+        // y los documentos emitidos (kind, status).
+        group.MapVistaDeCartera(QualityReportQueryHandler.Vista, (f, q) => new QualityReportQuery(f, Texto(q, "groupBy")));
+        group.MapVistaDeCartera(VintagesReportQueryHandler.Vista, (f, _) => new VintagesReportQuery(f));
+        group.MapVistaDeCartera(ConcentrationReportQueryHandler.Vista,
+            (f, q) => new ConcentrationReportQuery(f, Texto(q, "by"), Texto(q, "top"), Texto(q, "warnAt")));
+        group.MapVistaDeCartera(IssuedDocumentsReportQueryHandler.Vista, (f, q) => new IssuedDocumentsReportQuery(f, Texto(q, "kind"), Texto(q, "status")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>
@@ -151,6 +161,23 @@ public static class LendingReportsRoutes
             .RequirePermission(PermisoDeVer)
             .RequirePermissionWhenExporting(PermisoDeExportar);
 
+        if (vista.PersonalDataExceptWhen is { } excepcion)
+        {
+            // K5 (T0982): los datos del deudor dependen de un filtro propio (concentration por deudor o grupo): el permiso adicional y, al exportar,
+            // el de datos personales se piden sólo cuando la consulta los trae; sin ellos, el mismo 404 que lo inexistente y sin auditar (C84).
+            ruta.AddEndpointFilter(async (contexto, siguiente) =>
+            {
+                var http = contexto.HttpContext;
+                if (!vista.TraeDatosDelDeudor(http.Request.Query[excepcion.Filter].ToString())) return await siguiente(contexto);
+                if (vista.RequiredPermission is { } requerido && !await PermissionAuthorizationFilter.TieneAsync(http, requerido))
+                    return PermissionAuthorizationFilter.NotFoundEnvelope(http);
+                if (EntregaDeInformes.EsExportacion(http.Request.Query["format"].ToString())
+                    && !await PermissionAuthorizationFilter.TieneAsync(http, PermisoDeDatosPersonales))
+                    return PermissionAuthorizationFilter.NotFoundEnvelope(http);
+                return await siguiente(contexto);
+            });
+            return ruta;
+        }
         if (vista.RequiredPermission is { } adicional) ruta.RequirePermission(adicional);
         if (vista.PersonalData) ruta.WithMetadata(new RequirePermissionWhenExportingAttribute(PermisoDeDatosPersonales));
         return ruta;
