@@ -681,7 +681,19 @@ comprobante cierra el período. Suscriptor por central en `Centrales.CodigosDeSu
 (`RegulatoryFiles.Read`, nunca un `View`), pantallas `/cartera/sicses` y `/cartera/centrales`. Recetas:
 `docs/manual/cartera-documentos-al-deudor.md`, `docs/manual/cartera-informes-y-tablero.md`,
 `docs/operaciones/cartera-sicses-y-centrales.md`; cotejar los layouts es del dueño (T1011). **Las e2e de K5 están escritas
-y se corren una sola vez al final de todas las fases** (decisión del dueño). Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+y se corren una sola vez al final de todas las fases** (decisión del dueño).
+**K6a, pérdida esperada (fase 22, 2026-10-17)**: migración aditiva `CarteraPerdidaEsperada` (`LND_ImpairmentModelElections`,
+`LND_ArrearsHistoryLoads` y siete columnas nulas de PE en `LND_MonthlyCloseLoans`, para el 9083) y `EntregaVigente = K6a`.
+Consumo con y sin libranza y comercial de persona natural se deterioran por el **Anexo 2** (CE 68 de 2024) en las obligadas
+desde su primer cierre y en las que lo adoptan: Z → puntaje logístico en `decimal` (`FuncionLogistica`, redondeo E9) → PI
+de la tabla del tipo de organización (o `VOLUNTARIA`) × PDI por garantía (con varias, la mayor) × exposición, con la
+calificación homologada (`MotorDePerdidaEsperada`). **No hay hechos contables nuevos**. Una obligada no activa sin el Anexo 2
+ni el historial de mora completo (`RequirementsMissing`); los meses que faltan entran por la plantilla
+`lending.arrears-history` y lo que siga faltando lo completa el cierre con la regla de meses faltantes y lo marca. La no
+obligada adopta o desiste con acta, estudio y aviso subidos a la propuesta (pestaña «Modelo de deterioro» de
+`/cartera/cierres`). El Anexo 2 sembrado va `verified = false` y **sin la PI voluntaria** (nadie adopta hasta registrarla);
+el 9083 espera instructivo. Recetas: `docs/operaciones/cartera-perdida-esperada.md`, `docs/manual/cartera-perdida-esperada.md`.
+Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
   pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.
