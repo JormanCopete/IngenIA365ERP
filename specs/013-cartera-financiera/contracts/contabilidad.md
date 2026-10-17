@@ -87,6 +87,7 @@ y los asientos de ejemplo, en §24.
 | `MoraCausada` | MCA | B | ídem, con `DefaultInterest` | ídem | ídem | CA | K1 |
 | `SeguroCausado` | SCA | B | `PagoPorCuentaDelAsociado` (`Insurance`) | `SeguroPorPagar` | ídem | CA | K1 |
 | `AjusteDeCausacionPorFechaValor` | AFV | B | los roles de `InteresCausado`, `MoraCausada` o `SeguroCausado`, con signo | ídem | ídem | CA | K1 |
+| `CorreccionMonetariaUvrCausada` | CMU | B | si la UVR sube: el rol de saldo del concepto (`Capital`, `InteresPorCobrar`, `PagoPorCuentaDelAsociado`, `CargoPorCobrar`; suspendido o castigado, el de orden como en `InteresCausado`); si baja, al revés | `Ingreso` con el hecho fijado en la regla (`CMU`); en un `Anticipo` o `SaldoAFavor` del deudor, el signo se invierte | PorLotes resumido, `FinDeCausacion` | CA | K6b (E12) |
 | `PagoAplicado` | PAP | B | `RecaudoPorAplicar` (clase del recaudador) | por concepto: `Capital`, `InteresPorCobrar`, `PagoPorCuentaDelAsociado`, `CargoPorCobrar` | EnLinea | RC; DN si `Payroll` | K1 |
 | `PagoReversado` | PRV | B | lo que acreditó el pago, con las dimensiones vigentes (§9) | `RecaudoPorAplicar` | hereda del pago | RC; DN si `Payroll` | K1 |
 | `AnticipoRecibido` | ANR | B | `RecaudoPorAplicar` | `Anticipo` | EnLinea (unidad del pago) | RC | K1 |
@@ -123,7 +124,7 @@ Reglas que valen para todos:
   en un DS. El `AjusteDeCausacionPorFechaValor` que provoca una operación fechada atrás es acompañante de esa
   operación (C03); el que emite la corrida `NationalValueCorrection` va por partes y por lotes. El mapeo de un hecho
   que viaja en la unidad de otro no se usa.
-- **Masivos por partes** (T14): `InteresCausado`, `MoraCausada`, `SeguroCausado`, `DeterioroCalculado`,
+- **Masivos por partes** (T14): `InteresCausado`, `MoraCausada`, `SeguroCausado`, `CorreccionMonetariaUvrCausada` (K6b), `DeterioroCalculado`,
   `CarteraReclasificadaPorCalificacion` y `ReversoDeCierre` llegan por partes (fecha o cierre × sucursal × tipo ×
   tanda), con totales por combinación y **la lista por crédito**. El constructor arma las líneas desde la lista por
   crédito: así una cuenta que exige tercero o cruce conserva el detalle (§10.4).
@@ -487,7 +488,7 @@ contadora (C6).
 | `DS` | Desembolso, su reverso y los ajustes desde Comercial | `CreditoDesembolsado\|*`, `DesembolsoReversado\|*`, `CreditoAjustadoDesdeComercial\|*` |
 | `RC` | Pagos, reversos, anticipos, saldos a favor, cobro de suspenso, recuperación de castigada, cobro provisional | `PagoAplicado\|*`, `PagoReversado\|*`, `AnticipoRecibido\|*`, `AnticipoAplicado\|*`, `CobroDeInteresEnSuspenso\|*`, `SaldoAFavorReconocido\|*`, `SaldoAFavorResuelto\|*`, `RecuperacionDeCastigada\|*`, `CobroProvisionalIncorporado\|*` |
 | `DN` | Lo que recauda Nómina (la recuperación de castigadas incluida, C79) | `PagoAplicado\|Payroll`, `PagoReversado\|Payroll`, `RecuperacionDeCastigada\|Payroll` |
-| `CA` | Interés, mora, seguro, gasto de cobranza y ajuste por fecha valor | `InteresCausado\|*`, `MoraCausada\|*`, `SeguroCausado\|*`, `AjusteDeCausacionPorFechaValor\|*`, `GastoDeCobranzaCausado\|*` |
+| `CA` | Interés, mora, seguro, gasto de cobranza, ajuste por fecha valor y corrección monetaria UVR (K6b) | `InteresCausado\|*`, `MoraCausada\|*`, `SeguroCausado\|*`, `AjusteDeCausacionPorFechaValor\|*`, `GastoDeCobranzaCausado\|*`, `CorreccionMonetariaUvrCausada\|*` |
 | `PV` | Deterioro, reclasificación por calificación, castigo y reverso de cierre | `DeterioroCalculado\|*`, `CarteraReclasificadaPorCalificacion\|*`, `ReversoDeCierre\|*`, `CreditoCastigado\|*` |
 | `CN` (nuevo) | Novedades: reestructuración, modificación, novación, condonación, cambio de dimensión y contingentes | `DimensionContableCambiada\|*`, `CreditoReestructurado\|*`, `CreditoModificado\|*`, `CreditoNovado\|*`, `CondonacionAprobada\|*`, `CreditoAprobadoSinDesembolsar\|*`, `CupoRotativoOtorgado\|*`, `GarantiaConstituida\|*` |
 
@@ -700,7 +701,7 @@ decide con los parámetros de Cartera (módulo `LND`, ámbito `LendingFactType` 
 
 | Tipos | Defecto (D8) |
 |---|---|
-| `InteresCausado`, `MoraCausada`, `SeguroCausado`, `AjusteDeCausacionPorFechaValor` | PorLotes, resumido, disparador `FinDeCausacion` |
+| `InteresCausado`, `MoraCausada`, `SeguroCausado`, `AjusteDeCausacionPorFechaValor`, `CorreccionMonetariaUvrCausada` (K6b) | PorLotes, resumido, disparador `FinDeCausacion` |
 | `DimensionContableCambiada` | sin vigencia propia: EnLinea si la emite una operación, PorLotes resumido `FinDeCausacion` si la emite el proceso; con vigencia propia, rige para los dos (`ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite`) |
 | `DeterioroCalculado`, `CarteraReclasificadaPorCalificacion` | PorLotes, resumido, disparador `CierreDeCartera` |
 | `DesembolsoReversado`, `PagoReversado`, `ReversoDeCierre` | **heredan** el modo sellado de su original (`ModoDeEntrega.Heredado`, el mecanismo de la 012 para las anulaciones), con el alcance de lote de su propia operación |
@@ -1740,4 +1741,24 @@ aplica cada decisión.
 | CON-18 · carpeta común | C82: `Application/Accounting/Integration` (§1.1) |
 | — · usuario de origen del proceso | C23: «registrado por» = `Actor.NombreDelProceso` (§7.3, §22) |
 | — · roles de saldo del contrato | C29: lista publicada en §16.1 |
+
+---
+
+## 29. Enmienda K6b (2026-10-17): la corrección monetaria UVR (E12)
+
+Con K6b (vivienda Ley 546 y UVR; FR-024, D18) Cartera emite un hecho masivo nuevo, `CorreccionMonetariaUvrCausada` (código corto
+`CMU`, `LND_FactTypes.DeliveredIn = K6b`, comprobante `CA`, modo de los masivos, admite proceso; `mensajes.md` §10.25). Rige la
+**propuesta por defecto de E12** (DT §7.7) mientras la contadora no responda:
+
+- **Sin rol nuevo**: el lado de resultado es el rol `Ingreso` con el hecho fijado en la regla (`hecho = CMU`, peso 2 de la matriz);
+  el lado del saldo, el rol del concepto que cambió de valor, con las mismas dimensiones (y `valueUnit = Uvr`). La contadora crea la
+  regla de `CMU` × `Ingreso` con la cuenta que elija para la corrección monetaria; sin ella, con `Contabilidad.FaltaDeRegla =
+  Bloquear` el ciclo detiene su tanda y alerta, como con cualquier hecho sin regla. El hecho viaja con signo: una UVR que baja
+  invierte los lados.
+- **Comprobante**: el `CA` del día, resumido con la causación (una línea por crédito donde la cuenta exige tercero o cruce).
+- **Conciliación**: el saldo en pesos de un crédito en UVR es Σ causado + Σ corrección − Σ pagado: sin este hecho, el cuadre de
+  vivienda no cierra contra el libro.
+- **Abierto**: si el certificado tributario incluye la corrección monetaria pagada junto a los intereses de vivienda (hoy no).
+
+Lo fija el caso 50 de `ConstructorDeLineasDeCarteraTests` (`Casos/50-correccion-monetaria-uvr.json`).
 

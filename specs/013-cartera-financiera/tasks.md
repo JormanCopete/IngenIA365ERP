@@ -4572,7 +4572,14 @@ tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
   - Hecho el 2026-10-17 en una prueba nueva, `Lending/Migration/ViviendaEnLaMigracionTests` (el crédito de vivienda se importa, el cuadre lo pide con modalidad `VIVIENDA` y el acta ya no lo declara fuera), en lugar de ampliar `ActivateLendingCommandHandlerTests`.
 - [X] T1046 [P] Ampliar `CertificadoTributarioTests` (T0964) con un crédito de vivienda en UVR: sus intereses van a la sección de vivienda, en pesos a la UVR de la fecha de cada pago (FR-024; D18)
   - Hecho el 2026-10-17: crédito en UVR en la sección de vivienda, intereses del libro en pesos a la UVR de la fecha valor de cada pago, saldo a la UVR del 31-12.
-- [ ] T1047 Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/ViviendaConUvrTests.cs` (colección «Cartera e2e», cooperativa aislada, dos motores): antes de K6b vivienda no se origina ni se migra (la prueba fija ese comportamiento por la guarda de entrega); con K6b, el recorrido de la prueba independiente por HTTP, con `UVR` y `TOPE_TASA_VIVIENDA` registrados en la **colección «Valores nacionales e2e»** o como valores de la cooperativa aislada sembrados en la fixture, nunca en DEV ni QA (§7.6 de las transversales; quickstart §1.7) (FR-024; D18)
+- [X] T1047 Crear `tests/IngenIA365ERP.API.IntegrationTests/Lending/ViviendaConUvrTests.cs` (colección «Cartera e2e», cooperativa aislada, dos motores): antes de K6b vivienda no se origina ni se migra (la prueba fija ese comportamiento por la guarda de entrega); con K6b, el recorrido de la prueba independiente por HTTP, con `UVR` y `TOPE_TASA_VIVIENDA` registrados en la **colección «Valores nacionales e2e»** o como valores de la cooperativa aislada sembrados en la fixture, nunca en DEV ni QA (§7.6 de las transversales; quickstart §1.7) (FR-024; D18)
+  - Hecho el 2026-10-17 (bloque 2): **escrita y compilando, sin ejecutar** (instrucción del dueño: las pruebas contra bases y Docker corren una sola
+    vez al final de todas las fases). Colección «Cartera e2e», cooperativa aislada «vivienda»; registra en la central de su host el tope y una serie
+    UVR **sintética marcada como de prueba** (fuente «Serie de prueba (e2e), no publicada»), de ayer a hoy + 30. Dos hechos: la guarda de entrega
+    (`LectorDeVivienda.Disponible(K6a)` falso; por HTTP no se puede bajar la entrega desplegada) y el recorrido: tasa variable y sobre el tope
+    rechazadas, `housing` del detalle, simulación con `uvr` y `LND-2026.2`, solicitud no VIS con hipoteca, segundo grado → `FirstRankMortgageRequired`,
+    primer grado → desembolso, 29 días causados con `MonetaryCorrection` y partes `CorreccionMonetariaUvrCausada`, liquidación y estado con la UVR del
+    día, liquidación futura proyectada y un día sin UVR que frena sólo al crédito en UVR. La migración al cuadre y E1/E2 quedan en Application y Domain.
 
 ### Implementation for K6b
 
@@ -4605,6 +4612,8 @@ tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
 - [X] T1056 Si T1049 adopta el hecho nuevo (pregunta **E12**, DT §7.7; FR-024; D18): agregar `CorreccionMonetariaUvrCausada` al catálogo de mensajes de Cartera (`CatalogoDeMensajesDeCarteraV1`), a `LND_FactTypes` (semilla `LendingFactTypesSeeder`, Order 90, `DeliveredIn = K6b`), a contracts/mensajes.md y a la matriz contable (`RolesDeCuentaDeCartera`, contracts/contabilidad.md), con su prueba en `ConstructorDeLineasDeCarteraTests`; sin él, la corrección monetaria no llega a Contabilidad y el cuadre de vivienda no cierra
   - Hecho el 2026-10-17 en código, semilla (`LendingFactTypesSeeder`, CMU, K6b; `lending-voucher-mappings.json` CMU → CA) y pruebas (caso 50 del constructor). **Falta documentarlo** en contracts/mensajes.md y contracts/contabilidad.md (bloque 2).
 - [ ] T1057 [P] Revisar con el dueño los campos de vivienda y UVR del layout del SICSES (`sicses-cartera-*.json`) y publicar una versión nueva del JSON si el instructivo los pide (T79) (dueño) (FR-024; D18)
+  - 2026-10-17 (bloque 2): **sigue del dueño**. `sicses-cartera-1-2026-12-01.json` (formato 9027) no trae campos de unidad UVR, VIS ni subsidio, y
+    agregarlos exigiría inventar su número, posición y valores admitidos sin el instructivo a la vista: no se tocó.
 - [X] T1058 Subir `CatalogoDeCartera.EntregaVigente` a `EntregaDeCartera.K6b` (D18; DT §6)
   - Hecho el 2026-10-17; las pruebas de entrega se ajustaron (no se borraron).
 
@@ -4612,8 +4621,20 @@ tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
 
 - [X] T1059 Sólo si T1048 lo decide: columnas UVR en las entidades y configuraciones (`PrecisionDeCartera.ValorUvr`) y la migración par **`CarteraVivienda`** con `tools/scripts/add-migration.ps1`, aditiva (DT §2.26) (FR-024; D18; C104)
   - Hecho el 2026-10-17: migración par aditiva `CarteraVivienda` (15 columnas nulas o con defecto `Pesos`), paridad verde.
-- [ ] T1060 [P] Ampliar las pantallas `/cartera/lineas/{id:guid}` (unidad pesos/UVR, límites de vivienda con su fuente), `/cartera/simulador` (plan en UVR con la equivalencia en pesos a la UVR de hoy y la leyenda de proyección), `/cartera/creditos/{id:guid}` (saldo en UVR y en pesos, UVR del día) y sus clientes de `Shared/Services/Cartera`; `IndicadorDeCarga`, sin colores literales (FR-024; D18)
-- [ ] T1061 Escribir `docs/manual/cartera-vivienda-y-uvr.md` **(nuevo)**: reglas de la Ley 546 como parámetros, UVR y tope, migración de vivienda, E1/E2, certificado tributario; y el paso en el runbook de valores nacionales para registrar la serie UVR (FR-024; D18)
+- [X] T1060 [P] Ampliar las pantallas `/cartera/lineas/{id:guid}` (unidad pesos/UVR, límites de vivienda con su fuente), `/cartera/simulador` (plan en UVR con la equivalencia en pesos a la UVR de hoy y la leyenda de proyección), `/cartera/creditos/{id:guid}` (saldo en UVR y en pesos, UVR del día) y sus clientes de `Shared/Services/Cartera`; `IndicadorDeCarga`, sin colores literales (FR-024; D18)
+  - Hecho el 2026-10-17 (bloque 2). API sin rutas nuevas (api.md §29): `CreditLineDto.housing` (tope y cinco límites con fuente; `missing` sin
+    romper), `ScheduleSimulationDto.uvr`/`isHousing`, `CreditApplicationDto.isSocialHousing`, `LoanTermsDto.denominationUnit`, plan con `uvrValue` y
+    cuota en UVR, libro con `uvrAmount`/`uvrValue`, y `uvr` en liquidación y estado de cuenta (UVR del día, proyectada o no, saldos en UVR;
+    `Application/Lending/Housing/ViviendaDtos.cs`). Pantallas: editor de versión (Vivienda ya no está deshabilitada; «Unidad del capital» sólo si la
+    combinación admite UVR), resumen de versión con la unidad, detalle de línea con el tope y los límites, simulador con el plan en UVR y su
+    leyenda, solicitud nueva con la marca VIS (y su detalle), garantías con matrícula y **grado de la hipoteca** (sin él la UI no podía registrar
+    el primer grado que exige el desembolso), y en el crédito la unidad, el bloque `EnUvrDelCredito` en liquidación y estado, la cuota y saldo en UVR
+    del plan y el valor en UVR del libro. Sin clientes nuevos (los existentes leen los campos opcionales). Pruebas: `ViviendaEnLasConsultasTests` (2)
+    y `ViviendaYUvrClientTests` (3). Sin pruebas de arquitectura nuevas: no hay rutas, comandos, permisos ni datos personales nuevos.
+- [X] T1061 Escribir `docs/manual/cartera-vivienda-y-uvr.md` **(nuevo)**: reglas de la Ley 546 como parámetros, UVR y tope, migración de vivienda, E1/E2, certificado tributario; y el paso en el runbook de valores nacionales para registrar la serie UVR (FR-024; D18)
+  - Hecho el 2026-10-17 (bloque 2): el manual, el §3a del runbook `docs/operaciones/valores-nacionales.md` (UVR día a día por la plantilla, el tope,
+    qué pasa si falta), el tema «Vivienda (Ley 546) y créditos en UVR» del manual en línea y el índice. CMU documentado en `contracts/mensajes.md`
+    (fila 48 y §10.25) y `contracts/contabilidad.md` (fila CMU, `CA` y §29); columnas de K6b en data-model §0.4 y §31; límites en §12.5.
 
 #### Notas del bloque 1 (2026-10-17) para el bloque 2
 
@@ -4631,6 +4652,14 @@ tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
   es una sola clave, sin distinguir VIS/no VIS ni pesos/UVR.
 - **Para el dueño**: valores y fuentes de los cinco límites, la clave del tope (¿VIS/no VIS, pesos/UVR?), E12 y la corrección monetaria en el
   certificado, tramos en UVR, migración de créditos UVR de SOLIDO, T1057 (SICSES).
+
+#### Notas del bloque 2 (2026-10-17)
+
+- **Pendiente de la corrida final**: `ViviendaConUvrTests` (escrita, compila, sin correr) en los dos motores.
+- **Defecto anotado, no corregido**: corregir una UVR ya replicada no encola la corrida `NationalValueCorrection` (sólo la corrección de una
+  `USURA` lo hace, `EfectoDeReplicacionCorreccionDeValorNacional`); los días ya causados con la UVR vieja no se recalculan. Lo dice el runbook §3a.
+- **No hecho**: el PDF de la simulación (`SimulacionDeCreditoReport`) no pinta el plan en UVR; la pantalla sí.
+- T1057 sigue del dueño (SICSES).
 
 **Checkpoint**: `ViviendaConUvrTests` verde en los dos motores; casos 61–65 y r21 verdes; `CarteraVivienda`
 generada sólo si T1048 la pidió; K6b lista para DEV y QA.

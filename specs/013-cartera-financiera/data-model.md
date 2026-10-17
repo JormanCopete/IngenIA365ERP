@@ -75,7 +75,7 @@ completa está en §10. Las columnas de detalle no llevan marca (T1, «Lo que no
 | `Monto` | decimal(18,2) | pesos: libro, plan, posiciones, operaciones, cupos, garantías, órdenes, archivos |
 | `TasaAnual` | decimal(9,6) | toda tasa **como fracción** (0,265000 = 26,5 % EA): EA pactada, usura, índice, margen, piso, techo, tasa de mora fija, factor relativo de mora, tarifa de seguro |
 | `TasaEquivalente` | decimal(28,18) | tasas derivadas selladas o explicadas: diaria, del período, sobretasa de cargos (`ChargesSpread`) |
-| `ValorUvr` | decimal(18,4) | K6b: valores en UVR (`CarteraVivienda`, sólo si hace falta) |
+| `ValorUvr` | decimal(18,4) | K6b: cantidades en UVR y el valor de una UVR (migración `CarteraVivienda`, 2026-10-17; ver abajo) |
 | `Fraccion` **(fijado aquí)** | decimal(9,6) | proporciones que no son tasas: cobertura mínima, veces los aportes, pesos del puntaje, umbral de coincidencia de nombre, retención de prima |
 | `Puntaje` **(fijado aquí)** | decimal(12,4) | puntajes propios y de centrales (admite escalas de 0 a 1.000 con decimales) |
 
@@ -85,6 +85,19 @@ completa está en §10. Las columnas de detalle no llevan marca (T1, «Lo que no
   10; 100; 1.000), modo (`RoundingMode`) y momento (`RoundingMoment`). El residuo queda visible en la
   explicación (`RedondeoDeCartera`).
 - Los porcentajes no se guardan como 0–100: siempre fracción. Días, meses y cuotas son `int`.
+- **K6b (T1048, T1059; decidido el 2026-10-17): sí hacen falta columnas UVR.** Todas con el alias `ValorUvr` (18,4), nulas en un
+  crédito en pesos; los montos en pesos siguen en `Monto` (su valor a la UVR de la fecha que dice cada tabla). Un crédito en UVR se
+  reconstruye en UVR (redondeo a la diezmilésima, `RedondeoDeCartera.EnUvr`) y se valora en pesos al centavo:
+
+  | Tabla | Columna | Qué es |
+  |---|---|---|
+  | `LND_CreditLineVersions` | `DenominationUnit` (`int`, no nula, defecto `1` = `Pesos`) | La unidad del capital de la versión; `2` = `Uvr` sólo si la combinación del catálogo «admite UVR», en un solo tramo. Entra a la huella sólo si es UVR |
+  | `LND_LoanTermsVersions` | `DenominationUnit` (ídem) | La unidad sellada del crédito |
+  | `LND_RepaymentScheduleVersions` | `UvrValue` | La UVR con que se valoraron en pesos las cuotas del plan |
+  | `LND_RepaymentInstallments` | `OpeningPrincipalUvr`, `PrincipalUvr`, `InterestUvr`, `InsuranceUvr`, `TotalUvr`, `ClosingPrincipalUvr` | La cuota en UVR |
+  | `LND_LoanTransactions` | `UvrAmount`, `UvrValue` | El movimiento en UVR y la UVR de su fecha valor; la corrección monetaria diaria es la clase `MonetaryCorrection` (`UvrAmount = 0`) |
+  | `LND_LoanDailyPositions` | `UvrValue`, `PrincipalUvr`, `PayoffAmountUvr` | La posición del día en UVR |
+  | `LND_CreditApplications` | `IsSocialHousing` (`bit`, nula) | Sólo en una solicitud de vivienda: si el inmueble es VIS (elige `VIVIENDA_FINANCIABLE_VIS`) |
 
 ### 0.5 Fechas
 
@@ -3775,6 +3788,7 @@ los mensajes acumulados de Comercial.
 | `CarteraCobranza` (K4) | `LND_MessageCampaigns`, `LND_CollectionStages`, `LND_CollectionStageHistory`, `LND_CollectorAssignmentRules`, `LND_CollectorAssignments`, `LND_CollectionActions`, `LND_PaymentPromises`, `LND_PaymentAgreements`, `…Installments`, `LND_LegalProcesses`, `…Actions` | `LND_DebtorMessages.CampaignId`; `LND_LoanNovelties.PaymentAgreementId` |
 | `CarteraInformes` (K5) | `LND_RegulatoryFiles`, `LND_RegulatoryFileLines` (y `LND_IssuedDocument*` si no se adelantaron) | — |
 | `CarteraPerdidaEsperada` (K6a) | `LND_ImpairmentModelElections`, `LND_ArrearsHistoryLoads` | FK e índice de `LND_LoanArrearsHistory.ArrearsHistoryLoadId` (la columna nació nula en `CarteraRiesgo`); siete columnas nulas en `LND_MonthlyCloseLoans` para el SICSES por pérdida esperada (§23.2) |
+| `CarteraVivienda` (K6b, 2026-10-17) | — | 15 columnas (§0.4): `DenominationUnit` en `LND_CreditLineVersions` y `LND_LoanTermsVersions` (no nulas, defecto `Pesos`); `UvrValue` en `LND_RepaymentScheduleVersions`; seis `*Uvr` en `LND_RepaymentInstallments`; `UvrAmount` y `UvrValue` en `LND_LoanTransactions`; `UvrValue`, `PrincipalUvr` y `PayoffAmountUvr` en `LND_LoanDailyPositions`; `IsSocialHousing` en `LND_CreditApplications`. Ninguna tabla nueva |
 
 Todas son aditivas y pares (PostgreSQL y SQL Server, `tools/scripts/add-migration.ps1`); la fila `lending.process` de
 `COR_BackgroundLeases` la siembra `PlataformaParaCartera`.
@@ -5779,7 +5793,7 @@ El catálogo, cerrado en código (`Domain/Common/NationalValues`), fija por cód
 estricto** (`Mayor` = un valor mayor es más estricto; `Menor` = uno menor lo es) y qué acota. El valor vive en
 `ADM_NationalValues` (`Code = LIMITE`, `Key` = el código), con vigencia y fuente, y se siembra «pendiente de validar».
 Un límite nuevo más estricto que lo configurado alerta `Cartera.LimiteLegalMasEstricto`. Los seis primeros los nombra la
-§2.21 de las transversales; los otros 17 **(fijado aquí)**, entre ellos los de cobranza (inicio de lunes a viernes, inicio y fin del sábado, contactos por día), los fija este documento (C71).
+§2.21 de las transversales; los otros 17 **(fijado aquí)** y los cinco de vivienda de K6b, entre ellos los de cobranza (inicio de lunes a viernes, inicio y fin del sábado, contactos por día), los fija este documento (C71).
 
 | Código | Unidad | Estricto | Valor semilla | Acota | Fuente |
 |---|---|---|---|---|---|
@@ -5804,6 +5818,16 @@ Un límite nuevo más estricto que lo configurado alerta `Cartera.LimiteLegalMas
 | `TITULAR_RECLAMO_DIAS` · `TITULAR_RECLAMO_PRORROGA_DIAS` | `Dias` (hábiles) | `Menor` | 15 · 8 | `PlazosDelTitular`, `LND_CreditReportClaims` | Ley 1581, Ley 1266 |
 | `TITULAR_LEYENDA_RECLAMO_DIAS` | `Dias` (hábiles) | `Menor` | 2 | marca «reclamo en trámite» | Ley 1266 |
 | `PERMANENCIA_NEGATIVO_VECES_MORA` · `PERMANENCIA_NEGATIVO_MESES_MAXIMOS` | `Veces` · `Meses` | `Menor` | 2 · 48 (PV) | `ProyeccionCentralDeRiesgo` (K5) | Ley 2157 |
+| `VIVIENDA_PLAZO_MINIMO_MESES` **(nuevo, K6b)** | `Meses` | `Mayor` | 60 (PV) | plazo mínimo de la versión de línea y de la solicitud de vivienda (`ReglasDeVivienda`) | Ley 546 de 1999, art. 17 |
+| `VIVIENDA_PLAZO_MAXIMO_MESES` **(nuevo, K6b)** | `Meses` | `Menor` | 360 (PV) | plazo máximo, ídem | Ley 546 de 1999, art. 17 |
+| `VIVIENDA_FINANCIABLE` **(nuevo, K6b)** | `Fraccion` | `Menor` | 0,70 (PV) | monto de la solicitud de vivienda frente al valor del inmueble (sus hipotecas) | Ley 546 de 1999, art. 17; Decreto 145 de 2000 (compilado en el Decreto 2555 de 2010) |
+| `VIVIENDA_FINANCIABLE_VIS` **(nuevo, K6b)** | `Fraccion` | `Menor` | 0,80 (PV) | ídem, vivienda de interés social (`IsSocialHousing`) | ídem |
+| `VIVIENDA_CUOTA_INGRESO` **(nuevo, K6b)** | `Fraccion` | `Menor` | 0,30 (PV) | primera cuota (llevada a un mes) frente a los ingresos familiares (solicitante y codeudores) | ídem |
+
+Los cinco de vivienda (K6b, T1051, 2026-10-17) se siembran como «valor semilla, pendiente de validar»: valores y fuentes los coteja
+el dueño. Sin uno vigente, la línea, la solicitud y el desembolso de vivienda responden `NationalValues.Missing`. El tope de tasa
+de vivienda **no** es un límite: es el valor nacional `TOPE_TASA_VIVIENDA` (`EA`, sin clave, §12.3), como la `UVR` (`Pesos`, un
+valor por día), y ninguno de los dos se siembra.
 
 `Veces` es la unidad que este documento agrega a la lista de §2.21 **(fijado aquí)**: un múltiplo (del SMMLV, de la
 mora) o un conteo.

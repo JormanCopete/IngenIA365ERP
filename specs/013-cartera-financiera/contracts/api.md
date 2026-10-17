@@ -2339,3 +2339,26 @@ Además se aplicaron aquí C28 (`Answered` en listar y simular, §20), C35 (clav
 (`destination` e `isEnabled` del registro), C38, C60–C63 (activación), C64 (partes de la migración), C69, C71 (códigos
 de `data-model.md` §10, literales) y C82 (importación de valores nacionales).
 
+
+---
+
+## 29. Enmienda K6b (2026-10-17): vivienda Ley 546 y UVR
+
+Ninguna ruta nueva. Las respuestas ganan campos **opcionales** (nulos o con su defecto fuera de vivienda y UVR), así lo de K1–K6a
+no cambia; las entradas aceptan dos campos nuevos.
+
+| Ruta | Campo | Qué es |
+|---|---|---|
+| `POST /credit-lines`, `POST /credit-lines/{id}/versions` (entrada) · `CreditLineVersionDto` | `denominationUnit` (`Pesos` por defecto, `Uvr`) | La unidad del capital. `Uvr` sólo en una combinación «admite UVR» del catálogo de modalidades y sin tramos (`Lending.Housing.UvrNotAdmitted`, `Lending.Housing.UvrTranchesNotSupported`) |
+| `GET /credit-lines/{id}` | `housing` | En una línea de vivienda: `{ date, rateCap: { rate, validFrom, source, nationalValuePublicId } \| null, limits: [{ code, value, source, nationalValuePublicId }], missing: [string] }`, el tope y los cinco límites de la Ley 546 vigentes a `date`; lo que falta va en `missing` sin romper la consulta |
+| `POST /applications`, `PUT /applications/{id}` (entrada) · `CreditApplicationDto` | `isSocialHousing` (bool?) | Sólo en una solicitud de vivienda: VIS elige `VIVIENDA_FINANCIABLE_VIS`; nulo en las demás |
+| `POST /simulations/schedule` → `ScheduleSimulationDto` | `isHousing` · `uvr` | `isHousing`: la línea sigue la Ley 546 (sella `LND-2026.2`). `uvr`, en una línea en UVR: `{ uvrDate, uvrValue, amountUvr, toPayUvr, installments: [{ number, dueDate, principal, interest, insurance, total, balanceAfter }], legend }`; las cuotas de `installments` (en pesos) son su equivalencia a esa UVR |
+| `GET /loans/{id}` → `LoanTermsDto` | `denominationUnit` (`Pesos` \| `Uvr`) | La unidad sellada |
+| `GET /loans/{id}/schedule` | `uvrValue` · `installments[].uvr` | La UVR con que se valoró el plan y la cuota en UVR `{ openingPrincipal, principal, interest, insurance, total, closingPrincipal }` |
+| `GET /loans/{id}/transactions` | `uvrAmount` · `uvrValue` | El movimiento en UVR y la UVR de su fecha valor; la clase nueva `MonetaryCorrection` es la corrección monetaria diaria |
+| `GET /loans/{id}/settlement` · `GET /loans/{id}/statement` | `uvr` | `{ uvrDate, uvrValue, projected, lastPublished, principalUvr, toPayOffUvr, balancesUvr, legend }`: la UVR del día (a una fecha sin UVR publicada, **proyectada** desde la última, sólo para mostrar, con aviso en `warnings`) y los saldos en UVR; los montos en pesos de la respuesta son su valor a esa UVR |
+
+Errores (todos 422 con su dato y fuente): `Lending.Housing.VariableRateNotAllowed`, `.RateCapExceeded` (con el tope del día y su
+fuente), `.TermOutOfLimits`, `.UvrNotAdmitted`, `.FinancingExceeded`, `.InstallmentToIncomeExceeded`, `.DataRequired`,
+`.FirstRankMortgageRequired` (desembolso) y `NationalValues.Missing` (sin tope, límite o UVR del día). Antes de K6b siguen
+`Lending.CreditLine.HousingNotAvailable` y `Lending.Migration.HousingNotAvailable`.
