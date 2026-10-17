@@ -683,6 +683,23 @@ public static class ManualCatalogo
             ["Cartera activada y el cierre mensual del período hecho (para el SICSES).", "Parámetro Centrales.CodigosDeSuscriptor con el código de la cooperativa en cada central.",
                 "Permisos Lending.RegulatoryFiles.Read para ver y descargar, Lending.RegulatoryReports.Generate para el SICSES, Lending.CreditBureauFiles.Generate para las centrales y Lending.RegulatoryFiles.MarkUploaded para marcar cargado."],
             ["cartera-informes-y-tablero", "cartera-documentos"], ["/cartera/centrales"], TipoDeTema.Proceso));
+        // Feature 013, K6a (T1040): la pérdida esperada del Anexo 2 —obligada o adoptada—, el historial de mora y cómo leer el cierre. El registro y el cotejo
+        // del Anexo 2, la carga complementaria y la activación de una obligada, en docs/operaciones/cartera-perdida-esperada.md; para la contadora,
+        // docs/manual/cartera-perdida-esperada.md.
+        t.Add(Proceso("cartera-perdida-esperada", "Pérdida esperada (Anexo 2) y modelo de deterioro", Modulos.Cartera, "/cartera/cierres",
+            "Ver con qué modelo se deteriora cada segmento, adoptar o desistir voluntariamente de la pérdida esperada con decisión del consejo, completar el historial de mora que la migración no trajo y leer la probabilidad de incumplimiento, la pérdida dado el incumplimiento y la exposición de cada crédito en el cierre.",
+            [
+                P("Cartera → Cierres → Modelo de deterioro", "La tabla dice, para cada segmento, si va por altura de mora (Anexo 1) o por pérdida esperada (Anexo 2) y por qué: obligada por su tipo de organización, adopción voluntaria o no obligada. Consumo con y sin libranza y comercial de persona natural son los segmentos del Anexo 2.", "/cartera/cierres", "Abrir Cierres"),
+                P("Historial de mora", "«Revisar» lista los créditos vivos que no tienen los meses de mora que pide la pérdida esperada. Los meses que la migración no trajo se cargan con la plantilla «Historial de mora complementario» (crédito, mes, mora máxima y la fuente), antes o después de activar y hasta el primer cierre en pérdida esperada. Volver a cargar un mes no borra nada: manda la carga más reciente."),
+                P("Adoptar o desistir (no obligadas)", "«Proponer la adopción» da el identificador de la propuesta: llevalo al acta del consejo como punto «Cambio del modelo de deterioro». Subí a la propuesta el estudio de impacto y el soporte del aviso a la Superintendencia, indicá la fecha del aviso, desde cuándo rige (no antes del aviso más la antelación de la norma; si no alcanza, la pantalla dice la fecha más temprana) y el punto del acta aprobado. El cambio rige desde el primer cierre de su fecha y nunca recalcula un cierre anterior. Una cooperativa obligada no adopta ni desiste."),
+                P("Leer el cierre", "En el detalle del cierre, «Por qué» de un crédito en pérdida esperada muestra la probabilidad de incumplimiento (y la tabla que se usó), la pérdida dado el incumplimiento (y la garantía), la exposición, el puntaje y si está en incumplimiento. La categoría contable es la homologada del Anexo 2. Si un crédito no tenía el historial completo, el cierre aplicó la regla de meses faltantes y lo dice."),
+            ],
+            ["perdida esperada", "anexo 2", "modelo de referencia", "probabilidad de incumplimiento", "pi", "pdi", "exposicion", "historial de mora",
+                "meses faltantes", "adopcion voluntaria", "desistimiento", "obligada", "obligacion sobrevenida", "deterioro", "homologacion", "circular 100"],
+            ["Cartera activada; el Anexo 2 registrado en la plataforma (y, para adoptar, con la probabilidad de incumplimiento de la aplicación voluntaria).",
+                "La regla de meses faltantes (Riesgo.ReglaMesesFaltantes) y, con «Fija», sus días.",
+                "Permisos Lending.Ratings.Read para ver, Lending.ArrearsHistory.Import para el historial y Lending.ImpairmentModel.Manage para adoptar o desistir."],
+            ["cartera-activacion", "cartera-sicses-y-centrales"], [], TipoDeTema.Proceso));
 
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.
