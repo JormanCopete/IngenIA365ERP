@@ -369,7 +369,8 @@ public sealed class ConstructorDeDocumentosDeCartera(
             porNumero[credito.Number] = (credito, estado);
         }
 
-        var certificado = CertificadoTributario.Armar(año, paraCertificar);
+        var saldoIncluye = await SaldoDelCertificadoAsync(p.Hoy, ct);
+        var certificado = CertificadoTributario.Armar(año, paraCertificar, saldoIncluye);
         if (certificado.Vacio)
             return Falla(DocumentErrors.NadaQueCertificar($"la persona no tuvo créditos con la cooperativa en {año}"));
 
@@ -385,16 +386,28 @@ public sealed class ConstructorDeDocumentosDeCartera(
         datos["year"] = año;
         datos["loans"] = certificado.Todos.Select(c => new
         {
-            number = c.Numero, housing = c.EsVivienda, interestPaid = c.InteresesPagados, balanceAtYearEnd = c.SaldoTotal,
+            number = c.Numero, housing = c.EsVivienda, interestPaid = c.InteresesPagados, interestPaidWithAdvance = c.InteresesConAnticipo,
+            balanceAtYearEnd = c.SaldoTotal,
         }).ToList();
         datos["totalInterestPaid"] = certificado.TotalInteresesPagados;
         datos["totalHousingInterestPaid"] = certificado.TotalInteresesDeVivienda;
+        datos["balanceIncludes"] = saldoIncluye.ToString();
         var version = porNumero.Values.Select(x => x.Estado.RulesVersion).FirstOrDefault() ?? VersionesDeReglas.Vigente;
         return Result.Success(new DocumentoArmado(lineas,
             new CuerpoDeCertificadoTributario(año, certificado.Creditos.Select(Impreso).ToList(), certificado.Vivienda.Select(Impreso).ToList(),
                 certificado.TotalInteresesPagados, certificado.TotalInteresesDeVivienda, certificado.TotalSaldo),
             cierre, null, null, null, null, version, datos,
             [CuerpoDePazYSalvo.LeyendaDeAlcance, ModelosDeDocumentoDeCartera.LeyendaDeInteresesPagados]));
+    }
+
+    /// <summary>
+    /// Los conceptos del saldo al 31 de diciembre vigentes el día de la emisión (<c>Documentos.CertificadoTributario.SaldoIncluye</c>, decisión del dueño
+    /// del 2026-10-16); sin valor legible, todos (el saldo de antes del parámetro).
+    /// </summary>
+    private async Task<ConceptosDelSaldoCertificado> SaldoDelCertificadoAsync(DateOnly hoy, CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye, hoy, ct: ct);
+        return (leido.IsSuccess ? SaldoDelCertificadoTributario.Leer(leido.Value.Texto) : null) ?? ConceptosDelSaldoCertificado.Todos;
     }
 
     private static CreditoCertificadoTributario Impreso(InteresesPagadosPorCredito c) => new(c.Numero, c.Linea, c.InteresCorrientePagado,

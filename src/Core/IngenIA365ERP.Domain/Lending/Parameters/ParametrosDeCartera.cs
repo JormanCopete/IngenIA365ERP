@@ -1,6 +1,7 @@
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Parameters;
+using IngenIA365ERP.Domain.Lending.Documents;
 using static IngenIA365ERP.Domain.Common.Parametros.CatalogoDeParametros;
 using static IngenIA365ERP.Domain.Lending.EntregaDeCartera;
 
@@ -122,6 +123,13 @@ public static class ParametrosDeCartera
     /// (<c>quality</c>) y en el tablero: vencida = saldo de capital con días de mora mayores que este valor. Pendiente de validar por la contadora. (nuevo)
     /// </summary>
     public const string InformesDiasCarteraVencida = "Informes.DiasCarteraVencida";
+
+    /// <summary>
+    /// K5 (US13; decisión del dueño del 2026-10-16): qué conceptos suma el saldo al 31 de diciembre del certificado tributario, como nombres de
+    /// <c>ConceptosDelSaldoCertificado</c> separados por coma (<c>Capital</c>, <c>InteresCorriente</c>, <c>InteresDeMora</c>, <c>OtrosCargos</c> y
+    /// <c>MenosAnticipo</c>, que resta el anticipo). El defecto los lleva todos: el saldo de antes del parámetro. Se lee vigente el día de la emisión. (nuevo)
+    /// </summary>
+    public const string DocumentosCertificadoTributarioSaldoIncluye = "Documentos.CertificadoTributario.SaldoIncluye";
 
     /// <summary>Forma de un horario de cobranza: <c>HH:mm-HH:mm</c>.</summary>
     public const string PatronDeHorario = @"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$";
@@ -359,6 +367,10 @@ public static class ParametrosDeCartera
         Entero(Modulo, InformesDiasCarteraVencida,
             "Días de mora desde los que un crédito cuenta como cartera vencida en los indicadores de calidad y el tablero (más de este número).",
             "30", K5, General) with { Minimo = 0m, PendienteDeValidar = PendienteContadora },
+        Texto(DocumentosCertificadoTributarioSaldoIncluye,
+            "Conceptos que suma el saldo al 31 de diciembre del certificado tributario, separados por coma: Capital, InteresCorriente, InteresDeMora, "
+            + "OtrosCargos (seguros, gastos de cobranza y otros cargos) y MenosAnticipo (resta el anticipo). El defecto los lleva todos.",
+            SaldoDelCertificadoTributario.Defecto, K5, patron: SaldoDelCertificadoTributario.Patron),
     ];
 
     private static DefinicionDeParametro Texto(string clave, string descripcion, string defecto, EntregaDeModulo desde,

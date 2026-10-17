@@ -81,6 +81,10 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
         var deK5 = ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.InformesDiasCarteraVencida);
         Assert.True(deK5.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5 && deK5.DisponibleEnLaEntrega() && deK5.PendienteDeValidar is not null,
             "Informes.DiasCarteraVencida es de K5, se ofrece y está pendiente de validar.");
+        // 2026-10-16 (decisión del dueño): el saldo del certificado tributario también es de K5 y se ofrece.
+        var saldo = ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye);
+        Assert.True(saldo.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5 && saldo.DisponibleEnLaEntrega(),
+            "Documentos.CertificadoTributario.SaldoIncluye es de K5 y se ofrece.");
     }
 
     [Fact]

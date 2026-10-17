@@ -4,6 +4,8 @@ using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Lending.Documents;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Documents;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Tests.Lending.Documents;
@@ -227,5 +229,92 @@ public sealed class DocumentosDeK5Tests : IAsyncLifetime
         primero.IsSuccess.Should().BeTrue(primero.IsFailure ? primero.Error.Message : string.Empty);
         segundo.Value.DocumentPublicId.Should().Be(primero.Value.DocumentPublicId);
         (await _d.Db.IssuedLendingDocuments.CountAsync(d => d.Kind == IssuedDocumentKind.TaxCertificate)).Should().Be(1);
+    }
+
+    // ------------------------------------------------------------ decisiones del dueño del 2026-10-16 (certificado tributario) --
+
+    private static readonly LoanConcept[] ConceptosDeInteres =
+        [LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense, LoanConcept.DefaultInterestInSuspense];
+
+    /// <summary>Lo que el libro real aplicó a intereses en el año, por clase de fila (positivo).</summary>
+    private async Task<decimal> InteresesDelLibroAsync(int año, params LoanTransactionKind[] clases)
+    {
+        var desde = new DateOnly(año, 1, 1);
+        var hasta = new DateOnly(año, 12, 31);
+        var filas = await _d.Db.LoanTransactions.AsNoTracking()
+            .Where(t => t.LoanId == _d.Credito.Id && clases.Contains(t.Kind) && ConceptosDeInteres.Contains(t.Concept)).ToListAsync();
+        return -filas.Where(t => t.ValueDate >= desde && t.ValueDate <= hasta).Sum(t => t.Amount);
+    }
+
+    private async Task<JsonElement> CreditoDelCertificadoAsync(short año)
+    {
+        var emitido = await _d.EmitidoAsync(DocumentosDePrueba.CertificadoTributario(_d.Ana.PublicId, año));
+        var documento = await _d.DocumentoAsync(emitido.DocumentPublicId);
+        using var datos = JsonDocument.Parse(documento.EssentialDataJson);
+        return datos.RootElement.Clone();
+    }
+
+    [Fact]
+    public async Task El_interes_que_cubre_un_anticipo_ingresado_en_el_año_cuenta_en_el_certificado()
+    {
+        // La cuota del 1 de enero de 2027 vence sin pagarse; el 15 de enero un pago la cubre y deja anticipo, que cubre parte de la de febrero.
+        await _d.P.CausarHastaAsync(new DateOnly(2027, 1, 15));
+        await _d.P.AplicadoAsync(_d.P.Pago(ModalidadDePago.Advance, 250_000m));
+        await _d.P.CausarHastaAsync(new DateOnly(2027, 2, 2));
+        var delPago = await InteresesDelLibroAsync(2027, LoanTransactionKind.PaymentAllocation, LoanTransactionKind.PaymentReallocation);
+        var delAnticipo = await InteresesDelLibroAsync(2027, LoanTransactionKind.AdvanceApplied);
+        delPago.Should().BeGreaterThan(0m);
+        delAnticipo.Should().BeGreaterThan(0m, "el anticipo de enero cubrió el interés de la cuota de febrero");
+        _d.P.C.Ir(new DateOnly(2028, 1, 12));
+
+        var datos = await CreditoDelCertificadoAsync(2027);
+
+        datos.GetProperty("totalInterestPaid").GetDecimal().Should().Be(delPago + delAnticipo, "el anticipo ingresó en 2027 y se aplicó en 2027");
+        datos.GetProperty("loans")[0].GetProperty("interestPaidWithAdvance").GetDecimal().Should().Be(delAnticipo);
+    }
+
+    [Fact]
+    public async Task El_interes_que_cubre_un_anticipo_ingresado_el_año_anterior_no_cuenta_aunque_se_aplique_en_el_año()
+    {
+        await _d.P.CausarHastaAsync(DiaDelPago);
+        await _d.P.AplicadoAsync(_d.P.Pago(ModalidadDePago.Advance, 100_000m));
+        await _d.P.CausarHastaAsync(new DateOnly(2027, 1, 2));
+        (await InteresesDelLibroAsync(2027, LoanTransactionKind.AdvanceApplied)).Should()
+            .BeGreaterThan(0m, "el anticipo de diciembre cubrió el interés de la cuota de enero");
+        _d.P.C.Ir(new DateOnly(2028, 1, 12));
+
+        var datos = await CreditoDelCertificadoAsync(2027);
+
+        datos.GetProperty("totalInterestPaid").GetDecimal().Should().Be(0m, "el anticipo ingresó en 2026 y en 2027 no hubo pagos");
+        datos.GetProperty("loans")[0].GetProperty("interestPaidWithAdvance").GetDecimal().Should().Be(0m);
+    }
+
+    [Fact]
+    public async Task El_saldo_al_31_de_diciembre_por_defecto_lleva_capital_e_intereses()
+    {
+        _d.P.C.Ir(Enero);
+
+        var datos = await CreditoDelCertificadoAsync(2026);
+
+        datos.GetProperty("balanceIncludes").GetString().Should().Be(nameof(ConceptosDelSaldoCertificado.Todos));
+        datos.GetProperty("loans")[0].GetProperty("balanceAtYearEnd").GetDecimal().Should()
+            .BeGreaterThan(3_000_000m, "capital más el interés causado en diciembre");
+        var cuerpo = _d.Pintados.Last().Cuerpo.Should().BeOfType<CuerpoDeCertificadoTributario>().Subject;
+        cuerpo.Creditos.Single().SaldoDeIntereses.Should().BeGreaterThan(0m);
+    }
+
+    [Fact]
+    public async Task El_saldo_al_31_de_diciembre_lleva_los_conceptos_que_configura_la_cooperativa()
+    {
+        await _d.ParametroAsync(ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye, "Capital");
+        _d.P.C.Ir(Enero);
+
+        var datos = await CreditoDelCertificadoAsync(2026);
+
+        datos.GetProperty("balanceIncludes").GetString().Should().Be(nameof(ConceptosDelSaldoCertificado.Capital));
+        datos.GetProperty("loans")[0].GetProperty("balanceAtYearEnd").GetDecimal().Should().Be(3_000_000m, "sólo el capital, sin pagos");
+        var cuerpo = _d.Pintados.Last().Cuerpo.Should().BeOfType<CuerpoDeCertificadoTributario>().Subject;
+        cuerpo.Creditos.Single().SaldoDeIntereses.Should().Be(0m);
+        cuerpo.TotalSaldo.Should().Be(3_000_000m);
     }
 }

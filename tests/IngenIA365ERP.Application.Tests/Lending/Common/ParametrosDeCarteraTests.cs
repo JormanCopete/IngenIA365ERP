@@ -74,6 +74,7 @@ public class ParametrosDeCarteraTests
         { "Informes.RangosDeEdad", "30,60,90,180,360", [N], EntregaDeCartera.K1 },
         { "Informes.PuntosAlertaUsura", "2.0", [N], EntregaDeCartera.K1 },
         { "Informes.DiasCarteraVencida", "30", [N], EntregaDeCartera.K5 },
+        { "Documentos.CertificadoTributario.SaldoIncluye", "Capital,InteresCorriente,InteresDeMora,OtrosCargos,MenosAnticipo", [N], EntregaDeCartera.K5 },
     };
 
     [Fact]
@@ -106,9 +107,9 @@ public class ParametrosDeCarteraTests
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K5).ToList();
 
         posteriores.Should().BeEmpty("ninguna clave es de K6a en adelante");
-        // T0980 (fase 20): la única clave de K5 es Informes.DiasCarteraVencida, pendiente de validar por la contadora.
+        // T0980 (fase 20): Informes.DiasCarteraVencida, pendiente de validar por la contadora; 2026-10-16: el saldo del certificado tributario.
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5).Select(d => d.Clave).Should()
-            .Equal(ParametrosDeCartera.InformesDiasCarteraVencida);
+            .Equal(ParametrosDeCartera.InformesDiasCarteraVencida, ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye);
         ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.InformesDiasCarteraVencida).Should()
             .Match<IngenIA365ERP.Domain.Common.Parametros.DefinicionDeParametro>(d => d.DisponibleEnLaEntrega() && d.PendienteDeValidar != null);
         ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)).Should().OnlyContain(d => d.DisponibleEnLaEntrega());
