@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
@@ -121,13 +122,36 @@ public class ImportNationalValuesCommandTests
         var r = await Importar(e, Lector(
             Fila("SMMLV", "", "2026-01-01", "1750905", "Pesos"),
             Fila("DTF", "", "2026-01-01", "0,1", "EA"),
-            Fila("UVR", "", "2026-01-01", "400", "Pesos")), ModoDeImportacion.Apply);
+            Fila("UVR", "DIARIA", "2026-01-01", "400", "Pesos")), ModoDeImportacion.Apply);
 
         r.Error.Code.Should().Be(ImportErrors.InvalidCode);
         var resultado = (ImportResultDto)((ErrorConDatos)r.Error).Data;
         resultado.Errors.Should().Contain(x => x.Row == 3 && x.Column == PlantillaDeValoresNacionales.Codigo && x.Code == ErroresDeValoresNacionales.CodeUnknownCode);
-        resultado.Errors.Should().Contain(x => x.Row == 4 && x.Code == ImportErrors.CellNotYetAvailable, "UVR se habilita con K6b");
+        // K6b (T1050): la UVR ya se carga (antes de K6b respondía Import.Cell.NotYetAvailable), pero no lleva clave.
+        resultado.Errors.Should().Contain(x => x.Row == 4 && x.Code == ErroresDeValoresNacionales.KeyInvalidCode, "la UVR no lleva clave");
         (await e.Db.PlatformNationalValues.AnyAsync()).Should().BeFalse("la fila buena tampoco se guarda");
+    }
+
+    [Fact]
+    public async Task Con_K6b_la_serie_UVR_y_el_tope_de_vivienda_se_cargan_por_la_plantilla()
+    {
+        // K6b (T1050; FR-024, D18): la serie diaria de la UVR (un valor por día, desde = hasta) y el tope de vivienda, sin clave. Valores de prueba.
+        using var e = new RegistroCentralDePrueba();
+
+        var r = await Importar(e, Lector(
+            Fila("UVR", "", "2026-11-01", "406,0010", "Pesos", "Banco de la República", hasta: "2026-11-01"),
+            Fila("UVR", "", "2026-11-02", "406,0832", "Pesos", "Banco de la República", hasta: "2026-11-02"),
+            Fila("UVR", "", "2026-11-03", "406,1654", "Pesos", "Banco de la República", hasta: "2026-11-03"),
+            Fila("TOPE_TASA_VIVIENDA", "", "2026-01-01", "0,105", "EA", "Junta Directiva del Banco de la República")), ModoDeImportacion.Apply);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? JsonSerializer.Serialize(((ErrorConDatos)r.Error).Data) : "");
+        r.Value.Applied.Should().BeTrue();
+        var uvr = await e.Db.PlatformNationalValues.Where(v => v.Code == CodigosDeValorNacional.Uvr).OrderBy(v => v.ValidFrom).ToListAsync();
+        uvr.Select(v => (v.ValidFrom, v.ValidTo, v.Value, v.Key)).Should().Equal(
+            (new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 1), 406.0010m, ""),
+            (new DateOnly(2026, 11, 2), new DateOnly(2026, 11, 2), 406.0832m, ""),
+            (new DateOnly(2026, 11, 3), new DateOnly(2026, 11, 3), 406.1654m, ""));
+        (await e.Db.PlatformNationalValues.SingleAsync(v => v.Code == CodigosDeValorNacional.TopeTasaVivienda)).Value.Should().Be(0.105m);
     }
 
     [Fact]

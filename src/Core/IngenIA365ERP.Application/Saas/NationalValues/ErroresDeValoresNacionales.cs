@@ -34,7 +34,9 @@ public static class ErroresDeValoresNacionales
         new ErrorConDatos(KeyInvalidCode, mensaje, new { code = codigo, allowedKeys = clavesAdmitidas });
 
     public static Error CodigoNoDisponible(string codigo) =>
-        new ErrorConDatos(CodeNotAvailableCode, $"{codigo} todavía no está disponible (llega con la entrega K6b).", new { code = codigo });
+        new ErrorConDatos(CodeNotAvailableCode,
+            $"{codigo} todavía no está disponible (llega con la entrega {CodigosDeValorNacional.Buscar(codigo)?.DisponibleDesde.ToString() ?? "posterior"}).",
+            new { code = codigo, availableFrom = CodigosDeValorNacional.Buscar(codigo)?.DisponibleDesde.ToString() });
 
     public static Error UnidadInvalida(string mensaje) => new(UnitInvalidCode, mensaje);
 

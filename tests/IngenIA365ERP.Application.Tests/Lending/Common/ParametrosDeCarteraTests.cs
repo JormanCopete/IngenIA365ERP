@@ -105,14 +105,16 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K6a_vigente_se_ofrecen_todas_las_claves_hasta_K6a()
+    public void Con_K6b_vigente_se_ofrecen_todas_las_claves_hasta_K6b()
     {
         // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; T0955 sube a K4 y T0969 a K5 (fase 19: el
-        // extracto y el certificado tributario no traen claves nuevas); T1024 (fase 22) sube a K6a, con Riesgo.MesesFaltantesDiasFijos (T1027).
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6a);
-        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6a).ToList();
+        // extracto y el certificado tributario no traen claves nuevas); T1024 (fase 22) sube a K6a, con Riesgo.MesesFaltantesDiasFijos (T1027); T1058
+        // (fase 23) sube a K6b, la última entrega, sin claves nuevas (los límites de vivienda son valores nacionales LIMITE, T1051).
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6b).ToList();
 
-        posteriores.Should().BeEmpty("ninguna clave es de K6b");
+        posteriores.Should().BeEmpty("K6b es la última entrega de Cartera");
+        ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6b).Should().BeEmpty("la vivienda no trae claves");
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()
             .Equal(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);
         ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos).Should()
