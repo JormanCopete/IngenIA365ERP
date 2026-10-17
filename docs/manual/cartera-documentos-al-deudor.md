@@ -66,14 +66,25 @@ si después se reversa un pago del período, el extracto queda anulado (§7) y s
 ### 2b. El certificado tributario
 
 Se pide con la clase **Certificado tributario**, el titular (el crédito sólo sirve para elegirlo) y el año. Lista cada crédito en
-que la persona es **deudora** con:
+que la persona es **deudora** —sólo como deudora: las codeudas no se certifican, lo confirmó el dueño el 2026-10-16— con:
 
 - **Intereses pagados en el año**: lo que los pagos aplicaron a **interés corriente** y a **interés de mora** —incluidos los que
   estaban en suspenso— con **fecha valor dentro del año**, **neto de los pagos reversados** que la cooperativa conocía al emitir.
   Así, un pago de diciembre reversado en enero, antes de emitir, no cuenta; uno reversado después de emitir anula el certificado
   (§7). Esta definición es nueva y la **valida la contadora** con los casos de ejemplo antes de entregarle el certificado a los
   asociados (quickstart §12). No cuentan los intereses causados y no pagados, ni los seguros ni los gastos de cobranza.
-- **Saldo al 31 de diciembre** de capital, de intereses y de los demás conceptos, menos el anticipo, con la información al emitir.
+- **Intereses cubiertos con anticipo** (decisión del dueño del 2026-10-16): cuando un anticipo (lo pagado antes de que la cuota
+  venza) se aplica a una cuota dentro del año, el interés que cubre **cuenta como pagado sólo si el anticipo ingresó dentro del
+  año**, es decir, si la fecha valor del pago que lo dejó cae en el año. Si ingresó antes —por ejemplo, un pago de diciembre que
+  adelanta la cuota de enero—, ese interés **no cuenta** en el certificado del año siguiente aunque se aplique en él (y tampoco en
+  el del año del pago, porque entonces todavía era anticipo y no interés). Nada se cuenta dos veces: el pago que deja el anticipo
+  no suma interés por esa parte, sólo la aplicación. Cuando un anticipo mezcla dinero de dos años, se usa primero el más antiguo,
+  y dentro de una cuota el dinero cubre los conceptos en el orden de la prelación. Lo mismo vale para una **cancelación** que usa
+  un anticipo: de sus intereses se resta lo que cubrió el anticipo ingresado antes del año. El PDF no separa esa parte; los datos
+  del documento la guardan como `interestPaidWithAdvance`.
+- **Saldo al 31 de diciembre**, con la información al emitir, de los conceptos que la cooperativa configure (§8): por defecto
+  capital, intereses corrientes y de mora (con sus suspensos) y los demás cargos (seguros, gastos de cobranza, otros), menos el
+  anticipo. Un concepto que no se incluye sale en cero en su columna.
 
 Un crédito **cancelado en el año** aparece con saldo cero y sus intereses pagados; uno desembolsado **después** del año o cancelado
 **antes** no aparece. Los créditos de **vivienda** —los de segmento SARC `VIVIENDA` según el catálogo de modalidades vigente al 31
@@ -154,14 +165,21 @@ Por la API es `GET /api/lending/documents/verify/{código}?sha256={huella en hex
 1. **Firmante** (obligatorio): en Cartera → Parámetros, `Documentos.Firmante.Nombre` y `Documentos.Firmante.Cargo`, con
    vigencia desde una fecha y motivo. Sin ellos no se emite nada (`Lending.Document.SignerMissing`). El documento guarda el
    nombre y el cargo vigentes al emitir.
-2. **Codeudas en el paz y salvo general**: `Documentos.PazYSalvoIncluyeCodeudas` (por defecto no).
-3. **Logotipo e imagen de la firma** (opcionales; pregunta I6 de las decisiones transversales, rige la propuesta por defecto
+2. **Codeudas en el paz y salvo general**: `Documentos.PazYSalvoIncluyeCodeudas` (por defecto no). El certificado tributario no
+   tiene esta opción: certifica sólo como deudor.
+3. **Saldo del certificado tributario** (desde el 2026-10-16): `Documentos.CertificadoTributario.SaldoIncluye`, los conceptos
+   separados por coma: `Capital`, `InteresCorriente`, `InteresDeMora`, `OtrosCargos` (seguros, gastos de cobranza y otros cargos)
+   y `MenosAnticipo` (resta el anticipo). Por defecto los cinco, que es el saldo de siempre; si nadie lo configura, nada cambia.
+   Por ejemplo, `Capital,InteresCorriente` deja fuera la mora, los cargos y el anticipo. Rige el valor vigente **el día de la
+   emisión** (al reimprimir un certificado ya emitido no cambia: el PDF guardado es el que vale) y queda en los datos del
+   documento como `balanceIncludes`.
+4. **Logotipo e imagen de la firma** (opcionales; pregunta I6 de las decisiones transversales, rige la propuesta por defecto
    mientras el dueño no responda): en Cartera → Parámetros → pestaña **«Documentos»**, «Subir logotipo» y «Subir imagen de la
    firma», en JPEG o PNG. Subir otra **reemplaza** la vigente (la emisión toma siempre la última); la anterior se puede borrar
    desde la lista. Un documento ya emitido conserva su PDF con la imagen que tenía. Sin imágenes, el PDF lleva el membrete con
    el nombre y el NIT de la cooperativa y la línea de firma con el nombre y el cargo. Ver exige `Lending.Documents.Read`;
    subir y borrar, `Lending.Parameters.Manage`. La firma digital certificada queda fuera de esta entrega.
-4. Fuera de producción todo PDF lleva **«AMBIENTE DE PRUEBAS – SIN VALIDEZ»** (como leyenda y marca de agua) y el documento
+5. Fuera de producción todo PDF lleva **«AMBIENTE DE PRUEBAS – SIN VALIDEZ»** (como leyenda y marca de agua) y el documento
    queda marcado así para siempre.
 
 ## 9. Lo que llega después

@@ -5681,6 +5681,7 @@ transversales deja a este documento.
 | `Informes.RangosDeEdad` | Text | lista de días en orden creciente | `30,60,90,180,360` (rangos 1–30, 31–60, 61–90, 91–180, 181–360, más de 360) **(fijado aquí)** | None | K1 | F-15 |
 | `Informes.PuntosAlertaUsura` | Decimal | puntos de tasa efectiva anual | 2,0 (PV) **(fijado aquí)** | None | K1 | FR-133 |
 | `Informes.DiasCarteraVencida` | Int | ≥ 0; vencida = días de mora **mayores** que este valor | 30 (PV, a validar por la contadora) **(nuevo, fase 20, T0980)** | None | K5 | FR-134, FR-135 |
+| `Documentos.CertificadoTributario.SaldoIncluye` | Text | nombres separados por coma: `Capital`, `InteresCorriente`, `InteresDeMora`, `OtrosCargos`, `MenosAnticipo` | los cinco (el saldo de antes del parámetro) **(nuevo, decisión del dueño del 2026-10-16)** | None | K5 | FR-131 |
 
 **Técnicos** (appsettings, no son de la cooperativa): `Lending:Process:Enabled`, `IntervalSeconds` 30, `BudgetSeconds`
 60, `LeaseTtlSeconds` 120, `MaxParallelCooperatives` 2, `StartTimeLocal` «00:30», `BatchSize` 250;
