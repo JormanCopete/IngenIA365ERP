@@ -77,6 +77,10 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
         Assert.All(ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K4),
             d => Assert.True(d.DisponibleEnLaEntrega(), $"{d.Clave} es de K4 y no se ofrece."));
         Assert.NotNull(ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.CobranzaToleranciaDePromesa).PendienteDeValidar);
+        // T0980 (fase 20): Informes.DiasCarteraVencida es la clave de K5 y se ofrece.
+        var deK5 = ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.InformesDiasCarteraVencida);
+        Assert.True(deK5.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5 && deK5.DisponibleEnLaEntrega() && deK5.PendienteDeValidar is not null,
+            "Informes.DiasCarteraVencida es de K5, se ofrece y está pendiente de validar.");
     }
 
     [Fact]

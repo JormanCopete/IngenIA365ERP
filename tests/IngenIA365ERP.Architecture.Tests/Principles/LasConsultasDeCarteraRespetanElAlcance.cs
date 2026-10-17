@@ -131,6 +131,14 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Collections/Campaigns/MessageCampaignCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Collections/PriorNotices/PriorNoticeCommands.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/CollectionReportQueries.cs",
+        // K5 (US15, T0981, T0983): la calidad, las cosechas y la concentración leen los créditos y las líneas de cierre por AmbitoDeInformeDeCartera;
+        // los documentos emitidos por DocumentosEmitidos.Visibles con el alcance; el tablero, todas sus fichas por AmbitoDeInformeDeCartera y sus
+        // filtros de oficina y línea sólo con las del alcance.
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/QualityReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/VintagesReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ConcentrationReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/IssuedDocumentsReportQuery.cs",
+        "Core/IngenIA365ERP.Application/Lending/Reports/GetLendingDashboardQuery.cs",
     ];
 
     /// <summary>

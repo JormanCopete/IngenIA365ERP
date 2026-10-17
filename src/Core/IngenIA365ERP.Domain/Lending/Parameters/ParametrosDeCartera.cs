@@ -117,6 +117,12 @@ public static class ParametrosDeCartera
     public const string InformesRangosDeEdad = "Informes.RangosDeEdad";
     public const string InformesPuntosAlertaUsura = "Informes.PuntosAlertaUsura";
 
+    /// <summary>
+    /// K5 (US15, T0980; data-model §12.1): desde qué días de mora un crédito cuenta como cartera <b>vencida</b> en los indicadores de calidad
+    /// (<c>quality</c>) y en el tablero: vencida = saldo de capital con días de mora mayores que este valor. Pendiente de validar por la contadora. (nuevo)
+    /// </summary>
+    public const string InformesDiasCarteraVencida = "Informes.DiasCarteraVencida";
+
     /// <summary>Forma de un horario de cobranza: <c>HH:mm-HH:mm</c>.</summary>
     public const string PatronDeHorario = @"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$";
 
@@ -350,6 +356,9 @@ public static class ParametrosDeCartera
         NumeroDecimal(Modulo, InformesPuntosAlertaUsura,
             "Puntos de tasa efectiva anual bajo la usura desde los que se alerta.", "2.0", K1, General)
             with { PendienteDeValidar = PendienteContadora },
+        Entero(Modulo, InformesDiasCarteraVencida,
+            "Días de mora desde los que un crédito cuenta como cartera vencida en los indicadores de calidad y el tablero (más de este número).",
+            "30", K5, General) with { Minimo = 0m, PendienteDeValidar = PendienteContadora },
     ];
 
     private static DefinicionDeParametro Texto(string clave, string descripcion, string defecto, EntregaDeModulo desde,
