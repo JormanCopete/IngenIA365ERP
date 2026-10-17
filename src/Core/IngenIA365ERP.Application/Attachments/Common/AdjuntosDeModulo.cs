@@ -170,6 +170,14 @@ public static class AdjuntosDeModulo
     public const string ArchivoDeDescuentos = "LendingPayrollDeductionFile";
 
     /// <summary>
+    /// Feature 013, K5 (US16, T1005, T81; DT §2.24; adaptadores-y-archivos.md §7.5, §9): el formato de cartera del SICSES o el archivo de una central de
+    /// riesgo tal como se generó (SHA-256 en <c>LND_RegulatoryFiles</c>; el dueño es la generación, <c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Lo
+    /// genera Cartera y lo sube <b>antes</b> de guardar la fila: se lee con <c>Lending.RegulatoryFiles.Read</c> (trae deudores; también el auditor y el
+    /// revisor fiscal), no recibe subidas y no se borra —es la evidencia de lo que se cargó en el portal (Principio XI, FR-003)—.
+    /// </summary>
+    public const string ArchivoRegulatorio = "LendingRegulatoryFile";
+
+    /// <summary>
     /// Feature 013, K2 (T0837; FR-109; adaptadores-y-archivos.md §9): la certificación laboral y de descuentos de la pagaduría. El dueño es la
     /// <b>solicitud</b> que se radica por libranza —se lee con <c>Lending.Applications.Read</c>, se sube con <c>Lending.Applications.Create</c> mientras
     /// la solicitud no esté decidida y decidida queda bloqueada (<c>Attachments.OwnerLocked</c>)— o el <b>crédito</b> que se traslada a otra pagaduría
@@ -323,6 +331,7 @@ public static class AdjuntosDeModulo
         [SimulacionEnviada] = new("Lending.DebtorMessages.Read", Borrable: false, "la simulación enviada a la persona"),
         [ArchivoDeDesembolsos] = new("Lending.DisbursementFiles.Generate", Borrable: false, "el archivo de desembolsos de crédito que se entregó al banco"),
         [ArchivoDeDescuentos] = new("Lending.PayrollDeductionFiles.Read", Borrable: false, "el archivo de descuentos que se entregó a una pagaduría"),
+        [ArchivoRegulatorio] = new("Lending.RegulatoryFiles.Read", Borrable: false, "el archivo del SICSES o de una central de riesgo tal como se generó"),
         [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
         [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
     };

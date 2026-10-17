@@ -723,6 +723,11 @@ public static class DependencyInjection
         // Feature 013, K5 (T0999): los layouts del SICSES y de las centrales se cargan y validan aquí, al componer: un JSON mal formado
         // impide arrancar (adaptadores-y-archivos.md §7.2).
         services.AddSingleton(Lending.Regulatory.CatalogoDeLayoutsDeCartera.Embebido);
+        // Feature 013, K5 (T1002–T1004): las proyecciones del SICSES y de las centrales, la preparación común y la generación.
+        services.AddScoped<Lending.Regulatory.ProyeccionSicsesCartera>();
+        services.AddScoped<Lending.Regulatory.ProyeccionCentralDeRiesgo>();
+        services.AddScoped<Lending.Regulatory.PreparacionDeArchivoRegulatorio>();
+        services.AddScoped<Lending.Regulatory.GeneracionDeArchivoRegulatorio>();
 
         // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
         services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();

@@ -125,6 +125,25 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
         EmitAsync(AuditEventTypes.LendingPayrollDeductionFileDownloaded, "PayrollDeductionFile", filePublicId, new { number = numero, sha256 }, ct);
 
     /// <summary>
+    /// K5 (T1004; C46): el evento resumen de una generación regulatoria —clase, central, período, versión, estado, layout, advertencias, conteos de
+    /// filas, bloqueantes y excluidos, y la huella—, en la transacción de la generación (se llama después de su guardado). Las líneas de las centrales
+    /// van con <c>[SinDiffDeAuditoria]</c>: no es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoRegulatorioGeneradoAsync(Guid filePublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingRegulatoryFileGenerated, "RegulatoryFile", filePublicId, resumen, ct);
+
+    /// <summary>K5 (T1004): la marca de cargado en el portal, con el radicado, su fecha y el comprobante si se adjuntó.</summary>
+    public Task<Guid?> EmitirArchivoRegulatorioCargadoAsync(Guid filePublicId, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingRegulatoryFileUploaded, "RegulatoryFile", filePublicId, detalle, ct);
+
+    /// <summary>
+    /// K5 (T1004): el enlace de descarga de un archivo regulatorio (trae los deudores del período), con su huella. Se registra como los demás archivos de
+    /// módulo; no va en <see cref="LecturasSensibles"/>, que es la lista cerrada de research §13.
+    /// </summary>
+    public Task<Guid?> EmitirArchivoRegulatorioDescargadoAsync(Guid filePublicId, string archivo, string? sha256, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingRegulatoryFileDownloaded, "RegulatoryFile", filePublicId, new { fileName = archivo, sha256 }, ct);
+
+    /// <summary>
     /// US8 (T0752): la activación de Cartera, en su transacción, con los requisitos evaluados, lo que nació y las huellas del cuadre, la conciliación y
     /// los cobros provisionales. No es una lectura sensible: no va en <see cref="LecturasSensibles"/>.
     /// </summary>

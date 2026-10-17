@@ -243,7 +243,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         // K4 (T0946, T0947): el acuerdo de pago y el proceso de cobro jurídico.
         LendingNumberKind.PaymentAgreement => db.PaymentAgreements.IgnoreQueryFilters().AnyAsync(a => a.Number == numero, ct),
         LendingNumberKind.LegalProcess => db.LegalProcesses.IgnoreQueryFilters().AnyAsync(p => p.Number == numero, ct),
-        // K5 (archivos regulatorios): su tabla nace con su entrega.
+        // K5 (T1004): el archivo regulatorio no tiene columna de número: el número encabeza su nombre (NUMERO_…).
+        LendingNumberKind.RegulatoryFile => db.RegulatoryFiles.IgnoreQueryFilters().AnyAsync(f => f.FileName != null && f.FileName.StartsWith(numero + "_"), ct),
         _ => Task.FromResult(false),
     };
 

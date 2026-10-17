@@ -262,6 +262,12 @@ public static class AuditEventTypes
     public const string LendingPayrollDeductionFileGenerated = "Lending.PayrollDeductionFile.Generated";
     public const string LendingPayrollDeductionFileDownloaded = "Lending.PayrollDeductionFile.Downloaded";
 
+    // K5 (US16, T1004; C46): el evento resumen de cada generación regulatoria (SICSES o central; las líneas de las centrales van con
+    // [SinDiffDeAuditoria]), su marca de cargado con el radicado y el enlace de descarga (trae deudores: se registra cada emisión).
+    public const string LendingRegulatoryFileGenerated = "Lending.RegulatoryFile.Generated";
+    public const string LendingRegulatoryFileUploaded = "Lending.RegulatoryFile.Uploaded";
+    public const string LendingRegulatoryFileDownloaded = "Lending.RegulatoryFile.Downloaded";
+
     // US5 (bloque 9B, T0546; interfaces §3.13; T68, A11): el contrato de obligaciones. El intento va por un contexto aparte (sobrevive a la
     // reversión del recaudador); el hecho, en COR_AuditOutbox dentro de la transacción con la distribución completa. Las lecturas del contrato
     // (listar y simular) llevan D, R y la huella; no son de la lista cerrada de lecturas sensibles.
