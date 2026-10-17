@@ -1298,7 +1298,7 @@ reapertura y volver a cerrar crea `Version + 1`.
 |---|---|---|---|---|---|
 | `GET /?date=` | Ratings.Read | `GetImpairmentModelBySegmentQuery` | → `[{ segment, model: ArrearsAnnex1 \| ExpectedLossAnnex2, basis: NotObligated \| Obligated \| Voluntary, mark?: "ObligatoryModelUnavailable", since, election? }]` (`SelectorDeModeloDeDeterioro`) | | K1 |
 | `GET /elections` | Ratings.Read | `ListImpairmentModelElectionsQuery` | → arreglo de adopciones y desistimientos | | K6a |
-| `POST /elections` | ImpairmentModel.Manage | `RegisterImpairmentModelElectionCommand` | `{ kind: VoluntaryAdoption \| VoluntaryWithdrawal, segments[], validFrom, sessionItemPublicId, impactStudyAttachmentPublicId, noticeDate, noticeAttachmentPublicId, probabilityTablesDocumentPublicId? }` → 201 | `Lending.ImpairmentModel.HistoryIncomplete` (`data: { loans[] }`), `.NoticeOutOfTerm` (`data: { earliestValidFrom }`), `.ObligatoryNoWithdrawal`, `Lending.Session.ItemMismatch` | K6a |
+| `POST /elections` | ImpairmentModel.Manage | `RegisterImpairmentModelElectionCommand` | `{ electionPublicId, kind: VoluntaryAdoption \| VoluntaryWithdrawal, segments[]?, validFrom, sessionItemPublicId, impactStudyAttachmentPublicId, noticeDate, noticeAttachmentPublicId, reason }` → 201 con la elección. `electionPublicId` es el sujeto del punto del acta (`ImpairmentModelChange`) que la pantalla genera al proponer; sin segmentos, los tres. **Enmienda del bloque 3 de K6a (2026-10-17)**: sin `probabilityTablesDocumentPublicId` (la PI voluntaria es la del Anexo 2 vigente, clave `VOLUNTARIA`); el estudio y el aviso son adjuntos `LendingImpairmentModelElectionSupport` de la propuesta | Los de data-model §23.8: `Lending.ImpairmentModel.IncompleteHistory` (`data: { loans[] }`; aquí decía `HistoryIncomplete`), `.NoticeOutOfTerm` (`data: { earliestValidFrom }`), `.Obligated` (aquí decía `ObligatoryNoWithdrawal`), `.NotAlternating`, `.ValidFromTaken`, `.RetroactiveValidFrom`, `.RuleMissing`, `.SegmentInvalid`, `.VoluntaryPdMissing`, `.SupportInvalid` **(nuevo)**, `Lending.Session.ItemMismatch`, `Lending.Security.UserWithoutPerson` | K6a |
 
 Antes de K6a la ruta `POST /elections` no existe (404): ninguna cooperativa puede adoptar el modelo
 voluntariamente (FR-105).
@@ -1308,7 +1308,7 @@ voluntariamente (FR-105).
 | Ruta | Permiso | Comando / consulta | Cuerpo → respuesta | Errores | E |
 |---|---|---|---|---|---|
 | `GET /completeness?date=&segment=` | Ratings.Read | `GetArrearsHistoryCompletenessQuery` | → `{ date, monthsRequired, ruleDocument { publicId, code }, incomplete: [{ loan, segment, monthsAvailable, missingMonths[] }] }` (`HistorialDeMora.Construir`) | | K1 |
-| `GET /template.xlsx` · `POST /import?mode=` | ArrearsHistory.Import | `ImportArrearsHistoryCommand` | plantilla `lending.arrears-history` (crédito, mes, máxima mora del mes) → `ImportResultDto`; información, sin transacciones ni hechos | `Import.Invalid`, `Lending.ArrearsHistory.LoanNotInLoad` | K6a |
+| `GET /template.xlsx` · `POST /import?mode=` | ArrearsHistory.Import | `ImportArrearsHistoryCommand` | plantilla `lending.arrears-history` (`numeroDeCredito`, `mes`, `moraMaximaDias`, `moraAlCierreDias`, `fuente`) → `ImportResultDto` con `extra.completeness[]` en la revisión; información, sin transacciones ni hechos; también antes de activar. Sin descarga con datos | `Import.Invalid`, `Lending.ArrearsHistory.LoanNotInLoad`, `.MonthClosed`, `.LoadClosed`, `.NoAppliedLoad` | K6a |
 
 ### 12.6 Evaluación de cartera — `/risk/evaluations` (K3; FR-102)
 

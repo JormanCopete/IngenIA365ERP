@@ -2759,6 +2759,11 @@ Cartera, `.RetroactiveValidFrom`; sin `ReglaDePerdidaEsperada` vigente en `Valid
 esperada, `.SegmentInvalid`; al adoptar, sin la PI `VOLUNTARIA` del Anexo 2 vigente en cada segmento, `.VoluntaryPdMissing` (la semilla no la
 trae: la de la CE 100 está por registrar). El historial se verifica a la fecha del primer cierre en que rige (el fin del mes de `ValidFrom`).
 
+**Bloque 3 de K6a (2026-10-17)**: el estudio de impacto y el soporte del aviso son adjuntos del dueño **(nuevo)** `LendingImpairmentModelElectionSupport`
+con `OwnerEntityPublicId` = la propuesta (el `PublicId` de la elección): se suben con `Lending.ImpairmentModel.Manage` mientras no haya elección con
+ese `PublicId`, se leen con `Lending.Ratings.Read` y, registrada, quedan bloqueados (`Attachments.OwnerLocked`). Registrar exige que los dos sean
+adjuntos disponibles de la propuesta: si no, `Lending.ImpairmentModel.SupportInvalid` **(nuevo)** con `data.fields`.
+
 ### 23.9 `LND_ArrearsHistoryLoads` — `ArrearsHistoryLoad` (H; K6a; FR-140, US8-10; T49)
 
 | Columna | Tipo | Nulo | Notas |
@@ -3952,7 +3957,7 @@ completa (§23.10).
 `.AccountingPeriodClosed`, `.AccrualBehind`, `.ReplicationUnavailable`, `.NotLast`, `.BaseNotReopenable`;
 `Lending.AnalysisRating.NotWorse`; `Lending.ImpairmentModel.NotAvailable`, `.IncompleteHistory`, `.NoticeOutOfTerm`,
 `.Obligated` y, desde el bloque 2 de K6a **(nuevos)**, `.NotAlternating`, `.VoluntaryPdMissing`, `.SegmentInvalid`, `.ValidFromTaken`, `.RuleMissing`,
-`.RetroactiveValidFrom`; `Lending.ArrearsHistory.LoanNotInLoad`, `.MonthClosed`, `.LoadClosed` y `.NoAppliedLoad` **(nuevo)**; `Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`;
+`.RetroactiveValidFrom` y, desde el bloque 3, `.SupportInvalid`; `Lending.ArrearsHistory.LoanNotInLoad`, `.MonthClosed`, `.LoadClosed` y `.NoAppliedLoad` **(nuevo)**; `Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`;
 `Lending.Novelty.ConsentMissing`, `.ModificationNotAllowed`; `Lending.Waiver.PrincipalRequiresException`;
 `Lending.WriteOff.RequirementMissing`; `Lending.Migration.AlreadyActivated`. Los de la activación
 (`Lending.Activation.RequirementsMissing`, `.CutoffInvalid`, `.DeadlinePassed`, `.DifferencesNotAccepted`,
