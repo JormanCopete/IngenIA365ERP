@@ -717,6 +717,102 @@ public static class ManualCatalogo
                 "Permisos Lending.CreditLines.Manage para la línea, Lending.Guarantees.Manage para la hipoteca y Lending.Disbursements.Execute para desembolsar."],
             ["cartera-migracion", "cartera-perdida-esperada"], [], TipoDeTema.Proceso));
 
+        // ------------------------------------------------------ Cartera: el día a día --
+        // Feature 013, fase 24 (T1074): los temas que faltaban del módulo —líneas, simulador, solicitudes y actas, desembolsos, créditos y
+        // liquidación, cierres, bandeja de mensajes y valores nacionales—. El detalle de cada uno, en docs/manual/cartera-*.md (índice en
+        // docs/manual/cartera.md).
+        t.Add(Proceso("cartera-lineas", "Líneas de crédito y usura", Modulos.Cartera, "/cartera/lineas",
+            "Crear y versionar las líneas de crédito (tasa, plazos, montos, seguros, garantías, documentos, puntaje), ver la holgura frente a la usura del día y cerrar o reabrir una línea; los créditos vivos conservan la versión con la que nacieron.",
+            [
+                P("Cartera → Líneas", "Lista con estado, modalidad, versión vigente, tasa, holgura de usura y la marca «cerrada por usura desde …». Sólo aparecen las líneas de su alcance.", "/cartera/lineas", "Abrir Líneas"),
+                P("Alta y versión nueva", "La línea nace con su primera versión; un cambio de tasa, plazo o reglas es una versión nueva con vigencia, nunca una edición: los créditos ya desembolsados siguen con la suya. La carga masiva usa la plantilla de líneas (revisar sin guardar y luego aplicar)."),
+                P("Usura", "Ninguna tasa ni ninguna tasa efectiva con cargos supera la usura de su modalidad del día. Cuando llega una usura menor, la línea que queda por encima se cierra sola para créditos nuevos y avisa; se reabre con una versión que quepa."),
+                P("Puntaje y equivalencias", "La pestaña «Puntaje» del detalle define el modelo de puntaje de la línea; la de equivalencias dice qué línea usa cada plazo de las ventas a crédito de Comercial."),
+            ],
+            ["lineas de credito", "linea", "usura", "tasa", "version de linea", "cerrar linea", "puntaje", "equivalencias", "seguros", "garantias exigidas"],
+            ["La usura de cada modalidad registrada y replicada.", "Permisos Lending.CreditLines.View para consultar y Lending.CreditLines.Manage para crear, versionar, cerrar o reabrir."],
+            ["cartera-simulador", "cartera-valores-nacionales", "cartera-vivienda-y-uvr"], ["/cartera/lineas/{Id:guid}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-simulador", "Simulador de crédito", Modulos.Cartera, "/cartera/simulador",
+            "Simular el plan de pagos de una línea —capital, interés, seguros y saldo por cuota, tasa efectiva, tasa con cargos y la explicación de cada tramo— sin registrar nada, imprimirlo o enviarlo por correo a la persona.",
+            [
+                P("Cartera → Simulador", "Elegí la línea, el monto, las cuotas, la periodicidad y, si la línea lo admite, la gracia o las cuotas extraordinarias. Lo que la línea no admite se señala en el campo con sus límites.", "/cartera/simulador", "Abrir Simulador"),
+                P("Leer la simulación", "Una simulación que pasa la usura no es error: lo dice y explica por qué; radicar, aprobar y desembolsar sí lo bloquean. Sin usura registrada para el día no simula y avisa a quien la registra."),
+                P("Imprimir o enviar", "El PDF dice «Simulación – no constituye aprobación». Enviar por correo exige la autorización de tratamiento de datos, el correo registrado y la ventana legal de contacto. Ninguna de las dos cosas crea una solicitud."),
+            ],
+            ["simulador", "simulacion", "plan de pagos", "cuota", "tasa efectiva", "tasa con cargos", "enviar simulacion"],
+            ["Una línea vigente y la usura del día replicada.", "Permiso Lending.Simulations.Run."],
+            ["cartera-lineas", "cartera-solicitudes-y-actas"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-solicitudes-y-actas", "Solicitudes, decisiones y actas", Modulos.Cartera, "/cartera/solicitudes",
+            "Armar una solicitud desde una simulación, radicarla, analizarla y decidirla en el nivel que le corresponde —individual o en una sesión del órgano con su acta—, y anularla o desistirla.",
+            [
+                P("Cartera → Solicitudes", "Lista de solicitudes de su alcance con su estado. «Nueva solicitud» parte de una simulación y guarda el borrador con las partes, los documentos, las autorizaciones y las garantías.", "/cartera/solicitudes", "Abrir Solicitudes"),
+                P("Radicar y analizar", "Radicar corre las validaciones (usura, capacidad, concentración, listas, centrales, bloqueos) y calcula el nivel de decisión por la matriz de atribuciones. El analista registra su análisis y puede volver a correr las validaciones."),
+                P("Decidir", "Quien tiene el permiso del nivel decide desde el detalle o desde «Mis pendientes». Si el nivel es colegiado, la solicitud va como punto de una sesión del órgano.", "/cartera/aprobaciones", "Abrir Aprobaciones"),
+                P("Sesiones y actas", "Convocar, registrar la asistencia, los puntos y los votos (por la secretaría, desde la sesión propia o en presencia con llave o código) y cerrar el acta: decide, numera y guarda el PDF. Lo cerrado no se edita; un voto mal registrado se reemplaza con motivo.", "/cartera/actas", "Abrir Actas"),
+            ],
+            ["solicitud", "radicar", "analisis", "decision", "atribuciones", "nivel de decision", "aprobaciones", "actas", "sesion", "votos", "quorum", "comite", "consejo"],
+            ["Cartera activada para crear o radicar solicitudes.", "Permisos Lending.Applications.* según la acción, el del nivel de decisión (Lending.Decisions.*) y Lending.Sessions.* para las actas."],
+            ["cartera-simulador", "cartera-desembolsos"], ["/cartera/solicitudes/nueva", "/cartera/solicitudes/{Id:guid}", "/cartera/aprobaciones", "/cartera/actas"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-desembolsos", "Desembolsos, garantías y pagaré", Modulos.Cartera, "/cartera/desembolsos",
+            "Desembolsar una solicitud aprobada con sus garantías y su pagaré, recoger créditos propios, seguir la orden de giro con Tesorería, generar el archivo de desembolsos y anular un crédito pendiente de giro.",
+            [
+                P("Garantías y pagaré", "En el detalle de la solicitud se registran y perfeccionan las garantías y el pagaré (físico o desmaterializado). Lo que la línea exige debe estar antes de desembolsar."),
+                P("Cartera → Desembolsos", "La pestaña «Desembolsar» muestra la vista previa (lo que se gira, lo que se recoge, los descuentos y lo que falta) y desembolsa: el crédito nace con sus condiciones selladas y su plan.", "/cartera/desembolsos", "Abrir Desembolsos"),
+                P("Órdenes de giro y archivo", "«Órdenes de giro» sigue lo que Tesorería gira; se pide anular una orden, se ordena un giro nuevo o se anula un crédito pendiente de giro. «Archivos de desembolsos» genera el archivo plano del banco."),
+            ],
+            ["desembolso", "desembolsar", "garantias", "pagare", "orden de giro", "tesoreria", "archivo de desembolsos", "recogida", "tramos"],
+            ["Solicitud aprobada y vigente; la usura del día replicada; el mes contable abierto.", "Permisos Lending.Disbursements.Execute (atribución con monto), Lending.Guarantees.Manage y Lending.PromissoryNotes.Manage."],
+            ["cartera-solicitudes-y-actas", "cartera-creditos-y-liquidacion"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-creditos-y-liquidacion", "Créditos, estado de cuenta y liquidación", Modulos.Cartera, "/cartera/creditos",
+            "Buscar un crédito y ver su resumen, estado de cuenta, plan con sus versiones, operaciones, libro, garantías y giro; liquidarlo a cualquier fecha —también con lo que se sabía en un momento dado— y simular o reversar un pago.",
+            [
+                P("Cartera → Créditos", "Busque por número o deudor, línea, oficina, estado, modalidad o mora mínima. Los saldos de la lista son la última foto diaria, con su fecha; la cifra exacta a una fecha es la liquidación.", "/cartera/creditos", "Abrir Créditos"),
+                P("El expediente", "Las pestañas del crédito muestran el estado de cuenta, el plan y sus versiones, las operaciones con su comprobante, el libro, la calificación, las garantías y el giro."),
+                P("Liquidar", "La pestaña «Liquidación» da lo que cuesta cancelar a una fecha, por concepto y con la explicación; «con la información hasta» reproduce lo que se sabía en ese momento. Cada consulta queda en la auditoría."),
+                P("Pagos", "Los pagos los aplica quien recauda (Recaudo o Nómina) por el contrato de obligaciones; aquí se simulan y, con permiso, se reversan con motivo. Lo causado se corrige por la causación de cada día, no a mano."),
+            ],
+            ["creditos", "credito", "estado de cuenta", "liquidacion", "saldo para cancelar", "plan de pagos", "libro", "operaciones", "reversar pago", "simular pago", "causacion"],
+            ["Cartera activada.", "Permisos Lending.Loans.Read para el expediente y Lending.Payoffs.Read para liquidar."],
+            ["cartera-desembolsos", "cartera-cierres", "cartera-documentos"], ["/cartera/creditos/{Id:guid}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-cierres", "Calificación y cierre mensual", Modulos.Cartera, "/cartera/cierres",
+            "Revisar los requisitos y ordenar el cierre del mes —calificación de cada crédito, arrastre, deterioro y los hechos para Contabilidad—, leer el detalle y el cuadre de un cierre y reabrirlo con motivo.",
+            [
+                P("Cartera → Cierres", "Muestra el cierre base y los mensuales con su estado, y los requisitos del mes: cierre anterior, mes abierto en Contabilidad, causación al día, valores nacionales al día y ninguna corrida en curso.", "/cartera/cierres", "Abrir Cierres"),
+                P("Ordenar", "Ordenar sólo encola: el proceso corre el cierre por tandas y deja la calificación, el deterioro y los hechos fechados el último día del mes. Contabilidad no cierra el mes mientras Cartera no lo haya cerrado."),
+                P("Detalle y cambios", "El detalle de un cierre muestra las líneas por crédito, el reporte de cambios de categoría con su causa, el cuadre y las partes. Lo cerrado no se edita."),
+                P("Reabrir", "Reabrir pide motivo y deja el cierre reemplazado; el nuevo cierre del mes se ordena otra vez."),
+            ],
+            ["cierre mensual", "cierres", "calificacion", "arrastre", "deterioro", "categoria", "reabrir cierre", "cierre base", "sarc"],
+            ["Cartera activada; la causación al día hasta fin de mes; el Anexo 1 y la política del consejo vigentes.", "Permisos Lending.Ratings.Read para consultar y Lending.MonthlyClose.Execute (y .Reopen) para ordenar y reabrir."],
+            ["cartera-creditos-y-liquidacion", "cartera-perdida-esperada", "cartera-informes-y-tablero"], ["/cartera/cierres/{Id:guid}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-bandeja-de-mensajes", "Bandeja de mensajes de Cartera", Modulos.Cartera, "/cartera/bandeja-de-mensajes",
+            "Ver lo que llegó a Cartera (ventas a crédito de Comercial, resultados del giro, de la pagaduría y de los pagos) con su evaluación y su respuesta, y los hechos que Cartera emitió a Contabilidad con su estado, para reprocesar lo que falló.",
+            [
+                P("Cartera → Bandeja de mensajes", "La pestaña «Recibidos» lista lo que llegó, cómo se evaluó y qué respondió Cartera; un recibo que no se puede procesar se marca no reprocesable con motivo.", "/cartera/bandeja-de-mensajes", "Abrir la bandeja"),
+                P("Emitidos", "La pestaña «Emitidos» muestra los hechos para Contabilidad con su estado. Uno rechazado se reprocesa después de corregir la causa (casi siempre una regla de la matriz contable); uno que no pasaba se envía cuando ya debe pasar."),
+                P("Conciliación", "La conciliación contable compara Cartera con Contabilidad por conjuntos de cuentas y explica cada diferencia hecho por hecho.", "/cartera/conciliacion-contable", "Abrir la conciliación"),
+            ],
+            ["bandeja de mensajes", "mensajes recibidos", "hechos emitidos", "reprocesar", "rechazo contable", "ventas a credito", "conciliacion contable"],
+            ["Permisos Lending.Messages.Read para ver, Lending.Messages.Reprocess para reprocesar y Lending.Messages.SendNotApplicable para enviar lo que no pasaba."],
+            ["cartera-creditos-y-liquidacion", "cartera-cierres"], ["/cartera/conciliacion-contable"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-valores-nacionales", "Valores nacionales: usura, UVR, festivos y límites", Modulos.Cartera, "/admin/valores-nacionales",
+            "Los valores que fija la ley y son iguales para todas las cooperativas —salario mínimo, UVT, usura por modalidad, UVR, festivos, tope de vivienda y límites legales—: el maestro los registra una vez en la plataforma y cada cooperativa recibe una réplica que Cartera y Nómina leen.",
+            [
+                P("Administración → Valores nacionales", "Sólo el maestro, con segundo factor, registra un valor con su vigencia, unidad y fuente (las tasas como fracción: 26,50 % es 0,2650), o carga varios con la plantilla. Arriba aparece lo que falta para los próximos días.", "/admin/valores-nacionales", "Abrir Valores nacionales"),
+                P("Corregir", "Nada se edita ni se borra: «Corregir» registra otra fila con motivo. Corregir una usura o una UVR que ya se causó encola en cada cooperativa la corrección de los días causados."),
+                P("La réplica", "Cada cooperativa recibe los valores por la réplica; si falta un valor que Cartera necesita (la usura del día, la UVR de un crédito en UVR), no adivina: no simula o no causa ese día y avisa con la alerta de valor nacional faltante."),
+            ],
+            ["valores nacionales", "usura", "uvr", "festivos", "salario minimo", "uvt", "tope de vivienda", "limites legales", "replica", "corregir valor"],
+            ["Ser el maestro de la plataforma, con segundo factor, para registrar o corregir.", "La réplica al día en cada cooperativa (la tarea programada de valores nacionales)."],
+            ["cartera-lineas", "cartera-vivienda-y-uvr", "cartera-cierres"], [], TipoDeTema.Proceso));
+
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.
         // Los temas del crédito heredado se retiraron con sus pantallas; la Cartera nueva trae los suyos en Modulos.Cartera.

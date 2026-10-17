@@ -353,3 +353,25 @@ Del lado contable, `PlanearLote` separa por `OriginModule`, `VersionesAceptadas`
 | Consumo | `Application/Common/Integration/{IMensajesEntrantes,MensajesEntrantes,RegisterDeliveryResultCommand,DestinatariosDeIntegracion,ConsumidoresPorDestino}.cs` |
 | Migración | `PlataformaParaCartera` (par PostgreSQL / SQL Server, con la semilla del registro y el arrendamiento `lending.process`) |
 | Pruebas | Application `EmisorDeMensajesConVariosModulosTests`, `RegistroDeIntegracionTests`, `ConsumoConValidacionFallidaTests`, `MensajesEntrantesPendientesTests`; arquitectura `ElCatalogoDeMensajesEsUnico`, `EmisionesDeProcesoPermitidas`, `UnSoloConsumidorPorDestino`, `SoloElEmisorEscribeLaBandeja`; e2e `PlataformaParaCarteraTests` |
+
+### 9.7 Los canales externos (T71–T73)
+
+La bandeja de mensajes cruza entre módulos del ERP; lo que el ERP le pide a un **tercero** fuera de su base (SMS y WhatsApp al deudor,
+listas restrictivas, depósito de valores, centrales de riesgo) va por otro camino: un **puerto** de Application y un **adaptador** en el
+proyecto `IngenIA365ERP.ExternalChannels`, que sólo conoce `API/Program.cs` (`LosProveedoresExternosSoloLosConoceSuAdaptador`). Cada
+cooperativa elige por clase y con vigencia qué canal atiende (`COR_ExternalChannelSettings`, `/admin/canales-externos`) y la operación sella
+el código del canal con que se hizo. Tres reglas:
+
+- **Credenciales fuera de la base**: en el Secret `erp-canales-externos` de cada ambiente, una clave por cooperativa y canal, que se carga con
+  `tools/scripts/crear-secreto-canales-externos.ps1` (`LasCredencialesDeCanalesExternosNoTocanLaBase`).
+- **Una sola guardia del efecto legal** (`GuardiaDeCanalesExternos`): en producción un resultado del canal `SIMULADO` no produce efecto
+  (`Lending.Adapter.SimulatedInProduction`); `CARGA-PROPIA` sí.
+- **Un circuito por cooperativa y canal** (`CircuitoDeCanalExterno`): con fallas seguidas el canal se suspende y alerta
+  `Cartera.CanalExternoNoDisponible`.
+
+El **correo no es un canal externo**: sale por `IEmailSender` (`CORREO`). Hay **dos caminos de correo** y no se mezclan: las
+**notificaciones de usuario** (alertas de la plataforma a quien trabaja en el ERP, `COR_Notifications`/`COR_Alerts`) y los **mensajes al
+deudor** (cola `ColaDeMensajesAlDeudor` con plantilla versionada, autorización de tratamiento de datos, ventana de contacto de la Ley 2300
+y evidencia de entrega; el envío de documentos y de la simulación usa esta cola). Detalle operativo en
+[canales-externos.md](../operaciones/canales-externos.md); los mensajes al deudor, en
+[cartera-gobierno-y-seguridad.md](cartera-gobierno-y-seguridad.md) §7.

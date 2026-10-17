@@ -193,3 +193,48 @@ después de activar queda fuera de Cartera con la alerta `Cartera.VentaNoIncorpo
 - **Diferencias que cambiaron** al activar (`DifferencesNotAccepted` después de aceptar): alguien contabilizó en Contabilidad entre la
   aceptación y la activación; revisar la versión nueva del cuadre y volver a aceptar con acta.
 - Un requisito de producción que no se cumple: la lista de `RequirementsMissing` dice quién lo corrige y en qué pantalla.
+
+## 10. El ensayo general en QA y las condiciones de salida (quickstart §11)
+
+> Fase 24 (T1073). La fuente es `specs/013-cartera-financiera/quickstart.md` §11; aquí va lo que el operador sigue. Todo con autorización
+> expresa del dueño, en las fechas que él defina y con la evidencia de cada paso en las notas de release.
+
+**El ensayo general en QA** (§11.2), antes de tocar producción:
+
+1. Una cooperativa de QA con la parametrización real: líneas, matriz de la contadora con la completitud vacía, atribuciones, órganos con sus
+   miembros, vinculados, plantillas de mensaje validadas, roles, alcances y perfil regulatorio.
+2. Una contabilidad de ensayo con la apertura a un corte pasado y la carga de migración real a ese corte (las personas se registran antes).
+3. El recorrido completo (quickstart §3) con los dobles de prueba hasta el **primer cierre mensual con la conciliación en cero**.
+4. La comparación con cifras de referencia de una muestra por línea (saldo por concepto, cuota, días de mora, calificación), cada
+   diferencia explicada y aprobada por el jefe de cartera.
+
+**La salida** (§11.4) sigue este runbook (§1 a §8) en el orden: retiro con respaldo y segundo revisor
+([cartera-retiro-heredado.md](cartera-retiro-heredado.md)) → valores nacionales al día ([valores-nacionales.md](valores-nacionales.md)) →
+perfil regulatorio → seguridad → contabilidad → Comercial → corte C → carga real → cuadre y conciliación → activación C+1 → Comercial el
+mismo día → primeros días → primer cierre.
+
+**Las doce condiciones de salida** (§11.5): no se activa en producción si falta alguna.
+
+| # | Condición | Se comprueba con |
+|---|---|---|
+| 1 | **Recaudo y Tesorería reales** registrados con versiones vigentes; ningún doble de prueba | `/admin/participantes-de-integracion`; la activación lo exige (`Lending.Activation.RequirementsMissing`) |
+| 2 | Pérdida esperada (K6a) sólo si el perfil la hace obligada | perfil y selector; la activación lo exige |
+| 3 | Retiro con diagnóstico, respaldo, segundo revisor y aprobación por base | [cartera-retiro-heredado.md](cartera-retiro-heredado.md) |
+| 4 | Anexo 1 vigente y usura de las modalidades de las líneas activas | la activación lo exige |
+| 5 | Cuadre en cero o aceptado con acta; conciliación de ventas resuelta | `/cartera/migracion` (cuadre y ventas) |
+| 6 | Toda oficina con créditos vinculada a una sucursal contable | la activación lo exige |
+| 7 | Roles, alcances y personas vinculadas a los usuarios que deciden | `/cartera/activacion` |
+| 8 | Matriz completa, recaudo de Nómina resuelto, `DESC_CARTERA` con cuentas, patrimonio técnico vigente | `/contabilidad/cartera/completitud` |
+| 9 | Líneas de origen comercial con el concepto tributario del interés | la línea no se activa sin él |
+| 10 | Parámetros legales y plantillas de mensaje validados por la contadora y el oficial | parámetros sin «pendiente de validar» en lo que se usa |
+| 11 | Ensayo general terminado con el primer cierre en cero y las diferencias aprobadas | acta del ensayo |
+| 12 | QA por rol, pasos de SC-009 y la app MAUI probados a mano | notas de release |
+
+## 11. Respaldo por entrega al promover a producción
+
+Cada entrega se promueve con su `pg_dump -Fc` de **cada base** (la administrativa y la de cada cooperativa) antes de aplicar sus
+migraciones: `<base>-AAAAMMDD-pre-f013.dump` para K1 (que trae la destructiva `RetiroDeLaCarteraHeredada`) y
+`<base>-AAAAMMDD-pre-f013-kN.dump` para K2 a K6b (aditivas: `CarteraLibranza`, `CarteraNovedades`, `CarteraCobranza` y
+`CarteraCobranzaSalida`, `CarteraInformes` y `CarteraComprobanteDeCargue`, `CarteraPerdidaEsperada`, `CarteraVivienda`). La verificación es **contra la base**
+(tablas de la migración, permisos `Lending.*` sembrados por la API al arrancar, `/health/ready`, réplica de valores nacionales al día), no
+contra el repositorio. El estado de cada entrega por ambiente se anota en [estado-y-pendientes.md](estado-y-pendientes.md).

@@ -140,6 +140,24 @@ procesos por cooperativa, parámetros con vigencia, aprobaciones, alertas y audi
 | `docs/manual/plantillas-de-importacion.md` | I1 | **La mecánica común de las plantillas** (encabezados en la fila 1, revisión y aplicación todo o nada, errores por hoja, fila y columna, `ImportResultDto`) y cómo se agrega una plantilla nueva. |
 | `docs/operaciones/inventario-retiro-heredado.md` | I1 | **Runbook de la migración destructiva** `RetiroDelInventarioHeredado`: diagnóstico por base, `pg_dump` `*-pre-f012.dump`, la fila de aprobación, el segundo revisor, qué hace la guarda, el `Down()` y el retorno desde el respaldo. |
 | `docs/operaciones/inventario-puesta-en-marcha.md` | I1 (el cuadre, I2) | **Runbook de la puesta en marcha**: semillas, plantillas en orden, conteo físico, cifras de SOLIDO, saldo inicial con aprobación, excepción de puesta en marcha, comparativos, marcha paralela y activación bodega por bodega (en producción, sólo con I2). |
+| `docs/operaciones/auditoria-cadena-de-sellos.md` | I1 | **Auditoría con entrega garantizada**: `COR_AuditOutbox`, cabezas y anclas, el reenviador, la verificación de integridad, qué hacer ante un hallazgo y cómo rotar la clave de anclas. |
+
+### Feature 013: Cartera financiera (EN CURSO — K1 a K6b construidas en la rama `013-cartera-financiera`, sin merge ni despliegue)
+Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas: K1 núcleo (no sale en vivo sin Recaudo y
+Tesorería reales), K2 libranza, K3 novedades y castigo, K4 cobranza, K5 documentos, informes y reportes regulatorios, K6a pérdida esperada y
+K6b vivienda y UVR. Cartera no conoce cuentas: emite hechos a Contabilidad por la bandeja; los pagos llegan por el contrato de obligaciones;
+los valores de la ley vienen del registro central de valores nacionales.
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `specs/013-cartera-financiera/spec.md` · `plan.md` | — | Spec (17 historias) y plan técnico por entregas K1–K6b, con el Constitution Check. |
+| `specs/013-cartera-financiera/decisiones-transversales.md` | — | Nombres canónicos (§2, con las pruebas con nombre fijo en §2.25 y las migraciones en §2.26), decisiones T1–T102, choques y preguntas al dueño (§5); manda sobre cualquier otra redacción. |
+| `specs/013-cartera-financiera/research.md` · `data-model.md` · `quickstart.md` · `tasks.md` | — | Investigación, modelo de datos, recorrido de ensayo por entrega (§11: COOFLOPAL) y tareas (fase 24: Polish). |
+| `specs/013-cartera-financiera/contracts/` | — | `api.md`, `mensajes.md`, `contabilidad.md`, `plantillas.md` y los demás contratos. |
+| `specs/013-cartera-financiera/diagnostico-cartera-heredada.sql` | K1 | Diagnóstico de sólo lectura de las tablas heredadas por base, antes del retiro. |
+| `docs/manual/cartera.md` | fase 24 | **Índice de Cartera**: los manuales y runbooks por entrega, las cinco reglas que lo arman, los dos caminos de correo y el grupo de menú «Ahorros y aportes». |
+| `docs/operaciones/cartera-retiro-heredado.md` | 013, fase 3 (K1) | **El retiro de la cartera heredada**: diagnóstico por base, respaldo `<base>-AAAAMMDD-pre-f013.dump`, la fila `LND.RetiroHeredado.Aprobado`, el segundo revisor (H7) y la guarda `THROW 50013` / `RAISE EXCEPTION` de `RetiroDeLaCarteraHeredada`. |
+| `docs/manual/cartera-libranza-y-pagadurias.md` | 013, fase 15 (K2, US10) | **Libranza**: pagadurías y convenios versionados con sus formatos de ida y vuelta por referencia, el archivo de descuentos por pagaduría y período, la respuesta y los no aplicados, y por qué lo descontado y no girado no causa mora dentro del umbral. |
 | `docs/operaciones/valores-nacionales.md` | 013, fase 2 | **Valores nacionales**: el maestro registra y corrige en el registro central, la plantilla y el paquete entre ambientes, la réplica a cada cooperativa, la proyección de Nómina (`Nomina.ValorNacionalDistinto`), la revisión «pendiente de validar» y los faltantes; desde K6b (§3a), la UVR día a día y el tope de vivienda. |
 | `docs/operaciones/canales-externos.md` | 013, fase 2 | **Canales externos**: el Secret `erp-canales-externos` y su guion, `SIMULADO` y `CARGA-PROPIA`, el efecto legal en producción y el circuito. |
 | `docs/manual/cartera-gobierno-y-seguridad.md` | 013, fase 4 (K1) | **Gobierno y seguridad de Cartera**: alcance por oficina y línea que falla cerrado, matriz de atribuciones y montos operativos, órganos, sesiones, votos y actas, segregación por persona, vinculados, autorizaciones y auditoría; la cola de mensajes al deudor con la ventana de la Ley 2300, plantillas y el canal simulado; y la preparación para la activación (roles, personas de los usuarios, oficinas vinculadas). |
@@ -167,7 +185,8 @@ procesos por cooperativa, parámetros con vigencia, aprobaciones, alertas y audi
 | `docs/manual/cartera-perdida-esperada.md` | 013, fase 22 (K6a, US9) | **La pérdida esperada (Anexo 2)**, para la contadora: qué segmentos y a quién, el cálculo crédito por crédito (puntaje, calificación del modelo, incumplimiento, PI, PDI por garantía, exposición, homologación), el historial de mora con la regla de meses faltantes, la adopción voluntaria y la lista de lo que valida (T1041). |
 | `docs/operaciones/cartera-perdida-esperada.md` | 013, fase 22 (K6a, US9, US8-10) | **La pérdida esperada en operación**: `CarteraPerdidaEsperada` y `EntregaVigente = K6a`, registrar y cotejar el Anexo 2 (lo que quedó abierto: PI voluntaria, integrales con sección de ahorro, el «00»), la carga complementaria del historial y la activación de una obligada, adoptar o desistir (acta, soportes, registro), la obligación sobrevenida, cómo leer el cierre y cómo agregar el 9083 y los cambios del 9027/9081 cuando haya instructivo. |
 | `docs/manual/cartera-vivienda-y-uvr.md` | 013, fase 23 (K6b) | **Vivienda con la Ley 546 y créditos en UVR**, para el jefe de cartera y la contadora: las reglas como valores con fuente (tope, plazo, financiable general y VIS, cuota-ingreso, hipoteca de primer grado), la versión de reglas `LND-2026.2`, líneas en UVR, cómo se calcula un crédito en UVR (plan, valoración diaria, corrección monetaria, pagos, UVR faltante o proyectada), la corrección monetaria en Contabilidad (E12), certificado tributario, E1/E2, migración y lo pendiente (T1061). |
-| `docs/operaciones/auditoria-cadena-de-sellos.md` | I1 | **Auditoría con entrega garantizada**: `COR_AuditOutbox`, cabezas y anclas, el reenviador, la verificación de integridad, qué hacer ante un hallazgo y cómo rotar la clave de anclas. |
+| `docs/manual/plantillas-de-importacion.md` §5b | 013, fase 24 | **El registro de plantillas `lending.*`** con su ruta, permisos y entrega. |
+| `docs/manual/plataforma-de-integracion.md` §9 | 013 | **Varios emisores, el proceso como origen, el registro de participantes** y (§9.7) **los canales externos y los dos caminos de correo**. |
 
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
