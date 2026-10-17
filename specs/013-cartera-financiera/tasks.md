@@ -4689,6 +4689,8 @@ tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
     `reallocations` de `PagoAplicado`/`PagoReversado` (pagos posteriores redistribuidos por una fecha valor anterior) **no las desglosa**
     Contabilidad (`ConstructorDeLineasDeCartera.Pago`/`PagoReversado` sólo leen `amounts`): ¿se asientan con el mismo molde de `PRN`? (c) un
     pago que con la UVR nueva cambiaría de cancelar o no el crédito se redistribuye, pero el estado no cambia solo (runbook §3a: soporte).
+    Verificación (2026-10-17, en local): build 0 errores; Domain 2.298, Application 5.706, Architecture 638, Shared 467, todas pasan; e2e
+    Lending 108 + 7 omitidas y «Contabilidad e2e» 35, sin fallas, en PostgreSQL y en SQL Server.
 - **No hecho**: el PDF de la simulación (`SimulacionDeCreditoReport`) no pinta el plan en UVR; la pantalla sí.
 - T1057 sigue del dueño (SICSES).
 
