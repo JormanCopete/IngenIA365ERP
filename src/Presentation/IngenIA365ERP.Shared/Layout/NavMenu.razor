@@ -210,6 +210,11 @@
             <PermissionGate Required="Lending.Reports.View">
                 <NavLink href="/cartera/informes" class="nav-subitem">Informes de cartera</NavLink>
             </PermissionGate>
+            @* K5, US15 (T0985): el tablero de Cartera —saldo, colocación, calidad, deterioro, recaudo, cosechas, promesas, mensajes y alertas—
+               del alcance de quien lo abre. *@
+            <PermissionGate Required="Lending.Dashboard.View">
+                <NavLink href="/cartera/tablero" class="nav-subitem">Tablero de cartera</NavLink>
+            </PermissionGate>
             @* K2, US10 (T0853): la libranza —pagadurías con su convenio, archivos de descuento por período y las cuotas no aplicadas—. El detalle de
                una pagaduría y el de un archivo se abren desde sus listas. *@
             <span class="nav-subgroup-title">Libranza</span>

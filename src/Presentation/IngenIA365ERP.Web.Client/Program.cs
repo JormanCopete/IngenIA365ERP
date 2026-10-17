@@ -155,6 +155,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CarteraClient>(
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RiesgoClient>();
 // Feature 013, US15 (T0799): el centro de informes de Cartera.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.InformesDeCarteraClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.TableroDeCarteraClient>();
 // Feature 011: adjuntos (subida y descarga directas al almacén; el archivo no pasa por .NET).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient>();
 // Feature 008 — permisos efectivos del usuario en la cooperativa activa (PermissionGate).

@@ -54,4 +54,19 @@ public sealed record VistaDeInformeDeCarteraDto
     /// <summary>La entrega de Cartera desde la que existe (1 = K1).</summary>
     public int AvailableFrom { get; init; }
     public string? RequiredPermission { get; init; }
+    /// <summary>K5: la vista no trae datos del deudor cuando su filtro propio vale uno de estos (la concentración por línea, sector o pagaduría).</summary>
+    public ExcepcionDeDatosDelDeudorDto? PersonalDataExceptWhen { get; init; }
+
+    /// <summary>¿La consulta con estos filtros propios trae datos del deudor?</summary>
+    public bool TraeDatosDelDeudor(IReadOnlyDictionary<string, string> propios) =>
+        PersonalData && (PersonalDataExceptWhen is not { } e
+                         || !propios.TryGetValue(e.Filter, out var valor) || string.IsNullOrWhiteSpace(valor)
+                         || !e.Values.Contains(valor.Trim(), StringComparer.OrdinalIgnoreCase));
+}
+
+/// <summary>Cuándo una vista con datos del deudor deja de traerlos: con <see cref="Filter"/> en uno de <see cref="Values"/>. (nuevo)</summary>
+public sealed record ExcepcionDeDatosDelDeudorDto
+{
+    public string Filter { get; init; } = "";
+    public IReadOnlyList<string> Values { get; init; } = [];
 }

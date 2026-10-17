@@ -1,0 +1,128 @@
+@page "/cartera/tablero"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@inject TableroDeCarteraClient TableroDeCartera
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+
+<PageTitle>Tablero de cartera - IngenIA365ERP</PageTitle>
+
+@* Feature 013, US15, K5 (T0985; FR-135; US15-1; contracts/api.md §17): el tablero de Cartera. Las fichas son las que devuelve
+   GET /api/lending/dashboard —saldo, colocación del mes, calidad, deterioro, recaudo frente al esperado, cosechas, cumplimiento de promesas,
+   mensajes pendientes y rechazados, alertas pendientes—, siempre del alcance de quien consulta; esta pantalla sólo las pinta como .kpi-card por
+   unidad y severidad (sin colores propios: los de componentes.css) y lleva a su vista o pantalla con un clic. Filtros de oficina y línea: las
+   del alcance que devuelve el mismo tablero; y el corte. Sin datos del deudor. *@
+<PermissionGate Required="Lending.Dashboard.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tablero de cartera</h3>
+        <div class="toolbar">
+            <label class="campo">Oficina
+                <select class="e-input" value="@(_oficina?.ToString() ?? "")" @onchange="@(e => CambiarOficina(e.Value?.ToString()))" disabled="@_carga.Activa">
+                    <option value="">Todas las de su alcance</option>
+                    @foreach (var o in _alcance.Branches) { <option value="@o.PublicId">@o.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Línea
+                <select class="e-input" value="@(_linea?.ToString() ?? "")" @onchange="@(e => CambiarLinea(e.Value?.ToString()))" disabled="@_carga.Activa">
+                    <option value="">Todas las de su alcance</option>
+                    @foreach (var l in _alcance.Lines) { <option value="@l.PublicId">@l.Code · @l.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Con corte al
+                <input type="date" class="e-input" value="@(_corte.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" @onchange="@(e => CambiarCorte(e.Value))" disabled="@_carga.Activa" />
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando las cifras del tablero…">
+        @if (_tablero is not null)
+        {
+            <div class="kpi-grid">
+                @foreach (var ficha in _tablero.Tiles)
+                {
+                    <button type="button" class="kpi-card ficha-tablero @Severidad(ficha)" title="Ver el detalle" @onclick="@(() => Navigation.NavigateTo(ficha.Link.Ruta))">
+                        <span class="kpi-label">@ficha.Label</span>
+                        <span class="kpi-value">@Valor(ficha.Value, ficha.Unit)</span>
+                        @if (ficha.PreviousValue is not null)
+                        {
+                            <span class="kpi-anterior">Mes anterior: @Valor(ficha.PreviousValue, ficha.Unit)</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(ficha.Note))
+                        {
+                            <span class="kpi-anterior">@ficha.Note</span>
+                        }
+                    </button>
+                }
+            </div>
+            <p class="texto-tenue">
+                Cifras al @_tablero.AsOf.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture), sólo de las oficinas y líneas de su alcance.
+                La calidad y las cosechas siguen definiciones pendientes de validar por la contadora (vea el manual).
+            </p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private TableroDeCarteraDto? _tablero;
+    private AlcanceDelTableroDeCarteraDto _alcance = new();
+    private Guid? _oficina, _linea;
+    private DateOnly _corte = DateOnly.FromDateTime(DateTime.Today);
+    private static readonly CultureInfo Colombia = CultureInfo.GetCultureInfo("es-CO");
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await TableroDeCartera.TableroAsync(_oficina, _linea, _corte);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el tablero de cartera.");
+            return;
+        }
+        _tablero = r.Value;
+        // El alcance para los filtros es el de quien consulta, sin filtrar: se guarda la primera vez.
+        if (_alcance.Branches.Count == 0 && _alcance.Lines.Count == 0) _alcance = r.Value.Scope;
+    }
+
+    private Task CambiarOficina(string? valor)
+    {
+        _oficina = Guid.TryParse(valor, out var id) ? id : null;
+        return CargarAsync();
+    }
+
+    private Task CambiarLinea(string? valor)
+    {
+        _linea = Guid.TryParse(valor, out var id) ? id : null;
+        return CargarAsync();
+    }
+
+    private Task CambiarCorte(object? valor)
+    {
+        if (!DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var fecha)) return Task.CompletedTask;
+        _corte = fecha;
+        return CargarAsync();
+    }
+
+    private static string Severidad(FichaDelTableroDeCarteraDto f) => f.Severity switch
+    {
+        "Critical" => "severidad-critical",
+        "Warning" => "severidad-warning",
+        "Info" => "severidad-info",
+        _ => string.Empty,
+    };
+
+    /// <summary>La cifra según su unidad: pesos, porcentaje, días o conteo. Sin dato, un guion.</summary>
+    private static string Valor(decimal? valor, string unidad) => valor is not { } v ? "—" : unidad switch
+    {
+        "Money" => v.ToString("C0", Colombia),
+        "Percent" => $"{v.ToString("N2", Colombia)} %",
+        "Days" => $"{v.ToString("N1", Colombia)} días",
+        _ => v.ToString("N0", Colombia),
+    };
+}

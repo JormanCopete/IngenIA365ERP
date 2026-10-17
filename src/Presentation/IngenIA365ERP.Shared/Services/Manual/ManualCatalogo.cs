@@ -649,7 +649,24 @@ public static class ManualCatalogo
         t.Add(Consulta("/cartera/informes", "Informes de cartera", Modulos.Cartera,
             "Cartera por edades, colocación, recaudo, movimientos de un crédito, usura, mensajes al deudor y conciliación de la migración, exportables a Excel, PDF y Word.",
             "Elegí el informe, el rango o la fecha de corte, la sucursal y la línea (sólo las de su alcance traen filas) y los filtros propios del informe.",
-            "cartera por edades", "colocacion", "recaudo", "movimientos", "usura", "mensajes al deudor", "conciliacion de la migracion"));
+            "cartera por edades", "colocacion", "recaudo", "movimientos", "usura", "mensajes al deudor", "conciliacion de la migracion",
+            "calidad", "cosechas", "concentracion", "documentos emitidos"));
+        // Feature 013, US15, K5 (T0986): las vistas de gestión de K5 —calidad, cosechas, concentración, documentos emitidos— y el tablero. Las
+        // definiciones (a validar por la contadora), los permisos y la auditoría de las exportaciones, en docs/manual/cartera-informes-y-tablero.md.
+        t.Add(Proceso("cartera-informes-y-tablero", "Indicadores de gestión y tablero de cartera", Modulos.Cartera, "/cartera/tablero",
+            "Seguir la cartera de un vistazo en el tablero (saldo, colocación, calidad, deterioro, recaudo frente al esperado, cosechas, promesas, mensajes y alertas) y profundizar en los informes de calidad, cosechas, concentración y documentos emitidos, siempre dentro de las oficinas y líneas de su alcance.",
+            [
+                P("Cartera → Tablero de cartera", "Cada ficha muestra la cifra al corte y la del mes anterior; un clic lleva al informe o la pantalla que la explica. Elegí la oficina y la línea (sólo las de su alcance) y la fecha de corte.", "/cartera/tablero", "Abrir el tablero"),
+                P("Calidad de la cartera", "Informe «Calidad de la cartera»: cartera bruta, vencida, en riesgo (calificadas B a E), deterioro y cobertura del último cierre del mes, en total o por oficina, línea o modalidad. Vencida es lo que tiene más días de mora que el parámetro «Días de cartera vencida».", "/cartera/informes?vista=quality", "Abrir calidad"),
+                P("Cosechas", "Informe «Cosechas»: por mes de desembolso, la mora a 30, 60 y 90 días en cada mes de maduración, sobre lo desembolsado. Sale de los cierres de cada mes.", "/cartera/informes?vista=vintages", "Abrir cosechas"),
+                P("Concentración", "Informe «Concentración»: los mayores deudores y grupos conectados con su porcentaje del límite individual y la señal cuando están cerca o lo superan; también por línea, sector y pagaduría. Por deudor y por grupo exige permiso para ver datos de los deudores.", "/cartera/informes?vista=concentration", "Abrir concentración"),
+                P("Documentos emitidos y exportar", "Informe «Documentos emitidos»: los documentos al deudor del rango con su estado a hoy. Todo informe se exporta a Excel, PDF o Word con el permiso de exportar (y el de datos personales si trae deudores); cada exportación queda en la auditoría."),
+            ],
+            ["tablero", "indicadores", "calidad de la cartera", "cartera vencida", "cartera en riesgo", "cobertura", "deterioro", "cosechas", "concentracion",
+                "limite individual", "grupo conectado", "documentos emitidos", "recaudo frente al esperado"],
+            ["Cartera activada y al menos un cierre del mes para la calidad, el deterioro y las cosechas.", "Patrimonio técnico vigente en Contabilidad para el porcentaje del límite individual.",
+                "Permisos Lending.Dashboard.View para el tablero, Lending.Reports.View para los informes, Lending.Loans.Read para los que traen deudores y Lending.Reports.Export (más Lending.Reports.ExportPersonalData) para exportar."],
+            ["cartera-documentos"], [], TipoDeTema.Proceso));
 
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.
