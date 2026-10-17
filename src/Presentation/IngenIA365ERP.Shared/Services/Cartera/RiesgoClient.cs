@@ -18,6 +18,12 @@ public sealed class RiesgoClient(HttpClient http, CentralAuthClient auth)
     public const string Ruta = GobiernoDeCarteraClient.Base + "/risk";
     public const string RutaDeCierres = Ruta + "/monthly-closes";
 
+    /// <summary>La plantilla <c>lending.arrears-history</c> (K6a): <c>/template.xlsx</c> e <c>/import?mode=</c>, para <c>ImportarPlantilla</c>.</summary>
+    public const string RutaDeHistorial = Ruta + "/arrears-history";
+
+    /// <summary>El dueño de los adjuntos del estudio de impacto y del aviso de una propuesta de cambio del modelo (K6a).</summary>
+    public const string DuenoDeSoportesDelCambioDelModelo = "LendingImpairmentModelElectionSupport";
+
     // -------------------------------------------------------------------------------------------- política SARC --
 
     public Task<ResultadoDeInventario<PoliticaSarcDto>> PoliticaAsync(DateOnly? fecha = null, CancellationToken ct = default) =>
@@ -99,6 +105,16 @@ public sealed class RiesgoClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<IReadOnlyList<ModeloPorSegmentoDto>>> ModeloPorSegmentoAsync(DateOnly? fecha = null, CancellationToken ct = default) =>
         Enviar<IReadOnlyList<ModeloPorSegmentoDto>>(HttpMethod.Get, ConQuery($"{Ruta}/impairment-model", Query(("date", Texto(fecha)))), null, null, ct);
+
+    /// <summary>Las adopciones y los desistimientos voluntarios, el más reciente primero (K6a).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<EleccionDelModeloDto>>> EleccionesAsync(CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<EleccionDelModeloDto>>(HttpMethod.Get, $"{Ruta}/impairment-model/elections", null, null, ct);
+
+    /// <summary>Registra la adopción o el desistimiento voluntario con el punto del acta, el estudio y el aviso (K6a); los errores llevan sus datos
+    /// (<c>earliestValidFrom</c>, <c>loans[]</c>, <c>segments</c>).</summary>
+    public Task<ResultadoDeInventario<EleccionDelModeloDto>> RegistrarEleccionAsync(NuevaEleccionDelModeloRequest pedido, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<EleccionDelModeloDto>(HttpMethod.Post, $"{Ruta}/impairment-model/elections", pedido, clave, ct);
 
     public Task<ResultadoDeInventario<CompletitudDelHistorialDto>> CompletitudDelHistorialAsync(DateOnly? fecha = null, string? segmento = null,
         CancellationToken ct = default) =>
