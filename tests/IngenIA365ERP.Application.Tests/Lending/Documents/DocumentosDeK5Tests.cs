@@ -71,9 +71,10 @@ public sealed class DocumentosDeK5Tests : IAsyncLifetime
     }
 
     [Fact]
-    public void Con_K5_vigente_las_seis_clases_se_emiten()
+    public void Desde_K5_las_seis_clases_se_emiten()
     {
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K5);
+        // T1024 (fase 22): la vigente subió a K6a; las clases de K5 se siguen emitiendo.
+        CatalogoDeCartera.EntregaVigente.Should().BeOneOf(EntregaDeCartera.K5, EntregaDeCartera.K6a, EntregaDeCartera.K6b);
         Enum.GetValues<IssuedDocumentKind>().Should().OnlyContain(c => PrefijosDeDocumentosDeCartera.Disponible(c, CatalogoDeCartera.EntregaVigente));
         PrefijosDeDocumentosDeCartera.Disponible(IssuedDocumentKind.Statement, EntregaDeCartera.K4).Should().BeFalse();
     }

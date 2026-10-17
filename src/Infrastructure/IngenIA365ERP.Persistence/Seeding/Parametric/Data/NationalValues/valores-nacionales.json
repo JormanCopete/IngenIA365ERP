@@ -43,6 +43,15 @@
       "verified": false,
       "source": "Circular Externa 100 del 2026-05-12 (Supersolidaria), pendiente de cotejo (pregunta E8)",
       "file": "regla-de-perdida-esperada.json"
+    },
+    {
+      "kind": "SarcAnexo2",
+      "code": "ANEXO2-2024-07-25",
+      "validFrom": "2024-07-25",
+      "schemaVersion": 1,
+      "verified": false,
+      "source": "CBCF (Supersolidaria) Tít. IV Cap. II Anexo 2, texto de la CE 68 del 2024-07-24 (DO 52.828); tablas en imagen transcritas por el equipo el 2026-10-16, pendiente de cotejo (E8); sin la PI VOLUNTARIA de la CE 100",
+      "file": "sarc-anexo-2.json"
     }
   ],
   "values": [

@@ -73,13 +73,15 @@ public class ObligacionSobrevenidaTests : IAsyncLifetime
         new EfectoDeReplicacionObligacionSobrevenida().AlReplicarAsync(_c.Db, new LoteReplicado([], [Regla()], _c.G.UtcNow, CierreDePrueba.Hoy), default);
 
     [Fact]
-    public async Task Una_regla_que_obliga_a_la_cooperativa_activada_levanta_las_dos_alertas()
+    public async Task Una_regla_que_obliga_a_la_cooperativa_activada_alerta_la_obligacion_sin_la_marca_con_K6a()
     {
         await PerfilAsync("COOP_AHORRO_CREDITO");
 
         var efecto = await ReplicarAsync();
 
-        efecto.Alertas.Select(a => a.TypeCode).Should().Equal(TiposDeAlerta.ObligacionSobrevenida, TiposDeAlerta.ModeloObligatorioNoDisponible);
+        // Antes de K6a se sumaba Cartera.ModeloObligatorioNoDisponible; con K6a (T1024) la pérdida esperada está desplegada (T1021, bloque 2, suma
+        // Cartera.HistorialDeMoraIncompleto).
+        efecto.Alertas.Select(a => a.TypeCode).Should().Equal(TiposDeAlerta.ObligacionSobrevenida);
         efecto.Alertas[0].DedupKey.Should().Be($"{TiposDeAlerta.ObligacionSobrevenida}:2027-01");
         efecto.Alertas[0].Body.Should().Contain("36 meses");
         efecto.Notas.Should().ContainSingle().Which.Should().Contain("2027-01-01");
@@ -103,7 +105,7 @@ public class ObligacionSobrevenidaTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task El_modelo_por_segmento_marca_los_cubiertos_obligados_sin_el_modelo_disponible()
+    public async Task El_modelo_por_segmento_lleva_los_cubiertos_obligados_a_la_perdida_esperada_con_K6a()
     {
         await PerfilAsync("COOP_AHORRO_CREDITO");
         await ReplicarReglaAsync();
@@ -113,8 +115,9 @@ public class ObligacionSobrevenidaTests : IAsyncLifetime
 
         r.IsSuccess.Should().BeTrue();
         r.Value.Select(s => s.Segment).Should().BeEquivalentTo("CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA", "COMERCIAL_PN");
-        r.Value.Should().OnlyContain(s => s.Basis == nameof(ModelBasis.Obligated) && s.Model == nameof(ImpairmentModel.ArrearsAnnex1)
-            && s.Mark == "ObligatoryModelUnavailable" && s.Since == Desde);
+        // Sin K6a quedaban en el Anexo 1 con la marca «ObligatoryModelUnavailable» (D28); con K6a (T1024) van a la pérdida esperada, sin marca.
+        r.Value.Should().OnlyContain(s => s.Basis == nameof(ModelBasis.Obligated) && s.Model == nameof(ImpairmentModel.ExpectedLossAnnex2)
+            && s.Mark == null && s.Since == Desde);
 
         var antes = await new GetImpairmentModelBySegmentQueryHandler(new LectorDeDocumentoNormativo(_c.Db), new LectorDePerfilRegulatorio(_c.Db), _c.G.Reloj)
             .Handle(new GetImpairmentModelBySegmentQuery(CierreDePrueba.Hoy), default);

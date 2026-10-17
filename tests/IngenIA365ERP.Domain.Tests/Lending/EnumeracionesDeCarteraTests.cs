@@ -230,7 +230,7 @@ public class EnumeracionesDeCarteraTests
     {
         Enum.GetValues<EntregaDeCartera>().Select(e => (e.ToString(), (int)e)).Should().Equal(
             ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7));
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K5, "T0969 la subió a K5");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6a, "T0969 la subió a K5 y T1024 (fase 22) a K6a");
     }
 
     [Fact]

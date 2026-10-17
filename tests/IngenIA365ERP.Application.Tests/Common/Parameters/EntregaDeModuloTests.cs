@@ -67,7 +67,7 @@ public class EntregaDeModuloTests
 
         CatalogoDeParametros.EntregaVigenteDe("INV").Should().Be((EntregaDeModulo)CatalogoDeParametros.EntregaVigente);
         CatalogoDeParametros.EntregaVigenteDe("LND").Should().Be((EntregaDeModulo)CatalogoDeCartera.EntregaVigente);
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K5, "T0849 la subió a K2, T0889 a K3, T0955 a K4 y T0969 a K5");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6a, "T0849 la subió a K2, T0889 a K3, T0955 a K4, T0969 a K5 y T1024 a K6a");
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class EntregaDeModuloTests
     }
 
     [Fact]
-    public async Task Las_claves_de_Cartera_de_K4_y_K5_se_ofrecen_con_K5_vigente_junto_a_las_de_K1_a_K3()
+    public async Task Las_claves_de_Cartera_de_K4_a_K6a_se_ofrecen_con_K6a_vigente_junto_a_las_de_K1_a_K3()
     {
         // T0980 (fase 20): con K5 vigente se ofrecen también las claves de K5: Informes.DiasCarteraVencida y (2026-10-16)
         // Documentos.CertificadoTributario.SaldoIncluye; T1003 (fase 21): Centrales.CodigosDeSuscriptor.
@@ -108,9 +108,9 @@ public class EntregaDeModuloTests
             .And.Contain(ParametrosDeCartera.LibranzaVentanaDeGiroDias).And.Contain(ParametrosDeCartera.CastigoExigeDeterioroTotal);
         claves.Should().Contain(ParametrosDeCartera.AvisoPrevioDiasMinimos).And.Contain(ParametrosDeCartera.CobranzaToleranciaDePromesa)
             .And.Contain(ParametrosDeCartera.InformesDiasCarteraVencida).And.Contain(ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye)
-            .And.Contain(ParametrosDeCartera.CentralesCodigosDeSuscriptor);
+            .And.Contain(ParametrosDeCartera.CentralesCodigosDeSuscriptor).And.Contain(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);
         (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1" || p.AvailableFrom == "K2" || p.AvailableFrom == "K3" || p.AvailableFrom == "K4"
-                                                       || p.AvailableFrom == "K5");
+                                                       || p.AvailableFrom == "K5" || p.AvailableFrom == "K6a");
     }
 
     [Fact]

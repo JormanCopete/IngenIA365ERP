@@ -51,19 +51,24 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
     }
 
     [Fact]
-    public void Con_K5_vigente_se_ofrecen_las_claves_hasta_K5_y_ninguna_posterior()
+    public void Con_K6a_vigente_se_ofrecen_las_claves_hasta_K6a_y_ninguna_posterior()
     {
         // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; T0955 sube a K4 (US12): AvisoPrevio.* y
         // Cobranza.ToleranciaDePromesa se ofrecen; T0969 sube a K5 (fase 19, sin claves nuevas). Hoy ninguna clave es de K6a en adelante: si una llega
-        // antes de su entrega, esta prueba la frena.
-        Assert.Equal(EntregaDeCartera.K5, CatalogoDeCartera.EntregaVigente);
+        // antes de su entrega, esta prueba la frena. T1024 (fase 22) sube a K6a: Riesgo.MesesFaltantesDiasFijos (T1027) se ofrece; nada de K6b.
+        Assert.Equal(EntregaDeCartera.K6a, CatalogoDeCartera.EntregaVigente);
         var vigente = CatalogoDeParametros.EntregaVigenteDe(EntregaDeModulo.LineaDeCartera);
 
         var ofrecidas = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleEnLaEntrega()).ToList();
         Assert.All(ofrecidas, d => Assert.True(d.DisponibleDesde <= vigente, $"{d.Clave} se ofrece antes de su entrega ({d.DisponibleDesde})."));
 
         var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > vigente).ToList();
-        Assert.All(posteriores, d => Assert.False(d.DisponibleEnLaEntrega(), $"{d.Clave} es de {d.DisponibleDesde} y se ofrece con K5."));
+        Assert.All(posteriores, d => Assert.False(d.DisponibleEnLaEntrega(), $"{d.Clave} es de {d.DisponibleDesde} y se ofrece con K6a."));
+        var deK6a = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).ToList();
+        Assert.Equal([ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos], deK6a.Select(d => d.Clave));
+        Assert.All(deK6a, d => Assert.True(d.DisponibleEnLaEntrega() && d.PendienteDeValidar is not null, $"{d.Clave} es de K6a, se ofrece y está pendiente de validar."));
+        Assert.True(ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.RiesgoReglaMesesFaltantes).DisponibleDesde
+            < (EntregaDeModulo)EntregaDeCartera.K6a, "la regla de meses faltantes existe desde K1 (se usa desde K6a)");
         Assert.All(ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Libranza.", StringComparison.Ordinal)),
             d => Assert.True(d.DisponibleEnLaEntrega(), $"{d.Clave} es de K2 y no se ofrece."));
         var castigo = ParametrosDeCartera.Definiciones.Where(d => d.Clave.StartsWith("Castigo.", StringComparison.Ordinal)).ToList();

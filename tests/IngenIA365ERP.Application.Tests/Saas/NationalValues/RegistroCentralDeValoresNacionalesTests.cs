@@ -221,12 +221,15 @@ public class RegistroCentralDeValoresNacionalesTests
     }
 
     [Fact]
-    public async Task El_Anexo_2_no_se_admite_antes_de_K6a_ni_una_clase_sin_validador()
+    public async Task Con_K6a_el_Anexo_2_se_valida_y_una_clase_sin_validador_no_se_admite()
     {
         using var e = new RegistroCentralDePrueba();
 
+        // Antes de K6a el Anexo 2 no se admitía (DocumentKindNotAvailable); con K6a desplegada (T1024) se valida por su forma.
         (await e.RegistrarDocumentoAsync(new RegisterRegulatoryDocumentCommand(nameof(RegulatoryDocumentKind.SarcAnexo2), "ANEXO2", Enero2026, null, 1, "{}", false, "CBCF")))
-            .Error.Code.Should().Be(ErroresDeValoresNacionales.DocumentKindNotAvailableCode);
+            .Error.Code.Should().Be(ErroresDeValoresNacionales.DocumentInvalidCode);
+        (await e.RegistrarDocumentoAsync(new RegisterRegulatoryDocumentCommand(nameof(RegulatoryDocumentKind.SarcAnexo2), "ANEXO2-SEMILLA", Enero2026, null, 1,
+            PlatformNationalValuesSeeder.Contenido("sarc-anexo-2.json"), false, "CE 68 de 2024"))).IsSuccess.Should().BeTrue();
         (await e.RegistrarDocumentoAsync(new RegisterRegulatoryDocumentCommand(nameof(RegulatoryDocumentKind.SarcAnexo1), "ANEXO1", Enero2026, null, 1, "{}", false, "CBCF")))
             .Error.Code.Should().Be(ErroresDeValoresNacionales.DocumentInvalidCode, "desde la fase 3 Cartera registra el validador del Anexo 1 (T0204)");
         var sinCartera = new RegisterRegulatoryDocumentCommandHandler(e.Db, e.Maestro, e.Reloj,
@@ -306,7 +309,9 @@ public class RegistroCentralDeValoresNacionalesTests
 
         documentos.Select(d => d.Kind).Should().BeEquivalentTo([nameof(RegulatoryDocumentKind.CatalogoDeModalidades), nameof(RegulatoryDocumentKind.TiposDeOrganizacion),
             // Feature 013, fase 3 (T0204): el Anexo 1 y la regla de pérdida esperada, sin verificar (E8).
-            nameof(RegulatoryDocumentKind.SarcAnexo1), nameof(RegulatoryDocumentKind.ReglaDePerdidaEsperada)]);
+            nameof(RegulatoryDocumentKind.SarcAnexo1), nameof(RegulatoryDocumentKind.ReglaDePerdidaEsperada),
+            // K6a (T1026, 2026-10-16): el Anexo 2 de la CE 68 de 2024, transcrito sin cotejar (E8).
+            nameof(RegulatoryDocumentKind.SarcAnexo2)]);
         documentos.Should().OnlyContain(d => !d.Verified, "versión inicial pendiente de cotejo (E4, E8, E10)");
         valores.Single(v => v.Code == CodigosDeValorNacional.Smmlv).Value.Should().Be(1_750_905m);
         valores.Single(v => v.Code == CodigosDeValorNacional.Uvt).Value.Should().Be(52_374m);

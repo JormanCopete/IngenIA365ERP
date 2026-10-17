@@ -26,6 +26,8 @@ public class ParametrosDeCarteraTests
         { "Mora.SobreIntereses", "false", [N], EntregaDeCartera.K1 },
         { "Causacion.ContinuaTrasFallecimiento", "true", [N, L], EntregaDeCartera.K1 },
         { "Riesgo.ReglaMesesFaltantes", "MayorObservada", [N], EntregaDeCartera.K1 },
+        // K6a (T1027): los días fijos de la regla «Fija», sin valor.
+        { "Riesgo.MesesFaltantesDiasFijos", "", [N], EntregaDeCartera.K6a },
         { "Riesgo.DiaLimiteCierre", "10", [N], EntregaDeCartera.K1 },
         { "Riesgo.CierreProgramado", "false", [N], EntregaDeCartera.K1 },
         { "Riesgo.RedondeoDeterioro", "Centavo", [N], EntregaDeCartera.K1 },
@@ -103,14 +105,18 @@ public class ParametrosDeCarteraTests
     }
 
     [Fact]
-    public void Con_K5_vigente_se_ofrecen_todas_las_claves_hasta_K5()
+    public void Con_K6a_vigente_se_ofrecen_todas_las_claves_hasta_K6a()
     {
         // T0849: K2 habilita las claves Libranza.*; T0889 sube a K3 y T0910 le suma las Castigo.*; T0955 sube a K4 y T0969 a K5 (fase 19: el
-        // extracto y el certificado tributario no traen claves nuevas); las de K6a en adelante siguen sin ofrecerse.
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K5);
-        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K5).ToList();
+        // extracto y el certificado tributario no traen claves nuevas); T1024 (fase 22) sube a K6a, con Riesgo.MesesFaltantesDiasFijos (T1027).
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6a);
+        var posteriores = ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde > (EntregaDeModulo)EntregaDeCartera.K6a).ToList();
 
-        posteriores.Should().BeEmpty("ninguna clave es de K6a en adelante");
+        posteriores.Should().BeEmpty("ninguna clave es de K6b");
+        ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K6a).Select(d => d.Clave).Should()
+            .Equal(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);
+        ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos).Should()
+            .Match<IngenIA365ERP.Domain.Common.Parametros.DefinicionDeParametro>(d => d.DisponibleEnLaEntrega() && d.AdmiteVacio && d.PendienteDeValidar != null);
         // T0980 (fase 20): Informes.DiasCarteraVencida, pendiente de validar por la contadora; 2026-10-16: el saldo del certificado tributario y
         // (T1003, fase 21) los códigos de suscriptor de las centrales.
         ParametrosDeCartera.Definiciones.Where(d => d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5).Select(d => d.Clave).Should()

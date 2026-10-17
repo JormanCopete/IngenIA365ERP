@@ -19,15 +19,19 @@ public class ValidadorDeDocumentoNormativoDeCarteraTests
 {
     private static readonly string Anexo1Semilla = PlatformNationalValuesSeeder.Contenido("sarc-anexo-1.json");
     private static readonly string ReglaSemilla = PlatformNationalValuesSeeder.Contenido("regla-de-perdida-esperada.json");
+    private static readonly string Anexo2Semilla = PlatformNationalValuesSeeder.Contenido("sarc-anexo-2.json");
     private static readonly DateOnly Desde = new(2026, 1, 1);
 
     [Fact]
-    public void Hay_un_validador_por_clase_y_el_del_Anexo_2_rechaza_hasta_K6a()
+    public void Hay_un_validador_por_clase_y_el_del_Anexo_2_lee_el_documento_desde_K6a()
     {
-        // US9 (T0691): el del Anexo 2 existe y rechaza todo contenido mientras la entrega desplegada no sea K6a.
+        // US9 (T0691): el del Anexo 2 existía y rechazaba todo contenido antes de K6a; con K6a (T1024, T1025) lee el documento tipado.
         ValidadorDeDocumentoNormativoDeCartera.Todos.Select(v => v.Clase)
             .Should().BeEquivalentTo([RegulatoryDocumentKind.SarcAnexo1, RegulatoryDocumentKind.ReglaDePerdidaEsperada, RegulatoryDocumentKind.SarcAnexo2]);
-        ValidadorDeDocumentoNormativoDeCartera.Anexo2.Validar("{}", 1).Should().ContainSingle(e => e.Mensaje.Contains("K6a"));
+        ValidadorDeDocumentoNormativoDeCartera.Anexo2.VersionesDeEsquema.Should().Equal(Anexo2.VersionesDeEsquema);
+        ValidadorDeDocumentoNormativoDeCartera.Anexo2.Validar("{}", 1).Should().NotBeEmpty()
+            .And.NotContain(e => e.Mensaje.Contains("llega con la entrega K6a"), "con K6a desplegada el Anexo 2 se valida por su forma");
+        ValidadorDeDocumentoNormativoDeCartera.Anexo2.Validar(Anexo2Semilla, 1).Should().BeEmpty();
     }
 
     [Fact]
