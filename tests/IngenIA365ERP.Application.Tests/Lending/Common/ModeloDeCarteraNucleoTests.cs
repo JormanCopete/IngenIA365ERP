@@ -29,6 +29,10 @@ namespace IngenIA365ERP.Application.Tests.Lending.Common;
 ///
 /// <para>K5 (fase 21, T0997, T1001): suma las dos tablas de <c>CarteraInformes</c> (data-model §28): el archivo regulatorio avanza de estado; su
 /// línea de central es hecho <c>bigint</c> sin diferencias de auditoría (C46).</para>
+///
+/// <para>K6a (fase 22, T1032, T1033): suma las dos tablas de <c>CarteraPerdidaEsperada</c> (data-model §23.8, §23.9): la elección voluntaria y la carga
+/// complementaria del historial son hechos; la carga, sin diferencias de auditoría (C46). La FK de <c>LND_LoanArrearsHistory.ArrearsHistoryLoadId</c>
+/// nace con ella.</para>
 /// </summary>
 public class ModeloDeCarteraNucleoTests
 {
@@ -80,6 +84,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_LegalProcessActions",
         // Archivos regulatorios (K5, CarteraInformes; data-model §28)
         "LND_RegulatoryFiles", "LND_RegulatoryFileLines",
+        // Pérdida esperada (K6a, CarteraPerdidaEsperada; data-model §23.8, §23.9)
+        "LND_ImpairmentModelElections", "LND_ArrearsHistoryLoads",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -105,14 +111,14 @@ public class ModeloDeCarteraNucleoTests
         "LendingActivation", "MonthlyClose", "MonthlyCloseLoan", "MonthlyCloseGeneralImpairment", "MonthlyCloseReopening", "LoanArrearsHistoryEntry",
         "RiskPolicyVersion", "PayrollDeductionFileLine", "PayrollDeductionResult", "NonDeductionFollowUp",
         "CollectionStageHistoryEntry", "CollectorAssignment", "CollectionAction", "PaymentPromise", "PaymentAgreementInstallment", "LegalProcessAction",
-        "RegulatoryFileLine",
+        "RegulatoryFileLine", "ImpairmentModelElection", "ArrearsHistoryLoad",
         .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
-            "PayrollDeductionFileLine", "RegulatoryFileLine", .. Preparacion];
+            "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
@@ -137,9 +143,9 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(130,
+        Tablas.Should().HaveCount(132,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
-            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5)");
+            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)");
     }
 
     [Theory]
@@ -250,6 +256,17 @@ public class ModeloDeCarteraNucleoTests
         Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "NoveltyId", "LND_LoanNovelties");
         Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "WaiverId", "LND_Waivers");
         Apunta(typeof(Domain.Entities.Lending.Operations.LoanOperation), "WriteOffBatchItemId", "LND_WriteOffBatchItems");
+    }
+
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void La_columna_de_K6a_del_historial_apunta_a_la_carga_complementaria(bool postgres)
+    {
+        // K6a (T1032): la columna nació nula en CarteraRiesgo; su FK e índice nacen con CarteraPerdidaEsperada.
+        var historial = Modelo(postgres).FindEntityType(typeof(Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry))!;
+        historial.GetForeignKeys().Should().Contain(fk => fk.Properties.Single().Name == "ArrearsHistoryLoadId"
+            && fk.PrincipalEntityType.GetTableName() == "LND_ArrearsHistoryLoads");
+        historial.GetIndexes().Should().Contain(i => i.GetDatabaseName() == "IX_LND_LoanArrearsHistory_ArrearsHistoryLoadId");
     }
 
     private static IModel Modelo(bool postgres)

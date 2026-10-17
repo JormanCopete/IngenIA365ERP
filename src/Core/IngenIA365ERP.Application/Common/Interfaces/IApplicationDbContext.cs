@@ -466,6 +466,8 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry> LoanArrearsHistory { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating> AnalysisRatings { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion> RiskPolicyVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ImpairmentModelElection> ImpairmentModelElections { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ArrearsHistoryLoad> ArrearsHistoryLoads { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan> Loans { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl> LoanControls { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty> LoanParties { get; }

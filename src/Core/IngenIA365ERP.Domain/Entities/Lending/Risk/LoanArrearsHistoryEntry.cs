@@ -26,7 +26,7 @@ public class LoanArrearsHistoryEntry : AuditableEntity, IHechoInmutable
 
     public int? MigrationLoadId { get; init; }
 
-    /// <summary>Nace en K6a (<c>LND_ArrearsHistoryLoads</c>); sin FK hasta entonces.</summary>
+    /// <summary>La carga complementaria (<c>LND_ArrearsHistoryLoads</c>, K6a); su FK nace con <c>CarteraPerdidaEsperada</c>.</summary>
     public int? ArrearsHistoryLoadId { get; init; }
 
     public int? ProcessRunId { get; init; }

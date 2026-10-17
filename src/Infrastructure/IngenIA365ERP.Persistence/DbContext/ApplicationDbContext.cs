@@ -564,6 +564,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry> LoanArrearsHistory => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.LoanArrearsHistoryEntry>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating> AnalysisRatings => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.AnalysisRating>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion> RiskPolicyVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.RiskPolicyVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ImpairmentModelElection> ImpairmentModelElections => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.ImpairmentModelElection>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.ArrearsHistoryLoad> ArrearsHistoryLoads => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.ArrearsHistoryLoad>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan> Loans => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.Loan>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl> LoanControls => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanControl>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty> LoanParties => Set<IngenIA365ERP.Domain.Entities.Lending.Loans.LoanParty>();
