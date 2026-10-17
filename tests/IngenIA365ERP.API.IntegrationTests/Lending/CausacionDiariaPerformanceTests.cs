@@ -4,11 +4,6 @@ using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.API.IntegrationTests.Ventas;
-using IngenIA365ERP.Domain.Entities.Lending.Loans;
-using IngenIA365ERP.Domain.Entities.Lending.Operations;
-using IngenIA365ERP.Domain.Entities.Lending.Schedules;
-using IngenIA365ERP.Domain.Entities.Lending.Transactions;
-using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Xunit.Abstractions;
 using static IngenIA365ERP.API.IntegrationTests.Lending.CausacionE2E;
@@ -19,16 +14,19 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// T0483 (feature 013, US4; quickstart §1.8; SC-007, SC-020), en el motor de <c>DB_PROVIDER</c> y sólo con <c>RUN_PERF_TESTS=1</c> (sin ella se
 /// reporta omitida con su motivo, nunca con un <c>return</c>): una pasada completa del ciclo diario sobre 50.000 créditos vivos de una cooperativa
 /// aislada, tanda por tanda de 250 con <c>RunDailyAccrualCommand</c> como la conduce el procesador, en menos de 30 minutos; mientras corre, en otra
-/// cooperativa del mismo host las consultas de estado de cuenta y de la lista siguen con p95 &lt; 1 s (SC-008). Deja medidos en la salida las
+/// cooperativa del mismo host se aplican pagos por el contrato (el recaudador de prueba) y se consultan el estado de cuenta, la lista y el
+/// disponible del cupo, con p95 &lt; 1 s en las consultas (SC-008) y el de los pagos informado. Deja medidos en la salida las
 /// tandas, las partes, los mensajes, las líneas del resumido del día, las filas nuevas de <c>LND_LoanDailyPositions</c> (D13) y de
 /// <c>COR_IntegrationMessages</c> (B3), y un día saltado puesto al día sin duplicados.
 ///
 /// <para>
-/// <b>La cartera es sintética mientras no exista la carga de US8</b> (fase 13; quickstart dice «cargados por la migración»): un crédito desembolsado
-/// por HTTP sirve de plantilla y se copia en la base con sus condiciones, su plan, su operación de desembolso, su libro, su control y sus partes —el
-/// mismo grafo que deja el desembolso—, en tandas de 500 con EF. Cuando la migración cargue créditos, la siembra pasa a ser la carga. Los pagos por
-/// el contrato en la otra cooperativa llegan con US5 (fase 9); hasta entonces se miden las consultas. El tamaño se puede bajar con
-/// <c>CARTERA_CREDITOS_DE_RENDIMIENTO</c> para probar el arnés; el umbral sólo se juzga con los 50.000. (nuevo)
+/// <b>La cartera es sintética</b>: un crédito desembolsado por HTTP sirve de plantilla y se copia en la base con sus condiciones, su plan, su
+/// operación de desembolso, su libro, su control y sus partes —el mismo grafo que deja el desembolso—, en tandas de 500 con EF. Fase 24 (T1065):
+/// se queda así a propósito aunque la carga de US8 ya exista. Lo que aquí se mide es el ciclo diario, y cargar 50.000 créditos por la migración y
+/// activarlos es otra medición con su propio umbral (<see cref="ActivacionDeCarteraPerformanceTests"/>, C60); hacerlo aquí sumaría a esta prueba el
+/// tiempo de la activación sin cambiar el grafo que causa el ciclo. Los pagos por el contrato en la otra cooperativa van por el recaudador de prueba
+/// (fuera de producción, T20). El tamaño se puede bajar con <c>CARTERA_CREDITOS_DE_RENDIMIENTO</c> para probar el arnés; el umbral sólo se juzga con
+/// los 50.000. (nuevo)
 /// </para>
 ///
 /// <para>
@@ -48,7 +46,6 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx, ITestOutputHelper salida)
 {
     private const int CreditosPorDefecto = 50_000;
-    private const int TamanoDeLaSiembra = 500;
     private static readonly TimeSpan Umbral = TimeSpan.FromMinutes(30);
 
     [FactDeRendimiento]
@@ -66,10 +63,14 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         await ContabilidadDeCarteraE2E.MatrizPorPlantillaAsync(http, esc.Coop.TokenAdmin, h, conHuecos: false);
 
         var plantilla = (await DesembolsoE2E.CreditoDesembolsadoAsync(http, esc, "Plantilla", 3_000_000m)).Desembolso.GetProperty("loanPublicId").GetGuid();
-        var consultado = (await DesembolsoE2E.CreditoDesembolsadoAsync(http, otra, "Consultado", 2_000_000m)).Desembolso.GetProperty("loanPublicId").GetGuid();
+        var (_, personaConsultada, desembolsoConsultado) = await DesembolsoE2E.CreditoDesembolsadoAsync(http, otra, "Consultado", 2_000_000m);
+        var consultado = desembolsoConsultado.GetProperty("loanPublicId").GetGuid();
+        // Fase 24 (T1065): un cupo para que la otra cooperativa también consulte el disponible mientras corre la pasada.
+        var cupo = await OriginacionE2E.OtorgarCupoAsync(http, otra.Usuarios.Jefe.Token, personaConsultada, 5_000_000m, otra.Hoy);
+        cupo.StatusCode.Should().Be(HttpStatusCode.Created, await cupo.Content.ReadAsStringAsync());
 
         var siembra = Stopwatch.StartNew();
-        await SembrarAsync(tenant, plantilla, cuantos - 1);
+        await Performance.SiembraDeCarteraSintetica.SembrarAsync(fx, tenant, plantilla, cuantos - 1);
         salida.WriteLine($"Siembra de {cuantos - 1:N0} créditos copiados de la plantilla: {siembra.Elapsed.TotalSeconds:N0} s.");
         jefe = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Jefe);
 
@@ -77,11 +78,12 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         Guid corrida;
         TimeSpan duracion;
         var tiempos = new List<double>();
+        var pagos = new List<double>();
         using (RelojEn(fx, h.AddDays(1)))
         {
             corrida = await OrdenarCicloAsync(http, jefe);
             using var fin = new CancellationTokenSource();
-            var consultas = ConsultarAsync(otra, consultado, tiempos, fin.Token);
+            var consultas = ConsultarAsync(otra, consultado, personaConsultada, h.AddDays(1), tiempos, pagos, fin.Token);
             var reloj = Stopwatch.StartNew();
             var tandas = await CorrerHastaTerminarAsync(fx, tenant, corrida, tamano: 250);
             duracion = reloj.Elapsed;
@@ -104,7 +106,8 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         salida.WriteLine($"Partes: {medidas.Partes:N0}; mensajes de las partes: {medidas.mensajesDePartes:N0}; líneas del resumido del día: {medidas.lineas:N0}.");
         salida.WriteLine($"Filas nuevas de LND_LoanDailyPositions: {medidas.posiciones:N0}; COR_IntegrationMessages en la cooperativa: {medidas.mensajes:N0}.");
         var p95 = P95(tiempos);
-        salida.WriteLine($"Otra cooperativa durante la pasada: {tiempos.Count:N0} consultas, p95 {p95:N0} ms.");
+        salida.WriteLine($"Otra cooperativa durante la pasada: {tiempos.Count:N0} consultas, p95 {p95:N0} ms; " +
+                         $"{pagos.Count:N0} pagos por el contrato, p50 {P50(pagos):N0} ms, p95 {P95(pagos):N0} ms.");
 
         medidas.Status.Should().Be(Domain.Enums.Lending.LendingProcessRunStatus.Completed);
         medidas.ProcessedLoans.Should().Be(cuantos);
@@ -204,21 +207,39 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         }
     }
 
-    /// <summary>Consulta sin parar, hasta que termine la pasada, el estado de cuenta y la lista de la otra cooperativa; anota cada tiempo.</summary>
-    private async Task ConsultarAsync(DesembolsoE2E.Escenario otra, Guid credito, List<double> tiempos, CancellationToken fin)
+    /// <summary>
+    /// Sin parar, hasta que termine la pasada, en la otra cooperativa: consulta el estado de cuenta, la lista y el disponible del cupo (cada tiempo en
+    /// <paramref name="tiempos"/>) y, una vuelta de cada diez, aplica un pago de 1.000 por el contrato con el recaudador de prueba (cada tiempo en
+    /// <paramref name="pagos"/>; con 200 ms entre vueltas, media hora de pasada no alcanza a cancelar los 2.000.000 del crédito).
+    /// </summary>
+    private async Task ConsultarAsync(DesembolsoE2E.Escenario otra, Guid credito, Guid persona, DateOnly fechaValor, List<double> tiempos, List<double> pagos,
+        CancellationToken fin)
     {
         using var http = fx.CreateClient();
         var token = await UsuariosDeCartera.IngresarAsync(http, otra.Usuarios.Jefe);
+        var recaudador = await UsuariosDeCartera.IngresarAsync(http, otra.Usuarios.Pruebas);
         var ingreso = Stopwatch.StartNew();
+        var vuelta = 0;
         while (!fin.IsCancellationRequested)
         {
             // El access dura 15 minutos y la pasada sobre 50.000 créditos dura más: se vuelve a ingresar cada diez.
             if (ingreso.Elapsed > TimeSpan.FromMinutes(10))
             {
                 token = await UsuariosDeCartera.IngresarAsync(http, otra.Usuarios.Jefe);
+                recaudador = await UsuariosDeCartera.IngresarAsync(http, otra.Usuarios.Pruebas);
                 ingreso.Restart();
             }
-            foreach (var url in new[] { $"{DesembolsoE2E.Creditos}/{credito}/statement", $"{DesembolsoE2E.Creditos}?pageSize=20" })
+            if (vuelta++ % 10 == 0)
+            {
+                var pago = Stopwatch.StartNew();
+                using var aplicado = await CarteraE2E.ConClaveAsync(http, recaudador, HttpMethod.Post, $"{PagosE2E.Recaudador}/payments",
+                    new { items = new[] { PagosE2E.Pago(credito, persona, "FreeAmount", 1_000m, fechaValor) }, interactive = false });
+                pago.Stop();
+                aplicado.StatusCode.Should().Be(HttpStatusCode.OK, await aplicado.Content.ReadAsStringAsync());
+                lock (pagos) pagos.Add(pago.Elapsed.TotalMilliseconds);
+            }
+            foreach (var url in new[] { $"{DesembolsoE2E.Creditos}/{credito}/statement", $"{DesembolsoE2E.Creditos}?pageSize=20",
+                         $"{OriginacionE2E.Cupos}/availability?personPublicId={persona}" })
             {
                 var reloj = Stopwatch.StartNew();
                 using var r = await CarteraE2E.MandarGetAsync(http, token, url);
@@ -230,89 +251,11 @@ public sealed class CausacionDiariaPerformanceTests(CentralIdentityApiFixture fx
         }
     }
 
-    // ------------------------------------------------------------------------------------------- la siembra --
-
-    /// <summary>
-    /// Copia <paramref name="copias"/> veces el grafo del crédito plantilla —crédito, operación de desembolso, condiciones, plan con sus cuotas,
-    /// libro, control y partes— con números y PublicId propios, en tandas de <see cref="TamanoDeLaSiembra"/>. Sólo prueba de volumen.
-    /// </summary>
-    private async Task SembrarAsync(Guid tenant, Guid plantilla, int copias)
+    private static double P50(List<double> tiempos)
     {
-        var grafo = await EnLaBaseAsync(fx, tenant, async db =>
-        {
-            var loan = await db.Loans.AsNoTracking().SingleAsync(l => l.PublicId == plantilla);
-            return new Grafo(
-                loan,
-                await db.LoanOperations.AsNoTracking().Where(o => o.LoanId == loan.Id).ToListAsync(),
-                await db.LoanTermsVersions.AsNoTracking().Where(t => t.LoanId == loan.Id).ToListAsync(),
-                await db.RepaymentScheduleVersions.AsNoTracking().Where(v => v.LoanId == loan.Id).ToListAsync(),
-                await (from i in db.RepaymentInstallments.AsNoTracking()
-                       join v in db.RepaymentScheduleVersions.AsNoTracking() on i.ScheduleVersionId equals v.Id
-                       where v.LoanId == loan.Id
-                       select i).ToListAsync(),
-                await db.LoanTransactions.AsNoTracking().Where(t => t.LoanId == loan.Id).ToListAsync(),
-                await db.LoanControls.AsNoTracking().SingleAsync(c => c.LoanId == loan.Id),
-                await db.LoanParties.AsNoTracking().Where(p => p.LoanId == loan.Id).ToListAsync());
-        });
-
-        for (var desde = 0; desde < copias; desde += TamanoDeLaSiembra)
-        {
-            var hasta = Math.Min(copias, desde + TamanoDeLaSiembra);
-            await EnLaBaseAsync(fx, tenant, async db =>
-            {
-                db.ChangeTracker.AutoDetectChangesEnabled = false;
-                var creditos = Enumerable.Range(desde, hasta - desde)
-                    .Select(i => Clonar(db, grafo.Credito, ("Number", $"VOL{i + 1:D9}"))).ToList();
-                await db.SaveChangesAsync();
-                var operaciones = new Dictionary<(int, long), LoanOperation>();
-                for (var k = 0; k < creditos.Count; k++)
-                    foreach (var o in grafo.Operaciones)
-                        operaciones[(k, o.Id)] = Clonar(db, o, ("LoanId", creditos[k].Id), ("Number", $"VOP{desde + k + 1:D9}{o.Sequence}"),
-                            ("IdempotencyKey", o.IdempotencyKey is null ? null : Guid.NewGuid().ToString("N")));
-                await db.SaveChangesAsync();
-                var condiciones = new Dictionary<(int, int), LoanTermsVersion>();
-                for (var k = 0; k < creditos.Count; k++)
-                    foreach (var t in grafo.Condiciones)
-                        condiciones[(k, t.Id)] = Clonar(db, t, ("LoanId", creditos[k].Id), ("OperationId", operaciones[(k, t.OperationId)].Id));
-                await db.SaveChangesAsync();
-                var planes = new Dictionary<(int, int), RepaymentScheduleVersion>();
-                for (var k = 0; k < creditos.Count; k++)
-                    foreach (var v in grafo.Planes)
-                        planes[(k, v.Id)] = Clonar(db, v, ("LoanId", creditos[k].Id), ("TermsVersionId", condiciones[(k, v.TermsVersionId)].Id),
-                            ("OperationId", operaciones[(k, v.OperationId)].Id));
-                await db.SaveChangesAsync();
-                for (var k = 0; k < creditos.Count; k++)
-                {
-                    foreach (var c in grafo.Cuotas) Clonar(db, c, ("ScheduleVersionId", planes[(k, c.ScheduleVersionId)].Id));
-                    foreach (var t in grafo.Libro)
-                        Clonar(db, t, ("LoanId", creditos[k].Id), ("OperationId", t.OperationId is { } op ? operaciones[(k, op)].Id : null));
-                    Clonar(db, grafo.Control, ("LoanId", creditos[k].Id));
-                    foreach (var p in grafo.Partes) Clonar(db, p, ("LoanId", creditos[k].Id));
-                }
-                await db.SaveChangesAsync();
-                return 0;
-            });
-        }
-    }
-
-    private sealed record Grafo(Loan Credito, List<LoanOperation> Operaciones, List<LoanTermsVersion> Condiciones, List<RepaymentScheduleVersion> Planes,
-        List<RepaymentInstallment> Cuotas, List<LoanTransaction> Libro, LoanControl Control, List<LoanParty> Partes);
-
-    /// <summary>
-    /// Una copia de <paramref name="original"/> agregada al contexto, con Id nuevo, PublicId nuevo, sin token de concurrencia (lo pone el motor) y
-    /// con los cambios dados. Las propiedades de escritura única se copian como valores, no por sus <c>init</c>.
-    /// </summary>
-    private static T Clonar<T>(ApplicationDbContext db, T original, params (string Propiedad, object? Valor)[] cambios) where T : class
-    {
-        var valores = db.Entry(original).CurrentValues.Clone();
-        var propiedades = valores.Properties.Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
-        valores["Id"] = valores.Properties.Single(p => p.Name == "Id").ClrType == typeof(long) ? (object)0L : 0;
-        valores["PublicId"] = Guid.NewGuid();
-        if (propiedades.Contains("RowVersion")) valores["RowVersion"] = null;
-        foreach (var (propiedad, valor) in cambios) valores[propiedad] = valor;
-        var copia = (T)valores.ToObject();
-        db.Add(copia);
-        return copia;
+        if (tiempos.Count == 0) return 0;
+        var ordenados = tiempos.Order().ToList();
+        return ordenados[(int)Math.Ceiling(ordenados.Count * 0.5) - 1];
     }
 
     private static double P95(List<double> tiempos)
