@@ -241,7 +241,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         var filas = new List<LoanTransaction>();
         foreach (var c in causaciones)
         {
-            if (c.Filas.Any(f => f.Kind != LoanTransactionKind.Accrual || f.ValueDate != c.Dia || f.Amount == 0m || f.LoanId != c.Control.LoanId))
+            // K6b: la corrección monetaria de un crédito en UVR es fila de la causación del día, igual que la causación misma.
+            if (c.Filas.Any(f => f.Kind is not (LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection) || f.ValueDate != c.Dia || f.Amount == 0m || f.LoanId != c.Control.LoanId))
                 throw new InvalidOperationException($"La causación del {c.Dia:yyyy-MM-dd} del crédito {c.Control.LoanId} trae filas que no son suyas.");
             if (c.Filas.Any(f => (f.OperationId is not null || f.Operation is not null) == (f.ProcessRunId is not null)))
                 throw new InvalidOperationException("Una fila del libro tiene exactamente un origen: la operación o la corrida (CK_LND_LoanTransactions_Origin).");

@@ -153,7 +153,8 @@ public sealed class ViviendaConUvrTests(CentralIdentityApiFixture fx)
         using (RelojEn(fx, ultimo))
         {
             corrida = await CicloDeHoyAsync(fx, http, jefe, tenant);
-            (await MarcaAsync(fx, tenant, credito)).Should().Be(ultimo);
+            (await MarcaAsync(fx, tenant, credito)).Should().Be(ultimo, "la corrida causa hasta hoy: {0}",
+                (await CorridaAsync(http, jefe, corrida)).GetProperty("errors").GetRawText());
 
             var filas = await CausacionAsync(fx, tenant, credito);
             var correcciones = filas.Where(f => f.Clase == LoanTransactionKind.MonetaryCorrection).ToList();
