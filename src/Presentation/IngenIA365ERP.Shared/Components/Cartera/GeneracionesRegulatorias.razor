@@ -1,0 +1,179 @@
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject RegulatorioDeCarteraClient Regulatorio
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+@* Feature 013, K5, US16 (T1009; api.md §18): las versiones del SICSES o de una central —estado, filas, bloqueantes, advertencias, excluidos, huella,
+   radicado—, el detalle de una (inconsistencias y excluidos), la descarga por enlace firmado de 60 s (auditada) y marcar cargado con el radicado del
+   portal (con clave): después el período ya no se regenera. Una versión «validada» quedó con bloqueantes y no tiene archivo. *@
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    <div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead>
+                <tr><th>Período</th>@if (Clase == RegulatorioDeCarteraClient.ClaseCentral) { <th>Central</th> }<th>Versión</th><th>Estado</th><th class="numero">Filas</th><th class="numero">Bloqueantes</th><th class="numero">Advertencias</th>@if (Clase == RegulatorioDeCarteraClient.ClaseCentral) { <th class="numero">Excluidos</th> }<th>Archivo</th><th>Generado</th><th>Cargado</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var a in _archivos)
+                {
+                    var archivo = a;
+                    <tr>
+                        <td>@TextosRegulatorios.Periodo(archivo.Year, archivo.Month)</td>
+                        @if (Clase == RegulatorioDeCarteraClient.ClaseCentral) { <td>@archivo.BureauCode</td> }
+                        <td>@archivo.Version</td>
+                        <td>@TextosRegulatorios.Estado(archivo.Status)</td>
+                        <td class="numero">@archivo.Counts.Rows</td>
+                        <td class="numero">@archivo.Counts.Blocking</td>
+                        <td class="numero">@archivo.Counts.Warnings</td>
+                        @if (Clase == RegulatorioDeCarteraClient.ClaseCentral) { <td class="numero">@archivo.Counts.Excluded</td> }
+                        <td>@(archivo.FileName ?? "—")<br /><span class="texto-tenue" title="@archivo.Sha256">SHA-256 @TextosRegulatorios.Huella(archivo.Sha256)</span></td>
+                        <td>@archivo.GeneratedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @archivo.GeneratedBy</td>
+                        <td>@(archivo.Uploaded is { } u ? $"{u.FilingNumber} · {u.FilingDate?.ToString("dd/MM/yyyy")} · {u.By}" : "—")</td>
+                        <td class="acciones">
+                            <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => VerAsync(archivo))">Ver</SfButton>
+                            @if (archivo.DownloadAvailable)
+                            {
+                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-download" Disabled="@_accion.Activa" OnClick="@(() => DescargarAsync(archivo))">Descargar</SfButton>
+                            }
+                            @if (archivo.Status == 2)
+                            {
+                                <PermissionGate Required="Lending.RegulatoryFiles.MarkUploaded">
+                                    <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => AbrirCargue(archivo))">Marcar cargado</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (_archivos.Count == 0) { <p class="texto-tenue">Todavía no hay generaciones.</p> }
+    <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
+</IndicadorDeCarga>
+
+<IndicadorDeCarga Cargando="@_detalleCarga.Activa">
+    @if (_detalle is { } d)
+    {
+        <div class="info-card">
+            <h4>@(d.File.FileName ?? $"Versión {d.File.Version} sin archivo") · @TextosRegulatorios.Estado(d.File.Status)</h4>
+            <p class="texto-apoyo">Layout @d.File.LayoutCode · @TextosRegulatorios.Periodo(d.File.Year, d.File.Month)@(d.File.Sha256 is { } h ? $" · SHA-256 {h}" : "")</p>
+            @foreach (var w in d.File.Warnings) { <p class="aviso aviso-alerta">@w.Message</p> }
+            <TablaDeIncidenciasRegulatorias Incidencias="@d.Issues.Where(i => !i.Code.StartsWith("Lending.Regulatory.", StringComparison.Ordinal)).ToList()" />
+            @if (d.Excluded.Count > 0)
+            {
+                <h4>Excluidos del archivo</h4>
+                <TablaDeExcluidosDeCentral Excluidos="@d.Excluded" />
+            }
+        </div>
+    }
+</IndicadorDeCarga>
+
+<SfDialog @bind-Visible="_mostrarCargue" Header="Marcar cargado en el portal" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando el cargue…">
+                @if (_aCargar is { } c)
+                {
+                    <p>@c.FileName · versión @c.Version. Después de marcarlo, el período ya no se regenera: la corrección va en el período siguiente.</p>
+                }
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Radicado * <input class="e-input" @bind="_radicado" maxlength="100" /></label>
+                    <label class="campo">Fecha del radicado <input type="date" class="e-input" @bind="_fechaRadicado" /></label>
+                </div>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_radicado))" OnClick="@MarcarCargadoAsync">Marcar cargado</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCargue = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private const int TamanoDePagina = 20;
+
+    /// <summary>La clase: <see cref="RegulatorioDeCarteraClient.ClaseSicses"/> o <see cref="RegulatorioDeCarteraClient.ClaseCentral"/>.</summary>
+    [Parameter] public int Clase { get; set; } = RegulatorioDeCarteraClient.ClaseSicses;
+
+    /// <summary>La central (en centrales); nula, todas.</summary>
+    [Parameter] public string? Central { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _detalleCarga = new(), _accion = new();
+    private List<ArchivoRegulatorioDto> _archivos = [];
+    private int _pagina = 1;
+    private long _total;
+    private ArchivoRegulatorioDetalleDto? _detalle;
+    private ArchivoRegulatorioDto? _aCargar;
+    private bool _mostrarCargue;
+    private string? _radicado, _error;
+    private DateOnly? _fechaRadicado;
+    private ClaveDeOperacion _clave = new();
+    private string? _centralCargada;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_archivos.Count > 0 && _centralCargada == Central) return;
+        _centralCargada = Central;
+        _pagina = 1;
+        await RecargarAsync();
+    }
+
+    /// <summary>Vuelve a leer la lista (después de generar) y muestra el detalle de <paramref name="elegido"/> si viene.</summary>
+    public async Task RecargarAsync(ArchivoRegulatorioDetalleDto? elegido = null)
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var r = await Regulatorio.ArchivosAsync(Clase, string.IsNullOrWhiteSpace(Central) ? null : Central, pagina: _pagina);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las generaciones."); return; }
+            _archivos = [.. r.Value?.Items ?? []];
+            _total = r.Value?.TotalCount ?? 0;
+        }
+        if (elegido is not null) _detalle = elegido;
+        StateHasChanged();
+    }
+
+    private async Task IrAPaginaAsync(int pagina)
+    {
+        _pagina = pagina;
+        await RecargarAsync();
+    }
+
+    private async Task VerAsync(ArchivoRegulatorioDto archivo)
+    {
+        using var carga = _detalleCarga.Iniciar();
+        var r = await Regulatorio.ArchivoAsync(archivo.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la generación."); return; }
+        _detalle = r.Value;
+    }
+
+    private async Task DescargarAsync(ArchivoRegulatorioDto archivo)
+    {
+        using var carga = _accion.Iniciar();
+        var r = await Regulatorio.EnlaceAsync(archivo.PublicId);
+        if (!r.IsSuccess || r.Value?.Url is not { } url) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el archivo."); return; }
+        await Adjuntos.DescargarAsync(url, archivo.FileName ?? "archivo-regulatorio.txt");
+    }
+
+    private void AbrirCargue(ArchivoRegulatorioDto archivo)
+    {
+        _aCargar = archivo;
+        _radicado = null;
+        _fechaRadicado = DateOnly.FromDateTime(DateTime.Today);
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarCargue = true;
+    }
+
+    private async Task MarcarCargadoAsync()
+    {
+        if (_aCargar is null || string.IsNullOrWhiteSpace(_radicado)) return;
+        using var carga = _accion.Iniciar();
+        var r = await Regulatorio.MarcarCargadoAsync(_aCargar.PublicId, new MarcarCargadoRequest(_radicado.Trim(), DateTime.UtcNow, _fechaRadicado, null), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo marcar cargado."; return; }
+        _mostrarCargue = false;
+        await Notification.SuccessAsync($"{_aCargar.FileName} quedó cargado con el radicado {r.Value!.Uploaded?.FilingNumber}.");
+        await RecargarAsync();
+    }
+}

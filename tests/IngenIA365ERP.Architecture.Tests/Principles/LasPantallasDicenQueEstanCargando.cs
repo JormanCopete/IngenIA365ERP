@@ -65,6 +65,9 @@ public class LasPantallasDicenQueEstanCargando
         "Cartera/Activacion.razor",
         // US15 (T0799): el centro de informes de Cartera (no usa SfGrid: pinta TablaDeReporte).
         "Cartera/Informes.razor",
+        // K5, US16 (T1009): el formato del SICSES y los archivos para las centrales de riesgo.
+        "Cartera/Sicses.razor",
+        "Cartera/Centrales.razor",
     ];
 
     [Fact]

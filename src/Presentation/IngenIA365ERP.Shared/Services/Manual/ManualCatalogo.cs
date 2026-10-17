@@ -667,6 +667,22 @@ public static class ManualCatalogo
             ["Cartera activada y al menos un cierre del mes para la calidad, el deterioro y las cosechas.", "Patrimonio técnico vigente en Contabilidad para el porcentaje del límite individual.",
                 "Permisos Lending.Dashboard.View para el tablero, Lending.Reports.View para los informes, Lending.Loans.Read para los que traen deudores y Lending.Reports.Export (más Lending.Reports.ExportPersonalData) para exportar."],
             ["cartera-documentos"], [], TipoDeTema.Proceso));
+        // Feature 013, US16, K5 (T1010): el formato de cartera del SICSES y los archivos para las centrales de riesgo. El cotejo de los layouts, los
+        // casos dorados y qué hacer con los excluidos, en docs/operaciones/cartera-sicses-y-centrales.md.
+        t.Add(Proceso("cartera-sicses-y-centrales", "Formato SICSES y archivos para centrales de riesgo", Modulos.Cartera, "/cartera/sicses",
+            "Validar y generar el formato de cartera de créditos del SICSES de un mes cerrado y el archivo de novedades de cada central de riesgo, descargarlos, cargarlos en el portal y dejar el radicado; en las centrales, ver quién queda fuera y por qué.",
+            [
+                P("Cartera → Formato SICSES", "Elegí el año y el mes (con su cierre mensual hecho). «Validar» no guarda nada: lista las inconsistencias por crédito y campo y la fecha límite del reporte según el nivel de supervisión.", "/cartera/sicses", "Abrir Formato SICSES"),
+                P("Generar", "Con inconsistencias bloqueantes queda una versión «validada» sin archivo, con lo encontrado; corregí el dato en el maestro (o reabrí y volvé a cerrar el mes) y generá de nuevo. Sin bloqueantes se piden reconocer las advertencias: el layout con campos sin cotejar y el cierre con el modelo obligatorio no disponible. Ninguna va dentro del archivo. Regenerar deja la versión anterior reemplazada, con su archivo."),
+                P("Descargar y marcar cargado", "«Descargar» baja el archivo por un enlace de 60 segundos y queda en la auditoría. Después de cargarlo en el portal, «Marcar cargado» con el radicado: el período ya no se regenera y la corrección va en el siguiente."),
+                P("Cartera → Centrales de riesgo", "Elegí la central y el período: el archivo lleva las novedades desde el último archivo cargado de esa central. Sólo van quienes autorizaron el reporte con evidencia y, si el dato es negativo, con el aviso previo con constancia de su episodio; los demás quedan excluidos con su motivo y la gestión que lo corrige.", "/cartera/centrales", "Abrir Centrales de riesgo"),
+                P("Excluidos", "Informe «Excluidos de centrales»: por central y período, quién quedó fuera y qué hacer (obtener la autorización, enviar el aviso previo o registrar su constancia, esperar la reclamación al seguro o el fin de la insolvencia).", "/cartera/informes?vista=bureau-exclusions", "Abrir excluidos"),
+            ],
+            ["sicses", "supersolidaria", "formato de cartera", "reporte regulatorio", "centrales de riesgo", "datacredito", "transunion", "radicado", "cargar en el portal",
+                "excluidos", "aviso previo", "autorizacion de reporte", "layout", "cotejar"],
+            ["Cartera activada y el cierre mensual del período hecho (para el SICSES).", "Parámetro Centrales.CodigosDeSuscriptor con el código de la cooperativa en cada central.",
+                "Permisos Lending.RegulatoryFiles.Read para ver y descargar, Lending.RegulatoryReports.Generate para el SICSES, Lending.CreditBureauFiles.Generate para las centrales y Lending.RegulatoryFiles.MarkUploaded para marcar cargado."],
+            ["cartera-informes-y-tablero", "cartera-documentos"], ["/cartera/centrales"], TipoDeTema.Proceso));
 
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.

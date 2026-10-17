@@ -122,6 +122,7 @@ namespace IngenIA365ERP.App
             // Feature 013, US15 (T0799): el centro de informes de Cartera.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.InformesDeCarteraClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.TableroDeCarteraClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.RegulatorioDeCarteraClient>();
             builder.Services.AddSingleton<INotificationService, NotificationService>();
             builder.Services.AddSingleton<ILoadingService, LoadingService>();
 
