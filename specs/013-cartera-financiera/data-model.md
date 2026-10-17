@@ -2625,7 +2625,15 @@ Una línea por crédito vivo (y castigado en control) del cierre. En el mensual 
 | `PrincipalImpairment` · `InterestImpairment` · `OtherImpairment` · `TotalImpairment` | `Monto` | no | conceptos suspendidos al 100 % (FR-103) |
 | `PreviousTotalImpairment` · `ImpairmentDelta` | `Monto` | no | contra la línea vigente del cierre anterior o del base |
 | `ProbabilityOfDefault` · `LossGivenDefault` · `ExposureAtDefault` | `TasaEquivalente` · `Fraccion` · `Monto` | sí | K6a; nacen nulas en K1 para no alterar una tabla grande después |
+| `ExpectedLossZ` · `ExpectedLossScore` | `TasaEquivalente` | sí | **(nuevo, K6a bloque 2, `CarteraPerdidaEsperada`)** Z y puntaje del modelo; nulos si el crédito está incumplido o en el Anexo 1 |
+| `IsInDefault` · `DaysInDefault` | bit · int | sí | **(nuevo)** incumplido (por su mora o por arrastre) y días en incumplimiento |
+| `ProbabilityOfDefaultKey` · `LossGivenDefaultCollateralType` | nvarchar(40) | sí | **(nuevo)** la clave de la tabla de PI (tipo de organización o `VOLUNTARIA`) y el tipo de garantía de la PDI |
+| `IncompleteArrearsHistory` | bit | sí | **(nuevo)** el historial se completó con la regla de meses faltantes (FR-105) |
 | `ExplanationJson` | nvarchar(max) | no | explicación crédito por crédito (FR-106) |
+
+Las siete columnas **(nuevas)** de K6a son lo que el formato 9083 del SICSES («cálculo de deterioro de cartera») y los 9027 y 9081 por pérdida
+esperada piden por crédito además de PI, PDI y exposición (aviso del dueño del 2026-10-16); la calificación del modelo es `ModelRating` y la homologada,
+`AccountingRating`. El layout lo arma el bloque 3 cuando haya instructivo.
 
 Índices: `UK (ProcessRunId, LoanId)` filtrado `[ProcessRunId] IS NOT NULL`; `UK (MonthlyCloseId, LoanId)` filtrado
 `[MonthlyCloseId] IS NOT NULL`; `(LoanId)`. Unas 600.000 filas al año con 50.000 créditos: `int` alcanza.
@@ -2744,6 +2752,13 @@ incompleto, `Lending.ImpairmentModel.IncompleteHistory` y la lista; `ValidFrom` 
 (`Lending.ImpairmentModel.Obligated`); adopción y desistimiento alternan. La obligación sobrevenida no es una elección:
 la deriva `SelectorDeModeloDeDeterioro` del perfil y de la regla vigentes (T50).
 
+**Bloque 2 de K6a (2026-10-16)**: el punto del acta es del sujeto `ImpairmentModelChange` y su `SubjectPublicId` es el `PublicId` que tendrá la
+elección (la pantalla lo genera al proponer el cambio; `AsuntoDeActaCambioDelModelo` describe la propuesta mientras no se registra). Además
+(**nuevos**): sin alternancia, `.NotAlternating`; `ValidFrom` no posterior a la última elección, `.ValidFromTaken`, ni al último cierre de
+Cartera, `.RetroactiveValidFrom`; sin `ReglaDePerdidaEsperada` vigente en `ValidFrom`, `.RuleMissing`; un segmento que no es de pérdida
+esperada, `.SegmentInvalid`; al adoptar, sin la PI `VOLUNTARIA` del Anexo 2 vigente en cada segmento, `.VoluntaryPdMissing` (la semilla no la
+trae: la de la CE 100 está por registrar). El historial se verifica a la fecha del primer cierre en que rige (el fin del mes de `ValidFrom`).
+
 ### 23.9 `LND_ArrearsHistoryLoads` — `ArrearsHistoryLoad` (H; K6a; FR-140, US8-10; T49)
 
 | Columna | Tipo | Nulo | Notas |
@@ -2752,9 +2767,16 @@ la deriva `SelectorDeModeloDeDeterioro` del perfil y de la regla vigentes (T50).
 | `FileName` · `FileSha256` · `RowCount` | nvarchar(260) · char(64) · int | no | plantilla `lending.arrears-history` |
 | `AppliedByUserId` · `AppliedAt` | int FK · datetime | no | `Lending.ArrearsHistory.Import` |
 | `CoverageJson` | nvarchar(max) | no | créditos que quedan con historial completo y los que siguen incompletos |
+| `Source` | nvarchar(120) | no | **(nuevo, bloque 2 de K6a)** la columna `fuente`, la misma en todas las filas |
+| `RowsJson` | nvarchar(max) | no | **(nuevo)** las filas normalizadas (`loanNumber`, `year`, `month`, `maxDaysPastDue`, `daysPastDueAtMonthEnd`) |
 
 Todo o nada; escribe `LND_LoanArrearsHistory` con origen `ComplementaryLoad`, sin transacciones ni hechos. Se admite
 desde que hay una carga aplicada (también antes de activar) hasta el primer cierre en PE de los segmentos cubiertos.
+**Antes de activar** los créditos no existen (nacen en la activación): la carga guarda sus filas en `RowsJson` y el cierre base de la
+activación las escribe en `LND_LoanArrearsHistory` con su `ArrearsHistoryLoadId`, en el orden en que se aplicaron (manda la más reciente);
+después de activar, las escribe la carga misma. La completitud por segmento (revisión y activación) se calcula sobre la preparación de la carga
+(`CoberturaDelHistorialMigrado`): los meses hasta el anterior al del corte —el mes del corte lo cubren la mora migrada al corte y las
+transacciones—.
 
 ### 23.10 `LND_RiskPolicyVersions` — `RiskPolicyVersion` (H; K1, `CarteraRiesgo`; FR-099, FR-103, FR-104, FR-106; T45, R11)
 
@@ -3747,7 +3769,7 @@ los mensajes acumulados de Comercial.
 | `CarteraNovedades` (K3) | `LND_LoanNovelties`, `LND_LoanNoveltyLoans`, `LND_LoanNoveltyConsents`, `LND_Waivers`, `LND_WaiverLines`, `LND_WriteOffBatches`, `…Items`, `LND_PortfolioEvaluations`, `…Loans` | `LND_InsolvencyProceedings.AgreementNoveltyId` |
 | `CarteraCobranza` (K4) | `LND_MessageCampaigns`, `LND_CollectionStages`, `LND_CollectionStageHistory`, `LND_CollectorAssignmentRules`, `LND_CollectorAssignments`, `LND_CollectionActions`, `LND_PaymentPromises`, `LND_PaymentAgreements`, `…Installments`, `LND_LegalProcesses`, `…Actions` | `LND_DebtorMessages.CampaignId`; `LND_LoanNovelties.PaymentAgreementId` |
 | `CarteraInformes` (K5) | `LND_RegulatoryFiles`, `LND_RegulatoryFileLines` (y `LND_IssuedDocument*` si no se adelantaron) | — |
-| `CarteraPerdidaEsperada` (K6a) | `LND_ImpairmentModelElections`, `LND_ArrearsHistoryLoads` | `LND_LoanArrearsHistory.ArrearsHistoryLoadId` |
+| `CarteraPerdidaEsperada` (K6a) | `LND_ImpairmentModelElections`, `LND_ArrearsHistoryLoads` | FK e índice de `LND_LoanArrearsHistory.ArrearsHistoryLoadId` (la columna nació nula en `CarteraRiesgo`); siete columnas nulas en `LND_MonthlyCloseLoans` para el SICSES por pérdida esperada (§23.2) |
 
 Todas son aditivas y pares (PostgreSQL y SQL Server, `tools/scripts/add-migration.ps1`); la fila `lending.process` de
 `COR_BackgroundLeases` la siembra `PlataformaParaCartera`.
@@ -3929,7 +3951,8 @@ completa (§23.10).
 **Códigos de error**: `Lending.PayrollFile.Superseded`; `Lending.MonthlyClose.PreviousMissing`, `.AlreadyClosed`,
 `.AccountingPeriodClosed`, `.AccrualBehind`, `.ReplicationUnavailable`, `.NotLast`, `.BaseNotReopenable`;
 `Lending.AnalysisRating.NotWorse`; `Lending.ImpairmentModel.NotAvailable`, `.IncompleteHistory`, `.NoticeOutOfTerm`,
-`.Obligated`; `Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`;
+`.Obligated` y, desde el bloque 2 de K6a **(nuevos)**, `.NotAlternating`, `.VoluntaryPdMissing`, `.SegmentInvalid`, `.ValidFromTaken`, `.RuleMissing`,
+`.RetroactiveValidFrom`; `Lending.ArrearsHistory.LoanNotInLoad`, `.MonthClosed`, `.LoadClosed` y `.NoAppliedLoad` **(nuevo)**; `Lending.Payment.PaymasterReferenceRequired`, `.PaymasterReferenceInvalid`;
 `Lending.Novelty.ConsentMissing`, `.ModificationNotAllowed`; `Lending.Waiver.PrincipalRequiresException`;
 `Lending.WriteOff.RequirementMissing`; `Lending.Migration.AlreadyActivated`. Los de la activación
 (`Lending.Activation.RequirementsMissing`, `.CutoffInvalid`, `.DeadlinePassed`, `.DifferencesNotAccepted`,
