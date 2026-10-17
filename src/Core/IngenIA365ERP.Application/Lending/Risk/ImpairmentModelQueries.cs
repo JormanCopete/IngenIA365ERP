@@ -116,21 +116,51 @@ public static class CompletitudDelHistorial
         var ids = creditos.Select(c => c.Id).ToList();
         var todos = await db.Loans.AsNoTracking().IgnoreQueryFilters()
             .Where(l => ids.Contains(l.Id) || l.OriginLoanId != null || db.Loans.Any(x => x.OriginLoanId == l.Id))
-            .Select(l => new { l.Id, l.OriginLoanId, l.OriginLinkKind, l.OpenedOn }).ToDictionaryAsync(l => l.Id, ct);
+            .Select(l => new { l.Id, l.OriginLoanId, l.OriginLinkKind, l.OpenedOn, l.Number, l.MigrationLoadId }).ToDictionaryAsync(l => l.Id, ct);
+        var desembolsos = await DesembolsosMigradosAsync(db, todos.Values.Where(l => l.MigrationLoadId != null).Select(l => l.MigrationLoadId!.Value).ToList(), ct);
+
+        // Un crédito migrado nace en Cartera al corte (OpenedOn), pero su historia empieza en el desembolso original de la carga: sin esto, los meses
+        // anteriores al corte nunca se pedían y la completitud, la obligación sobrevenida y el cierre daban por completo un historial que no lo era.
+        DateOnly Inicio(int id, DateOnly abierto, string numero, int? carga) =>
+            carga is { } c && desembolsos.TryGetValue((c, numero), out var d) && d < abierto ? d : abierto;
+
         return creditos.ToDictionary(c => c.Id, c =>
         {
             var antecesores = new List<int>();
-            var inicio = c.OpenedOn;
-            if (!todos.TryGetValue(c.Id, out var actual)) return new CreditoParaHistorial(c.Id, inicio);
+            if (!todos.TryGetValue(c.Id, out var actual)) return new CreditoParaHistorial(c.Id, Inicio(c.Id, c.OpenedOn, c.Number, c.MigrationLoadId));
+            var inicio = Inicio(actual.Id, actual.OpenedOn, actual.Number, actual.MigrationLoadId);
             while (actual.OriginLoanId is { } previo && actual.OriginLinkKind is LoanLinkKind.Novation or LoanLinkKind.Refinancing
                    && todos.TryGetValue(previo, out var anterior) && !antecesores.Contains(previo))
             {
                 antecesores.Add(previo);
-                if (anterior.OpenedOn < inicio) inicio = anterior.OpenedOn;
+                var suyo = Inicio(anterior.Id, anterior.OpenedOn, anterior.Number, anterior.MigrationLoadId);
+                if (suyo < inicio) inicio = suyo;
                 actual = anterior;
             }
             return new CreditoParaHistorial(c.Id, inicio) { Antecesores = antecesores };
         });
+    }
+
+    /// <summary>El desembolso original de cada crédito de las cargas dadas (vigentes y castigados), por carga y número de origen.</summary>
+    private static async Task<Dictionary<(int Carga, string Numero), DateOnly>> DesembolsosMigradosAsync(IApplicationDbContext db, IReadOnlyCollection<int> cargas,
+        CancellationToken ct)
+    {
+        var resultado = new Dictionary<(int, string), DateOnly>();
+        if (cargas.Count == 0) return resultado;
+        var distintas = cargas.Distinct().ToList();
+        var partes = await db.MigrationLoadParts.AsNoTracking().IgnoreQueryFilters()
+            .Where(p => distintas.Contains(p.MigrationLoadId) && p.Status == MigrationPartStatus.Imported && !p.IsDeleted)
+            .ToDictionaryAsync(p => p.Id, p => p.MigrationLoadId, ct);
+        if (partes.Count == 0) return resultado;
+        var ids = partes.Keys.ToList();
+        var vigentes = await db.MigrationLoanRows.AsNoTracking().IgnoreQueryFilters().Where(r => ids.Contains(r.MigrationLoadPartId))
+            .Select(r => new { r.MigrationLoadPartId, r.SourceLoanNumber, Fecha = (DateOnly?)r.DisbursementDate }).ToListAsync(ct);
+        var castigados = await db.MigrationChargedOffRows.AsNoTracking().IgnoreQueryFilters()
+            .Where(r => ids.Contains(r.MigrationLoadPartId) && r.DisbursementDate != null)
+            .Select(r => new { r.MigrationLoadPartId, r.SourceLoanNumber, Fecha = r.DisbursementDate }).ToListAsync(ct);
+        foreach (var r in vigentes.Concat(castigados))
+            resultado.TryAdd((partes[r.MigrationLoadPartId], r.SourceLoanNumber), r.Fecha!.Value);
+        return resultado;
     }
 
     /// <summary>
