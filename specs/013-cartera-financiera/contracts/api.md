@@ -1589,8 +1589,10 @@ publicada con `MapVistaDeCartera` y su metadato `VistaDeInformeDeCartera`.
   `Lending.Report.RangeInvalid` / `.RangeTooLong`; un filtro propio inválido, `Lending.Report.FilterInvalid`
   con los admitidos.
 - **Registro**: `GET /api/reports/lending` (`Reports.View`) → `[{ key, name, description, fileName, filters[],
-  ownFilters?[], personalData, availableFrom, requiredPermission? }]`, sin las vistas que exigen un permiso
-  que quien pregunta no tiene. Pantalla `/cartera/informes?vista=`.
+  ownFilters?[], personalData, availableFrom, requiredPermission?, personalDataExceptWhen? { filter, values[] } }]`, sin las vistas que exigen un permiso
+  que quien pregunta no tiene. Pantalla `/cartera/informes?vista=`. K5 (T0982): una vista con `personalDataExceptWhen` (la
+  concentración por `by=line|sector|payer`) se ofrece a todos y su ruta pide `requiredPermission` y, al exportar, `ExportPersonalData` sólo
+  cuando el filtro trae datos del deudor.
 
 | Vista | E | Filtros propios | PD | Columnas (· ocultas) |
 |---|---|---|---|---|
@@ -1609,9 +1611,9 @@ publicada con `MapVistaDeCartera` y su metadato `VistaDeInformeDeCartera`.
 | `promises` | K4 | `status?` | sí | Crédito, Deudor, Fecha, Valor, Estado, Gestor · `_credito` |
 | `payment-agreements` | K4 | `status?` | sí | Crédito, Deudor, Cuotas, Cumplidas, Vencidas, Estado · `_credito` |
 | `prior-notices` | K4 | `status?` | sí | Crédito, Deudor, Episodio, Comunicaciones, Constancia, Fecha más temprana de reporte · `_credito` |
-| `quality` | K5 | `asOf`, `groupBy?` | no | Cartera bruta, Vencida, Vencida/bruta, En riesgo (B–E), Riesgo/bruta, Deterioro, Cobertura |
-| `vintages` | K5 | `from`, `to` (meses de desembolso) | no | Mes de desembolso, Monto, Mes de maduración, Mora 30, Mora 60, Mora 90 (%) |
-| `concentration` | K5 | `asOf`, `top?`, `by=debtor\|group\|line\|sector\|payer` | sí con `by=debtor\|group` | Dimensión, Saldo, Participación, % del límite individual, Señal |
+| `quality` | K5 | `asOf`, `groupBy=total\|office\|line\|modality` (por defecto `total`) | no | Dimensión, Cartera bruta, Vencida, Vencida/bruta, En riesgo (B–E), Riesgo/bruta, Deterioro, Cobertura (del último cierre vigente al corte; vencida con `Informes.DiasCarteraVencida`) |
+| `vintages` | K5 | `from`, `to` (meses de desembolso; sin `from`, los doce hasta `to`) | no | Mes de desembolso, Monto, Mes de maduración, Mes del cierre, Mora 30, Mora 60, Mora 90 (%) |
+| `concentration` | K5 | `asOf`, `top?` (1–500, 20), `warnAt?` (% del límite, 80), `by=debtor\|group\|line\|sector\|payer` | sí con `by=debtor\|group` (`personalDataExceptWhen`) | Dimensión, Saldo, Participación, % del límite individual, Señal · `_persona` |
 | `issued-documents` | K5 | `from`, `to`, `kind?`, `status?` | sí | Fecha, Clase, Número, Titular, Estado, Código, Emitido por · `_documento` |
 | `bureau-exclusions` | K5 | `bureau`, `year`, `month` | sí | Crédito, Deudor, Motivo (sin autorización, sin aviso previo, reclamo en trámite), Gestión sugerida · `_credito` |
 
@@ -1619,6 +1621,11 @@ publicada con `MapVistaDeCartera` y su metadato `VistaDeInformeDeCartera`.
 { asOf, scope { branches[], lines[] }, tiles: [{ key, label, value, previousValue?, unit: Money \| Count \| Percent \| Days, severity?,
 link: { page, query } }] }`, sobre las posiciones diarias dentro del alcance (FR-135). Fichas: saldo, colocación del mes, calidad, deterioro,
 recaudo frente al esperado, cosechas, cumplimiento de promesas, mensajes pendientes y rechazados, alertas pendientes. **E: K5.**
+Implementado en la fase 20 (T0983, T0984; `DashboardEndpoints`): las claves son `saldo`, `colocacion-del-mes`, `calidad`, `deterioro`,
+`recaudo-vs-esperado`, `cosechas`, `cumplimiento-de-promesas`, `mensajes-pendientes-y-rechazados`, `alertas-pendientes`; cada ficha suma
+`note?` (cómo se lee o por qué no tiene dato) y su `link` a `/cartera/informes?vista=…`, `/cartera/bandeja-de-mensajes` o `/cartera/alertas`;
+`scope.branches[]`/`lines[]` son `{ publicId, code, name }`. Una oficina o línea fuera del alcance da cifras en cero. Definiciones en
+`docs/manual/cartera-informes-y-tablero.md` §4.
 
 ---
 
