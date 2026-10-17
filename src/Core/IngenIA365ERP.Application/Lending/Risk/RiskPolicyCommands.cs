@@ -102,6 +102,18 @@ public sealed class AddRiskPolicyVersionCommandHandler(
         if (combinada.Errores.Count > 0) return Result.Failure<RiskPolicyVersionDto>(ErroresDeRiesgo.FueraDeEsquema(combinada.Errores));
         if (combinada.MenosEstrictas.Count > 0) return Result.Failure<RiskPolicyVersionDto>(ErroresDeRiesgo.MenosEstricta(combinada.MenosEstrictas));
 
+        // K6a (T1016, bloque 2): las celdas de la pérdida esperada (PI, PDI y PDI sin incumplimiento) se comparan con el Anexo 2 vigente en ValidFrom,
+        // también sólo más estrictas. Sin celdas de pérdida esperada no se lee el Anexo 2; con ellas y sin Anexo 2 vigente, no hay contra qué comparar.
+        var leidaPolitica = leida.Documento;
+        if (leidaPolitica.ProbabilidadesDeIncumplimiento.Count + leidaPolitica.PerdidasDadoElIncumplimiento.Count + leidaPolitica.PerdidasSinIncumplimiento.Count > 0)
+        {
+            var anexo2 = await normativa.LeerAsync(RegulatoryDocumentKind.SarcAnexo2, request.ValidFrom, Anexo2.Leer, ct: ct);
+            if (anexo2.IsFailure) return Result.Failure<RiskPolicyVersionDto>(anexo2.Error);
+            var deLaPerdida = PoliticaSarcEfectiva.CombinarAnexo2(anexo2.Value.Documento, leidaPolitica);
+            if (deLaPerdida.Errores.Count > 0) return Result.Failure<RiskPolicyVersionDto>(ErroresDeRiesgo.FueraDeEsquema(deLaPerdida.Errores));
+            if (deLaPerdida.MenosEstrictas.Count > 0) return Result.Failure<RiskPolicyVersionDto>(ErroresDeRiesgo.MenosEstricta(deLaPerdida.MenosEstrictas));
+        }
+
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Result.Failure<RiskPolicyVersionDto>(ErroresDeGobierno.SinUsuario());
 

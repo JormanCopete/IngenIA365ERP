@@ -79,12 +79,43 @@ public class ObligacionSobrevenidaTests : IAsyncLifetime
 
         var efecto = await ReplicarAsync();
 
-        // Antes de K6a se sumaba Cartera.ModeloObligatorioNoDisponible; con K6a (T1024) la pérdida esperada está desplegada (T1021, bloque 2, suma
-        // Cartera.HistorialDeMoraIncompleto).
+        // Antes de K6a se sumaba Cartera.ModeloObligatorioNoDisponible; con K6a (T1024) la pérdida esperada está desplegada. Sin créditos con historial
+        // incompleto no se suma Cartera.HistorialDeMoraIncompleto (T1021: la prueba de abajo).
         efecto.Alertas.Select(a => a.TypeCode).Should().Equal(TiposDeAlerta.ObligacionSobrevenida);
         efecto.Alertas[0].DedupKey.Should().Be($"{TiposDeAlerta.ObligacionSobrevenida}:2027-01");
         efecto.Alertas[0].Body.Should().Contain("36 meses");
         efecto.Notas.Should().ContainSingle().Which.Should().Contain("2027-01-01");
+    }
+
+    /// <summary>
+    /// K6a, T1021 (US9-9; FR-105): la obligación sobrevenida nunca se niega por falta de historial; lista los créditos sin historial completo al primer
+    /// cierre en pérdida esperada y, además de <c>Cartera.ObligacionSobrevenida</c>, levanta <c>Cartera.HistorialDeMoraIncompleto</c> para el contador y el
+    /// jefe de cartera; sin la marca «modelo obligatorio no disponible» (K6a desplegada).
+    /// </summary>
+    [Fact]
+    public async Task Con_creditos_sin_historial_completo_alerta_tambien_el_historial_incompleto_con_la_lista()
+    {
+        await PerfilAsync("COOP_AHORRO_CREDITO");
+        // El crédito de Ana como migrado (corte 2026-11-30) y desembolsado en septiembre, sin historial de septiembre ni octubre.
+        var carga = new Domain.Entities.Lending.Migration.MigrationLoad
+        {
+            Number = 9, CutoffDate = CierreDePrueba.CorteDeLaActivacion, Status = MigrationLoadStatus.Activated, CreatedByUserId = _c.Jefe.Id,
+        };
+        _c.Db.MigrationLoads.Add(carga);
+        await _c.Db.SaveChangesAsync();
+        var credito = await _c.Db.Loans.SingleAsync(x => x.Id == _c.Credito.Id);
+        credito.MigrationLoadId = carga.Id;
+        credito.OpenedOn = new DateOnly(2026, 9, 15);
+        await _c.Db.SaveChangesAsync();
+        _c.Db.ChangeTracker.Clear();
+
+        var efecto = await ReplicarAsync();
+
+        efecto.Alertas.Select(a => a.TypeCode).Should().Equal(TiposDeAlerta.ObligacionSobrevenida, TiposDeAlerta.HistorialDeMoraIncompleto);
+        efecto.Alertas.Should().NotContain(a => a.TypeCode == TiposDeAlerta.ModeloObligatorioNoDisponible);
+        efecto.Alertas[1].Body.Should().Contain(credito.Number).And.Contain("2027-01-31", "se mira al primer cierre en pérdida esperada");
+        efecto.Alertas[1].DedupKey.Should().Be($"{TiposDeAlerta.HistorialDeMoraIncompleto}:obligacion-2027-01");
+        efecto.Alertas[0].Body.Should().Contain(credito.Number);
     }
 
     [Fact]

@@ -65,7 +65,8 @@ public sealed class CierreMensualDeCartera(
     IDateTimeService reloj,
     ReplicacionDeValoresNacionales? replicacion = null,
     ILogger<CierreMensualDeCartera>? logger = null,
-    ValidacionPreviaDeProceso? validacionDeProceso = null)
+    ValidacionPreviaDeProceso? validacionDeProceso = null,
+    CargadorDePerdidaEsperada? cargadorDePerdida = null)
 {
     private const int LargoDelMensaje = 1000;
 
@@ -104,7 +105,15 @@ public sealed class CierreMensualDeCartera(
         if (contexto.IsFailure) throw new ReglaDeCarteraException(new ProblemaDeCartera(contexto.Error.Code, contexto.Error.Message));
         var anterior = RequisitosDelCierreMensual.Anterior(await RequisitosDelCierreMensual.CierresVigentesAsync(db, ct), anio, mes);
         var datos = await cargador.CargarAsync(ids, fin, r, contexto.Value, anterior, ct);
-        var calculo = CalculoDeRiesgo.Calcular(datos, contexto.Value, conArrastre: true);
+        // K6a (T1036): los créditos (de la tanda y de sus grupos) cuyo segmento está en pérdida esperada se puntúan y deterioran por el Anexo 2.
+        IReadOnlyDictionary<int, DatosDePerdidaEsperada>? perdida = null;
+        if (contexto.Value.PerdidaEsperada is { } pe)
+        {
+            var enPerdida = datos.Creditos.Values
+                .Where(c => contexto.Value.Seleccion.ParaCredito(c.Combinacion.ExpectedLossSegment).Modelo == ImpairmentModel.ExpectedLossAnnex2).ToList();
+            perdida = await (cargadorDePerdida ?? new CargadorDePerdidaEsperada(db)).CargarAsync(enPerdida, fin, r, pe.MesesDeHistorial, ct);
+        }
+        var calculo = CalculoDeRiesgo.Calcular(datos, contexto.Value, conArrastre: true, perdidaEsperada: perdida);
 
         var numeroDeTanda = corrida.BatchCount + 1;
         var errores = new List<LendingProcessRunError>();
@@ -218,6 +227,25 @@ public sealed class CierreMensualDeCartera(
             contexto.ModelosConGeneral,
             contexto.Redondeo);
 
+        // K6a (T1036; FR-105): los créditos en pérdida esperada cuyo historial se completó con la regla de meses faltantes.
+        var incompletas = lineas.Where(l => l.IncompleteArrearsHistory == true).ToList();
+        string? incompletasJson = null;
+        if (incompletas.Count > 0)
+        {
+            var deIncompletas = incompletas.Select(l => l.LoanId).ToList();
+            var numeros = await db.Loans.AsNoTracking().Where(l => deIncompletas.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => new { l.PublicId, l.Number }, ct);
+            incompletasJson = JsonSerializer.Serialize(new
+            {
+                missingMonthsRule = contexto.PerdidaEsperada?.ReglaDeMesesFaltantes.ToString(),
+                fixedDays = contexto.PerdidaEsperada?.DiasFijos,
+                loans = incompletas.Select(l => new
+                {
+                    loanPublicId = numeros.GetValueOrDefault(l.LoanId)?.PublicId, loanNumber = numeros.GetValueOrDefault(l.LoanId)?.Number,
+                    segment = l.ExpectedLossSegmentCode,
+                }).ToList(),
+            }, Json);
+        }
+
         var ahora = reloj.UtcNow;
         var cierre = new MonthlyClose
         {
@@ -240,7 +268,8 @@ public sealed class CierreMensualDeCartera(
             ObligatoryModelUnavailable = contexto.Seleccion.ModeloObligatorioNoDisponible,
             UnvalidatedParameters = contexto.ConParametrosSinValidar,
             UnvalidatedParametersJson = contexto.SinValidarJson,
-            IncompleteHistory = false,
+            IncompleteHistory = incompletas.Count > 0,
+            IncompleteHistoryJson = incompletasJson,
             LoanCount = lineas.Count,
             TotalPrincipal = lineas.Sum(l => l.PrincipalBalance),
             TotalInterest = lineas.Sum(l => l.CurrentInterestBalance + l.DefaultInterestBalance),

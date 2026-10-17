@@ -60,7 +60,7 @@ internal sealed class CierreDePrueba : IDisposable
     // ------------------------------------------------------------------------------------------------------- piezas --
 
     public LectorDelContextoDeRiesgo Contextos() => new(new LectorDeDocumentoNormativo(Db), G.Valores, D.Parametros(),
-        new LectorDeIndicadoresDeLaEntidad(D.Contabilidad, D.Parametros()), G.Perfil, new PoliticaSarcVigente(Db));
+        new LectorDeIndicadoresDeLaEntidad(D.Contabilidad, D.Parametros()), G.Perfil, new PoliticaSarcVigente(Db), Db);
     public CargadorDeRiesgo Cargador() => new(Db, C.Cargador());
     public RequisitosDelCierreMensual Requisitos() => new(Db, D.Contabilidad, G.Reloj);
     public CierreMensualDeCartera Cierre() => new(Db, D.O.Cerrojo, Requisitos(), Contextos(), Cargador(), C.EmisionDelProceso(), C.Tanda, G.Reloj);

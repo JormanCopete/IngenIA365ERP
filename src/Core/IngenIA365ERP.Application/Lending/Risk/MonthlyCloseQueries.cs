@@ -81,7 +81,11 @@ public sealed record MonthlyCloseLoanDto(
     IReadOnlyList<string> Explanation);
 
 /// <summary>Un cambio de calificación frente al cierre anterior (api.md §12.3, <c>GET /{id}/changes</c>). (nuevo)</summary>
-public sealed record MonthlyCloseChangeDto(Guid LoanPublicId, string LoanNumber, RefDto Debtor, string? Previous, string Current, string Cause);
+public sealed record MonthlyCloseChangeDto(Guid LoanPublicId, string LoanNumber, RefDto Debtor, string? Previous, string Current, string Cause)
+{
+    /// <summary>K6a (T1036; FR-105): el crédito está en pérdida esperada y su historial de mora se completó con la regla de meses faltantes.</summary>
+    public bool IncompleteHistory { get; init; }
+}
 
 /// <summary>
 /// <c>GET /api/lending/risk/monthly-closes?year=&amp;kind=</c> (feature 013, US9, T0709; api.md §12.3, <c>Lending.Ratings.Read</c>): los cierres
@@ -202,14 +206,16 @@ public sealed class GetMonthlyCloseChangesQueryHandler(IApplicationDbContext db,
             ? new Dictionary<int, MonthlyCloseLoan>()
             : await CategoriaContableDeCartera.LineasDe(db, anterior).Where(l => ids.Contains(l.LoanId)).ToDictionaryAsync(l => l.LoanId, ct);
         static string Texto(RatingCategory cat, RatingSubcategory sub) => sub == RatingSubcategory.None ? cat.ToString() : sub.ToString();
-        var cambios = lineas.Where(l => !previas.TryGetValue(l.LoanId, out var p) || p.FinalRating != l.FinalRating || p.FinalSubcategory != l.FinalSubcategory)
+        // K6a (T1036): también los créditos sin historial completo, aunque no cambien de calificación (FR-105: quedan listados en el reporte).
+        var cambios = lineas.Where(l => !previas.TryGetValue(l.LoanId, out var p) || p.FinalRating != l.FinalRating || p.FinalSubcategory != l.FinalSubcategory
+                || l.IncompleteArrearsHistory == true)
             .OrderBy(l => l.LoanId).ToList();
         var pagina = new PageRequest(request.Page, request.PageSize);
         var vista = cambios.Skip((pagina.SafePage - 1) * pagina.SafePageSize).Take(pagina.SafePageSize).ToList();
         var (creditos, personas) = await ConsultasDeCierres.ReferenciasAsync(db, vista, ct);
         var items = vista.Select(l => new MonthlyCloseChangeDto(creditos[l.LoanId].PublicId, creditos[l.LoanId].Number, personas[l.PersonId],
             previas.TryGetValue(l.LoanId, out var p) ? Texto(p.FinalRating, p.FinalSubcategory) : null, Texto(l.FinalRating, l.FinalSubcategory),
-            l.RatingCause.ToString())).ToList();
+            l.RatingCause.ToString()) { IncompleteHistory = l.IncompleteArrearsHistory == true }).ToList();
         return Result.Success(new PagedResult<MonthlyCloseChangeDto>(items, pagina.SafePage, pagina.SafePageSize, cambios.Count));
     }
 }
