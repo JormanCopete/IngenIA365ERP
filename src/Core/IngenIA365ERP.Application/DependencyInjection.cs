@@ -720,6 +720,9 @@ public static class DependencyInjection
         // Feature 013, K4 (T0943, T0944): el paso (7) del ciclo diario —la cobranza— y el ejecutor de la corrida que registra la etapa migrada (C64).
         services.AddScoped<Lending.Collections.CobranzaDelCicloDiario>();
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Collections.Stages.EjecutorDeEtapasMigradas>();
+        // Feature 013, K5 (T0999): los layouts del SICSES y de las centrales se cargan y validan aquí, al componer: un JSON mal formado
+        // impide arrancar (adaptadores-y-archivos.md §7.2).
+        services.AddSingleton(Lending.Regulatory.CatalogoDeLayoutsDeCartera.Embebido);
 
         // Feature 013 (T0087): la carga vigente de CARGA-PROPIA se lee de COR_RestrictiveListLoads/Entries.
         services.TryAddScoped<Common.Compliance.ICargaDeListasRestrictivas, Compliance.RestrictiveLists.CargaDeListasRestrictivasEnBase>();
