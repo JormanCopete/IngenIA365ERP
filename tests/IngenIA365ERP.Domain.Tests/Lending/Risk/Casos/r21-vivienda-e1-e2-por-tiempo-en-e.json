@@ -1,0 +1,47 @@
+{
+  // r21 (K6b, T1043; FR-024, D18; SC-021, SC-023): vivienda con el Anexo 1 SEMBRADO (sarc-anexo-1.json, ANEXO1-2025-01-31, verified = false,
+  // pregunta E8): rangos A 0-60, B 61-150, C 151-360, D 361-540, E 541+; E1 por 0 a 6 meses en E al 30 %, E2 de 7 a 18 al 60 % y desde 19 al
+  // 100 % (la condición tipada MonthsInE); la garantía hipotecaria por meses de mora cumplidos (días ÷ 30): 70 % hasta 18, 50 % hasta 24, 30 %
+  // hasta 30, 15 % hasta 36 y 0 desde 36. Base = capital − garantía × fracción admisible; desde C la causación está suspendida y los intereses
+  // causados van al 100 %. Sin aportes (rige D19). A mano, al centavo:
+  //  1. 541 días, 0 meses en E → E1 30 %; 18 meses: hipoteca 150.000.000 × 0,50 = 75.000.000; base 100.000.000 − 75.000.000 = 25.000.000;
+  //     capital 7.500.000; intereses 1.234.567,89 al 100 %; total 8.734.567,89.
+  //  2. 600 días, 6 meses en E → E1 30 %; 20 meses: hipoteca 80.000.000 × 0,50 = 40.000.000; base 10.000.000 → 3.000.000.
+  //  3. 760 días, 7 meses en E → E2 60 %; 25 meses: hipoteca 100.000.000 × 0,30 = 30.000.000; base 30.000.000 → 18.000.000.
+  //  4. 1.000 días, 18 meses en E → E2 60 %; 33 meses: hipoteca 100.000.000 × 0,15 = 15.000.000; base 25.000.000 → 15.000.000.
+  //  5. 1.100 días, 19 meses en E → E2 100 %; 36 meses: la hipoteca ya no se admite (0); base = capital 30.000.000.
+  //  6. 400 días → D 20 %; 13 meses: hipoteca 20.000.000 × 0,70 = 14.000.000; base 16.000.000 → 3.200.000.
+  // Pendiente de que la contadora coteje la norma (E8) y firme los valores (quickstart §12).
+  "nombre": "r21-vivienda-e1-e2-por-tiempo-en-e",
+  "norma": "sembrado",
+  "creditos": [
+    { "id": 1, "deudor": 2101, "segmento": "VIVIENDA", "diasDeMora": 541, "mesesEnE": 0,
+      "saldos": { "capital": 100000000, "interesCorriente": 1234567.89 }, "garantias": [ { "naturaleza": "Mortgage", "valor": 150000000 } ] },
+    { "id": 2, "deudor": 2102, "segmento": "VIVIENDA", "diasDeMora": 600, "mesesEnE": 6,
+      "saldos": { "capital": 50000000 }, "garantias": [ { "naturaleza": "Mortgage", "valor": 80000000 } ] },
+    { "id": 3, "deudor": 2103, "segmento": "VIVIENDA", "diasDeMora": 760, "mesesEnE": 7,
+      "saldos": { "capital": 60000000 }, "garantias": [ { "naturaleza": "Mortgage", "valor": 100000000 } ] },
+    { "id": 4, "deudor": 2104, "segmento": "VIVIENDA", "diasDeMora": 1000, "mesesEnE": 18,
+      "saldos": { "capital": 40000000 }, "garantias": [ { "naturaleza": "Mortgage", "valor": 100000000 } ] },
+    { "id": 5, "deudor": 2105, "segmento": "VIVIENDA", "diasDeMora": 1100, "mesesEnE": 19,
+      "saldos": { "capital": 30000000 }, "garantias": [ { "naturaleza": "Mortgage", "valor": 100000000 } ] },
+    { "id": 6, "deudor": 2106, "segmento": "VIVIENDA", "diasDeMora": 400,
+      "saldos": { "capital": 30000000 }, "garantias": [ { "naturaleza": "Mortgage", "valor": 20000000 } ] }
+  ],
+  "esperado": {
+    "creditos": [
+      { "id": 1, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "garantiaAdmisible": 75000000, "base": 25000000, "porcentaje": 0.30,
+        "deterioroCapital": 7500000.00, "deterioroIntereses": 1234567.89, "deterioroTotal": 8734567.89 },
+      { "id": 2, "categoria": "E", "subcategoria": "E1", "causa": "Arrears", "garantiaAdmisible": 40000000, "base": 10000000, "porcentaje": 0.30,
+        "deterioroCapital": 3000000.00, "deterioroTotal": 3000000.00 },
+      { "id": 3, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "garantiaAdmisible": 30000000, "base": 30000000, "porcentaje": 0.60,
+        "deterioroCapital": 18000000.00, "deterioroTotal": 18000000.00 },
+      { "id": 4, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "garantiaAdmisible": 15000000, "base": 25000000, "porcentaje": 0.60,
+        "deterioroCapital": 15000000.00, "deterioroTotal": 15000000.00 },
+      { "id": 5, "categoria": "E", "subcategoria": "E2", "causa": "Arrears", "garantiaAdmisible": 0, "base": 30000000, "porcentaje": 1,
+        "deterioroCapital": 30000000.00, "deterioroTotal": 30000000.00 },
+      { "id": 6, "categoria": "D", "subcategoria": "None", "causa": "Arrears", "garantiaAdmisible": 14000000, "base": 16000000, "porcentaje": 0.20,
+        "deterioroCapital": 3200000.00, "deterioroTotal": 3200000.00 }
+    ]
+  }
+}

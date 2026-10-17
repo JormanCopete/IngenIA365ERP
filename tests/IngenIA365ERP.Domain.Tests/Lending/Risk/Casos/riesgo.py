@@ -35,6 +35,9 @@ getcontext().prec = 40
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 NORMAS = os.path.join(AQUI, "..", "Normas")
+# K6b (T1043): la norma «sembrado» es el Anexo 1 de la semilla central (el mismo archivo que siembra PlatformNationalValuesSeeder).
+SEMBRADO = os.path.join(AQUI, *[".."] * 5, "src", "Infrastructure", "IngenIA365ERP.Persistence", "Seeding", "Parametric", "Data",
+                        "NationalValues", "sarc-anexo-1.json")
 CATS = ["A", "B", "C", "D", "E"]
 PE_SEGMENTOS = ["CONSUMO_LIBRANZA", "CONSUMO_SIN_LIBRANZA", "COMERCIAL_PN"]
 ENTREGAS = ["K1", "K2", "K3", "K4", "K5", "K6a", "K6b"]
@@ -389,7 +392,7 @@ def correr(verificar):
     for nombre in sorted(f for f in os.listdir(AQUI) if f.endswith(".json") and not f.startswith("pe")):
         caso = leer(os.path.join(AQUI, nombre))
         for e in escenarios(caso):
-            norma = leer(os.path.join(NORMAS, e["norma"] + ".json"))
+            norma = leer(SEMBRADO if e["norma"] == "sembrado" else os.path.join(NORMAS, e["norma"] + ".json"))
             n, celdas, adicional, compensa = efectiva(norma, e["politica"])
             op = e["opciones"]
             cal = calificar(n, caso, caso["creditos"], op.get("conArrastre", True))

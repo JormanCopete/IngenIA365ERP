@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Housing;
 using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Replay;
@@ -118,8 +119,15 @@ public sealed class CasoDoradoDeCartera
     /// series de la modalidad. La usura lleva su <c>Sequence</c> por el orden del archivo, como en la hoja.
     /// </summary>
     public EntradaDeReconstruccion Entrada(CondicionesJson c, IReadOnlyList<OperacionJson> operaciones, DateTime r) =>
-        new(c.Credito(VersionesDeReglas.Vigente), c.Entrada(), operaciones.Select((o, i) => Operacion(o, i)).ToList(), r)
+        new(c.Credito(c.RulesVersion), c.Entrada(), operaciones.Select((o, i) => Operacion(o, i)).ToList(), r)
         {
+            // K6b (T1042): el tope de vivienda (bitemporal, como la usura) y, en un crédito en UVR, la serie diaria.
+            TopeDeVivienda = Series.TopeDeVivienda.Select((u, i) => new ValorDeUsura(u.Desde, u.Ea, u.RegistradoEn, i + 1, u.PublicId ?? Guid.Empty)
+            {
+                ValidTo = u.Hasta,
+                SupersedesPublicId = u.Corrige,
+            }).ToList(),
+            Uvr = c.Unidad == DenominationUnit.Uvr ? new SerieUvr(Series.Uvr.Select(x => new ValorDeUvr(x.Fecha, x.Valor))) : null,
             Usura = Series.Usura.Select((u, i) => (u, i)).Where(x => x.u.Clave == c.Modalidad)
                 .Select(x => new ValorDeUsura(x.u.Desde, x.u.Ea, x.u.RegistradoEn, x.i + 1, x.u.PublicId ?? Guid.Empty)
                 {
@@ -187,6 +195,12 @@ public sealed class CasoDoradoDeCartera
         public bool SuspensoConSuConcepto { get; set; } = true;
         public bool CuotaEspecificaFueraDeOrden { get; set; }
         public bool GastosInformados { get; set; }
+        // K6b (T1042): las reglas de vivienda (<c>"Vivienda"</c>) y la unidad del capital (Pesos o Uvr).
+        public string? Reglas { get; set; }
+        public DenominationUnit Unidad { get; set; } = DenominationUnit.Pesos;
+
+        /// <summary>La versión de reglas que sella el crédito: la de vivienda si el caso lo dice; si no, la vigente.</summary>
+        public string RulesVersion => Reglas == "Vivienda" ? VersionesDeReglas.Vivienda : VersionesDeReglas.Vigente;
 
         public Prelacion PrelacionSellada() =>
             new(Prelacion, ConceptosDePrelacion ?? [], SuspensoConSuConcepto, CuotaEspecificaFueraDeOrden, GastosInformados);
@@ -221,6 +235,7 @@ public sealed class CasoDoradoDeCartera
             TratamientoDeGracia = Gracia?.Tratamiento,
             CuotasDeDistribucion = Gracia?.CuotasDeDistribucion,
             Seguros = Seguros.Select(s => new SeguroDelPlan(s.Codigo, s.Base, s.Tarifa, s.Periodicidad, s.Computa)).ToList(),
+            RulesVersion = RulesVersion,
         };
     }
 
@@ -334,6 +349,16 @@ public sealed class CasoDoradoDeCartera
         public List<ToleranciaJson> Tolerancias { get; set; } = [];
         /// <summary>K2 (T0804): lo descontado por la pagaduría y pendiente de giro, con su ventana y su umbral sellados.</summary>
         public List<PendienteDeGiroJson> PendientesDeGiro { get; set; } = [];
+        /// <summary>K6b (T1042): la UVR publicada de cada día (serie de prueba, no oficial).</summary>
+        public List<UvrJson> Uvr { get; set; } = [];
+        /// <summary>K6b (T1042): el tope de tasa de vivienda (<c>TOPE_TASA_VIVIENDA</c>), como la usura.</summary>
+        public List<UsuraJson> TopeDeVivienda { get; set; } = [];
+    }
+
+    public sealed class UvrJson
+    {
+        public DateOnly Fecha { get; set; }
+        public decimal Valor { get; set; }
     }
 
     public sealed class PendienteDeGiroJson
@@ -511,6 +536,11 @@ public sealed class CasoDoradoDeCartera
         public List<FilaDeLibroJson>? Causacion { get; set; }
         public List<FilaDeLibroJson>? Diferencias { get; set; }
         public List<PagoEsperadoJson>? Pagos { get; set; }
+        // K6b (T1042): la valoración de un crédito en UVR.
+        public decimal? UvrDelDia { get; set; }
+        public bool? UvrProyectada { get; set; }
+        public Dictionary<string, decimal>? SaldosEnUvr { get; set; }
+        public decimal? ValorParaCancelarEnUvr { get; set; }
     }
 
     /// <summary>US5: lo que se espera de la distribución de un pago (quickstart §1.2).</summary>

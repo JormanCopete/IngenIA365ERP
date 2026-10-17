@@ -22,7 +22,7 @@ public class CasosDoradosDeRiesgoTests
     public static IEnumerable<object[]> Casos() => CasoDoradoDeRiesgo.Archivos().Select(f => new object[] { Path.GetFileName(f) });
 
     [Fact]
-    public void Estan_los_casos_de_K1_K3_y_K6a()
+    public void Estan_los_casos_de_K1_K3_K6a_y_K6b()
     {
         CasoDoradoDeRiesgo.Archivos().Select(Path.GetFileNameWithoutExtension).Should().BeEquivalentTo(
         [
@@ -37,6 +37,8 @@ public class CasosDoradosDeRiesgoTests
             "pe01-consumo-con-libranza", "pe02-consumo-sin-libranza", "pe03-comercial-persona-natural", "pe04-historial-parcial-mayor-observada",
             "pe05-historial-parcial-del-corte", "pe06-historial-parcial-fija", "pe07-pi-voluntaria", "pe08-homologacion",
             "pe09-segmento-fuera-del-modelo", "pe10-novacion-hereda-historial",
+            // K6b (T1043): vivienda con el Anexo 1 sembrado —E1/E2 por meses en E y la garantía hipotecaria por meses de mora—.
+            "r21-vivienda-e1-e2-por-tiempo-en-e",
         ]);
     }
 

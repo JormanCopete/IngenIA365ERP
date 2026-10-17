@@ -215,14 +215,14 @@ public class CasosDoradosDeCarteraTests
         for (var d = marca.AddDays(1); d <= consulta.Fecha; d = d.AddDays(1))
         {
             var r = MotorDeCartera.Causar(entrada, d.AddDays(-1), d);
-            r.Causo.Should().BeTrue($"el {d:yyyy-MM-dd} tiene usura certificada");
+            r.Causo.Should().BeTrue($"el {d:yyyy-MM-dd} tiene usura certificada (y, en UVR, UVR publicada)");
             filas.AddRange(r.Filas);
         }
         Filas(filas).Should().Equal(Filas(e.Causacion ?? []), "causación día a día desde la marca");
 
         // Lo causado de a un día es lo que la reconstrucción pone en el libro esos días.
         var libro = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, marca.AddDays(1)).Libro.Movimientos
-            .Where(m => m.Clase == LoanTransactionKind.Accrual);
+            .Where(m => m.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection);
         Filas(libro).Should().Equal(Filas(filas));
     }
 
@@ -276,6 +276,23 @@ public class CasosDoradosDeCarteraTests
             foreach (var p in e.Pagos) CompararDistribucion(estado.Pagos[p.Id], p, $"pago {p.Id}");
         }
 
+        // K6b (T1042): la valoración de un crédito en UVR —la UVR del día (y si es proyectada), los saldos y el valor para cancelar en UVR— y la versión
+        // de reglas de vivienda.
+        estado.RulesVersion.Should().Be(condiciones.RulesVersion, "el crédito se calcula con su versión de reglas sellada");
+        if (condiciones.Unidad == DenominationUnit.Uvr)
+        {
+            estado.Uvr.Should().NotBeNull("un crédito en UVR se valora en pesos con la UVR del día");
+            estado.Uvr!.Valor.Should().Be(e.UvrDelDia, "UVR del día");
+            estado.Uvr.Proyectada.Should().Be(e.UvrProyectada ?? false, "UVR proyectada sólo para mostrar");
+            estado.Uvr.Estado.SaldosPorConcepto.ToDictionary(s => s.Key.ToString(), s => s.Value).Should()
+                .BeEquivalentTo(e.SaldosEnUvr ?? [], "saldos en UVR por concepto");
+            estado.Uvr.Estado.ValorParaCancelar.Should().Be(e.ValorParaCancelarEnUvr, "valor para cancelar en UVR");
+        }
+        else
+        {
+            estado.Uvr.Should().BeNull("un crédito en pesos no lleva valoración en UVR");
+        }
+
         // Σ libro teórico desde el origen = saldos del estado por concepto y cuota (el capital sin cuota, por total).
         var completo = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, estado.Origen);
         foreach (var grupo in completo.Libro.Movimientos.GroupBy(m => m.Concepto))
@@ -292,7 +309,7 @@ public class CasosDoradosDeCarteraTests
 
         // La huella se repite, y no depende del orden en que llegan las operaciones.
         completo.Huella.Should().Be(estado.Huella).And.MatchRegex("^[0-9a-f]{64}$");
-        completo.TextoCanonico.Should().StartWith(VersionesDeReglas.Vigente + "|");
+        completo.TextoCanonico.Should().StartWith(condiciones.RulesVersion + "|");
         var alReves = entrada with { Operaciones = entrada.Operaciones.Reverse().ToList() };
         MotorDeCartera.Reconstruir(alReves, consulta.Fecha).Huella.Should().Be(estado.Huella, "la huella no depende del orden de EF");
     }
@@ -412,9 +429,12 @@ public class CasosDoradosDeCarteraTests
         }
     }
 
-    private static List<(DateOnly, LoanConcept, int?, decimal)> Filas(IEnumerable<MovimientoDeLibro> filas) =>
-        filas.Select(f => (f.Dia, f.Concepto, f.Cuota, f.Monto)).OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ToList();
+    // K6b (T1042): con la clase, porque un crédito en UVR causa en el mismo día y clave su interés y su corrección monetaria.
+    private static List<(DateOnly, LoanTransactionKind, LoanConcept, int?, decimal)> Filas(IEnumerable<MovimientoDeLibro> filas) =>
+        filas.Select(f => (f.Dia, f.Clase, f.Concepto, f.Cuota, f.Monto))
+            .OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ThenBy(f => (int)f.Clase).ToList();
 
-    private static List<(DateOnly, LoanConcept, int?, decimal)> Filas(IEnumerable<CasoDoradoDeCartera.FilaDeLibroJson> filas) =>
-        filas.Select(f => (f.Dia, f.Concepto, f.Cuota, f.Valor)).OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ToList();
+    private static List<(DateOnly, LoanTransactionKind, LoanConcept, int?, decimal)> Filas(IEnumerable<CasoDoradoDeCartera.FilaDeLibroJson> filas) =>
+        filas.Select(f => (f.Dia, Clase: f.Clase ?? LoanTransactionKind.Accrual, f.Concepto, f.Cuota, f.Valor))
+            .OrderBy(f => f.Dia).ThenBy(f => (int)f.Concepto).ThenBy(f => f.Cuota ?? 0).ThenBy(f => (int)f.Clase).ToList();
 }

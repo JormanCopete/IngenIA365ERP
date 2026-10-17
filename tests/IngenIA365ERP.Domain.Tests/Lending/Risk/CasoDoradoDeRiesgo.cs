@@ -174,9 +174,10 @@ public sealed class CasoDoradoDeRiesgo
         JsonSerializer.Deserialize<CasoDoradoDeRiesgo>(File.ReadAllText(ruta), Lectura)
         ?? throw new InvalidOperationException($"El caso {ruta} está vacío.");
 
-    /// <summary>La norma de prueba por nombre.</summary>
+    /// <summary>La norma de prueba por nombre; K6b (T1043): «sembrado» es el Anexo 1 de la semilla central (<c>sarc-anexo-1.json</c>).</summary>
     public static Anexo1 LeerNorma(string nombre)
     {
+        if (nombre == "sembrado") return Anexo1Sembrado();
         var r = Anexo1.Leer(File.ReadAllText(Path.Combine(Directorio, "Normas", nombre + ".json")), 1);
         return r.Documento ?? throw new InvalidOperationException($"La norma {nombre} no se lee: {string.Join("; ", r.Errores.Select(e => $"{e.Ruta} {e.Mensaje}"))}");
     }

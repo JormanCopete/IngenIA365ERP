@@ -206,6 +206,8 @@ def vencimientos(desembolso, periodicidad, periodos, dia_de_pago, primer):
 class Redondeo:
     def __init__(self, r):
         self.unidad, self.modo, self.momento = D(r["unidad"]), MODOS[r["modo"]], r["momento"]
+        # K6b (T1042): la unidad minima de un monto; el centavo en pesos, la diezmilesima en UVR (la pone vivienda.py).
+        self.minima = D(r.get("minima", "0.01"))
 
     def a(self, v, unidad):
         return (v / unidad).quantize(D(1), rounding=self.modo) * unidad
@@ -214,7 +216,7 @@ class Redondeo:
         return self.a(v, self.unidad)
 
     def centavo(self, v):
-        return self.a(v, D("0.01"))
+        return self.a(v, self.minima)
 
     def concepto(self, v):
         return self.unidad_(v) if self.momento == "PerConcept" else self.centavo(v)
@@ -1248,6 +1250,9 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         elif t in ("Payment", "ProvisionalCollection"):
             snap = instantanea(v)
             sol = solicitud_de(o, v)
+            # K6b (T1042): un credito en UVR convierte lo recibido en pesos a UVR con el estado del dia (lo pone vivienda.py).
+            if cond_json.get("_pagoEnUvr") is not None:
+                sol["valor"] = cond_json["_pagoEnUvr"](snap, sol["valor"], v)
             pr = prel
             problema = problema_de_pago(snap, sol, pr)
             if problema == "Lending.Payment.SpecificInstallmentBlocked":
@@ -1665,6 +1670,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         "validaHasta": (primer_sin_usura - UN_DIA).isoformat() if primer_sin_usura is not None else None,
         "transiciones": transiciones,
         "_libro": filas_libro, "_plan": p, "_pagos": estado["pagos"], "_anticipos": estado["anticipos"],
+        "_vencidas": [x["numero"] for x in p["cuotas"] if ev["vencida"][x["numero"]]],
+        "_por": por, "_origen": origen,
     }
 
 
@@ -1822,6 +1829,9 @@ def main():
     for nombre in archivos:
         ruta = os.path.join(AQUI, nombre)
         caso = cargar(ruta)
+        # K6b (T1042): los casos de vivienda los calcula vivienda.py (la misma hoja, en UVR y valorada en pesos).
+        if (caso.get("condiciones") or {}).get("reglas") == "Vivienda":
+            continue
         esperado = esperado_completo(caso) if "esperado" in caso else None
         consultas = consultas_calculadas(caso)
         novedades = novedades_calculadas(caso)
