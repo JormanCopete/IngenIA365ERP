@@ -700,6 +700,22 @@ public static class ManualCatalogo
                 "La regla de meses faltantes (Riesgo.ReglaMesesFaltantes) y, con «Fija», sus días.",
                 "Permisos Lending.Ratings.Read para ver, Lending.ArrearsHistory.Import para el historial y Lending.ImpairmentModel.Manage para adoptar o desistir."],
             ["cartera-activacion", "cartera-sicses-y-centrales"], [], TipoDeTema.Proceso));
+        // Feature 013, K6b (T1061): vivienda con la Ley 546 de 1999, en pesos o en UVR. El registro de la UVR día a día y del tope, en
+        // docs/operaciones/valores-nacionales.md §3a; para la contadora y el jefe de cartera, docs/manual/cartera-vivienda-y-uvr.md.
+        t.Add(Proceso("cartera-vivienda-y-uvr", "Vivienda (Ley 546) y créditos en UVR", Modulos.Cartera, "/cartera/lineas",
+            "Crear líneas de vivienda en pesos o en UVR bajo el tope de vivienda, simular el plan en UVR, radicar con la hipoteca y la marca VIS, desembolsar con hipoteca de primer grado y leer los saldos de un crédito en UVR a la UVR del día.",
+            [
+                P("Cartera → Líneas → Nueva versión", "Modalidad Vivienda: tasa fija, que no supere el menor entre el tope de vivienda y la usura del día; plazo entre los límites de vivienda. «Unidad del capital» ofrece UVR sólo si el catálogo de modalidades la admite, y una línea en UVR no desembolsa por tramos. El detalle de la línea muestra el tope y los cinco límites vigentes con su fuente.", "/cartera/lineas", "Abrir Líneas"),
+                P("Simular en UVR", "El simulador muestra, además del plan en pesos, el plan en UVR: monto, cuotas y saldo en UVR, y la equivalencia en pesos a la UVR del desembolso. Esa equivalencia es una proyección: cada cuota se paga a la UVR del día del pago.", "/cartera/simulador", "Abrir Simulador"),
+                P("Radicar y desembolsar", "En la solicitud de vivienda marque si el inmueble es de interés social (VIS): elige el porcentaje financiable. Registre la hipoteca sobre la solicitud antes de radicar: su valor es el del inmueble. El desembolso exige una hipoteca de primer grado constituida o vigente."),
+                P("Leer un crédito en UVR", "En el crédito, la liquidación y el estado de cuenta muestran la UVR del día, el capital y lo que cuesta cancelar en UVR y en pesos. A una fecha sin UVR publicada la UVR es proyectada y sólo se muestra. El libro trae la corrección monetaria de cada día."),
+            ],
+            ["vivienda", "ley 546", "uvr", "unidad de valor real", "tope de vivienda", "vis", "interes social", "hipoteca", "primer grado",
+                "correccion monetaria", "porcentaje financiable", "cuota ingreso", "plazo de vivienda"],
+            ["El tope de tasa de vivienda (TOPE_TASA_VIVIENDA) y, para créditos en UVR, la UVR de cada día registrados en la plataforma y replicados.",
+                "Los cinco límites de vivienda sembrados «pendiente de validar» y confirmados por el dueño.",
+                "Permisos Lending.CreditLines.Manage para la línea, Lending.Guarantees.Manage para la hipoteca y Lending.Disbursements.Execute para desembolsar."],
+            ["cartera-migracion", "cartera-perdida-esperada"], [], TipoDeTema.Proceso));
 
         // ------------------------------------------------------ Ahorros y aportes --
         // Feature 013 (T0187, T0193): lo conservado de la cartera heredada, con sus rutas /cartera/... reservadas.
