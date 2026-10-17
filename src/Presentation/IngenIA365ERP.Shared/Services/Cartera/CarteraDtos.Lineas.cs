@@ -185,6 +185,10 @@ public sealed class VersionDeLineaRequest
     public int DayCount { get; set; } = 2;
     public int RateEquivalence { get; set; } = 1;
     public RedondeoRequest Rounding { get; set; } = new();
+
+    /// <summary>K6b: la unidad del capital, 1 pesos (defecto) o 2 UVR (sólo en una combinación de vivienda que la admite).</summary>
+    public int DenominationUnit { get; set; } = 1;
+
     public int AllocationOrder { get; set; } = 1;
     public List<int>? ConceptOrder { get; set; }
     public bool SuspenseWithItsConcept { get; set; } = true;
@@ -251,6 +255,7 @@ public sealed class VersionDeLineaRequest
         DayCount = v.DayCount,
         RateEquivalence = v.RateEquivalence,
         Rounding = new RedondeoRequest { Unit = v.RoundingUnit, Mode = v.RoundingMode, Moment = v.RoundingMoment },
+        DenominationUnit = v.DenominationUnit,
         AllocationOrder = v.AllocationOrder,
         ConceptOrder = [.. v.ConceptOrder],
         SuspenseWithItsConcept = v.SuspenseWithItsConcept,
@@ -400,7 +405,11 @@ public sealed record VersionDeLineaDto(
     IReadOnlyList<BandaDeTasaDto> RateBands,
     IReadOnlyList<DocumentoExigidoDto> Documents,
     IReadOnlyList<SeguroDto> Insurances,
-    IReadOnlyList<ReglaDeGarantiaDto> CollateralRules);
+    IReadOnlyList<ReglaDeGarantiaDto> CollateralRules)
+{
+    /// <summary>K6b: la unidad del capital, 1 pesos o 2 UVR.</summary>
+    public int DenominationUnit { get; init; } = 1;
+}
 
 /// <summary>Una versión en el historial de la línea.</summary>
 public sealed record ResumenDeVersionDto(Guid PublicId, int VersionNumber, DateOnly ValidFrom, DateOnly? ValidTo, DateTime RegisteredAt,
@@ -420,7 +429,20 @@ public sealed record LineaDeCreditoDto(
     Guid? UsuryBlockedByValuePublicId,
     bool AdmitsNewCredits,
     VersionDeLineaDto? CurrentVersion,
-    IReadOnlyList<ResumenDeVersionDto> Versions);
+    IReadOnlyList<ResumenDeVersionDto> Versions)
+{
+    /// <summary>K6b: en una línea de vivienda, el tope de tasa y los límites de la Ley 546 vigentes con su fuente; nulo en las demás.</summary>
+    public ViviendaDeLineaDto? Housing { get; init; }
+}
+
+/// <summary>Un límite de vivienda vigente (valor nacional <c>LIMITE</c>) con su fuente.</summary>
+public sealed record LimiteDeViviendaDto(string Code, decimal Value, string? Source, Guid? NationalValuePublicId);
+
+/// <summary>El tope de tasa de vivienda vigente (<c>TOPE_TASA_VIVIENDA</c>, EA).</summary>
+public sealed record TopeDeViviendaDto(decimal Rate, DateOnly ValidFrom, string? Source, Guid NationalValuePublicId);
+
+/// <summary>Las reglas de la Ley 546 que rigen la línea de vivienda a la fecha; <c>Missing</c> dice lo que no está registrado.</summary>
+public sealed record ViviendaDeLineaDto(DateOnly Date, TopeDeViviendaDto? RateCap, IReadOnlyList<LimiteDeViviendaDto> Limits, IReadOnlyList<string> Missing);
 
 /// <summary>La versión vigente resumida para la lista; <c>UsuryHeadroom</c> es la menor holgura de su plan tipo hoy.</summary>
 public sealed record VersionVigenteResumidaDto(Guid PublicId, DateOnly ValidFrom, int RateKind, decimal? CurrentRate, string? IndexCode,

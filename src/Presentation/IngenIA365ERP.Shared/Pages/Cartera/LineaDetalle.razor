@@ -77,6 +77,31 @@
                 {
                     <p class="texto-tenue">La línea no tiene versión vigente hoy.</p>
                 }
+                @if (l.Housing is { } vivienda)
+                {
+                    @* K6b (T1060; FR-024, D18): las reglas de la Ley 546 que rigen la línea de vivienda hoy, con su fuente: el tope de tasa y los cinco
+                       límites (valores nacionales replicados de la central). Lo que falte se dice: sin él la línea no origina ni desembolsa. *@
+                    <div class="info-card">
+                        <h4>Vivienda: tope y límites de la Ley 546 al @vivienda.Date.ToString("dd/MM/yyyy")</h4>
+                        @foreach (var falta in vivienda.Missing) { <p class="aviso aviso-alerta" role="alert">@falta</p> }
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Regla</th><th class="numero">Valor</th><th>Fuente</th></tr></thead>
+                                <tbody>
+                                    @if (vivienda.RateCap is { } tope)
+                                    {
+                                        <tr><td>Tope de tasa de vivienda (desde @tope.ValidFrom.ToString("dd/MM/yyyy"))</td><td class="numero">@TextosDeCreditos.Porcentaje(tope.Rate) EA</td><td>@(tope.Source ?? "—")</td></tr>
+                                    }
+                                    @foreach (var limite in vivienda.Limits)
+                                    {
+                                        <tr><td>@TextosDeCreditos.LimiteDeVivienda(limite.Code).Nombre</td><td class="numero">@TextosDeCreditos.ValorDeLimiteDeVivienda(limite.Code, limite.Value)</td><td>@(limite.Source ?? "—")</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="texto-tenue">La tasa de la línea se controla contra el menor entre el tope de vivienda y la usura del día.</p>
+                    </div>
+                }
             }
             else if (_pestana == 1)
             {

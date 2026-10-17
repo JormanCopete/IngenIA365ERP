@@ -184,6 +184,12 @@ public sealed record GarantiaDto(
     decimal? FundCoverage)
 {
     public IReadOnlyList<Guid> Documents { get; init; } = [];
+
+    /// <summary>La matrícula o el registro de la garantía.</summary>
+    public string? RegistrationReference { get; init; }
+
+    /// <summary>K6b: el grado de una hipoteca.</summary>
+    public byte? MortgageRank { get; init; }
 }
 
 /// <summary>Registrar o editar una garantía real o de fondo (§6.1).</summary>
@@ -200,6 +206,10 @@ public sealed record GarantiaRequest
     public string? PolicyNumber { get; init; }
     public DateOnly? PolicyExpiresOn { get; init; }
     public string? RegistrationReference { get; init; }
+
+    /// <summary>K6b: el grado de una hipoteca (1 = primer grado, el que exige el desembolso de vivienda).</summary>
+    public byte? MortgageRank { get; init; }
+
     public decimal? FundCoverage { get; init; }
 }
 

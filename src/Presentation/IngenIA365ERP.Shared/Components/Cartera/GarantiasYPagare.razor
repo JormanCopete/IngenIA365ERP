@@ -21,7 +21,7 @@
                         var garantia = g;
                         <tr>
                             <td>@TextosDeDesembolso.ClaseDeGarantia(garantia.Kind)</td>
-                            <td>@garantia.Description@(garantia.ValidUntil is { } v ? $" · vigente hasta {v:dd/MM/yyyy}" : "")</td>
+                            <td>@garantia.Description@(garantia.MortgageRank is { } grado ? $" · hipoteca de grado {grado}" : "")@(garantia.ValidUntil is { } v ? $" · vigente hasta {v:dd/MM/yyyy}" : "")</td>
                             <td class="numero">@TextosDeOriginacion.Pesos(garantia.Value)</td>
                             <td class="numero">@TextosDeOriginacion.Pesos(garantia.AdmissibleValue)</td>
                             <td>@TextosDeDesembolso.EstadoDeGarantia(garantia.Status) · @garantia.Documents.Count documento(s)</td>
@@ -64,6 +64,12 @@
                     <label class="campo campo-ancho">Descripción <input class="e-input" @bind="_nueva.Descripcion" maxlength="300" /></label>
                     <label class="campo">Valor <input class="e-input" type="number" min="0" step="1" @bind="_nueva.Valor" /></label>
                     <label class="campo">Vigente hasta <input class="e-input" type="date" @bind="_nueva.VigenteHasta" /></label>
+                    @if (_nueva.Clase == "Mortgage")
+                    {
+                        @* K6b (T1060): la hipoteca lleva su matrícula y su grado; vivienda exige primer grado para desembolsar (Ley 546). *@
+                        <label class="campo">Matrícula <input class="e-input" @bind="_nueva.Matricula" maxlength="60" /></label>
+                        <label class="campo">Grado <input class="e-input" type="number" min="1" max="9" @bind="_nueva.Grado" /></label>
+                    }
                     <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_nueva.Descripcion) || _nueva.Valor is not > 0)" OnClick="@RegistrarAsync">Registrar garantía</SfButton>
                 </div>
             </PermissionGate>
@@ -141,6 +147,8 @@
         public string? Descripcion { get; set; }
         public decimal? Valor { get; set; }
         public DateOnly? VigenteHasta { get; set; }
+        public string? Matricula { get; set; }
+        public byte? Grado { get; set; } = 1;
     }
 
     private readonly EstadoDeCarga _carga = new(), _accion = new();
@@ -173,6 +181,8 @@
             Description = _nueva.Descripcion!.Trim(),
             Value = _nueva.Valor ?? 0m,
             ValidUntil = _nueva.VigenteHasta,
+            RegistrationReference = _nueva.Clase == "Mortgage" && !string.IsNullOrWhiteSpace(_nueva.Matricula) ? _nueva.Matricula.Trim() : null,
+            MortgageRank = _nueva.Clase == "Mortgage" ? _nueva.Grado : null,
         }, _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la garantía."); return; }
         _nueva = new NuevaGarantia();

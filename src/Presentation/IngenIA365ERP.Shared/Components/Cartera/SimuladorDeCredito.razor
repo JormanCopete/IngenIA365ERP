@@ -97,6 +97,41 @@
                     </tbody>
                 </table>
             </div>
+            @if (s.Uvr is { } uvr)
+            {
+                @* K6b (T1060; FR-024): en una línea en UVR la cuota se pacta en UVR. Las cuotas en pesos de arriba son su equivalencia a la UVR
+                   publicada del desembolso; la de cada pago será la UVR de ese día. *@
+                <div class="info-card">
+                    <h4>Plan en UVR</h4>
+                    <p class="aviso aviso-info">@uvr.Legend</p>
+                    <div class="kpi-grid">
+                        <div class="kpi-card"><span class="kpi-label">UVR del @uvr.UvrDate.ToString("dd/MM/yyyy")</span><span class="kpi-value">@TextosDeCreditos.ValorDeUvr(uvr.UvrValue)</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Monto en UVR</span><span class="kpi-value">@TextosDeCreditos.Uvr(uvr.AmountUvr)</span></div>
+                        <div class="kpi-card"><span class="kpi-label">Total a pagar en UVR</span><span class="kpi-value">@TextosDeCreditos.Uvr(uvr.ToPayUvr)</span></div>
+                    </div>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Cuota</th><th>Vence</th><th class="numero">Capital (UVR)</th><th class="numero">Interés (UVR)</th><th class="numero">Seguros (UVR)</th><th class="numero">Cuota (UVR)</th><th class="numero">Equivalencia en pesos</th><th class="numero">Saldo (UVR)</th></tr></thead>
+                            <tbody>
+                                @foreach (var c in uvr.Installments)
+                                {
+                                    <tr>
+                                        <td class="numero">@c.Number</td>
+                                        <td>@c.DueDate.ToString("dd/MM/yyyy")</td>
+                                        <td class="numero">@c.Principal.ToString("N4", Colombia)</td>
+                                        <td class="numero">@c.Interest.ToString("N4", Colombia)</td>
+                                        <td class="numero">@c.Insurance.ToString("N4", Colombia)</td>
+                                        <td class="numero">@c.Total.ToString("N4", Colombia)</td>
+                                        <td class="numero">@((c.Total * uvr.UvrValue).ToString("N2", Colombia))</td>
+                                        <td class="numero">@c.BalanceAfter.ToString("N4", Colombia)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="texto-tenue">La equivalencia en pesos usa la UVR del @uvr.UvrDate.ToString("dd/MM/yyyy") para todas las cuotas: es una proyección, no el valor a pagar de cada fecha.</p>
+                </div>
+            }
             @if (s.ExplanationLines.Count > 0)
             {
                 <details>
