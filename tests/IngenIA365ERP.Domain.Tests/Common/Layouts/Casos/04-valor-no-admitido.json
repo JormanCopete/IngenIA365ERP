@@ -1,0 +1,26 @@
+{
+  "nombre": "Valor fuera de allowedValues: bloqueante con registro, campo, crédito y ruta",
+  "derivacion": "PA no está en [CC, NI].",
+  "layout": {
+    "code": "PRUEBA-ERRORES", "version": "1", "source": "Caso de prueba del motor", "validFrom": "2026-01-01",
+    "fileKind": "Delimited", "delimiter": ";", "encoding": "utf-8", "lineEnding": "CRLF",
+    "records": [
+      { "code": "Detail", "repeat": "PorCredito", "fields": [
+        { "number": 1, "name": "Tipo de identificación", "order": 1, "length": 2, "kind": "A", "format": "Text", "required": true, "path": "Deudor.TipoDeDocumento", "allowedValues": ["CC", "NI"] },
+        { "number": 2, "name": "Nombre", "order": 2, "length": 10, "kind": "A", "format": "Text", "required": true, "path": "Deudor.Nombre" },
+        { "number": 3, "name": "Saldo", "order": 3, "length": 12, "kind": "N", "format": "Amount2", "required": true, "path": "Saldos.Capital" },
+        { "number": 4, "name": "Días de mora", "order": 4, "length": 4, "kind": "N", "format": "Integer", "path": "Riesgo.DiasDeMora" },
+        { "number": 5, "name": "Fecha", "order": 5, "length": 8, "kind": "N", "format": "Date", "path": "Credito.Fecha" } ] }
+    ]
+  },
+  "filas": [
+    { "registro": "Detail", "credito": "CR-10", "valores": { "Deudor.TipoDeDocumento": "CC", "Deudor.Nombre": "Ana", "Saldos.Capital": 100, "Riesgo.DiasDeMora": 3, "Credito.Fecha": "2027-01-31" } },
+    { "registro": "Detail", "credito": "CR-12", "valores": { "Deudor.TipoDeDocumento": "PA", "Deudor.Nombre": "Luis", "Saldos.Capital": 50 } }
+  ],
+  "esperado": {
+    "escrito": false,
+    "inconsistencias": [
+      { "severidad": "Blocking", "codigo": "Layout.ValorNoPermitido", "registro": "Detail", "campo": 1, "credito": "CR-12", "ruta": "Deudor.TipoDeDocumento", "fila": 1 }
+    ]
+  }
+}

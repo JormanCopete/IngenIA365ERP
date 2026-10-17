@@ -1,0 +1,34 @@
+{
+  "nombre": "Delimitado con barra, LF y UTF-8: monto con punto, relleno declarado, opcional vacío, constante y tildes conservadas",
+  "derivacion": "Sin normalizar: «José Peña» va tal cual. 1500,5 → 1500.50; -20 → -20.00; oficina 42 con pad 0 en 5 → 00042; teléfono vacío → campo vacío entre barras; fecha por defecto yyyyMMdd; constante ERP.",
+  "layout": {
+    "code": "PRUEBA-DELIMITADO", "version": "1", "source": "Caso de prueba del motor", "validFrom": "2026-01-01",
+    "fileKind": "Delimited", "delimiter": "|", "encoding": "utf-8", "lineEnding": "LF",
+    "records": [
+      { "code": "Detail", "repeat": "PorCredito", "fields": [
+        { "number": 1, "name": "Tipo de identificación", "order": 1, "length": 2, "kind": "A", "format": "Text", "required": true, "path": "Deudor.TipoDeDocumento", "allowedValues": ["CC", "CE", "NI"] },
+        { "number": 2, "name": "Número de identificación", "order": 2, "length": 15, "kind": "A", "format": "Text", "required": true, "path": "Deudor.NumeroDeDocumento" },
+        { "number": 3, "name": "Nombre", "order": 3, "length": 40, "kind": "A", "format": "Text", "required": true, "path": "Deudor.Nombre" },
+        { "number": 4, "name": "Saldo", "order": 4, "length": 20, "kind": "N", "format": "AmountPoint2", "required": true, "path": "Saldos.Capital" },
+        { "number": 5, "name": "Oficina", "order": 5, "length": 5, "kind": "N", "format": "Integer", "required": true, "path": "Credito.Oficina", "pad": "0" },
+        { "number": 6, "name": "Teléfono", "order": 6, "length": 15, "kind": "A", "format": "Text", "path": "Deudor.Telefono" },
+        { "number": 7, "name": "Fecha de corte", "order": 7, "length": 8, "kind": "N", "format": "Date", "required": true, "path": "Archivo.FechaDeCorte" },
+        { "number": 8, "name": "Fuente", "order": 8, "length": 10, "kind": "A", "format": "Text", "required": true, "constant": "ERP" } ] }
+    ]
+  },
+  "filas": [
+    { "registro": "Detail", "credito": "CR-1", "valores": { "Deudor.TipoDeDocumento": "CC", "Deudor.NumeroDeDocumento": "79123456", "Deudor.Nombre": "José Peña",
+      "Saldos.Capital": 1500.5, "Credito.Oficina": 42, "Deudor.Telefono": null, "Archivo.FechaDeCorte": "2027-01-31" } },
+    { "registro": "Detail", "credito": "CR-2", "valores": { "Deudor.TipoDeDocumento": "CE", "Deudor.NumeroDeDocumento": "E-5544", "Deudor.Nombre": "Ana",
+      "Saldos.Capital": -20, "Credito.Oficina": 7, "Deudor.Telefono": "3001234567", "Archivo.FechaDeCorte": "2027-01-31" } }
+  ],
+  "esperado": {
+    "escrito": true,
+    "finDeLinea": "\n",
+    "lineas": [
+      "CC|79123456|José Peña|1500.50|00042||20270131|ERP",
+      "CE|E-5544|Ana|-20.00|00007|3001234567|20270131|ERP"
+    ],
+    "inconsistencias": []
+  }
+}

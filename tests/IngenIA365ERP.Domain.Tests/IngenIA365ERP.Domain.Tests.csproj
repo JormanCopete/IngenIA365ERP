@@ -45,6 +45,8 @@
     <None Include="Inventory\Analytics\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 013 (T0021): documentos normativos de prueba para los lectores tipados de valores nacionales. -->
     <None Include="Common\NationalValues\Documentos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 013, K5 (T0987): casos del motor generico de layouts (ancho fijo, delimitado, bloqueantes), derivados a mano. -->
+    <None Include="Common\Layouts\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 013, US17 (T0240, T0241, T0269): casos dorados de la votacion, las atribuciones y la ventana legal de contacto,
          calculados a mano. -->
     <None Include="Lending\Sessions\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
