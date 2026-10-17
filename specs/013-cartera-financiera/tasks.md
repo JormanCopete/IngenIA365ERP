@@ -4233,6 +4233,12 @@ generar la concentración y ver al deudor cercano al límite señalado con su po
 **Checkpoint**: `InformesYTableroDeCarteraTests` verde en los dos motores con su parte K5 (la parte K1 quedó verde al
 cierre de K1); `/cartera/tablero` y las cuatro vistas de K5 publicadas; `TodoEnlaceDelMenuTieneSuPagina` verde.
 
+**Resultado (2026-10-16)**: `dotnet build IngenIA365ERP.slnx` sin errores; Domain 2.126, Application 5.573, Architecture 632 y Shared 460 pasan;
+regresión `IntegrationTests.Lending` 103 pasan y 5 omitidas (108) en PostgreSQL y en SQL Server. Sin migración (el parámetro nuevo es una fila de
+`COR_ParameterVersions` y todo lo demás lee tablas de K1–K4). Pendiente del dueño: validar con la contadora las definiciones de calidad, cosecha y
+concentración y el defecto de `Informes.DiasCarteraVencida` (manual §3, §6); decidir si la concentración mide con el límite con garantía admisible y
+si el 80 % de la señal le sirve; promover K5 sólo con la fase 21.
+
 ---
 
 ## Phase 21: User Story 16 - Reportes regulatorios: SICSES y centrales de riesgo (Priority: P3) — entrega K5
