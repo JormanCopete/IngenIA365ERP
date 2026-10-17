@@ -30,9 +30,14 @@ public sealed class GetRepaymentScheduleQueryHandler(IApplicationDbContext db, I
         var causa = await db.LoanTermsVersions.AsNoTracking().Where(t => t.Id == v.TermsVersionId).Select(t => t.Cause.ToString()).FirstOrDefaultAsync(ct);
         var cuotas = await db.RepaymentInstallments.AsNoTracking().Where(i => i.ScheduleVersionId == v.Id).OrderBy(i => i.InstallmentNumber)
             .Select(i => new ScheduleInstallmentDto(i.InstallmentNumber, i.PeriodStart, i.DueDate, i.ExigibleDate, i.OpeningPrincipal, i.Principal, i.Interest,
-                i.GraceInterest, i.Insurance, i.OtherCharges, i.Total, i.ClosingPrincipal, i.IsExtraordinary, i.IsGraceInstallment))
+                i.GraceInterest, i.Insurance, i.OtherCharges, i.Total, i.ClosingPrincipal, i.IsExtraordinary, i.IsGraceInstallment)
+            {
+                // K6b (bloque 2): la cuota en UVR de un plan en UVR.
+                Uvr = i.PrincipalUvr == null ? null
+                    : new UvrInstallmentAmountsDto(i.OpeningPrincipalUvr, i.PrincipalUvr, i.InterestUvr, i.InsuranceUvr, i.TotalUvr, i.ClosingPrincipalUvr),
+            })
             .ToListAsync(ct);
         return Result.Success(new RepaymentScheduleDto(v.VersionNumber, v.EffectiveValueDate, causa ?? string.Empty, v.RulesVersion,
-            v.FirstRegeneratedInstallment, v.PrincipalBase, cuotas));
+            v.FirstRegeneratedInstallment, v.PrincipalBase, cuotas) { UvrValue = v.UvrValue });
     }
 }

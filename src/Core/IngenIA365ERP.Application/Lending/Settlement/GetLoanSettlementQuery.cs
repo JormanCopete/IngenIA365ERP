@@ -42,7 +42,11 @@ public sealed record LoanSettlementDto(
     IReadOnlyList<SettlementExplanationDto> Explanation,
     IReadOnlyList<string> ExplanationText,
     DateOnly? ValidUntil,
-    IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Warnings)
+{
+    /// <summary>K6b (bloque 2; FR-024): en un crédito en UVR, la UVR del día (publicada o proyectada) y los saldos en UVR; nulo en pesos.</summary>
+    public Housing.LoanUvrDto? Uvr { get; init; }
+}
 
 /// <summary>
 /// <c>GET /api/lending/loans/{id}/settlement?date=&amp;recordedAsOf=</c> (feature 013, US4, T0503; api.md §8.1, <c>Lending.Payoffs.Read</c>; FR-068,
@@ -89,9 +93,14 @@ public sealed class GetLoanSettlementQueryHandler(
             avisos.Add($"La liquidación usa la última usura conocida desde el {v.AddDays(1):yyyy-MM-dd}: vale hasta el {v:yyyy-MM-dd}.");
         if (estado.UsuraTopada) avisos.Add("La tasa del día está topada por la usura certificada.");
         if (estado.Suspendida) avisos.Add("La causación está suspendida: los intereses van a suspenso.");
+        if (estado.Uvr is { Proyectada: true } u)
+            avisos.Add($"No hay UVR publicada para el {d:yyyy-MM-dd}: los pesos usan una UVR proyectada desde la del {u.UvrDelDia.UltimaPublicada:yyyy-MM-dd}, sólo para mostrar.");
         return new LoanSettlementDto(credito.PublicId, credito.Number, d, r, estado.RulesVersion, "sha256:" + estado.Huella, estado.ValorParaCancelar,
             porConcepto, conDeudor, porCuota, estado.AlturaDeMora.Dias, estado.Suspendida, estado.UsuraTopada, explicacion, estado.Explicacion.Lineas,
-            estado.ValidaHasta, avisos);
+            estado.ValidaHasta, avisos)
+        {
+            Uvr = Housing.LoanUvrDto.De(estado),
+        };
     }
 }
 

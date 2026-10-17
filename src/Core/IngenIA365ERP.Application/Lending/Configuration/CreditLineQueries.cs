@@ -79,14 +79,20 @@ public sealed class GetCreditLineQueryHandler(
     IApplicationDbContext db,
     IAlcanceDeCartera alcanceDeLaPeticion,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<GetCreditLineQuery, Result<CreditLineDto>>
+    IDateTimeService reloj,
+    Housing.LectorDeVivienda? vivienda = null) : IRequestHandler<GetCreditLineQuery, Result<CreditLineDto>>
 {
     public async Task<Result<CreditLineDto>> Handle(GetCreditLineQuery request, CancellationToken ct)
     {
         var linea = await ConsultasDeLineas.LineaEnAlcanceAsync(db, alcanceDeLaPeticion, auditoria, request.CreditLinePublicId, seguir: false, ct);
-        return linea.IsFailure
-            ? Result.Failure<CreditLineDto>(linea.Error)
-            : Result.Success(await ConsultasDeLineas.DtoAsync(db, linea.Value, request.Date ?? reloj.HoyLocal, ct));
+        if (linea.IsFailure) return Result.Failure<CreditLineDto>(linea.Error);
+        var fecha = request.Date ?? reloj.HoyLocal;
+        var dto = await ConsultasDeLineas.DtoAsync(db, linea.Value, fecha, ct);
+        // K6b (bloque 2): una línea de vivienda muestra el tope y los límites de la Ley 546 vigentes a la fecha con su fuente.
+        if (vivienda is not null && Housing.LectorDeVivienda.Disponible()
+            && string.Equals(dto.CurrentVersion?.ModalityCode, ReglasDeLineaDeCredito.ModalidadDeVivienda, StringComparison.OrdinalIgnoreCase))
+            dto = dto with { Housing = await Housing.CreditLineHousingDto.LeerAsync(vivienda, fecha, ct) };
+        return Result.Success(dto);
     }
 }
 

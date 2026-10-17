@@ -395,7 +395,14 @@ public sealed record CreditLineDto(
     Guid? UsuryBlockedByValuePublicId,
     bool AdmitsNewCredits,
     CreditLineVersionDto? CurrentVersion,
-    IReadOnlyList<CreditLineVersionSummaryDto> Versions);
+    IReadOnlyList<CreditLineVersionSummaryDto> Versions)
+{
+    /// <summary>
+    /// K6b (bloque 2; FR-024, D18): en una línea de vivienda, el tope de tasa y los cinco límites de la Ley 546 vigentes a la fecha consultada con su
+    /// fuente (y lo que falte); nulo en las demás.
+    /// </summary>
+    public Housing.CreditLineHousingDto? Housing { get; init; }
+}
 
 /// <summary>La versión vigente resumida para la lista (api.md §3.1); <c>usuryHeadroom</c> es la menor holgura de su plan tipo hoy.</summary>
 public sealed record CreditLineCurrentVersionDto(Guid PublicId, DateOnly ValidFrom, RateKind RateKind, decimal? CurrentRate, string? IndexCode,

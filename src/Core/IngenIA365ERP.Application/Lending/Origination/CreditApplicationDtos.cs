@@ -159,7 +159,11 @@ public sealed record CreditApplicationDto(
     bool BlockedByRestrictiveLists,
     DateTime? SubmittedAt,
     string CreatedBy,
-    DateTime CreatedAt);
+    DateTime CreatedAt)
+{
+    /// <summary>K6b (bloque 2; FR-024): en una solicitud de vivienda, si el inmueble es de interés social (VIS); nulo en las demás.</summary>
+    public bool? IsSocialHousing { get; init; }
+}
 
 /// <summary>Una fila de la lista de solicitudes (api.md §4.2 <c>CreditApplicationListItemDto</c>).</summary>
 public sealed record CreditApplicationListItemDto(
@@ -232,7 +236,10 @@ public static class ConsultasDeSolicitudes
             s.Status == CreditApplicationStatus.Approved || s.ApprovalDecisionId is not null
                 ? new CreditApplicationApprovalDto(s.ApprovedAmount, s.ApprovedTerms, s.ApprovalValidUntil, s.AprobacionVencida(hoy))
                 : null,
-            listas, s.SubmittedAt, s.CreatedBy ?? string.Empty, s.CreatedAt);
+            listas, s.SubmittedAt, s.CreatedBy ?? string.Empty, s.CreatedAt)
+        {
+            IsSocialHousing = s.IsSocialHousing,
+        };
     }
 
     private static CreditApplicationScoreDto Puntaje(CreditScore p)
