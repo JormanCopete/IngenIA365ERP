@@ -4707,8 +4707,23 @@ verificada **contra la base de producción**, no contra el repositorio.
     `Contabilidad/Cartera`, `Services/Cartera`, menú, `ManualCatalogo`, `CentroReportes`, `Application` y `Domain` de Lending (plantillas,
     layouts JSON, errores), semillas `Lending*`, `DocumentosDeCarteraReport` y `docs/manual/cartera*.md`; muerde (comprobado). Revisión a mano
     con `grep -rniE "s[oó]lido"` sobre `src/Presentation` y `docs/manual`: sólo `cartera-vivienda-y-uvr.md` lo nombraba (dos veces) y se corrigió.
-- [ ] T1064 Correr la lista de quickstart §1.9 («lo que debe seguir verde») en los dos motores al cierre de cada entrega: «Nomina e2e», «Contabilidad e2e», «Inventario e2e» y las de Application de otros módulos; `CreditoProvisionalTests` y `LiquidacionDefinitivaTests` con sus cambios esperados
-  - Pendiente de la **corrida final** (2026-10-17): contra bases de datos, la corre el usuario una sola vez al final.
+- [X] T1064 Correr la lista de quickstart §1.9 («lo que debe seguir verde») en los dos motores al cierre de cada entrega: «Nomina e2e», «Contabilidad e2e», «Inventario e2e» y las de Application de otros módulos; `CreditoProvisionalTests` y `LiquidacionDefinitivaTests` con sus cambios esperados
+  - Hecho el 2026-10-17 (**corrida final**, en local, sin `RUN_PERF_TESTS`). La primera pasada de Lending en PostgreSQL dio 105 pasan, 7 omitidas
+    y 3 fallan; se corrigieron en la causa: (1) `RegistroDeCartera.CausarEnBloque` rechazaba la corrección monetaria de los créditos en UVR
+    («trae filas que no son suyas»): ningún crédito en UVR causaba (`cc361b59`); (2) aplicar la carga de una obligada sin historial de mora
+    completo se negaba, y la carga complementaria sólo se admite sobre una carga aplicada: el camino de US8-10 era inalcanzable; ahora es aviso
+    al aplicar y lo exige la activación, `plantillas.md` §5.3 corregido (`78926dd2`); (3) la completitud del historial tomaba el corte
+    (`OpenedOn`) como inicio de un crédito migrado y nunca pedía los meses anteriores: ahora el desembolso de la fila de la carga (`f05e0c7a`);
+    y en `PerdidaEsperadaTests` tres expectativas mal puestas (línea y acta con el corte de ayer; la elección la radica la secretaría por la
+    segregación) (`b8651d0f`). Resultado final, idéntico en los dos motores:
+    · **Lending** («Cartera e2e»): 108 pasan, 7 omitidas (las de rendimiento), 0 fallan — PostgreSQL 13 m, SQL Server 24 m.
+    · **Proyecto de integración completo**: 585 pasan, 16 omitidas, 0 fallan (601) — PostgreSQL 45 m, SQL Server 1 h 32 m. Por carpeta, en los dos:
+      Accounting («Contabilidad e2e») 35; Attachments 55; Audit 14; Auth 2; Compliance 4; Core 13; Database 9; ElectronicInvoicing 11 + 1
+      omitida; Health 2; Identity 33; Integration 43 + 1; Inventory («Inventario e2e») 70 + 3; Lending 108 + 7; Middleware 27; MultiTenancy 10;
+      NationalValues 5; Notifications 4; Payroll («Nomina e2e») 26; Reports 36; Security 59 + 1 (la de hashes); SoftDelete 3; Ventas 16 + 3.
+      Las 16 omitidas son las de volumen (`RUN_PERF_TESTS`), `PasswordHashIntegrityTests` y las de la 012 con su motivo. Ninguna falla de
+      infraestructura en esta corrida.
+    · Sin contenedores, tras las correcciones: Domain 2.293, Application 5.700, Architecture 638, Shared 467, todas pasan.
 
 ### Rendimiento y volumen
 
