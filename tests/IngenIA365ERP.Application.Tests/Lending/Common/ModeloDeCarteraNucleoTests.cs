@@ -26,6 +26,9 @@ namespace IngenIA365ERP.Application.Tests.Lending.Common;
 /// <para>K4 (fase 18, T0939): suma las once tablas de <c>CarteraCobranza</c> (data-model §26.3–§26.10). Son hechos la historia de etapas, la
 /// asignación, la gestión, la promesa, la cuota del acuerdo y la actuación jurídica; la etapa, la regla, el acuerdo, el proceso y la campaña
 /// cambian de vigencia o de estado.</para>
+///
+/// <para>K5 (fase 21, T0997, T1001): suma las dos tablas de <c>CarteraInformes</c> (data-model §28): el archivo regulatorio avanza de estado; su
+/// línea de central es hecho <c>bigint</c> sin diferencias de auditoría (C46).</para>
 /// </summary>
 public class ModeloDeCarteraNucleoTests
 {
@@ -75,6 +78,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_MessageCampaigns", "LND_CollectionStages", "LND_CollectionStageHistory", "LND_CollectorAssignmentRules", "LND_CollectorAssignments",
         "LND_CollectionActions", "LND_PaymentPromises", "LND_PaymentAgreements", "LND_PaymentAgreementInstallments", "LND_LegalProcesses",
         "LND_LegalProcessActions",
+        // Archivos regulatorios (K5, CarteraInformes; data-model §28)
+        "LND_RegulatoryFiles", "LND_RegulatoryFileLines",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -100,18 +105,19 @@ public class ModeloDeCarteraNucleoTests
         "LendingActivation", "MonthlyClose", "MonthlyCloseLoan", "MonthlyCloseGeneralImpairment", "MonthlyCloseReopening", "LoanArrearsHistoryEntry",
         "RiskPolicyVersion", "PayrollDeductionFileLine", "PayrollDeductionResult", "NonDeductionFollowUp",
         "CollectionStageHistoryEntry", "CollectorAssignment", "CollectionAction", "PaymentPromise", "PaymentAgreementInstallment", "LegalProcessAction",
+        "RegulatoryFileLine",
         .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
-            "PayrollDeductionFileLine", .. Preparacion];
+            "PayrollDeductionFileLine", "RegulatoryFileLine", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
     [
-        "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent",
+        "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent", "RegulatoryFileLine",
         "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
     ];
 
@@ -131,9 +137,9 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(128,
+        Tablas.Should().HaveCount(130,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
-            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4)");
+            + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5)");
     }
 
     [Theory]
