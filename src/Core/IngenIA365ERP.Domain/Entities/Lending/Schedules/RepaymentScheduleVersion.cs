@@ -45,5 +45,8 @@ public class RepaymentScheduleVersion : AuditableEntity, IHechoInmutable
 
     public string RulesVersion { get; init; } = string.Empty;
 
+    /// <summary>K6b (T1048, T1059): la UVR con que se valoraron en pesos las cuotas de un plan en UVR (alias <c>ValorUvr</c>); nula en pesos.</summary>
+    public decimal? UvrValue { get; init; }
+
     public string InputsSha256 { get; init; } = string.Empty;
 }

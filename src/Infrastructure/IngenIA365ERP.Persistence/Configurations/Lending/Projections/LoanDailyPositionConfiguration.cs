@@ -38,6 +38,10 @@ public class LoanDailyPositionConfiguration : IEntityTypeConfiguration<LoanDaily
         builder.Property(e => e.Advance).Monto().IsRequired();
         builder.Property(e => e.CreditBalance).Monto().IsRequired();
         builder.Property(e => e.PayoffAmount).Monto().IsRequired();
+        // K6b (T1059; CarteraVivienda): la valoración en UVR.
+        builder.Property(e => e.UvrValue).ValorUvr();
+        builder.Property(e => e.PrincipalUvr).ValorUvr();
+        builder.Property(e => e.PayoffAmountUvr).ValorUvr();
 
         builder.Property(e => e.DaysPastDue).IsRequired();
         builder.Property(e => e.InstallmentsPastDue).IsRequired();

@@ -76,6 +76,13 @@ public sealed class HuellaDeCartera
     public HuellaDeCartera Textos(string clave, IEnumerable<string?> valores) =>
         Poner(clave, "[" + string.Join(",", valores.Select(v => v is null ? "null" : Cadena(v))) + "]");
 
+    /// <summary>Agrega lo de <paramref name="llenar"/> sólo si <paramref name="condicion"/> (un campo que no existía en las huellas ya selladas).</summary>
+    public HuellaDeCartera Si(bool condicion, Func<HuellaDeCartera, HuellaDeCartera> llenar)
+    {
+        ArgumentNullException.ThrowIfNull(llenar);
+        return condicion ? llenar(this) : this;
+    }
+
     /// <summary>El JSON canónico.</summary>
     public string Canonico() =>
         "{" + string.Join(",", _campos.Select(c => Cadena(c.Key) + ":" + c.Value)) + "}";

@@ -68,6 +68,12 @@ public class CreditApplication : AuditableEntity
     /// <summary>K2 (<c>CarteraLibranza</c>; FR-109): el convenio de la pagaduría externa en una solicitud por libranza.</summary>
     public int? PayrollAgreementId { get; set; }
 
+    /// <summary>
+    /// K6b (T1048, T1055; FR-024): en una solicitud de vivienda, si el inmueble es de interés social (VIS): elige el límite de financiación
+    /// (<c>VIVIENDA_FINANCIABLE_VIS</c> o <c>VIVIENDA_FINANCIABLE</c>). Nulo fuera de vivienda.
+    /// </summary>
+    public bool? IsSocialHousing { get; set; }
+
     /// <summary>K2: la identificación del empleado ante la pagaduría (pasa al vínculo como <c>EmployeeIdAtPaymaster</c>).</summary>
     public string? PayrollEmployeeIdentifier { get; set; }
 

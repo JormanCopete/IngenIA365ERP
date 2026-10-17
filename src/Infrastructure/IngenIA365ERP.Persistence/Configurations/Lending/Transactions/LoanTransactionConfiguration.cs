@@ -33,6 +33,9 @@ public class LoanTransactionConfiguration : IEntityTypeConfiguration<LoanTransac
         builder.Property(e => e.AccountingDate).IsRequired();
         builder.Property(e => e.RegisteredAt).IsRequired();
         builder.Property(e => e.InControl).IsRequired();
+        // K6b (T1059; CarteraVivienda): el valor en UVR de la fila y la UVR con que se valoró.
+        builder.Property(e => e.UvrAmount).ValorUvr();
+        builder.Property(e => e.UvrValue).ValorUvr();
 
         builder.HasOne(e => e.Loan).WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.Operation).WithMany().HasForeignKey(e => e.OperationId).OnDelete(DeleteBehavior.Restrict);

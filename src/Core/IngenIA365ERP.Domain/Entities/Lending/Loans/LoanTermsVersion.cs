@@ -120,6 +120,12 @@ public class LoanTermsVersion : AuditableEntity, IHechoInmutable
 
     public RoundingMoment RoundingMoment { get; init; }
 
+    /// <summary>
+    /// K6b (T1048, T1055; FR-024, D18): la unidad del capital sellada de la versión de la línea: <c>Pesos</c> o <c>Uvr</c>. En UVR la reconstrucción
+    /// lleva plan y saldos en UVR con la serie diaria y los valora en pesos con la UVR del día.
+    /// </summary>
+    public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
+
     // -------------------------------------------------------------------------------- prelación sellada (§1.8) --
 
     public AllocationOrder AllocationOrder { get; init; }

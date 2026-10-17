@@ -269,6 +269,35 @@ public class ModeloDeCarteraNucleoTests
         historial.GetIndexes().Should().Contain(i => i.GetDatabaseName() == "IX_LND_LoanArrearsHistory_ArrearsHistoryLoadId");
     }
 
+    [Theory]
+    [MemberData(nameof(Motores))]
+    public void Las_columnas_de_K6b_son_nulas_en_UVR_o_con_su_defecto_en_pesos(bool postgres)
+    {
+        // K6b (T1048, T1059; CarteraVivienda): ninguna tabla nueva; la unidad del capital nace en pesos para lo anterior y los valores en UVR son
+        // nulos fuera de un crédito en UVR, con el alias ValorUvr (18,4).
+        var modelo = Modelo(postgres);
+        foreach (var tipo in new[] { typeof(Domain.Entities.Lending.Configuration.CreditLineVersion), typeof(Domain.Entities.Lending.Loans.LoanTermsVersion) })
+        {
+            var unidad = modelo.FindEntityType(tipo)!.FindProperty("DenominationUnit")!;
+            unidad.IsNullable.Should().BeFalse();
+            unidad.GetDefaultValue().Should().Be(Domain.Enums.Lending.DenominationUnit.Pesos, tipo.Name);
+        }
+        foreach (var (tipo, columnas) in new (Type, string[])[]
+                 {
+                     (typeof(Domain.Entities.Lending.Schedules.RepaymentInstallment),
+                         ["OpeningPrincipalUvr", "PrincipalUvr", "InterestUvr", "InsuranceUvr", "TotalUvr", "ClosingPrincipalUvr"]),
+                     (typeof(Domain.Entities.Lending.Schedules.RepaymentScheduleVersion), ["UvrValue"]),
+                     (typeof(Domain.Entities.Lending.Transactions.LoanTransaction), ["UvrAmount", "UvrValue"]),
+                     (typeof(Domain.Entities.Lending.Projections.LoanDailyPosition), ["UvrValue", "PrincipalUvr", "PayoffAmountUvr"]),
+                 })
+            foreach (var columna in columnas)
+            {
+                var p = modelo.FindEntityType(tipo)!.FindProperty(columna)!;
+                (p.IsNullable, p.GetPrecision(), p.GetScale()).Should().Be((true, 18, 4), $"{tipo.Name}.{columna}");
+            }
+        modelo.FindEntityType(typeof(Domain.Entities.Lending.Origination.CreditApplication))!.FindProperty("IsSocialHousing")!.IsNullable.Should().BeTrue();
+    }
+
     private static IModel Modelo(bool postgres)
     {
         var builder = new DbContextOptionsBuilder<ApplicationDbContext>()

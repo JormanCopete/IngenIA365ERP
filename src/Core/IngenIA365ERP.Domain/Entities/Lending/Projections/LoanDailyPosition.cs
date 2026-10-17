@@ -87,4 +87,14 @@ public class LoanDailyPosition : AuditableEntityLong, IHechoInmutable
 
     /// <summary>Huella de la reconstrucción.</summary>
     public string InputsSha256 { get; init; } = string.Empty;
+
+    /// <summary>
+    /// K6b (T1048, T1059; data-model §6.1): en un crédito en UVR, la UVR del día con que se valoró la posición, el capital y el valor para cancelar en
+    /// UVR (alias <c>ValorUvr</c>); nulas en pesos.
+    /// </summary>
+    public decimal? UvrValue { get; init; }
+
+    public decimal? PrincipalUvr { get; init; }
+
+    public decimal? PayoffAmountUvr { get; init; }
 }
