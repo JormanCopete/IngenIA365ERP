@@ -83,6 +83,9 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollectionFeesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PriorNoticesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/CreditReportClaimsEndpoints.cs",
+        // K5, US16 (fase 21, bloque 3, T1008): generar el SICSES y los archivos de las centrales y marcar cargado. Sin clave sólo validar ("/validate",
+        // no guarda) y el enlace de descarga ("/download-link").
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/RegulatoryEndpoints.cs",
     ];
 
     /// <summary>
@@ -100,7 +103,9 @@ public class LosComandosDeCarteraLlevanClave
             // K3 (bloque C, T0890): simular la novedad (api.md §11.1, «sin clave»: no escribe).
             "/simulate\"",
             // K4 (bloque C, T0956): la vista previa de una campaña (api.md §14.9: «sin clave», no escribe).
-            "/{id:guid}/preview\""];
+            "/{id:guid}/preview\"",
+            // K5 (fase 21, bloque 3, T1008): validar el SICSES o el archivo de una central (api.md §18, «no guarda; sin clave»).
+            "/validate\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así
@@ -283,6 +288,11 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Collections.Claims.ExtendCreditReportClaimCommand),
         typeof(IngenIA365ERP.Application.Lending.Collections.Claims.AnswerCreditReportClaimCommand),
         typeof(IngenIA365ERP.Application.Lending.Collections.Claims.WithdrawCreditReportClaimCommand),
+        // K5 (US16, fase 21, T1004): generar el SICSES y el archivo de una central, y marcar cargado. Validar y el enlace de descarga no son comandos
+        // con clave.
+        typeof(IngenIA365ERP.Application.Lending.Regulatory.GenerateSicsesFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Regulatory.GenerateCreditBureauFileCommand),
+        typeof(IngenIA365ERP.Application.Lending.Regulatory.MarkRegulatoryFileUploadedCommand),
     ];
 
     private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);
