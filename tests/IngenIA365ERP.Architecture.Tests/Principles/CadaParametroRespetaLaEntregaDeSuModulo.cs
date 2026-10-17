@@ -89,6 +89,12 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
         var suscriptor = ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.CentralesCodigosDeSuscriptor);
         Assert.True(suscriptor.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5 && suscriptor.DisponibleEnLaEntrega(),
             "Centrales.CodigosDeSuscriptor es de K5 y se ofrece.");
+        // Decisión del dueño del 2026-10-16: los rangos de mora de las centrales y el aviso previo a los codeudores son de K5 y se ofrecen.
+        foreach (var clave in new[] { ParametrosDeCartera.CentralesRangosDeMora, ParametrosDeCartera.AvisoPrevioIncluirCodeudores })
+        {
+            var d = ParametrosDeCartera.Definiciones.Single(x => x.Clave == clave);
+            Assert.True(d.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5 && d.DisponibleEnLaEntrega(), $"{clave} es de K5 y se ofrece.");
+        }
     }
 
     [Fact]

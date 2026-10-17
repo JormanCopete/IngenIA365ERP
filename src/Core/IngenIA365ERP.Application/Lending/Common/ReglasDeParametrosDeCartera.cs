@@ -29,6 +29,16 @@ public static class ErroresDeParametrosDeCartera
     /// </summary>
     public const string CodigoAcompananteSinModo = "Lending.Parameter.CompanionHasNoMode";
 
+    /// <summary>
+    /// <b>(nuevo; decisión del dueño del 2026-10-16)</b>: los rangos de mora de <c>Centrales.RangosDeMora</c> tienen la forma pero no la regla —límites
+    /// que no crecen, un rango negativo que no existe, un tipo de cartera repetido—.
+    /// </summary>
+    public const string CodigoRangosDeMoraInvalidos = "Lending.Parameter.InvalidArrearsRanges";
+
+    /// <summary>Los rangos de mora no sirven (422), con el motivo.</summary>
+    public static Error RangosDeMoraInvalidos(string valor, string motivo) => new ErrorConDatos(CodigoRangosDeMoraInvalidos, motivo,
+        new { key = ParametrosDeCartera.CentralesRangosDeMora, value = valor });
+
     /// <summary>C01: el acompañante no tiene modo propio (422).</summary>
     public static Error AcompananteSinModo(string clave, string tipoDeHecho, string principal) => new ErrorConDatos(CodigoAcompananteSinModo,
         $"«{tipoDeHecho}» viaja siempre con «{principal}» y pasa a contabilidad como él: configure «{clave}» en el tipo de hecho principal.",
@@ -96,6 +106,9 @@ public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacion
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.AcompananteSinModo(definicion.Clave, ambito.Code, principal));
         if (definicion.Clave == ParametrosDeCartera.ContabilidadDiferirComisiones && alta.Valor == "true")
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.DiferirComisionesNoSoportado());
+        if (definicion.Clave == ParametrosDeCartera.CentralesRangosDeMora
+            && Domain.Lending.Regulatory.RangosDeMoraParaCentrales.Validar(alta.Valor) is { } motivo)
+            return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.RangosDeMoraInvalidos(alta.Valor, motivo));
 
         foreach (var codigo in definicion.LimitesLegales)
         {

@@ -138,6 +138,21 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string CentralesCodigosDeSuscriptor = "Centrales.CodigosDeSuscriptor";
 
+    /// <summary>
+    /// K5 (US16; decisión del dueño del 2026-10-16): los rangos de mora del reporte a centrales por tipo de cartera (modalidad) y desde qué rango el
+    /// dato es negativo, como <c>TIPO=límite,límite,…|rango</c> separados por punto y coma (<see cref="Regulatory.RangosDeMoraParaCentrales"/>). El
+    /// defecto (rangos de 30 días, negativo desde el primero) reproduce el comportamiento de antes: toda mora es dato negativo. Se lee vigente al corte
+    /// del archivo. (nuevo)
+    /// </summary>
+    public const string CentralesRangosDeMora = "Centrales.RangosDeMora";
+
+    /// <summary>
+    /// K5 (decisión del dueño del 2026-10-16): el aviso previo al reporte negativo se abre y se envía también a cada codeudor vigente del crédito, con su
+    /// propia constancia, y la central reporta al codeudor con dato negativo sólo si <b>su</b> aviso está completo. En <c>false</c> (el defecto), los
+    /// codeudores no reciben aviso y no se reportan con dato negativo (quedan fuera con <c>NoPriorNoticeEvidence</c>). (nuevo)
+    /// </summary>
+    public const string AvisoPrevioIncluirCodeudores = "AvisoPrevio.IncluirCodeudores";
+
     /// <summary>Forma de <see cref="CentralesCodigosDeSuscriptor"/>.</summary>
     public const string PatronDeCodigosDeSuscriptor = @"^[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20}(;[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20})*$";
 
@@ -385,6 +400,19 @@ public static class ParametrosDeCartera
             "Código de suscriptor de la cooperativa en cada central de riesgo, como CENTRAL=código separados por punto y coma "
             + "(DATACREDITO=123456;TRANSUNION=ABC123). Sin el de una central, su archivo no se genera.",
             string.Empty, K5, patron: PatronDeCodigosDeSuscriptor, admiteVacio: true),
+        Texto(CentralesRangosDeMora,
+            "Rangos de mora del reporte a centrales por tipo de cartera (modalidad) y desde qué rango el dato es negativo: TIPO=límite,límite,…|rango "
+            + "separados por punto y coma, con * para los tipos que no se nombran (*=30,60,90,120,150,180|1;VIVIENDA=60,120,180|1). El rango 1 va de 1 "
+            + "al primer límite, el último queda abierto; por debajo del rango negativo la obligación se reporta al día. La altura de mora reportada "
+            + "sale del rango.",
+            Regulatory.RangosDeMoraParaCentrales.Defecto, K5, patron: Regulatory.RangosDeMoraParaCentrales.Patron) with
+        {
+            PendienteDeValidar = "Defecto propuesto (rangos de 30 días, negativo desde el primero: toda mora es dato negativo, como antes del parámetro), "
+                                 + "pendiente de validar por el dueño y la contadora (decisión del dueño del 2026-10-16).",
+        },
+        SiNo(Modulo, AvisoPrevioIncluirCodeudores,
+            "El aviso previo al reporte negativo se abre y se envía también a cada codeudor del crédito, con su propia constancia; la central reporta al "
+            + "codeudor con dato negativo sólo si su aviso está completo. En «false», los codeudores no se reportan con dato negativo.", false, K5, General),
     ];
 
     private static DefinicionDeParametro Texto(string clave, string descripcion, string defecto, EntregaDeModulo desde,

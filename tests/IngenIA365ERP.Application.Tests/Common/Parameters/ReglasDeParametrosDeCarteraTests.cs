@@ -164,6 +164,21 @@ public class ReglasDeParametrosDeCarteraTests
     }
 
     [Fact]
+    public async Task Los_rangos_de_mora_de_las_centrales_exigen_su_regla_ademas_de_su_forma()
+    {
+        // Decisión del dueño del 2026-10-16: la forma la revisa el patrón; los límites crecientes y el rango negativo existente, la regla de Cartera.
+        var mal = await Registrar(ParametrosDeCartera.CentralesRangosDeMora, "*=60,30|1", fuente: null);
+
+        mal.Error.Code.Should().Be(ErroresDeParametrosDeCartera.CodigoRangosDeMoraInvalidos);
+        mal.Error.Message.Should().Contain("orden creciente");
+        Datos(mal.Error).GetProperty("key").GetString().Should().Be(ParametrosDeCartera.CentralesRangosDeMora);
+        (await Registrar(ParametrosDeCartera.CentralesRangosDeMora, "*=30,60|4", fuente: null)).Error.Code
+            .Should().Be(ErroresDeParametrosDeCartera.CodigoRangosDeMoraInvalidos);
+
+        (await Registrar(ParametrosDeCartera.CentralesRangosDeMora, "*=30,60,90|2;VIVIENDA=60,120|1", fuente: null)).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Las_reglas_de_Cartera_no_corren_para_otros_modulos_ni_las_de_la_plataforma_para_Cartera()
     {
         var plataforma = Substitute.For<IReglasDeParametros>();
