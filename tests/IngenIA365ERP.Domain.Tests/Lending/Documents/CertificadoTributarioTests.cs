@@ -2,6 +2,7 @@ using FluentAssertions;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Documents;
+using IngenIA365ERP.Domain.Lending.Housing;
 using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Replay;
 using IngenIA365ERP.Domain.Tests.Lending.Replay;
@@ -92,6 +93,44 @@ public class CertificadoTributarioTests
         c.Vivienda.Select(x => x.Numero).Should().Equal("CR-9");
         c.TotalInteresesDeVivienda.Should().Be(0m, "sin pagos no hay intereses pagados");
         c.Vivienda[0].SaldoDeCapital.Should().BeGreaterThan(0m);
+    }
+
+    /// <summary>K6b (T1046): una serie UVR diaria sintética (valores DE PRUEBA, no publicados) que crece un poco cada día de 2027.</summary>
+    private static SerieUvr SerieDePrueba()
+    {
+        var valores = new List<ValorDeUvr>();
+        var valor = 400.0000m;
+        for (var d = new DateOnly(2027, 1, 1); d <= new DateOnly(2028, 1, 31); d = d.AddDays(1))
+        {
+            valores.Add(new ValorDeUvr(d, valor));
+            valor = Math.Round(valor * 1.00015m, 4, MidpointRounding.AwayFromZero);
+        }
+        return new SerieUvr(valores);
+    }
+
+    [Fact]
+    public void Un_credito_de_vivienda_en_UVR_va_a_la_seccion_de_vivienda_con_los_intereses_en_pesos_a_la_UVR_de_cada_pago()
+    {
+        var serie = SerieDePrueba();
+        var entrada = Credito(new DateOnly(2027, 1, 15),
+            Pago("P1", new DateOnly(2027, 2, 15), 160_000m, 10),
+            Pago("P2", new DateOnly(2027, 3, 15), 160_000m, 11)) with { Uvr = serie };
+        var alCierre = MotorDeCartera.Reconstruir(entrada, Cierre);
+        alCierre.EnUvr.Should().BeTrue();
+
+        var c = CertificadoTributario.Armar(Año, [new CreditoParaCertificar("CR-V", "Vivienda UVR", true, alCierre)]);
+
+        c.Creditos.Should().BeEmpty();
+        var vivienda = c.Vivienda.Should().ContainSingle().Subject;
+        vivienda.InteresesPagados.Should().Be(InteresDe(alCierre, "P1", "P2")).And.BeGreaterThan(0m);
+        c.TotalInteresesDeVivienda.Should().Be(vivienda.InteresesPagados);
+        // En pesos a la UVR de la fecha valor de cada pago, no a la del cierre.
+        var pagosDelLibro = alCierre.Libro.Movimientos.Where(m => CertificadoTributario.ClasesDePago.Contains(m.Clase)
+            && (CertificadoTributario.Corrientes.Contains(m.Concepto) || CertificadoTributario.DeMora.Contains(m.Concepto))).ToList();
+        pagosDelLibro.Should().NotBeEmpty().And.OnlyContain(m => m.ValorUvr == serie.Requerida(m.Dia));
+        (-pagosDelLibro.Sum(m => m.Monto)).Should().Be(vivienda.InteresesPagados);
+        vivienda.SaldoDeCapital.Should().Be(alCierre.Saldo(LoanConcept.Principal), "el saldo al 31 de diciembre, en pesos a la UVR de ese día");
+        alCierre.Uvr!.Valor.Should().Be(serie.Requerida(Cierre));
     }
 
     [Fact]

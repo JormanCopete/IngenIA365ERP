@@ -85,14 +85,20 @@ public sealed class CreateCreditLineCommandHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task Vivienda_es_HousingNotAvailable_hasta_K6b()
+    public async Task Vivienda_es_HousingNotAvailable_antes_de_K6b_y_desde_K6b_pasa_la_Ley_546()
     {
         await _l.NormativaAsync();
+        await _l.ViviendaAsync();
 
-        var r = await _l.Crear().Handle(LineasDePrueba.Alta("VIV", LineasDePrueba.Version(modalidad: "VIVIENDA", subsegmento: null)), default);
+        // Antes de K6b (la guarda de entrega, explícita) la vivienda no se crea, como en K1 (D18).
+        var antes = await new CreateCreditLineCommandHandler(_l.Db, _l.Reglas(Domain.Lending.EntregaDeCartera.K6a), _l.Alta(), _l.G.Reloj)
+            .Handle(LineasDePrueba.Alta("VIV", LineasDePrueba.Vivienda()), default);
+        antes.Error.Code.Should().Be("Lending.CreditLine.HousingNotAvailable");
+        LineasDePrueba.Datos(antes.Error).GetProperty("availableFrom").GetString().Should().Be("K6b");
 
-        r.Error.Code.Should().Be("Lending.CreditLine.HousingNotAvailable");
-        LineasDePrueba.Datos(r.Error).GetProperty("availableFrom").GetString().Should().Be("K6b");
+        // Con K6b vigente (T1055) se crea si cumple la Ley 546.
+        var r = await _l.Crear().Handle(LineasDePrueba.Alta("VIV", LineasDePrueba.Vivienda()), default);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
     }
 
     [Fact]

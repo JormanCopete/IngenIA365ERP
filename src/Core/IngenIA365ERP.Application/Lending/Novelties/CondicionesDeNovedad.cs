@@ -32,7 +32,8 @@ public static class CondicionesDeNovedad
             RegisteredAt = operacion.RegisteredAt,
             Cause = credito is not null ? TermsVersionCause.Novation : reestructura ? TermsVersionCause.Restructuring : TermsVersionCause.Modification,
             NoveltyId = n.Id,
-            RulesVersion = VersionesDeReglas.Vigente,
+            // K6b (T1053): un crédito de vivienda conserva las reglas de vivienda tras la novedad; los demás, la vigente.
+            RulesVersion = VersionesDeReglas.ParaCreditoNuevo(VersionesDeReglas.EsDeVivienda(v.RulesVersion)),
             CreditLineVersionId = v.CreditLineVersionId,
             ModalityCode = v.ModalityCode,
             SubsegmentCode = v.SubsegmentCode,
@@ -67,6 +68,7 @@ public static class CondicionesDeNovedad
             RoundingUnit = v.RoundingUnit,
             RoundingMode = v.RoundingMode,
             RoundingMoment = v.RoundingMoment,
+            DenominationUnit = v.DenominationUnit,
             AllocationOrder = v.AllocationOrder,
             ConceptPriority = v.ConceptPriority,
             SuspenseWithItsConcept = v.SuspenseWithItsConcept,

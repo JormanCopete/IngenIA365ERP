@@ -136,7 +136,8 @@ public sealed class RequisitosDelDesembolso(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    Housing.LectorDeVivienda? vivienda = null)
 {
     /// <summary>El permiso que desembolsa (y cuyo monto operativo se mira).</summary>
     public const string PermisoDeDesembolsar = "Lending.Disbursements.Execute";
@@ -227,6 +228,10 @@ public sealed class RequisitosDelDesembolso(
         // 4. Garantías, codeudores y pagaré.
         var desembolsado = yaDesembolsado + bruto;
         var pendientes = await GarantiasAsync(s, version, desembolsado, partes, fechaValor, bloqueosHallados, ct);
+        // K6b (T1055): un crédito de vivienda exige la hipoteca de primer grado y cumple la Ley 546 (plazo, financiable, cuota-ingreso).
+        if (await Housing.ValidacionDeVivienda.GarantiasAsync(db, s, simulacion, ct) is { } sinHipoteca) bloqueosHallados.Add(sinHipoteca);
+        if (vivienda is not null && await Housing.ValidacionDeVivienda.SolicitudAsync(db, vivienda, s, simulacion, desembolsado, fechaValor, ct) is { IsFailure: true } ley546)
+            bloqueosHallados.Add(ley546.Error);
 
         // 5. Listas, bloqueos y concentración.
         var personasDeLaSolicitud = partes.Select(p => p.PersonId).Append(s.ApplicantPersonId).Distinct().ToList();

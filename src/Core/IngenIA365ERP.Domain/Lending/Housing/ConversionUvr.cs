@@ -117,6 +117,28 @@ public static class ConversionUvr
     }
 
     /// <summary>
+    /// K6b (T1055): el plan en UVR de un crédito que se desembolsa, en pesos a la UVR del desembolso, con la entrada en pesos que lo originó: el capital
+    /// de las cuotas por acumulado contra el monto desembolsado (Σ capital = monto al centavo, SC-017), lo demás uno a uno. Es el plan que se guarda en
+    /// pesos (<c>LND_RepaymentInstallments</c>, con su copia en UVR) y el que muestra la simulación con la leyenda de que la UVR cambia cada día.
+    /// </summary>
+    public static PlanDePagos PlanAlDesembolso(PlanDePagos enUvr, decimal valorUvr, EntradaDePlan entradaEnPesos)
+    {
+        ArgumentNullException.ThrowIfNull(enUvr);
+        ArgumentNullException.ThrowIfNull(entradaEnPesos);
+        var enPesos = PlanEnPesos(enUvr, valorUvr, entradaEnPesos.Redondeo);
+        var capital = Repartir(enUvr.Cuotas.Select(c => c.Capital).ToList(), valorUvr, entradaEnPesos.Redondeo.Modo, entradaEnPesos.Monto);
+        var saldo = entradaEnPesos.Monto;
+        var cuotas = new List<CuotaDelPlan>(enPesos.Cuotas.Count);
+        for (var i = 0; i < enPesos.Cuotas.Count; i++)
+        {
+            var c = enPesos.Cuotas[i];
+            cuotas.Add(c with { SaldoInicial = saldo, Capital = capital[i], SaldoFinal = saldo - capital[i] });
+            saldo -= capital[i];
+        }
+        return enPesos with { Entrada = entradaEnPesos, Cuotas = cuotas };
+    }
+
+    /// <summary>
     /// Una distribución en UVR, en pesos a la UVR de su fecha valor: lo que usó del anticipo uno a uno; lo cubierto, el anticipo, el saldo a favor y el
     /// excedente por acumulado contra el valor recibido en pesos (<paramref name="valorEnPesos"/>) más lo usado del anticipo, así se cumple
     /// <c>Valor = Σ Lineas + Anticipo + SaldoAFavor + Excedente − Σ AnticipoUsado</c> al centavo.

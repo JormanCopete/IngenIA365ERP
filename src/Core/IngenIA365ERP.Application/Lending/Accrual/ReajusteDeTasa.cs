@@ -175,6 +175,6 @@ public sealed class ReajusteDeTasa(
         SuspenseWithItsConcept = v.SuspenseWithItsConcept, AllowsSpecificInstallmentOutOfOrder = v.AllowsSpecificInstallmentOutOfOrder,
         NoteRecalculation = v.NoteRecalculation, Insurances = v.Insurances, ResultingEffectiveRate = v.ResultingEffectiveRate,
         ChargesSpread = v.ChargesSpread, UsuryValuePublicId = v.UsuryValuePublicId, RestructuringCount = v.RestructuringCount,
-        RestructuredOn = v.RestructuredOn, InputsSha256 = operacion.InputsSha256,
+        RestructuredOn = v.RestructuredOn, InputsSha256 = operacion.InputsSha256, DenominationUnit = v.DenominationUnit,
     };
 }

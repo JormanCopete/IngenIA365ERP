@@ -200,6 +200,8 @@ public sealed class ArmadoDeSolicitud(
         s.PayoffRequest = e.OwnLoanPayoffs is { Count: > 0 } r ? ConsultasDeSolicitudes.Serializar(r) : null;
         s.PolicyExceptionRequested = e.PolicyExceptionRequested;
         s.PolicyExceptionReason = e.PolicyExceptionRequested ? e.PolicyExceptionReason?.Trim() : null;
+        // K6b (T1055): sólo una solicitud de vivienda dice si el inmueble es VIS.
+        s.IsSocialHousing = Housing.ValidacionDeVivienda.EsVivienda(a.Simulacion) ? e.IsSocialHousing ?? false : null;
     }
 
     /// <summary>

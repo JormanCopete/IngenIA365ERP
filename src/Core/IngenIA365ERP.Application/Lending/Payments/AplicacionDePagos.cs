@@ -253,7 +253,11 @@ public sealed class AplicacionDePagos(
 
         // El tope legal del prepago sin penalidad (FR-075): sólo se sella, el motor no cobra cargos de prepago. La recogida queda fuera (decisión del
         // dueño, 2026-10-14): recoger un crédito al desembolsar otro no es un prepago del deudor y no se bloquea por falta del SMMLV o del límite.
-        var tope = r.Class == ClaseDeRecaudador.OwnLoanPayoff ? Result.Success<TopeSellado?>(null) : await TopeAsync(credito, modalidad, dist, ct);
+        // K6b (T1053): con las reglas de vivienda el prepago va siempre sin penalidad (Ley 546 de 1999): se sella «dentro del tope» sin leer el SMMLV.
+        var tope = r.Class == ClaseDeRecaudador.OwnLoanPayoff ? Result.Success<TopeSellado?>(null)
+            : Domain.Lending.VersionesDeReglas.EsDeVivienda(d.Estado.RulesVersion) && (modalidad is PaymentModality.ExtraordinaryPrincipal or PaymentModality.FullPayoff || dist.AbonoACapital != 0m)
+                ? Result.Success<TopeSellado?>(new TopeSellado(new ResultadoDeTopeDePrepago(true, 0m, 0m), null, null))
+                : await TopeAsync(credito, modalidad, dist, ct);
         if (tope.IsFailure) return Falla(tope.Error);
 
         var datos = (await partes.DatosAsync([d.Cargado], ct))[credito.Id];
@@ -485,7 +489,7 @@ public sealed class AplicacionDePagos(
             : Result.Success<Domain.Entities.Lending.Payroll.PayrollDeductionResult?>(pendiente);
     }
 
-    private sealed record TopeSellado(ResultadoDeTopeDePrepago Resultado, Guid Smmlv, Guid Limite);
+    private sealed record TopeSellado(ResultadoDeTopeDePrepago Resultado, Guid? Smmlv, Guid? Limite);
 
     /// <summary>
     /// El tope legal del prepago (FR-075) en un abono extraordinario a capital o en una cancelación: el SMMLV y el límite a la fecha del desembolso.

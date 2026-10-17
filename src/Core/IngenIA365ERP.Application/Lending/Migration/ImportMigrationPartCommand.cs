@@ -337,7 +337,8 @@ public sealed class ImportMigrationPartCommandHandler(
             if (codigo is null) return null;
             if (_lineas.TryGetValue(codigo, out var l) && l.Version is { } version && alcance.IncluyeLinea(l.Id))
             {
-                if (string.Equals(version.ModalityCode, "VIVIENDA", StringComparison.OrdinalIgnoreCase))
+                // D18: hasta K6b la vivienda no se migra; desde K6b (T1055) entra a la carga y al cuadre como las demás.
+                if (string.Equals(version.ModalityCode, "VIVIENDA", StringComparison.OrdinalIgnoreCase) && !Housing.LectorDeVivienda.Disponible())
                 {
                     fila.Error(columna, ErroresDeMigracion.CodigoViviendaNoDisponible, ErroresDeMigracion.ViviendaNoDisponible(fila.Numero));
                     return null;

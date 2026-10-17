@@ -129,6 +129,10 @@ public sealed record CreditLineVersionInput
     public DayCountConvention DayCount { get; init; } = DayCountConvention.Actual365;
     public RateEquivalence RateEquivalence { get; init; } = RateEquivalence.Compound;
     public RoundingInput Rounding { get; init; } = new();
+
+    /// <summary>K6b (T1055): la unidad del capital (<c>Pesos</c> por defecto; <c>Uvr</c> sólo en una combinación de vivienda que la admite).</summary>
+    public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
+
     public AllocationOrder AllocationOrder { get; init; } = AllocationOrder.OldestInstallmentFirst;
     public IReadOnlyList<LoanConcept>? ConceptOrder { get; init; }
     public bool SuspenseWithItsConcept { get; init; } = true;
@@ -200,6 +204,7 @@ public sealed record CreditLineVersionInput
             RoundingUnit = Rounding?.Unit ?? RedondeoDeCartera.Centavo,
             RoundingMode = Rounding?.Mode ?? RoundingMode.AwayFromZero,
             RoundingMoment = Rounding?.Moment ?? RoundingMoment.PerInstallment,
+            DenominationUnit = DenominationUnit,
             AllocationOrder = AllocationOrder,
             ConceptPriority = ConceptOrder ?? BorradorDeVersionDeLinea.PrelacionPorDefecto,
             SuspenseWithItsConcept = SuspenseWithItsConcept,
@@ -362,8 +367,14 @@ public sealed record CreditLineVersionDto(
                     s.RetainedFraction, s.SelfInsured, s.IsDebtorLifeInsurance, s.Computa());
             }).ToList(),
             l.Garantias.Select(g => new CollateralRuleDto(g.Order, g.MinAmount, g.MaxAmount, g.MinTermMonths, g.MaxTermMonths, g.RequiredCoDebtors,
-                ListaDeEnums.Leer<CollateralKind>(g.AdmittedKinds), g.MinimumCoverage, g.ContributionsCountAsCollateral, g.RequiredPromissoryNoteKind)).ToList());
+                ListaDeEnums.Leer<CollateralKind>(g.AdmittedKinds), g.MinimumCoverage, g.ContributionsCountAsCollateral, g.RequiredPromissoryNoteKind)).ToList())
+        {
+            DenominationUnit = v.DenominationUnit,
+        };
     }
+
+    /// <summary>K6b (T1055): la unidad del capital de la versión (<c>Pesos</c> o <c>Uvr</c>).</summary>
+    public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
 }
 
 /// <summary>Una versión en el historial de la línea (api.md §3.1 <c>GET /{id}</c>).</summary>

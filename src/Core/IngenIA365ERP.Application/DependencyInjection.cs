@@ -244,6 +244,8 @@ public static class DependencyInjection
         // Feature 013, US1 (T0352–T0355): las reglas únicas de una versión de línea, su único escritor, el lector a (D, R) de la versión
         // vigente y el de las equivalencias de Comercial a la fecha de la venta.
         services.AddScoped<Lending.Configuration.ReglasDeLineaDeCredito>();
+        // K6b (T1051, T1055): los límites de vivienda y el tope de tasa de vivienda, para la línea, la solicitud y el desembolso.
+        services.AddScoped<Lending.Housing.LectorDeVivienda>();
         services.AddScoped<Lending.Configuration.AltaDeVersionDeLinea>();
         services.AddScoped<Lending.Configuration.VersionVigenteDeLinea>();
         services.AddScoped<Lending.Configuration.EquivalenciasDeComercio>();

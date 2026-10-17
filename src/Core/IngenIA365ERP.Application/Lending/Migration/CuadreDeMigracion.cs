@@ -234,7 +234,8 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
         foreach (var c in creditos)
         {
             var (modalidad, subsegmento) = modalidadDe.GetValueOrDefault(c.CreditLineCode);
-            if (string.Equals(modalidad, "VIVIENDA", StringComparison.OrdinalIgnoreCase)) continue; // fuera hasta K6b
+            // D18: fuera del cuadre hasta K6b; desde K6b (T1055, FR-141) la vivienda entra por concepto, modalidad, sub-segmento, categoría y cuenta.
+            if (string.Equals(modalidad, "VIVIENDA", StringComparison.OrdinalIgnoreCase) && !Housing.LectorDeVivienda.Disponible()) continue;
             var r = riesgo.GetValueOrDefault(c.SourceLoanNumber);
             var categoria = r is null ? RatingCategory.A : HomologacionDeCalificacion.Contable(r.Rating, r.Subcategory);
             var d = new DimensionesDeCreditoDeCartera(c.CreditLineCode, modalidad, subsegmento, categoria.ToString(), empleados.GetValueOrDefault(c.PersonId),

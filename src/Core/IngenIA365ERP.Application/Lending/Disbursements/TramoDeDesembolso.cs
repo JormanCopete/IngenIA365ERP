@@ -185,6 +185,8 @@ public sealed class TramoDeDesembolso(
             RoundingUnit = v.RoundingUnit,
             RoundingMode = v.RoundingMode,
             RoundingMoment = v.RoundingMoment,
+            // K6b (T1055): la unidad del capital de la versión de la línea (en UVR, la reconstrucción lleva el crédito en UVR).
+            DenominationUnit = v.DenominationUnit,
             AllocationOrder = v.AllocationOrder,
             ConceptPriority = v.ConceptPriority,
             SuspenseWithItsConcept = v.SuspenseWithItsConcept,
@@ -212,6 +214,9 @@ public sealed class TramoDeDesembolso(
         var cargado = await cargador.CargarAsync(creditoId, null, r.FechaValor, ct);
         if (cargado is not { Listo: true })
             throw new InvalidOperationException($"No se pudo reconstruir el crédito para regenerar su plan: {cargado?.Error?.Code} {cargado?.Error?.Message}");
+        // K6b (T1055): un crédito en UVR se desembolsa en un solo tramo (la línea en UVR no admite tramos: ReglasDeLineaDeCredito).
+        if (cargado.Pactadas.DenominationUnit == DenominationUnit.Uvr)
+            throw new InvalidOperationException("Lending.Housing.UvrTranchesNotSupported: un crédito en UVR se desembolsa en un solo tramo.");
         var anterior = Domain.Lending.MotorDeCartera.Reconstruir(cargado.Entrada!, r.FechaValor).Plan
             ?? throw new InvalidOperationException("El crédito no tiene plan a la fecha valor del tramo.");
         return Domain.Lending.MotorDeCartera.RegenerarPlan(anterior, new EntradaDeRegeneracion(r.FechaValor) { CambioDeCapital = r.Bruto });
@@ -224,11 +229,16 @@ public sealed class TramoDeDesembolso(
     /// </summary>
     public Task<RepaymentScheduleVersion> PlanAsync(Loan credito, LoanTermsVersion condiciones, LoanOperation operacion, RequisitosEvaluados r,
         int numeroDeVersion, PlanDePagos plan, CancellationToken ct) =>
-        PlanAsync(credito, condiciones, operacion, r.FechaValor, r.Desembolsado, r.Simulacion.Huella, numeroDeVersion, plan, ct);
+        PlanAsync(credito, condiciones, operacion, r.FechaValor, r.Desembolsado, r.Simulacion.Huella, numeroDeVersion, plan, ct,
+            r.EsElPrimero ? r.Simulacion.PlanEnUvr : null, r.EsElPrimero ? r.Simulacion.ValorUvr : null);
 
     /// <summary>US6 (T0590): la versión del plan con lo desembolsado y la huella dados (la usa también el nacimiento de la obligación de una venta).</summary>
+    /// <remarks>
+    /// K6b (T1059): con <paramref name="planEnUvr"/> (el primer tramo de una línea en UVR) cada cuota guarda también su valor en UVR y la versión la UVR
+    /// con que se valoraron en pesos.
+    /// </remarks>
     public async Task<RepaymentScheduleVersion> PlanAsync(Loan credito, LoanTermsVersion condiciones, LoanOperation operacion, DateOnly fechaValor,
-        decimal desembolsado, string huella, int numeroDeVersion, PlanDePagos plan, CancellationToken ct)
+        decimal desembolsado, string huella, int numeroDeVersion, PlanDePagos plan, CancellationToken ct, PlanDePagos? planEnUvr = null, decimal? valorUvr = null)
     {
         if (plan.TotalCapital != desembolsado)
             throw new InvalidOperationException(
@@ -250,7 +260,9 @@ public sealed class TramoDeDesembolso(
             InstallmentCount = plan.Cuotas.Count,
             RulesVersion = plan.RulesVersion,
             InputsSha256 = huella,
+            UvrValue = planEnUvr is null ? null : valorUvr,
         };
+        var enUvr = planEnUvr?.Cuotas.ToDictionary(c => c.Numero);
         var cuotas = plan.Cuotas.Select(c => new RepaymentInstallment
         {
             ScheduleVersion = version,
@@ -268,6 +280,12 @@ public sealed class TramoDeDesembolso(
             ClosingPrincipal = c.SaldoFinal,
             IsExtraordinary = c.Extraordinaria != 0m || plan.Entrada.Extraordinarias.Any(x => x.Cuota == c.Numero),
             IsGraceInstallment = c.SoloInteres,
+            OpeningPrincipalUvr = enUvr?.GetValueOrDefault(c.Numero)?.SaldoInicial,
+            PrincipalUvr = enUvr?.GetValueOrDefault(c.Numero)?.Capital,
+            InterestUvr = enUvr?.GetValueOrDefault(c.Numero)?.Interes,
+            InsuranceUvr = enUvr?.GetValueOrDefault(c.Numero)?.Seguro,
+            TotalUvr = enUvr?.GetValueOrDefault(c.Numero)?.Total,
+            ClosingPrincipalUvr = enUvr?.GetValueOrDefault(c.Numero)?.SaldoFinal,
         }).ToList();
         registro.RegistrarPlan(version, cuotas);
         return version;
