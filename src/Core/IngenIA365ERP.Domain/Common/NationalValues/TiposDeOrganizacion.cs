@@ -24,6 +24,32 @@ public sealed record TipoDeOrganizacion(string Code, string Name, bool IsEmploye
     /// cuántos meses después del corte se refleja en el cierre—. Nulo: el documento no lo dice (la evaluación no se valida contra él).
     /// </summary>
     public PeriodicidadDeEvaluacion? PortfolioEvaluation { get; init; }
+
+    /// <summary>
+    /// Feature 013, K5 (US16, T1002, T1007; FR-136): el formato de cartera del SICSES según el nivel de supervisión del perfil —en qué meses se corta,
+    /// cuántos días calendario después del fin del mes vence la entrega y cuántos días antes se avisa—. Nulo o sin el nivel: el documento no lo dice
+    /// (el SICSES se genera igual, pero no hay plazo que vigilar). Dato del documento, «pendiente de validar» con el resto del tipo.
+    /// </summary>
+    public IReadOnlyList<ReporteSicsesPorNivel>? SicsesReport { get; init; }
+
+    /// <summary>El reporte del SICSES de un nivel de supervisión, o nulo si el documento no lo dice.</summary>
+    public ReporteSicsesPorNivel? SicsesDelNivel(int nivel) => SicsesReport?.FirstOrDefault(r => r.SupervisionLevel == nivel);
+}
+
+/// <summary>
+/// El formato de cartera del SICSES de un nivel de supervisión (K5): los meses de corte, el plazo en días calendario desde el último día del mes cortado
+/// y los días de aviso antes del plazo (<c>Cartera.PlazoRegulatorioPorVencer</c>). (nuevo)
+/// </summary>
+public sealed record ReporteSicsesPorNivel(int SupervisionLevel, IReadOnlyList<int> CutoffMonths, int DueDays, int WarningDays)
+{
+    /// <summary>¿Se reporta el mes <paramref name="mes"/>?</summary>
+    public bool SeReporta(int mes) => CutoffMonths.Contains(mes);
+
+    /// <summary>El último día para entregar el corte de <paramref name="anio"/>-<paramref name="mes"/>: el fin del mes más los días del plazo.</summary>
+    public DateOnly Limite(int anio, int mes) => new DateOnly(anio, mes, 1).AddMonths(1).AddDays(-1).AddDays(DueDays);
+
+    /// <summary>Desde qué día se avisa que vence el corte de <paramref name="anio"/>-<paramref name="mes"/>.</summary>
+    public DateOnly AvisoDesde(int anio, int mes) => Limite(anio, mes).AddDays(-WarningDays);
 }
 
 /// <summary>El reporte de castigos al supervisor de un tipo de organización: si es obligatorio y su plazo en días calendario (nulo: sin plazo fijado).</summary>
@@ -48,9 +74,12 @@ public sealed record CategoriaDeFondoDeEmpleados(string Code, string Name);
 ///
 /// <para>Esquema 1 (camelCase): <c>{ employeeFundCategories: [ { code, name } ], organizationTypes: [ { code, name,
 /// isEmployeeFund, expectedLoss: NotAdmitted | Admitted | Required, verified?, writeOffReport?: { required, dueDays? },
-/// portfolioEvaluation?: { cutoffMonths: [1..12], effectMonthsAfterCutoff } } ] }</c>. Códigos únicos; si algún tipo es
+/// portfolioEvaluation?: { cutoffMonths: [1..12], effectMonthsAfterCutoff }, sicsesReport?: [ { supervisionLevel: 1..3, cutoffMonths: [1..12],
+/// dueDays, warningDays } ] } ] }</c>. Códigos únicos; si algún tipo es
 /// fondo de empleados, las categorías no pueden faltar. <c>writeOffReport</c> y <c>portfolioEvaluation</c> son opcionales (K3, US14: sin
-/// cambio de versión de esquema); un plazo obligatorio no puede faltar si el reporte es obligatorio y los meses de corte van del 1 al 12.</para>
+/// cambio de versión de esquema); un plazo obligatorio no puede faltar si el reporte es obligatorio y los meses de corte van del 1 al 12.
+/// <c>sicsesReport</c> es opcional (K5, US16; tampoco cambia la versión): un nivel por fila, sin repetirse, plazo de más de cero días y aviso de cero o
+/// más.</para>
 /// </summary>
 public sealed class TiposDeOrganizacion
 {
@@ -132,6 +161,7 @@ public sealed class TiposDeOrganizacion
             {
                 WriteOffReport = Reporte(t, ruta, errores),
                 PortfolioEvaluation = Evaluacion(t, ruta, errores),
+                SicsesReport = Sicses(t, ruta, errores),
             });
         }
 
@@ -181,6 +211,48 @@ public sealed class TiposDeOrganizacion
         if (!e.TryGetProperty("effectMonthsAfterCutoff", out var x) || x.ValueKind != JsonValueKind.Number || !x.TryGetInt32(out efecto) || efecto < 0)
             errores.Add(new($"{aqui}.effectMonthsAfterCutoff", "Los meses entre el corte y el cierre que refleja la evaluación son un entero de cero o más."));
         return new PeriodicidadDeEvaluacion(meses, efecto);
+    }
+
+    private static IReadOnlyList<ReporteSicsesPorNivel>? Sicses(JsonElement tipo, string ruta, List<ErrorDeDocumentoNormativo> errores)
+    {
+        if (!tipo.TryGetProperty("sicsesReport", out var s) || s.ValueKind == JsonValueKind.Null) return null;
+        var aqui = $"{ruta}.sicsesReport";
+        if (s.ValueKind != JsonValueKind.Array)
+        {
+            errores.Add(new(aqui, "El reporte del SICSES es una lista de { supervisionLevel, cutoffMonths, dueDays, warningDays }."));
+            return null;
+        }
+        var lista = new List<ReporteSicsesPorNivel>();
+        var i = 0;
+        foreach (var r in s.EnumerateArray())
+        {
+            var donde = $"{aqui}[{i++}]";
+            if (r.ValueKind != JsonValueKind.Object)
+            {
+                errores.Add(new(donde, "Cada nivel del reporte del SICSES es un objeto."));
+                continue;
+            }
+            var nivel = Entero(r, "supervisionLevel", donde, n => n is >= 1 and <= 3, "El nivel de supervisión es 1, 2 o 3.", errores);
+            if (nivel > 0 && lista.Any(x => x.SupervisionLevel == nivel))
+                errores.Add(new($"{donde}.supervisionLevel", $"El nivel {nivel} está repetido."));
+            var meses = new List<int>();
+            foreach (var m in LecturaDeDocumento.Arreglo(r, "cutoffMonths", donde, noVacio: true, errores))
+            {
+                if (m.ValueKind == JsonValueKind.Number && m.TryGetInt32(out var mes) && mes is >= 1 and <= 12 && !meses.Contains(mes)) meses.Add(mes);
+                else errores.Add(new($"{donde}.cutoffMonths", "Los meses de corte van del 1 al 12, sin repetirse."));
+            }
+            var plazo = Entero(r, "dueDays", donde, n => n > 0, "El plazo del SICSES es un número entero de días mayor que cero.", errores);
+            var aviso = Entero(r, "warningDays", donde, n => n >= 0, "Los días de aviso son un entero de cero o más.", errores);
+            lista.Add(new ReporteSicsesPorNivel(nivel, meses, plazo, aviso));
+        }
+        return lista;
+    }
+
+    private static int Entero(JsonElement objeto, string propiedad, string ruta, Func<int, bool> valido, string mensaje, List<ErrorDeDocumentoNormativo> errores)
+    {
+        if (objeto.TryGetProperty(propiedad, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var n) && valido(n)) return n;
+        errores.Add(new($"{ruta}.{propiedad}", mensaje));
+        return 0;
     }
 
     private static string? Codigo(JsonElement objeto, string ruta, HashSet<string> vistos, string que, List<ErrorDeDocumentoNormativo> errores)

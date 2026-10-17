@@ -131,6 +131,16 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string DocumentosCertificadoTributarioSaldoIncluye = "Documentos.CertificadoTributario.SaldoIncluye";
 
+    /// <summary>
+    /// K5 (US16, T1003; adaptadores-y-archivos.md §7.4): el código de suscriptor (fuente) de la cooperativa en cada central de riesgo, como
+    /// <c>CENTRAL=código</c> separados por punto y coma (<c>DATACREDITO=123456;TRANSUNION=ABC123</c>). Va en el archivo de la central
+    /// (<c>Archivo.CodigoDeSuscriptor</c>); sin el de una central, el validador lo señala como obligatorio vacío y su archivo no se genera. (nuevo)
+    /// </summary>
+    public const string CentralesCodigosDeSuscriptor = "Centrales.CodigosDeSuscriptor";
+
+    /// <summary>Forma de <see cref="CentralesCodigosDeSuscriptor"/>.</summary>
+    public const string PatronDeCodigosDeSuscriptor = @"^[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20}(;[A-Z0-9_]{1,20}=[A-Za-z0-9-]{1,20})*$";
+
     /// <summary>Forma de un horario de cobranza: <c>HH:mm-HH:mm</c>.</summary>
     public const string PatronDeHorario = @"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$";
 
@@ -371,6 +381,10 @@ public static class ParametrosDeCartera
             "Conceptos que suma el saldo al 31 de diciembre del certificado tributario, separados por coma: Capital, InteresCorriente, InteresDeMora, "
             + "OtrosCargos (seguros, gastos de cobranza y otros cargos) y MenosAnticipo (resta el anticipo). El defecto los lleva todos.",
             SaldoDelCertificadoTributario.Defecto, K5, patron: SaldoDelCertificadoTributario.Patron),
+        Texto(CentralesCodigosDeSuscriptor,
+            "Código de suscriptor de la cooperativa en cada central de riesgo, como CENTRAL=código separados por punto y coma "
+            + "(DATACREDITO=123456;TRANSUNION=ABC123). Sin el de una central, su archivo no se genera.",
+            string.Empty, K5, patron: PatronDeCodigosDeSuscriptor, admiteVacio: true),
     ];
 
     private static DefinicionDeParametro Texto(string clave, string descripcion, string defecto, EntregaDeModulo desde,

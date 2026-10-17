@@ -101,13 +101,14 @@ public class EntregaDeModuloTests
     public async Task Las_claves_de_Cartera_de_K4_y_K5_se_ofrecen_con_K5_vigente_junto_a_las_de_K1_a_K3()
     {
         // T0980 (fase 20): con K5 vigente se ofrecen también las claves de K5: Informes.DiasCarteraVencida y (2026-10-16)
-        // Documentos.CertificadoTributario.SaldoIncluye.
+        // Documentos.CertificadoTributario.SaldoIncluye; T1003 (fase 21): Centrales.CodigosDeSuscriptor.
         var claves = (await Listar("LND")).Select(p => p.Key).ToList();
 
         claves.Should().Contain(ParametrosDeCartera.PagosDiasMaximosFechaValor).And.Contain(ParametrosDeCartera.CobranzaHorarioLunesAViernes)
             .And.Contain(ParametrosDeCartera.LibranzaVentanaDeGiroDias).And.Contain(ParametrosDeCartera.CastigoExigeDeterioroTotal);
         claves.Should().Contain(ParametrosDeCartera.AvisoPrevioDiasMinimos).And.Contain(ParametrosDeCartera.CobranzaToleranciaDePromesa)
-            .And.Contain(ParametrosDeCartera.InformesDiasCarteraVencida).And.Contain(ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye);
+            .And.Contain(ParametrosDeCartera.InformesDiasCarteraVencida).And.Contain(ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye)
+            .And.Contain(ParametrosDeCartera.CentralesCodigosDeSuscriptor);
         (await Listar("LND")).Should().OnlyContain(p => p.AvailableFrom == "K1" || p.AvailableFrom == "K2" || p.AvailableFrom == "K3" || p.AvailableFrom == "K4"
                                                        || p.AvailableFrom == "K5");
     }

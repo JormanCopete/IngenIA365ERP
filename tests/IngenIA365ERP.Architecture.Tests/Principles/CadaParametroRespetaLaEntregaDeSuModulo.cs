@@ -85,6 +85,10 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
         var saldo = ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.DocumentosCertificadoTributarioSaldoIncluye);
         Assert.True(saldo.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5 && saldo.DisponibleEnLaEntrega(),
             "Documentos.CertificadoTributario.SaldoIncluye es de K5 y se ofrece.");
+        // T1003 (fase 21): los códigos de suscriptor de las centrales son de K5 y se ofrecen.
+        var suscriptor = ParametrosDeCartera.Definiciones.Single(d => d.Clave == ParametrosDeCartera.CentralesCodigosDeSuscriptor);
+        Assert.True(suscriptor.DisponibleDesde == (EntregaDeModulo)EntregaDeCartera.K5 && suscriptor.DisponibleEnLaEntrega(),
+            "Centrales.CodigosDeSuscriptor es de K5 y se ofrece.");
     }
 
     [Fact]
