@@ -138,6 +138,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/VintagesReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ConcentrationReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/IssuedDocumentsReportQuery.cs",
+        // K5 (US16, T1006): los excluidos del archivo de una central, por la oficina y la línea de su crédito.
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/BureauExclusionsReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/GetLendingDashboardQuery.cs",
     ];
 
@@ -251,6 +253,13 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",
         // K5 (US16, T0999): los layouts regulatorios son documentos nacionales embebidos, iguales para todas las cooperativas.
         ["ListRegulatoryLayoutsQuery"] = "layouts nacionales embebidos (SICSES y centrales): sin oficina, sin deudores, sin datos de la cooperativa",
+        // K5 (US16, T1004): el SICSES y el archivo de una central llevan toda la cartera de la cooperativa, de cualquier oficina y línea; los leen sólo
+        // quienes tienen Lending.RegulatoryFiles.Read o generan (RegulatoryReports.Generate, CreditBureauFiles.Generate). La vista bureau-exclusions
+        // sí filtra por el alcance (es del centro de informes).
+        ["ValidateSicsesFileQuery"] = "el formato del SICSES lleva toda la cartera de la cooperativa: lo valida quien lo genera (RegulatoryReports.Generate)",
+        ["ValidateCreditBureauFileQuery"] = "el archivo de una central lleva toda la cartera de la cooperativa: lo valida quien lo genera (CreditBureauFiles.Generate)",
+        ["ListRegulatoryFilesQuery"] = "las generaciones regulatorias son de toda la cooperativa (SICSES y centrales): se leen con RegulatoryFiles.Read",
+        ["GetRegulatoryFileQuery"] = "una generación regulatoria es de toda la cooperativa (SICSES y centrales): se lee con RegulatoryFiles.Read",
     };
 
     private static readonly Regex Requerido = new(@"AlcanceDeCartera", RegexOptions.Compiled);

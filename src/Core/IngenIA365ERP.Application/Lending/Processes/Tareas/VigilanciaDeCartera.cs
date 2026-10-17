@@ -17,6 +17,9 @@ public sealed record VigilanciaRealizada(bool CicloDeAyerSinTerminar, int Credit
 {
     /// <summary>US9 (T0707): el mes anterior quedó sin cierre de Cartera pasado <c>Riesgo.DiaLimiteCierre</c>.</summary>
     public string? CierrePendiente { get; init; }
+
+    /// <summary>K5 (US16, T1007): los períodos del SICSES (<c>aaaa-mm</c>) cuyo plazo vence (o venció) sin una generación <c>Generated</c> ni <c>Uploaded</c>.</summary>
+    public IReadOnlyList<string> SicsesPorVencer { get; init; } = [];
 }
 
 /// <summary>
@@ -30,7 +33,11 @@ public sealed record VigilanciaRealizada(bool CicloDeAyerSinTerminar, int Credit
 /// (<see cref="MarcaDeTareaDiariaDeCartera"/>) es anterior a ayer (<c>…:{tarea}:{fecha}</c>).</item>
 /// </list>
 /// Idempotente por el <c>DedupKey</c>: repetir suma la ocurrencia. US9 (T0707; pregunta E6) suma <c>Cartera.CierreMensualPendiente</c> si, pasado el
-/// día <c>Riesgo.DiaLimiteCierre</c>, el mes anterior (con Cartera ya activada en él) no tiene cierre vigente (<c>…:{aaaa-mm}</c>). (nuevo)
+/// día <c>Riesgo.DiaLimiteCierre</c>, el mes anterior (con Cartera ya activada en él) no tiene cierre vigente (<c>…:{aaaa-mm}</c>). K5 (US16, T1007; DT §2.13)
+/// suma <c>Cartera.PlazoRegulatorioPorVencer</c> para el SICSES: desde los días de aviso antes del día límite que fija el perfil regulatorio (nivel de
+/// supervisión y documento <c>TiposDeOrganizacion</c>, <see cref="Regulatory.ProyeccionSicsesCartera.PlazoAsync"/>), si el mes se reporta y no tiene una
+/// generación <c>Generated</c> ni <c>Uploaded</c>, a <c>Lending.RegulatoryReports.Generate</c> (<c>…:SICSES:{aaaa-mm}</c>); sigue avisando pasado el
+/// límite. Sin perfil o sin el dato del documento no hay plazo que vigilar. (nuevo)
 /// </summary>
 public sealed record WatchLendingProcessesCommand : IRequest<Result<VigilanciaRealizada>>;
 
@@ -41,7 +48,9 @@ public sealed class WatchLendingProcessesCommandHandler(
     IAlertas alertas,
     IDateTimeService reloj,
     IEnumerable<ITareaProgramada> tareas,
-    IngenIA365ERP.Application.Common.Parameters.ILectorDeParametros? parametros = null) : IRequestHandler<WatchLendingProcessesCommand, Result<VigilanciaRealizada>>
+    IngenIA365ERP.Application.Common.Parameters.ILectorDeParametros? parametros = null,
+    IngenIA365ERP.Application.Common.NationalValues.IPerfilRegulatorio? perfiles = null,
+    IngenIA365ERP.Application.Common.NationalValues.INormativaVigente? normativa = null) : IRequestHandler<WatchLendingProcessesCommand, Result<VigilanciaRealizada>>
 {
     /// <summary>Hasta esta hora local no se espera que lo de ayer esté terminado.</summary>
     public static readonly TimeOnly Tolerancia = TareasDeCartera.HoraDeInicio;
@@ -123,9 +132,36 @@ public sealed class WatchLendingProcessesCommandHandler(
                 DedupKey: $"{TiposDeAlerta.CierreMensualPendiente}:{cierrePendiente}", ModuloDeOrigen: Modulo), ct);
         }
 
+        // K5 (T1007): el plazo del SICSES de los dos meses anteriores (el plazo de uno puede caer pasado el mes siguiente).
+        var sicses = new List<string>();
+        if (perfiles is not null && normativa is not null)
+        {
+            for (var atras = 2; atras >= 1; atras--)
+            {
+                var mes = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(-atras);
+                if (activada > Domain.Entities.Lending.Risk.MonthlyClose.UltimoDiaDe(mes.Year, mes.Month)) continue;
+                var plazo = await Regulatory.ProyeccionSicsesCartera.PlazoAsync(perfiles, normativa, mes.Year, mes.Month, ct);
+                if (plazo is not { SeReporta: true, Limite: { } limiteSicses, AvisoDesde: { } aviso } || hoy < aviso) continue;
+                var hecho = await db.RegulatoryFiles.AsNoTracking().AnyAsync(f => !f.IsDeleted && f.Kind == RegulatoryFileKind.Sicses
+                    && f.PeriodYear == mes.Year && f.PeriodMonth == mes.Month
+                    && (f.Status == RegulatoryFileStatus.Generated || f.Status == RegulatoryFileStatus.Uploaded), ct);
+                if (hecho) continue;
+                var periodo = Risk.ErroresDeRiesgo.Mes(mes.Year, mes.Month);
+                sicses.Add(periodo);
+                await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.PlazoRegulatorioPorVencer, $"Formato de cartera del SICSES de {periodo}",
+                    (hoy > limiteSicses
+                        ? $"Venció el {limiteSicses:yyyy-MM-dd} el plazo para reportar al SICSES el formato de cartera de {periodo}"
+                        : $"El {limiteSicses:yyyy-MM-dd} vence el plazo para reportar al SICSES el formato de cartera de {periodo}")
+                    + " y todavía no está generado. Valídelo y genérelo desde «SICSES» y márquelo cargado con el radicado del portal.",
+                    DedupKey: $"{TiposDeAlerta.PlazoRegulatorioPorVencer}:SICSES:{periodo}", RecipientPermissions: ["Lending.RegulatoryReports.Generate"],
+                    ModuloDeOrigen: Modulo), ct);
+            }
+        }
+
         return Result.Success(new VigilanciaRealizada(cicloSinTerminar, conError.Select(c => c.Id).Distinct().Count(), sinCorrer)
         {
             CierrePendiente = cierrePendiente,
+            SicsesPorVencer = sicses,
         });
     }
 }

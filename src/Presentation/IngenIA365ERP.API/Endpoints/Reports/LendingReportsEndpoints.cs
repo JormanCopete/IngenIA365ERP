@@ -100,6 +100,9 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(ConcentrationReportQueryHandler.Vista,
             (f, q) => new ConcentrationReportQuery(f, Texto(q, "by"), Texto(q, "top"), Texto(q, "warnAt")));
         group.MapVistaDeCartera(IssuedDocumentsReportQueryHandler.Vista, (f, q) => new IssuedDocumentsReportQuery(f, Texto(q, "kind"), Texto(q, "status")));
+        // K5 (US16, T1006): los excluidos del archivo de una central (bureau obligatorio; year y month, o el último generado).
+        group.MapVistaDeCartera(BureauExclusionsReportQueryHandler.Vista,
+            (f, q) => new BureauExclusionsReportQuery(f, Texto(q, "bureau"), Entero(q, "year"), Entero(q, "month")));
     }
 
     private static int? Entero(IQueryCollection q, string clave) =>

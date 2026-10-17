@@ -42,9 +42,10 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
     private static readonly string[] VistasDeK4 = ["collection-stages", "promises", "payment-agreements", "prior-notices"];
 
     /// <summary>
-    /// K5 (fase 20, T0982): calidad y cosechas (agregadas), concentración (con datos del deudor sólo por deudor y por grupo) y documentos emitidos.
+    /// K5 (fase 20, T0982): calidad y cosechas (agregadas), concentración (con datos del deudor sólo por deudor y por grupo) y documentos emitidos;
+    /// fase 21 (T1006): los excluidos del archivo de una central.
     /// </summary>
-    private static readonly string[] VistasDeK5 = ["quality", "vintages", "concentration", "issued-documents"];
+    private static readonly string[] VistasDeK5 = ["quality", "vintages", "concentration", "issued-documents", "bureau-exclusions"];
 
     [Fact]
     public async Task K1_registro_permisos_exportacion_auditada_alcance_y_columnas()
@@ -79,7 +80,7 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
             .BeEquivalentTo(VistasDeK1.Concat(VistasDeK2).Concat(VistasDeK3).Concat(VistasDeK4).Concat(VistasDeK5));
         registro.Where(v => v.GetProperty("personalData").GetBoolean()).Select(v => v.GetProperty("key").GetString())
             .Should().BeEquivalentTo(ConDatosDelDeudor.Append("payroll-deduction-reconciliation").Concat(VistasDeK3).Concat(VistasDeK4)
-                .Concat(["concentration", "issued-documents"]));
+                .Concat(["concentration", "issued-documents", "bureau-exclusions"]));
         registro.Where(v => VistasDeK1.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 1);
         registro.Where(v => VistasDeK2.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 2);
         registro.Where(v => VistasDeK3.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 3);
