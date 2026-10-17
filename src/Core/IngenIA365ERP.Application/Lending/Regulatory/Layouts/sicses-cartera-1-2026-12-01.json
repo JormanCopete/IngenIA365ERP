@@ -3,7 +3,7 @@
   "kind": "Sicses",
   "bureauCode": null,
   "version": "1",
-  "source": "Instructivo del formato de cartera de créditos del SICSES, Superintendencia de la Economía Solidaria (por cotejar)",
+  "source": "Instructivo del formato 9027, informe individual de cartera de créditos, del SICSES, Superintendencia de la Economía Solidaria (por cotejar)",
   "validFrom": "2026-12-01",
   "validTo": null,
   "fileKind": "Delimited",
@@ -413,6 +413,7 @@
     "Las rutas (path) son el vocabulario que entrega la proyección de Application; un cambio de ruta es un cambio de la proyección y del layout a la vez.",
     "Una fila por crédito de las líneas vigentes del cierre mensual del período; las filas no se guardan: se derivan del cierre (data-model §28.2).",
     "La marca «modelo obligatorio no disponible» (D28) es una advertencia de la generación y nunca va dentro del archivo.",
-    "Los códigos de tipo de identificación, modalidad y tipo de garantía son los del instructivo por cotejar; la proyección traduce los del ERP."
+    "Los códigos de tipo de identificación, modalidad y tipo de garantía son los del instructivo por cotejar; la proyección traduce los del ERP.",
+    "Es el formato 9027 del SICSES (informe individual de cartera de créditos). Su periodicidad y su plazo por nivel de supervisión no viven aquí sino en el dato sicsesReport del documento TiposDeOrganizacion (decisión del dueño del 2026-10-16): nivel 1 mensual a 20 días, diciembre al último día hábil de enero; nivel 2 trimestral a 30 días, diciembre en febrero según el último dígito del NIT; nivel 3 anual con corte de diciembre y reporte en febrero (Circular Externa 84 de 2025). Pendiente de validar."
   ]
 }

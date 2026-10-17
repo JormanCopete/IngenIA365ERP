@@ -130,6 +130,47 @@ public sealed class ExcluidosYPlazoDelSicsesTests : IAsyncLifetime
     }
 
     [Fact]
+    public void La_semilla_trae_el_plazo_del_formato_9027_por_nivel_de_supervision()
+    {
+        // Decisión del dueño del 2026-10-16: nivel 1 mensual a 20 días, diciembre al último día hábil de enero; nivel 2 trimestral a 30 días, diciembre
+        // en febrero (conservador: el 1); nivel 3 anual en febrero, salvo fondos de empleados y mutuales, que no lo traen todavía.
+        var leido = IngenIA365ERP.Domain.Common.NationalValues.TiposDeOrganizacion.Leer(
+            IngenIA365ERP.Persistence.Seeding.Parametric.PlatformNationalValuesSeeder.Contenido("tipos-de-organizacion.json"), 1);
+        leido.Errores.Should().BeEmpty();
+        var tipos = leido.Documento!;
+        var coop = tipos.Buscar("COOP_AHORRO_CREDITO")!;
+
+        coop.SicsesDelNivel(1)!.Limite(2026, 12).Should().Be(new DateOnly(2027, 1, 29), "el 31 de enero de 2027 es domingo");
+        coop.SicsesDelNivel(1)!.Limite(2027, 1).Should().Be(new DateOnly(2027, 2, 20));
+        coop.SicsesDelNivel(2)!.SeReporta(5).Should().BeFalse();
+        coop.SicsesDelNivel(2)!.Limite(2027, 3).Should().Be(new DateOnly(2027, 4, 30));
+        coop.SicsesDelNivel(2)!.Limite(2026, 12).Should().Be(new DateOnly(2027, 2, 1));
+        coop.SicsesDelNivel(3)!.CutoffMonths.Should().Equal(12);
+        coop.SicsesDelNivel(3)!.Limite(2026, 12).Should().Be(new DateOnly(2027, 2, 1));
+        tipos.Buscar("FONDO_EMPLEADOS")!.SicsesDelNivel(3).Should().BeNull();
+        tipos.Buscar("ASOCIACION_MUTUAL")!.SicsesDelNivel(3).Should().BeNull();
+        tipos.Tipos.Should().OnlyContain(t => t.SicsesDelNivel(1) != null && t.SicsesDelNivel(2) != null);
+    }
+
+    [Fact]
+    public async Task El_corte_de_diciembre_del_nivel_1_vence_el_ultimo_dia_habil_de_enero()
+    {
+        await _r.PerfilConSicsesAsync(1, """
+            [ { "supervisionLevel": 1, "cutoffMonths": [1,2,3,4,5,6,7,8,9,10,11,12], "dueDays": 20, "warningDays": 5,
+                "dueExceptions": [ { "cutoffMonth": 12, "monthsAfterCutoff": 1, "lastBusinessDay": true } ] } ]
+            """);
+        _r.G.HoyLocal = new DateOnly(2027, 1, 16);
+
+        (await VigilarAsync()).Value.SicsesPorVencer.Should().NotContain("2026-12", "vence el viernes 29 de enero: se avisa desde el 24");
+
+        _r.G.HoyLocal = new DateOnly(2027, 1, 24);
+        (await VigilarAsync()).Value.SicsesPorVencer.Should().Contain("2026-12");
+        _r.Alertas.Single(a => a.DedupKey == $"{TiposDeAlerta.PlazoRegulatorioPorVencer}:SICSES:2026-12").Body.Should().Contain("2027-01-29");
+        (await new ProyeccionSicsesCartera(_r.Db, _r.D.Contabilidad, _r.G.Perfil, _r.D.O.L.Normativa()).ProyectarAsync(Anio, Mes, default))
+            .Value.Plazo!.Limite.Should().Be(new DateOnly(2027, 1, 29));
+    }
+
+    [Fact]
     public async Task Un_nivel_que_no_reporta_el_mes_o_un_perfil_sin_el_dato_no_avisan()
     {
         await _r.PerfilConSicsesAsync(2, """[ { "supervisionLevel": 2, "cutoffMonths": [3, 6, 9], "dueDays": 30, "warningDays": 5 } ]""");

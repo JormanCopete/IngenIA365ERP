@@ -42,14 +42,44 @@ public sealed record TipoDeOrganizacion(string Code, string Name, bool IsEmploye
 /// </summary>
 public sealed record ReporteSicsesPorNivel(int SupervisionLevel, IReadOnlyList<int> CutoffMonths, int DueDays, int WarningDays)
 {
+    /// <summary>
+    /// Decisión del dueño del 2026-10-16: los cortes con un plazo distinto del general —el de diciembre del nivel 1 vence el último día hábil de enero;
+    /// el de diciembre de los niveles 2 y 3, en febrero—. Vacío: todos los cortes con <see cref="DueDays"/>.
+    /// </summary>
+    public IReadOnlyList<PlazoEspecialDelSicses> DueExceptions { get; init; } = [];
+
     /// <summary>¿Se reporta el mes <paramref name="mes"/>?</summary>
     public bool SeReporta(int mes) => CutoffMonths.Contains(mes);
 
-    /// <summary>El último día para entregar el corte de <paramref name="anio"/>-<paramref name="mes"/>: el fin del mes más los días del plazo.</summary>
-    public DateOnly Limite(int anio, int mes) => new DateOnly(anio, mes, 1).AddMonths(1).AddDays(-1).AddDays(DueDays);
+    /// <summary>
+    /// El último día para entregar el corte de <paramref name="anio"/>-<paramref name="mes"/>: el del plazo especial del mes si lo hay; si no, el fin del
+    /// mes más los días del plazo.
+    /// </summary>
+    public DateOnly Limite(int anio, int mes) =>
+        DueExceptions.FirstOrDefault(e => e.CutoffMonth == mes) is { } especial
+            ? especial.Limite(anio, mes)
+            : new DateOnly(anio, mes, 1).AddMonths(1).AddDays(-1).AddDays(DueDays);
 
     /// <summary>Desde qué día se avisa que vence el corte de <paramref name="anio"/>-<paramref name="mes"/>.</summary>
     public DateOnly AvisoDesde(int anio, int mes) => Limite(anio, mes).AddDays(-WarningDays);
+}
+
+/// <summary>
+/// Un plazo especial del SICSES para un mes de corte (decisión del dueño del 2026-10-16): vence <see cref="MonthsAfterCutoff"/> meses después del mes
+/// cortado, el día <see cref="Day"/> (el último del mes si éste tiene menos) o el <b>último día hábil</b> de ese mes (<see cref="LastBusinessDay"/>: el
+/// último de lunes a viernes; los festivos no se descuentan, y en enero —el único mes que hoy lo usa— nunca caen al final). Lo que depende del último
+/// dígito del NIT se expresa con el día más temprano del calendario (plazo conservador). (nuevo)
+/// </summary>
+public sealed record PlazoEspecialDelSicses(int CutoffMonth, int MonthsAfterCutoff, int? Day, bool LastBusinessDay)
+{
+    public DateOnly Limite(int anio, int mes)
+    {
+        var primero = new DateOnly(anio, mes, 1).AddMonths(MonthsAfterCutoff);
+        var ultimo = primero.AddMonths(1).AddDays(-1);
+        if (!LastBusinessDay) return new DateOnly(primero.Year, primero.Month, Math.Min(Day ?? ultimo.Day, ultimo.Day));
+        while (ultimo.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) ultimo = ultimo.AddDays(-1);
+        return ultimo;
+    }
 }
 
 /// <summary>El reporte de castigos al supervisor de un tipo de organización: si es obligatorio y su plazo en días calendario (nulo: sin plazo fijado).</summary>
@@ -75,7 +105,7 @@ public sealed record CategoriaDeFondoDeEmpleados(string Code, string Name);
 /// <para>Esquema 1 (camelCase): <c>{ employeeFundCategories: [ { code, name } ], organizationTypes: [ { code, name,
 /// isEmployeeFund, expectedLoss: NotAdmitted | Admitted | Required, verified?, writeOffReport?: { required, dueDays? },
 /// portfolioEvaluation?: { cutoffMonths: [1..12], effectMonthsAfterCutoff }, sicsesReport?: [ { supervisionLevel: 1..3, cutoffMonths: [1..12],
-/// dueDays, warningDays } ] } ] }</c>. Códigos únicos; si algún tipo es
+/// dueDays, warningDays, dueExceptions?: [ { cutoffMonth, monthsAfterCutoff, day? | lastBusinessDay? } ] } ] } ] }</c>. Códigos únicos; si algún tipo es
 /// fondo de empleados, las categorías no pueden faltar. <c>writeOffReport</c> y <c>portfolioEvaluation</c> son opcionales (K3, US14: sin
 /// cambio de versión de esquema); un plazo obligatorio no puede faltar si el reporte es obligatorio y los meses de corte van del 1 al 12.
 /// <c>sicsesReport</c> es opcional (K5, US16; tampoco cambia la versión): un nivel por fila, sin repetirse, plazo de más de cero días y aviso de cero o
@@ -243,7 +273,48 @@ public sealed class TiposDeOrganizacion
             }
             var plazo = Entero(r, "dueDays", donde, n => n > 0, "El plazo del SICSES es un número entero de días mayor que cero.", errores);
             var aviso = Entero(r, "warningDays", donde, n => n >= 0, "Los días de aviso son un entero de cero o más.", errores);
-            lista.Add(new ReporteSicsesPorNivel(nivel, meses, plazo, aviso));
+            lista.Add(new ReporteSicsesPorNivel(nivel, meses, plazo, aviso) { DueExceptions = Especiales(r, donde, meses, errores) });
+        }
+        return lista;
+    }
+
+    /// <summary>
+    /// <c>dueExceptions?: [ { cutoffMonth, monthsAfterCutoff: 1..12, day?: 1..31, lastBusinessDay?: bool } ]</c> (decisión del dueño del 2026-10-16): un
+    /// mes de corte del nivel, sin repetirse, con <b>o</b> el día <b>o</b> el último día hábil.
+    /// </summary>
+    private static IReadOnlyList<PlazoEspecialDelSicses> Especiales(JsonElement nivel, string ruta, IReadOnlyList<int> meses, List<ErrorDeDocumentoNormativo> errores)
+    {
+        if (!nivel.TryGetProperty("dueExceptions", out var e) || e.ValueKind == JsonValueKind.Null) return [];
+        var aqui = $"{ruta}.dueExceptions";
+        if (e.ValueKind != JsonValueKind.Array)
+        {
+            errores.Add(new(aqui, "Los plazos especiales del SICSES son una lista de { cutoffMonth, monthsAfterCutoff, day | lastBusinessDay }."));
+            return [];
+        }
+        var lista = new List<PlazoEspecialDelSicses>();
+        var i = 0;
+        foreach (var x in e.EnumerateArray())
+        {
+            var donde = $"{aqui}[{i++}]";
+            if (x.ValueKind != JsonValueKind.Object)
+            {
+                errores.Add(new(donde, "Cada plazo especial del SICSES es un objeto."));
+                continue;
+            }
+            var mes = Entero(x, "cutoffMonth", donde, n => meses.Contains(n), "El mes del plazo especial es uno de los meses de corte del nivel.", errores);
+            if (mes > 0 && lista.Any(p => p.CutoffMonth == mes))
+                errores.Add(new($"{donde}.cutoffMonth", $"El mes {mes} ya tiene plazo especial."));
+            var despues = Entero(x, "monthsAfterCutoff", donde, n => n is >= 1 and <= 12, "Los meses después del corte van de 1 a 12.", errores);
+            int? dia = null;
+            if (x.TryGetProperty("day", out var d) && d.ValueKind != JsonValueKind.Null)
+            {
+                if (d.ValueKind == JsonValueKind.Number && d.TryGetInt32(out var n) && n is >= 1 and <= 31) dia = n;
+                else errores.Add(new($"{donde}.day", "El día del plazo especial va de 1 a 31."));
+            }
+            var habil = LecturaDeDocumento.Booleano(x, "lastBusinessDay", donde, false, errores);
+            if ((dia is not null) == habil)
+                errores.Add(new(donde, "Cada plazo especial lleva el día o el último día hábil, y sólo uno de los dos."));
+            lista.Add(new PlazoEspecialDelSicses(mes, despues, dia, habil));
         }
         return lista;
     }
