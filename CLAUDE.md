@@ -660,7 +660,28 @@ gestión de sistema `LeftCollection` no anulable, asignación cerrada) y si reca
 suspendido por insolvencia se reanuda **a mano** (`/resume`, nunca mientras la insolvencia negocia); la etapa migrada se
 registra con una corrida (`process-runs` con `kind: MigratedCollectionStages` y motivo, o la tarea de una sola vez
 `cartera.etapas-migradas-k4`), no con la semilla. SMS y WhatsApp reales siguen `SIMULADO` hasta que haya proveedor
-(T0931/T0952). Recetas: `docs/manual/cartera-cobranza-y-aviso-previo.md`, `docs/operaciones/cartera-despliegue-k4.md`. Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
+(T0931/T0952). Recetas: `docs/manual/cartera-cobranza-y-aviso-previo.md`, `docs/operaciones/cartera-despliegue-k4.md`.
+**K5, documentos, informes y regulatorios (fases 19–21, 2026-10-16)**: migraciones aditivas `CarteraInformes`
+(`LND_RegulatoryFiles` y `LND_RegulatoryFileLines`) y `CarteraComprobanteDeCargue` (`ReceiptAttachmentPublicId` nulo).
+Documentos al deudor: **extracto** de un período y **certificado tributario** del año (sólo créditos donde la persona es
+deudora; el anticipo aplicado a intereses cuenta sólo si **ingresó** en el año; el saldo al 31/12 por conceptos según
+`Documentos.CertificadoTributario.SaldoIncluye`, por defecto los cinco = el saldo de siempre, rige el vigente al emitir).
+Informes `quality`, `vintages`, `concentration` (datos del deudor sólo agrupada por deudor o grupo), `issued-documents` y
+`bureau-exclusions`, y el **tablero** `GET /api/lending/dashboard` (`/cartera/tablero`, sin datos personales); «vencida» es
+más que `Informes.DiasCarteraVencida` (30, pendiente de validar). El **SICSES** (formato 9027, del cierre mensual vigente;
+plazo por nivel de supervisión en `sicsesReport` de `TiposDeOrganizacion`, pendiente de validar) y los **archivos de
+centrales** (novedades desde el último `Uploaded`; sólo con autorización `CreditBureauReport` con evidencia y, si el dato es
+negativo, aviso previo `Complete` del titular —el codeudor recibe el suyo sólo con `AvisoPrevio.IncluirCodeudores`—; la mora
+se reporta por **rangos configurables por modalidad**, `Centrales.RangosDeMora`, y es negativa desde el rango que diga; los
+demás quedan excluidos con su motivo) salen de un motor genérico puro, `Domain/Common/Layouts` (la PILA no lo usa), sobre
+layouts JSON embebidos con vigencia desde 2026-12-01 que **están sin cotejar** (`verified = false`): cada generación lleva
+`Lending.Regulatory.LayoutSinCotejar` y la marca D28 va como advertencia, nunca dentro del archivo. Con bloqueantes queda una
+versión `Validated` sin archivo (422 `BlockingIssues`); regenerar deja `Superseded`; marcar cargado con radicado y
+comprobante cierra el período. Suscriptor por central en `Centrales.CodigosDeSuscriptor`. Rutas `/api/lending/regulatory`
+(`RegulatoryFiles.Read`, nunca un `View`), pantallas `/cartera/sicses` y `/cartera/centrales`. Recetas:
+`docs/manual/cartera-documentos-al-deudor.md`, `docs/manual/cartera-informes-y-tablero.md`,
+`docs/operaciones/cartera-sicses-y-centrales.md`; cotejar los layouts es del dueño (T1011). **Las e2e de K5 están escritas
+y se corren una sola vez al final de todas las fases** (decisión del dueño). Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
   pestaña «Emitidos» de `/cartera/bandeja-de-mensajes` y los reconocimientos de Cartera en `/contabilidad/periodos`.
