@@ -299,7 +299,12 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Risk.ImportArrearsHistoryCommand),
     ];
 
-    private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave", RegexOptions.Compiled);
+    /// <summary>
+    /// Fase 24 (T1062): <c>MapPlantilla(</c> cuenta, porque <c>RutasDePlantilla</c> pone <c>.ConClaveDeOperacion()</c> en la importación. Con los
+    /// comentarios fuera del recorrido (<see cref="ReglaSobreFuente.Faltantes"/>), <c>ContributionBalancesEndpoints</c> —cuya única escritura es la
+    /// plantilla— pasaba sólo porque un comentario decía «Idempotency-Key».
+    /// </summary>
+    private static readonly Regex Requerido = new(@"Idempotency|ConClave|RequiereClave|\.MapPlantilla\(", RegexOptions.Compiled);
 
     /// <summary>
     /// US5 (T0526, T21): el contrato de obligaciones no es una escritura de pantalla: su clave es la de negocio del recaudador (<c>NOM:</c>,

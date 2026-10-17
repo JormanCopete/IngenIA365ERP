@@ -24,7 +24,31 @@ public class NadieEscribeElLibroDeCarteraFueraDelRegistro
         (new Regex(@"\b(LoanTransactions|LoanOperations|LoanDailyPositions|LoanTermsVersions|RepaymentScheduleVersions|RepaymentInstallments|LoanControls)\.(Add|AddRange|Update|UpdateRange|Attach)\(", RegexOptions.Compiled), "escribe el libro, sus versiones, sus proyecciones o la fila de control"),
         (new Regex(@"\.(LastAccruedDate|LastRegisteredAt|LastPositionDate)\s*(=(?!=)|\+=)", RegexOptions.Compiled), "mueve la marca de agua del crédito"),
         (new Regex(@"\bnew\s+(LoanTransaction|LoanOperation|LoanDailyPosition)\s*\(", RegexOptions.Compiled), "construye una fila del libro"),
+        // Fase 24 (T1062): también por el Set<> genérico del contexto concreto, que el DbSet con nombre no cubre.
+        (new Regex(@"\bSet<\s*(LoanTransaction|LoanOperation|LoanDailyPosition|LoanTermsVersion|RepaymentScheduleVersion|RepaymentInstallment|LoanControl)\s*>\(\)\s*\.\s*(Add|AddRange|Update|UpdateRange|Attach)\(", RegexOptions.Compiled),
+            "escribe el libro por Set<>"),
     ];
+
+    /// <summary>
+    /// Fase 24 (T1062): el patrón <c>new LoanTransaction(</c> de arriba no muerde, porque las filas se arman con inicializador
+    /// (<c>new LoanTransaction { … }</c>). Armar una fila fuera del registro se admite sólo para entregársela a
+    /// <c>registro.RegistrarTransacciones</c> (el desembolso, el nacimiento de la venta y de lo migrado, el saldo a favor de la corrección): un archivo
+    /// que arma una fila del libro o una posición y no se la entrega al registro la estaría escribiendo por su cuenta.
+    /// </summary>
+    private static readonly Regex ArmaUnaFila = new(@"\bnew\s+(LoanTransaction|LoanDailyPosition)\s*[({]", RegexOptions.Compiled);
+
+    [Fact]
+    public void Quien_arma_una_fila_del_libro_se_la_entrega_al_registro()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var infracciones = ReglaSobreFuente.ArchivosEn(Carpetas)
+            .Where(a => !Exentos.Contains(ReglaSobreFuente.Relativo(root, a)))
+            .Select(a => (Archivo: a, Texto: FuenteSinComentarios.Leer(a)))
+            .Where(x => ArmaUnaFila.IsMatch(x.Texto) && !x.Texto.Contains("RegistrarTransacciones(", StringComparison.Ordinal))
+            .Select(x => $"{ReglaSobreFuente.Relativo(root, x.Archivo)}: arma una fila del libro y no se la entrega a RegistroDeCartera")
+            .ToList();
+        ReglaSobreFuente.SinInfracciones(infracciones, "Alguien arma una fila del libro de Cartera y la escribe fuera de RegistroDeCartera (FR-001)");
+    }
 
     [Fact]
     public void Solo_el_registro_escribe_el_libro()

@@ -88,12 +88,12 @@ El Anexo 1 sembrado ya trae las subcategorías **E1/E2 de vivienda por meses en 
 
 Con K6b la plantilla `loans` admite modalidad Vivienda; el cuadre de la activación la incluye por concepto, modalidad, sub-segmento, categoría y
 cuenta, y el acta ya no la declara fuera. Un crédito migrado en UVR trae los **montos en pesos**, que se convierten a la UVR del corte
-(limitación de K6b: la migración de la serie de SOLIDO en UVR la decide el dueño).
+(limitación de K6b: cómo se migran los saldos en UVR del sistema anterior lo decide el dueño).
 
 ## 9. Lo que queda para el dueño y la contadora
 
 - Valores y fuentes de los cinco límites; la clave del tope (hoy una sola: no distingue VIS/no VIS ni pesos/UVR).
 - E12: el hecho propio de la corrección monetaria y su cuenta; la corrección monetaria en el certificado.
-- Tramos en UVR; la migración de créditos en UVR de SOLIDO; los campos de vivienda y UVR del SICSES (T1057).
+- Tramos en UVR; la migración de los créditos en UVR del sistema anterior; los campos de vivienda y UVR del SICSES (T1057).
 - El cotejo del Anexo 1 de vivienda (E8).
 - Corregir una UVR ya causada no encola todavía una corrida de corrección (sólo la usura lo hace): ver el runbook.

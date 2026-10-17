@@ -66,12 +66,15 @@ internal static class ReglaSobreFuente
         return infracciones;
     }
 
-    /// <summary>Archivos que no contienen el patrón obligatorio.</summary>
+    /// <summary>
+    /// Archivos que no contienen el patrón obligatorio <b>en el código</b>: los comentarios no cuentan (fase 24, T1062: antes se leía el texto
+    /// entero y un comentario que nombrara la llamada bastaba para pasar aunque el código ya no la hiciera).
+    /// </summary>
     public static List<string> Faltantes(IEnumerable<string> archivos, Regex requerido)
     {
         var root = RepoPath.FindRepoRoot();
         return archivos
-            .Where(a => !requerido.IsMatch(File.ReadAllText(a)))
+            .Where(a => !requerido.IsMatch(FuenteSinComentarios.Leer(a)))
             .Select(a => Relativo(root, a))
             .ToList();
     }

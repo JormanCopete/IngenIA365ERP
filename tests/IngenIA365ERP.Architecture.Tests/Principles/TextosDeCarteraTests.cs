@@ -168,6 +168,61 @@ public class TextosDeCarteraTests
         ReglaSobreFuente.SinInfracciones(infracciones, "Mensajes de error de Cartera con códigos o el nombre del sistema anterior (§7.6)");
     }
 
+    /// <summary>
+    /// Fase 24 (T1063; FR-144, T98): todo lo que la persona lee de Cartera —pantallas de <c>Pages/Cartera</c>, <c>Pages/CarteraFinanciera</c>,
+    /// <c>Pages/AhorrosYAportes</c> y <c>Pages/Contabilidad/Cartera</c>, sus textos y clientes (<c>Services/Cartera</c>), el menú, el manual en línea
+    /// (<c>ManualCatalogo</c>), el centro de reportes, las plantillas de importación y los layouts regulatorios (en <c>Application/Lending</c>, con sus
+    /// JSON), los mensajes de error y el motor (<c>Domain/Lending</c>), las semillas de Cartera (plantillas de mensaje sembradas, tipos de hecho), los
+    /// documentos al deudor (<c>DocumentosDeCarteraReport</c>) y los manuales <c>docs/manual/cartera*.md</c>— no nombra el sistema anterior. En el
+    /// código se miran las líneas que no son comentario; en las pantallas, los JSON y los manuales, todo el texto.
+    /// </summary>
+    private static readonly string[] CarpetasVisibles =
+    [
+        "Presentation/IngenIA365ERP.Shared/Pages/Cartera",
+        "Presentation/IngenIA365ERP.Shared/Pages/CarteraFinanciera",
+        "Presentation/IngenIA365ERP.Shared/Pages/AhorrosYAportes",
+        "Presentation/IngenIA365ERP.Shared/Pages/Contabilidad/Cartera",
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera",
+        "Core/IngenIA365ERP.Application/Lending",
+        "Core/IngenIA365ERP.Domain/Lending",
+    ];
+
+    private static readonly string[] ArchivosVisibles =
+    [
+        "Presentation/IngenIA365ERP.Shared/Layout/NavMenu.razor",
+        "Presentation/IngenIA365ERP.Shared/Services/Manual/ManualCatalogo.cs",
+        "Presentation/IngenIA365ERP.Shared/Pages/CentroReportes.razor",
+        "Presentation/IngenIA365ERP.API/Reports/DocumentosDeCarteraReport.cs",
+        "Infrastructure/IngenIA365ERP.Persistence/Seeding/Parametric/LendingMessageTemplatesSeeder.cs",
+    ];
+
+    private static readonly Regex SistemaAnterior = new(@"\bs[oó]lido\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    [Fact]
+    public void Nada_de_lo_que_se_lee_de_Cartera_nombra_el_sistema_anterior()
+    {
+        var root = RepoPath.FindRepoRoot();
+        var codigo = CarpetasVisibles.SelectMany(c => ReglaSobreFuente.ArchivosEn([c]))
+            .Concat(ReglaSobreFuente.ArchivosNombrados(ArchivosVisibles))
+            .Concat(ReglaSobreFuente.ArchivosEn(["Infrastructure/IngenIA365ERP.Persistence/Seeding"]).Where(a => Path.GetFileName(a).StartsWith("Lending", StringComparison.Ordinal)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var textos = CarpetasVisibles.SelectMany(c => ReglaSobreFuente.ArchivosEn([c], "*.razor").Concat(ReglaSobreFuente.ArchivosEn([c], "*.json")))
+            .Concat(Directory.EnumerateFiles(Path.Combine(root, "docs", "manual"), "cartera*.md"))
+            .ToList();
+        Assert.Contains(codigo, a => a.EndsWith("ManualCatalogo.cs", StringComparison.Ordinal));
+        Assert.Contains(codigo, a => a.EndsWith("CatalogoDePlantillasDeCartera.cs", StringComparison.Ordinal));
+        Assert.Contains(textos, a => a.EndsWith(".json", StringComparison.Ordinal) && a.Contains("Regulatory", StringComparison.Ordinal));
+        Assert.Contains(textos, a => Path.GetFileName(a) == "cartera.md");
+
+        var infracciones = ReglaSobreFuente.Infracciones(codigo, [(SistemaAnterior, "nombra el sistema anterior")]);
+        infracciones.AddRange(textos
+            .SelectMany(a => File.ReadAllLines(a).Select((l, i) => (Archivo: a, Linea: l, Numero: i + 1)))
+            .Where(x => SistemaAnterior.IsMatch(x.Linea))
+            .Select(x => $"{ReglaSobreFuente.Relativo(root, x.Archivo)}:{x.Numero}: nombra el sistema anterior"));
+        ReglaSobreFuente.SinInfracciones(infracciones, "Un texto de Cartera nombra el sistema anterior (FR-144, T98)");
+    }
+
     [Fact]
     public void Los_textos_de_Cartera_no_muestran_codigos_ni_el_sistema_anterior()
     {
