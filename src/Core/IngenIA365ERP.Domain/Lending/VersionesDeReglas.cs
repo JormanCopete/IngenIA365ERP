@@ -19,8 +19,14 @@ public static partial class VersionesDeReglas
     /// <summary>El prefijo de Cartera.</summary>
     public const string Prefijo = "LND-";
 
-    /// <summary>La versión vigente en esta versión del programa: la primera de K1.</summary>
+    /// <summary>La versión vigente en esta versión del programa para todo crédito que no es de vivienda: la primera de K1.</summary>
     public const string Vigente = "LND-2026.1";
+
+    /// <summary>
+    /// K6b (T1053; FR-024, D18): la versión de las reglas de <b>vivienda</b> con la Ley 546 de 1999 —la siguiente a la de K1—. La sella todo
+    /// crédito de modalidad <c>VIVIENDA</c> (en pesos o en UVR) originado o migrado desde K6b; los créditos de K1 conservan la suya.
+    /// </summary>
+    public const string Vivienda = "LND-2026.2";
 
     /// <summary>La versión sellada en un crédito no es una que este programa sepa calcular.</summary>
     public const string CodigoVersionDesconocida = "Lending.Rules.UnknownVersion";
@@ -32,11 +38,32 @@ public static partial class VersionesDeReglas
         + "período (cada vencimiento del plan y, después del último, cada mes); gracia total sin interés sobre interés; mora = factor × "
         + "corriente pactada antes de topar; saldo vencido de la cuota sin su mora para la tolerancia.");
 
-    /// <summary>Las versiones que este programa sabe calcular, de la más antigua a la vigente.</summary>
-    public static IReadOnlyList<string> Conocidas { get; } = [Vigente];
+    /// <summary>
+    /// Las reglas de <c>LND-2026.2</c> (K6b, vivienda): las de K1 más la Ley 546 de 1999 —tasa fija salvo pacto de rebaja, interés cobrado vencido
+    /// y sin capitalizar, sin mora sobre intereses aunque <c>Mora.SobreIntereses</c> esté encendido, el tope de vivienda del día además de la usura
+    /// (rige el menor) y prepago sin penalidad—. Un crédito en UVR lleva plan y saldos en UVR con la serie diaria (ver
+    /// <c>Housing/ReconstruccionEnUvr</c>).
+    /// </summary>
+    public static ReglasDeCalculo K6bVivienda { get; } = new(
+        Vivienda,
+        "Las de LND-2026.1 con la Ley 546 de 1999: tasa fija; interés vencido sin capitalizar; sin mora sobre intereses; tope de vivienda "
+        + "del día además de la usura (rige el menor); prepago sin penalidad; en UVR, plan y saldos en UVR convertidos a pesos con la UVR del día.")
+    {
+        DeVivienda = true,
+    };
+
+    /// <summary>Las versiones que este programa sabe calcular, de la más antigua a la más nueva.</summary>
+    public static IReadOnlyList<string> Conocidas { get; } = [Vigente, Vivienda];
 
     private static readonly IReadOnlyDictionary<string, ReglasDeCalculo> PorVersion =
-        new Dictionary<string, ReglasDeCalculo>(StringComparer.Ordinal) { [Vigente] = K1 };
+        new Dictionary<string, ReglasDeCalculo>(StringComparer.Ordinal) { [Vigente] = K1, [Vivienda] = K6bVivienda };
+
+    /// <summary>La versión que sella un crédito o una simulación nuevos: la de vivienda para la modalidad de vivienda; si no, la vigente.</summary>
+    public static string ParaCreditoNuevo(bool esVivienda) => esVivienda ? Vivienda : Vigente;
+
+    /// <summary>¿La versión es la de vivienda (sus reglas lo dicen)?</summary>
+    public static bool EsDeVivienda(string? version) =>
+        version is not null && PorVersion.TryGetValue(version, out var reglas) && reglas.DeVivienda;
 
     /// <summary>¿Tiene la forma <c>LND-AAAA.n</c> (n desde 1)?</summary>
     public static bool TieneFormato(string? version) => version is not null && Formato().IsMatch(version);
@@ -61,7 +88,20 @@ public static partial class VersionesDeReglas
 }
 
 /// <summary>
-/// Las reglas de cálculo de una <c>RulesVersion</c> (T29): su nombre y en palabras lo que fija. Hoy hay una; una versión nueva agrega
-/// su instancia en <see cref="VersionesDeReglas"/> y las ramas que la distinguen en el motor. (nuevo)
+/// Las reglas de cálculo de una <c>RulesVersion</c> (T29): su nombre y en palabras lo que fija. Una versión nueva agrega su instancia en
+/// <see cref="VersionesDeReglas"/> y las ramas que la distinguen en el motor. (nuevo)
 /// </summary>
-public sealed record ReglasDeCalculo(string Version, string Descripcion);
+public sealed record ReglasDeCalculo(string Version, string Descripcion)
+{
+    /// <summary>
+    /// K6b (T1053): las reglas de vivienda de la Ley 546 de 1999. El motor no causa mora sobre intereses aunque la condición sellada lo diga, topa
+    /// con el menor entre la usura y el tope de vivienda del día, y el prepago no lleva penalidad.
+    /// </summary>
+    public bool DeVivienda { get; init; }
+
+    /// <summary>¿Se puede causar mora sobre los intereses vencidos? Nunca en vivienda (FR-063, D14).</summary>
+    public bool AdmiteMoraSobreIntereses => !DeVivienda;
+
+    /// <summary>¿El prepago va siempre sin penalidad (Ley 546 de 1999)? Sólo vivienda; los demás, según el tope legal (Ley 1555 de 2012).</summary>
+    public bool PrepagoSinPenalidad => DeVivienda;
+}

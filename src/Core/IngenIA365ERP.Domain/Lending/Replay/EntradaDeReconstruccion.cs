@@ -161,4 +161,17 @@ public sealed record EntradaDeReconstruccion(
     /// versión de reglas).
     /// </summary>
     public IReadOnlyList<CuotaPendienteDeGiro> PendientesDeGiro { get; init; } = [];
+
+    /// <summary>
+    /// K6b (T1053; FR-024, D18): el tope de tasa de vivienda (<c>TOPE_TASA_VIVIENDA</c>), bitemporal como la usura. Sólo lo mira un crédito con las
+    /// reglas de vivienda: el tope del día es el menor entre él y la usura que llegue en <see cref="Usura"/>.
+    /// </summary>
+    public IReadOnlyList<ValorDeUsura> TopeDeVivienda { get; init; } = [];
+
+    /// <summary>
+    /// K6b (T1054; FR-024, D18): la serie diaria de la <c>UVR</c> de un crédito <b>en UVR</b>; nula en un crédito en pesos. Con ella, la
+    /// reconstrucción lleva plan y saldos en UVR y devuelve el estado valorado en pesos con la UVR del día (<c>Housing.ReconstruccionEnUvr</c>).
+    /// Los montos de la entrada (desembolsos, pagos, saldos iniciales, tolerancias) siguen en pesos: la reconstrucción los convierte a su fecha.
+    /// </summary>
+    public Housing.SerieUvr? Uvr { get; init; }
 }

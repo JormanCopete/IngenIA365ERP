@@ -107,6 +107,16 @@ public sealed class EstadoDelCredito
     public IReadOnlyList<AplicacionDeAnticipo> AnticiposAplicados { get; internal init; } = [];
 
     /// <summary>
+    /// K6b (T1054; FR-024): la valoración de un crédito <b>en UVR</b> —la UVR del día (publicada o proyectada), el estado en UVR y la serie—; nula
+    /// en un crédito en pesos. En un crédito en UVR todo lo demás de este estado (saldos, cuotas, plan, pagos, libro) está en pesos a la UVR del día
+    /// (los pagos y las filas de las operaciones, a la de su fecha valor).
+    /// </summary>
+    public Housing.ValoracionEnUvr? Uvr { get; internal init; }
+
+    /// <summary>¿Es un crédito en UVR?</summary>
+    public bool EnUvr => Uvr is not null;
+
+    /// <summary>
     /// Un estado armado a mano (US5, T0514): la fecha, el plan y los saldos por cuota y concepto, sin libro ni explicación; las cuotas salen
     /// del plan con su capital pendiente de los saldos y vencidas si la fecha pasó su vencimiento. Lo usan las pruebas y quien simula sobre
     /// saldos ya conocidos; la reconstrucción arma el suyo.
@@ -145,7 +155,14 @@ public sealed class EstadoDelCredito
     /// El valor para cancelar a D (FR-068): todo lo cobrable —capital, corriente, mora, sus suspensos, seguros, gastos y otros cargos—
     /// menos el anticipo del mismo crédito; el saldo a favor no se aplica solo (D7).
     /// </summary>
-    public decimal ValorParaCancelar => Cobrables.Sum(c => Saldo(c)) - Anticipo;
+    public decimal ValorParaCancelar => ValorParaCancelarDe(Saldos);
+
+    /// <summary>El valor para cancelar de unos saldos por cuota y concepto (K6b: el de los saldos en UVR o en pesos de un crédito en UVR).</summary>
+    internal static decimal ValorParaCancelarDe(IEnumerable<SaldoDeCuota> saldos)
+    {
+        var lista = saldos as IReadOnlyCollection<SaldoDeCuota> ?? saldos.ToList();
+        return lista.Where(s => Cobrables.Contains(s.Concepto)).Sum(s => s.Valor) - lista.Where(s => s.Concepto == LoanConcept.Advance).Sum(s => s.Valor);
+    }
 
     /// <summary>
     /// La huella SHA-256 de la liquidación (T24, M15): el texto canónico de <see cref="HuellaDeCartera"/> con el prefijo

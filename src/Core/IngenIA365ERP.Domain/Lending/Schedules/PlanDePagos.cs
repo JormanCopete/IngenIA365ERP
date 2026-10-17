@@ -51,6 +51,12 @@ public sealed record EntradaDePlan(
     public int? CuotasDeDistribucion { get; init; }
 
     public IReadOnlyList<SeguroDelPlan> Seguros { get; init; } = [];
+
+    /// <summary>
+    /// K6b (T1053): la versión de reglas con que se calcula y se sella el plan. Por defecto la vigente; un crédito de vivienda lleva
+    /// <see cref="VersionesDeReglas.Vivienda"/> (la elige quien arma la entrada con <see cref="VersionesDeReglas.ParaCreditoNuevo"/>).
+    /// </summary>
+    public string RulesVersion { get; init; } = VersionesDeReglas.Vigente;
 }
 
 /// <summary>
@@ -143,7 +149,11 @@ public sealed record EntradaDePlanMigrado(
     decimal TasaEfectivaAnual,
     DayCountConvention Convencion,
     RateEquivalence Equivalencia,
-    RedondeoDeCartera Redondeo);
+    RedondeoDeCartera Redondeo)
+{
+    /// <summary>K6b (T1053): la versión de reglas del crédito migrado (la de vivienda para un crédito de vivienda).</summary>
+    public string RulesVersion { get; init; } = VersionesDeReglas.Vigente;
+}
 
 /// <summary>Lo causado de un concepto en una cuota hasta una fecha (proyección con pagos a tiempo, US4).</summary>
 public sealed record CausadoDeCuota(int Cuota, LoanConcept Concepto, decimal Valor);

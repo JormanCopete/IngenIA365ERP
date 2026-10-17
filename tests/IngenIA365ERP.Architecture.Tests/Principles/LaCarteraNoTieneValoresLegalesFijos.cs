@@ -43,6 +43,19 @@ public class LaCarteraNoTieneValoresLegalesFijos
     }
 
     [Fact]
+    public void La_vivienda_esta_en_las_dos_reglas()
+    {
+        // K6b (T1053, T1054): la vivienda (Domain/Lending/Housing) se revisa por literales decimales y por los días de la semana y de la década.
+        var archivos = ReglaSobreFuente.ArchivosEn(Carpetas).Select(a => a.Replace('\\', '/')).ToList();
+        var delMotor = ReglaSobreFuente.ArchivosEn(CarpetasDelMotor).Select(a => a.Replace('\\', '/')).ToList();
+        foreach (var pieza in new[] { "SerieUvr", "ConversionUvr", "ReconstruccionEnUvr", "ReglasDeVivienda" })
+        {
+            Assert.Contains(archivos, a => a.EndsWith($"Domain/Lending/Housing/{pieza}.cs", StringComparison.Ordinal));
+            Assert.Contains(delMotor, a => a.EndsWith($"Domain/Lending/Housing/{pieza}.cs", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
     public void La_cobranza_esta_en_la_regla()
     {
         // K4 (T0932, T0937): los motores puros de la cobranza (Domain/Lending/Collections) están entre los archivos que se revisan.
@@ -110,6 +123,9 @@ public class LaCarteraNoTieneValoresLegalesFijos
         // US9 (T0674): los motores de calificación y deterioro, la política efectiva, el selector y el historial de mora: rangos, porcentajes,
         // tramos de garantía y meses de historial llegan en el Anexo 1, la política y la regla de pérdida esperada, nunca como número.
         "Core/IngenIA365ERP.Domain/Lending/Risk",
+        // K6b (T1053, T1054): la vivienda —la UVR, sus conversiones, la reconstrucción en UVR y las reglas de la Ley 546—. Los límites de vivienda,
+        // el tope y la UVR llegan como valores nacionales; ninguno es un número del código.
+        "Core/IngenIA365ERP.Domain/Lending/Housing",
     ];
 
     private static readonly Regex SieteODiez = new(@"(?<![\w.])(7|10)(?:[mM])?(?![\w.])", RegexOptions.Compiled);

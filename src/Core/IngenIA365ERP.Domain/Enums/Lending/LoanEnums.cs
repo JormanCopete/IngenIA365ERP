@@ -56,6 +56,14 @@ public enum LoanTransactionKind
     /// <c>+</c> los demás conceptos en su primera cuota (anticipo y saldo a favor, sin cuota). (nuevo)
     /// </summary>
     TransferFromLinkedLoan = 19,
+
+    /// <summary>
+    /// K6b (T1054, T1056; FR-024, D18, pregunta E12): la <b>corrección monetaria</b> de un crédito en UVR. Cada día valor, lo que cambió el valor en
+    /// pesos de lo que se debe en UVR (capital y demás conceptos de la cuota) por el cambio de la UVR del día, sin contar lo que causó ni lo que
+    /// movieron las operaciones: <c>U(saldo en UVR × UVR del día) − U(saldo en UVR de la víspera × UVR de la víspera) − lo causado − lo movido</c>.
+    /// La escribe la causación diaria y la lleva a Contabilidad el hecho <c>CorreccionMonetariaUvrCausada</c>. (nuevo)
+    /// </summary>
+    MonetaryCorrection = 20,
 }
 
 /// <summary>Clase de una operación (<c>LND_LoanOperations</c>, M, FR-048, FR-142).</summary>

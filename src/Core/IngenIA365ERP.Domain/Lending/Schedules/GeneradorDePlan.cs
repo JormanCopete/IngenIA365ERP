@@ -67,7 +67,7 @@ public static class GeneradorDePlan
             extra[graciaTotal ? x.Cuota - 1 + g : x.Cuota - 1] += r.Concepto(x.Valor);
 
         var explicacion = new ExplicacionDeCartera()
-            .Linea($"Reglas {VersionesDeReglas.Vigente}; convención {e.Convencion}, equivalencia {e.Equivalencia}, redondeo a "
+            .Linea($"Reglas {e.RulesVersion}; convención {e.Convencion}, equivalencia {e.Equivalencia}, redondeo a "
                 + $"{ExplicacionDeCartera.Numero(r.Unidad)} {r.Modo} {r.Momento}.")
             .Linea(TextoDeLaTasaDiaria(e, tasaDiaria))
             .Linea($"Nominal del período (informativa): (1 + {ExplicacionDeCartera.Numero(e.TasaEfectivaAnual)})^(1/"
@@ -199,7 +199,7 @@ public static class GeneradorDePlan
                 "difference", sumaDeCapital - e.Monto));
 
         explicacion.Linea($"La última cuota paga el saldo de capital y absorbe el residuo de redondeo: {ExplicacionDeCartera.Numero(residuo)}.");
-        return new PlanDePagos(VersionesDeReglas.Vigente, e, tasaDiaria, nominal, cuotaNivelada, interesDeGracia, residuo, cuotas, explicacion)
+        return new PlanDePagos(e.RulesVersion, e, tasaDiaria, nominal, cuotaNivelada, interesDeGracia, residuo, cuotas, explicacion)
         {
             PeriodosDeGracia = graciaTotal ? Enumerable.Range(0, g).Select(k => new PeriodoDeGracia(desde[k], fechas[k])).ToList() : [],
         };
@@ -443,7 +443,7 @@ public static class GeneradorDePlan
         var cuotas = desplazamiento == 0 ? plan.Cuotas : plan.Cuotas.Select(c => c with { Numero = c.Numero + desplazamiento }).ToList();
         var explicacion = new ExplicacionDeCartera()
             .Linea($"Novedad {n.Mecanismo} decidida el {ExplicacionDeCartera.Fecha(n.Fecha)}: plan nuevo desde esa fecha con las reglas "
-                + $"{VersionesDeReglas.Vigente}, {n.Cuotas.ToString(Inv)} cuotas desde la {n.PrimeraCuota.ToString(Inv)}.")
+                + $"{b.RulesVersion}, {n.Cuotas.ToString(Inv)} cuotas desde la {n.PrimeraCuota.ToString(Inv)}.")
             .Linea($"Capital: saldo {ExplicacionDeCartera.Numero(n.SaldoDeCapital)}"
                 + (n.SaldosRecogidos.Count > 0 ? $" + recogido {string.Join(" + ", n.SaldosRecogidos.Select(ExplicacionDeCartera.Numero))}" : string.Empty)
                 + (n.InteresCapitalizado != 0m ? $" + capitalizado {ExplicacionDeCartera.Numero(n.InteresCapitalizado)}" : string.Empty)
@@ -661,8 +661,8 @@ public static class GeneradorDePlan
                 + "causa el motor desde el corte.")
             .Linea($"La última cuota absorbe la diferencia entre el saldo de capital y las cuotas cargadas: {ExplicacionDeCartera.Numero(residuo)}.");
         var entrada = new EntradaDePlan(m.SaldoDeCapital, m.Corte, filas.Count, m.Periodicidad, m.Sistema, m.TasaEfectivaAnual, m.Convencion,
-            m.Equivalencia, red);
-        return new PlanDePagos(VersionesDeReglas.Vigente, entrada, rd, EquivalenciaDeTasas.NominalDelPeriodo(m.TasaEfectivaAnual, m.Periodicidad),
+            m.Equivalencia, red) { RulesVersion = m.RulesVersion };
+        return new PlanDePagos(m.RulesVersion, entrada, rd, EquivalenciaDeTasas.NominalDelPeriodo(m.TasaEfectivaAnual, m.Periodicidad),
             null, 0m, residuo, cuotas, explicacion);
     }
 
@@ -781,7 +781,8 @@ public static class GeneradorDePlan
         ArgumentNullException.ThrowIfNull(e);
         ArgumentNullException.ThrowIfNull(e.Redondeo);
         if (e.Monto <= 0m) throw new ArgumentOutOfRangeException(nameof(e), e.Monto, "El monto es mayor que cero.");
-        if (decimal.Round(e.Monto, 2) != e.Monto) throw new ArgumentException("El monto va en pesos con centavos.", nameof(e));
+        if (e.Redondeo.RedondearAlCentavo(e.Monto) != e.Monto)
+            throw new ArgumentException(e.Redondeo.EsDeUvr ? "El monto en UVR va con cuatro decimales." : "El monto va en pesos con centavos.", nameof(e));
         ArgumentOutOfRangeException.ThrowIfLessThan(e.Periodos, 1, nameof(e.Periodos));
 
         var unico = e.Periodicidad == RepaymentPeriodicity.SinglePayment;

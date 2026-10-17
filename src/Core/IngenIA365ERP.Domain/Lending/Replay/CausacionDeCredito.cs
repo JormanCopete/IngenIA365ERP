@@ -41,6 +41,15 @@ public static class CausacionDeCredito
                 $"Se causa un día a la vez y en orden: la marca está en {ExplicacionDeCartera.Fecha(ultimaCausada)} y se pidió {ExplicacionDeCartera.Fecha(dia)}.",
                 new Dictionary<string, object?> { ["lastAccruedDate"] = ultimaCausada, ["date"] = dia }));
 
+        // K6b (T1054): un crédito en UVR no se causa un día sin UVR publicada (ni sin la de la víspera, con que se valoró lo de ayer): NationalValues.Missing
+        // sólo para él, y la marca no avanza.
+        if (entrada.Uvr is { } serie)
+            foreach (var d in new[] { dia.AddDays(-1), dia })
+                if (serie.Publicada(d) is null && ReconstruccionDeCredito.OperacionesVigentes(entrada, dia) is { Count: > 0 } ops && d >= ops[0].FechaValor)
+                    return new ResultadoDeCausacion(dia, [], null, ReconstruccionDeCredito.EnSuUnidad(entrada with { Uvr = null, Operaciones = [] }, dia, null, null),
+                        ProblemaDeCartera.Con(CodigoValorNacionalFaltante,
+                        $"No hay UVR publicada para el {ExplicacionDeCartera.Fecha(d)}: el crédito en UVR no se causa hasta que se replique.", "date", d));
+
         var estado = ReconstruccionDeCredito.Reconstruir(entrada, dia, dia, interpretes);
         if (estado.Origen is not { } origen || dia <= origen)
             return new ResultadoDeCausacion(dia, [], null, estado, null);
@@ -48,7 +57,8 @@ public static class CausacionDeCredito
             return new ResultadoDeCausacion(dia, [], null, estado, ProblemaDeCartera.Con(CodigoValorNacionalFaltante,
                 $"No hay usura certificada para el {ExplicacionDeCartera.Fecha(sinUsura)}: el crédito no se causa hasta que se replique.", "date", sinUsura));
 
-        var filas = estado.Libro.DelDia(dia).Where(f => f.Clase == LoanTransactionKind.Accrual).ToList();
+        // K6b (T1054): en un crédito en UVR, la causación del día va con su corrección monetaria.
+        var filas = estado.Libro.DelDia(dia).Where(f => f.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection).ToList();
         var transicion = estado.Transiciones.LastOrDefault(t => t.Fecha == dia);
         return new ResultadoDeCausacion(dia, filas, transicion, estado, null);
     }
