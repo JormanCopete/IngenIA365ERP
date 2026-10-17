@@ -142,7 +142,9 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `docs/operaciones/llavero-dataprotection.md`.
 - **Multi-tenancy**: Una base de datos por cooperativa (constitución v2.0.0, Principio IV).
   El aislamiento es físico. La base administrativa `IngenIA365ERP_Admin` es una sola y
-  vive fuera de toda base de cooperativa.
+  vive fuera de toda base de cooperativa. Desde la 013 guarda también los **valores nacionales** con vigencia
+  (`ADM_NationalValues`: usura, UVR, topes, tipos de organización, Anexo 2) y sus soportes (`ADM_RegulatoryDocuments`),
+  que se replican a `COR_` de cada cooperativa.
 - **Códigos de catálogo** (desde el 2026-09-12): en todo catálogo el código es la
   nomenclatura de la cooperativa —alfanumérico, en mayúsculas, sin espacios, único en su
   tabla— y nunca un identificador del sistema (para eso están `Id` y `PublicId`). Lo
@@ -592,8 +594,8 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
   producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
 
-- **Cartera financiera (feature 013, rama `013-cartera-financiera`, fases 1–11, 2026-10-13; rama local, sin merge ni
-  despliegue)**: Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas K1–K6b; K1
+- **Cartera financiera (feature 013, rama `013-cartera-financiera`, K1 a K6b construidas (fases 1–23) y Polish local (fase 24,
+  2026-10-17); rama local, sin merge ni despliegue)**: Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas K1–K6b; K1
   es el mínimo para salir en vivo y **no sale sin Recaudo y Tesorería** (en prueba, un recaudador y una tesorería de
   prueba, que no existen en producción). Hasta aquí: plataforma y retiro de las tablas `LND_` de crédito heredadas
   (fases 1–3), gobierno y seguridad (US17), líneas y usura (US1), originación (US2), desembolso, garantías y pagaré
@@ -703,6 +705,19 @@ la UVR de cada día, registrada **un valor por día** en la central (sin semilla
 comprobante `CA`; propuesta por defecto de E12). Las respuestas ganan `housing`, `uvr`, `denominationUnit` e
 `isSocialHousing` opcionales (api.md §29). Recetas: `docs/manual/cartera-vivienda-y-uvr.md`,
 `docs/operaciones/valores-nacionales.md` §3a.
+**Reglas transversales de la 013 (cierre local, 2026-10-17)**: **un solo escritor del libro de Cartera**,
+`RegistroDeCartera` (`NadieEscribeElLibroDeCarteraFueraDelRegistro`); **una sola fuente de saldos**,
+`ReconstruccionDeCredito` (no hay saldos guardados que no salgan de ella); los pagos entran sólo por el **contrato de
+obligaciones v1**; los **valores nacionales** (usura, UVR, topes, tipos de organización, Anexo 2) se registran una vez en la
+base administrativa (`ADM_NationalValues`, `ADM_RegulatoryDocuments`) y se **replican** a `COR_` de cada cooperativa; corregir
+una USURA o una UVR ya replicada encola la corrida `NationalValueCorrection`, que corrige desde el día afectado hasta la última
+marca con filas nuevas (nunca edita lo aplicado) y manda el reparto en pesos de un pago de ese día en su propio hecho
+`PagoRedistribuidoPorValorNacional` (PRN, comprobante `CA`; decisión del dueño); los **cierres son inmutables**; el modelo de
+deterioro va por cooperativa y segmento; **los layouts son dato** con cotejo (`verified`); los documentos al deudor llevan
+código de verificación; los permisos `Lending.*` los siembra la API al arrancar; las pruebas de DT §2.25 tienen nombre fijo.
+Verde al cierre local: e2e en PostgreSQL y SQL Server (Lending 108 pasan y 7 omitidas de rendimiento; todo el proyecto 585 y
+16). Índice de recetas: `docs/manual/cartera.md`. Pendiente del dueño o de ambiente: cotejar layouts y Anexo 2, PI voluntaria,
+UVR y topes reales en la central, T1078–T1089 (QA, MAUI, despliegue).
 Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
@@ -718,18 +733,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-09-26 (cierre de la entrega I1 de la feature 012, en su rama `012-inventario-comercial`), remedida. **Son cifras que
+Instantánea del 2026-10-17 (cierre local de la feature 013, K1 a K6b y Polish, en su rama `013-cartera-financiera`), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 201 con `@page` (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 12 clases `*Report` (2026-09-26; el retiro del inventario heredado se llevó `InventoryValuationReport`: los informes de inventario nuevos salen del centro de informes como `TablaExportable`) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
-| Pruebas sin contenedores | 3.215 el 2026-09-26, cierre de I1 de la 012 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load), todas pasan | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 283 con `@page` (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 18 clases `*Report` (2026-10-17, feature 013: +6, documentos al deudor y de Cartera). Antes: 12 (2026-09-26; el retiro del inventario heredado se llevó `InventoryValuationReport`: los informes de inventario nuevos salen del centro de informes como `TablaExportable`) | `grep -rhoE "static class [A-Za-z]+Report\b" src/Presentation/IngenIA365ERP.API/Reports/*.cs \| wc -l` |
+| Pruebas sin contenedores | 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
