@@ -117,7 +117,7 @@ internal sealed class RegulatoriosDePrueba : IDisposable
 
     /// <summary>Un crédito sembrado como hecho, con su posición al <paramref name="posicion"/> (por defecto, el corte) y sus días de mora.</summary>
     public async Task<Loan> CreditoAsync(string numero, Person deudor, decimal monto = 1_000_000m, int dias = 0, LoanStatus estado = LoanStatus.Active,
-        DateOnly? abierto = null, DateOnly? posicion = null, decimal? capital = null, Action<Loan>? ajustar = null)
+        DateOnly? abierto = null, DateOnly? posicion = null, decimal? capital = null, Action<Loan>? ajustar = null, string modalidad = "CONSUMO")
     {
         var credito = new Loan
         {
@@ -130,7 +130,7 @@ internal sealed class RegulatoriosDePrueba : IDisposable
         Db.LoanDailyPositions.Add(new LoanDailyPosition
         {
             LoanId = credito.Id, PositionDate = posicion ?? Corte, Version = 1, Status = estado, BranchId = credito.BranchId, CreditLineId = credito.CreditLineId,
-            ModalityCode = "CONSUMO", Principal = capital ?? monto, PrincipalPastDue = dias > 0 ? 50_000m : 0m, DefaultInterest = dias > 0 ? 1_500m : 0m,
+            ModalityCode = modalidad, Principal = capital ?? monto, PrincipalPastDue = dias > 0 ? 50_000m : 0m, DefaultInterest = dias > 0 ? 1_500m : 0m,
             DaysPastDue = dias, InstallmentsPastDue = dias > 0 ? 1 + dias / 30 : 0, InputsSha256 = "x",
         });
         await Db.SaveChangesAsync();

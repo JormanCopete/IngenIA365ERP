@@ -60,12 +60,15 @@ public static class AvisosPrevios
     /// El aviso del episodio del crédito (por la UK <c>(LoanId, PersonId, EpisodeStartDate)</c>) o uno nuevo con lo vigente sellado: los días mínimos
     /// (<c>AvisoPrevio.DiasMinimos</c>, con su piso legal) y el umbral (<c>AvisoPrevio.UmbralDosComunicaciones</c> en veces el SMMLV, por el SMMLV del día)
     /// que dicen si se exigen una o dos comunicaciones según el saldo de la obligación. El nuevo queda en la unidad de trabajo, sin guardar.
+    /// <paramref name="titular"/> es el avisado: el deudor si no se dice, o un codeudor cuando <c>AvisoPrevio.IncluirCodeudores</c> lo pide (decisión del
+    /// dueño del 2026-10-16), cada uno con su propio aviso y su propia constancia.
     /// </summary>
     public static async Task<Result<(PriorNotice Aviso, bool Nuevo)>> AbrirAsync(IApplicationDbContext db, ReglasDeParametrosDeCartera parametros,
-        IValoresNacionales valores, Loan credito, DateOnly inicioDelEpisodio, decimal saldo, DateOnly dia, CancellationToken ct)
+        IValoresNacionales valores, Loan credito, DateOnly inicioDelEpisodio, decimal saldo, DateOnly dia, CancellationToken ct, int? titular = null)
     {
-        var existente = db.PriorNotices.Local.FirstOrDefault(n => n.LoanId == credito.Id && n.PersonId == credito.DebtorPersonId && n.EpisodeStartDate == inicioDelEpisodio)
-                        ?? await db.PriorNotices.FirstOrDefaultAsync(n => n.LoanId == credito.Id && n.PersonId == credito.DebtorPersonId
+        var persona = titular ?? credito.DebtorPersonId;
+        var existente = db.PriorNotices.Local.FirstOrDefault(n => n.LoanId == credito.Id && n.PersonId == persona && n.EpisodeStartDate == inicioDelEpisodio)
+                        ?? await db.PriorNotices.FirstOrDefaultAsync(n => n.LoanId == credito.Id && n.PersonId == persona
                                                                           && n.EpisodeStartDate == inicioDelEpisodio && !n.IsDeleted, ct);
         if (existente is not null) return Result.Success((existente, false));
 
@@ -80,7 +83,7 @@ public static class AvisosPrevios
         var aviso = new PriorNotice
         {
             LoanId = credito.Id,
-            PersonId = credito.DebtorPersonId,
+            PersonId = persona,
             EpisodeStartDate = inicioDelEpisodio,
             RequiredCommunications = (byte)(umbralEnPesos is { } u ? AvisoPrevioPorEpisodio.ComunicacionesExigidas(saldo, u) : 1),
             MinimumDays = minimos,
@@ -88,6 +91,13 @@ public static class AvisosPrevios
         };
         db.PriorNotices.Add(aviso);
         return Result.Success((aviso, true));
+    }
+
+    /// <summary>¿El aviso previo incluye a los codeudores al <paramref name="dia"/> (<c>AvisoPrevio.IncluirCodeudores</c>)? Si no se puede leer, no.</summary>
+    public static async Task<bool> IncluyeCodeudoresAsync(ReglasDeParametrosDeCartera parametros, DateOnly dia, CancellationToken ct)
+    {
+        var p = await parametros.LeerAsync(ParametrosDeCartera.AvisoPrevioIncluirCodeudores, dia, ct: ct);
+        return p.IsSuccess && p.Value.Valor is true;
     }
 
     /// <summary>Las variables del aviso (adaptadores-y-archivos.md §4.7): la obligación, lo vencido y la fecha más temprana de reporte.</summary>

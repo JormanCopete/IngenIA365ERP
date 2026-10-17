@@ -17,6 +17,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Risk;
 using IngenIA365ERP.Domain.Enums.Compliance;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Parameters;
+using IngenIA365ERP.Domain.Lending.Regulatory;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -59,6 +60,16 @@ public sealed record TitularDeCentral
     public int CuotasPactadas { get; init; }
     public int CuotasEnMora { get; init; }
     public int DiasDeMora { get; init; }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-16: el número del rango de mora del tipo de cartera (<c>Centrales.RangosDeMora</c>) con el que se reporta la
+    /// obligación en mora; nulo si no se reporta en mora. La altura de mora reportada (el código de la novedad) sale de él.
+    /// </summary>
+    public int? RangoDeMora { get; init; }
+
+    /// <summary>La etiqueta del rango (<c>1-30</c>, <c>31-60</c>, <c>181+</c>); nula si no se reporta en mora.</summary>
+    public string? AlturaDeMora { get; init; }
+
     public DateOnly? FechaLimiteDePago { get; init; }
     public DateOnly? FechaDelUltimoPago { get; init; }
 
@@ -140,7 +151,7 @@ public static class FilasDeCentral
         valores["Obligacion.Numero"] = x.NumeroDeObligacion;
         valores["Obligacion.FechaDeApertura"] = x.FechaDeApertura;
         valores["Obligacion.FechaDeVencimiento"] = x.FechaDeVencimiento;
-        valores["Obligacion.Novedad"] = t.Estado(x.Estado);
+        valores["Obligacion.Novedad"] = t.Novedad(x.Estado, x.RangoDeMora);
         valores["Obligacion.EstadoDeOrigen"] = x.Reestructurado ? t.EstadoDeOrigenReestructurado : t.EstadoDeOrigenNormal;
         valores["Obligacion.FechaDelEstadoDeOrigen"] = x.FechaDelEstadoDeOrigen;
         valores["Obligacion.ValorInicial"] = x.ValorInicial;
@@ -154,6 +165,8 @@ public static class FilasDeCentral
         valores["Saldos.Total"] = x.SaldoTotal;
         valores["Saldos.EnMora"] = x.SaldoEnMora;
         valores["Riesgo.DiasDeMora"] = x.DiasDeMora;
+        valores["Riesgo.RangoDeMora"] = x.RangoDeMora;
+        valores["Riesgo.AlturaDeMora"] = x.AlturaDeMora;
         valores["Reporte.MarcaDeReclamo"] = x.ReclamoEnTramite ? "R" : null;
         valores["Reporte.MarcaDeRetiro"] = x.RetiroSinAviso || x.AnuladoDesdeElOrigen ? "X" : null;
         return new FilaDeLayout(Detalle, x.NumeroDeObligacion, valores);
@@ -188,6 +201,11 @@ public sealed record ProyeccionDeCentral(
 /// insolvencia negociando (<c>Insolvency</c>), descuento de libranza pendiente de giro dentro del umbral de la pagaduría
 /// (<c>PaymasterArrearsWithinThreshold</c>) o sin aviso previo <c>Complete</c> de su episodio desde su fecha más temprana
 /// (<c>NoPriorNoticeEvidence</c>, y la alerta <c>Cartera.AvisoPrevioSinConstancia</c>).</item>
+/// <item>Decisiones del dueño del 2026-10-16: la mora se reporta por los <b>rangos de su tipo de cartera</b> (<c>Centrales.RangosDeMora</c>, vigente al
+/// corte, por la modalidad de la posición): por debajo del rango negativo la obligación va al día —sin días, saldo ni cuotas en mora y sin exigir
+/// aviso—; desde él va en mora con su rango, y la altura reportada (el código de la novedad) sale del rango. El codeudor con dato negativo se reporta
+/// sólo con <c>AvisoPrevio.IncluirCodeudores</c> y <b>su</b> aviso completo; sin el parámetro queda fuera con <c>NoPriorNoticeEvidence</c> y sin
+/// alerta.</item>
 /// <item>Reclamo sobre el reporte en trámite (<c>LND_CreditReportClaims</c>): incluido con su marca.</item>
 /// <item>Retiros: lo reportado con dato negativo sin aviso (en el archivo anterior, o migrado sin aviso en el primer archivo de la central) sale con la
 /// marca de retiro y sin dato negativo; un crédito <b>anulado desde su origen</b> que figuraba en el archivo anterior sale como retiro de él y de sus
@@ -226,6 +244,8 @@ public sealed class ProyeccionCentralDeRiesgo(
             .ToListAsync(ct);
         var ids = creditos.Select(l => l.Id).ToList();
         var datos = await DatosDelCreditoAlCorte.LeerAsync(db, ids, corte, ct);
+        var rangos = await RangosDeMoraAsync(parametros, corte, ct);
+        var incluirCodeudores = await AvisosPrevios.IncluyeCodeudoresAsync(parametros, corte, ct);
 
         var codeudores = (await db.LoanParties.AsNoTracking().Where(p => ids.Contains(p.LoanId) && p.Role == CreditPartyRole.CoDebtor).ToListAsync(ct))
             .Where(p => p.VigenteA(corte)).ToLookup(p => p.LoanId, p => p.PersonId);
@@ -264,6 +284,7 @@ public sealed class ProyeccionCentralDeRiesgo(
             }
 
             EstadoEnCentral estado;
+            RangoDeMora? rango = null;
             var cerrado = CerradoEl(l);
             if (cerrado is { } c && c <= corte)
             {
@@ -275,15 +296,26 @@ public sealed class ProyeccionCentralDeRiesgo(
                 estado = EstadoEnCentral.Cancelada;
             }
             else if (l.WrittenOffOn is { } castigo && castigo <= corte) estado = EstadoEnCentral.Castigada;
-            else estado = (d.Posicion?.DaysPastDue ?? 0) > 0 ? EstadoEnCentral.EnMora : EstadoEnCentral.AlDia;
+            else if ((d.Posicion?.DaysPastDue ?? 0) > 0)
+            {
+                // Decisión del dueño del 2026-10-16: la mora se reporta por el rango de su tipo de cartera; por debajo del rango negativo, al día.
+                var regla = rangos.Para(d.Posicion?.ModalityCode);
+                var dias = d.Posicion!.DaysPastDue;
+                rango = regla.RangoDe(dias);
+                estado = regla.EsNegativo(dias) ? EstadoEnCentral.EnMora : EstadoEnCentral.AlDia;
+            }
+            else estado = EstadoEnCentral.AlDia;
 
             foreach (var (personaId, esDeudor) in new[] { (l.DebtorPersonId, true) }.Concat(codeudores[l.Id].Distinct().Select(p => (p, false))))
             {
                 var b = Base(l, d, personaId, esDeudor) with { Estado = estado };
                 if (estado == EstadoEnCentral.Cancelada) b = b with { SaldoTotal = 0m, SaldoEnMora = 0m, DiasDeMora = 0, CuotasEnMora = 0, FechaDelEstadoDeOrigen = cerrado };
+                if (estado == EstadoEnCentral.AlDia && b.DiasDeMora > 0) b = b with { SaldoEnMora = 0m, DiasDeMora = 0, CuotasEnMora = 0 };
                 borradores.Add(b with
                 {
                     EsNegativo = estado is EstadoEnCentral.EnMora or EstadoEnCentral.Castigada,
+                    RangoDeMora = estado == EstadoEnCentral.EnMora ? rango?.Numero : null,
+                    AlturaDeMora = estado == EstadoEnCentral.EnMora ? rango?.Etiqueta : null,
                     InicioDelEpisodio = estado is EstadoEnCentral.EnMora or EstadoEnCentral.Castigada && d.Posicion is { DaysPastDue: > 0 } p
                         ? p.PositionDate.AddDays(-p.DaysPastDue) : null,
                     RetiroSinAviso = retirosSinAviso.Contains((l.Id, personaId)),
@@ -312,7 +344,7 @@ public sealed class ProyeccionCentralDeRiesgo(
                 .Where(r => !r.IsDeleted && r.Status == CreditReportClaimStatus.InProcess && personaIds.Contains(r.PersonId)
                             && (r.BureauCode == null || r.BureauCode == central))
                 .Select(r => new { r.PersonId, r.LoanId }).ToListAsync(ct));
-        var avisos = await AvisosAsync(negativos, corte, ct);
+        var avisos = await AvisosAsync(negativos.Where(n => n.EsDeudor || incluirCodeudores).ToList(), corte, ct);
 
         var alertas = new List<AlertaALevantar>();
         var decididos = new List<TitularDeCentral>(borradores.Count);
@@ -333,6 +365,9 @@ public sealed class ProyeccionCentralDeRiesgo(
                 if (conReclamacionAlSeguro.Contains(t.LoanId)) motivo = MotivosDeExclusionDeCentral.DeceasedClaimInProcess;
                 else if (insolventes.Contains(t.PersonId)) motivo = MotivosDeExclusionDeCentral.Insolvency;
                 else if (conGiroPendiente.Contains(t.LoanId)) motivo = MotivosDeExclusionDeCentral.PaymasterArrearsWithinThreshold;
+                // Decisión del dueño del 2026-10-16: sin AvisoPrevio.IncluirCodeudores el codeudor no recibe aviso y no se reporta con dato negativo; no
+                // hay gestión que hacer, así que tampoco alerta.
+                else if (!t.EsDeudor && !incluirCodeudores) motivo = MotivosDeExclusionDeCentral.NoPriorNoticeEvidence;
                 else if (avisos.GetValueOrDefault((t.LoanId, t.PersonId)) is { } aviso && aviso.Permite) t = t with { AvisoPrevioId = aviso.Id };
                 else
                 {
@@ -493,6 +528,16 @@ public sealed class ProyeccionCentralDeRiesgo(
             EntityType: aviso is null ? "Loan" : nameof(PriorNotice), EntityPublicId: aviso?.PublicId ?? t.LoanPublicId,
             DedupKey: $"{TiposDeAlerta.AvisoPrevioSinConstancia}:{central}:{t.LoanId}:{t.PersonId}:{t.InicioDelEpisodio:yyyy-MM-dd}",
             ModuloDeOrigen: "Lending");
+
+    /// <summary>
+    /// Los rangos de mora por tipo de cartera vigentes al corte (<c>Centrales.RangosDeMora</c>, decisión del dueño del 2026-10-16); si el parámetro no se
+    /// puede leer o no sirve, los del defecto —toda mora es dato negativo, como antes del parámetro—.
+    /// </summary>
+    public static async Task<RangosDeMoraParaCentrales> RangosDeMoraAsync(ReglasDeParametrosDeCartera parametros, DateOnly corte, CancellationToken ct)
+    {
+        var p = await parametros.LeerAsync(ParametrosDeCartera.CentralesRangosDeMora, corte, ct: ct);
+        return (p.IsSuccess ? RangosDeMoraParaCentrales.Leer(p.Value.Texto) : null) ?? RangosDeMoraParaCentrales.PorDefecto;
+    }
 
     /// <summary>El código de suscriptor de la central (<c>Centrales.CodigosDeSuscriptor</c>, vigente al corte), o nulo si no está.</summary>
     private async Task<string?> CodigoDeSuscriptorAsync(string central, DateOnly corte, CancellationToken ct)

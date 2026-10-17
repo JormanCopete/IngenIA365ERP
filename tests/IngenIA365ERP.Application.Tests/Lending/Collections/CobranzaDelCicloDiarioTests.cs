@@ -164,6 +164,41 @@ public sealed class CobranzaDelCicloDiarioTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Con_AvisoPrevio_IncluirCodeudores_el_aviso_se_abre_tambien_para_cada_codeudor_y_le_sale_su_comunicacion()
+    {
+        // Decisión del dueño del 2026-10-16: con el parámetro en true, Beto (codeudor) recibe su propio aviso del episodio, con su propia constancia.
+        _c.Db.ParameterVersions.Add(new IngenIA365ERP.Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = ParametrosDeCartera.Modulo, Key = ParametrosDeCartera.AvisoPrevioIncluirCodeudores, ScopeKind = IngenIA365ERP.Domain.Enums.Parameters.ParameterScopeKind.None,
+            Value = "true", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba", CreatedAt = _c.G.UtcNow.AddDays(-30), CreatedBy = "test",
+        });
+        await _c.Db.SaveChangesAsync();
+        _c.E.Autorizar(_c.Beto, MessageChannel.Sms);
+        var credito = _c.EnMora(40);
+
+        var r = await _c.CorrerAsync(credito);
+
+        r.AvisosAbiertos.Should().Be(2);
+        var avisos = await _c.Db.PriorNotices.AsNoTracking().OrderBy(a => a.Id).ToListAsync();
+        avisos.Select(a => a.PersonId).Should().BeEquivalentTo([_c.Ana.Id, _c.Beto.Id]);
+        avisos.Select(a => a.EpisodeStartDate).Distinct().Should().ContainSingle("el episodio es el mismo del crédito");
+
+        await _c.Ciclo().CierreAsync(_c.Hoy, default);
+        await _c.Db.SaveChangesAsync();
+        (await _c.Db.DebtorMessages.AsNoTracking().Where(m => m.Purpose == DebtorMessagePurpose.PriorNotice).Select(m => m.PersonId).ToListAsync())
+            .Should().BeEquivalentTo([_c.Ana.Id, _c.Beto.Id], "cada titular recibe su comunicación");
+    }
+
+    [Fact]
+    public async Task Sin_el_parametro_el_codeudor_no_recibe_aviso()
+    {
+        var r = await _c.CorrerAsync(_c.EnMora(40));
+
+        r.AvisosAbiertos.Should().Be(1);
+        (await _c.Db.PriorNotices.AsNoTracking().SingleAsync()).PersonId.Should().Be(_c.Ana.Id, "AvisoPrevio.IncluirCodeudores arranca en false");
+    }
+
+    [Fact]
     public async Task La_etapa_con_gasto_propone_y_encola_el_aviso_del_gasto_sin_causarlo()
     {
         var r = await _c.CorrerAsync(_c.EnMora(40));

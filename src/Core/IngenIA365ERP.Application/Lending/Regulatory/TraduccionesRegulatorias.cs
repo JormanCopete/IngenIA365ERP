@@ -130,7 +130,12 @@ public static class TraduccionesRegulatorias
             [RepaymentPeriodicity.Monthly] = "1", [RepaymentPeriodicity.Bimonthly] = "2", [RepaymentPeriodicity.Quarterly] = "3",
             [RepaymentPeriodicity.SemiAnnual] = "4", [RepaymentPeriodicity.Annual] = "5", [RepaymentPeriodicity.SinglePayment] = "6",
             [RepaymentPeriodicity.Biweekly] = "7", [RepaymentPeriodicity.Weekly] = "8", [RepaymentPeriodicity.TenDay] = "9",
-        });
+        })
+    {
+        // Decisión del dueño del 2026-10-16: la altura de mora sale del rango de Centrales.RangosDeMora (por cotejar): rango 1 «mora 30», 2 «mora 60»,
+        // 3 «mora 90» y 4 en adelante «mora 120 o más».
+        AlturasDeMora = new Dictionary<int, string> { [1] = "06", [2] = "07", [3] = "08", [4] = "09" },
+    };
 
     /// <summary>La genérica (TransUnion y cualquier otra sin tabla propia, por cotejar): códigos alfabéticos.</summary>
     public static readonly TraduccionDeCentral Generica = new(
@@ -162,6 +167,23 @@ public sealed record TraduccionDeCentral(
     public string TipoDeIdentificacion(string estandar) => TiposDeIdentificacion.TryGetValue(estandar, out var c) ? c : estandar;
 
     public string Estado(EstadoEnCentral estado) => Estados[estado];
+
+    /// <summary>
+    /// Decisión del dueño del 2026-10-16: el código de la altura de mora por número de rango (<c>Centrales.RangosDeMora</c>); un rango mayor que el último
+    /// de la tabla toma el último. Vacío: la central no distingue alturas y la mora va con el código de <see cref="EstadoEnCentral.EnMora"/>.
+    /// </summary>
+    public IReadOnlyDictionary<int, string> AlturasDeMora { get; init; } = new Dictionary<int, string>();
+
+    /// <summary>
+    /// El código de la novedad de una obligación: en mora y con su rango, el de la altura (<see cref="AlturasDeMora"/>) si la central la distingue; en
+    /// lo demás, el del estado.
+    /// </summary>
+    public string Novedad(EstadoEnCentral estado, int? rango)
+    {
+        if (estado != EstadoEnCentral.EnMora || rango is not { } r || AlturasDeMora.Count == 0) return Estado(estado);
+        return AlturasDeMora.TryGetValue(r, out var codigo) ? codigo : AlturasDeMora.Where(a => a.Key <= r).OrderByDescending(a => a.Key).Select(a => a.Value)
+            .FirstOrDefault() ?? Estado(estado);
+    }
 
     public string Periodicidad(RepaymentPeriodicity p) =>
         Periodicidades.TryGetValue(p, out var c) ? c : ((int)p).ToString(System.Globalization.CultureInfo.InvariantCulture);

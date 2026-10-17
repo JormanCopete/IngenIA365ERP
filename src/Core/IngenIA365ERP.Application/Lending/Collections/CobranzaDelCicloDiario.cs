@@ -179,6 +179,9 @@ public sealed class CobranzaDelCicloDiario(
         var asignaciones = await RepartirAsync(entraron.Select(e => e.Credito).ToList(), dia, ct);
         // K4, bloque D: el tope del gasto de la cooperativa, vigente hoy (vacío = sin tope). Si no se puede leer, no se propone ningún gasto hoy.
         var tope = entraron.Count == 0 ? null : await GastosDeCobranza.TopeAsync(parametros, dia, ct);
+        // Decisión del dueño del 2026-10-16: con AvisoPrevio.IncluirCodeudores, el aviso se abre también para cada codeudor vigente, con su constancia.
+        var codeudores = await CodeudoresParaAvisoAsync(entraron.Where(e => EtapasDeCartera.PideAvisoPrevio(e.Etapa) && e.Credito.Estado.AlturaDeMora.Dias > 0)
+            .Select(e => e.Credito.Credito.Id).ToList(), dia, ct);
 
         foreach (var (c, etapa, entrada, dias) in entraron)
         {
@@ -205,6 +208,15 @@ public sealed class CobranzaDelCicloDiario(
                 else if (abierto.IsFailure)
                     _log.LogWarning("[Cartera.AvisoPrevioSinAbrir] El aviso previo del crédito {Credito} no se abrió: {Codigo} {Mensaje}", c.Credito.Number,
                         abierto.Error.Code, abierto.Error.Message);
+                foreach (var codeudor in codeudores[c.Credito.Id])
+                {
+                    var delCodeudor = await AvisosPrevios.AbrirAsync(db, parametros, valores, c.Credito, dia.AddDays(-c.Estado.AlturaDeMora.Dias),
+                        Math.Max(0m, c.Estado.ValorParaCancelar), dia, ct, codeudor);
+                    if (delCodeudor.IsSuccess && delCodeudor.Value.Nuevo) avisos++;
+                    else if (delCodeudor.IsFailure)
+                        _log.LogWarning("[Cartera.AvisoPrevioSinAbrir] El aviso previo de un codeudor del crédito {Credito} no se abrió: {Codigo} {Mensaje}",
+                            c.Credito.Number, delCodeudor.Error.Code, delCodeudor.Error.Message);
+                }
             }
 
             // El gasto de cobranza de la regla de la etapa: se propone e informa; lo causa una persona.
@@ -283,6 +295,19 @@ public sealed class CobranzaDelCicloDiario(
             }
         }
         return salida;
+    }
+
+    /// <summary>
+    /// Los codeudores vigentes a <paramref name="dia"/> de los créditos que hoy abren aviso previo, si <c>AvisoPrevio.IncluirCodeudores</c> está en
+    /// <c>true</c> ese día (decisión del dueño del 2026-10-16); si no, ninguno.
+    /// </summary>
+    private async Task<ILookup<int, int>> CodeudoresParaAvisoAsync(IReadOnlyList<int> creditos, DateOnly dia, CancellationToken ct)
+    {
+        if (creditos.Count == 0 || !await AvisosPrevios.IncluyeCodeudoresAsync(parametros, dia, ct))
+            return Array.Empty<int>().ToLookup(x => x, x => x);
+        var ids = creditos.Distinct().ToList();
+        return (await db.LoanParties.AsNoTracking().Where(p => ids.Contains(p.LoanId) && p.Role == CreditPartyRole.CoDebtor).ToListAsync(ct))
+            .Where(p => p.VigenteA(dia)).DistinctBy(p => (p.LoanId, p.PersonId)).ToLookup(p => p.LoanId, p => p.PersonId);
     }
 
     /// <summary>Los créditos con el deudor fallecido y reclamación en trámite o en negociación de insolvencia: la cobranza no los toca.</summary>
