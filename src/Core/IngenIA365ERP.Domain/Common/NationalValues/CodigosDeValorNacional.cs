@@ -1,4 +1,5 @@
 using System.Globalization;
+using IngenIA365ERP.Domain.Lending;
 
 namespace IngenIA365ERP.Domain.Common.NationalValues;
 
@@ -11,7 +12,7 @@ public enum MotivoDeRechazoDeValorNacional
     /// <summary><c>NationalValues.KeyInvalid</c>.</summary>
     ClaveInvalida = 2,
 
-    /// <summary><c>NationalValues.CodeNotAvailable</c> (<c>UVR</c> y <c>TOPE_TASA_VIVIENDA</c> hasta K6b).</summary>
+    /// <summary><c>NationalValues.CodeNotAvailable</c> (un código de una entrega posterior a la vigente: <c>UVR</c> y <c>TOPE_TASA_VIVIENDA</c> antes de K6b).</summary>
     CodigoNoDisponible = 3,
 
     /// <summary>La unidad no es la del código (o la del límite, en <c>LIMITE</c>).</summary>
@@ -25,7 +26,7 @@ public enum MotivoDeRechazoDeValorNacional
 public sealed record RechazoDeValorNacional(MotivoDeRechazoDeValorNacional Motivo, string Campo, string Mensaje);
 
 /// <summary>
-/// Definición de un código de valor nacional: unidades admitidas, si lleva clave y valor, si está disponible en K1 y,
+/// Definición de un código de valor nacional: unidades admitidas, si lleva clave y valor, desde qué entrega de Cartera se admite y,
 /// para los índices que se leen como «último publicado» (IBR, IPC), cuántos días calendario de antigüedad admite antes
 /// de alertar <c>Cartera.IndiceDesactualizado</c>.
 /// </summary>
@@ -34,9 +35,16 @@ public sealed record DefinicionDeValorNacional(
     IReadOnlyList<UnidadDeValorNacional> UnidadesAdmitidas,
     bool LlevaClave,
     bool LlevaValor,
-    bool DisponibleEnK1,
+    EntregaDeCartera DisponibleDesde,
     int? AntiguedadMaximaDias,
-    string Descripcion);
+    string Descripcion)
+{
+    /// <summary>¿Se admite en K1? (<c>UVR</c> y <c>TOPE_TASA_VIVIENDA</c> llegan con K6b.)</summary>
+    public bool DisponibleEnK1 => DisponibleDesde == EntregaDeCartera.K1;
+
+    /// <summary>¿Se admite con la entrega dada (por defecto, <see cref="CatalogoDeCartera.EntregaVigente"/>)? K6b (T1050) habilita UVR y el tope.</summary>
+    public bool DisponibleEn(EntregaDeCartera? entrega = null) => (entrega ?? CatalogoDeCartera.EntregaVigente) >= DisponibleDesde;
+}
 
 /// <summary>
 /// Catálogo cerrado de códigos de valor nacional (feature 013, T37, T40, R47; DT §2.21; data-model parte 3 §3.1, §12.3).
@@ -61,17 +69,18 @@ public static class CodigosDeValorNacional
 
     private static readonly IReadOnlyList<DefinicionDeValorNacional> Lista =
     [
-        new(Usura, [UnidadDeValorNacional.EA], LlevaClave: true, LlevaValor: true, DisponibleEnK1: true, null, "Tasa de usura certificada por modalidad"),
-        new(Ibr, [UnidadDeValorNacional.NominalMV], true, true, true, AntiguedadMaximaDias: 5, "Indicador bancario de referencia por plazo"),
-        new(Ipc, [UnidadDeValorNacional.Fraccion], true, true, true, AntiguedadMaximaDias: 40, "Índice de precios al consumidor por serie"),
-        new(TopeTasaVivienda, [UnidadDeValorNacional.EA], false, true, DisponibleEnK1: false, null, "Tope de tasa de vivienda (Ley 546 de 1999)"),
-        new(Uvr, [UnidadDeValorNacional.Pesos], false, true, DisponibleEnK1: false, null, "Valor diario de una UVR"),
-        new(Smmlv, [UnidadDeValorNacional.Pesos], false, true, true, null, "Salario mínimo mensual legal vigente"),
-        new(Uvt, [UnidadDeValorNacional.Pesos], false, true, true, null, "Unidad de valor tributario"),
-        new(Festivo, [], true, LlevaValor: false, true, null, "Festivo nacional (clave = la fecha)"),
+        new(Usura, [UnidadDeValorNacional.EA], LlevaClave: true, LlevaValor: true, DisponibleDesde: EntregaDeCartera.K1, null, "Tasa de usura certificada por modalidad"),
+        new(Ibr, [UnidadDeValorNacional.NominalMV], true, true, EntregaDeCartera.K1, AntiguedadMaximaDias: 5, "Indicador bancario de referencia por plazo"),
+        new(Ipc, [UnidadDeValorNacional.Fraccion], true, true, EntregaDeCartera.K1, AntiguedadMaximaDias: 40, "Índice de precios al consumidor por serie"),
+        // K6b (T1050): el tope de vivienda y la UVR diaria, sin clave, se admiten desde K6b.
+        new(TopeTasaVivienda, [UnidadDeValorNacional.EA], false, true, DisponibleDesde: EntregaDeCartera.K6b, null, "Tope de tasa de vivienda (Ley 546 de 1999)"),
+        new(Uvr, [UnidadDeValorNacional.Pesos], false, true, DisponibleDesde: EntregaDeCartera.K6b, null, "Valor diario de una UVR"),
+        new(Smmlv, [UnidadDeValorNacional.Pesos], false, true, EntregaDeCartera.K1, null, "Salario mínimo mensual legal vigente"),
+        new(Uvt, [UnidadDeValorNacional.Pesos], false, true, EntregaDeCartera.K1, null, "Unidad de valor tributario"),
+        new(Festivo, [], true, LlevaValor: false, EntregaDeCartera.K1, null, "Festivo nacional (clave = la fecha)"),
         new(Limite,
             [UnidadDeValorNacional.Fraccion, UnidadDeValorNacional.Dias, UnidadDeValorNacional.Meses, UnidadDeValorNacional.Horas, UnidadDeValorNacional.Veces],
-            true, true, true, null, "Límite legal (clave = código de CatalogoDeLimitesLegales)"),
+            true, true, EntregaDeCartera.K1, null, "Límite legal (clave = código de CatalogoDeLimitesLegales)"),
     ];
 
     private static readonly Dictionary<string, DefinicionDeValorNacional> PorCodigo = Lista.ToDictionary(c => c.Codigo, StringComparer.Ordinal);
@@ -83,15 +92,17 @@ public static class CodigosDeValorNacional
 
     /// <summary>
     /// Valida código, clave, unidad y presencia del valor, sin leer nada más (la clave de <c>USURA</c> contra el catálogo
-    /// de modalidades y el valor de un <c>LIMITE</c> contra su dirección los completa quien registra). Vacío = válido.
+    /// de modalidades y el valor de un <c>LIMITE</c> contra su dirección los completa quien registra). Vacío = válido. Un código de una
+    /// entrega posterior a <paramref name="entrega"/> (por defecto la vigente) se rechaza con <see cref="MotivoDeRechazoDeValorNacional.CodigoNoDisponible"/>.
     /// </summary>
-    public static IReadOnlyList<RechazoDeValorNacional> Validar(string? codigo, string? clave, UnidadDeValorNacional? unidad, decimal? valor)
+    public static IReadOnlyList<RechazoDeValorNacional> Validar(string? codigo, string? clave, UnidadDeValorNacional? unidad, decimal? valor,
+        EntregaDeCartera? entrega = null)
     {
         var def = Buscar(codigo);
         if (def is null)
             return [new(MotivoDeRechazoDeValorNacional.CodigoDesconocido, "code", $"«{codigo}» no es un código de valor nacional.")];
-        if (!def.DisponibleEnK1)
-            return [new(MotivoDeRechazoDeValorNacional.CodigoNoDisponible, "code", $"{def.Codigo} todavía no está disponible.")];
+        if (!def.DisponibleEn(entrega))
+            return [new(MotivoDeRechazoDeValorNacional.CodigoNoDisponible, "code", $"{def.Codigo} todavía no está disponible (llega con {def.DisponibleDesde}).")];
 
         var rechazos = new List<RechazoDeValorNacional>();
         clave ??= string.Empty;

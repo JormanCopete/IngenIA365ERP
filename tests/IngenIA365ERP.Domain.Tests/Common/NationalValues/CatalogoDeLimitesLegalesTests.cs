@@ -38,12 +38,19 @@ public class CatalogoDeLimitesLegalesTests
         { "PERMANENCIA_NEGATIVO_MESES_MAXIMOS", UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Menor, "" },
         // Feature 013, US17 bloque D (data-model §3.12, §12.5): el grado de parentesco de un vinculado.
         { "VINCULADOS_GRADO_PARENTESCO", UnidadDeValorNacional.Veces, DireccionDeLoEstricto.Menor, "" },
+        // K6b (T1051; data-model §12.5): los límites de vivienda de la Ley 546 de 1999.
+        { "VIVIENDA_PLAZO_MINIMO_MESES", UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Mayor, "" },
+        { "VIVIENDA_PLAZO_MAXIMO_MESES", UnidadDeValorNacional.Meses, DireccionDeLoEstricto.Menor, "" },
+        { "VIVIENDA_FINANCIABLE", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "" },
+        { "VIVIENDA_FINANCIABLE_VIS", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "" },
+        { "VIVIENDA_CUOTA_INGRESO", UnidadDeValorNacional.Fraccion, DireccionDeLoEstricto.Menor, "" },
     };
 
     [Fact]
-    public void Son_los_veinticuatro_codigos_fijados_sin_repetir()
+    public void Son_los_veintinueve_codigos_fijados_sin_repetir()
     {
-        CatalogoDeLimitesLegales.Todos.Should().HaveCount(24);
+        // K6b (T1051) suma los cinco de vivienda a los veinticuatro de K1–K6a.
+        CatalogoDeLimitesLegales.Todos.Should().HaveCount(29);
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().OnlyHaveUniqueItems();
         CatalogoDeLimitesLegales.Todos.Select(l => l.Codigo).Should().BeEquivalentTo(Fijados.Select(f => (string)f[0]));
     }
@@ -125,13 +132,20 @@ public class CatalogoDeLimitesLegalesTests
     }
 
     [Fact]
-    public void UVR_y_tope_de_vivienda_no_estan_disponibles_en_K1()
+    public void UVR_y_tope_de_vivienda_no_estan_disponibles_en_K1_y_si_desde_K6b()
     {
         CodigosDeValorNacional.Buscar("UVR")!.DisponibleEnK1.Should().BeFalse();
         CodigosDeValorNacional.Buscar("TOPE_TASA_VIVIENDA")!.DisponibleEnK1.Should().BeFalse();
         CodigosDeValorNacional.Buscar("USURA")!.DisponibleEnK1.Should().BeTrue();
-        CodigosDeValorNacional.Validar("UVR", "", UnidadDeValorNacional.Pesos, 380m)
+        // Antes de K6b (la guarda de entrega, explícita) se rechazan; con K6b vigente (T1050, T1058) se admiten.
+        CodigosDeValorNacional.Validar("UVR", "", UnidadDeValorNacional.Pesos, 380m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K6a)
             .Should().ContainSingle(r => r.Motivo == MotivoDeRechazoDeValorNacional.CodigoNoDisponible);
+        CodigosDeValorNacional.Validar("TOPE_TASA_VIVIENDA", "", UnidadDeValorNacional.EA, 0.12m, IngenIA365ERP.Domain.Lending.EntregaDeCartera.K6a)
+            .Should().ContainSingle(r => r.Motivo == MotivoDeRechazoDeValorNacional.CodigoNoDisponible);
+        CodigosDeValorNacional.Validar("UVR", "", UnidadDeValorNacional.Pesos, 380m).Should().BeEmpty();
+        CodigosDeValorNacional.Validar("TOPE_TASA_VIVIENDA", "", UnidadDeValorNacional.EA, 0.12m).Should().BeEmpty();
+        CodigosDeValorNacional.Validar("UVR", "CLAVE", UnidadDeValorNacional.Pesos, 380m)
+            .Should().ContainSingle(r => r.Motivo == MotivoDeRechazoDeValorNacional.ClaveInvalida, "la UVR no lleva clave");
     }
 
     [Fact]

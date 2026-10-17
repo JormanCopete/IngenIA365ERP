@@ -23,7 +23,9 @@ public class EnumeracionesDeCarteraTests
             ("AdvanceApplied", 9), ("CreditBalanceRecognized", 10), ("CreditBalanceSettled", 11), ("Charge", 12), ("Waiver", 13),
             ("CommercialAdjustment", 14), ("WriteOff", 15), ("Recovery", 16),
             // K3 (T0874): la capitalización y el traslado al crédito enlazado de una novación o refinanciación.
-            ("Capitalization", 17), ("TransferToLinkedLoan", 18), ("TransferFromLinkedLoan", 19)],
+            ("Capitalization", 17), ("TransferToLinkedLoan", 18), ("TransferFromLinkedLoan", 19),
+            // K6b (T1054, T1056): la corrección monetaria de un crédito en UVR.
+            ("MonetaryCorrection", 20)],
         [typeof(LoanOperationKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Payment", 3), ("PaymentReversal", 4),
             ("DisbursementReversal", 5), ("RateReset", 6), ("TermsChange", 7), ("Charge", 8), ("Waiver", 9), ("CommercialAdjustment", 10),
             ("WriteOff", 11), ("PreferenceChange", 12), ("CreditBalanceResolution", 13), ("ProvisionalCollection", 14)],
@@ -53,6 +55,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(RoundingMoment)] = [("PerConcept", 1), ("PerInstallment", 2), ("PerTotal", 3)],
         [typeof(RoundingMode)] = [("AwayFromZero", 1), ("ToEven", 2), ("Up", 3), ("Down", 4)],
         [typeof(RateKind)] = [("Fixed", 1), ("Variable", 2)],
+        // K6b (T1048): la unidad del capital de la línea y del crédito.
+        [typeof(DenominationUnit)] = [("Pesos", 1), ("Uvr", 2)],
         [typeof(DefaultRateKind)] = [("Fixed", 1), ("RelativeToCurrent", 2)],
         // El valor ES la base de proporción (precedente de PayrollPeriodicity; CH39).
         [typeof(RepaymentPeriodicity)] = [("SinglePayment", 0), ("Weekly", 7), ("TenDay", 10), ("Biweekly", 15), ("Monthly", 30),
@@ -230,7 +234,7 @@ public class EnumeracionesDeCarteraTests
     {
         Enum.GetValues<EntregaDeCartera>().Select(e => (e.ToString(), (int)e)).Should().Equal(
             ("K1", 1), ("K2", 2), ("K3", 3), ("K4", 4), ("K5", 5), ("K6a", 6), ("K6b", 7));
-        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6a, "T0969 la subió a K5 y T1024 (fase 22) a K6a");
+        CatalogoDeCartera.EntregaVigente.Should().Be(EntregaDeCartera.K6b, "T0969 la subió a K5, T1024 (fase 22) a K6a y T1058 (fase 23) a K6b");
     }
 
     [Fact]
