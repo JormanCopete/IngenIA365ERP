@@ -167,9 +167,10 @@ public class CorreccionDeValorNacionalTests : IAsyncLifetime
         var corrida = await _c.Db.LendingProcessRuns.SingleAsync(r => r.Kind == LendingProcessKind.NationalValueCorrection);
         corrida.Should().BeEquivalentTo(new
         {
-            Status = LendingProcessRunStatus.Requested, AffectedFrom = (DateOnly?)Hoy.AddDays(3), AffectedTo = (DateOnly?)Hoy.AddDays(3),
+            Status = LendingProcessRunStatus.Requested, AffectedFrom = (DateOnly?)Hoy.AddDays(3), AffectedTo = (DateOnly?)Causado,
             RequestedByKind = ActorKind.Process, ExecutionOrigin = $"Replica:{correccion.SourcePublicId:D}",
-        }, "la UVR de un día toca sólo ese día");
+        }, "la UVR de un día cambia también la corrección monetaria del día siguiente y, si ese día hubo un pago, el capital en UVR y lo que sigue: "
+           + "la corrida llega hasta la marca (decisión del dueño del 2026-10-17; antes llegaba sólo al día corregido y el día siguiente quedaba descuadrado)");
     }
 
     [Fact]
@@ -195,6 +196,68 @@ public class CorreccionDeValorNacionalTests : IAsyncLifetime
         (leida.Status, leida.TotalLoans, leida.ProcessedLoans).Should().Be((LendingProcessRunStatus.Completed, 0, 0),
             "el crédito de Ana es en pesos y la UVR no lo toca");
         (await _c.Db.LoanTransactions.CountAsync(t => t.ProcessRunId == corrida.Id)).Should().Be(0);
+    }
+
+    // -------------------------------------------- K6b: el pago aplicado en un día cuya UVR se corrige (decisión del dueño, 2026-10-17) --
+
+    [Fact]
+    public void La_diferencia_del_reparto_de_un_pago_se_registra_como_reaplicacion_de_la_corrida()
+    {
+        var d = new IngenIA365ERP.Domain.Lending.Replay.DiferenciaDeLibro(Hoy.AddDays(3), LoanConcept.Principal, 1, -293_147.07m, -292_000.00m)
+            { DePago = true };
+        var mensaje = Guid.NewGuid();
+
+        var fila = IngenIA365ERP.Application.Lending.Ledger.RegistroDeCartera.DiferenciaDeReparto(7, d, 9, Causado, _c.D.G.UtcNow, mensaje);
+
+        (fila.Kind, fila.Concept, fila.InstallmentNumber, fila.Amount, fila.ProcessRunId, fila.OperationId, fila.MessagePublicId, fila.ValueDate,
+                fila.AccountingDate)
+            .Should().Be((LoanTransactionKind.PaymentReallocation, LoanConcept.Principal, (int?)1, 1_147.07m, (int?)9, (int?)null, (Guid?)mensaje,
+                Hoy.AddDays(3), Causado), "el pago y sus filas no se tocan: la diferencia es una fila nueva de la corrida, fechada en el período abierto");
+        var invalida = () => IngenIA365ERP.Application.Lending.Ledger.RegistroDeCartera.DiferenciaDeReparto(7, d with { DePago = false }, 9, Causado,
+            _c.D.G.UtcNow, mensaje);
+        invalida.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task El_reparto_de_un_pago_corregido_sale_en_su_propio_hecho_masivo_con_el_valor_corregido_y_el_dia_del_pago()
+    {
+        await _c.SembrarTiposDeHechoAsync();
+        _c.Ir(Causado.AddDays(1));
+        var corrida = new LendingProcessRun
+        {
+            Kind = LendingProcessKind.NationalValueCorrection, Status = LendingProcessRunStatus.Running, AffectedFrom = Hoy.AddDays(3), AffectedTo = Causado,
+            RequestedByKind = ActorKind.Process, RequestedAt = _c.D.G.UtcNow, ExecutionOrigin = EfectoDeReplicacionCorreccionDeValorNacional.PrefijoDeOrigen + Guid.NewGuid(),
+        };
+        _c.Db.LendingProcessRuns.Add(corrida);
+        await _c.Db.SaveChangesAsync();
+        var cargado = (await _c.Cargador().CargarAsync(_c.Credito.Id, null, Causado, default))!;
+        var datos = (await _c.Partes().DatosAsync([cargado], default))[_c.Credito.Id];
+        var dia = Hoy.AddDays(3);
+        var filas = new List<IngenIA365ERP.Domain.Lending.Replay.MovimientoDeLibro>
+        {
+            new(dia, LoanTransactionKind.PaymentReallocation, LoanConcept.CurrentInterest, 1, -1_234.56m),
+            new(dia, LoanTransactionKind.PaymentReallocation, LoanConcept.Principal, 1, 1_234.56m),
+        };
+        var corregido = new CorrectedNationalValueV1 { Code = CodigosDeValorNacional.Uvr, Key = string.Empty, ValidFrom = dia, SourcePublicId = Guid.NewGuid(), SourceSequence = 7 };
+        var origen = new OrigenDePartes(AccountingFactPartSource.NationalValueCorrectionBatch, corrida, null, new Dictionary<DateOnly, int> { [Causado] = 1 }, null)
+            { FechaDeRegistro = Causado.AddDays(1) };
+
+        var r = await _c.Partes().MasivasAsync(origen, [new LineaDeCausacion(datos, dia, filas)], PagoRedistribuidoPorValorNacionalV1.Type, corregido);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        await _c.Db.SaveChangesAsync();
+
+        var parte = r.Value.Partes.Should().ContainSingle().Subject;
+        (parte.FactType, parte.TotalAmount, parte.ValueDate).Should().Be((PagoRedistribuidoPorValorNacionalV1.Type, 0m, Causado),
+            "el reparto sólo redistribuye: suma cero");
+        r.Value.Mensaje(_c.Credito.Id, dia, LoanConcept.Principal).Should().Be(parte.MessagePublicId);
+        var mensaje = await _c.Db.IntegrationMessages.SingleAsync(m => m.PublicId == parte.MessagePublicId);
+        mensaje.Type.Should().Be(PagoRedistribuidoPorValorNacionalV1.Type);
+        mensaje.OriginEventKey.Should().Be($"Confirmation:{parte.PublicId:N}");
+        mensaje.PayloadJson.Should().Contain("\"correctedNationalValue\":{").And.Contain("\"code\":\"UVR\"")
+            .And.Contain($"\"valueDate\":\"{dia:yyyy-MM-dd}\"").And.Contain("\"runKind\":\"NationalValueCorrection\"")
+            .And.Contain("\"concept\":\"Principal\"").And.Contain("\"concept\":\"CurrentInterest\"");
+        (await _c.Db.IntegrationMessageDeliveries.SingleAsync(x => x.MessageId == mensaje.Id)).Mode.Should().Be(DeliveryMode.Batch,
+            "por lotes, con el ajuste de la corrida");
     }
 
     [Fact]

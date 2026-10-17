@@ -4,8 +4,9 @@ using IngenIA365ERP.Domain.Enums.Integration;
 namespace IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 
 /// <summary>
-/// Los 42 tipos que emite Cartera (feature 013, T0070, T0071; contracts/mensajes.md §2.1 y §2.2; DT §2.11, C01–C03, C15, C91, C94,
-/// C117): los 36 hechos a Contabilidad (K6b, T1056, suma la corrección monetaria UVR), cada uno con su código corto (<c>LND_FactTypes.ShortCode</c>, que la semilla de tipos de
+/// Los 43 tipos que emite Cartera (feature 013, T0070, T0071; contracts/mensajes.md §2.1 y §2.2; DT §2.11, C01–C03, C15, C91, C94,
+/// C117): los 37 hechos a Contabilidad (K6b, T1056, suma la corrección monetaria UVR y, por la decisión del dueño del 2026-10-17, el reparto de
+/// un pago corregido por la UVR), cada uno con su código corto (<c>LND_FactTypes.ShortCode</c>, que la semilla de tipos de
 /// hecho copia de aquí), y los 6 mensajes a Comercial, Tesorería y Recaudo. Todos son de <c>CAR</c>, v1, y a un solo destino;
 /// <see cref="TipoDeMensaje.AdmiteProceso"/> es la lista cerrada de §6 (<c>EmisionesDeProcesoPermitidas</c>). Los de K2, K3 y K4 se
 /// declaran desde K1 aunque se emitan desde su entrega. Ninguno lleva cuentas contables (FR-126).
@@ -26,7 +27,7 @@ public static class CatalogoDeMensajesDeCarteraV1
     private const FormaDeClaveDeEvento Cierre = FormaDeClaveDeEvento.Cierre;
     private const FormaDeClaveDeEvento Reapertura = FormaDeClaveDeEvento.Reapertura;
 
-    /// <summary>Los 36 hechos <c>CAR → Accounting</c> de §2.1, en su orden.</summary>
+    /// <summary>Los 37 hechos <c>CAR → Accounting</c> de §2.1, en su orden.</summary>
     public static IReadOnlyList<TipoDeMensaje> HechosAContabilidad { get; } =
     [
         Hecho(typeof(CreditoDesembolsadoV1), CreditoDesembolsadoV1.Type, "DES", N, C, proceso: false),
@@ -69,6 +70,8 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(GarantiaConstituidaV1), GarantiaConstituidaV1.Type, "GCT", N, CoP, proceso: true),
         // K6b (T1056; pregunta E12, propuesta por defecto): la corrección monetaria de los créditos en UVR, masiva como la causación.
         Hecho(typeof(CorreccionMonetariaUvrCausadaV1), CorreccionMonetariaUvrCausadaV1.Type, "CMU", N, P, proceso: true),
+        // K6b (decisión del dueño del 2026-10-17): el reparto en pesos de un pago aplicado en un día cuya UVR se corrigió, masivo como el ajuste.
+        Hecho(typeof(PagoRedistribuidoPorValorNacionalV1), PagoRedistribuidoPorValorNacionalV1.Type, "PRN", N, P, proceso: true),
     ];
 
     /// <summary>Los 6 mensajes de Cartera a otros destinos de §2.2, en su orden.</summary>

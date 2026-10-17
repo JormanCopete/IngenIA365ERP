@@ -317,6 +317,31 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         };
     }
 
+    /// <summary>
+    /// K6b (decisión del dueño del 2026-10-17): la fila de una diferencia del <b>reparto de un pago</b> (<see cref="DiferenciaDeLibro.DePago"/>) que
+    /// registra la corrida de corrección de una UVR: clase <c>PaymentReallocation</c> de la corrida, con el día valor del pago, la fecha contable del
+    /// período abierto y el mensaje de su hecho <c>PagoRedistribuidoPorValorNacional</c>. El pago y sus filas no se tocan.
+    /// </summary>
+    public static LoanTransaction DiferenciaDeReparto(int loanId, DiferenciaDeLibro d, int processRunId, DateOnly fechaContable, DateTime registradoEn,
+        Guid? mensaje)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        if (!d.DePago) throw new InvalidOperationException("La diferencia no es del reparto de un pago.");
+        return new LoanTransaction
+        {
+            LoanId = loanId,
+            ProcessRunId = processRunId,
+            Kind = LoanTransactionKind.PaymentReallocation,
+            Concept = d.Concepto,
+            InstallmentNumber = d.Cuota,
+            Amount = d.Diferencia,
+            ValueDate = d.Dia,
+            AccountingDate = fechaContable,
+            RegisteredAt = Utc(registradoEn),
+            MessagePublicId = mensaje,
+        };
+    }
+
     /// <summary>La clase de la fila que registra una diferencia de la conciliación.</summary>
     public static LoanTransactionKind ClaseDeDiferencia(DiferenciaDeLibro d, IReadOnlyList<DiferenciaDeLibro> todas)
     {

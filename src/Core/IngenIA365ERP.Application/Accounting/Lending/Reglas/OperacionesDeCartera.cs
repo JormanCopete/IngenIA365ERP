@@ -42,8 +42,8 @@ public sealed record OperacionDeCartera(
 }
 
 /// <summary>
-/// Los 36 hechos de Cartera que van a Contabilidad (feature 013, T0640, C110; contracts/contabilidad.md §2.1): 30 de negocio (con
-/// comprobante; K6b suma la corrección monetaria UVR) y 6 informativos (con recibo y sin comprobante). Catálogo fijo en código, del lado de Contabilidad: Contabilidad no depende
+/// Los 37 hechos de Cartera que van a Contabilidad (feature 013, T0640, C110; contracts/contabilidad.md §2.1): 31 de negocio (con
+/// comprobante; K6b suma la corrección monetaria UVR y el reparto de un pago corregido por la UVR) y 6 informativos (con recibo y sin comprobante). Catálogo fijo en código, del lado de Contabilidad: Contabilidad no depende
 /// de <c>Application.Lending</c> (lo vigila <c>CarteraNoConoceContabilidad</c> en las dos direcciones), así que el modo y el comprobante por
 /// defecto se repiten aquí y en la semilla de <c>LND_FactTypes</c>; una prueba los coteja. (nuevo)
 ///
@@ -153,6 +153,14 @@ public static class OperacionesDeCartera
         new(CorreccionMonetariaUvrCausadaV1.Type, "CMU", false,
             [R.Capital, R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar, R.SuspensoEnOrden, R.CastigadaEnOrden, R.Ingreso],
             [R.Ingreso, R.ContraOrdenContingente, R.ContraOrdenControl, R.Anticipo, R.SaldoAFavor], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K6b,
+            Ninguno, PorPartes: true),
+        // K6b (decisión del dueño del 2026-10-17; contabilidad.md §30): el reparto en pesos de un pago aplicado en un día cuya UVR se corrigió. Sin
+        // rol nuevo: lo que el pago cubre de menos vuelve al débito de su rol de saldo y lo que cubre de más sale al crédito; el anticipo y el saldo a
+        // favor al revés; el suspenso y la castigada, por su ingreso (el del cobro del suspenso, el de la recuperación) y su orden. Sin el puente del
+        // recaudo: lo recibido no cambia. Un importe negativo invierte los lados.
+        new(PagoRedistribuidoPorValorNacionalV1.Type, "PRN", false,
+            [.. ConceptosDeLaCuota, R.Ingreso, R.IngresoPorRecuperacion, R.SuspensoEnOrden, R.CastigadaEnOrden],
+            [R.Anticipo, R.SaldoAFavor, R.ContraOrdenContingente, R.ContraOrdenControl], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K6b,
             Ninguno, PorPartes: true),
     ];
 

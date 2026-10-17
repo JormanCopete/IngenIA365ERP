@@ -119,6 +119,7 @@ transversales; lo detalla `contabilidad.md`); en una unidad manda el del princip
 | 34 | `CupoRotativoOtorgado` | CRO | Business | sí | `Confirmation` · `Confirmation:{tipoDeHecho:N}` · `Confirmation:{cupo:N}` | El otorgamiento, la ampliación o la reducción del cupo rotativo; una parte del ciclo diario al vencer el cupo (usarlo o pagarlo no lo mueve: 913005 mide el cupo otorgado, C92) | NoPasa | CN | K1 (A3) |
 | 35 | `GarantiaConstituida` | GCT | Business | sí | `Confirmation` · `Confirmation:{tipoDeHecho:N}` · `Confirmation:{garantía:N}` | La constitución, la revaluación, la extinción o la ejecución de la garantía; aparte, su liberación por la cancelación del crédito; una parte del ciclo diario cuando la liberación espera la firmeza (D23) | NoPasa | CN | K1 (A3) |
 | 48 | `CorreccionMonetariaUvrCausada` | CMU | Business | sí | `Confirmation:{parte:N}` | Parte de una tanda de la corrida `DailyCycle` o `NationalValueCorrection` (corrección de una `UVR`, fase 24), o de la puesta al día de una operación (C04), sólo de los créditos **en UVR** | PorLotes resumido, `FinDeCausacion` | CA | K6b (E12) |
+| 49 | `PagoRedistribuidoPorValorNacional` | PRN | Business | sí | `Confirmation:{parte:N}` | Parte de una tanda de la corrida `NationalValueCorrection` de una `UVR`: el reparto en pesos de los pagos de los créditos en UVR aplicados en los días que toca (decisión del dueño del 2026-10-17) | PorLotes resumido, `FinDeCausacion` | CA | K6b |
 
 `{parte:N}` es el `PublicId` de la parte (`LND_AccountingFactParts`); `{tipoDeHecho:N}`, el `PublicId` de la fila
 del tipo en `LND_FactTypes`; `{crédito:N}`, `{solicitud:N}`, `{cupo:N}` y `{garantía:N}`, el `PublicId` del crédito,
@@ -127,7 +128,8 @@ Los acompañantes (lista fija de §7.2) no tienen modo propio: sellan el de su p
 no los ofrece en el ámbito `LendingFactType` cuando viajan así (C01).
 
 La fila 48 (numerada después de las de §2.2 y §2.3 porque llegó con K6b, 2026-10-17) es la **corrección monetaria** de los
-créditos en UVR (pregunta E12 con su propuesta por defecto, pendiente de la contadora): su contenido está en §10.25.
+créditos en UVR (pregunta E12 con su propuesta por defecto, pendiente de la contadora): su contenido está en §10.25. La fila 49 (decisión
+del dueño del 2026-10-17) es el **reparto de un pago** aplicado en un día cuya UVR se corrigió después: su contenido está en §10.26.
 
 Las filas 33 a 35 son las **cuentas contingentes** del CUIF (9115, 913005 y 9110) que propone A3 (C15): nacen en K1
 con modo `NoPasa`, la contadora decide cuándo pasan, y si el dueño rechaza A3 salen del catálogo sin tocar nada más.
@@ -238,7 +240,7 @@ sucursal por su `PublicId` (Principio VI) y los catálogos por su código. Lo pr
 | Instantes | `DateTimeOffset` UTC con `Z`: `registeredAt`, `informationCutoffAt`, `emittedAt` |
 | Tipos de Cartera | Como texto con los valores de su enum: `LoanConcept`, `LoanOperationKind`, `PaymentModality`, `PrepaymentChoice`, `LoanStatus`, `RatingSubcategory`, `ImpairmentModel`, `DisbursementOrderStatus`, `PayrollNoveltyKind`, `LendingProcessKind`; y los de puerto `ClaseDeRecaudador`, `ClaseDeMedioDeRecaudo`, `MotivoDeNoDescuento` |
 | Códigos de catálogo | Línea (`creditLineCode`), modalidad y sub-segmento (documento `CatalogoDeModalidades`), segmento SARC, pagaduría por su persona, bancos por `COR_Banks.Code` |
-| Signo | Como la 012: positivo es el efecto natural del hecho (el que describe `contabilidad.md`); negativo, el contrario. `CreditoAjustadoDesdeComercial`, `AjusteDeCausacionPorFechaValor` y las reasignaciones de pagos (`reallocations`) son los únicos que mezclan signos dentro del mismo contenido |
+| Signo | Como la 012: positivo es el efecto natural del hecho (el que describe `contabilidad.md`); negativo, el contrario. `CreditoAjustadoDesdeComercial`, `AjusteDeCausacionPorFechaValor`, `PagoRedistribuidoPorValorNacional` (K6b) y las reasignaciones de pagos (`reallocations`) son los únicos que mezclan signos dentro del mismo contenido |
 | Números visibles | El del crédito (`loanNumber`) es el documento cruce (FR-126); el de la operación va en `origin.number` |
 
 Ningún contenido lleva cuentas, ni Id internos, ni datos de una persona que no estén en su copia sellada (I-1:
@@ -382,7 +384,8 @@ lo origina la persona».
 | Dobles de prueba (§18) | la persona que prueba | la persona | `Person` |
 
 Tipos que admiten proceso (T11): los masivos de la causación y del cierre (`InteresCausado`, `MoraCausada`,
-`SeguroCausado`, `CorreccionMonetariaUvrCausada` (K6b), `DeterioroCalculado`, `CarteraReclasificadaPorCalificacion`, `ReversoDeCierre`),
+`SeguroCausado`, `CorreccionMonetariaUvrCausada` (K6b), `PagoRedistribuidoPorValorNacional` (K6b), `DeterioroCalculado`,
+`CarteraReclasificadaPorCalificacion`, `ReversoDeCierre`),
 `CausacionSuspendida`, `CausacionReanudada`, `AnticipoAplicado`, `DimensionContableCambiada`,
 `AjusteDeCausacionPorFechaValor`, `SaldoAFavorReconocido`, los informativos de cierre (`CierreDeCarteraRealizado`,
 `CierreDeCarteraReabierto`), las respuestas a Comercial (`ObligacionCreada`, `ObligacionRechazada`) y, con A3, los tres
@@ -410,7 +413,7 @@ en minúsculas).
 |---|---|---|
 | `Confirmation` | La operación o el documento | El hecho principal de una operación y sus acompañantes (§7.2); `CobroProvisionalIncorporado`; `CarteraActivada`, `CargaDeCarteraAplicada`; `OrdenDeGiroEmitida`; `PagoReversadoPorCartera`; `DescuentosPorPagaduria`; `ObligacionCreada`; con A3, el contingente principal de su solicitud, cupo o garantía |
 | `Confirmation:{tipoDeHecho:N}` | La operación | Cada hecho que una operación emite **aparte** de su unidad principal: `CausacionSuspendida`, `CausacionReanudada`, `DimensionContableCambiada` y, con A3, el contingente que mueve una operación ajena (desembolso, pago, cancelación). `tipoDeHecho` es el `PublicId` de la fila del tipo en `LND_FactTypes` (sembrado con Guid fijo) |
-| `Confirmation:{parte:N}` | La parte (`LND_AccountingFactParts`) | Masivos: `InteresCausado`, `MoraCausada`, `SeguroCausado`, `CorreccionMonetariaUvrCausada` (K6b) (de la corrida o de la puesta al día de una operación, C04) y el `AjusteDeCausacionPorFechaValor` de la corrida `NationalValueCorrection` (C03) |
+| `Confirmation:{parte:N}` | La parte (`LND_AccountingFactParts`) | Masivos: `InteresCausado`, `MoraCausada`, `SeguroCausado`, `CorreccionMonetariaUvrCausada` (K6b) (de la corrida o de la puesta al día de una operación, C04) y el `AjusteDeCausacionPorFechaValor` y el `PagoRedistribuidoPorValorNacional` (K6b) de la corrida `NationalValueCorrection` (C03) |
 | `Confirmation:{crédito:N}` | La parte de su tanda, sucursal y tipo | Hechos por crédito que nace un proceso (C02): `AnticipoAplicado`, `CausacionSuspendida`, `CausacionReanudada`, `DimensionContableCambiada` (ciclo diario) y `SaldoAFavorReconocido` (corrida `NationalValueCorrection`). Un mensaje por crédito, nunca con el crédito como origen; modo propio del tipo |
 | `Confirmation:{solicitud:N}` · `Confirmation:{cupo:N}` · `Confirmation:{garantía:N}` | La parte de su tanda | Con A3, el contingente que el ciclo diario detecta (vencimiento de la aprobación o del cupo, liberación de la garantía tras la firmeza), con la misma forma que los hechos por crédito de un proceso |
 | `Confirmation:{evaluación:N}` | El recibo del mensaje de Comercial | `ObligacionRechazada`: una por evaluación (`LND_InboundMessageEvaluations.PublicId`), así Comercial ve el motivo vigente tras cada reproceso |
@@ -836,7 +839,10 @@ Dos orígenes con la misma forma masiva de §10.0 (C03):
   transacción una corrida `Requested` cuando llega un valor nacional con `SupersedesPublicId` que cubre días ya
   causados, sólo si Cartera está activada (C05). Los códigos que la encolan son `USURA` y, desde la fase 24
   (2026-10-17), `UVR`: ésa sólo mira y recorre los créditos **en UVR**, y la diferencia de su corrección monetaria
-  no viaja aquí sino en un `CorreccionMonetariaUvrCausada` de la misma parte de la corrida (§10.25).
+  no viaja aquí sino en un `CorreccionMonetariaUvrCausada` de la misma parte de la corrida (§10.25), y el reparto de un pago aplicado en un
+  día corregido, en un `PagoRedistribuidoPorValorNacional` (§10.26; decisión del dueño del 2026-10-17). La corrida de una `UVR` llega
+  **hasta la marca** de los créditos, no hasta el fin de la vigencia del valor (que en la serie diaria es el mismo día): la UVR de un día
+  cambia también la corrección monetaria del día siguiente y, si ese día hubo un pago, el capital en UVR y lo que sigue.
 
 Lo origina la persona de la operación o el proceso. Valores **con signo**: positivo causa más, negativo menos; incluye
 la reclasificación a suspenso que resulte de reconstruir (`CurrentInterest` negativo y `CurrentInterestInSuspense`
@@ -1325,6 +1331,60 @@ día de una operación (`catchUpOperation`, C04). Admite proceso. Código corto 
   ],
   "lineCount": 1,
   "controlTotal": 9876.54
+}
+```
+
+### 10.26 `PagoRedistribuidoPorValorNacional` v1 (K6b, decisión del dueño del 2026-10-17)
+
+**K6b (2026-10-17; FR-024, D18).** Cuando se **corrige la UVR** de un día en que se aplicó un pago a un crédito en UVR, lo recibido en pesos
+no cambia, pero el pago es otra cantidad de UVR y cubre en pesos otra mezcla de conceptos: con la UVR más alta, el interés (fijo en UVR)
+vale más pesos y le queda menos al capital; con la más baja, al revés; y lo mismo con el anticipo o el saldo a favor que el pago dejó. La
+corrida `NationalValueCorrection` de la `UVR` compara el reparto de los pagos **aparte** de la causación y de la corrección monetaria (filas
+`PaymentAllocation`, `Recovery`, `AdvanceReceived`, `AdvanceApplied`, `CreditBalanceRecognized`, `PaymentReallocation`;
+`LibroTeorico.EsDePago`), registra cada diferencia como `PaymentReallocation` **de la corrida** (fecha contable del período abierto, día valor
+del pago) y la lleva a Contabilidad en este hecho. El pago, sus filas y su `PagoAplicado` no se tocan: lo contabilizado se corrige con un
+comprobante nuevo de su propio hecho y fecha.
+
+Forma masiva de §10.0 con el origen, la clave y el actor de la parte de la corrida (`Confirmation:{parte:N}`, admite proceso): una parte
+por sucursal y tanda; **una línea por crédito y día valor del pago** (`valueDate`). Código corto `PRN` (`LND_FactTypes`, `DeliveredIn =
+K6b`), comprobante `CA` (`lending-voucher-mappings.json`), modo de los masivos.
+
+| Campo propio | Tipo | Oblig. | Qué es |
+|---|---|---|---|
+| `runKind` · `runPublicId` | string · Guid | sí | `NationalValueCorrection` y la corrida |
+| `factDate` | DateOnly | sí | El último día que toca la corrida (los días valor de los pagos van en cada línea) |
+| `correctedNationalValue` | `CorrectedNationalValueV1` | sí | La `UVR` corregida que la provocó (§10.5) |
+
+- **Conceptos y signo**: los del reparto, por cuota, con el **signo del libro** (reconstrucción − libro): un concepto que el pago cubre **de
+  más** sale **negativo** (su fila es más negativa); uno que cubre de menos, positivo; el anticipo (`Advance`) o el saldo a favor
+  (`CreditBalance`) que el pago deja de más, positivo. Por línea, Σ de lo que se debe = Σ de los pasivos con el deudor
+  (`LibroTeorico.DescuadreDelReparto` = 0): lo recibido no cambia. `uvrAmount` nulo.
+- **Dimensiones**: las del crédito a la fecha contable (`valueUnit = "Uvr"`).
+- **Contabilidad** (`contabilidad.md` §30): sin rol nuevo y sin el puente del recaudo; positivo al débito del rol de saldo del concepto y al
+  crédito del anticipo o el saldo a favor; el suspenso y lo de un castigado, por su ingreso y su orden.
+- **Sólo la UVR**: la corrida de una `USURA` no separa el reparto (sigue como en §10.5); ver la pregunta abierta en `tasks.md` (fase 24).
+
+```json
+{
+  "runKind": "NationalValueCorrection",
+  "runPublicId": "0c0c0051-0000-4000-8000-000000000051",
+  "factDate": "2026-11-14",
+  "batchNumber": 1,
+  "partNumber": 3,
+  "correctedNationalValue": { "code": "UVR", "key": "", "validFrom": "2026-11-14", "sourcePublicId": "5a5a0051-0000-4000-8000-000000000051", "sourceSequence": 812 },
+  "totals": [ { "dimensions": { "creditLineCode": "VIV01", "modalityCode": "VIVIENDA", "subsegmentCode": null, "riskCategory": "A", "riskSubcategory": "None", "isEmployee": false, "inGracePeriod": false, "restructured": false, "writtenOff": false, "collectorClass": null, "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f", "impairmentModel": "ArrearsAnnex1", "riskSegment": "VIVIENDA", "valueUnit": "Uvr" },
+      "amounts": [ { "concept": "CurrentInterest", "installmentNumber": null, "amount": -1234.56, "uvrAmount": null, "onBehalfOfAssociate": false, "reasonCode": null },
+                   { "concept": "Principal", "installmentNumber": null, "amount": 1234.56, "uvrAmount": null, "onBehalfOfAssociate": false, "reasonCode": null } ], "loanCount": 1 } ],
+  "lines": [
+    { "loan": { "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123", "loanNumber": "000123" }, "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002", "counterpartyPersonPublicId": null,
+      "dimensions": { "creditLineCode": "VIV01", "modalityCode": "VIVIENDA", "subsegmentCode": null, "riskCategory": "A", "riskSubcategory": "None", "isEmployee": false, "inGracePeriod": false, "restructured": false, "writtenOff": false, "collectorClass": null, "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f", "impairmentModel": "ArrearsAnnex1", "riskSegment": "VIVIENDA", "valueUnit": "Uvr" },
+      "previousDimensions": null,
+      "amounts": [ { "concept": "Principal", "installmentNumber": 1, "amount": 1234.56, "uvrAmount": null, "onBehalfOfAssociate": false, "reasonCode": null },
+                   { "concept": "CurrentInterest", "installmentNumber": 1, "amount": -1234.56, "uvrAmount": null, "onBehalfOfAssociate": false, "reasonCode": null } ],
+      "valueDate": "2026-11-14" }
+  ],
+  "lineCount": 1,
+  "controlTotal": 0.00
 }
 ```
 
@@ -2068,7 +2128,8 @@ y contenido (transversales §7.6).
 8. **`ScheduleKey` de Cartera con código corto** (`CAR.{ShortCode}|{disparador}|{hora}|{granularidad}`, C06).
 9. **Códigos de participante** `CNT`, `INV`, `NOM`, `CAR`, `TST` y las columnas `Destination` e `IsEnabled` del registro
    (C35, C36).
-10. **Signo mixto** sólo en `CreditoAjustadoDesdeComercial`, `AjusteDeCausacionPorFechaValor` y las reasignaciones.
+10. **Signo mixto** sólo en `CreditoAjustadoDesdeComercial`, `AjusteDeCausacionPorFechaValor`, `PagoRedistribuidoPorValorNacional` (K6b) y
+    las reasignaciones.
 11. **El contenido de los contingentes de A3** (§10.24, C15) y los datos que Contabilidad necesita (C22): `writtenOff`,
     `previousDimensions` en las novedades, el movimiento del deterioro, el beneficiario y la forma del desembolso, y lo
     que sale contra el deterioro en condonaciones y castigos.

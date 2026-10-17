@@ -1,0 +1,199 @@
+{
+  "descripcion": "K6b (decisión del dueño del 2026-10-17): la UVR del 14-11-2026 se corrigió hacia arriba después de aplicar ese día un pago de un crédito de vivienda en UVR. Lo recibido no cambia, pero el interés de la cuota (fijo en UVR) vale más pesos: el pago cubre 1.234,56 más de interés (libro −1.234,56) y otro tanto menos de capital (+1.234,56). El reparto va entre los roles de saldo, sin el puente del recaudo ni el ingreso: el capital vuelve al débito (con tercero y cruce) y el interés por cobrar sale al crédito. Comprobante CA de la corrida de corrección, con la fecha contable del período abierto; el día valor del pago va en la línea.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation:00000000000000000000000000000000",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "VNC-20261120-0003",
+      "publicId": "0d0d0051-0000-4000-8000-000000000051",
+      "operationDate": "2026-11-20"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0051-0000-4000-8000-000000000051",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": null,
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": null,
+      "name": "Proceso de integración"
+    },
+    "emittedAt": "2026-11-20T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0051-0000-4000-8000-000000000051",
+      "type": "PagoRedistribuidoPorValorNacional",
+      "kind": "Business",
+      "originDocumentClass": "AccountingFactPart",
+      "payload": {
+        "runKind": "NationalValueCorrection",
+        "runPublicId": "0c0c0051-0000-4000-8000-000000000051",
+        "factDate": "2026-11-14",
+        "batchNumber": 1,
+        "partNumber": 3,
+        "correctedNationalValue": {
+          "code": "UVR",
+          "key": "",
+          "validFrom": "2026-11-14",
+          "sourcePublicId": "5a5a0051-0000-4000-8000-000000000051",
+          "sourceSequence": 812
+        },
+        "totals": [
+          {
+            "dimensions": {
+              "creditLineCode": "VIV01",
+              "modalityCode": "VIVIENDA",
+              "subsegmentCode": null,
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "VIVIENDA",
+              "valueUnit": "Uvr"
+            },
+            "amounts": [
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": null,
+                "amount": -1234.56,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              },
+              {
+                "concept": "Principal",
+                "installmentNumber": null,
+                "amount": 1234.56,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "loanCount": 1
+          }
+        ],
+        "lines": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+              "loanNumber": "000123"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "VIV01",
+              "modalityCode": "VIVIENDA",
+              "subsegmentCode": null,
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": null,
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "VIVIENDA",
+              "valueUnit": "Uvr"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "Principal",
+                "installmentNumber": 1,
+                "amount": 1234.56,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              },
+              {
+                "concept": "CurrentInterest",
+                "installmentNumber": 1,
+                "amount": -1234.56,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "valueDate": "2026-11-14"
+          }
+        ],
+        "lineCount": 1,
+        "controlTotal": 0.0
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "CA",
+    "fecha": "2026-11-20",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "Capital",
+        "cuenta": "14050501",
+        "debito": 1234.56,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoRedistribuidoPorValorNacional"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14050601",
+        "debito": 0.0,
+        "credito": 1234.56,
+        "tercero": null,
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoRedistribuidoPorValorNacional"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  },
+  "matrizExtra": [
+    {
+      "rol": "Capital",
+      "cuenta": "14050501",
+      "modalidad": "VIVIENDA",
+      "categoria": "A"
+    },
+    {
+      "rol": "InteresPorCobrar",
+      "cuenta": "14050601",
+      "modalidad": "VIVIENDA",
+      "categoria": "A",
+      "concepto": "CurrentInterest"
+    }
+  ]
+}

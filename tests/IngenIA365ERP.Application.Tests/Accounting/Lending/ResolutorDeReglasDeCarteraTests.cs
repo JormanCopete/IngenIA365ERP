@@ -35,15 +35,15 @@ public class ResolutorDeReglasDeCarteraTests
     // ------------------------------------------------------------------------------------------ catálogos fijos --
 
     [Fact]
-    public void Los_hechos_son_los_36_del_catalogo_de_mensajes_con_su_codigo_corto()
+    public void Los_hechos_son_los_37_del_catalogo_de_mensajes_con_su_codigo_corto()
     {
-        // K6b (T1056): suma la corrección monetaria UVR (CMU), de negocio.
-        O.Todas.Should().HaveCount(36);
+        // K6b (T1056): suma la corrección monetaria UVR (CMU), de negocio; y el reparto de un pago corregido por la UVR (PRN, 2026-10-17).
+        O.Todas.Should().HaveCount(37);
         O.Todas.Select(o => (o.Codigo, o.Corto, o.EsInformativo)).Should().Equal(
             CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => (t.Type, t.CodigoCorto!, t.Kind == IntegrationMessageKind.Informational)),
             "el código de operación de la matriz es el Type del mensaje (§2.1, C110)");
         O.Todas.Count(o => o.EsInformativo).Should().Be(6);
-        O.DeNegocio.Should().HaveCount(30);
+        O.DeNegocio.Should().HaveCount(31);
         O.Todas.SelectMany(o => o.Roles).Should().OnlyContain(r => R.Buscar(r) != null, "todo hecho nombra roles del catálogo");
         O.Todas.Where(o => o.EsInformativo).Should().OnlyContain(o => o.Roles.Count == 0 && o.Comprobante == null);
         O.Todas.Where(o => o.HeredaElModo).Select(o => o.Codigo).Should().BeEquivalentTo([DesembolsoReversadoV1.Type, PagoReversadoV1.Type, ReversoDeCierreV1.Type]);

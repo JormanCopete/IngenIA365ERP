@@ -80,7 +80,8 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
 
     /// <summary>Los roles que mueve la causación diaria, que sale resumida (C5).</summary>
     private static readonly HashSet<string> RolesDeLaCausacion = new(
-        new[] { InteresCausado, MoraCausada, SeguroCausado, AjusteDeCausacion, CorreccionMonetaria }.SelectMany(t => OperacionesDeCartera.Buscar(t)!.Roles),
+        new[] { InteresCausado, MoraCausada, SeguroCausado, AjusteDeCausacion, CorreccionMonetaria, RepartoCorregido }
+            .SelectMany(t => OperacionesDeCartera.Buscar(t)!.Roles),
         StringComparer.Ordinal);
 
     private const string InteresCausado = Common.Integration.Contracts.Lending.InteresCausadoV1.Type;
@@ -90,6 +91,9 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
 
     /// <summary>K6b (T1056): la corrección monetaria UVR sale resumida con la causación del día.</summary>
     private const string CorreccionMonetaria = Common.Integration.Contracts.Lending.CorreccionMonetariaUvrCausadaV1.Type;
+
+    /// <summary>K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR sale resumido con el ajuste de la corrida.</summary>
+    private const string RepartoCorregido = Common.Integration.Contracts.Lending.PagoRedistribuidoPorValorNacionalV1.Type;
 
     public async Task<Result<CompletitudDeLaMatrizDeCarteraDto>> Handle(GetLendingRulesCompletenessQuery request, CancellationToken ct)
     {

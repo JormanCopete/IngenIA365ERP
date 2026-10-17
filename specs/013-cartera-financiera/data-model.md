@@ -2467,7 +2467,10 @@ encola la réplica**, no el ciclo: `EfectoDeReplicacionCorreccionDeValorNacional
 la misma transacción una corrida `Requested` cuando llega una fila con `SupersedesPublicId` que cubre días ya causados,
 sólo si Cartera está activada (C05). Reacciona a `USURA` (todos los créditos) y, desde la fase 24, a `UVR` (sólo los
 créditos con `LND_LoanTermsVersions.DenominationUnit = Uvr`, que son también los únicos que recorre la corrida; sus
-diferencias de corrección monetaria se registran como `MonetaryCorrection`).
+diferencias de corrección monetaria se registran como `MonetaryCorrection`). Decisión del dueño del 2026-10-17: la corrida de una
+`UVR` tiene `AffectedTo` = la última marca de los créditos en UVR (no el fin de la vigencia del valor, que en la serie diaria es el mismo día:
+la UVR de un día cambia la corrección monetaria del siguiente), y el reparto de los pagos de esos días se registra como `PaymentReallocation`
+de la corrida (`ProcessRunId`, sin operación) con el hecho `PagoRedistribuidoPorValorNacional`. Sin columnas nuevas.
 
 **Transiciones**: `Requested` → `Running` → `Completed` | `CompletedWithErrors` (créditos en `LND_ProcessRunErrors`) |
 `Failed` (error de la corrida entera). `Failed` y `CompletedWithErrors` vuelven a `Running` con

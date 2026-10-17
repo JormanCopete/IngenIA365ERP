@@ -396,6 +396,12 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
             },
+            // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR, sólo de la corrida de corrección.
+            PagoRedistribuidoPorValorNacionalV1.Type => new PagoRedistribuidoPorValorNacionalV1
+            {
+                RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte,
+                CorrectedNationalValue = valorCorregido, Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
+            },
             AjusteDeCausacionPorFechaValorV1.Type => new AjusteDeCausacionPorFechaValorV1
             {
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,

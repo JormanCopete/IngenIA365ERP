@@ -36,6 +36,14 @@ public sealed record DiferenciaDeLibro(DateOnly Dia, LoanConcept Concepto, int? 
     /// sólo la marca <see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/>.
     /// </summary>
     public bool DeCorreccionMonetaria { get; init; }
+
+    /// <summary>
+    /// K6b (decisión del dueño, 2026-10-17): la diferencia es del <b>reparto de un pago</b> (filas de <see cref="LibroTeorico.EsDePago"/>) de un
+    /// crédito en UVR cuyo día valor tuvo la UVR corregida: el pago es el mismo en pesos, pero a la UVR nueva cubre en pesos otra mezcla de capital,
+    /// intereses, cargos, anticipo y saldo a favor. Sólo la marca <see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/> con
+    /// <c>separarPagos</c>; viaja en el hecho <c>PagoRedistribuidoPorValorNacional</c>.
+    /// </summary>
+    public bool DePago { get; init; }
 }
 
 /// <summary>
@@ -95,6 +103,29 @@ public sealed class LibroTeorico
             .ToList();
     }
 
+    /// <summary>
+    /// K6b (decisión del dueño, 2026-10-17): las clases de fila del <b>reparto de un pago</b> —lo aplicado, lo recuperado de un castigado, el anticipo
+    /// recibido o usado, el saldo a favor que deja y las reaplicaciones—: lo que cambia en pesos, sin cambiar lo recibido, cuando se corrige la UVR
+    /// del día valor del pago. Las demás operaciones (desembolso, cargo, condonación, novedades, resoluciones) no son un reparto.
+    /// </summary>
+    public static bool EsDePago(LoanTransactionKind clase) =>
+        clase is LoanTransactionKind.PaymentAllocation or LoanTransactionKind.Recovery or LoanTransactionKind.AdvanceReceived
+            or LoanTransactionKind.AdvanceApplied or LoanTransactionKind.CreditBalanceRecognized or LoanTransactionKind.PaymentReallocation;
+
+    /// <summary>Los conceptos que son un pasivo con el deudor (el anticipo y el saldo a favor): en el libro, positivo es que el pasivo crece.</summary>
+    public static bool EsPasivoConElDeudor(LoanConcept concepto) => concepto is LoanConcept.Advance or LoanConcept.CreditBalance;
+
+    /// <summary>
+    /// Lo que no cuadra de un cambio de reparto (K6b, decisión del dueño del 2026-10-17): Σ de las diferencias de lo que se debe − Σ de las de los
+    /// pasivos con el deudor. Lo recibido no cambia, así que un reparto que sólo se redistribuye da cero: cubrir más de un concepto (libro más
+    /// negativo) es cubrir menos de otro o dejar menos anticipo o saldo a favor.
+    /// </summary>
+    public static decimal DescuadreDelReparto(IEnumerable<DiferenciaDeLibro> diferencias)
+    {
+        ArgumentNullException.ThrowIfNull(diferencias);
+        return diferencias.Sum(d => EsPasivoConElDeudor(d.Concepto) ? -d.Diferencia : d.Diferencia);
+    }
+
     /// <summary>Las clases de fila que son causación (lo demás son hechos de las operaciones).</summary>
     public static bool EsDeCausacion(LoanTransactionKind clase) =>
         clase is LoanTransactionKind.Accrual or LoanTransactionKind.AccrualAdjustment or LoanTransactionKind.SuspenseReclassification;
@@ -121,16 +152,28 @@ public sealed class LibroTeorico
     /// <c>MonetaryCorrection</c> se comparan sólo entre sí y sus diferencias van marcadas con <see cref="DiferenciaDeLibro.DeCorreccionMonetaria"/>,
     /// porque viajan en otro hecho (<c>CorreccionMonetariaUvrCausada</c>) y se registran con su clase. En un crédito en pesos no hay filas
     /// <c>MonetaryCorrection</c> y el resultado es el de <see cref="Diferencias"/>.
+    /// <para>
+    /// Con <paramref name="separarPagos"/> (K6b, decisión del dueño del 2026-10-17; la corrección de una <c>UVR</c>), también el <b>reparto de los
+    /// pagos</b> (<see cref="EsDePago"/>) se compara aparte y sus diferencias van marcadas con <see cref="DiferenciaDeLibro.DePago"/>: si no, el interés
+    /// que un pago cubre de más o de menos se anula con el de la causación del mismo día y el capital quedaría como un ajuste de causación, que no
+    /// tiene con qué contabilizarse.
+    /// </para>
     /// </summary>
-    public IReadOnlyList<DiferenciaDeLibro> DiferenciasSeparandoLaCorreccionMonetaria(IEnumerable<MovimientoDeLibro> libro, DateOnly? hasta = null)
+    public IReadOnlyList<DiferenciaDeLibro> DiferenciasSeparandoLaCorreccionMonetaria(IEnumerable<MovimientoDeLibro> libro, DateOnly? hasta = null,
+        bool separarPagos = false)
     {
         ArgumentNullException.ThrowIfNull(libro);
         var lista = libro.ToList();
         static bool Cmu(MovimientoDeLibro m) => m.Clase == LoanTransactionKind.MonetaryCorrection;
-        var resto = new LibroTeorico(_movimientos.Where(m => !Cmu(m))).Diferencias(lista.Where(m => !Cmu(m)), hasta);
+        bool Pago(MovimientoDeLibro m) => separarPagos && EsDePago(m.Clase);
+        var resto = new LibroTeorico(_movimientos.Where(m => !Cmu(m) && !Pago(m))).Diferencias(lista.Where(m => !Cmu(m) && !Pago(m)), hasta);
         var correccion = new LibroTeorico(_movimientos.Where(Cmu)).Diferencias(lista.Where(Cmu), hasta)
             .Select(d => d with { DeCorreccionMonetaria = true });
-        return resto.Concat(correccion).OrderBy(d => d.Dia).ThenBy(d => d.DeCorreccionMonetaria).ThenBy(d => (int)d.Concepto).ThenBy(d => d.Cuota ?? 0)
+        IEnumerable<DiferenciaDeLibro> pagos = separarPagos
+            ? new LibroTeorico(_movimientos.Where(Pago)).Diferencias(lista.Where(Pago), hasta).Select(d => d with { DePago = true })
+            : [];
+        return resto.Concat(pagos).Concat(correccion)
+            .OrderBy(d => d.Dia).ThenBy(d => d.DeCorreccionMonetaria).ThenBy(d => d.DePago).ThenBy(d => (int)d.Concepto).ThenBy(d => d.Cuota ?? 0)
             .ToList();
     }
 }

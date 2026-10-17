@@ -107,16 +107,18 @@ public static class MotorDeCartera
     /// <summary>
     /// Como <see cref="Verificar"/>, con la corrección monetaria de un crédito en UVR aparte
     /// (<see cref="LibroTeorico.DiferenciasSeparandoLaCorreccionMonetaria"/>): la usa la corrida de corrección por valor nacional, que registra las
-    /// diferencias de la corrección monetaria como <c>MonetaryCorrection</c> y las demás como ajuste de causación (K6b, fase 24).
+    /// diferencias de la corrección monetaria como <c>MonetaryCorrection</c> y las demás como ajuste de causación (K6b, fase 24). Con
+    /// <paramref name="separarPagos"/> (la corrección de una UVR; decisión del dueño del 2026-10-17), el reparto de los pagos va aparte
+    /// (<see cref="DiferenciaDeLibro.DePago"/>) y se registra como <c>PaymentReallocation</c> con su hecho.
     /// </summary>
     public static IReadOnlyList<DiferenciaDeLibro> VerificarSeparandoLaCorreccionMonetaria(EntradaDeReconstruccion entrada, DateOnly hasta,
-        IEnumerable<MovimientoDeLibro> libro, IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes = null)
+        IEnumerable<MovimientoDeLibro> libro, IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes = null, bool separarPagos = false)
     {
         ArgumentNullException.ThrowIfNull(entrada);
         var operaciones = ReconstruccionDeCredito.OperacionesVigentes(entrada, hasta);
-        if (operaciones.Count == 0) return LibroTeorico.Vacio.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta);
+        if (operaciones.Count == 0) return LibroTeorico.Vacio.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta, separarPagos);
         var estado = ReconstruccionDeCredito.Reconstruir(entrada, hasta, operaciones[0].FechaValor, interpretes);
-        return estado.Libro.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta);
+        return estado.Libro.DiferenciasSeparandoLaCorreccionMonetaria(libro, hasta, separarPagos);
     }
 
     // ------------------------------------------------------------------------------------------------ US5 (T0534–T0536)

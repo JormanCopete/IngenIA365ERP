@@ -20,6 +20,9 @@ namespace IngenIA365ERP.Application.Lending.Accrual;
 /// <para>K6b (fase 24): también una <c>UVR</c> que corrige otra. Ésa sólo toca a los créditos <b>en UVR</b>
 /// (<see cref="CreditosAfectados"/>): sin ninguno, o sin ninguno causado en o después del día corregido, no se encola nada. Antes sólo reaccionaba a la
 /// usura y corregir una UVR ya replicada dejaba los días causados con la UVR vieja.</para>
+/// <para>K6b (decisión del dueño del 2026-10-17): la corrida de una <c>UVR</c> llega <b>hasta la marca</b>, no hasta el fin de la vigencia del valor
+/// (que en la serie diaria es el mismo día): la UVR de un día cambia también la corrección monetaria del día siguiente (la víspera se valora con
+/// ella) y, si ese día se aplicó un pago, el pago es otra cantidad de UVR y cambia el capital en UVR, la causación y los repartos que siguen.</para>
 /// </summary>
 public sealed class EfectoDeReplicacionCorreccionDeValorNacional : IEfectoDeReplicacion
 {
@@ -65,7 +68,7 @@ public sealed class EfectoDeReplicacionCorreccionDeValorNacional : IEfectoDeRepl
         foreach (var v in correcciones.OrderBy(v => v.SourceSequence))
         {
             if (marcas[v.Code] is not { } marca || v.ValidFrom > marca) continue;
-            var hasta = v.ValidTo is { } fin && fin < marca ? fin : marca;
+            var hasta = v.Code != CodigosDeValorNacional.Uvr && v.ValidTo is { } fin && fin < marca ? fin : marca;
             db.LendingProcessRuns.Add(new LendingProcessRun
             {
                 Kind = LendingProcessKind.NationalValueCorrection,

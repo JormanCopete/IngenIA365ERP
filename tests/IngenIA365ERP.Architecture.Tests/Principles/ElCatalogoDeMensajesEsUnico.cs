@@ -87,13 +87,13 @@ public class ElCatalogoDeMensajesEsUnico
         // Los veinte de la 012 y la v2 de VentaACreditoRegistrada (T0175, T18), que también es de Comercial.
         Assert.Equal(21, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
         Assert.Equal(20, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
-        // K6b (T1056): + CorreccionMonetariaUvrCausada.
-        Assert.Equal(42, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
+        // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
+        Assert.Equal(43, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
         Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         Assert.Equal(2, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
         var hechos = todos.Where(t => t.OriginModule == ModulosDeOrigen.Cartera && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
-        Assert.Equal(36, hechos.Count);
+        Assert.Equal(37, hechos.Count);
         Assert.All(hechos, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         Assert.Equal(hechos.Count, hechos.Select(t => t.CodigoCorto).Distinct().Count());
         Assert.All(todos.Except(hechos), t => Assert.Null(t.CodigoCorto));

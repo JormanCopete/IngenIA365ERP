@@ -268,6 +268,7 @@ public static class ConstructorDeLineasDeCartera
         SeguroCausadoV1 x => x.Lines,
         AjusteDeCausacionPorFechaValorV1 x => x.Lines,
         CorreccionMonetariaUvrCausadaV1 x => x.Lines,
+        PagoRedistribuidoPorValorNacionalV1 x => x.Lines,
         DeterioroCalculadoV1 x => x.Lines,
         CarteraReclasificadaPorCalificacionV1 x => x.Lines,
         ReversoDeCierreV1 x => x.Lines,
@@ -367,6 +368,11 @@ public static class ConstructorDeLineasDeCartera
                 case CorreccionMonetariaUvrCausadaV1 x:
                     foreach (var l in x.Lines)
                         foreach (var a in l.Amounts) CorreccionMonetaria(l.Dimensions, a, l.Loan, l.DebtorPersonPublicId);
+                    break;
+                // K6b (decisión del dueño del 2026-10-17): el reparto de un pago corregido por la UVR.
+                case PagoRedistribuidoPorValorNacionalV1 x:
+                    foreach (var l in x.Lines)
+                        foreach (var a in l.Amounts) Redistribucion(l.Dimensions, a, l.Loan, l.DebtorPersonPublicId);
                     break;
                 case PagoAplicadoV1 x: Pago(x); break;
                 case PagoReversadoV1 x: PagoReversado(x); break;
@@ -742,6 +748,47 @@ public static class ConstructorDeLineasDeCartera
                     break;
                 default:
                     Asentar(saldo, L(R.Ingreso, d, a, credito, deudor), a.Amount);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// K6b (decisión del dueño del 2026-10-17; contabilidad.md §30): un concepto del reparto de un pago que cambió porque se corrigió la UVR de su
+        /// día valor, con el signo del libro. Lo que se debe: positivo = el pago lo cubre de menos, vuelve al débito de su rol de saldo; el anticipo y
+        /// el saldo a favor: positivo = el pago deja más, al crédito. El suspenso cobrado va por su ingreso (como en <c>CobroDeInteresEnSuspenso</c>)
+        /// y su orden; en un castigado, por el ingreso de la recuperación y la castigada en orden. Las partidas sueltas cuadran entre los conceptos
+        /// del mismo pago (lo recibido no cambia); las de orden, por pares.
+        /// </summary>
+        private void Redistribucion(LoanFactDimensionsV1 d, ConceptAmountV1 a, LoanRefV1 credito, Guid deudor)
+        {
+            var rol = R.RolDelConcepto(a.Concept, a.OnBehalfOfAssociate, d.WrittenOff);
+            if (rol is null)
+            {
+                ConceptoSinRol(a, credito);
+                return;
+            }
+            switch (rol)
+            {
+                case R.Anticipo or R.SaldoAFavor:
+                    Suelta(L(rol, d, a, credito, deudor), debitoSiPositivo: false, a.Amount);
+                    break;
+                case R.SuspensoEnOrden:
+                    Suelta(L(R.Ingreso, d, a, credito, deudor), debitoSiPositivo: true, a.Amount);
+                    Asentar(L(R.SuspensoEnOrden, d, a, credito, deudor), L(R.ContraOrdenContingente, d, a, credito, null), a.Amount);
+                    break;
+                case R.CastigadaEnOrden:
+                    Suelta(L(R.IngresoPorRecuperacion, d, a, credito, deudor), debitoSiPositivo: true, a.Amount);
+                    Asentar(L(R.CastigadaEnOrden, d, a, credito, deudor), L(R.ContraOrdenControl, d, a, credito, null), a.Amount);
+                    break;
+                default:
+                    if (d.WrittenOff)
+                    {
+                        // Lo cobrado de un castigado es recuperación: lo que el pago cubre de menos baja el ingreso y vuelve a la castigada en orden.
+                        Suelta(L(R.IngresoPorRecuperacion, d, a, credito, deudor), debitoSiPositivo: true, a.Amount);
+                        Asentar(L(R.CastigadaEnOrden, d, a, credito, deudor), L(R.ContraOrdenControl, d, a, credito, null), a.Amount);
+                    }
+                    else
+                        Suelta(L(rol, d, a, credito, deudor), debitoSiPositivo: true, a.Amount);
                     break;
             }
         }
