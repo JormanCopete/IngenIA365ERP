@@ -5203,6 +5203,7 @@ demás códigos que fijan las partes 1 y 2 (§9 y «Nombres fijados») completan
 | `Lending.Parameter.BelowLegalFloor` | 422 | «El valor {valor} es menos estricto que el límite legal vigente ({limite}, {fuente}). La cooperativa sólo puede ser más estricta.» | vigencia de parámetro | T42 |
 | `Lending.Parameter.NotYetAvailable` **(fijado en api.md §3.4)** | 422 | ««{clave}» todavía no está disponible: llega con la entrega {entrega}.» (`data: { key, availableFrom }`) | vigencia de una clave de una entrega posterior a `CatalogoDeCartera.EntregaVigente` (T43) | T43 |
 | `Lending.Parameter.NotSupportedYet` **(nuevo, C111, C123)** | 422 | «La cooperativa todavía no puede diferir comisiones y costos de originación: ninguna entrega lo implementa.» (`data: { key, availableFrom: null }`) | vigencia de `Contabilidad.DiferirComisiones = true` (FR-017, C10) | FR-017 |
+| `Lending.Parameter.FixedDaysRequired` **(nuevo, K6a, T1027)** | 422 | «La regla de meses faltantes «Fija» necesita los días de mora con que se completan…» (`data: { key, requires }`) | vigencia de `Riesgo.ReglaMesesFaltantes = Fija` sin `Riesgo.MesesFaltantesDiasFijos` en la fecha, o vaciar los días mientras rige «Fija» | FR-105 |
 | `Lending.Parameter.CompanionHasNoMode` **(nuevo, C111; T0653)** | 422 | ««{tipo}» viaja siempre con «{principal}» y pasa a contabilidad como él: configure «{clave}» en el tipo de hecho principal.» (`data: { key, factType, principal }`) | vigencia de `Contabilidad.ModoDePaso`, `.Granularidad`, `.DisparadorDeLote` o `.HoraDeLote` en el ámbito `LendingFactType` de `AnticipoRecibido`, `CobroDeInteresEnSuspenso` o `RecuperacionDeCastigada` (C01) | T56 |
 | `Lending.Process.AlreadyRunning` | 422 | «Ya hay una corrida de {clase} en curso. Espere a que termine.» | `RequestLendingProcessRunCommand`, `OrderMonthlyCloseCommand` | PM-13 |
 | `Lending.ProcessRun.KindNotOrderable` **(nuevo, US4 bloque 8B, C111)** | 422 | «El cierre mensual y su reapertura se ordenan desde el cierre de Cartera, no desde las corridas.» · «Las corridas de {clase} no se ordenan a mano: las encola el sistema.» (`data.kind`) | `RequestLendingProcessRunCommand` con `MonthlyClose`, `CloseReopen` o `NationalValueCorrection` | PM-13, C59 |
@@ -5619,6 +5620,7 @@ transversales deja a este documento.
 | Clave | Tipo | Valores | Defecto | Ámbitos | Límite | E | Origen |
 |---|---|---|---|---|---|---|---|
 | `Riesgo.ReglaMesesFaltantes` | Choice | `MayorObservada`, `DelCorte`, `Fija` | `MayorObservada` (PV) | None | — | K1 (uso K6a) | R14 |
+| `Riesgo.MesesFaltantesDiasFijos` **(nuevo, K6a, T1027)** | Int | ≥ 0 | sin valor (PV); obligatoria si `Riesgo.ReglaMesesFaltantes = Fija`: sin ella la regla «Fija» se rechaza al guardar y no se vacía mientras rige (`Lending.Parameter.FixedDaysRequired` **(nuevo)**, 422, `data: { key, requires }`) | None | — | K6a | R14, T1027 |
 | `Riesgo.DiaLimiteCierre` | Int | 1–28 | 10 | None | — | K1 | R17 |
 | `Riesgo.CierreProgramado` | Bool | | false | None | — | K1 | R17, E6 |
 | `Riesgo.RedondeoDeterioro` | Choice | `Centavo`, `Peso` | `Centavo` | None | — | K1 | R17, E9 |

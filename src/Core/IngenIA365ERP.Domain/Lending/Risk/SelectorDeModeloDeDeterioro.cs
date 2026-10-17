@@ -7,7 +7,14 @@ namespace IngenIA365ERP.Domain.Lending.Risk;
 public sealed record PerfilParaModelo(string? TipoDeOrganizacion, string? CategoriaDeFondo);
 
 /// <summary>La elección voluntaria vigente al cierre (K6a, <c>LND_ImpairmentModelElections</c>): adopción o desistimiento y sus segmentos.</summary>
-public sealed record EleccionDeModelo(ImpairmentModelElectionKind Clase, IReadOnlyList<string> Segmentos);
+public sealed record EleccionDeModelo(ImpairmentModelElectionKind Clase, IReadOnlyList<string> Segmentos)
+{
+    /// <summary>K6a (T1014): el primer cierre al que aplica (<c>ValidFrom</c>); nulo, desde siempre.</summary>
+    public DateOnly? Desde { get; init; }
+}
+
+/// <summary>K6a (T1014): una versión del perfil regulatorio con su vigencia (<c>COR_RegulatoryProfileVersions.ValidFrom</c>).</summary>
+public sealed record VigenciaDePerfil(DateOnly Desde, PerfilParaModelo Perfil);
 
 /// <summary>
 /// El modelo de un segmento de pérdida esperada (data-model §23.1 <c>ModelBySegmentJson</c>): modelo, fundamento y la marca
@@ -49,6 +56,23 @@ public static class SelectorDeModeloDeDeterioro
 {
     /// <summary>¿La entrega desplegada trae la pérdida esperada?</summary>
     public static bool PerdidaEsperadaDisponible(EntregaDeCartera entrega) => entrega >= EntregaDeCartera.K6a;
+
+    /// <summary>
+    /// K6a (T1014; US9-6, US9-7, US9-9): el modelo de cada segmento <b>al cierre</b> de <paramref name="fechaDelCierre"/>: la versión del perfil
+    /// vigente a esa fecha (una obligación sobrevenida rige desde el primer cierre dentro de su vigencia) y la última elección voluntaria cuyo
+    /// <c>ValidFrom</c> ya llegó (la adopción rige desde su fecha y el desistimiento vuelve al Anexo 1 desde la suya). Nunca mira hacia atrás:
+    /// un cierre anterior a una elección se selecciona igual que antes de registrarla.
+    /// </summary>
+    public static SeleccionDeModelos SeleccionarAl(DateOnly fechaDelCierre, ReglaDePerdidaEsperada? regla, IEnumerable<VigenciaDePerfil> perfiles,
+        IEnumerable<EleccionDeModelo> elecciones, EntregaDeCartera entrega)
+    {
+        ArgumentNullException.ThrowIfNull(perfiles);
+        ArgumentNullException.ThrowIfNull(elecciones);
+        var perfil = perfiles.Where(p => p.Desde <= fechaDelCierre).OrderByDescending(p => p.Desde).FirstOrDefault()?.Perfil;
+        var eleccion = elecciones.Where(e => (e.Desde ?? DateOnly.MinValue) <= fechaDelCierre).OrderByDescending(e => e.Desde ?? DateOnly.MinValue)
+            .FirstOrDefault();
+        return Seleccionar(regla, perfil, eleccion, entrega);
+    }
 
     public static SeleccionDeModelos Seleccionar(ReglaDePerdidaEsperada? regla, PerfilParaModelo? perfil, EleccionDeModelo? eleccion, EntregaDeCartera entrega)
     {

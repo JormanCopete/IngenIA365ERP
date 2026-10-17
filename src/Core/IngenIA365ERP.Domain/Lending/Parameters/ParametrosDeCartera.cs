@@ -50,6 +50,12 @@ public static class ParametrosDeCartera
 
     // ------------------------------------------------------------------------------------------------ riesgo y cierres --
     public const string RiesgoReglaMesesFaltantes = "Riesgo.ReglaMesesFaltantes";
+
+    /// <summary>
+    /// K6a (T1027; data-model §12.1): los días de mora con que se completan los meses de historial que faltan cuando
+    /// <see cref="RiesgoReglaMesesFaltantes"/> es «Fija» (<c>HistorialDeMora.Completar</c>). Sin valor; con la regla «Fija» es obligatoria. (nuevo)
+    /// </summary>
+    public const string RiesgoMesesFaltantesDiasFijos = "Riesgo.MesesFaltantesDiasFijos";
     public const string RiesgoDiaLimiteCierre = "Riesgo.DiaLimiteCierre";
     public const string RiesgoCierreProgramado = "Riesgo.CierreProgramado";
     public const string RiesgoRedondeoDeterioro = "Riesgo.RedondeoDeterioro";
@@ -187,6 +193,13 @@ public static class ParametrosDeCartera
         Eleccion(Modulo, RiesgoReglaMesesFaltantes,
             "Cómo se completan los meses de historial que faltan para la pérdida esperada (se usa desde K6a).",
             ["MayorObservada", "DelCorte", "Fija"], "MayorObservada", K1, General) with { PendienteDeValidar = PendienteContadora },
+        Entero(Modulo, RiesgoMesesFaltantesDiasFijos,
+            "Días de mora con que se completan los meses de historial que faltan si la regla de meses faltantes es «Fija». Sin valor; "
+            + "obligatoria con esa regla.", "", K6a, General) with
+        {
+            AdmiteVacio = true, Minimo = 0m,
+            PendienteDeValidar = "Sin valor: la cooperativa lo fija si elige la regla «Fija» (pregunta E9 de la contadora).",
+        },
         Entero(Modulo, RiesgoDiaLimiteCierre, "Día del mes siguiente hasta el que se puede cerrar el mes de cartera.", "10", K1, General)
             with { Minimo = 1, Maximo = 28 },
         SiNo(Modulo, RiesgoCierreProgramado, "El cierre mensual corre solo el día límite si nadie lo ordenó antes.", false, K1, General),

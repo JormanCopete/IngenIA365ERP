@@ -179,6 +179,21 @@ public class ReglasDeParametrosDeCarteraTests
     }
 
     [Fact]
+    public async Task La_regla_Fija_de_meses_faltantes_exige_los_dias_fijos_y_no_deja_vaciarlos()
+    {
+        // K6a (T1027): «Fija» sin Riesgo.MesesFaltantesDiasFijos vigente en la misma fecha se rechaza; con los días, se admite; y los días no se
+        // vacían mientras rige «Fija».
+        var sinDias = await Registrar(ParametrosDeCartera.RiesgoReglaMesesFaltantes, "Fija", fuente: null);
+        sinDias.Error.Code.Should().Be(ErroresDeParametrosDeCartera.CodigoDiasFijosRequeridos);
+        Datos(sinDias.Error).GetProperty("requires").GetString().Should().Be(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos);
+
+        Guardar(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos, "60");
+        (await Registrar(ParametrosDeCartera.RiesgoReglaMesesFaltantes, "Fija", fuente: null)).IsSuccess.Should().BeTrue();
+        (await Registrar(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos, "", fuente: null)).Error.Code
+            .Should().Be(ErroresDeParametrosDeCartera.CodigoDiasFijosRequeridos);
+    }
+
+    [Fact]
     public async Task Las_reglas_de_Cartera_no_corren_para_otros_modulos_ni_las_de_la_plataforma_para_Cartera()
     {
         var plataforma = Substitute.For<IReglasDeParametros>();

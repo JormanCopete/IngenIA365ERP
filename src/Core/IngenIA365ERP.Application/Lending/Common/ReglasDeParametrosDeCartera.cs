@@ -35,6 +35,18 @@ public static class ErroresDeParametrosDeCartera
     /// </summary>
     public const string CodigoRangosDeMoraInvalidos = "Lending.Parameter.InvalidArrearsRanges";
 
+    /// <summary>
+    /// <b>(nuevo; K6a, T1027)</b>: la regla de meses faltantes «Fija» sin <c>Riesgo.MesesFaltantesDiasFijos</c> vigente en la misma fecha, o vaciar los
+    /// días fijos mientras rige esa regla.
+    /// </summary>
+    public const string CodigoDiasFijosRequeridos = "Lending.Parameter.FixedDaysRequired";
+
+    /// <summary>La regla «Fija» necesita los días fijos (422).</summary>
+    public static Error DiasFijosRequeridos(string clave) => new ErrorConDatos(CodigoDiasFijosRequeridos,
+        $"La regla de meses faltantes «Fija» necesita los días de mora con que se completan: registre primero «{ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos}» "
+        + "con vigencia desde la misma fecha, o elija otra regla.",
+        new { key = clave, requires = ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos });
+
     /// <summary>Los rangos de mora no sirven (422), con el motivo.</summary>
     public static Error RangosDeMoraInvalidos(string valor, string motivo) => new ErrorConDatos(CodigoRangosDeMoraInvalidos, motivo,
         new { key = ParametrosDeCartera.CentralesRangosDeMora, value = valor });
@@ -110,6 +122,9 @@ public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacion
             && Domain.Lending.Regulatory.RangosDeMoraParaCentrales.Validar(alta.Valor) is { } motivo)
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.RangosDeMoraInvalidos(alta.Valor, motivo));
 
+        if (await DiasFijosFaltanAsync(alta, ct))
+            return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.DiasFijosRequeridos(definicion.Clave));
+
         foreach (var codigo in definicion.LimitesLegales)
         {
             if (LimitesDeParametro.Comparable(definicion, alta.Valor, codigo) is null) continue;
@@ -124,6 +139,26 @@ public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacion
         }
 
         return Result.Success(DecisionDeReglasDeParametro.Adelante);
+    }
+
+    /// <summary>
+    /// K6a (T1027): la regla de meses faltantes «Fija» exige <c>Riesgo.MesesFaltantesDiasFijos</c> con valor en la fecha desde la que rige, y los días
+    /// fijos no se vacían mientras rige esa regla.
+    /// </summary>
+    private async Task<bool> DiasFijosFaltanAsync(AltaDeParametro alta, CancellationToken ct)
+    {
+        var clave = alta.Definicion.Clave;
+        if (clave == ParametrosDeCartera.RiesgoReglaMesesFaltantes && alta.Valor == nameof(Domain.Lending.Risk.ReglaDeMesesFaltantes.Fija))
+        {
+            var dias = await lector.LeerAsync(Modulo, ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos, alta.ValidFrom, ParameterScopeKind.None, 0, ct);
+            return dias.IsFailure || string.IsNullOrWhiteSpace(dias.Value.Texto);
+        }
+        if (clave == ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos && string.IsNullOrWhiteSpace(alta.Valor))
+        {
+            var regla = await lector.LeerAsync(Modulo, ParametrosDeCartera.RiesgoReglaMesesFaltantes, alta.ValidFrom, ParameterScopeKind.None, 0, ct);
+            return regla.IsSuccess && regla.Value.Texto == nameof(Domain.Lending.Risk.ReglaDeMesesFaltantes.Fija);
+        }
+        return false;
     }
 
     /// <summary>
