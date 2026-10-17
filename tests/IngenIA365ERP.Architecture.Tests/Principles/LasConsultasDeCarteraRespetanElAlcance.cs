@@ -238,6 +238,7 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListLendingFactTypesQuery"] = "catálogo de la cooperativa: los tipos de hecho no tienen oficina ni deudores",
         ["ListTestCollectorReversalsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): ve lo que recibe el recaudador, no una oficina",
         // US9 (bloque 12B): lo de toda la cooperativa, sin datos de deudores.
+        ["ListImpairmentModelElectionsQuery"] = "las elecciones del modelo de deterioro son del consejo para toda la cooperativa: sin deudores ni oficina (K6a, T1034)",
         ["GetRiskPolicyQuery"] = "la política SARC es del consejo y la norma es nacional: celdas y versiones, sin deudores ni oficina (Parameters.View)",
         ["GetMonthlyCloseReadinessQuery"] = "los requisitos del cierre son de toda la cooperativa: conteos y estados, sin deudores (MonthlyClose.Execute)",
         // K2 (US10, bloque B): los convenios son un catálogo de la cooperativa; el archivo de una pagaduría lleva todas sus obligaciones.

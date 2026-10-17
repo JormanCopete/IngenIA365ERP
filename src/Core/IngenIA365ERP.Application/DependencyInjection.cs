@@ -568,6 +568,7 @@ public static class DependencyInjection
         services.AddScoped<Lending.Risk.PoliticaSarcVigente>();
         services.AddScoped<Lending.Risk.LectorDelContextoDeRiesgo>();
         services.AddScoped<Lending.Risk.CargadorDeRiesgo>();
+        services.AddScoped<Lending.Risk.CargadorDePerdidaEsperada>();
         services.AddScoped<Lending.Risk.CalificacionInformativa>();
         services.AddScoped<Lending.Risk.CalificacionDelCiclo>();
         services.AddScoped<Lending.Risk.RequisitosDelCierreMensual>();
@@ -577,6 +578,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDelCierreMensual>();
         services.AddScoped<Lending.Processes.IEjecutorDeCorridaDeCartera, Lending.Risk.EjecutorDeLaReapertura>();
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.AsuntoDeActaPoliticaSarc>();
+        // K6a (T1034): el cambio voluntario del modelo de deterioro como asunto del acta del consejo.
+        services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Risk.AsuntoDeActaCambioDelModelo>();
         services.AddScoped<Core.RegulatoryProfile.IEvaluadorDeObligacionDePerdidaEsperada, Lending.Risk.EvaluadorDeObligacionDePerdidaEsperada>();
         services.AddSingleton<Common.NationalValues.IEfectoDeReplicacion, Lending.Risk.EfectoDeReplicacionObligacionSobrevenida>();
         // Feature 013, US3 (bloque 7C, T0449) y US6 (T0586): Cartera como destino de la bandeja: ResultadoDelGiro v1 y la familia de Comercial

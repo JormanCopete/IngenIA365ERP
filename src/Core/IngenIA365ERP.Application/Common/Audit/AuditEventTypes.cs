@@ -249,6 +249,10 @@ public static class AuditEventTypes
     // K4 (T0944; C64): el evento resumen del registro de la etapa de cobranza migrada al desplegar K4, por cooperativa, con la tabla de equivalencia
     // de códigos; no es lectura.
     public const string LendingMigratedCollectionStagesRegistered = "Lending.CollectionStages.MigratedRegistered";
+    /// <summary>K6a (T1034): la adopción o el desistimiento voluntario del modelo de pérdida esperada.</summary>
+    public const string LendingImpairmentModelElectionRegistered = "Lending.ImpairmentModel.ElectionRegistered";
+    /// <summary>K6a (T1035; C46): el resumen de una carga complementaria del historial de mora.</summary>
+    public const string LendingArrearsHistoryLoadApplied = "Lending.ArrearsHistory.LoadApplied";
 
     // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
     // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.

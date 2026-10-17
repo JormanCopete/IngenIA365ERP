@@ -164,6 +164,20 @@ public sealed class CierreBase(IApplicationDbContext db, INormativaVigente norma
                 DaysPastDueAtMonthEnd = h.DaysPastDueAtMonthEnd, Origin = ArrearsHistoryOrigin.Migration, MigrationLoadId = carga.Id,
             });
         }
+        // K6a (T1035; FR-140): las cargas complementarias registradas antes de activar, que no tenían créditos donde escribirse; en el orden en que se
+        // aplicaron, para que entre dos del mismo mes mande la más reciente.
+        var complementarias = await db.ArrearsHistoryLoads.AsNoTracking().Where(l => l.MigrationLoadId == carga.Id && !l.IsDeleted).OrderBy(l => l.Id)
+            .ToListAsync(ct);
+        foreach (var complementaria in complementarias)
+            foreach (var f in CoberturaDelHistorialMigrado.Filas(complementaria.RowsJson))
+            {
+                if (!creditos.TryGetValue(f.LoanNumber, out var credito)) continue;
+                db.LoanArrearsHistory.Add(new LoanArrearsHistoryEntry
+                {
+                    LoanId = credito.Id, PeriodYear = (short)f.Year, PeriodMonth = (byte)f.Month, MaxDaysPastDue = f.MaxDaysPastDue,
+                    DaysPastDueAtMonthEnd = f.DaysPastDueAtMonthEnd, Origin = ArrearsHistoryOrigin.ComplementaryLoad, ArrearsHistoryLoadId = complementaria.Id,
+                });
+            }
         await db.SaveChangesAsync(ct);
         return Result.Success(cierre);
     }

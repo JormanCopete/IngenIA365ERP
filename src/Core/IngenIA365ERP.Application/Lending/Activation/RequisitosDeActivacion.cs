@@ -14,6 +14,7 @@ using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Risk;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Domain.Lending.Risk.Normativa;
 using Microsoft.EntityFrameworkCore;
 
@@ -58,7 +59,8 @@ public sealed class RequisitosDeActivacion(
     INormativaVigente? normativa = null,
     IPerfilRegulatorio? perfiles = null,
     IValoresNacionales? valores = null,
-    Common.NormaPendienteDeCartera? normaPendiente = null)
+    Common.NormaPendienteDeCartera? normaPendiente = null,
+    Common.ReglasDeParametrosDeCartera? parametros = null)
 {
     public const string CargaAplicada = "LoadApplied";
     public const string DiferenciasAceptadas = "DifferencesAccepted";
@@ -161,13 +163,9 @@ public sealed class RequisitosDeActivacion(
 
         var (perdida, sinModeloObligatorio) = await PerdidaEsperadaAsync(fechaDeActivacion, ct);
         requisitos.Add(perdida);
-        var k6a = SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(CatalogoDeCartera.EntregaVigente);
-        requisitos.Add(k6a
-            ? Cumple(ParametrosDePerdidaEsperada, "La entrega desplegada calcula la pérdida esperada con los parámetros vigentes.")
-            : NoAplica(ParametrosDePerdidaEsperada, "Sólo aplica donde está desplegada la entrega de pérdida esperada."));
-        requisitos.Add(k6a
-            ? Cumple(HistorialDeMoraCompleto, "El historial de mora de la carga se validó al aplicarla.")
-            : NoAplica(HistorialDeMoraCompleto, "Sólo aplica donde está desplegada la entrega de pérdida esperada."));
+        var (parametrosDePerdida, historialCompleto) = await RequisitosDeK6aAsync(carga, fechaDeActivacion, ct);
+        requisitos.Add(parametrosDePerdida);
+        requisitos.Add(historialCompleto);
 
         requisitos.Add(await Anexo1Async(fechaDeActivacion, ct));
         requisitos.Add(await UsuraAsync(fechaDeActivacion, ct));
@@ -206,6 +204,92 @@ public sealed class RequisitosDeActivacion(
             ? (Falta(PerdidaEsperadaDisponible, $"desplegar la entrega de pérdida esperada: la cooperativa está obligada{cuando}", "Plataforma", null, null), false)
             : (Dispensa(PerdidaEsperadaDisponible, $"La cooperativa está obligada a la pérdida esperada{cuando} y esta entrega no la trae: fuera de producción se activa con la marca «modelo obligatorio no disponible».",
                 "Plataforma", null, null), true);
+    }
+
+    /// <summary>
+    /// K6a (T1037; US8-10, FR-142): lo que la pérdida esperada exige a una cooperativa <b>obligada</b> (a la fecha de activación o desde una fecha
+    /// posterior por un perfil ya registrado), en todos los ambientes, a la fecha del <b>primer cierre que la use</b> (el fin del mes de la activación o
+    /// del inicio de la obligación, el posterior):
+    /// <list type="bullet">
+    /// <item><c>ExpectedLossParameters</c> (FR-106): el Anexo 2 vigente con la PI del tipo de organización en cada segmento cubierto, la regla de meses
+    /// faltantes (y sus días con «Fija») y, para un fondo de empleados, el SMMLV;</item>
+    /// <item><c>ArrearsHistoryComplete</c> (FR-105, FR-140): el historial de los créditos migrados de los segmentos cubiertos completo hasta el mes anterior
+    /// al del corte, contando las cargas complementarias (<see cref="Risk.CoberturaDelHistorialMigrado"/>); si no, falta con la lista de créditos y meses
+    /// (como <c>Lending.Migration.ArrearsHistoryRequired</c>) y lo corrige la carga complementaria.</item>
+    /// </list>
+    /// Una no obligada no exige ni parámetros ni historial.
+    /// </summary>
+    private async Task<(RequisitoDeActivacionDto Parametros, RequisitoDeActivacionDto Historial)> RequisitosDeK6aAsync(MigrationLoad? carga, DateOnly fecha,
+        CancellationToken ct)
+    {
+        if (!SelectorDeModeloDeDeterioro.PerdidaEsperadaDisponible(CatalogoDeCartera.EntregaVigente))
+            return (NoAplica(ParametrosDePerdidaEsperada, "Sólo aplica donde está desplegada la entrega de pérdida esperada."),
+                NoAplica(HistorialDeMoraCompleto, "Sólo aplica donde está desplegada la entrega de pérdida esperada."));
+        if (normativa is null || perfiles is null)
+            return (NoAplica(ParametrosDePerdidaEsperada, "No se evaluó la obligación de pérdida esperada."),
+                NoAplica(HistorialDeMoraCompleto, "No se evaluó la obligación de pérdida esperada."));
+        var regla = await normativa.LeerAsync(RegulatoryDocumentKind.ReglaDePerdidaEsperada, fecha, ReglaDePerdidaEsperada.Leer, ct: ct);
+        if (regla.IsFailure)
+            return (Cumple(ParametrosDePerdidaEsperada, "No hay regla de pérdida esperada vigente: la cooperativa no está obligada."),
+                Cumple(HistorialDeMoraCompleto, "No hay regla de pérdida esperada vigente: no se exige historial."));
+
+        var perfil = await perfiles.VigenteAsync(fecha, null, ct);
+        DateOnly? desde = Obligada(regla.Value.Documento, perfil) ? fecha : null;
+        if (desde is null && db is not null)
+            desde = (await db.RegulatoryProfileVersions.AsNoTracking().Where(v => !v.IsDeleted && v.ValidFrom > fecha).OrderBy(v => v.ValidFrom).ToListAsync(ct))
+                .FirstOrDefault(v => regla.Value.Documento.Obliga(v.OrganizationTypeCode, v.EmployeeFundCategory))?.ValidFrom;
+        if (desde is not { } inicio)
+            return (Cumple(ParametrosDePerdidaEsperada, "La cooperativa no está obligada a la pérdida esperada: no se le exigen sus parámetros."),
+                Cumple(HistorialDeMoraCompleto, "La cooperativa no está obligada a la pérdida esperada: no se le exige historial."));
+
+        var primerCierre = Domain.Entities.Lending.Risk.MonthlyClose.UltimoDiaDe(inicio.Year, inicio.Month);
+        var perfilAlCierre = await perfiles.VigenteAsync(primerCierre, null, ct) ?? perfil;
+        var tipo = perfilAlCierre?.OrganizationTypeCode ?? string.Empty;
+        var cuando = string.Create(CultureInfo.InvariantCulture, $"al primer cierre en pérdida esperada ({primerCierre:yyyy-MM-dd})");
+
+        // Los parámetros de FR-106.
+        var faltan = new List<string>();
+        var anexo2 = await normativa.LeerAsync(RegulatoryDocumentKind.SarcAnexo2, primerCierre, Anexo2.Leer, ct: ct);
+        if (anexo2.IsFailure) faltan.Add("el Anexo 2 del SARC vigente");
+        else
+            faltan.AddRange(regla.Value.Documento.SegmentosCubiertos.Where(s => anexo2.Value.Documento.TablaDePi(s, tipo) is null)
+                .Select(s => $"la probabilidad de incumplimiento de {tipo} en {s} en el Anexo 2"));
+        if (parametros is not null)
+        {
+            var reglaDeMeses = await parametros.LeerAsync(ParametrosDeCartera.RiesgoReglaMesesFaltantes, primerCierre, ct: ct);
+            if (reglaDeMeses.IsFailure || string.IsNullOrWhiteSpace(reglaDeMeses.Value.Texto))
+                faltan.Add($"el parámetro {ParametrosDeCartera.RiesgoReglaMesesFaltantes}");
+            else if (reglaDeMeses.Value.Texto == nameof(ReglaDeMesesFaltantes.Fija))
+            {
+                var dias = await parametros.LeerAsync(ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos, primerCierre, ct: ct);
+                if (dias.IsFailure || string.IsNullOrWhiteSpace(dias.Value.Texto)) faltan.Add($"el parámetro {ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos}");
+            }
+        }
+        if (valores is not null && (perfilAlCierre?.EmployeeFundCategory is not null
+                                    || (await normativa.TiposDeOrganizacionAsync(primerCierre, null, ct)) is { IsSuccess: true } tipos
+                                    && tipos.Value.Documento.Buscar(tipo)?.IsEmployeeFund == true)
+            && (await valores.LeerAsync(CodigosDeValorNacional.Smmlv, string.Empty, primerCierre, null, ct)).IsFailure)
+            faltan.Add("el salario mínimo vigente (la cuota de un fondo de empleados)");
+        var deParametros = faltan.Count == 0
+            ? Cumple(ParametrosDePerdidaEsperada, $"Los parámetros de la pérdida esperada rigen {cuando}.")
+            : Falta(ParametrosDePerdidaEsperada, $"registrar {string.Join("; ", faltan)} {cuando}", "Plataforma", "/cartera/parametros", "Lending.Parameters.Manage");
+
+        // El historial de los créditos migrados de los segmentos cubiertos.
+        if (db is null || carga is null)
+            return (deParametros, NoAplica(HistorialDeMoraCompleto, "No se evaluó el historial de la carga."));
+        var catalogo = await normativa.CatalogoDeModalidadesAsync(carga.CutoffDate, null, ct);
+        if (catalogo.IsFailure)
+            return (deParametros, Falta(HistorialDeMoraCompleto, "el catálogo de modalidades vigente al corte para saber los segmentos de los créditos", "Plataforma",
+                null, null));
+        var cobertura = await new Risk.CoberturaDelHistorialMigrado(db).CalcularAsync(carga, regla.Value.Documento, catalogo.Value.Documento, primerCierre, [], ct);
+        var incompletos = cobertura.SelectMany(c => c.Incomplete).ToList();
+        if (incompletos.Count == 0)
+            return (deParametros, Cumple(HistorialDeMoraCompleto, $"Los créditos migrados de los segmentos cubiertos tienen el historial de mora completo {cuando}."));
+        var lista = string.Join("; ", incompletos.Take(20).Select(i => $"{i.LoanNumber} ({string.Join(", ", i.MissingMonths.Take(6))}{(i.MissingMonths.Count > 6 ? "…" : string.Empty)})"));
+        return (deParametros, Falta(HistorialDeMoraCompleto,
+            string.Create(CultureInfo.InvariantCulture,
+                $"completar con la carga complementaria el historial de mora de {incompletos.Count} créditos migrados ({Migration.ErroresDeMigracion.CodigoHistorialRequerido}): {lista}{(incompletos.Count > 20 ? "…" : string.Empty)}"),
+            "Cartera", "/cartera/cierres", "Lending.ArrearsHistory.Import"));
     }
 
     private static bool Obligada(ReglaDePerdidaEsperada regla, PerfilRegulatorioDto? perfil) =>

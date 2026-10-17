@@ -190,8 +190,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
         De(e, RequisitosDeActivacion.Anexo1Vigente).Should().BeEquivalentTo(new { Met = true, Status = EstadosDeRequisito.Waived }, o => o.ExcludingMissingMembers());
         De(e, RequisitosDeActivacion.Anexo1Vigente).WhoFixes.Should().NotBeNull();
         De(e, RequisitosDeActivacion.RolesDeCarteraCreados).Status.Should().Be(EstadosDeRequisito.Waived);
-        // T1024 (fase 22): con K6a desplegada los dos requisitos de la pérdida esperada aplican; lo que de verdad exigen a una obligada (parámetros de
-        // FR-106 vigentes e historial completo de los segmentos cubiertos) lo construye T1037 en el bloque 2 de la fase.
+        // T1024 y T1037 (fase 22): con K6a desplegada los dos requisitos de la pérdida esperada aplican; sin regla de pérdida esperada vigente nadie está
+        // obligado y se cumplen (lo que exigen a una obligada lo cubre ActivacionConPerdidaEsperadaTests).
         De(e, RequisitosDeActivacion.ParametrosDePerdidaEsperada).Status.Should().Be(EstadosDeRequisito.Met);
         De(e, RequisitosDeActivacion.HistorialDeMoraCompleto).Status.Should().Be(EstadosDeRequisito.Met);
         e.Requisitos.Select(r => r.Code).Should().BeEquivalentTo(
@@ -305,6 +305,9 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     {
         await ReglaDePerdidaEsperadaAsync();
         await PerfilAsync("COOP_AHORRO_CREDITO", new DateOnly(2026, 1, 1));
+        // T1037 (bloque 2): a la obligada se le exigen los parámetros de FR-106 vigentes al primer cierre (el Anexo 2 con la PI de su tipo); la carga
+        // de esta escena no trae créditos, así que el historial está completo.
+        await Risk.PerdidaEsperadaDePrueba.Anexo2Async(Db, _l.G.UtcNow, new DateOnly(2026, 1, 1));
         Recaudador(IntegrationParticipantClass.Test);
         Tesoreria(doble: true);
 
@@ -314,7 +317,7 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
         var dentro = await EvaluarAsync();
 
         // Antes de K6a (T1024) la obligada se negaba en producción y fuera activaba con la marca «modelo obligatorio no disponible» (D28); con K6a
-        // desplegada la pérdida esperada está disponible y no hay marca. Lo que exige a la obligada (T1037, US8-10) es del bloque 2 de la fase 22.
+        // desplegada la pérdida esperada está disponible y no hay marca. Lo que exige a la obligada (T1037, US8-10) lo cubre ActivacionConPerdidaEsperadaTests.
         De(fuera, RequisitosDeActivacion.PerdidaEsperadaDisponible).Status.Should().Be(EstadosDeRequisito.Met);
         fuera.ObligatoryModelUnavailable.Should().BeFalse();
         fuera.Faltantes.Should().BeEmpty();

@@ -249,6 +249,9 @@ public class LosHechosInmutablesNoSeModifican
         // K5 (T0997; data-model §28.2): la línea del archivo de una central no admite ninguna escritura después de insertarse. El archivo no es
         // hecho: su contenido es de sólo init y sólo avanzan el estado, el reemplazo y la carga con su radicado.
         ["RegulatoryFileLine"] = [],
+        // K6a (T1031; data-model §23.8, §23.9): la elección voluntaria del modelo (un cambio es otra elección) y la carga complementaria del
+        // historial (volver a cargar es otra carga) no admiten ninguna escritura después de insertarse.
+        ["ImpairmentModelElection"] = [], ["ArrearsHistoryLoad"] = [],
     };
 
     [Fact]

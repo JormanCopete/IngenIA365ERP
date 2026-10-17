@@ -166,6 +166,14 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
     public Task<Guid?> EmitirEtapasMigradasRegistradasAsync(Guid processRunPublicId, object resumen, CancellationToken ct = default) =>
         EmitAsync(AuditEventTypes.LendingMigratedCollectionStagesRegistered, "LendingProcessRun", processRunPublicId, resumen, ct);
 
+    /// <summary>K6a (T1034): la elección voluntaria del modelo de pérdida esperada, en la transacción que la registra. No es una lectura sensible.</summary>
+    public Task<Guid?> EmitirEleccionDelModeloRegistradaAsync(Guid electionPublicId, object detalle, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingImpairmentModelElectionRegistered, "ImpairmentModelElection", electionPublicId, detalle, ct);
+
+    /// <summary>K6a (T1035; C46): el evento resumen de una carga complementaria del historial de mora (sus filas van sin diferencias). No es una lectura sensible.</summary>
+    public Task<Guid?> EmitirHistorialComplementarioAplicadoAsync(Guid loadPublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingArrearsHistoryLoadApplied, "ArrearsHistoryLoad", loadPublicId, resumen, ct);
+
     private async Task<Guid?> EmitAsync(string action, string entityType, Guid? entityPublicId, object? after, CancellationToken ct, bool aparte = false)
     {
         try
