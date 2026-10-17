@@ -85,7 +85,7 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
         var deudores = new List<string>();
         foreach (var n in numeros) deudores.Add((await PersonaAsync(http, admin, $"Deudor{n[^1]}", "Obligada")).Documento);
         var carga = await CargaAsync(http, admin, corte, numeros.Select((n, i) => Credito(n, deudores[i], oficina, desembolso, 1_200_000m, 12)).ToList());
-        var punto = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, corte);
+        var punto = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, hoy);
         await AceptarDiferenciasAsync(http, admin, carga, punto);
 
         // ------------------------------------------------------------------- activar sin historial: negada con la lista --
@@ -173,9 +173,12 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
         var admin = coop.TokenAdmin;
         var tenant = coop.TenantPublicId;
         await PreparacionAsync(http, coop, corte, "COOP_MULTIACTIVA", financiera: false);
-        await LineaComercialAsync(http, admin, corte);
+        await LineaComercialAsync(fx, http, admin, corte);
         var oficina = await OficinaAsync(http, admin, tenant, "PEE");
         await AnexoDePruebaConVoluntariaAsync(http, tenant, corte);
+        // La elección la registra la secretaría del consejo, no el administrador: él lleva el acta (registra los votos y la cierra) y quien
+        // decide no radica (segregación, Lending.Segregation.Conflict).
+        var secretaria = (await UsuariosDeCartera.CrearAsync(fx, coop)).Secretaria.Token;
 
         // Un comercial de persona natural con su historial completo (nace en el mes del corte) y un consumo sin el historial de 36 meses: a la no
         // obligada no se le exige historial para activar.
@@ -185,7 +188,7 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
         comercial[C.Linea] = LineaComercial;
         var consumo = Credito("EN-CON-01", deudorConsumo, oficina, corte.AddDays(-75), 1_200_000m, 12);
         var carga = await CargaAsync(http, admin, corte, [comercial, consumo]);
-        var puntoDeActivacion = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, corte);
+        var puntoDeActivacion = await CarteraE2E.ActaDeActivacionAsync(http, coop, carga, hoy);
         await AceptarDiferenciasAsync(http, admin, carga, puntoDeActivacion);
         var activar = await ActivarAsync(http, admin, carga, hoy, puntoDeActivacion);
         activar.StatusCode.Should().Be(HttpStatusCode.Created, $"la no obligada activa sin historial completo: «{await activar.Content.ReadAsStringAsync()}»");
@@ -219,14 +222,14 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
             var soporteDelAviso = await ActasE2E.SoporteAsync(http, admin, propuesta, DuenoDeSoportes, "aviso-supersolidaria.pdf");
             var punto = await ActaDelCambioAsync(http, coop, propuesta, aviso);
 
-            var temprana = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Elecciones,
+            var temprana = await CarteraE2E.ConClaveAsync(http, secretaria, HttpMethod.Post, Elecciones,
                 Eleccion(propuesta, "VoluntaryAdoption", aviso.AddDays(Math.Max(1, antelacion - 5)), punto, estudio, aviso, soporteDelAviso, ["COMERCIAL_PN"]));
             temprana.IsSuccessStatusCode.Should().BeFalse(await temprana.Content.ReadAsStringAsync());
             var fueraDePlazo = await CarteraE2E.LeerAsync(temprana);
             fueraDePlazo.GetProperty("code").GetString().Should().Be("Lending.ImpairmentModel.NoticeOutOfTerm");
             fueraDePlazo.GetProperty("data").GetProperty("earliestValidFrom").GetString().Should().Be(Fecha(masTemprana), "la pantalla ofrece la más temprana");
 
-            var adopcion = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Elecciones,
+            var adopcion = await CarteraE2E.ConClaveAsync(http, secretaria, HttpMethod.Post, Elecciones,
                 Eleccion(propuesta, "VoluntaryAdoption", masTemprana, punto, estudio, aviso, soporteDelAviso, ["COMERCIAL_PN"]));
             adopcion.StatusCode.Should().Be(HttpStatusCode.Created, await adopcion.Content.ReadAsStringAsync());
             var adoptada = await CarteraE2E.LeerAsync(adopcion);
@@ -270,7 +273,7 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
             var estudio = await ActasE2E.SoporteAsync(http, admin, propuesta, DuenoDeSoportes, "estudio-desistimiento.pdf");
             var soporteDelAviso = await ActasE2E.SoporteAsync(http, admin, propuesta, DuenoDeSoportes, "aviso-desistimiento.pdf");
             var punto = await ActaDelCambioAsync(http, coop, propuesta, avisoDeDesistimiento);
-            var desistir = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Elecciones,
+            var desistir = await CarteraE2E.ConClaveAsync(http, secretaria, HttpMethod.Post, Elecciones,
                 Eleccion(propuesta, "VoluntaryWithdrawal", desde, punto, estudio, avisoDeDesistimiento, soporteDelAviso, ["COMERCIAL_PN"]));
             desistir.StatusCode.Should().Be(HttpStatusCode.Created, await desistir.Content.ReadAsStringAsync());
 
@@ -323,12 +326,14 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
     }
 
     /// <summary>La línea comercial de persona natural <c>MIGCOM</c> para los créditos migrados (segmento <c>COMERCIAL_PN</c>).</summary>
-    private static async Task LineaComercialAsync(HttpClient http, string admin, DateOnly desde)
+    private static async Task LineaComercialAsync(CentralIdentityApiFixture fx, HttpClient http, string admin, DateOnly desde)
     {
         var version = LineasE2E.VersionFija(desde, "COMERCIAL", "PersonaNatural", 0.20m, "Línea comercial de la cartera migrada (e2e)");
         version["interestTaxConcept"] = new { taxed = false, supportAttachmentPublicId = Guid.NewGuid() };
         version["amounts"] = new { min = 100_000m, max = 30_000_000m };
-        await LineasE2E.CrearExitoAsync(http, admin, LineaComercial, "Comercial persona natural migrado", version);
+        // Vigente en el corte (ayer): por la ruta una versión no rige antes de hoy, así que se registra con el reloj de la suite en el corte.
+        using (desde < CarteraE2E.Hoy(fx) ? CausacionE2E.RelojEn(fx, desde) : null)
+            await LineasE2E.CrearExitoAsync(http, admin, LineaComercial, "Comercial persona natural migrado", version);
     }
 
     /// <summary>La carga con los créditos dados (cuotas, saldos y riesgo al corte), aplicada; devuelve la carga.</summary>
