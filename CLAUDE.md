@@ -693,6 +693,16 @@ ni el historial de mora completo (`RequirementsMissing`); los meses que faltan e
 obligada adopta o desiste con acta, estudio y aviso subidos a la propuesta (pestaña «Modelo de deterioro» de
 `/cartera/cierres`). El Anexo 2 sembrado va `verified = false` y **sin la PI voluntaria** (nadie adopta hasta registrarla);
 el 9083 espera instructivo. Recetas: `docs/operaciones/cartera-perdida-esperada.md`, `docs/manual/cartera-perdida-esperada.md`.
+**K6b, vivienda Ley 546 y UVR (fase 23, 2026-10-17)**: migración aditiva `CarteraVivienda` (15 columnas, ninguna tabla).
+Con `EntregaVigente = K6b` se abre la modalidad Vivienda (reglas `LND-2026.2`): tasa fija bajo el menor entre
+`TOPE_TASA_VIVIENDA` y la usura, sin mora sobre intereses, prepago sin penalidad; plazo, financiable general y VIS
+(`IsSocialHousing`) y cuota-ingreso son cinco `LIMITE` sembrados «pendiente de validar»; el desembolso exige hipoteca de
+primer grado (`MortgageRank`). Un crédito en **UVR** (sin tramos) se lleva en UVR a la diezmilésima y se valora en pesos con
+la UVR de cada día, registrada **un valor por día** en la central (sin semilla); sin la UVR del día ese crédito no se causa
+(`NationalValues.Missing`). La corrección monetaria diaria es el hecho masivo `CorreccionMonetariaUvrCausada` (CMU,
+comprobante `CA`; propuesta por defecto de E12). Las respuestas ganan `housing`, `uvr`, `denominationUnit` e
+`isSocialHousing` opcionales (api.md §29). Recetas: `docs/manual/cartera-vivienda-y-uvr.md`,
+`docs/operaciones/valores-nacionales.md` §3a.
 Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `/api/lending/accounting/*` y `/api/lending/messages`; pantallas `/contabilidad/cartera/{matriz, tipos-de-comprobante,
   completitud, lotes, lotes/{id}}`, `/contabilidad/indicadores-regulatorios`, `/cartera/conciliacion-contable`, la
