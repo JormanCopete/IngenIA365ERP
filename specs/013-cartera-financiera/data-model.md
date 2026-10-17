@@ -3373,7 +3373,7 @@ guía adjunta (`Lending.PriorNotices.RegisterEvidence`: mensaje `Letter` con eve
 
 | Columna | Tipo | Nulo | Notas |
 |---|---|---|---|
-| `LoanId` · `PersonId` | int FK | no | titular avisado |
+| `LoanId` · `PersonId` | int FK | no | titular avisado: el deudor o, con `AvisoPrevio.IncluirCodeudores` (2026-10-16, sin cambio de esquema), cada codeudor vigente con su propio aviso |
 | `EpisodeStartDate` | date | no | vencimiento de la primera cuota impaga del episodio; `UK (LoanId, PersonId, EpisodeStartDate)` |
 | `RequiredCommunications` | tinyint | no | 1, o 2 en días distintos bajo `AvisoPrevio.UmbralDosComunicaciones` |
 | `MinimumDays` | int | no | `AvisoPrevio.DiasMinimos` vigente (piso nacional 20), sellado |
@@ -3507,10 +3507,24 @@ Molde `PilaGeneration` de la 010. Validar no guarda; generar con bloqueantes dej
 | `GeneratedByUserId` · `GeneratedAt` | int FK · datetime | no | `Lending.RegulatoryReports.Generate` / `Lending.CreditBureauFiles.Generate` |
 | `SupersededAt` | datetime | sí | |
 | `UploadedAt` · `UploadedByUserId` · `FilingNumber` · `FilingDate` | datetime · int FK · nvarchar(60) · date | sí | `MarkRegulatoryFileUploadedCommand` (`Lending.RegulatoryFiles.MarkUploaded`); después, el período no se regenera |
+| `ReceiptAttachmentPublicId` **(nuevo, 2026-10-16, migración `CarteraComprobanteDeCargue`)** | uniqueidentifier | sí | decisión del dueño: el comprobante del cargue en el portal, adjunto `LendingRegulatoryFileReceipt` de la generación (sin FK); se fija al marcar cargado (`Lending.RegulatoryFile.ReceiptInvalid` si no es un adjunto disponible de ella) |
 
 Índices: `UK (PeriodYear, PeriodMonth, Version)` filtrado `[Kind] = 1 AND [IsDeleted] = 0`; `UK (BureauCode,
 PeriodYear, PeriodMonth, Version)` filtrado `[Kind] = 2 AND [IsDeleted] = 0`. La lista y la descarga exigen
 `Lending.RegulatoryFiles.Read` (traen deudores, T60).
+
+Adjunto `LendingRegulatoryFileReceipt` (2026-10-16, `AdjuntosDeModulo`): dueño la generación; se lee con `Lending.RegulatoryFiles.Read`; se
+sube con `Lending.RegulatoryFiles.MarkUploaded` sólo mientras la generación esté `Generated`; se borra sólo hasta marcarla cargada (después,
+`Attachments.OwnerLocked`).
+
+**Plazo del SICSES (formato 9027) y mora de las centrales (decisiones del dueño del 2026-10-16).** El plazo sale de `sicsesReport` del
+documento `TiposDeOrganizacion` por nivel (`cutoffMonths`, `dueDays`, `warningDays` y, nuevo, `dueExceptions: [ { cutoffMonth,
+monthsAfterCutoff, day | lastBusinessDay } ]`, sin cambio de versión de esquema; semilla: nivel 1 mensual a 20 días con diciembre al último
+día hábil de enero, nivel 2 trimestral a 30 días con diciembre el 1 de febrero —conservador, el calendario real va por el último dígito del
+NIT—, nivel 3 anual con diciembre el 1 de febrero —CE 84 de 2025—, salvo fondos de empleados y mutuales; pendiente de validar). En las
+centrales, la mora se reporta por los rangos de `Centrales.RangosDeMora` (§12.1) del tipo de cartera de la posición: bajo el rango negativo,
+al día; desde él, en mora con su rango, y el `ReportedStatusCode` es el código de la altura del rango (`TraduccionDeCentral.AlturasDeMora`).
+El codeudor con dato negativo exige `AvisoPrevio.IncluirCodeudores` y su propio aviso completo.
 
 ### 28.2 `LND_RegulatoryFileLines` — `RegulatoryFileLine` **(nuevo)** (H; `AuditableEntityLong`; sólo `CreditBureau`; FR-123, FR-137)
 
@@ -5667,9 +5681,12 @@ transversales deja a este documento.
 | `Cobranza.TopeGasto.ValorMaximo` **(nuevo, K4 bloque D)** | Decimal | pesos, ≥ 0 | vacío = sin máximo (PV) | None | — | K4 | decisión del dueño del 2026-10-16, FR-121 |
 | `AvisoPrevio.DiasMinimos` | Int | días calendario | 20 (piso) | None | `AVISO_PREVIO_DIAS` | K4 | F-09 |
 | `AvisoPrevio.UmbralDosComunicaciones` | Decimal | veces el SMMLV | el nacional (PV) | None | `AVISO_PREVIO_UMBRAL_SMMLV` | K4 | F-09 |
+| `AvisoPrevio.IncluirCodeudores` **(nuevo, 2026-10-16)** | Bool | | false: los codeudores no reciben aviso ni se reportan con dato negativo | None | — | K5 | decisión del dueño del 2026-10-16 |
 | `Mensajes.Reintentos` | Int | ≥ 0 | 3 **(fijado aquí)** | None | — | K1 | F-06 |
 | `Canales.UmbralDeFallas` | Int | ≥ 1 | 5 **(fijado aquí)** | None | — | K1 | F-02 |
 | `Centrales.DiasDeVigenciaDeConsulta` | Int | ≥ 1 | 30 **(fijado aquí)** | None, CreditLine | — | K1 | F-19 |
+| `Centrales.CodigosDeSuscriptor` **(nuevo, fase 21, T1003)** | Text | `CENTRAL=código` separados por `;` | vacío | None | — | K5 | T1003 |
+| `Centrales.RangosDeMora` **(nuevo, 2026-10-16)** | Text | `TIPO=límite,…\|rango` separados por `;`, `*` para los demás tipos de cartera (modalidad); límites crecientes, rango negativo de 1 a límites + 1 (`Lending.Parameter.InvalidArrearsRanges`) | `*=30,60,90,120,150,180\|1` (PV): toda mora es dato negativo, como antes | None | — | K5 | decisión del dueño del 2026-10-16 |
 | `Listas.UmbralDeCoincidenciaDeNombre` | Decimal | 0–1 | 0,90 **(fijado aquí)**, el de §0.15 | None | — | K1 | F-18 |
 
 **Documentos e informes**

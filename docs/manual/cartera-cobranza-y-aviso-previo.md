@@ -219,7 +219,7 @@ El dato negativo de un **episodio de mora** no va a las centrales sin un aviso p
 vencimiento de la primera cuota impaga y termina el primer día sin mora; **recaer es un episodio nuevo** y necesita un aviso nuevo.
 
 - **Abrir**: lo abre el ciclo al entrar a una etapa con la acción «aviso previo» (en las semillas, la administrativa), uno por crédito,
-  deudor y episodio. Sella los días mínimos (`AvisoPrevio.DiasMinimos`, 20 por defecto, nunca menos que el piso legal) y el umbral
+  deudor y episodio (y uno por codeudor si `AvisoPrevio.IncluirCodeudores` lo pide, ver abajo). Sella los días mínimos (`AvisoPrevio.DiasMinimos`, 20 por defecto, nunca menos que el piso legal) y el umbral
   (`AvisoPrevio.UmbralDosComunicaciones`, en veces el SMMLV; vacío = el límite legal): **con saldo igual o menor al umbral se exigen dos
   comunicaciones en días distintos**; por encima, una.
 - **Enviar**: el cierre del ciclo encola la primera comunicación y, la segunda, en otro día y cuando la primera ya salió (plantilla
@@ -234,6 +234,37 @@ vencimiento de la primera cuota impaga y termina el primer día sin mora; **reca
   la migración deja el aviso válido.
 - Si pasan los días mínimos desde que se abrió y sigue sin constancia, el ciclo levanta `Cartera.AvisoPrevioSinConstancia`: registre la
   carta o revise por qué no salió el mensaje (por ejemplo, el deudor no autorizó ningún canal).
+
+### Aviso a los codeudores (decisión del dueño del 2026-10-16)
+
+El parámetro **`AvisoPrevio.IncluirCodeudores`** (sí/no, con vigencia, `false` por defecto) decide si el aviso previo también se da a los
+codeudores:
+
+- **`false`** (el defecto): sólo el deudor recibe aviso. Los codeudores **no se reportan con dato negativo** a las centrales: en el archivo de
+  la central quedan excluidos con `NoPriorNoticeEvidence`, sin alerta (no hay gestión que hacer). Al día sí se reportan, con su propia
+  autorización.
+- **`true`**: cuando el ciclo abre el aviso del episodio para el deudor, abre también **uno por cada codeudor vigente** ese día, con su propio
+  número de comunicaciones exigidas, su propia constancia y su propio estado; la cobranza le encola su comunicación como al deudor, y la carta
+  se registra igual (la guía va al aviso del codeudor). La central reporta al codeudor con dato negativo **sólo si su aviso está completo**
+  desde su fecha más temprana; si no, queda excluido con `NoPriorNoticeEvidence` y la alerta `Cartera.AvisoPrevioSinConstancia`.
+- Se lee vigente el día en que el ciclo abre el aviso (en la cobranza) y vigente al corte (en el archivo de la central). Un episodio que ya
+  tenía el aviso del deudor cuando se activó el parámetro recibe los de sus codeudores la próxima vez que el crédito entre a una etapa con la
+  acción «aviso previo»; mientras tanto, se pueden registrar a mano sus cartas sobre un aviso abierto.
+
+### Qué del aviso previo es configurable
+
+| Qué | Dónde | Defecto |
+|---|---|---|
+| Días mínimos entre la constancia y el reporte | `AvisoPrevio.DiasMinimos` (nunca menos que el límite legal `AVISO_PREVIO_DIAS`) | 20 |
+| Saldo hasta el cual se exigen dos comunicaciones | `AvisoPrevio.UmbralDosComunicaciones`, en veces el SMMLV (vacío = el límite legal) | el límite legal |
+| Avisar también a los codeudores | `AvisoPrevio.IncluirCodeudores` | `false` |
+| En qué etapa se abre el aviso | la acción «aviso previo» de la etapa (`/cartera/etapas-de-cobranza`) | la semilla la pone en una etapa |
+| Texto de la comunicación | la plantilla `AVISOPREV` por canal | la de la semilla |
+| Canal | el que el titular autorizó y la ventana de la Ley 2300 permite (horario y contactos por día: `Cobranza.Horario*`, `Cobranza.ContactosPorDia`) | — |
+| Desde qué mora el dato es negativo (y por tanto exige aviso) en el archivo de la central | `Centrales.RangosDeMora`, por tipo de cartera (runbook del SICSES y las centrales) | toda mora |
+
+Lo que **no** es configurable: el aviso es por episodio de mora (recaer es otro aviso), en producción un envío `SIMULADO` no es constancia, y
+la constancia de una carta exige la guía adjunta.
 
 ## 10. Reclamos sobre el reporte
 
@@ -256,6 +287,8 @@ está en el código) y nace **en trámite**: desde ahí el reporte lleva la marc
 - **Tope del gasto de cobranza** (bloque D): ya es configurable por la cooperativa (`Cobranza.TopeGasto.Porcentaje` y `.ValorMaximo`, §6),
   sin valor sembrado. Falta que el dueño y la contadora fijen el valor de cada cooperativa; el catálogo de límites legales sigue sin un techo
   nacional y no se inventa.
+- **Aviso a los codeudores** (2026-10-16): `AvisoPrevio.IncluirCodeudores` arranca en `false`; el dueño confirma si su política es avisarles
+  (y reportarlos) o no.
 - **SMS y WhatsApp reales**: pendientes de proveedor. Hoy esos canales salen por `SIMULADO`, que en producción **no** es constancia del
   aviso previo; mientras tanto, el aviso previo con efecto legal en producción sale por correo o por carta con guía. Ver el runbook.
 - **Permisos de las plantillas de rol** (resuelto en el bloque D): el jefe trae aprobar acuerdos, el cobro jurídico, las campañas y los avisos
