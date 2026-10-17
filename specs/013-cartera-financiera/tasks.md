@@ -4667,6 +4667,28 @@ tiempo suficiente para E2 (quickstart §9; `ViviendaConUvrTests`).
     `DiferenciasConCorreccionMonetariaTests` (Domain). Runbook §3a, mensajes.md §7 (fila 48 y la parte de la corrida) y data-model §22.1 al
     día. Límite que queda: la diferencia de un pago aplicado en un día corregido (hechos de la operación) no tiene hecho propio en esta corrida;
     sin caso dorado de una corrección UVR de punta a punta (la e2e `ViviendaConUvrTests` no la recorre).
+  - **2026-10-17, decisión del dueño: el pago aplicado en un día cuya UVR se corrige después.** Hecho: (1) la corrida de una `UVR` compara
+    el **reparto de los pagos** aparte (`LibroTeorico.EsDePago`: `PaymentAllocation`, `Recovery`, `AdvanceReceived`, `AdvanceApplied`,
+    `CreditBalanceRecognized`, `PaymentReallocation`; `DiferenciasSeparandoLaCorreccionMonetaria(separarPagos: true)`,
+    `DiferenciaDeLibro.DePago`) y lo registra como `PaymentReallocation` de la corrida (`RegistroDeCartera.DiferenciaDeReparto`, fecha contable
+    del período abierto, día valor del pago) con un **hecho nuevo** `PagoRedistribuidoPorValorNacional` (`PRN`, masivo por partes, admite
+    proceso, comprobante `CA`, PorLotes `FinDeCausacion`, `DeliveredIn = K6b`; 37 hechos y 43 tipos de Cartera). Contabilidad lo asienta **sin
+    rol nuevo y sin el puente del recaudo** (`ConstructorDeLineasDeCartera.Redistribucion`): con el signo del libro, positivo al débito del rol de
+    saldo del concepto y al crédito de `Anticipo`/`SaldoAFavor`; el suspenso por `Ingreso` y su orden; un castigado por `IngresoPorRecuperacion`
+    y `CastigadaEnOrden`; cuadra solo (`LibroTeorico.DescuadreDelReparto` = 0, porque lo recibido no cambia). La plantilla de la matriz no suma
+    filas: los roles son de hecho `*` y ya están sugeridos. El pago y su comprobante no se tocan. (2) **Defecto encontrado y corregido en la
+    causa**: la corrida de una `UVR` llegaba sólo al día corregido (`AffectedTo` = fin de la vigencia, que en la serie diaria es el mismo día),
+    pero la UVR de un día cambia también la corrección monetaria del siguiente (la víspera se valora con ella) y, con un pago, el capital en UVR
+    y la causación que sigue: el día siguiente quedaba descuadrado contra la reconstrucción. Ahora `AffectedTo` = la marca de los créditos en UVR
+    (`EfectoDeReplicacionCorreccionDeValorNacional`). La usura no cambia. Pruebas: `RepartoDePagoConUvrCorregidaTests` (Domain, 6: UVR que sube
+    y que baja sobre el caso dorado 63, pago con anticipo, el libro vuelve a cuadrar hasta la marca), casos dorados 51 y 52 del constructor,
+    `CorreccionDeValorNacionalTests` (+2 y la expectativa de `AffectedTo` corregida). Contratos: mensajes.md fila 49 y §10.26, contabilidad.md
+    §2.1, §5, §30; data-model §22.1; runbook `valores-nacionales.md` §3a; manual de vivienda §5. Sin migración. **Preguntas al dueño**: (a) ¿la
+    corrida de una `USURA` debe separar el reparto igual? Hoy un pago en un día con la usura corregida deja su capital en el
+    `AjusteDeCausacionPorFechaValor`, sin rol (mismo defecto, no tocado porque cambia el `SaldoAFavorReconocido` de C93); (b) las
+    `reallocations` de `PagoAplicado`/`PagoReversado` (pagos posteriores redistribuidos por una fecha valor anterior) **no las desglosa**
+    Contabilidad (`ConstructorDeLineasDeCartera.Pago`/`PagoReversado` sólo leen `amounts`): ¿se asientan con el mismo molde de `PRN`? (c) un
+    pago que con la UVR nueva cambiaría de cancelar o no el crédito se redistribuye, pero el estado no cambia solo (runbook §3a: soporte).
 - **No hecho**: el PDF de la simulación (`SimulacionDeCreditoReport`) no pinta el plan en UVR; la pantalla sí.
 - T1057 sigue del dueño (SICSES).
 

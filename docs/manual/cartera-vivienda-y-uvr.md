@@ -71,6 +71,12 @@ Rige la **propuesta por defecto de la pregunta E12** mientras la contadora no re
 el otro lado es la cuenta del concepto cuyo valor cambió (capital, intereses, seguros…). Con `Contabilidad.FaltaDeRegla = Bloquear` y sin esa
 regla, el ciclo detiene su tanda y alerta. Si la UVR baja, el hecho viene con signo negativo y los lados se invierten.
 
+**Si se corrige la UVR de un día con pagos** (decisión del dueño del 2026-10-17): lo recibido es el mismo, pero a la UVR nueva el pago
+cubre otra mezcla de interés, capital y anticipo. La corrida de corrección registra esa redistribución sin tocar el pago y la lleva a
+Contabilidad en el hecho `PagoRedistribuidoPorValorNacional` (código `PRN`, comprobante `CA`), entre las cuentas de saldo del crédito
+(capital, intereses por cobrar, cargos, anticipo, saldo a favor) y, si el pago cubrió intereses en suspenso, su ingreso. No pide reglas nuevas:
+usa las mismas de capital, intereses y anticipo de la línea. Detalle operativo: runbook de valores nacionales §3a.
+
 **Pendiente de la contadora** (E12): confirmar el hecho propio y su cuenta, y si el certificado tributario incluye la corrección monetaria pagada
 junto a los intereses de vivienda (hoy **no** la incluye).
 

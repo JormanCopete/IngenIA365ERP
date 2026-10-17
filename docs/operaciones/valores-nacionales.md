@@ -91,15 +91,29 @@ con la UVR **proyectada** desde la última publicada, con aviso y sólo para mos
 **Corregir una UVR ya replicada**: «Corregir» con motivo, como cualquier valor. Desde la fase 24 (2026-10-17) la corrección se trata
 como la de la usura: al replicarla, cada cooperativa con Cartera activada que tenga **créditos en UVR** causados en o después del día
 corregido encola una corrida `NationalValueCorrection` (`EfectoDeReplicacionCorreccionDeValorNacional`; `ExecutionOrigin` =
-`Replica:{valor}`) con los días que toca —una UVR diaria toca sólo su día, hasta la última marca—. La corrida recorre **sólo los créditos en
-UVR** y registra cada diferencia: la de la corrección monetaria como `MonetaryCorrection` con su hecho `CorreccionMonetariaUvrCausada`
-(`runKind = NationalValueCorrection`), el resto como `AccrualAdjustment` con `AjusteDeCausacionPorFechaValor` (`cause =
-NationalValueCorrection`), fechadas en el período abierto. Sin créditos en UVR, o si el día corregido no está causado, no se encola nada
-(la liquidación y lo que se cause después ya usan el valor corregido). Qué revisar: en `/cartera/procesos` la corrida termina
-`Completed`; si la política `Contabilidad.FaltaDeRegla` está en «Bloquear» y falta la regla del hecho `CMU` o `AFV`, la tanda se detiene y
-alerta como cualquier proceso. Límite conocido: si un pago aplicado en un día corregido cambia su reparto en pesos, esa diferencia (de los hechos
-de la operación, no de la causación) no tiene un hecho propio en esta corrida y Contabilidad la rechazaría por concepto sin rol: verificar la
-UVR antes de que llegue su día y, si la corrección toca un día con pagos, escalarlo a soporte.
+`Replica:{valor}`) **desde el día corregido hasta la última marca** de los créditos en UVR: aunque la UVR diaria rige un solo día, cambia
+también la corrección monetaria del día siguiente (la víspera se valora con ella) y, si ese día hubo pagos, el capital en UVR y lo que sigue
+(decisión del dueño del 2026-10-17; antes la corrida tocaba sólo el día corregido y el siguiente quedaba descuadrado contra la reconstrucción).
+La corrida recorre **sólo los créditos en UVR** y registra cada diferencia, fechada en el período abierto:
+
+- la de la **corrección monetaria**, como `MonetaryCorrection` con su hecho `CorreccionMonetariaUvrCausada` (`runKind =
+  NationalValueCorrection`);
+- la del **reparto de un pago** aplicado en un día tocado (decisión del dueño del 2026-10-17): lo recibido en pesos es el mismo, pero a la UVR
+  nueva el pago cubre otra mezcla —con la UVR más alta, más interés (fijo en UVR) y menos capital; con la más baja, al revés; y lo mismo con el
+  anticipo o el saldo a favor que dejó—. Se registra como `PaymentReallocation` de la corrida, con el día valor del pago, y va a Contabilidad
+  en su hecho `PagoRedistribuidoPorValorNacional` (`PRN`, comprobante `CA`): entre los roles de saldo (y el ingreso del suspenso o de la
+  recuperación), sin el puente del recaudo, y cuadra solo. **El pago, sus filas y su comprobante no se tocan**; el certificado tributario sale
+  de la reconstrucción y ya trae los intereses del reparto nuevo;
+- el resto (la causación que cambia porque cambió el capital en UVR), como `AccrualAdjustment` con `AjusteDeCausacionPorFechaValor`
+  (`cause = NationalValueCorrection`).
+
+Sin créditos en UVR, o si el día corregido no está causado, no se encola nada (la liquidación y lo que se cause después ya usan el valor
+corregido). Qué revisar: en `/cartera/procesos` la corrida termina `Completed`; si la política `Contabilidad.FaltaDeRegla` está en
+«Bloquear» y falta la regla de `CMU`, `PRN` o `AFV` (para `PRN`: las de saldo de capital, intereses, cargos, anticipo y saldo a favor de la
+línea, y el ingreso del suspenso si hubo), la tanda se detiene y alerta como cualquier proceso; se crea la regla y se reanuda. Después, el
+libro del crédito cuadra con la reconstrucción (la verificación del libro, `VerifyLendingLedgerIntegrityQuery`, no la marca). Límite que queda: un pago que con la UVR
+nueva cambiaría de **cancelar o no** el crédito (o su excedente) se redistribuye igual, pero el estado del crédito no cambia solo: escalarlo a
+soporte.
 
 Los **cinco límites de vivienda** (`VIVIENDA_PLAZO_MINIMO_MESES`, `VIVIENDA_PLAZO_MAXIMO_MESES`, `VIVIENDA_FINANCIABLE`,
 `VIVIENDA_FINANCIABLE_VIS`, `VIVIENDA_CUOTA_INGRESO`) son `LIMITE` y **sí** vienen sembrados, «pendiente de validar» (60 y 360 meses;
