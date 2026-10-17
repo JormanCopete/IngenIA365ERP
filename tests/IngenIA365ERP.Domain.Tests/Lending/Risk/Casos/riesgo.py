@@ -385,7 +385,8 @@ def igual(a, b):
 
 def correr(verificar):
     fallas = 0
-    for nombre in sorted(f for f in os.listdir(AQUI) if f.endswith(".json")):
+    # Los casos pe* (K6a, perdida esperada) los repasa riesgo-pe.py.
+    for nombre in sorted(f for f in os.listdir(AQUI) if f.endswith(".json") and not f.startswith("pe")):
         caso = leer(os.path.join(AQUI, nombre))
         for e in escenarios(caso):
             norma = leer(os.path.join(NORMAS, e["norma"] + ".json"))

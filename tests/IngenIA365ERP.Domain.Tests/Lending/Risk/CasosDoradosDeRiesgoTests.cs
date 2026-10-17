@@ -22,7 +22,7 @@ public class CasosDoradosDeRiesgoTests
     public static IEnumerable<object[]> Casos() => CasoDoradoDeRiesgo.Archivos().Select(f => new object[] { Path.GetFileName(f) });
 
     [Fact]
-    public void Estan_los_casos_de_K1_y_K3()
+    public void Estan_los_casos_de_K1_K3_y_K6a()
     {
         CasoDoradoDeRiesgo.Archivos().Select(Path.GetFileNameWithoutExtension).Should().BeEquivalentTo(
         [
@@ -33,6 +33,10 @@ public class CasosDoradosDeRiesgoTests
             "r05-reestructurado", "r06-pago-unico", "r07-credito-nuevo", "r08-analisis-solo-peor", "r09-insolvencia",
             "r10-deterioro-individual-anexo1", "r11-deterioro-general", "r12-politica-mas-estricta", "r13-redondeo-del-deterioro",
             "r14-homologacion-contable", "r15-selector-sin-k6a", "r16-d19-sin-descuento-de-aportes",
+            // K6a (T1013): la pérdida esperada del Anexo 2, repasada con Casos/riesgo-pe.py.
+            "pe01-consumo-con-libranza", "pe02-consumo-sin-libranza", "pe03-comercial-persona-natural", "pe04-historial-parcial-mayor-observada",
+            "pe05-historial-parcial-del-corte", "pe06-historial-parcial-fija", "pe07-pi-voluntaria", "pe08-homologacion",
+            "pe09-segmento-fuera-del-modelo", "pe10-novacion-hereda-historial",
         ]);
     }
 
@@ -45,6 +49,126 @@ public class CasosDoradosDeRiesgoTests
             Comprobar(caso, escenario);
         foreach (var historial in caso.Historiales)
             ComprobarHistorial(caso, historial);
+        if (caso.PerdidaEsperada is { } pe)
+            ComprobarPerdidaEsperada(caso, pe);
+    }
+
+    /// <summary>
+    /// K6a (T1013): la pérdida esperada encadenada como en el cierre: historial (dado mes a mes, o construido y completado con su regla),
+    /// puntaje (<see cref="MotorDePerdidaEsperada.Puntuar"/>), calificación con la candidata del modelo y el Anexo 1 sembrado
+    /// (<see cref="MotorDeCalificacion"/>, con arrastre), alineación del deudor y cálculo (<see cref="MotorDePerdidaEsperada.Calcular"/>). La
+    /// suspensión sale de la categoría por mora del Anexo 1 (lectura del equipo, a validar), salvo que el caso la dé.
+    /// </summary>
+    private static void ComprobarPerdidaEsperada(CasoDoradoDeRiesgo caso, CasoDoradoDeRiesgo.PerdidaEsperadaJson pe)
+    {
+        var anexo2 = CasoDoradoDeRiesgo.LeerAnexo2(pe.Anexo2);
+        var anexo1 = CasoDoradoDeRiesgo.Anexo1Sembrado();
+        var contexto = new ContextoDelModelo(pe.Contexto.TipoDeOrganizacion, pe.Contexto.FondoDeEmpleados, pe.Contexto.Smmlv, pe.Contexto.Voluntaria);
+        var seleccion = caso.Selector is { } s
+            ? SelectorDeModeloDeDeterioro.Seleccionar(CasoDoradoDeRiesgo.LeerRegla(s.Regla), new PerfilParaModelo(s.Tipo, s.CategoriaDeFondo),
+                s.Eleccion is { } clase ? new EleccionDeModelo(clase, s.SegmentosDeLaEleccion) : null, s.Entrega)
+            : null;
+
+        var enModelo = pe.Creditos.Where(c => c.Segmento is not null).ToList();
+        var historiales = enModelo.ToDictionary(c => c.Id, c => Historial(c));
+        var puntajes = enModelo.ToDictionary(c => c.Id, c => MotorDePerdidaEsperada.Puntuar(anexo2,
+            new CreditoParaPuntaje(c.Id, c.Segmento!, c.DiasDeMora, historiales[c.Id].Completado.Meses)
+            {
+                AsociadoActivo = c.AsociadoActivo,
+                ValorDeLaCuota = c.Cuota,
+                PlazoEnMeses = c.PlazoEnMeses,
+                PagoUnico = c.PagoUnico,
+            }, contexto));
+        string Sarc(CasoDoradoDeRiesgo.CreditoPeJson c) => anexo2.SegmentoObligatorio(c.Segmento!).SegmentoSarc;
+        var calificaciones = MotorDeCalificacion.Calificar(anexo1, enModelo.Select(c => new CreditoParaCalificar(c.Id, c.Deudor, Sarc(c), c.DiasDeMora)
+        {
+            PagoUnico = c.PagoUnico,
+            CalificacionDelModelo = puntajes[c.Id].CandidataParaCalificar,
+            Analisis = c.Analisis is { } an ? new(an.Categoria, an.Subcategoria) : null,
+        }), OpcionesDeCalificacion.Cierre).ToDictionary(c => c.LoanId);
+        var alinear = enModelo.Select(c => new CreditoParaAlinear(c.Id, c.Deudor, Sarc(c), c.DiasDeMora, puntajes[c.Id].Incumplido)).ToList();
+        var porArrastre = MotorDePerdidaEsperada.IncumplidosPorArrastre(alinear);
+        var moraActual = MotorDePerdidaEsperada.MoraActualPorDeudor(alinear);
+
+        using var _ = new AssertionScope($"{caso.Nombre} · pérdida esperada");
+        foreach (var esp in pe.Esperado)
+        {
+            var c = pe.Creditos.Single(x => x.Id == esp.Id);
+            var quien = $"{caso.Nombre} crédito {esp.Id}";
+            if (esp.Modelo is { } modelo)
+            {
+                var deSeleccion = seleccion ?? throw new InvalidOperationException($"{quien}: espera modelo y el caso no configura el selector.");
+                deSeleccion.ParaCredito(c.Segmento).Modelo.Should().Be(modelo, $"{quien}: modelo");
+            }
+            if (c.Segmento is null) continue;
+
+            var h = historiales[c.Id];
+            var p = puntajes[c.Id];
+            var cal = calificaciones[c.Id];
+            var sarc = anexo1.SegmentoObligatorio(Sarc(c));
+            var suspendido = c.Suspendido ?? anexo1.CategoriaPorMora(sarc.Codigo, c.DiasDeMora) >= sarc.CategoriaDeSuspension;
+            var r = MotorDePerdidaEsperada.Calcular(anexo2, new CreditoParaPerdidaEsperada(p, cal.Categoria,
+                new SaldosParaDeterioro(c.Saldos.Capital, c.Saldos.InteresCorriente, c.Saldos.InteresDeMora, c.Saldos.Otros), suspendido, c.Garantia)
+            {
+                IncumplidoPorArrastre = porArrastre.Contains(c.Id),
+                MoraActualDelDeudor = moraActual[c.Id],
+            }, contexto, ContextoDeAportes.D19SinIndicadores, pe.Redondeo);
+            var texto = r.Explicacion.Texto + "\n" + cal.Explicacion.Texto + "\n" + h.Completado.Explicacion.Texto;
+
+            if (esp.Faltantes is { } f) h.Faltantes.Should().Be(f, $"{quien}: meses que faltan\n{texto}");
+            if (esp.CompletadosCon is { } con)
+                h.Completado.Completados.Should().NotBeEmpty().And.OnlyContain(m => m.MaxDiasDeMora == con, $"{quien}: meses completados");
+            if (esp.Incumplido is { } inc) r.Incumplido.Should().Be(inc, $"{quien}: incumplido\n{texto}");
+            if (esp.DiasEnIncumplimiento is { } dias) r.DiasEnIncumplimiento.Should().Be(dias, $"{quien}: días en incumplimiento");
+            if (esp.Z is { } z) p.Z.Should().Be(z, $"{quien}: Z\n{texto}");
+            if (esp.Puntaje is { } puntaje) p.Puntaje.Should().Be(puntaje, $"{quien}: puntaje");
+            if (esp.CalificacionDelModelo is { } delModelo) p.Calificacion.Should().Be(delModelo, $"{quien}: calificación del modelo");
+            if (esp.Variables is { } vs) p.Variables.Select(v => $"{v.Codigo}={v.Valor}").Should().Equal(vs, $"{quien}: variables\n{texto}");
+            if (esp.ClaveDePi is { } clave) r.ClaveDePi.Should().Be(clave, $"{quien}: clave de la PI");
+            if (esp.CalificacionFinal is { } final) cal.Categoria.Should().Be(final, $"{quien}: calificación final\n{texto}");
+            if (esp.Causa is { } causa) cal.Causa.Should().Be(causa, $"{quien}: causa");
+            if (esp.Pi is { } pi) r.ProbabilidadDeIncumplimiento.Should().Be(pi, $"{quien}: PI\n{texto}");
+            if (esp.Pdi is { } pdi) r.PerdidaDadoElIncumplimiento.Should().Be(pdi, $"{quien}: PDI\n{texto}");
+            if (esp.Exposicion is { } vea) r.Exposicion.Should().Be(vea, $"{quien}: exposición");
+            if (esp.Suspendido is { } sus) suspendido.Should().Be(sus, $"{quien}: suspensión");
+            if (esp.DeterioroCapital is { } dc) r.DeterioroCapital.Should().Be(dc, $"{quien}: deterioro de capital\n{texto}");
+            if (esp.DeterioroIntereses is { } di) r.DeterioroIntereses.Should().Be(di, $"{quien}: deterioro de intereses");
+            if (esp.DeterioroOtros is { } dO) r.DeterioroOtros.Should().Be(dO, $"{quien}: deterioro de otros");
+            if (esp.Total is { } t) r.Total.Should().Be(t, $"{quien}: total");
+            if (esp.Contable is { } contable) r.CalificacionContable.Should().Be(contable, $"{quien}: contable\n{texto}");
+            if (esp.Homologada is { } homologada) r.Homologada.Should().Be(homologada, $"{quien}: homologada");
+            foreach (var linea in esp.ExplicacionContiene ?? []) texto.Should().Contain(linea, $"{quien}: explicación");
+        }
+    }
+
+    /// <summary>El historial completo del crédito: dado mes a mes o construido con sus filas y transacciones y completado con su regla.</summary>
+    private static (HistorialDeMoraCompletado Completado, int Faltantes) Historial(CasoDoradoDeRiesgo.CreditoPeJson c)
+    {
+        if (c.MoraMensual is { } m)
+        {
+            var hasta = Mes(m.Hasta);
+            var meses = Enumerable.Range(0, m.Meses).Select(i => hasta.AddMonths(i - m.Meses + 1))
+                .Select(d => new MoraMensualCompleta(d.Year, d.Month, m.Dias.GetValueOrDefault(d.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)), false))
+                .ToList();
+            return (new HistorialDeMoraCompletado(meses, null, new IngenIA365ERP.Domain.Lending.ExplicacionDeCartera()), 0);
+        }
+        var h = c.Historial ?? throw new InvalidOperationException($"El crédito {c.Id} no trae historial.");
+        var entradas = h.Filas.SelectMany((f, i) => Meses(f.Desde, f.Hasta)
+            .Select(d => new EntradaDeHistorialDeMora(f.Credito, d.Year, d.Month, f.Dias, f.Origen, i + 1))).ToList();
+        var construido = HistorialDeMora.Construir(new CreditoParaHistorial(c.Id, h.InicioDeLaCadena) { Antecesores = h.Antecesores }, entradas,
+            h.CorteDeMigracion, h.FechaDeReferencia, h.MesesExigidos);
+        var transacciones = h.Transacciones.SelectMany(t => Meses(t.Desde, t.Hasta).Select(d => (d, t.Dias)))
+            .ToDictionary(x => (x.d.Year, x.d.Month), x => x.Dias);
+        return (HistorialDeMora.Completar(construido, transacciones, h.Regla, h.DiasDelCorte, h.DiasFijos), construido.Faltantes.Count);
+    }
+
+    private static DateOnly Mes(string aaaaMm) =>
+        DateOnly.ParseExact(aaaaMm + "-01", "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static IEnumerable<DateOnly> Meses(string desde, string? hasta)
+    {
+        var fin = Mes(hasta ?? desde);
+        for (var d = Mes(desde); d <= fin; d = d.AddMonths(1)) yield return d;
     }
 
     /// <summary>K3 (T0859): el historial de mora con la cadena de la novación, mes a mes como texto y los que faltan.</summary>

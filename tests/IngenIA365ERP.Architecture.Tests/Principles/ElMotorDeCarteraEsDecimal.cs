@@ -99,6 +99,11 @@ public class ElMotorDeCarteraEsDecimal
         Path.Combine("Risk", "DeterioroPorConcepto.cs"),
         Path.Combine("Normativa", "Anexo1.cs"),
         Path.Combine("Normativa", "PoliticaSarc.cs"),
+        // K6a (T1012, T1022): la función logística del puntaje, su exponencial y el motor de pérdida esperada, sin coma flotante (research R55).
+        Path.Combine("Risk", "FuncionLogistica.cs"),
+        Path.Combine("Risk", "MotorDePerdidaEsperada.cs"),
+        Path.Combine("Rates", "AritmeticaDecimal.cs"),
+        Path.Combine("Normativa", "Anexo2.cs"),
     ];
 
     [Fact]

@@ -133,7 +133,10 @@ public class LaCarteraNoTieneValoresLegalesFijos
                      "SelectorDeModeloDeDeterioro.cs", "HistorialDeMora.cs", "MovimientosDelDeterioro.cs", "DeterioroPorConcepto.cs", "Normativa/Anexo1.cs",
                      "Normativa/PoliticaSarc.cs", "Normativa/ReglaDePerdidaEsperada.cs",
                      // K3 (T0873, T0904): el clasificador de novedades, los requisitos del castigo y la insolvencia al corte.
-                     "ClasificadorDeNovedad.cs", "RequisitosDeCastigo.cs", "CalificacionDeInsolvencia.cs" })
+                     "ClasificadorDeNovedad.cs", "RequisitosDeCastigo.cs", "CalificacionDeInsolvencia.cs",
+                     // K6a (T1022): la pérdida esperada del Anexo 2. Ningún coeficiente, corte, PI ni PDI vive en el código: llegan en el documento
+                     // SarcAnexo2 (el JSON semilla queda fuera de la regla por ser .json, no por una exención).
+                     "FuncionLogistica.cs", "MotorDePerdidaEsperada.cs", "HomologacionDeCalificacion.cs", "Normativa/Anexo2.cs" })
         {
             Assert.Contains(decimales, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));
             Assert.Contains(delMotor, a => a.EndsWith("Lending/Risk/" + pieza, StringComparison.Ordinal));
