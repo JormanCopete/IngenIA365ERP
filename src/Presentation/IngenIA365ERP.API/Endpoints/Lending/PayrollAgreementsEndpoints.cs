@@ -58,6 +58,35 @@ public class PayrollAgreementsEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(Administrar);
 
+        // Feature 014 (T093; api.md §18.3): los grupos de archivo y las equivalencias de concepto; fijarlos registra una versión nueva del convenio.
+        convenios.MapGet("/{id:guid}/file-groups", async (Guid id, DateOnly? date, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListPayrollAgreementFileGroupsQuery(id, date), ct))
+            .WithName("Lending_PayrollAgreements_FileGroups")
+            .RequirePermission(Ver);
+
+        convenios.MapPost("/{id:guid}/file-groups", async (Guid id, GruposRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SetPayrollAgreementFileGroupsCommand(id, body.ValidFrom, body.Groups ?? [], body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_PayrollAgreements_SetFileGroups")
+            .ConClaveDeOperacion()
+            .RequirePermission(Administrar);
+
+        convenios.MapGet("/{id:guid}/concept-equivalences", async (Guid id, DateOnly? date, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListPayrollAgreementConceptEquivalencesQuery(id, date), ct))
+            .WithName("Lending_PayrollAgreements_ConceptEquivalences")
+            .RequirePermission(Ver);
+
+        convenios.MapPost("/{id:guid}/concept-equivalences", async (Guid id, EquivalenciasRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SetPayrollAgreementConceptEquivalencesCommand(id, body.ValidFrom, body.Equivalences ?? [], body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_PayrollAgreements_SetConceptEquivalences")
+            .ConClaveDeOperacion()
+            .RequirePermission(Administrar);
+
         convenios.MapGet("/{id:guid}/pending-transfers", async (Guid id, DateOnly? asOf, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListPendingPayrollTransfersQuery(id, asOf), ct))
             .WithName("Lending_PayrollAgreements_PendingTransfers")
@@ -78,6 +107,12 @@ public class PayrollAgreementsEndpoints : ICarterModule
 
     /// <summary>El alta (§13.1): código, nombre, la pagaduría (persona jurídica del maestro), si es la nómina propia y la primera versión.</summary>
     public sealed record ConvenioRequest(string? Code, string? Name, Guid PayerPersonPublicId, bool IsOwnPayroll, PayrollAgreementVersionInput? FirstVersion);
+
+    /// <summary>Los grupos de archivo desde una fecha (§18.3 de la 014).</summary>
+    public sealed record GruposRequest(DateOnly ValidFrom, IReadOnlyList<PayrollFileGroupInput>? Groups, string? Reason);
+
+    /// <summary>Las equivalencias de concepto desde una fecha (§18.3 de la 014).</summary>
+    public sealed record EquivalenciasRequest(DateOnly ValidFrom, IReadOnlyList<PayrollConceptEquivalenceInput>? Equivalences, string? Reason);
 
     /// <summary>Los contactos vigentes del convenio: reemplazan a los anteriores.</summary>
     public sealed record ContactosRequest(IReadOnlyList<PayrollAgreementContactInput>? Contacts);
