@@ -952,3 +952,49 @@ Construida la historia 2. **Manda el código**; estas notas reemplazan lo dicho 
   Otros códigos nuevos: `Lending.Savings.LineNotOpen`, `.LineWithoutVersion`, `.OfficeNotAllowedByLine`, `.HolderDeceased`, `.PermanentAlreadyOpen`.
 - **E53 · `CaptacionesAportes` regenerada (T072).** Con `LND_GmfExemptAccounts`, ahora `20261018184016` PostgreSQL / `20261018183933` SQL Server (paridad OK, el SQL
   de datos de T044 conservado, el scaffold sin cambios ajenos).
+
+## 10. Enmienda de aportes: cuota, recaudo, consulta y pagadurías (2026-10-18, T081–T095, US3)
+
+Construida la historia 3. **Manda el código**; estas notas reemplazan lo dicho en `data-model.md`, `contracts/` y `tasks.md` donde choquen.
+
+- **E54 · Ingreso para la cuota.** La cuota «porcentaje del ingreso» toma el ingreso registrado del asociado, `COR_Associates.ExternalSalary`; sin él la cuota
+  no se genera y el ciclo lo informa (`Lending.Contributions.IncomeMissing`). El SMMLV sale de los valores nacionales; sin él, `NationalValues.Missing`.
+- **E55 · Ahorro permanente sin cuenta.** La cuota de aportes guarda las dos partes (`ContributionShare`, `PermanentSavingsShare`); la del permanente es otra
+  cuota de la cuenta permanente, enlazada. Si el asociado no tiene cuenta permanente viva, sólo se exige la parte de aportes (queda en el log del ciclo).
+- **E56 · Contrato de cuentas real en K7.** `ContratoDeCuentasDeCartera` reemplaza al sin activar: consulta, exigibles, simulación y consignación en aportes y en
+  las cuotas de ahorro permanente y contractual. Los depósitos libres, retiros y traslados en cuentas de ahorro responden `Lending.Savings.DeliveryNotAvailable`
+  (K8) y aportes no se retira por el contrato (`Lending.Contributions.NotWithdrawable`). `Free` en aportes es extraordinario; un sobrepago sin extraordinarios
+  admitidos se rechaza (`Lending.Contributions.OverpaymentNotAllowed`) —no se usa saldo a favor—. La validación previa contable es la de A8 de la 013. La
+  atribución por montos de efectivo (§1.6) llega con US4. El límite de participación sólo se aplica con capital social mayor que cero (el primer aporte de una
+  cooperativa nueva no puede exceder un capital que no existe).
+- **E57 · Saldo sin posiciones.** La consulta de aportes v2, el resumen, los informes, la constancia y el paz y salvo suman el libro con fecha valor ≤ corte;
+  las posiciones diarias las escribe el paso de captaciones desde K8. Mismo saldo para todos (SC-010).
+- **E58 · Devoluciones y cesiones.** Tabla nueva `LND_ContributionRequests` (Kind, Status, causa, punto del acta, decisión). La devolución sin retiro sólo se paga
+  por orden de giro en K7 (`TransferToAccount` → K8); la aprueba otra persona (expediente `ContributionRequest`); el exceso de participación que no existe
+  responde `Lending.Contributions.NoParticipationExcess`. Se suma `POST …/{id}/reject` (api.md no lo traía) para negar con motivo.
+- **E59 · Nómina recauda aportes y ahorros (E-02).** Conceptos sembrados `DESC_APORTES` y `DESC_AHORROS` (deducciones de valor fijo, elemento DIAN
+  «Deducciones/Cooperativa»); origen de novedad `AccountDeduction = 7` con `AccountPublicId`/`AccountNumber`; tabla `PAY_PayrollAccountDeductions` gemela de la de
+  créditos. Prelación **fija** aportes → créditos → ahorros (`PayrollCalculationEngine.PrelacionDeCartera`) mientras no exista la política
+  `PrelacionDescuentosDeCartera`. Aprobar consigna `Installments` con clave `NOM:{corrida}:{cuenta}`, fecha valor el fin del período (la fecha de Nómina no tiene
+  el tope de «futura» ni de «días hacia atrás»: sólo el corte de la activación) y lo no descontado cuota por cuota en orden de vencimiento. Rechazo: la línea baja y
+  el neto sube (`Payroll.AccountDeductionNotApplied`); «no contabilizable»: falla la aprobación (`Payroll.AccountDeductionNotPostable`); reversar la nómina
+  reversa cada consignación, todo o nada (`Payroll.AccountReversalRejected`). La liquidación definitiva **no** recauda cuentas en K7 (excluye estas novedades).
+  La migración adopta `ProveedorDeCuentas` v1 para el participante `NOM` (SQL a mano en `CaptacionesAportes`).
+- **E60 · Constancia y paz y salvo.** Tabla de enlace `LND_IssuedDocumentAccounts` sin `TermsVersionId` (llega con K9). La firmeza del paz y salvo se mide por la
+  fecha valor de la última operación, no por su registro. Reversar una operación de cuenta anula los documentos que la citaban.
+- **E61 · Pagadurías configurables (T090 completo, T091 parcial).** Grupos y equivalencias cuelgan de la versión del convenio; fijarlos registra una versión
+  nueva que copia la vigente. Reglas puras en `Domain/Lending/Payroll/EquivalenciasDePagaduria` (JSON canónico, `Lending.PayrollAgreement.ConceptMappedTwice`,
+  `.EquivalenceWithoutItems`, `.EquivalencePriorityRepeated`, `.EquivalenceWithoutSplit`, `.LineWithoutGroup`, `.FileGroupDuplicate`, `.EquivalenceDuplicate`) y el
+  reparto `Priority`/`Proportional` (al centavo, residuo a la de mayor pendiente, el exceso sobra). **Pendiente**: la generación por grupo, `DescuentosPorPagaduria`
+  v2, la lectura de la respuesta con equivalencias y su aplicación por los dos contratos. Falta un dato de diseño: una cuenta de aportes no tiene vínculo con un
+  convenio (el `LoanPayrollLink` es del crédito), así que no se sabe qué cuotas de cuentas van en el archivo de una pagaduría. Mientras tanto, generar con un
+  convenio que usa grupos responde `Lending.PayrollFile.FileGroupsPending`. `identityEquivalences` y `causeEquivalences` de api.md §18.3 no se construyeron.
+- **E62 · Riesgo.** La excepción de arrastre (capital ≤ aportes) y el descuento de aportes en el deterioro individual se leen de parámetros cuando aportes está
+  activado; sin ellos rige D19. La pérdida esperada (Anexo 2) **no** descuenta aportes (pregunta para la contadora).
+- **E63 · Rutas y pantallas.** `/api/lending/contributions` (resumen, cuotas, devoluciones y cesiones con aprobar y negar), §18.3 en `/payroll-agreements` y
+  `/api/payroll/runs/{runId}/account-deductions`. Pantallas `/cartera/aportes` (resumen y solicitudes por aprobar) y `/cartera/aportes/{persona}` (ficha); la
+  pestaña «Grupos y equivalencias» en `/cartera/pagadurias/{id}`. `asCollateralOf` del resumen llega con la garantía de aportes (K8).
+- **E64 · `CaptacionesAportes` regenerada (US3).** Con `LND_AccountInstallments`, `LND_AccountInstallmentNonDeductions`, `LND_ContributionRequests`,
+  `LND_IssuedDocumentAccounts`, `LND_PayrollAgreementFileGroups`, `LND_PayrollAgreementConceptEquivalences`, `PAY_PayrollAccountDeductions` y las columnas
+  `AccountPublicId`/`AccountNumber` de `PAY_Novelties`; ahora `20261018204949` PostgreSQL / `20261018204907` SQL Server (paridad OK, el scaffold sin cambios
+  ajenos). Conserva el SQL de datos de T044 y suma, a mano, la adopción de `ProveedorDeCuentas` v1 por el participante `NOM` (y su retiro en `Down`).
