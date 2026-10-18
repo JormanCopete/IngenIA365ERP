@@ -1,0 +1,35 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+
+@* Feature 014, US10 (T106): las líneas de una liquidación del retiro (+ a favor del asociado, − lo que se descuenta; la devolución, informativa). *@
+<div class="tabla-desplazable">
+    <table class="data-grid">
+        <thead>
+            <tr><th>#</th><th>Bloque</th><th>Cuenta</th><th>Crédito</th><th>Concepto</th><th class="numero">Valor</th><th>Operación</th><th>Nota</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var l in Lineas)
+            {
+                <tr>
+                    <td>@l.LineNumber</td>
+                    <td>@TextosDeRetiros.ClaseDeLinea(l.Kind)</td>
+                    <td>@(l.AccountNumber ?? "—")</td>
+                    <td>@(l.LoanNumber ?? "—")</td>
+                    <td>@(l.Concept ?? "—")</td>
+                    <td class="numero">@Pesos(l.Amount)</td>
+                    <td>@(l.AccountOperationNumber ?? "")@(l.LoanOperationNumber is { } p ? $" · pago {p}" : "")</td>
+                    <td>@l.Notes</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (Lineas.Count == 0) { <p class="texto-tenue">Sin líneas.</p> }
+
+@code {
+    private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
+
+    [Parameter, EditorRequired] public IReadOnlyList<LineaDeRetiroDto> Lineas { get; set; } = [];
+
+    private static string Pesos(decimal valor) => "$ " + valor.ToString("N0", Es);
+}

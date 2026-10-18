@@ -19,6 +19,7 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
     public const string RutaDeCuentas = Base + "/accounts";
     public const string RutaDeExenciones = Base + "/gmf-exemptions";
     public const string RutaDeAportes = Base + "/contributions";
+    public const string RutaDeRetiros = Base + "/membership-withdrawals";
 
     /// <summary>El dueño de los soportes de la titularidad de una cuenta (representación, beneficiarios, firma, origen de fondos): el titular.</summary>
     public const string DuenoDeSoportesDeTitularidad = "LendingAccountPartySupport";
@@ -176,6 +177,51 @@ public sealed class CaptacionesClient(HttpClient http, CentralAuthClient auth)
         CancellationToken ct = default) =>
         Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/{Ruta(solicitud.Kind)}/{solicitud.PublicId}/reject", new MotivoDeCarteraRequest(motivo),
             clave, ct);
+
+    // --------------------------------------------------------------------------- retiro del asociado (US10, T106) --
+
+    /// <summary>Los retiros del alcance por estado, causa y persona, el más reciente primero.</summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<RetiroDeAsociadoDto>>> RetirosAsync(int? estado = null, int? causa = null, Guid? persona = null,
+        int pagina = 1, int tamano = 50, CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<RetiroDeAsociadoDto>>(HttpMethod.Get, ConQuery(RutaDeRetiros, Query(("status", Texto(estado)), ("cause", Texto(causa)),
+            ("personPublicId", Texto(persona)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), null, null, ct);
+
+    /// <summary>El trámite con las líneas de su liquidación vigente y sus órdenes de devolución.</summary>
+    public Task<ResultadoDeInventario<RetiroDeAsociadoDto>> RetiroAsync(Guid retiro, CancellationToken ct = default) =>
+        Enviar<RetiroDeAsociadoDto>(HttpMethod.Get, $"{RutaDeRetiros}/{retiro}", null, null, ct);
+
+    /// <summary>Radica el retiro de un asociado vigente (una solicitud viva por persona).</summary>
+    public Task<ResultadoDeInventario<RetiroDeAsociadoDto>> RadicarRetiroAsync(RadicarRetiroRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<RetiroDeAsociadoDto>(HttpMethod.Post, RutaDeRetiros, request, clave, ct);
+
+    /// <summary>Desiste del retiro (sólo antes de aprobarse).</summary>
+    public Task<ResultadoDeInventario<RetiroDeAsociadoDto>> DesistirRetiroAsync(Guid retiro, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<RetiroDeAsociadoDto>(HttpMethod.Post, $"{RutaDeRetiros}/{retiro}/desist", new MotivoDeCarteraRequest(motivo), clave, ct);
+
+    /// <summary>Registra la aprobación del órgano con el punto del acta cerrada (quien radicó no decide).</summary>
+    public Task<ResultadoDeInventario<RetiroDeAsociadoDto>> AprobarRetiroAsync(Guid retiro, DecisionDeRetiroRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<RetiroDeAsociadoDto>(HttpMethod.Post, $"{RutaDeRetiros}/{retiro}/approve", request, clave, ct);
+
+    /// <summary>Registra la negación del órgano con el punto del acta cerrada.</summary>
+    public Task<ResultadoDeInventario<RetiroDeAsociadoDto>> NegarRetiroAsync(Guid retiro, DecisionDeRetiroRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<RetiroDeAsociadoDto>(HttpMethod.Post, $"{RutaDeRetiros}/{retiro}/reject", request, clave, ct);
+
+    /// <summary>La vista previa de la liquidación (sin escribir ni clave), con su huella.</summary>
+    public Task<ResultadoDeInventario<VistaPreviaDeRetiroDto>> VistaPreviaDeRetiroAsync(Guid retiro, VistaPreviaDeRetiroRequest request,
+        CancellationToken ct = default) =>
+        Enviar<VistaPreviaDeRetiroDto>(HttpMethod.Post, $"{RutaDeRetiros}/{retiro}/settlement/preview", request, null, ct);
+
+    /// <summary>Liquida con la huella de la vista previa: pérdidas, cruce y devolución en una sola operación.</summary>
+    public Task<ResultadoDeInventario<RetiroDeAsociadoDto>> LiquidarRetiroAsync(Guid retiro, LiquidarRetiroRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<RetiroDeAsociadoDto>(HttpMethod.Post, $"{RutaDeRetiros}/{retiro}/settle", request, clave, ct);
+
+    /// <summary>Ordena la devolución pendiente (retenida por el mínimo de la entidad o reintegrada); quien liquidó no la aprueba.</summary>
+    public Task<ResultadoDeInventario<RetiroDeAsociadoDto>> AprobarDevolucionDeRetiroAsync(Guid retiro, AprobarDevolucionDeRetiroRequest request,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<RetiroDeAsociadoDto>(HttpMethod.Post, $"{RutaDeRetiros}/{retiro}/refund/approve", request, clave, ct);
 
     private static string Ruta(int clase) => clase == TextosDeAportes.Devolucion ? "refunds" : "assignments";
 
