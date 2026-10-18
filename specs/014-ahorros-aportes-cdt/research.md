@@ -630,3 +630,59 @@ choquen:
   (FR-081) y `Riesgo.DescuentoAportesDeterioro` (FR-094, junto al existente de arrastre). La confirmación de la
   contadora sobre cuentas abandonadas (FR-084) es el parámetro `CuentasAbandonadas.TrasladoHabilitado` (falso).
 - **C27 · Tipos de documento**: son **9** (`IssuedDocumentKind` 7 a 15, incluida la respuesta al juzgado).
+
+## 5. Enmienda tras verificar contra el código (2026-10-18, T001)
+
+Verificado contra la rama `014-ahorros-aportes-cdt` en `b2481d0f` (la 013 completa por merge: K1 a K6b). **Manda el código**; estas
+notas reemplazan lo dicho arriba, en `data-model.md`, `contracts/` y `tasks.md` donde choquen.
+
+- **E01 · La 013 está construida.** Sus tareas abiertas son del dueño o de ambiente (T0183, T0198, T0855, T0856, T0895, T0931,
+  T0952, T0960–T0962 —los dos documentos de T0960 y T0961 existen—, T1011, T1041, T1057, T1071, T1078–T1089): no impiden empezar.
+  **K2 existe** (`PayrollAgreement`, `BankFileScope.PayrollDeductionRequest` 5 y `PayrollDeductionResult` 6): C22 se cumple y E-05
+  queda en la 014.
+- **E02 · Nombres que siguen iguales**: `CreditLine`, `CreditLineVersion`, `LendingSetup`, `LoanTransaction`, `RegistroDeCartera`
+  (`Application/Lending/Ledger`), `CicloDiarioDeCartera` (`Application/Lending/Accrual`), `CierreMensualDeCartera`
+  (`Application/Lending/Risk`), `LendingPostingRule.ClaveDe` (14 partes por posición: hecho, rol y las 12 dimensiones de
+  `DimensionDeCartera` 1–12; `Operation` es la 13 del enum), `RolesDeCuentaDeCartera` (26 roles en español y 8 familias),
+  `LendingDecisionSubjects` (clase de constantes de texto, C06), `ReconstruccionDeCredito` (`Domain/Lending/Replay`),
+  `MotorDeCartera`, `CerrojoDeCartera` y `SqlDelCerrojoDeCartera` (`Persistence/Lending`), `ICerrojoDeCartera` y
+  `NumeradorDeCartera` (`Application/Lending/Common`), `ConsumoDeCartera`, `ResolutorDeReglasDeCartera`, `OperacionesDeCartera`,
+  `VistaDeInformeDeCartera`, `ValidadoresDelContrato`, `ContratosDeIntegracion`, `ParametrosDeCartera`, `CodigosDeValorNacional`,
+  `LendingPermissionCatalogSeeder`, `PrecisionDeCartera`, `VigenciaBitemporal`. `IConsultaDeAportes` y
+  `ConsultaDeAportesNoDisponible` siguen en `Application/Common/Integration/Savings` (T041 los muda).
+- **E03 · `LendingNumberKind` 10 a 15 ya están ocupados** por la 013 (`LoanNovelty` 10, `Waiver` 11, `WriteOffBatch` 12,
+  `PortfolioEvaluation` 13, `PaymentAgreement` 14, `LegalProcess` 15). Las clases de número de captaciones van **al final**:
+  `MemberAccount` **16**, `MemberAccountOperation` **17**, `MembershipWithdrawal` **18**, `AssemblyDistribution` **19**,
+  `DeceasedHolderCase` **20** (reemplaza data-model §1.3 y §10).
+- **E04 · `ClaseDeRecaudador` vive en Application**, en `Common/Integration/Lending/EnumsDelContratoDeCartera.cs` (no en
+  `Domain/Enums`): `Receipts` 1, `Payroll` 2, `Contributions` 3, `OwnLoanPayoff` 4, `Test` 5; `Treasury` **6** se agrega allí (T014).
+- **E05 · `AccountingFactPartSource`** tiene 1 a 5 (`CloseReopening` 5): `AccountCatchUp` es **6**.
+- **E06 · `EntregaDeCartera`** llega hasta `K6b` = 7 y `CatalogoDeCartera.EntregaVigente = K6b`. Las entregas de esta feature se
+  agregan al final: `K7` 8, `K8` 9, `K9` 10, `K10` 11, `K11` 12. Los parámetros y valores nacionales de la 014 se declaran con su
+  entrega y, como en la 013 (`CadaParametroRespetaLaEntregaDeSuModulo`), **no se ofrecen ni se aceptan** hasta que la entrega que los
+  habilita suba `EntregaVigente` (eso lo hace cada entrega, no T014–T017).
+- **E07 · Las plantillas de rol no viven en el sembrador**: viven en `Application/Security/Roles/Plantillas/PerfilesSugeridos.cs`
+  (módulo `Lending`). `CreateSuggestedLendingRolesCommand` (sin claves) crea todas las del módulo y el requisito de activación
+  `LendingRolesCreated` las exige todas: con las cuatro de captaciones son **17** y el asistente de activación las crea juntas. Las e2e
+  de la 013 que decían «trece» se ajustan a 17 (T018).
+- **E08 · Casos dorados de crédito**: ya no son 32. `Domain.Tests/Lending/Casos` tiene 45 JSON (más los de libranza, novedades,
+  riesgo, puntaje, cobranza, sesiones y atribuciones en sus carpetas). SC-019 se lee como: **toda** la suite
+  `dotnet test tests/IngenIA365ERP.Domain.Tests --filter Lending` sigue verde sin tocar ningún JSON (T013).
+- **E09 · `ContextoDeAportes`** es el record de dominio `Domain/Lending/Risk/ContextoDeAportes.cs`
+  (`RigeD19`, `IndicadoresDisponibles`); la bandera que lo fuerza es la constante `ContextoDeRiesgo.RigeD19 = true` de
+  `Application/Lending/Risk/ContextoDeRiesgo.cs`. T084 toca los dos. `Riesgo.ExcepcionAportesArrastre` ya existe (K1).
+- **E10 · El «sembrado» de parámetros es el catálogo**: `ParametrosDeCartera.Definiciones` declara cada clave con tipo, defecto seguro
+  (texto), ámbitos, entrega y `PendienteDeValidar`; los pisos y techos legales se acotan con `LimitesLegales` (valor nacional `LIMITE`)
+  y la fila con vigencia la escribe la cooperativa por `COR_ParameterVersions`. No hay valores legales en el código: los defectos son
+  texto. Las claves definitivas de §9.1 (convención `Grupo.Nombre`, C02) quedan en la tabla de E15.
+- **E11 · Migraciones**: la última de la 013 es `CarteraVivienda` (`20261017062235` PostgreSQL / `20261017062205` SQL Server). El
+  retiro de la 014 es `RetiroDeCaptacionesHeredadas` (`20261018143710` / `20261018143627`), en commit propio; `CaptacionesAportes`
+  va después. Las de la 013 están congeladas (T0802).
+- **E12 · Permisos**: el sembrador de la 013 tiene **123** códigos (api.md §2 lo da bien); con los 39 de la 014, 162.
+- **E13 · Auditoría**: la regla `.Savings` → `Savings` de `ModuloDeAuditoria` se retiró con lo conservado (T007); todo lo de
+  captaciones es `Lending` (encadenado, diez años).
+- **E14 · Efectos fuera de Cartera del retiro** (T007), declarados en `docs/operaciones/captaciones-retiro-heredado.md`: la tarjeta
+  débito (`/api/debit/cards`) leía `LND_SavingsAccounts`; hasta que su propia feature la vincule a una cuenta de captación (spec, «Fuera de
+  esta feature») responde `DebitCard.SavingsAccountUnavailable`. `GetPersonDetailQuery` cuenta 0 ahorros hasta T043.
+  `AccountReferenceFinder` perdió sus ramas de parámetros de ahorro y CDT. Salieron además `Pages/CDT` (2 pantallas) con su grupo de
+  menú «CDT» y `API/Reports/PersonPortfolioReport.cs` (los informes PDF pasan de 12 a 11).

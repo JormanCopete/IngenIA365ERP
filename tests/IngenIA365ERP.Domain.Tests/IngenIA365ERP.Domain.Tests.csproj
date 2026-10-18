@@ -63,6 +63,8 @@
     <None Include="Lending\Risk\Normas\*.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Feature 013, K2 (T0803): casos dorados de las novedades de libranza, calculados con la hoja Lending\Payroll\Casos\novedades.py. -->
     <None Include="Lending\Payroll\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Feature 014 (T004): casos dorados de captaciones, calculados con la hoja Lending\Deposits\Casos\calcular.py (R12). -->
+    <None Include="Lending\Deposits\Casos\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Core\IngenIA365ERP.Domain\IngenIA365ERP.Domain.csproj" />
