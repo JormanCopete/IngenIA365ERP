@@ -95,6 +95,28 @@ public class TestDoublesEndpoints : ICarterModule
             .WithName("Lending_TestDoubles_CollectorReversals")
             .RequirePermission(Operar);
 
+        // Feature 014, US3 (T093; api.md §18.4): el recaudador de prueba sobre el contrato de cuentas —cuotas exigibles, consignar y reversar—.
+        dobles.MapGet("/collector/accounts/installments", async (Guid personPublicId, DateOnly? date, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListTestCollectorAccountInstallmentsQuery(personPublicId, date), ct))
+            .WithName("Lending_TestDoubles_CollectorAccountInstallments")
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/accounts/deposits", async (ConsignacionesRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ApplyTestCollectorAccountDepositsCommand(body.Deposits ?? [], body.NotDeducted) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_TestDoubles_CollectorAccountDeposits")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
+        dobles.MapPost("/collector/accounts/operations/{key}/reverse", async (string key, ReversoRequest body, HttpContext http, ISender sender,
+                    CancellationToken ct) =>
+                await sender.Send(new ReverseTestCollectorAccountOperationCommand(Uri.UnescapeDataString(key), body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_TestDoubles_CollectorAccountReverse")
+            .ConClaveDeOperacion()
+            .RequirePermission(Operar);
+
         // K2 (US10, T0850): el recaudador de prueba confirma el envío de un archivo de descuentos y devuelve la respuesta de la pagaduría, como REC.
         dobles.MapPost("/collector/payroll-deduction-files/{id:guid}/confirm-sent", async (Guid id, ConfirmacionDeEnvioRequest? body, HttpContext http,
                 ISender sender, CancellationToken ct) =>
@@ -166,6 +188,9 @@ public class TestDoublesEndpoints : ICarterModule
 
     /// <summary>El motivo del reverso por la clave del pago.</summary>
     public sealed record ReversoRequest(string? Reason);
+
+    /// <summary>El cuerpo de las consignaciones del recaudador de prueba en cuentas (feature 014).</summary>
+    public sealed record ConsignacionesRequest(IReadOnlyList<ConsignacionAAplicar>? Deposits, IReadOnlyList<NoDescontadoDeCuenta>? NotDeducted);
 
     /// <summary>
     /// La resolución de un saldo (§20, contradicción 6: los valores de <see cref="FormaDeResolucion"/>): la obligación, la forma, la clave (una

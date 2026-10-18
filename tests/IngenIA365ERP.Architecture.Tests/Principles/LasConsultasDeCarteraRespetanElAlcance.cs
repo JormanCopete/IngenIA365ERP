@@ -233,6 +233,7 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListContributionBalancesQuery"] = "el saldo de aportes es de la persona, no de una oficina (D19)",
         // Feature 014, US3 (T090, T093): el resumen de aportes es de la persona; los grupos de archivo y las equivalencias son del convenio, un
         // catálogo de la cooperativa.
+        ["ListTestCollectorAccountInstallmentsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
         ["GetContributionsSummaryQuery"] = "el resumen de aportes es de la persona, no de una oficina (D19): el mismo saldo de IConsultaDeAportes",
         ["ListPayrollAgreementFileGroupsQuery"] = "catálogo de la cooperativa: los grupos de archivo de un convenio no tienen oficina ni deudores",
         ["ListPayrollAgreementConceptEquivalencesQuery"] = "catálogo de la cooperativa: las equivalencias de un convenio no tienen oficina ni deudores",
