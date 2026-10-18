@@ -109,8 +109,69 @@ public static class ReglasDeLineaDeCaptacion
         if (!TarifasDeRetencion.Contains(tarifa, StringComparer.Ordinal))
             return Captacion("withholdingRateParameterCode", $"«{tarifa}» no es una tarifa de retención de captaciones. Use una de: {string.Join(", ", TarifasDeRetencion)}.");
         if (b.BranchPublicIds.Any(o => o == Guid.Empty)) return Captacion("branchPublicIds", "Una oficina no puede ir vacía.");
+        var problemaDeCargos = ValidarCargos(b.Charges);
+        if (problemaDeCargos is not null) return problemaDeCargos;
 
         return ValidarBloquesDeClase(b);
+    }
+
+    /// <summary>
+    /// US4 (T114; data-model §2.3; FR-128): el catálogo de cargos de una versión. Código de catálogo único en la versión (hasta 10, en mayúsculas, sin
+    /// espacios), nombre, clase y disparador conocidos; la periodicidad es obligatoria con <c>Periodic</c> e <c>Inactivity</c>; el valor fijo o el
+    /// porcentaje con su base según el modo; mínimo ≤ máximo; los gratuitos sólo en los cargos por evento sobre gratuitos; gravado exige el código del
+    /// servicio en Comercial (R14). Montos con hasta dos decimales y porcentajes como fracción de hasta seis.
+    /// </summary>
+    public static ProblemaDeCartera? ValidarCargos(IReadOnlyList<BorradorDeCargoDeCaptacion> cargos)
+    {
+        ArgumentNullException.ThrowIfNull(cargos);
+        var vistos = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var c in cargos)
+        {
+            var codigo = c.Code?.Trim().ToUpperInvariant() ?? string.Empty;
+            if (!System.Text.RegularExpressions.Regex.IsMatch(codigo, "^[A-Z0-9]{1,10}$"))
+                return Captacion("charges.code", $"«{c.Code}» no es un código de cargo: hasta 10 letras o números, sin espacios.");
+            if (!vistos.Add(codigo)) return Captacion("charges.code", $"El cargo {codigo} está dos veces en la versión.");
+            if (string.IsNullOrWhiteSpace(c.Name) || c.Name.Trim().Length > 120) return Captacion("charges.name", $"El cargo {codigo} lleva nombre (hasta 120).");
+            if (!Enum.IsDefined(c.Kind) || !Enum.IsDefined(c.Trigger) || !Enum.IsDefined(c.CalculationMode) || !Enum.IsDefined(c.ShortfallPolicy))
+                return Captacion("charges.kind", $"El cargo {codigo} tiene una clase, un disparador, un modo o una política desconocidos.");
+            var periodico = c.Trigger is ChargeTrigger.Periodic or ChargeTrigger.Inactivity;
+            if (periodico && (c.Periodicity is not { } p || !Enum.IsDefined(p) || p == RepaymentPeriodicity.SinglePayment))
+                return Captacion("charges.periodicity", $"El cargo {codigo} es periódico: diga su periodicidad.");
+            if (!periodico && c.Periodicity is not null) return Captacion("charges.periodicity", $"El cargo {codigo} no es periódico: no lleva periodicidad.");
+            if (CargosDeCuenta.EsSobreGratuitos(c.Trigger))
+            {
+                if (c.FreeOperationsPerPeriod is < 0) return Captacion("charges.freeOperationsPerPeriod", $"Los gratuitos del cargo {codigo} no son negativos.");
+                if (c.FreeOperationsPerPeriod is not null && c.FreePeriod is null)
+                    return Captacion("charges.freePeriod", $"Los gratuitos del cargo {codigo} son por período: diga cuál.");
+            }
+            else if (c.FreeOperationsPerPeriod is not null || c.FreePeriod is not null)
+            {
+                return Captacion("charges.freeOperationsPerPeriod", $"Sólo un cargo sobre los gratuitos de retiros o consignaciones lleva gratuitos ({codigo}).");
+            }
+            if (c.CalculationMode == ChargeCalculation.FixedAmount)
+            {
+                if (c.FixedAmount is not { } fijo || fijo <= 0m || !EsMonto(fijo))
+                    return Captacion("charges.fixedAmount", $"El cargo {codigo} es de valor fijo: diga el valor (mayor que cero, hasta dos decimales).");
+                if (c.Percentage is not null || c.PercentageBase is not null)
+                    return Captacion("charges.percentage", $"El cargo {codigo} es de valor fijo: no lleva porcentaje.");
+            }
+            else
+            {
+                if (c.Percentage is not { } pct || pct <= 0m || pct > 1m || !EsFraccion(pct) || c.PercentageBase is not { } pb || !Enum.IsDefined(pb))
+                    return Captacion("charges.percentage", $"El cargo {codigo} es un porcentaje: diga la fracción (mayor que 0 y hasta 1) y su base.");
+                if (c.FixedAmount is not null) return Captacion("charges.fixedAmount", $"El cargo {codigo} es un porcentaje: no lleva valor fijo.");
+            }
+            foreach (var (campo, monto) in new[] { ("charges.minAmount", c.MinAmount), ("charges.maxAmount", c.MaxAmount),
+                         ("charges.exemptIfAverageBalanceAtLeast", c.ExemptIfAverageBalanceAtLeast), ("charges.exemptIfMinimumBalanceAtLeast", c.ExemptIfMinimumBalanceAtLeast) })
+                if (monto is { } m && (m < 0m || !EsMonto(m))) return Captacion(campo, $"Los montos del cargo {codigo} son pesos no negativos con hasta dos decimales.");
+            if (c.MinAmount is { } min && c.MaxAmount is { } max && min > max) return Captacion("charges.minAmount", $"El mínimo del cargo {codigo} supera su máximo.");
+            if (c.ExemptIfSeniorityMonthsAtLeast is < 0) return Captacion("charges.exemptIfSeniorityMonthsAtLeast", $"La antigüedad del cargo {codigo} no es negativa.");
+            if (c.ExemptBranchPublicIds.Any(o => o == Guid.Empty)) return Captacion("charges.exemptBranchPublicIds", "Una oficina exonerada no puede ir vacía.");
+            if (c.IsVatTaxed && string.IsNullOrWhiteSpace(c.CommercialItemCode))
+                return Captacion("charges.commercialItemCode", $"El cargo {codigo} está gravado con IVA: diga el código del servicio en Comercial, que lo factura.");
+            if (c.CommercialItemCode is { Length: > 30 }) return Captacion("charges.commercialItemCode", "El código del servicio en Comercial tiene hasta 30 caracteres.");
+        }
+        return null;
     }
 
     /// <summary>La clase no cambia entre versiones de la línea (data-model §2.1).</summary>

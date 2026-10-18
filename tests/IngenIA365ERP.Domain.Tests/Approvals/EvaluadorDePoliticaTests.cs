@@ -111,7 +111,8 @@ public class EvaluadorDePoliticaTests
     [Fact]
     public void Los_sujetos_son_los_de_la_tabla_de_data_model()
     {
-        ApprovalSubjects.Todos.Should().Equal("DocumentConfirmation", "DiscountOverCap", "ProvisionalCredit", "TransferDiscrepancy", "PurchaseMatchException");
+        ApprovalSubjects.Todos.Should().Equal("DocumentConfirmation", "DiscountOverCap", "ProvisionalCredit", "TransferDiscrepancy", "PurchaseMatchException",
+            "AccountWithdrawal", "AccountCashDeposit");
         ApprovalSubjects.EsValido("DocumentConfirmation").Should().BeTrue();
         ApprovalSubjects.EsValido("documentconfirmation").Should().BeFalse("el sujeto se escribe exacto");
         ApprovalSubjects.EsValido("Otro").Should().BeFalse();

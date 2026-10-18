@@ -27,6 +27,57 @@ public sealed record BorradorDeTramoDeCaptacion(
 }
 
 /// <summary>
+/// Un cargo del catálogo de una versión de captación (feature 014, US4, T114; data-model §2.3; FR-128, D35): apagado salvo que se pida
+/// <see cref="IsEnabled"/>. El código es el estable entre versiones (<c>CodigoDeCatalogo</c>, hasta 10 caracteres). (nuevo)
+/// </summary>
+public sealed record BorradorDeCargoDeCaptacion(string Code, string Name, ChargeKind Kind, ChargeTrigger Trigger, ChargeCalculation CalculationMode)
+{
+    public bool IsEnabled { get; init; }
+    public RepaymentPeriodicity? Periodicity { get; init; }
+    public int? FreeOperationsPerPeriod { get; init; }
+    public RepaymentPeriodicity? FreePeriod { get; init; }
+    public decimal? FixedAmount { get; init; }
+    public decimal? Percentage { get; init; }
+    public ChargeBase? PercentageBase { get; init; }
+    public decimal? MinAmount { get; init; }
+    public decimal? MaxAmount { get; init; }
+    public decimal? ExemptIfAverageBalanceAtLeast { get; init; }
+    public decimal? ExemptIfMinimumBalanceAtLeast { get; init; }
+    public int? ExemptIfSeniorityMonthsAtLeast { get; init; }
+    public bool ExemptEmployees { get; init; }
+    public bool ExemptGmfExemptAccount { get; init; }
+    public bool ExemptMinors { get; init; }
+    public IReadOnlyList<Guid> ExemptBranchPublicIds { get; init; } = [];
+    public ChargeShortfallPolicy ShortfallPolicy { get; init; } = ChargeShortfallPolicy.KeepPending;
+    public bool IsVatTaxed { get; init; }
+    public string? CommercialItemCode { get; init; }
+
+    /// <summary>El cargo de una versión ya guardada.</summary>
+    public static BorradorDeCargoDeCaptacion De(DepositLineCharge c) => new(c.Code, c.Name, c.Kind, c.Trigger, c.CalculationMode)
+    {
+        IsEnabled = c.IsEnabled,
+        Periodicity = c.Periodicity,
+        FreeOperationsPerPeriod = c.FreeOperationsPerPeriod,
+        FreePeriod = c.FreePeriod,
+        FixedAmount = c.FixedAmount,
+        Percentage = c.Percentage,
+        PercentageBase = c.PercentageBase,
+        MinAmount = c.MinAmount,
+        MaxAmount = c.MaxAmount,
+        ExemptIfAverageBalanceAtLeast = c.ExemptIfAverageBalanceAtLeast,
+        ExemptIfMinimumBalanceAtLeast = c.ExemptIfMinimumBalanceAtLeast,
+        ExemptIfSeniorityMonthsAtLeast = c.ExemptIfSeniorityMonthsAtLeast,
+        ExemptEmployees = c.ExemptEmployees,
+        ExemptGmfExemptAccount = c.ExemptGmfExemptAccount,
+        ExemptMinors = c.ExemptMinors,
+        ExemptBranchPublicIds = c.LeerOficinasExoneradas(),
+        ShortfallPolicy = c.ShortfallPolicy,
+        IsVatTaxed = c.IsVatTaxed,
+        CommercialItemCode = c.CommercialItemCode,
+    };
+}
+
+/// <summary>
 /// La versión de una línea de captación que se quiere registrar, completa (data-model §2.1): una versión nueva se registra entera con sus
 /// tramos. Las columnas de una clase sólo se llenan en esa clase (<see cref="ReglasDeLineaDeCaptacion"/>). (nuevo)
 /// </summary>
@@ -125,8 +176,12 @@ public sealed record BorradorDeVersionDeCaptacion(DateOnly ValidFrom, string Rea
     // -------------------------------------------------------------------------------------------------------- hijas --
     public IReadOnlyList<BorradorDeTramoDeCaptacion> RateTiers { get; init; } = [];
 
+    /// <summary>US4 (T114): el catálogo de cargos de la versión (FR-128); vacío = sin cargos (el defecto, D35).</summary>
+    public IReadOnlyList<BorradorDeCargoDeCaptacion> Charges { get; init; } = [];
+
     /// <summary>La versión completa a partir de una ya guardada y sus tramos (para versionar desde la vigente o verificar la huella).</summary>
-    public static BorradorDeVersionDeCaptacion De(DepositLineVersion v, IEnumerable<DepositLineRateTier> tramos) =>
+    public static BorradorDeVersionDeCaptacion De(DepositLineVersion v, IEnumerable<DepositLineRateTier> tramos,
+        IEnumerable<DepositLineCharge>? cargos = null) =>
         new(v.ValidFrom, v.Reason, v.DepositClass)
         {
             RequiresAssociate = v.RequiresAssociate,
@@ -198,6 +253,7 @@ public sealed record BorradorDeVersionDeCaptacion(DateOnly ValidFrom, string Rea
             WithdrawableOnlyOnMembershipWithdrawal = v.WithdrawableOnlyOnMembershipWithdrawal,
             RateTiers = tramos.OrderBy(t => t.Order).Select(t => new BorradorDeTramoDeCaptacion(t.Order, t.MinBalance, t.MaxBalance, t.MinTermDays,
                 t.MaxTermDays, t.MinAmount, t.MaxAmount, t.AnnualRate, t.Margin)).ToList(),
+            Charges = (cargos ?? []).OrderBy(c => c.Code, StringComparer.Ordinal).Select(BorradorDeCargoDeCaptacion.De).ToList(),
         };
 
     /// <summary>El modo de los tramos que rige: nulo sin tramos; con tramos, el declarado o «todo el saldo» (D8).</summary>

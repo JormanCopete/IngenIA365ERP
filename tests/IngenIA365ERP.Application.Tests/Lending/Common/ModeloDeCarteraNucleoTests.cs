@@ -103,6 +103,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_PayrollAgreementFileGroups", "LND_PayrollAgreementConceptEquivalences",
         // Feature 014, US10 (T096; data-model §6.1, §6.2): el retiro del asociado y las líneas de su liquidación
         "LND_MembershipWithdrawals", "LND_MembershipWithdrawalLines",
+        // Feature 014, US4 (T110, T114, T118; data-model §2.3, §3.6, §4.7–§4.9): el GMF del mes, los cargos y el débito automático
+        "LND_GmfMonthlyUsage", "LND_DepositLineCharges", "LND_AccountCharges", "LND_AccountChargeExemptions", "LND_DirectDebitMandates",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3).</summary>
@@ -137,20 +139,23 @@ public class ModeloDeCarteraNucleoTests
         "AccountInstallment", "AccountInstallmentNonDeduction", "IssuedDocumentAccount",
         // Feature 014, US10 (T096): las líneas de la liquidación del retiro.
         "MembershipWithdrawalLine",
+        // Feature 014, US4 (T110, T114): el GMF del mes y el catálogo de cargos de la versión.
+        "GmfMonthlyUsage", "DepositLineCharge",
         .. Preparacion,
     ];
 
     /// <summary>Sin diferencias de auditoría (T67, C46).</summary>
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
-            "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", "MemberAccountDailyPosition", "MemberAccountControl", .. Preparacion];
+            "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", "MemberAccountDailyPosition", "MemberAccountControl", "GmfMonthlyUsage",
+            .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
     [
         "LoanOperation", "LoanTransaction", "LoanDailyPosition", "RepaymentInstallment", "DebtorMessageEvent", "RegulatoryFileLine",
         "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
-        "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition", "AccountInstallment",
+        "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition", "AccountInstallment", "GmfMonthlyUsage",
     ];
 
     /// <summary>Controles y documentos con estado cuyos únicos tampoco filtran por borrado lógico (data-model §0.1).</summary>
@@ -169,12 +174,13 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(151,
+        Tablas.Should().HaveCount(156,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
             + " + 1 de la cuenta exenta del GMF (US2) + 4 de las cuotas exigibles, las solicitudes de aportes y las cuentas de un documento (US3)"
-            + " + 2 de los grupos de archivo y las equivalencias de pagaduría (US3) + 2 del retiro del asociado y su liquidación (US10)");
+            + " + 2 de los grupos de archivo y las equivalencias de pagaduría (US3) + 2 del retiro del asociado y su liquidación (US10)"
+            + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)");
     }
 
     [Theory]

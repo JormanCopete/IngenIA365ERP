@@ -392,10 +392,41 @@ public class DepositLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCa
                 .Decimal("maxAmount", t.MaxAmount, 2)
                 .Decimal("annualRate", t.AnnualRate, 6)
                 .Decimal("margin", t.Margin, 6))
+            // US4 (T114): los cargos entran a la huella sólo si hay (las versiones sin cargos conservan la huella con que se sellaron).
+            .Si(b.Charges.Count > 0, h => h.Lista("charges", b.Charges.OrderBy(c => c.Code.Trim().ToUpperInvariant(), StringComparer.Ordinal), (x, c) => x
+                .Texto("code", c.Code.Trim().ToUpperInvariant())
+                .Texto("name", c.Name.Trim())
+                .Enumeracion("kind", (ChargeKind?)c.Kind)
+                .Logico("isEnabled", c.IsEnabled)
+                .Enumeracion("trigger", (ChargeTrigger?)c.Trigger)
+                .Enumeracion("periodicity", c.Periodicity)
+                .Entero("freeOperationsPerPeriod", c.FreeOperationsPerPeriod)
+                .Enumeracion("freePeriod", c.FreePeriod)
+                .Enumeracion("calculationMode", (ChargeCalculation?)c.CalculationMode)
+                .Decimal("fixedAmount", c.FixedAmount, 2)
+                .Decimal("percentage", c.Percentage, 6)
+                .Enumeracion("percentageBase", c.PercentageBase)
+                .Decimal("minAmount", c.MinAmount, 2)
+                .Decimal("maxAmount", c.MaxAmount, 2)
+                .Decimal("exemptIfAverageBalanceAtLeast", c.ExemptIfAverageBalanceAtLeast, 2)
+                .Decimal("exemptIfMinimumBalanceAtLeast", c.ExemptIfMinimumBalanceAtLeast, 2)
+                .Entero("exemptIfSeniorityMonthsAtLeast", c.ExemptIfSeniorityMonthsAtLeast)
+                .Logico("exemptEmployees", c.ExemptEmployees)
+                .Logico("exemptGmfExemptAccount", c.ExemptGmfExemptAccount)
+                .Logico("exemptMinors", c.ExemptMinors)
+                .Textos("exemptBranchPublicIds", c.ExemptBranchPublicIds.Distinct().Order().Select(o => o.ToString("N")))
+                .Enumeracion("shortfallPolicy", (ChargeShortfallPolicy?)c.ShortfallPolicy)
+                .Logico("isVatTaxed", c.IsVatTaxed)
+                .Texto("commercialItemCode", string.IsNullOrWhiteSpace(c.CommercialItemCode) ? null : c.CommercialItemCode.Trim())))
             .Calcular();
 
-    /// <summary>La huella de esta versión ya guardada con sus tramos, para verificar que nadie la cambió.</summary>
-    public string HuellaDeLoGuardado(IEnumerable<DepositLineRateTier> tramos) => Huella(BorradorDeVersionDeCaptacion.De(this, tramos));
+    /// <summary>US4 (T114): los cargos de la versión ya guardada (con su Id), por código.</summary>
+    public static IEnumerable<DepositLineCharge> Cargos(int depositLineVersionId, BorradorDeVersionDeCaptacion b) =>
+        b.Charges.OrderBy(c => c.Code.Trim().ToUpperInvariant(), StringComparer.Ordinal).Select(c => DepositLineCharge.Nuevo(depositLineVersionId, c));
+
+    /// <summary>La huella de esta versión ya guardada con sus tramos (y sus cargos), para verificar que nadie la cambió.</summary>
+    public string HuellaDeLoGuardado(IEnumerable<DepositLineRateTier> tramos, IEnumerable<DepositLineCharge>? cargos = null) =>
+        Huella(BorradorDeVersionDeCaptacion.De(this, tramos, cargos));
 
     private static List<Guid> Oficinas(BorradorDeVersionDeCaptacion b) => b.BranchPublicIds.Distinct().Order().ToList();
 }

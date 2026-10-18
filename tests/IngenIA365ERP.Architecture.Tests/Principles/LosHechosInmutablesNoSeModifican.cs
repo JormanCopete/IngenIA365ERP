@@ -264,6 +264,9 @@ public class LosHechosInmutablesNoSeModifican
         ["IssuedDocumentAccount"] = [],
         // Feature 014, US10 (T096; data-model §6.2): las líneas de una versión de la liquidación del retiro; la reliquidación escribe otra versión.
         ["MembershipWithdrawalLine"] = [],
+        // Feature 014, US4 (T110, T114; data-model §2.3, §4.6): el uso del GMF del mes (un reverso escribe su espejo) y el catálogo de cargos de una
+        // versión de la línea (una versión nueva lo corrige).
+        ["GmfMonthlyUsage"] = [], ["DepositLineCharge"] = [],
     };
 
     [Fact]

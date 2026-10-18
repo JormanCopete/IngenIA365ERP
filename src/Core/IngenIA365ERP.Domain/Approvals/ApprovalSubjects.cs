@@ -23,9 +23,21 @@ public static class ApprovalSubjects
     /// <summary>Una excepción del cruce a tres vías de compras (I5).</summary>
     public const string PurchaseMatchException = "PurchaseMatchException";
 
-    /// <summary>Los cinco, en el orden de la tabla de data-model §21.</summary>
+    /// <summary>
+    /// Feature 014, US4 (T111; api.md §1.6 de la 014; FR-051, US4-5): un retiro o un traslado de una cuenta de captación que supera la atribución con monto
+    /// <c>Lending.Accounts.Withdraw</c> del usuario que actúa. Regla fija de un nivel; lo aprueba un presente con segundo factor. (nuevo)
+    /// </summary>
+    public const string AccountWithdrawal = "AccountWithdrawal";
+
+    /// <summary>
+    /// Feature 014, US4 (T111; api.md §1.6 de la 014; FR-059): una consignación en efectivo que supera la atribución con monto
+    /// <c>Lending.Accounts.Deposit</c> del usuario que actúa (control de efectivo). Regla fija de un nivel. (nuevo)
+    /// </summary>
+    public const string AccountCashDeposit = "AccountCashDeposit";
+
+    /// <summary>Los cinco de data-model §21, en su orden, y los dos de captaciones de la feature 014.</summary>
     public static readonly IReadOnlyList<string> Todos =
-        [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException];
+        [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit];
 
     /// <summary>Si el texto es uno de los sujetos, escrito exacto (distingue mayúsculas).</summary>
     public static bool EsValido(string? sujeto) => sujeto is not null && Todos.Contains(sujeto, StringComparer.Ordinal);
@@ -42,4 +54,7 @@ public static class ApprovalSourceTypes
     public const string DocumentPayment = "DocumentPayment";
     public const string TransferDiscrepancy = "TransferDiscrepancy";
     public const string PurchaseMatchLine = "PurchaseMatchLine";
+
+    /// <summary>Feature 014, US4 (T111): un retiro, un traslado o una consignación en efectivo de una cuenta de captación sobre la atribución. (nuevo)</summary>
+    public const string MemberAccountOperation = "MemberAccountOperation";
 }

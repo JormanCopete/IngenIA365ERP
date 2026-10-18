@@ -108,6 +108,10 @@ public static class EvaluadorDePolitica
         ApprovalSubjects.ProvisionalCredit => new NivelDeAprobacion(1, 0m, "Inventory.Sales.SellOnCredit"),
         ApprovalSubjects.TransferDiscrepancy => new NivelDeAprobacion(1, 0m, "Inventory.Transfers.Approve"),
         ApprovalSubjects.PurchaseMatchException => new NivelDeAprobacion(1, 0m, "Inventory.Purchases.Approve"),
+        // Feature 014, US4 (T111): el retiro y la consignación en efectivo sobre la atribución de captaciones los decide quien tiene el mismo permiso
+        // (y, por la fuente, un monto que alcance).
+        ApprovalSubjects.AccountWithdrawal => new NivelDeAprobacion(1, 0m, "Lending.Accounts.Withdraw"),
+        ApprovalSubjects.AccountCashDeposit => new NivelDeAprobacion(1, 0m, "Lending.Accounts.Deposit"),
         _ => null,
     };
 

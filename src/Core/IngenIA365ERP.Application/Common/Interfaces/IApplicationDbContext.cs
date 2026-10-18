@@ -553,6 +553,12 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion> DepositLineVersions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier> DepositLineRateTiers { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion> ContributionLineVersions { get; }
+    // Feature 014, US4 (T110, T114, T118): el GMF del mes, los cargos, sus exoneraciones y el débito automático.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage> GmfMonthlyUsages { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate> DirectDebitMandates { get; }
 
     // Admin
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y

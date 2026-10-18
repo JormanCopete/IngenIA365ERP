@@ -1,10 +1,9 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
+namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 {
     /// <inheritdoc />
     public partial class CaptacionesAportes : Migration
@@ -36,7 +35,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "AccountNumber",
                 schema: "dbo",
                 table: "PAY_Novelties",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: true);
 
@@ -44,14 +43,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "AccountPublicId",
                 schema: "dbo",
                 table: "PAY_Novelties",
-                type: "uuid",
+                type: "uniqueidentifier",
                 nullable: true);
 
             migrationBuilder.AddColumn<DateTime>(
                 name: "ContributionsActivatedAt",
                 schema: "dbo",
                 table: "LND_Setup",
-                type: "timestamp with time zone",
+                type: "datetime2",
                 nullable: true);
 
             migrationBuilder.AddColumn<DateOnly>(
@@ -65,14 +64,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "ContributionsActivationId",
                 schema: "dbo",
                 table: "LND_Setup",
-                type: "integer",
+                type: "int",
                 nullable: true);
 
             migrationBuilder.AddColumn<DateTime>(
                 name: "DepositsActivatedAt",
                 schema: "dbo",
                 table: "LND_Setup",
-                type: "timestamp with time zone",
+                type: "datetime2",
                 nullable: true);
 
             migrationBuilder.AddColumn<DateOnly>(
@@ -86,39 +85,39 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "DepositsActivationId",
                 schema: "dbo",
                 table: "LND_Setup",
-                type: "integer",
+                type: "int",
                 nullable: true);
 
             migrationBuilder.AddColumn<int>(
                 name: "MemberAccountId",
                 schema: "dbo",
                 table: "LND_ProcessRunErrors",
-                type: "integer",
+                type: "int",
                 nullable: true);
 
             migrationBuilder.AlterColumn<int>(
                 name: "ResultFormatId",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "integer",
+                type: "int",
                 nullable: true,
                 oldClrType: typeof(int),
-                oldType: "integer");
+                oldType: "int");
 
             migrationBuilder.AlterColumn<int>(
                 name: "OutboundFormatId",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "integer",
+                type: "int",
                 nullable: true,
                 oldClrType: typeof(int),
-                oldType: "integer");
+                oldType: "int");
 
             migrationBuilder.AddColumn<string>(
                 name: "EmployeeIdentification",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: false,
                 defaultValue: "EmployeeIdAtPaymaster");
@@ -127,7 +126,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "IncludesAccountInstallments",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "boolean",
+                type: "bit",
                 nullable: false,
                 defaultValue: false);
 
@@ -135,7 +134,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "UsesFileGroups",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "boolean",
+                type: "bit",
                 nullable: false,
                 defaultValue: false);
 
@@ -143,7 +142,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "AccountCount",
                 schema: "dbo",
                 table: "LND_MigrationLoads",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 0);
 
@@ -151,7 +150,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "Nature",
                 schema: "dbo",
                 table: "LND_MigrationLoads",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 1);
 
@@ -166,7 +165,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "Nature",
                 schema: "dbo",
                 table: "LND_CreditLines",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 1);
 
@@ -174,7 +173,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "MaxNegotiatedSpread",
                 schema: "dbo",
                 table: "LND_AttributionRules",
-                type: "numeric(9,6)",
+                type: "decimal(9,6)",
                 precision: 9,
                 scale: 6,
                 nullable: true);
@@ -183,25 +182,25 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "SessionItemId",
                 schema: "dbo",
                 table: "LND_Activations",
-                type: "integer",
+                type: "int",
                 nullable: true,
                 oldClrType: typeof(int),
-                oldType: "integer");
+                oldType: "int");
 
             migrationBuilder.AlterColumn<int>(
                 name: "MigrationLoadId",
                 schema: "dbo",
                 table: "LND_Activations",
-                type: "integer",
+                type: "int",
                 nullable: true,
                 oldClrType: typeof(int),
-                oldType: "integer");
+                oldType: "int");
 
             migrationBuilder.AddColumn<int>(
                 name: "Nature",
                 schema: "dbo",
                 table: "LND_Activations",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 1);
 
@@ -209,7 +208,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "AccountCount",
                 schema: "dbo",
                 table: "LND_AccountingFactParts",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 0);
 
@@ -224,7 +223,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "DepositInsuranceEnrolled",
                 schema: "dbo",
                 table: "COR_RegulatoryProfileVersions",
-                type: "boolean",
+                type: "bit",
                 nullable: false,
                 defaultValue: false);
 
@@ -232,7 +231,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "DepositsFromAssociatesOnly",
                 schema: "dbo",
                 table: "COR_RegulatoryProfileVersions",
-                type: "boolean",
+                type: "bit",
                 nullable: false,
                 defaultValue: false);
 
@@ -240,7 +239,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "IsGmfWithholdingAgent",
                 schema: "dbo",
                 table: "COR_RegulatoryProfileVersions",
-                type: "boolean",
+                type: "bit",
                 nullable: false,
                 defaultValue: false);
 
@@ -248,7 +247,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "LiquidityFundCategory",
                 schema: "dbo",
                 table: "COR_RegulatoryProfileVersions",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: true);
 
@@ -256,7 +255,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "MayTakeDeposits",
                 schema: "dbo",
                 table: "COR_RegulatoryProfileVersions",
-                type: "boolean",
+                type: "bit",
                 nullable: false,
                 defaultValue: false);
 
@@ -264,7 +263,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "AccountFlag",
                 schema: "dbo",
                 table: "ACC_LendingPostingRules",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: true);
 
@@ -272,7 +271,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "ContributionClass",
                 schema: "dbo",
                 table: "ACC_LendingPostingRules",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: true);
 
@@ -280,7 +279,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "DepositClass",
                 schema: "dbo",
                 table: "ACC_LendingPostingRules",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: true);
 
@@ -288,7 +287,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "IssueTermBand",
                 schema: "dbo",
                 table: "ACC_LendingPostingRules",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: true);
 
@@ -296,7 +295,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "LineNature",
                 schema: "dbo",
                 table: "ACC_LendingPostingRules",
-                type: "character varying(20)",
+                type: "nvarchar(20)",
                 maxLength: 20,
                 nullable: true);
 
@@ -305,27 +304,27 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MessagePublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    MessageType = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    MessageType = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
                     MessageVersion = table.Column<short>(type: "smallint", nullable: false),
-                    AssociateId = table.Column<int>(type: "integer", nullable: false),
-                    WithdrawalPublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    WithdrawalNumber = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    AssociateId = table.Column<int>(type: "int", nullable: false),
+                    WithdrawalPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    WithdrawalNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     EffectiveDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    Cause = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
-                    AlreadyWithdrawn = table.Column<bool>(type: "boolean", nullable: false),
-                    ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Cause = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
+                    AlreadyWithdrawn = table.Column<bool>(type: "bit", nullable: false),
+                    ReceivedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -344,42 +343,42 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    CreditLineId = table.Column<int>(type: "integer", nullable: false),
-                    VersionNumber = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CreditLineId = table.Column<int>(type: "int", nullable: false),
+                    VersionNumber = table.Column<int>(type: "int", nullable: false),
                     ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
-                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Reason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
-                    MinimumMode = table.Column<int>(type: "integer", nullable: false),
-                    MinimumAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MinimumFraction = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    InstallmentMode = table.Column<int>(type: "integer", nullable: false),
-                    InstallmentAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    InstallmentFraction = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    InstallmentRoundingUnit = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    InstallmentRoundingMode = table.Column<int>(type: "integer", nullable: false),
-                    InstallmentPeriodicity = table.Column<int>(type: "integer", nullable: false),
-                    InstallmentDueDay = table.Column<byte>(type: "smallint", nullable: true),
-                    MinimumFirst = table.Column<bool>(type: "boolean", nullable: false),
-                    PermanentSavingsLineId = table.Column<int>(type: "integer", nullable: true),
-                    PermanentSavingsFraction = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    AllowsExtraordinary = table.Column<bool>(type: "boolean", nullable: false),
-                    MaxParticipationFraction = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    ExcessAction = table.Column<int>(type: "integer", nullable: false),
-                    AllowsTransferBetweenMembers = table.Column<bool>(type: "boolean", nullable: false),
-                    RefundTermDays = table.Column<int>(type: "integer", nullable: false),
-                    LossDeductionEnabled = table.Column<bool>(type: "boolean", nullable: false),
-                    ContentSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Reason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    MinimumMode = table.Column<int>(type: "int", nullable: false),
+                    MinimumAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MinimumFraction = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    InstallmentMode = table.Column<int>(type: "int", nullable: false),
+                    InstallmentAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    InstallmentFraction = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    InstallmentRoundingUnit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    InstallmentRoundingMode = table.Column<int>(type: "int", nullable: false),
+                    InstallmentPeriodicity = table.Column<int>(type: "int", nullable: false),
+                    InstallmentDueDay = table.Column<byte>(type: "tinyint", nullable: true),
+                    MinimumFirst = table.Column<bool>(type: "bit", nullable: false),
+                    PermanentSavingsLineId = table.Column<int>(type: "int", nullable: true),
+                    PermanentSavingsFraction = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    AllowsExtraordinary = table.Column<bool>(type: "bit", nullable: false),
+                    MaxParticipationFraction = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    ExcessAction = table.Column<int>(type: "int", nullable: false),
+                    AllowsTransferBetweenMembers = table.Column<bool>(type: "bit", nullable: false),
+                    RefundTermDays = table.Column<int>(type: "int", nullable: false),
+                    LossDeductionEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    ContentSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -405,91 +404,91 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    CreditLineId = table.Column<int>(type: "integer", nullable: false),
-                    VersionNumber = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CreditLineId = table.Column<int>(type: "int", nullable: false),
+                    VersionNumber = table.Column<int>(type: "int", nullable: false),
                     ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
-                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Reason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
-                    DepositClass = table.Column<int>(type: "integer", nullable: false),
-                    RequiresAssociate = table.Column<bool>(type: "boolean", nullable: false),
-                    AllowsCoHolders = table.Column<bool>(type: "boolean", nullable: false),
-                    AllowsMinors = table.Column<bool>(type: "boolean", nullable: false),
-                    AllowsLegalEntities = table.Column<bool>(type: "boolean", nullable: false),
-                    AllowsPartialWithdrawals = table.Column<bool>(type: "boolean", nullable: false),
-                    BranchPublicIdsJson = table.Column<string>(type: "text", nullable: true),
-                    RateKind = table.Column<int>(type: "integer", nullable: false),
-                    AnnualRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    IndexCode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    IndexKey = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    Margin = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    RateFloor = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    RateCeiling = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    ResetPeriodicity = table.Column<int>(type: "integer", nullable: true),
-                    RateTierMode = table.Column<int>(type: "integer", nullable: true),
-                    DeclaresAgreedRate = table.Column<bool>(type: "boolean", nullable: false),
-                    AllowsNegotiatedRate = table.Column<bool>(type: "boolean", nullable: false),
-                    KeepsNegotiatedMarginOnRollover = table.Column<bool>(type: "boolean", nullable: false),
-                    RateChangeNoticeDays = table.Column<int>(type: "integer", nullable: false),
-                    BalanceMethod = table.Column<int>(type: "integer", nullable: false),
-                    DayCount = table.Column<int>(type: "integer", nullable: false),
-                    RateEquivalence = table.Column<int>(type: "integer", nullable: false),
-                    RoundingUnit = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    RoundingMode = table.Column<int>(type: "integer", nullable: false),
-                    RoundingMoment = table.Column<int>(type: "integer", nullable: false),
-                    MinOpeningAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    MinBalance = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    MinBalanceForInterest = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    SettlementPeriodicity = table.Column<int>(type: "integer", nullable: false),
-                    SettlementDay = table.Column<byte>(type: "smallint", nullable: true),
-                    WithholdingRateParameterCode = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
-                    IsGmfSubject = table.Column<bool>(type: "boolean", nullable: false),
-                    MaxWithdrawalPerOperation = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MaxWithdrawalPerDay = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MaxCashPerOperation = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MaxCashPerDay = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    InactivityDays = table.Column<int>(type: "integer", nullable: true),
-                    AccruesWhileInactive = table.Column<bool>(type: "boolean", nullable: false),
-                    SuspendsAccrualOnTotalGarnishment = table.Column<bool>(type: "boolean", nullable: false),
-                    SuspendsAccrualOnDeceased = table.Column<bool>(type: "boolean", nullable: false),
-                    MinTermDays = table.Column<int>(type: "integer", nullable: true),
-                    MaxTermDays = table.Column<int>(type: "integer", nullable: true),
-                    InterestPeriodicities = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true),
-                    InterestTimings = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    AutoRollover = table.Column<bool>(type: "boolean", nullable: true),
-                    MaxRollovers = table.Column<int>(type: "integer", nullable: true),
-                    RolloverRateRule = table.Column<int>(type: "integer", nullable: true),
-                    CapitalizesOnRollover = table.Column<bool>(type: "boolean", nullable: true),
-                    GraceBusinessDays = table.Column<int>(type: "integer", nullable: true),
-                    GraceAccrues = table.Column<bool>(type: "boolean", nullable: true),
-                    AfterMaturityTreatment = table.Column<int>(type: "integer", nullable: true),
-                    MoveToDemandLineId = table.Column<int>(type: "integer", nullable: true),
-                    EarlyRedemptionAllowed = table.Column<bool>(type: "boolean", nullable: true),
-                    EarlyRedemptionPenaltyMode = table.Column<int>(type: "integer", nullable: true),
-                    PenaltyAnnualRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    PenaltyDiscountFraction = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    MinDaysBeforeRedemption = table.Column<int>(type: "integer", nullable: true),
-                    InstallmentPeriodicity = table.Column<int>(type: "integer", nullable: true),
-                    MinInstallmentAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MinTermMonths = table.Column<int>(type: "integer", nullable: true),
-                    MaxTermMonths = table.Column<int>(type: "integer", nullable: true),
-                    BonusAnnualRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    BreachAnnualRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    ToleratedLateInstallments = table.Column<int>(type: "integer", nullable: true),
-                    BreachEffect = table.Column<int>(type: "integer", nullable: true),
-                    BonusRecognition = table.Column<int>(type: "integer", nullable: true),
-                    WithdrawableOnlyOnMembershipWithdrawal = table.Column<bool>(type: "boolean", nullable: true),
-                    ContentSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Reason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    DepositClass = table.Column<int>(type: "int", nullable: false),
+                    RequiresAssociate = table.Column<bool>(type: "bit", nullable: false),
+                    AllowsCoHolders = table.Column<bool>(type: "bit", nullable: false),
+                    AllowsMinors = table.Column<bool>(type: "bit", nullable: false),
+                    AllowsLegalEntities = table.Column<bool>(type: "bit", nullable: false),
+                    AllowsPartialWithdrawals = table.Column<bool>(type: "bit", nullable: false),
+                    BranchPublicIdsJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RateKind = table.Column<int>(type: "int", nullable: false),
+                    AnnualRate = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    IndexCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    IndexKey = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    Margin = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    RateFloor = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    RateCeiling = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    ResetPeriodicity = table.Column<int>(type: "int", nullable: true),
+                    RateTierMode = table.Column<int>(type: "int", nullable: true),
+                    DeclaresAgreedRate = table.Column<bool>(type: "bit", nullable: false),
+                    AllowsNegotiatedRate = table.Column<bool>(type: "bit", nullable: false),
+                    KeepsNegotiatedMarginOnRollover = table.Column<bool>(type: "bit", nullable: false),
+                    RateChangeNoticeDays = table.Column<int>(type: "int", nullable: false),
+                    BalanceMethod = table.Column<int>(type: "int", nullable: false),
+                    DayCount = table.Column<int>(type: "int", nullable: false),
+                    RateEquivalence = table.Column<int>(type: "int", nullable: false),
+                    RoundingUnit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    RoundingMode = table.Column<int>(type: "int", nullable: false),
+                    RoundingMoment = table.Column<int>(type: "int", nullable: false),
+                    MinOpeningAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    MinBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    MinBalanceForInterest = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    SettlementPeriodicity = table.Column<int>(type: "int", nullable: false),
+                    SettlementDay = table.Column<byte>(type: "tinyint", nullable: true),
+                    WithholdingRateParameterCode = table.Column<string>(type: "nvarchar(60)", maxLength: 60, nullable: false),
+                    IsGmfSubject = table.Column<bool>(type: "bit", nullable: false),
+                    MaxWithdrawalPerOperation = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MaxWithdrawalPerDay = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MaxCashPerOperation = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MaxCashPerDay = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    InactivityDays = table.Column<int>(type: "int", nullable: true),
+                    AccruesWhileInactive = table.Column<bool>(type: "bit", nullable: false),
+                    SuspendsAccrualOnTotalGarnishment = table.Column<bool>(type: "bit", nullable: false),
+                    SuspendsAccrualOnDeceased = table.Column<bool>(type: "bit", nullable: false),
+                    MinTermDays = table.Column<int>(type: "int", nullable: true),
+                    MaxTermDays = table.Column<int>(type: "int", nullable: true),
+                    InterestPeriodicities = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    InterestTimings = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    AutoRollover = table.Column<bool>(type: "bit", nullable: true),
+                    MaxRollovers = table.Column<int>(type: "int", nullable: true),
+                    RolloverRateRule = table.Column<int>(type: "int", nullable: true),
+                    CapitalizesOnRollover = table.Column<bool>(type: "bit", nullable: true),
+                    GraceBusinessDays = table.Column<int>(type: "int", nullable: true),
+                    GraceAccrues = table.Column<bool>(type: "bit", nullable: true),
+                    AfterMaturityTreatment = table.Column<int>(type: "int", nullable: true),
+                    MoveToDemandLineId = table.Column<int>(type: "int", nullable: true),
+                    EarlyRedemptionAllowed = table.Column<bool>(type: "bit", nullable: true),
+                    EarlyRedemptionPenaltyMode = table.Column<int>(type: "int", nullable: true),
+                    PenaltyAnnualRate = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    PenaltyDiscountFraction = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    MinDaysBeforeRedemption = table.Column<int>(type: "int", nullable: true),
+                    InstallmentPeriodicity = table.Column<int>(type: "int", nullable: true),
+                    MinInstallmentAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MinTermMonths = table.Column<int>(type: "int", nullable: true),
+                    MaxTermMonths = table.Column<int>(type: "int", nullable: true),
+                    BonusAnnualRate = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    BreachAnnualRate = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    ToleratedLateInstallments = table.Column<int>(type: "int", nullable: true),
+                    BreachEffect = table.Column<int>(type: "int", nullable: true),
+                    BonusRecognition = table.Column<int>(type: "int", nullable: true),
+                    WithdrawableOnlyOnMembershipWithdrawal = table.Column<bool>(type: "bit", nullable: true),
+                    ContentSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -515,51 +514,51 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    CreditLineId = table.Column<int>(type: "integer", nullable: false),
-                    Nature = table.Column<int>(type: "integer", nullable: false),
-                    DepositClass = table.Column<int>(type: "integer", nullable: true),
-                    HolderPersonId = table.Column<int>(type: "integer", nullable: false),
-                    BranchId = table.Column<int>(type: "integer", nullable: false),
-                    HandlingMode = table.Column<int>(type: "integer", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    StatusChangedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Origin = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    CreditLineId = table.Column<int>(type: "int", nullable: false),
+                    Nature = table.Column<int>(type: "int", nullable: false),
+                    DepositClass = table.Column<int>(type: "int", nullable: true),
+                    HolderPersonId = table.Column<int>(type: "int", nullable: false),
+                    BranchId = table.Column<int>(type: "int", nullable: false),
+                    HandlingMode = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    StatusChangedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Origin = table.Column<int>(type: "int", nullable: false),
                     OpenedOn = table.Column<DateOnly>(type: "date", nullable: false),
-                    OpenedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    OpenedByUserId = table.Column<int>(type: "int", nullable: true),
                     ActivatedOn = table.Column<DateOnly>(type: "date", nullable: true),
                     InactiveSince = table.Column<DateOnly>(type: "date", nullable: true),
                     MaturedOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    ClosingRequestedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ClosingRequestedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ClosedOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    ClosedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    CloseReason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
-                    IsGarnished = table.Column<bool>(type: "boolean", nullable: false),
-                    RequiresDataUpdate = table.Column<bool>(type: "boolean", nullable: false),
+                    ClosedByUserId = table.Column<int>(type: "int", nullable: true),
+                    CloseReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    IsGarnished = table.Column<bool>(type: "bit", nullable: false),
+                    RequiresDataUpdate = table.Column<bool>(type: "bit", nullable: false),
                     DataUpdateRequiredSince = table.Column<DateOnly>(type: "date", nullable: true),
-                    ContractualStatus = table.Column<int>(type: "integer", nullable: true),
+                    ContractualStatus = table.Column<int>(type: "int", nullable: true),
                     TechnicalNegativeSince = table.Column<DateOnly>(type: "date", nullable: true),
                     AccrualSuspendedSince = table.Column<DateOnly>(type: "date", nullable: true),
-                    AccrualSuspensionReason = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true),
-                    SourceAccountNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    MigrationLoadId = table.Column<int>(type: "integer", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    AccrualSuspensionReason = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    SourceAccountNumber = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    MigrationLoadId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_MemberAccounts", x => x.Id);
-                    table.CheckConstraint("CK_LND_MemberAccounts_Class", "(\"Nature\" = 2 AND \"DepositClass\" IS NOT NULL) OR (\"Nature\" = 3 AND \"DepositClass\" IS NULL)");
-                    table.CheckConstraint("CK_LND_MemberAccounts_Nature", "\"Nature\" <> 1");
+                    table.CheckConstraint("CK_LND_MemberAccounts_Class", "([Nature] = 2 AND [DepositClass] IS NOT NULL) OR ([Nature] = 3 AND [DepositClass] IS NULL)");
+                    table.CheckConstraint("CK_LND_MemberAccounts_Nature", "[Nature] <> 1");
                     table.ForeignKey(
                         name: "FK_LND_MemberAccounts_COR_Branches_BranchId",
                         column: x => x.BranchId,
@@ -609,46 +608,46 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PayrollAgreementVersionId = table.Column<int>(type: "integer", nullable: false),
-                    Code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    Name = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
-                    OutboundFormatId = table.Column<int>(type: "integer", nullable: false),
-                    ResultFormatId = table.Column<int>(type: "integer", nullable: false),
-                    CutoffDay = table.Column<byte>(type: "smallint", nullable: true),
-                    PaymentDay = table.Column<byte>(type: "smallint", nullable: true),
-                    SendLeadDays = table.Column<int>(type: "integer", nullable: true),
-                    Order = table.Column<int>(type: "integer", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PayrollAgreementVersionId = table.Column<int>(type: "int", nullable: false),
+                    Code = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(120)", maxLength: 120, nullable: false),
+                    OutboundFormatId = table.Column<int>(type: "int", nullable: false),
+                    ResultFormatId = table.Column<int>(type: "int", nullable: false),
+                    CutoffDay = table.Column<byte>(type: "tinyint", nullable: true),
+                    PaymentDay = table.Column<byte>(type: "tinyint", nullable: true),
+                    SendLeadDays = table.Column<int>(type: "int", nullable: true),
+                    Order = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_PayrollAgreementFileGroups", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_LND_PayrollAgreementFileGroups_COR_BankFileFormats_Outbound~",
+                        name: "FK_LND_PayrollAgreementFileGroups_COR_BankFileFormats_OutboundFormatId",
                         column: x => x.OutboundFormatId,
                         principalSchema: "dbo",
                         principalTable: "COR_BankFileFormats",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_PayrollAgreementFileGroups_COR_BankFileFormats_ResultFo~",
+                        name: "FK_LND_PayrollAgreementFileGroups_COR_BankFileFormats_ResultFormatId",
                         column: x => x.ResultFormatId,
                         principalSchema: "dbo",
                         principalTable: "COR_BankFileFormats",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_PayrollAgreementFileGroups_LND_PayrollAgreementVersions~",
+                        name: "FK_LND_PayrollAgreementFileGroups_LND_PayrollAgreementVersions_PayrollAgreementVersionId",
                         column: x => x.PayrollAgreementVersionId,
                         principalSchema: "dbo",
                         principalTable: "LND_PayrollAgreementVersions",
@@ -661,46 +660,46 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PayrollRunId = table.Column<int>(type: "integer", nullable: false),
-                    PayrollRunEmployeeId = table.Column<int>(type: "integer", nullable: false),
-                    PayrollRunLineId = table.Column<int>(type: "integer", nullable: true),
-                    AccountPublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AccountNumber = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    ConceptCode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    ExpectedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    DeductedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    NotDeductedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    NotDeductedReason = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    AppliedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    CarteraReceiptPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CarteraReversalPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ResultCode = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: true),
-                    ResultMessage = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "text", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "text", nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "text", nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PayrollRunId = table.Column<int>(type: "int", nullable: false),
+                    PayrollRunEmployeeId = table.Column<int>(type: "int", nullable: false),
+                    PayrollRunLineId = table.Column<int>(type: "int", nullable: true),
+                    AccountPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AccountNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    ConceptCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    ExpectedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    DeductedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    NotDeductedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    NotDeductedReason = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    AppliedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    CarteraReceiptPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CarteraReversalPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ResultCode = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: true),
+                    ResultMessage = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_PAY_PayrollAccountDeductions", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_PAY_PayrollAccountDeductions_PAY_PayrollRunEmployees_Payrol~",
+                        name: "FK_PAY_PayrollAccountDeductions_PAY_PayrollRunEmployees_PayrollRunEmployeeId",
                         column: x => x.PayrollRunEmployeeId,
                         principalSchema: "dbo",
                         principalTable: "PAY_PayrollRunEmployees",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_PAY_PayrollAccountDeductions_PAY_PayrollRunLines_PayrollRun~",
+                        name: "FK_PAY_PayrollAccountDeductions_PAY_PayrollRunLines_PayrollRunLineId",
                         column: x => x.PayrollRunLineId,
                         principalSchema: "dbo",
                         principalTable: "PAY_PayrollRunLines",
@@ -716,31 +715,85 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "LND_DepositLineCharges",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    DepositLineVersionId = table.Column<int>(type: "int", nullable: false),
+                    Code = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(120)", maxLength: 120, nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    IsEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    Trigger = table.Column<int>(type: "int", nullable: false),
+                    Periodicity = table.Column<int>(type: "int", nullable: true),
+                    FreeOperationsPerPeriod = table.Column<int>(type: "int", nullable: true),
+                    FreePeriod = table.Column<int>(type: "int", nullable: true),
+                    CalculationMode = table.Column<int>(type: "int", nullable: false),
+                    FixedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    Percentage = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    PercentageBase = table.Column<int>(type: "int", nullable: true),
+                    MinAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MaxAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    ExemptIfAverageBalanceAtLeast = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    ExemptIfMinimumBalanceAtLeast = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    ExemptIfSeniorityMonthsAtLeast = table.Column<int>(type: "int", nullable: true),
+                    ExemptEmployees = table.Column<bool>(type: "bit", nullable: false),
+                    ExemptGmfExemptAccount = table.Column<bool>(type: "bit", nullable: false),
+                    ExemptMinors = table.Column<bool>(type: "bit", nullable: false),
+                    ExemptBranchPublicIdsJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ShortfallPolicy = table.Column<int>(type: "int", nullable: false),
+                    IsVatTaxed = table.Column<bool>(type: "bit", nullable: false),
+                    CommercialItemCode = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_DepositLineCharges", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_DepositLineCharges_Version",
+                        column: x => x.DepositLineVersionId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_DepositLineVersions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "LND_DepositLineRateTiers",
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    DepositLineVersionId = table.Column<int>(type: "integer", nullable: false),
-                    Order = table.Column<int>(type: "integer", nullable: false),
-                    MinBalance = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MaxBalance = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MinTermDays = table.Column<int>(type: "integer", nullable: true),
-                    MaxTermDays = table.Column<int>(type: "integer", nullable: true),
-                    MinAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    MaxAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    AnnualRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    Margin = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    DepositLineVersionId = table.Column<int>(type: "int", nullable: false),
+                    Order = table.Column<int>(type: "int", nullable: false),
+                    MinBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MaxBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MinTermDays = table.Column<int>(type: "int", nullable: true),
+                    MaxTermDays = table.Column<int>(type: "int", nullable: true),
+                    MinAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    MaxAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    AnnualRate = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    Margin = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -755,29 +808,140 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "LND_AccountChargeExemptions",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    ChargeCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    ApprovedByUserId = table.Column<int>(type: "int", nullable: false),
+                    DecisionId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AccountChargeExemptions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountChargeExemptions_LND_CreditDecisions_DecisionId",
+                        column: x => x.DecisionId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_CreditDecisions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountChargeExemptions_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountChargeExemptions_SEC_Users_ApprovedByUserId",
+                        column: x => x.ApprovedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_DirectDebitMandates",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    AuthorizedByPersonId = table.Column<int>(type: "int", nullable: false),
+                    Scope = table.Column<int>(type: "int", nullable: false),
+                    LoanId = table.Column<int>(type: "int", nullable: true),
+                    AllowsPartialDebit = table.Column<bool>(type: "bit", nullable: false),
+                    AuthorizationAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
+                    ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
+                    RevokedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RevokedByUserId = table.Column<int>(type: "int", nullable: true),
+                    RevokeReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_DirectDebitMandates", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_DirectDebitMandates_COR_People_AuthorizedByPersonId",
+                        column: x => x.AuthorizedByPersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_DirectDebitMandates_LND_Loans_LoanId",
+                        column: x => x.LoanId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_Loans",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_DirectDebitMandates_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_DirectDebitMandates_SEC_Users_RevokedByUserId",
+                        column: x => x.RevokedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "LND_GmfExemptAccounts",
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PersonId = table.Column<int>(type: "integer", nullable: false),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
                     ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
                     ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
-                    MarkedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    MarkReason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false),
-                    EndedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    EndReason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    MarkedByUserId = table.Column<int>(type: "int", nullable: true),
+                    MarkReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    EndedByUserId = table.Column<int>(type: "int", nullable: true),
+                    EndReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -817,25 +981,25 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
                     LastAccruedDate = table.Column<DateOnly>(type: "date", nullable: false),
                     LastSettledThrough = table.Column<DateOnly>(type: "date", nullable: true),
-                    Sequence = table.Column<int>(type: "integer", nullable: false),
-                    LastRegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Sequence = table.Column<int>(type: "int", nullable: false),
+                    LastRegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     LastPositionDate = table.Column<DateOnly>(type: "date", nullable: true),
                     LastHolderActivityDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    LastInstallmentPeriod = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    LastInstallmentPeriod = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -855,50 +1019,50 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
                     PositionDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    Version = table.Column<int>(type: "integer", nullable: false),
-                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    BranchId = table.Column<int>(type: "integer", nullable: false),
-                    CreditLineId = table.Column<int>(type: "integer", nullable: false),
-                    Nature = table.Column<int>(type: "integer", nullable: false),
-                    DepositClass = table.Column<int>(type: "integer", nullable: true),
-                    IssueTermBand = table.Column<int>(type: "integer", nullable: true),
-                    Principal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ContributionMinimum = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ContributionOrdinary = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ContributionExtraordinary = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ContributionRevaluation = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Bonus = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ChargeReceivable = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    InterestPayable = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: false),
-                    HeldAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    GarnishedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ClearingAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    MinimumBalance = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    AvailableBalance = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    WithholdingYearToDate = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    GmfMonthToDate = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    AppliedAnnualRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    DaysToMaturity = table.Column<int>(type: "integer", nullable: true),
-                    InstallmentsInArrears = table.Column<int>(type: "integer", nullable: false),
-                    ArrearsAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    IsInactive = table.Column<bool>(type: "boolean", nullable: false),
-                    IsGarnished = table.Column<bool>(type: "boolean", nullable: false),
-                    IsGmfExempt = table.Column<bool>(type: "boolean", nullable: false),
-                    IsAccrualSuspended = table.Column<bool>(type: "boolean", nullable: false),
-                    InputsSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Version = table.Column<int>(type: "int", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    BranchId = table.Column<int>(type: "int", nullable: false),
+                    CreditLineId = table.Column<int>(type: "int", nullable: false),
+                    Nature = table.Column<int>(type: "int", nullable: false),
+                    DepositClass = table.Column<int>(type: "int", nullable: true),
+                    IssueTermBand = table.Column<int>(type: "int", nullable: true),
+                    Principal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ContributionMinimum = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ContributionOrdinary = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ContributionExtraordinary = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ContributionRevaluation = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Bonus = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ChargeReceivable = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    InterestPayable = table.Column<decimal>(type: "decimal(18,6)", precision: 18, scale: 6, nullable: false),
+                    HeldAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    GarnishedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ClearingAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    MinimumBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    AvailableBalance = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    WithholdingYearToDate = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    GmfMonthToDate = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    AppliedAnnualRate = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    DaysToMaturity = table.Column<int>(type: "int", nullable: true),
+                    InstallmentsInArrears = table.Column<int>(type: "int", nullable: false),
+                    ArrearsAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    IsInactive = table.Column<bool>(type: "bit", nullable: false),
+                    IsGarnished = table.Column<bool>(type: "bit", nullable: false),
+                    IsGmfExempt = table.Column<bool>(type: "bit", nullable: false),
+                    IsAccrualSuspended = table.Column<bool>(type: "bit", nullable: false),
+                    InputsSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -918,7 +1082,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountDailyPositions_LND_MemberAccounts_MemberAc~",
+                        name: "FK_LND_MemberAccountDailyPositions_LND_MemberAccounts_MemberAccountId",
                         column: x => x.MemberAccountId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccounts",
@@ -931,32 +1095,32 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
-                    PersonId = table.Column<int>(type: "integer", nullable: false),
-                    Role = table.Column<int>(type: "integer", nullable: false),
-                    Share = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: true),
-                    SignatureLimit = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    RepresentationBasis = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    RepresentationSupportAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    SignatureSpecimenAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PhotoAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    BeneficiarySetNumber = table.Column<int>(type: "integer", nullable: true),
-                    BeneficiaryRecordAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    Role = table.Column<int>(type: "int", nullable: false),
+                    Share = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: true),
+                    SignatureLimit = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    RepresentationBasis = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    RepresentationSupportAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    SignatureSpecimenAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PhotoAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    BeneficiarySetNumber = table.Column<int>(type: "int", nullable: true),
+                    BeneficiaryRecordAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     ValidFrom = table.Column<DateOnly>(type: "date", nullable: false),
                     ValidTo = table.Column<DateOnly>(type: "date", nullable: true),
-                    EndReason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
-                    EndedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    EndReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    EndedByUserId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -989,40 +1153,112 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    PayrollAgreementVersionId = table.Column<int>(type: "integer", nullable: false),
-                    FileGroupId = table.Column<int>(type: "integer", nullable: true),
-                    PaymasterConceptCode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    Description = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    AllocationRule = table.Column<int>(type: "integer", nullable: false),
-                    Priority = table.Column<int>(type: "integer", nullable: false),
-                    ItemsJson = table.Column<string>(type: "text", nullable: false),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PayrollAgreementVersionId = table.Column<int>(type: "int", nullable: false),
+                    FileGroupId = table.Column<int>(type: "int", nullable: true),
+                    PaymasterConceptCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    AllocationRule = table.Column<int>(type: "int", nullable: false),
+                    Priority = table.Column<int>(type: "int", nullable: false),
+                    ItemsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_PayrollAgreementConceptEquivalences", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreemen~",
+                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreementFileGroups_FileGroupId",
                         column: x => x.FileGroupId,
                         principalSchema: "dbo",
                         principalTable: "LND_PayrollAgreementFileGroups",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreeme~1",
+                        name: "FK_LND_PayrollAgreementConceptEquivalences_LND_PayrollAgreementVersions_PayrollAgreementVersionId",
                         column: x => x.PayrollAgreementVersionId,
                         principalSchema: "dbo",
                         principalTable: "LND_PayrollAgreementVersions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LND_AccountCharges",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    DepositLineChargeId = table.Column<int>(type: "int", nullable: false),
+                    ChargeCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    PeriodFrom = table.Column<DateOnly>(type: "date", nullable: true),
+                    PeriodTo = table.Column<DateOnly>(type: "date", nullable: true),
+                    TriggerOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    BaseAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    AppliedOperationId = table.Column<long>(type: "bigint", nullable: false),
+                    CollectedOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    WaivedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    WaivedByUserId = table.Column<int>(type: "int", nullable: true),
+                    WaiverReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    WaiverDecisionId = table.Column<int>(type: "int", nullable: true),
+                    ReversedByOperationId = table.Column<long>(type: "bigint", nullable: true),
+                    IsVatTaxed = table.Column<bool>(type: "bit", nullable: false),
+                    ChargeMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ReversalMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CommercialInvoiceNumber = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
+                    CommercialInvoiceStatus = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_AccountCharges", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountCharges_LND_CreditDecisions_WaiverDecisionId",
+                        column: x => x.WaiverDecisionId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_CreditDecisions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountCharges_LND_DepositLineCharges_DepositLineChargeId",
+                        column: x => x.DepositLineChargeId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_DepositLineCharges",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountCharges_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_AccountCharges_SEC_Users_WaivedByUserId",
+                        column: x => x.WaivedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -1032,26 +1268,26 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
                     InstallmentId = table.Column<long>(type: "bigint", nullable: false),
-                    Origin = table.Column<int>(type: "integer", nullable: false),
-                    Reason = table.Column<int>(type: "integer", nullable: false),
-                    RequestedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    DeductedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    CollectorCode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    ReferenceKey = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    Origin = table.Column<int>(type: "int", nullable: false),
+                    Reason = table.Column<int>(type: "int", nullable: false),
+                    RequestedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    DeductedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    CollectorCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    ReferenceKey = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
                     OccurredOn = table.Column<DateOnly>(type: "date", nullable: false),
-                    Detail = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Detail = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1064,38 +1300,38 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
                     PeriodYear = table.Column<short>(type: "smallint", nullable: false),
-                    PeriodMonth = table.Column<byte>(type: "smallint", nullable: false),
-                    SubPeriodNumber = table.Column<byte>(type: "smallint", nullable: false),
+                    PeriodMonth = table.Column<byte>(type: "tinyint", nullable: false),
+                    SubPeriodNumber = table.Column<byte>(type: "tinyint", nullable: false),
                     DueDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ContributionShare = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    PermanentSavingsShare = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ContributionShare = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    PermanentSavingsShare = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     LinkedInstallmentId = table.Column<long>(type: "bigint", nullable: true),
-                    GeneratedByProcessRunId = table.Column<int>(type: "integer", nullable: true),
+                    GeneratedByProcessRunId = table.Column<int>(type: "int", nullable: true),
                     GeneratedByOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    RulesVersion = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    InputsSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    CancelledAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CancelReason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
+                    RulesVersion = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    InputsSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    CancelledAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CancelReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
                     CancelledByOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_AccountInstallments", x => x.Id);
-                    table.CheckConstraint("CK_LND_AccountInstallments_Amount", "\"Amount\" > 0");
-                    table.CheckConstraint("CK_LND_AccountInstallments_Origin", "(\"GeneratedByProcessRunId\" IS NOT NULL AND \"GeneratedByOperationId\" IS NULL) OR (\"GeneratedByProcessRunId\" IS NULL AND \"GeneratedByOperationId\" IS NOT NULL)");
+                    table.CheckConstraint("CK_LND_AccountInstallments_Amount", "[Amount] > 0");
+                    table.CheckConstraint("CK_LND_AccountInstallments_Origin", "([GeneratedByProcessRunId] IS NOT NULL AND [GeneratedByOperationId] IS NULL) OR ([GeneratedByProcessRunId] IS NULL AND [GeneratedByOperationId] IS NOT NULL)");
                     table.ForeignKey(
                         name: "FK_LND_AccountInstallments_LND_MemberAccounts_MemberAccountId",
                         column: x => x.MemberAccountId,
@@ -1104,7 +1340,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_AccountInstallments_LND_ProcessRuns_GeneratedByProcessR~",
+                        name: "FK_LND_AccountInstallments_LND_ProcessRuns_GeneratedByProcessRunId",
                         column: x => x.GeneratedByProcessRunId,
                         principalSchema: "dbo",
                         principalTable: "LND_ProcessRuns",
@@ -1124,40 +1360,40 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
                     OperationId = table.Column<long>(type: "bigint", nullable: false),
-                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    Purpose = table.Column<int>(type: "integer", nullable: false),
-                    BeneficiaryPersonId = table.Column<int>(type: "integer", nullable: false),
-                    BeneficiaryTaxIdType = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
-                    BeneficiaryTaxId = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    BeneficiaryName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
-                    DestinationBankId = table.Column<int>(type: "integer", nullable: true),
-                    DestinationAccountType = table.Column<byte>(type: "smallint", nullable: true),
-                    DestinationAccountNumber = table.Column<string>(type: "character varying(25)", maxLength: 25, nullable: true),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    StatusChangedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    IssuedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    IssuedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Purpose = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryPersonId = table.Column<int>(type: "int", nullable: false),
+                    BeneficiaryTaxIdType = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    BeneficiaryTaxId = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    BeneficiaryName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    DestinationBankId = table.Column<int>(type: "int", nullable: true),
+                    DestinationAccountType = table.Column<byte>(type: "tinyint", nullable: true),
+                    DestinationAccountNumber = table.Column<string>(type: "nvarchar(25)", maxLength: 25, nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    StatusChangedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IssuedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    IssuedByUserId = table.Column<int>(type: "int", nullable: true),
                     ResultDueOn = table.Column<DateOnly>(type: "date", nullable: false),
-                    MembershipWithdrawalId = table.Column<int>(type: "integer", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    MembershipWithdrawalId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_AccountPayoutOrders", x => x.Id);
-                    table.CheckConstraint("CK_LND_AccountPayoutOrders_Amount", "\"Amount\" > 0");
+                    table.CheckConstraint("CK_LND_AccountPayoutOrders_Amount", "[Amount] > 0");
                     table.ForeignKey(
                         name: "FK_LND_AccountPayoutOrders_COR_Banks_DestinationBankId",
                         column: x => x.DestinationBankId,
@@ -1193,38 +1429,38 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Kind = table.Column<int>(type: "integer", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
-                    TargetPersonId = table.Column<int>(type: "integer", nullable: true),
-                    TargetMemberAccountId = table.Column<int>(type: "integer", nullable: true),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    RefundCause = table.Column<int>(type: "integer", nullable: true),
-                    SessionItemPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
-                    RequestedByUserId = table.Column<int>(type: "integer", nullable: false),
-                    RequestedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    DecidedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    DecidedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DecisionReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    TargetPersonId = table.Column<int>(type: "int", nullable: true),
+                    TargetMemberAccountId = table.Column<int>(type: "int", nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    RefundCause = table.Column<int>(type: "int", nullable: true),
+                    SessionItemPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    RequestedByUserId = table.Column<int>(type: "int", nullable: false),
+                    RequestedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    DecidedByUserId = table.Column<int>(type: "int", nullable: true),
+                    DecidedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DecisionReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     OperationId = table.Column<long>(type: "bigint", nullable: true),
-                    PayoutOrderId = table.Column<int>(type: "integer", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    PayoutOrderId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_ContributionRequests", x => x.Id);
-                    table.CheckConstraint("CK_LND_ContributionRequests_Amount", "\"Amount\" > 0");
+                    table.CheckConstraint("CK_LND_ContributionRequests_Amount", "[Amount] > 0");
                     table.ForeignKey(
                         name: "FK_LND_ContributionRequests_COR_People_TargetPersonId",
                         column: x => x.TargetPersonId,
@@ -1233,7 +1469,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_ContributionRequests_LND_AccountPayoutOrders_PayoutOrde~",
+                        name: "FK_LND_ContributionRequests_LND_AccountPayoutOrders_PayoutOrderId",
                         column: x => x.PayoutOrderId,
                         principalSchema: "dbo",
                         principalTable: "LND_AccountPayoutOrders",
@@ -1270,40 +1506,98 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "LND_GmfMonthlyUsage",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    Year = table.Column<short>(type: "smallint", nullable: false),
+                    Month = table.Column<byte>(type: "tinyint", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    OperationId = table.Column<long>(type: "bigint", nullable: false),
+                    TaxableEventCode = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false),
+                    DisposedAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ExemptAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    TaxableBase = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    GmfAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Policy = table.Column<int>(type: "int", nullable: false),
+                    Rate = table.Column<decimal>(type: "decimal(9,6)", precision: 9, scale: 6, nullable: false),
+                    ReversesUsageId = table.Column<long>(type: "bigint", nullable: true),
+                    Origin = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LND_GmfMonthlyUsage", x => x.Id);
+                    table.CheckConstraint("CK_LND_GmfMonthlyUsage_Month", "[Month] BETWEEN 1 AND 12");
+                    table.ForeignKey(
+                        name: "FK_LND_GmfMonthlyUsage_COR_People_PersonId",
+                        column: x => x.PersonId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_People",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_GmfMonthlyUsage_LND_GmfMonthlyUsage_ReversesUsageId",
+                        column: x => x.ReversesUsageId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_GmfMonthlyUsage",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LND_GmfMonthlyUsage_LND_MemberAccounts_MemberAccountId",
+                        column: x => x.MemberAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "LND_MemberAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "LND_IssuedDocumentAccounts",
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    IssuedDocumentId = table.Column<int>(type: "integer", nullable: false),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    IssuedDocumentId = table.Column<int>(type: "int", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
                     LastOperationId = table.Column<long>(type: "bigint", nullable: true),
                     LastTransactionId = table.Column<long>(type: "bigint", nullable: true),
-                    BalanceAtCutoff = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    PreviousIssuedDocumentId = table.Column<int>(type: "integer", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    BalanceAtCutoff = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    PreviousIssuedDocumentId = table.Column<int>(type: "int", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_IssuedDocumentAccounts", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_LND_IssuedDocumentAccounts_LND_IssuedDocuments_IssuedDocume~",
+                        name: "FK_LND_IssuedDocumentAccounts_LND_IssuedDocuments_IssuedDocumentId",
                         column: x => x.IssuedDocumentId,
                         principalSchema: "dbo",
                         principalTable: "LND_IssuedDocuments",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_IssuedDocumentAccounts_LND_MemberAccounts_MemberAccount~",
+                        name: "FK_LND_IssuedDocumentAccounts_LND_MemberAccounts_MemberAccountId",
                         column: x => x.MemberAccountId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccounts",
@@ -1324,96 +1618,96 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
-                    CounterpartMemberAccountId = table.Column<int>(type: "integer", nullable: true),
-                    Kind = table.Column<int>(type: "integer", nullable: false),
-                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    Sequence = table.Column<int>(type: "integer", nullable: false),
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
+                    CounterpartMemberAccountId = table.Column<int>(type: "int", nullable: true),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Sequence = table.Column<int>(type: "int", nullable: false),
                     ValueDate = table.Column<DateOnly>(type: "date", nullable: false),
                     AccountingDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ActorKind = table.Column<int>(type: "integer", nullable: false),
-                    ActorUserId = table.Column<int>(type: "integer", nullable: true),
-                    OriginUserCentralId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CollectorClass = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    CollectorCode = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    IdempotencyKey = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: true),
-                    RequestSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ActorKind = table.Column<int>(type: "int", nullable: false),
+                    ActorUserId = table.Column<int>(type: "int", nullable: true),
+                    OriginUserCentralId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CollectorClass = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    CollectorCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    IdempotencyKey = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    RequestSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
                     ContractVersion = table.Column<short>(type: "smallint", nullable: true),
-                    PaymentMeansClass = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    ReceiptNumber = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: true),
+                    PaymentMeansClass = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    ReceiptNumber = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: true),
                     ReceiptDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    ReceiptBranchPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ReceiptMeansReference = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: true),
+                    ReceiptBranchPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ReceiptMeansReference = table.Column<string>(type: "nvarchar(80)", maxLength: 80, nullable: true),
                     ClearingUntil = table.Column<DateOnly>(type: "date", nullable: true),
-                    ClearedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CashOriginDeclarationAttachmentPublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AuthorizedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    AuthorizationDecisionId = table.Column<int>(type: "integer", nullable: true),
-                    SignedByPersonIdsJson = table.Column<string>(type: "character varying(400)", maxLength: 400, nullable: true),
+                    ClearedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CashOriginDeclarationAttachmentPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    AuthorizedByUserId = table.Column<int>(type: "int", nullable: true),
+                    AuthorizationDecisionId = table.Column<int>(type: "int", nullable: true),
+                    SignedByPersonIdsJson = table.Column<string>(type: "nvarchar(400)", maxLength: 400, nullable: true),
                     RelatedLoanOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    MembershipWithdrawalId = table.Column<int>(type: "integer", nullable: true),
-                    InboundMessageId = table.Column<int>(type: "integer", nullable: true),
-                    MigrationLoadId = table.Column<int>(type: "integer", nullable: true),
+                    MembershipWithdrawalId = table.Column<int>(type: "int", nullable: true),
+                    InboundMessageId = table.Column<int>(type: "int", nullable: true),
+                    MigrationLoadId = table.Column<int>(type: "int", nullable: true),
                     ReversesOperationId = table.Column<long>(type: "bigint", nullable: true),
                     ReversedByOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Payload = table.Column<string>(type: "text", nullable: false),
-                    InputsSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    RulesVersion = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    PrevalidationOutcome = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Reason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    InputsSha256 = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: false),
+                    RulesVersion = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    PrevalidationOutcome = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_MemberAccountOperations", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountOperations_LND_CreditDecisions_Authorizati~",
+                        name: "FK_LND_MemberAccountOperations_LND_CreditDecisions_AuthorizationDecisionId",
                         column: x => x.AuthorizationDecisionId,
                         principalSchema: "dbo",
                         principalTable: "LND_CreditDecisions",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountOperations_LND_InboundMessages_InboundMess~",
+                        name: "FK_LND_MemberAccountOperations_LND_InboundMessages_InboundMessageId",
                         column: x => x.InboundMessageId,
                         principalSchema: "dbo",
                         principalTable: "LND_InboundMessages",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountOperations_LND_LoanOperations_RelatedLoanO~",
+                        name: "FK_LND_MemberAccountOperations_LND_LoanOperations_RelatedLoanOperationId",
                         column: x => x.RelatedLoanOperationId,
                         principalSchema: "dbo",
                         principalTable: "LND_LoanOperations",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountOperations_LND_MemberAccounts_CounterpartM~",
+                        name: "FK_LND_MemberAccountOperations_LND_MemberAccounts_CounterpartMemberAccountId",
                         column: x => x.CounterpartMemberAccountId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountOperations_LND_MemberAccounts_MemberAccoun~",
+                        name: "FK_LND_MemberAccountOperations_LND_MemberAccounts_MemberAccountId",
                         column: x => x.MemberAccountId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountOperations_LND_MigrationLoads_MigrationLoa~",
+                        name: "FK_LND_MemberAccountOperations_LND_MigrationLoads_MigrationLoadId",
                         column: x => x.MigrationLoadId,
                         principalSchema: "dbo",
                         principalTable: "LND_MigrationLoads",
@@ -1455,35 +1749,35 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 columns: table => new
                 {
                     Id = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: false),
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: false),
                     OperationId = table.Column<long>(type: "bigint", nullable: true),
-                    ProcessRunId = table.Column<int>(type: "integer", nullable: true),
-                    Kind = table.Column<int>(type: "integer", nullable: false),
-                    Concept = table.Column<int>(type: "integer", nullable: false),
+                    ProcessRunId = table.Column<int>(type: "int", nullable: true),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    Concept = table.Column<int>(type: "int", nullable: false),
                     InstallmentId = table.Column<long>(type: "bigint", nullable: true),
-                    SchedulePeriodNumber = table.Column<int>(type: "integer", nullable: true),
-                    Amount = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: false),
+                    SchedulePeriodNumber = table.Column<int>(type: "int", nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,6)", precision: 18, scale: 6, nullable: false),
                     ValueDate = table.Column<DateOnly>(type: "date", nullable: false),
                     AccountingDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     ReversesTransactionId = table.Column<long>(type: "bigint", nullable: true),
-                    MessagePublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    MessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_MemberAccountTransactions", x => x.Id);
-                    table.CheckConstraint("CK_LND_MemberAccountTransactions_Amount", "\"Amount\" <> 0");
-                    table.CheckConstraint("CK_LND_MemberAccountTransactions_Origin", "(\"OperationId\" IS NOT NULL AND \"ProcessRunId\" IS NULL) OR (\"OperationId\" IS NULL AND \"ProcessRunId\" IS NOT NULL)");
+                    table.CheckConstraint("CK_LND_MemberAccountTransactions_Amount", "[Amount] <> 0");
+                    table.CheckConstraint("CK_LND_MemberAccountTransactions_Origin", "([OperationId] IS NOT NULL AND [ProcessRunId] IS NULL) OR ([OperationId] IS NULL AND [ProcessRunId] IS NOT NULL)");
                     table.ForeignKey(
                         name: "FK_LND_MemberAccountTransactions_Installment",
                         column: x => x.InstallmentId,
@@ -1492,21 +1786,21 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountTransactions_LND_MemberAccountOperations_O~",
+                        name: "FK_LND_MemberAccountTransactions_LND_MemberAccountOperations_OperationId",
                         column: x => x.OperationId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccountOperations",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountTransactions_LND_MemberAccountTransactions~",
+                        name: "FK_LND_MemberAccountTransactions_LND_MemberAccountTransactions_ReversesTransactionId",
                         column: x => x.ReversesTransactionId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccountTransactions",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_LND_MemberAccountTransactions_LND_MemberAccounts_MemberAcco~",
+                        name: "FK_LND_MemberAccountTransactions_LND_MemberAccounts_MemberAccountId",
                         column: x => x.MemberAccountId,
                         principalSchema: "dbo",
                         principalTable: "LND_MemberAccounts",
@@ -1526,54 +1820,54 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    PersonId = table.Column<int>(type: "integer", nullable: false),
-                    ContributionAccountId = table.Column<int>(type: "integer", nullable: false),
-                    Cause = table.Column<int>(type: "integer", nullable: false),
-                    CauseDetail = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    SupportAttachmentPublicIdsJson = table.Column<string>(type: "text", nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    PersonId = table.Column<int>(type: "int", nullable: false),
+                    ContributionAccountId = table.Column<int>(type: "int", nullable: false),
+                    Cause = table.Column<int>(type: "int", nullable: false),
+                    CauseDetail = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    SupportAttachmentPublicIdsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     FiledOn = table.Column<DateOnly>(type: "date", nullable: false),
-                    FiledByUserId = table.Column<int>(type: "integer", nullable: false),
-                    Status = table.Column<int>(type: "integer", nullable: false),
-                    ApprovalSessionItemId = table.Column<int>(type: "integer", nullable: true),
+                    FiledByUserId = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ApprovalSessionItemId = table.Column<int>(type: "int", nullable: true),
                     EffectiveDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    DecidedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DecidedByUserId = table.Column<int>(type: "integer", nullable: true),
-                    DecisionReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    DesistedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DesistReason = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
-                    ApprovedMessagePublicId = table.Column<Guid>(type: "uuid", nullable: true),
-                    SettlementVersion = table.Column<int>(type: "integer", nullable: false),
-                    SettledAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SettledByUserId = table.Column<int>(type: "integer", nullable: true),
+                    DecidedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DecidedByUserId = table.Column<int>(type: "int", nullable: true),
+                    DecisionReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DesistedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DesistReason = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    ApprovedMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    SettlementVersion = table.Column<int>(type: "int", nullable: false),
+                    SettledAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SettledByUserId = table.Column<int>(type: "int", nullable: true),
                     OffsetOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    ContributionsTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    SavingsTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    LoansOffsetTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    LossDeductionAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    RefundAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    ContributionsTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    SavingsTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    LoansOffsetTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    LossDeductionAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    RefundAmount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     RefundDueOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    RefundHeldByInstitutionalMinimum = table.Column<bool>(type: "boolean", nullable: false),
-                    RefundDecisionId = table.Column<int>(type: "integer", nullable: true),
-                    PaidAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SettlementIssuedDocumentId = table.Column<int>(type: "integer", nullable: true),
-                    ToRedoReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    RefundHeldByInstitutionalMinimum = table.Column<bool>(type: "bit", nullable: false),
+                    RefundDecisionId = table.Column<int>(type: "int", nullable: true),
+                    PaidAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SettlementIssuedDocumentId = table.Column<int>(type: "int", nullable: true),
+                    ToRedoReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LND_MembershipWithdrawals", x => x.Id);
-                    table.CheckConstraint("CK_LND_MembershipWithdrawals_Refund", "\"RefundAmount\" IS NULL OR \"RefundAmount\" >= 0");
+                    table.CheckConstraint("CK_LND_MembershipWithdrawals_Refund", "[RefundAmount] IS NULL OR [RefundAmount] >= 0");
                     table.ForeignKey(
                         name: "FK_LND_MembershipWithdrawals_ApprovalSessionItem",
                         column: x => x.ApprovalSessionItemId,
@@ -1644,28 +1938,28 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    MembershipWithdrawalId = table.Column<int>(type: "integer", nullable: false),
-                    SettlementVersion = table.Column<int>(type: "integer", nullable: false),
-                    LineNumber = table.Column<int>(type: "integer", nullable: false),
-                    Kind = table.Column<int>(type: "integer", nullable: false),
-                    MemberAccountId = table.Column<int>(type: "integer", nullable: true),
-                    LoanId = table.Column<int>(type: "integer", nullable: true),
-                    Concept = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    MembershipWithdrawalId = table.Column<int>(type: "int", nullable: false),
+                    SettlementVersion = table.Column<int>(type: "int", nullable: false),
+                    LineNumber = table.Column<int>(type: "int", nullable: false),
+                    Kind = table.Column<int>(type: "int", nullable: false),
+                    MemberAccountId = table.Column<int>(type: "int", nullable: true),
+                    LoanId = table.Column<int>(type: "int", nullable: true),
+                    Concept = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
                     AccountOperationId = table.Column<long>(type: "bigint", nullable: true),
                     LoanOperationId = table.Column<long>(type: "bigint", nullable: true),
-                    Notes = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
-                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
-                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
-                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                    Notes = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -1712,7 +2006,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "PAY_Novelties",
                 column: "AccountPublicId",
-                filter: "\"AccountPublicId\" IS NOT NULL AND \"IsDeleted\" = FALSE");
+                filter: "[AccountPublicId] IS NOT NULL AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_Setup_ContributionsActivationId",
@@ -1738,19 +2032,19 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_ProcessRunErrors",
                 columns: new[] { "ProcessRunId", "MemberAccountId", "AttemptNumber" },
                 unique: true,
-                filter: "\"MemberAccountId\" IS NOT NULL");
+                filter: "[MemberAccountId] IS NOT NULL");
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_LND_ProcessRunErrors_Subject",
                 schema: "dbo",
                 table: "LND_ProcessRunErrors",
-                sql: "\"LoanId\" IS NULL OR \"MemberAccountId\" IS NULL");
+                sql: "[LoanId] IS NULL OR [MemberAccountId] IS NULL");
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_LND_PayrollAgreementVersions_Formats",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                sql: "(\"UsesFileGroups\" = FALSE AND \"OutboundFormatId\" IS NOT NULL AND \"ResultFormatId\" IS NOT NULL) OR (\"UsesFileGroups\" = TRUE AND \"OutboundFormatId\" IS NULL AND \"ResultFormatId\" IS NULL)");
+                sql: "([UsesFileGroups] = 0 AND [OutboundFormatId] IS NOT NULL AND [ResultFormatId] IS NOT NULL) OR ([UsesFileGroups] = 1 AND [OutboundFormatId] IS NULL AND [ResultFormatId] IS NULL)");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MigrationLoads_Activated",
@@ -1758,7 +2052,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MigrationLoads",
                 columns: new[] { "Nature", "Status" },
                 unique: true,
-                filter: "\"Status\" = 4 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 4 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MigrationLoads_Applied",
@@ -1766,7 +2060,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MigrationLoads",
                 columns: new[] { "Nature", "Status" },
                 unique: true,
-                filter: "\"Status\" = 2 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 2 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MigrationLoads_Draft",
@@ -1774,7 +2068,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MigrationLoads",
                 columns: new[] { "Nature", "Status" },
                 unique: true,
-                filter: "\"Status\" = 1 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 1 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_IssuedDocumentEvents_CausingAccountOperationId",
@@ -1786,7 +2080,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "CK_LND_IssuedDocumentEvents_Cause",
                 schema: "dbo",
                 table: "LND_IssuedDocumentEvents",
-                sql: "\"CausingOperationId\" IS NULL OR \"CausingAccountOperationId\" IS NULL");
+                sql: "[CausingOperationId] IS NULL OR [CausingAccountOperationId] IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_CreditLines_Nature_Status",
@@ -1800,7 +2094,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_CreditLines",
                 column: "Nature",
                 unique: true,
-                filter: "\"Nature\" = 3 AND \"Status\" = 2 AND \"IsDeleted\" = FALSE");
+                filter: "[Nature] = 3 AND [Status] = 2 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_Activations_MigrationLoadId",
@@ -1808,7 +2102,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_Activations",
                 column: "MigrationLoadId",
                 unique: true,
-                filter: "\"MigrationLoadId\" IS NOT NULL");
+                filter: "[MigrationLoadId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_Activations_Nature",
@@ -1823,7 +2117,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_AccountingFactParts",
                 columns: new[] { "TriggerAccountOperationId", "BranchId", "FactType" },
                 unique: true,
-                filter: "\"TriggerAccountOperationId\" IS NOT NULL");
+                filter: "[TriggerAccountOperationId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_COR_AssociateInboundMessages_Associate",
@@ -1844,6 +2138,106 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "COR_AssociateInboundMessages",
                 column: "PublicId",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountChargeExemptions_ApprovedByUserId",
+                schema: "dbo",
+                table: "LND_AccountChargeExemptions",
+                column: "ApprovedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountChargeExemptions_DecisionId",
+                schema: "dbo",
+                table: "LND_AccountChargeExemptions",
+                column: "DecisionId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AccountChargeExemptions_Account_Code",
+                schema: "dbo",
+                table: "LND_AccountChargeExemptions",
+                columns: new[] { "MemberAccountId", "ChargeCode" },
+                unique: true,
+                filter: "[ValidTo] IS NULL AND [IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AccountChargeExemptions_PublicId",
+                schema: "dbo",
+                table: "LND_AccountChargeExemptions",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_Account_Status",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                columns: new[] { "MemberAccountId", "Status" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_AppliedOperationId",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "AppliedOperationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_ChargeMessage",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "ChargeMessagePublicId",
+                filter: "[ChargeMessagePublicId] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_CollectedOperationId",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "CollectedOperationId",
+                filter: "[CollectedOperationId] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_DepositLineChargeId",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "DepositLineChargeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_ReversedByOperationId",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "ReversedByOperationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_WaivedByUserId",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "WaivedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_AccountCharges_WaiverDecisionId",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "WaiverDecisionId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AccountCharges_Account_Charge_Period",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                columns: new[] { "MemberAccountId", "DepositLineChargeId", "PeriodFrom" },
+                unique: true,
+                filter: "[PeriodFrom] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AccountCharges_PublicId",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_AccountCharges_Trigger_Charge",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                columns: new[] { "TriggerOperationId", "DepositLineChargeId" },
+                unique: true,
+                filter: "[TriggerOperationId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_AccountInstallmentNonDeductions_Inst_Collector_Key",
@@ -1876,7 +2270,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_AccountInstallments",
                 column: "DueDate",
-                filter: "\"CancelledAt\" IS NULL");
+                filter: "[CancelledAt] IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_AccountInstallments_GeneratedByOperationId",
@@ -1889,14 +2283,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_AccountInstallments",
                 column: "LinkedInstallmentId",
-                filter: "\"LinkedInstallmentId\" IS NOT NULL");
+                filter: "[LinkedInstallmentId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_AccountInstallments_ProcessRun",
                 schema: "dbo",
                 table: "LND_AccountInstallments",
                 column: "GeneratedByProcessRunId",
-                filter: "\"GeneratedByProcessRunId\" IS NOT NULL");
+                filter: "[GeneratedByProcessRunId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_AccountInstallments_Account_Period",
@@ -1941,7 +2335,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_AccountPayoutOrders",
                 column: "MembershipWithdrawalId",
-                filter: "\"MembershipWithdrawalId\" IS NOT NULL");
+                filter: "[MembershipWithdrawalId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_AccountPayoutOrders_Status_ResultDueOn",
@@ -2044,13 +2438,27 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_ContributionRequests",
                 column: "OperationId",
                 unique: true,
-                filter: "\"OperationId\" IS NOT NULL");
+                filter: "[OperationId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_ContributionRequests_PublicId",
                 schema: "dbo",
                 table: "LND_ContributionRequests",
                 column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_DepositLineCharges_PublicId",
+                schema: "dbo",
+                table: "LND_DepositLineCharges",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_DepositLineCharges_Version_Code",
+                schema: "dbo",
+                table: "LND_DepositLineCharges",
+                columns: new[] { "DepositLineVersionId", "Code" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -2094,6 +2502,40 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_LND_DirectDebitMandates_AuthorizedByPersonId",
+                schema: "dbo",
+                table: "LND_DirectDebitMandates",
+                column: "AuthorizedByPersonId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_DirectDebitMandates_LoanId",
+                schema: "dbo",
+                table: "LND_DirectDebitMandates",
+                column: "LoanId",
+                filter: "[LoanId] IS NOT NULL");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_DirectDebitMandates_RevokedByUserId",
+                schema: "dbo",
+                table: "LND_DirectDebitMandates",
+                column: "RevokedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_DirectDebitMandates_Account_Loan",
+                schema: "dbo",
+                table: "LND_DirectDebitMandates",
+                columns: new[] { "MemberAccountId", "LoanId" },
+                unique: true,
+                filter: "[ValidTo] IS NULL AND [LoanId] IS NOT NULL AND [IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_DirectDebitMandates_PublicId",
+                schema: "dbo",
+                table: "LND_DirectDebitMandates",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LND_GmfExemptAccounts_EndedByUserId",
                 schema: "dbo",
                 table: "LND_GmfExemptAccounts",
@@ -2117,7 +2559,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_GmfExemptAccounts",
                 column: "PersonId",
                 unique: true,
-                filter: "\"ValidTo\" IS NULL AND \"IsDeleted\" = FALSE");
+                filter: "[ValidTo] IS NULL AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_GmfExemptAccounts_PublicId",
@@ -2125,6 +2567,39 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_GmfExemptAccounts",
                 column: "PublicId",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_GmfMonthlyUsage_MemberAccountId",
+                schema: "dbo",
+                table: "LND_GmfMonthlyUsage",
+                column: "MemberAccountId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_GmfMonthlyUsage_OperationId",
+                schema: "dbo",
+                table: "LND_GmfMonthlyUsage",
+                column: "OperationId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LND_GmfMonthlyUsage_Person_Month",
+                schema: "dbo",
+                table: "LND_GmfMonthlyUsage",
+                columns: new[] { "PersonId", "Year", "Month" });
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_GmfMonthlyUsage_PublicId",
+                schema: "dbo",
+                table: "LND_GmfMonthlyUsage",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_LND_GmfMonthlyUsage_Reverses",
+                schema: "dbo",
+                table: "LND_GmfMonthlyUsage",
+                column: "ReversesUsageId",
+                unique: true,
+                filter: "[ReversesUsageId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_IssuedDocumentAccounts_LastOperationId",
@@ -2245,14 +2720,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_MemberAccountOperations",
                 column: "ClearingUntil",
-                filter: "\"ClearedAt\" IS NULL AND \"ClearingUntil\" IS NOT NULL");
+                filter: "[ClearedAt] IS NULL AND [ClearingUntil] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountOperations_Counterpart",
                 schema: "dbo",
                 table: "LND_MemberAccountOperations",
                 column: "CounterpartMemberAccountId",
-                filter: "\"CounterpartMemberAccountId\" IS NOT NULL");
+                filter: "[CounterpartMemberAccountId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountOperations_InboundMessageId",
@@ -2265,7 +2740,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_MemberAccountOperations",
                 column: "MembershipWithdrawalId",
-                filter: "\"MembershipWithdrawalId\" IS NOT NULL");
+                filter: "[MembershipWithdrawalId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountOperations_MigrationLoadId",
@@ -2278,7 +2753,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_MemberAccountOperations",
                 column: "RelatedLoanOperationId",
-                filter: "\"RelatedLoanOperationId\" IS NOT NULL");
+                filter: "[RelatedLoanOperationId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountOperations_ReversedByOperationId",
@@ -2299,7 +2774,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccountOperations",
                 columns: new[] { "CollectorCode", "IdempotencyKey" },
                 unique: true,
-                filter: "\"IdempotencyKey\" IS NOT NULL");
+                filter: "[IdempotencyKey] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccountOperations_Number",
@@ -2321,7 +2796,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccountOperations",
                 column: "ReversesOperationId",
                 unique: true,
-                filter: "\"ReversesOperationId\" IS NOT NULL");
+                filter: "[ReversesOperationId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountParties_EndedByUserId",
@@ -2341,7 +2816,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccountParties",
                 columns: new[] { "MemberAccountId", "PersonId", "Role" },
                 unique: true,
-                filter: "\"ValidTo\" IS NULL AND \"IsDeleted\" = FALSE");
+                filter: "[ValidTo] IS NULL AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccountParties_Holder",
@@ -2349,7 +2824,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccountParties",
                 column: "MemberAccountId",
                 unique: true,
-                filter: "\"Role\" = 1 AND \"ValidTo\" IS NULL AND \"IsDeleted\" = FALSE");
+                filter: "[Role] = 1 AND [ValidTo] IS NULL AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccountParties_PublicId",
@@ -2387,7 +2862,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_MemberAccounts",
                 column: "MigrationLoadId",
-                filter: "\"MigrationLoadId\" IS NOT NULL");
+                filter: "[MigrationLoadId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccounts_OpenedByUserId",
@@ -2400,7 +2875,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_MemberAccounts",
                 column: "SourceAccountNumber",
-                filter: "\"SourceAccountNumber\" IS NOT NULL");
+                filter: "[SourceAccountNumber] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccounts_LiveContribution",
@@ -2408,7 +2883,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccounts",
                 column: "HolderPersonId",
                 unique: true,
-                filter: "\"Nature\" = 3 AND \"Status\" <> 6 AND \"IsDeleted\" = FALSE");
+                filter: "[Nature] = 3 AND [Status] <> 6 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccounts_LivePermanent",
@@ -2416,7 +2891,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccounts",
                 columns: new[] { "HolderPersonId", "CreditLineId" },
                 unique: true,
-                filter: "\"DepositClass\" = 3 AND \"Status\" <> 6 AND \"IsDeleted\" = FALSE");
+                filter: "[DepositClass] = 3 AND [Status] <> 6 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccounts_Number",
@@ -2455,28 +2930,28 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_MemberAccountTransactions",
                 column: "InstallmentId",
-                filter: "\"InstallmentId\" IS NOT NULL");
+                filter: "[InstallmentId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountTransactions_MessagePublicId",
                 schema: "dbo",
                 table: "LND_MemberAccountTransactions",
                 column: "MessagePublicId",
-                filter: "\"MessagePublicId\" IS NOT NULL");
+                filter: "[MessagePublicId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountTransactions_OperationId",
                 schema: "dbo",
                 table: "LND_MemberAccountTransactions",
                 column: "OperationId",
-                filter: "\"OperationId\" IS NOT NULL");
+                filter: "[OperationId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MemberAccountTransactions_ProcessRunId",
                 schema: "dbo",
                 table: "LND_MemberAccountTransactions",
                 column: "ProcessRunId",
-                filter: "\"ProcessRunId\" IS NOT NULL");
+                filter: "[ProcessRunId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccountTransactions_Accrual",
@@ -2484,7 +2959,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccountTransactions",
                 columns: new[] { "MemberAccountId", "Concept", "ValueDate" },
                 unique: true,
-                filter: "\"Kind\" = 6 AND \"ReversesTransactionId\" IS NULL");
+                filter: "[Kind] = 6 AND [ReversesTransactionId] IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MemberAccountTransactions_PublicId",
@@ -2499,14 +2974,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MemberAccountTransactions",
                 column: "ReversesTransactionId",
                 unique: true,
-                filter: "\"ReversesTransactionId\" IS NOT NULL");
+                filter: "[ReversesTransactionId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MembershipWithdrawalLines_Account",
                 schema: "dbo",
                 table: "LND_MembershipWithdrawalLines",
                 column: "MemberAccountId",
-                filter: "\"MemberAccountId\" IS NOT NULL");
+                filter: "[MemberAccountId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MembershipWithdrawalLines_AccountOperationId",
@@ -2519,7 +2994,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo",
                 table: "LND_MembershipWithdrawalLines",
                 column: "LoanId",
-                filter: "\"LoanId\" IS NOT NULL");
+                filter: "[LoanId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_LND_MembershipWithdrawalLines_LoanOperationId",
@@ -2601,7 +3076,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MembershipWithdrawals",
                 column: "PersonId",
                 unique: true,
-                filter: "\"Status\" = 2 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 2 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MembershipWithdrawals_Filed",
@@ -2609,7 +3084,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MembershipWithdrawals",
                 column: "PersonId",
                 unique: true,
-                filter: "\"Status\" = 1 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 1 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MembershipWithdrawals_Number",
@@ -2696,10 +3171,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "PAY_PayrollAccountDeductions",
                 columns: new[] { "PayrollRunId", "PayrollRunEmployeeId", "AccountPublicId" },
                 unique: true,
-                filter: "\"IsDeleted\" = FALSE");
+                filter: "[IsDeleted] = 0");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_LND_AccountingFactParts_LND_MemberAccountOperations_Trigger~",
+                name: "FK_LND_AccountingFactParts_LND_MemberAccountOperations_TriggerAccountOperationId",
                 schema: "dbo",
                 table: "LND_AccountingFactParts",
                 column: "TriggerAccountOperationId",
@@ -2709,7 +3184,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_LND_IssuedDocumentEvents_LND_MemberAccountOperations_Causin~",
+                name: "FK_LND_IssuedDocumentEvents_LND_MemberAccountOperations_CausingAccountOperationId",
                 schema: "dbo",
                 table: "LND_IssuedDocumentEvents",
                 column: "CausingAccountOperationId",
@@ -2749,7 +3224,47 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_LND_AccountInstallmentNonDeductions_LND_AccountInstallments~",
+                name: "FK_LND_AccountCharges_AppliedOperation",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "AppliedOperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountCharges_CollectedOperation",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "CollectedOperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountCharges_ReversedByOperation",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "ReversedByOperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountCharges_TriggerOperation",
+                schema: "dbo",
+                table: "LND_AccountCharges",
+                column: "TriggerOperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_AccountInstallmentNonDeductions_LND_AccountInstallments_InstallmentId",
                 schema: "dbo",
                 table: "LND_AccountInstallmentNonDeductions",
                 column: "InstallmentId",
@@ -2779,7 +3294,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_LND_AccountPayoutOrders_LND_MemberAccountOperations_Operati~",
+                name: "FK_LND_AccountPayoutOrders_LND_MemberAccountOperations_OperationId",
                 schema: "dbo",
                 table: "LND_AccountPayoutOrders",
                 column: "OperationId",
@@ -2799,9 +3314,19 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_LND_ContributionRequests_LND_MemberAccountOperations_Operat~",
+                name: "FK_LND_ContributionRequests_LND_MemberAccountOperations_OperationId",
                 schema: "dbo",
                 table: "LND_ContributionRequests",
+                column: "OperationId",
+                principalSchema: "dbo",
+                principalTable: "LND_MemberAccountOperations",
+                principalColumn: "Id",
+                onDelete: ReferentialAction.Restrict);
+
+            migrationBuilder.AddForeignKey(
+                name: "FK_LND_GmfMonthlyUsage_LND_MemberAccountOperations_OperationId",
+                schema: "dbo",
+                table: "LND_GmfMonthlyUsage",
                 column: "OperationId",
                 principalSchema: "dbo",
                 principalTable: "LND_MemberAccountOperations",
@@ -2842,41 +3367,41 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             // que ya existía, en «*». Sólo las de 14 posiciones (13 separadores): repetirla no hace nada.
             migrationBuilder.Sql(
                 """
-                UPDATE dbo."ACC_LendingPostingRules"
-                SET "DimensionKey" = "DimensionKey" || '|*|*|*|*|*'
-                WHERE length("DimensionKey") - length(replace("DimensionKey", '|', '')) = 13;
+                UPDATE [dbo].[ACC_LendingPostingRules]
+                SET [DimensionKey] = [DimensionKey] + N'|*|*|*|*|*'
+                WHERE LEN([DimensionKey]) - LEN(REPLACE([DimensionKey], N'|', N'')) = 13;
                 """);
 
             // T089 (a mano; se conserva al regenerar): Nómina adopta el contrato de cuentas v1 (ProveedorDeCuentas) para consignar aportes y ahorros; sin
             // la adopción el contrato rechaza a Nómina. Sólo si existe el participante NOM vigente y no la tiene ya.
             migrationBuilder.Sql(
                 """
-                INSERT INTO dbo."COR_IntegrationParticipantAdoptions" ("ParticipantId", "ContractName", "Version", "ValidFrom", "ValidTo", "Reason", "PublicId", "IsDeleted", "CreatedAt", "CreatedBy")
-                SELECT p."Id", 'ProveedorDeCuentas', CAST(1 AS smallint), DATE '1900-01-01', NULL, 'Migración CaptacionesAportes', gen_random_uuid(), FALSE, now(), 'SYSTEM'
-                FROM dbo."COR_IntegrationParticipants" p
-                WHERE p."Code" = 'NOM' AND p."Role" = 1 AND p."Destination" = '' AND p."ValidTo" IS NULL AND p."IsDeleted" = FALSE
+                INSERT INTO [dbo].[COR_IntegrationParticipantAdoptions] ([ParticipantId], [ContractName], [Version], [ValidFrom], [ValidTo], [Reason], [PublicId], [IsDeleted], [CreatedAt], [CreatedBy])
+                SELECT p.[Id], N'ProveedorDeCuentas', CAST(1 AS smallint), '1900-01-01', NULL, N'Migración CaptacionesAportes', NEWID(), 0, SYSUTCDATETIME(), N'SYSTEM'
+                FROM [dbo].[COR_IntegrationParticipants] p
+                WHERE p.[Code] = N'NOM' AND p.[Role] = 1 AND p.[Destination] = N'' AND p.[ValidTo] IS NULL AND p.[IsDeleted] = 0
                   AND NOT EXISTS (
-                    SELECT 1 FROM dbo."COR_IntegrationParticipantAdoptions" a
-                    WHERE a."ParticipantId" = p."Id" AND a."ContractName" = 'ProveedorDeCuentas' AND a."Version" = 1);
+                    SELECT 1 FROM [dbo].[COR_IntegrationParticipantAdoptions] a
+                    WHERE a.[ParticipantId] = p.[Id] AND a.[ContractName] = N'ProveedorDeCuentas' AND a.[Version] = 1);
                 """);
 
             // T098 (a mano; se conserva al regenerar): el participante ASO, destino Associates, adopta RetiroDeAsociadoAprobado v1 (mensajes.md §1.4, §7;
             // research C16, E-04). Clase Associates 9, rol MessageDestination 2, registrado por el proceso (2). Idempotente: sólo lo que falte.
             migrationBuilder.Sql(
                 """
-                INSERT INTO dbo."COR_IntegrationParticipants" ("Code", "Class", "Role", "Destination", "IsTestDouble", "IsEnabled", "ValidFrom", "ValidTo", "Reason", "RegisteredByKind", "RegisteredByUserId", "RegisteredByName", "PublicId", "IsDeleted", "CreatedAt", "CreatedBy")
-                SELECT 'ASO', 9, 2, 'Associates', FALSE, TRUE, DATE '1900-01-01', NULL, 'Asociados recibe el retiro del asociado aprobado en Cartera', 2, NULL, 'Migración CaptacionesAportes', gen_random_uuid(), FALSE, now(), 'SYSTEM'
+                INSERT INTO [dbo].[COR_IntegrationParticipants] ([Code], [Class], [Role], [Destination], [IsTestDouble], [IsEnabled], [ValidFrom], [ValidTo], [Reason], [RegisteredByKind], [RegisteredByUserId], [RegisteredByName], [PublicId], [IsDeleted], [CreatedAt], [CreatedBy])
+                SELECT N'ASO', 9, 2, N'Associates', 0, 1, '1900-01-01', NULL, N'Asociados recibe el retiro del asociado aprobado en Cartera', 2, NULL, N'Migración CaptacionesAportes', NEWID(), 0, SYSUTCDATETIME(), N'SYSTEM'
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM dbo."COR_IntegrationParticipants" p
-                    WHERE p."Code" = 'ASO' AND p."Role" = 2 AND p."Destination" = 'Associates' AND p."IsDeleted" = FALSE);
+                    SELECT 1 FROM [dbo].[COR_IntegrationParticipants] p
+                    WHERE p.[Code] = N'ASO' AND p.[Role] = 2 AND p.[Destination] = N'Associates' AND p.[IsDeleted] = 0);
 
-                INSERT INTO dbo."COR_IntegrationParticipantAdoptions" ("ParticipantId", "ContractName", "Version", "ValidFrom", "ValidTo", "Reason", "PublicId", "IsDeleted", "CreatedAt", "CreatedBy")
-                SELECT p."Id", 'RetiroDeAsociadoAprobado', CAST(1 AS smallint), DATE '1900-01-01', NULL, 'Migración CaptacionesAportes', gen_random_uuid(), FALSE, now(), 'SYSTEM'
-                FROM dbo."COR_IntegrationParticipants" p
-                WHERE p."Code" = 'ASO' AND p."Role" = 2 AND p."Destination" = 'Associates' AND p."ValidTo" IS NULL AND p."IsDeleted" = FALSE
+                INSERT INTO [dbo].[COR_IntegrationParticipantAdoptions] ([ParticipantId], [ContractName], [Version], [ValidFrom], [ValidTo], [Reason], [PublicId], [IsDeleted], [CreatedAt], [CreatedBy])
+                SELECT p.[Id], N'RetiroDeAsociadoAprobado', CAST(1 AS smallint), '1900-01-01', NULL, N'Migración CaptacionesAportes', NEWID(), 0, SYSUTCDATETIME(), N'SYSTEM'
+                FROM [dbo].[COR_IntegrationParticipants] p
+                WHERE p.[Code] = N'ASO' AND p.[Role] = 2 AND p.[Destination] = N'Associates' AND p.[ValidTo] IS NULL AND p.[IsDeleted] = 0
                   AND NOT EXISTS (
-                    SELECT 1 FROM dbo."COR_IntegrationParticipantAdoptions" a
-                    WHERE a."ParticipantId" = p."Id" AND a."ContractName" = 'RetiroDeAsociadoAprobado' AND a."Version" = 1);
+                    SELECT 1 FROM [dbo].[COR_IntegrationParticipantAdoptions] a
+                    WHERE a.[ParticipantId] = p.[Id] AND a.[ContractName] = N'RetiroDeAsociadoAprobado' AND a.[Version] = 1);
                 """);
         }
 
@@ -2886,35 +3411,35 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             // T098 (a mano): se retiran la adopción y el participante ASO que sembró esta migración.
             migrationBuilder.Sql(
                 """
-                DELETE FROM dbo."COR_IntegrationParticipantAdoptions"
-                WHERE "ContractName" = 'RetiroDeAsociadoAprobado' AND "Reason" = 'Migración CaptacionesAportes';
-                DELETE FROM dbo."COR_IntegrationParticipants"
-                WHERE "Code" = 'ASO' AND "RegisteredByName" = 'Migración CaptacionesAportes'
-                  AND NOT EXISTS (SELECT 1 FROM dbo."COR_IntegrationParticipantAdoptions" a WHERE a."ParticipantId" = "COR_IntegrationParticipants"."Id");
+                DELETE FROM [dbo].[COR_IntegrationParticipantAdoptions]
+                WHERE [ContractName] = N'RetiroDeAsociadoAprobado' AND [Reason] = N'Migración CaptacionesAportes';
+                DELETE p FROM [dbo].[COR_IntegrationParticipants] p
+                WHERE p.[Code] = N'ASO' AND p.[RegisteredByName] = N'Migración CaptacionesAportes'
+                  AND NOT EXISTS (SELECT 1 FROM [dbo].[COR_IntegrationParticipantAdoptions] a WHERE a.[ParticipantId] = p.[Id]);
                 """);
 
             // T089 (a mano): se retira la adopción de ProveedorDeCuentas que hizo esta migración.
             migrationBuilder.Sql(
                 """
-                DELETE FROM dbo."COR_IntegrationParticipantAdoptions"
-                WHERE "ContractName" = 'ProveedorDeCuentas' AND "Reason" = 'Migración CaptacionesAportes';
+                DELETE FROM [dbo].[COR_IntegrationParticipantAdoptions]
+                WHERE [ContractName] = N'ProveedorDeCuentas' AND [Reason] = N'Migración CaptacionesAportes';
                 """);
 
             // T044 (a mano): la clave vuelve a sus 14 posiciones antes de quitar las columnas.
             migrationBuilder.Sql(
                 """
-                UPDATE dbo."ACC_LendingPostingRules"
-                SET "DimensionKey" = left("DimensionKey", length("DimensionKey") - 10)
-                WHERE length("DimensionKey") - length(replace("DimensionKey", '|', '')) = 18 AND right("DimensionKey", 10) = '|*|*|*|*|*';
+                UPDATE [dbo].[ACC_LendingPostingRules]
+                SET [DimensionKey] = LEFT([DimensionKey], LEN([DimensionKey]) - 10)
+                WHERE LEN([DimensionKey]) - LEN(REPLACE([DimensionKey], N'|', N'')) = 18 AND RIGHT([DimensionKey], 10) = N'|*|*|*|*|*';
                 """);
 
             migrationBuilder.DropForeignKey(
-                name: "FK_LND_AccountingFactParts_LND_MemberAccountOperations_Trigger~",
+                name: "FK_LND_AccountingFactParts_LND_MemberAccountOperations_TriggerAccountOperationId",
                 schema: "dbo",
                 table: "LND_AccountingFactParts");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_LND_IssuedDocumentEvents_LND_MemberAccountOperations_Causin~",
+                name: "FK_LND_IssuedDocumentEvents_LND_MemberAccountOperations_CausingAccountOperationId",
                 schema: "dbo",
                 table: "LND_IssuedDocumentEvents");
 
@@ -2934,12 +3459,35 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_Setup");
 
             migrationBuilder.DropForeignKey(
+                name: "FK_LND_MemberAccountOperations_LND_MemberAccounts_CounterpartMemberAccountId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_MemberAccountOperations_LND_MemberAccounts_MemberAccountId",
+                schema: "dbo",
+                table: "LND_MemberAccountOperations");
+
+            migrationBuilder.DropForeignKey(
+                name: "FK_LND_MembershipWithdrawals_ContributionAccount",
+                schema: "dbo",
+                table: "LND_MembershipWithdrawals");
+
+            migrationBuilder.DropForeignKey(
                 name: "FK_LND_MembershipWithdrawals_OffsetOperation",
                 schema: "dbo",
                 table: "LND_MembershipWithdrawals");
 
             migrationBuilder.DropTable(
                 name: "COR_AssociateInboundMessages",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_AccountChargeExemptions",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_AccountCharges",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -2959,7 +3507,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "LND_DirectDebitMandates",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "LND_GmfExemptAccounts",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_GmfMonthlyUsage",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -2991,11 +3547,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo");
 
             migrationBuilder.DropTable(
-                name: "LND_AccountPayoutOrders",
+                name: "LND_DepositLineCharges",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
-                name: "LND_DepositLineVersions",
+                name: "LND_AccountPayoutOrders",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -3007,7 +3563,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "LND_DepositLineVersions",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "LND_AccountInstallments",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "LND_MemberAccounts",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -3016,10 +3580,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             migrationBuilder.DropTable(
                 name: "LND_MembershipWithdrawals",
-                schema: "dbo");
-
-            migrationBuilder.DropTable(
-                name: "LND_MemberAccounts",
                 schema: "dbo");
 
             migrationBuilder.DropIndex(
@@ -3261,44 +3821,44 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "ResultFormatId",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 0,
                 oldClrType: typeof(int),
-                oldType: "integer",
+                oldType: "int",
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<int>(
                 name: "OutboundFormatId",
                 schema: "dbo",
                 table: "LND_PayrollAgreementVersions",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 0,
                 oldClrType: typeof(int),
-                oldType: "integer",
+                oldType: "int",
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<int>(
                 name: "SessionItemId",
                 schema: "dbo",
                 table: "LND_Activations",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 0,
                 oldClrType: typeof(int),
-                oldType: "integer",
+                oldType: "int",
                 oldNullable: true);
 
             migrationBuilder.AlterColumn<int>(
                 name: "MigrationLoadId",
                 schema: "dbo",
                 table: "LND_Activations",
-                type: "integer",
+                type: "int",
                 nullable: false,
                 defaultValue: 0,
                 oldClrType: typeof(int),
-                oldType: "integer",
+                oldType: "int",
                 oldNullable: true);
 
             migrationBuilder.CreateIndex(
@@ -3307,7 +3867,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MigrationLoads",
                 column: "Status",
                 unique: true,
-                filter: "\"Status\" = 4 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 4 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MigrationLoads_Applied",
@@ -3315,7 +3875,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MigrationLoads",
                 column: "Status",
                 unique: true,
-                filter: "\"Status\" = 2 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 2 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_MigrationLoads_Draft",
@@ -3323,7 +3883,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "LND_MigrationLoads",
                 column: "Status",
                 unique: true,
-                filter: "\"Status\" = 1 AND \"IsDeleted\" = FALSE");
+                filter: "[Status] = 1 AND [IsDeleted] = 0");
 
             migrationBuilder.CreateIndex(
                 name: "UK_LND_Activations_MigrationLoadId",

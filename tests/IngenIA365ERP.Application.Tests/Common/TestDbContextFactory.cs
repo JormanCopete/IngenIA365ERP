@@ -503,6 +503,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion> DepositLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier> DepositLineRateTiers => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineRateTier>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion> ContributionLineVersions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.ContributionLineVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage> GmfMonthlyUsages => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions.GmfMonthlyUsage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge> DepositLineCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.DepositLineCharge>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge> AccountCharges => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountCharge>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption> AccountChargeExemptions => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.AccountChargeExemption>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate> DirectDebitMandates => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.DirectDebitMandate>();
     DbSet<DebitCard> IApplicationDbContext.DebitCards => throw new NotImplementedException();
     DbSet<DebitAgreementParameter> IApplicationDbContext.DebitAgreementParameters => throw new NotImplementedException();
     DbSet<PosTerminal> IApplicationDbContext.PosTerminals => throw new NotImplementedException();
