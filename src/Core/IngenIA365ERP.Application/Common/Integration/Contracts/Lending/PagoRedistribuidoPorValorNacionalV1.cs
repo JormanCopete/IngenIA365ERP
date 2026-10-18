@@ -3,7 +3,8 @@ namespace IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 /// <summary>
 /// <c>PagoRedistribuidoPorValorNacional</c> v1 (K6b, decisión del dueño del 2026-10-17; <c>PRN</c>; mensajes.md §10.26): hecho masivo por partes
 /// (T14), como <see cref="AjusteDeCausacionPorFechaValorV1"/>. Cuando se corrige la <c>UVR</c> de un día en que se aplicó un pago a un crédito en UVR,
-/// lo recibido en pesos no cambia pero el pago es otra cantidad de UVR y cubre en pesos otra mezcla de conceptos: este hecho lleva esa
+/// lo recibido en pesos no cambia pero el pago es otra cantidad de UVR y cubre en pesos otra mezcla de conceptos; desde la decisión del dueño del
+/// 2026-10-18, lo mismo cuando se corrige la <c>USURA</c> de ese día (el pago cubre otro interés y otro capital): este hecho lleva esa
 /// <b>redistribución</b> por concepto y cuota, con el <b>signo del libro</b> (reconstrucción − libro: un concepto que el pago cubre de más sale
 /// negativo; un anticipo o saldo a favor que el pago deja de más, positivo) y suma cero contra los pasivos con el deudor. Origen la parte de la
 /// corrida <c>NationalValueCorrection</c>; clave <c>Confirmation:{parte:N}</c>; una línea por crédito y día valor del pago

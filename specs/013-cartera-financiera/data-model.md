@@ -2470,7 +2470,9 @@ créditos con `LND_LoanTermsVersions.DenominationUnit = Uvr`, que son también l
 diferencias de corrección monetaria se registran como `MonetaryCorrection`). Decisión del dueño del 2026-10-17: la corrida de una
 `UVR` tiene `AffectedTo` = la última marca de los créditos en UVR (no el fin de la vigencia del valor, que en la serie diaria es el mismo día:
 la UVR de un día cambia la corrección monetaria del siguiente), y el reparto de los pagos de esos días se registra como `PaymentReallocation`
-de la corrida (`ProcessRunId`, sin operación) con el hecho `PagoRedistribuidoPorValorNacional`. Sin columnas nuevas.
+de la corrida (`ProcessRunId`, sin operación) con el hecho `PagoRedistribuidoPorValorNacional`. Decisión del dueño del 2026-10-18: la
+corrida de una `USURA` registra el reparto de los pagos igual (antes su capital quedaba como `AccrualAdjustment`, sin rol en Contabilidad).
+Sin columnas nuevas.
 
 **Transiciones**: `Requested` → `Running` → `Completed` | `CompletedWithErrors` (créditos en `LND_ProcessRunErrors`) |
 `Failed` (error de la corrida entera). `Failed` y `CompletedWithErrors` vuelven a `Running` con

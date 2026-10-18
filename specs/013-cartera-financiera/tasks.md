@@ -4850,6 +4850,30 @@ verificada **contra la base de producción**, no contra el repositorio.
     (§10). Los de esta fase (la corrección de la UVR y las pruebas nuevas) también. `Lending.Housing.UvrTranchesNotSupported` no se llevó a
     §10: es una guarda interna, no un código de respuesta.
 
+### Decisiones del dueño del 2026-10-18
+
+Respuestas del dueño a las preguntas abiertas de la fase 24 (notas del bloque 2 de la fase 23 y del cierre local). Cada tarea dice qué se hizo.
+
+- [X] T1091 Corrección de **usura** en un día con pagos: el capital del pago iba en el ajuste de causación, sin rol en Contabilidad. Aplicar el
+  mismo diseño que la UVR (pregunta (a) de las notas del bloque 2) y revisar el efecto sobre el saldo a favor que reconoce la corrida (C93)
+  - Hecho el 2026-10-18: `CorreccionDeValorNacional` separa el reparto de los pagos en toda corrida (`separarPagos` siempre), así que la de
+    una `USURA` emite también `PagoRedistribuidoPorValorNacional` (mismo `PRN`, `correctedNationalValue.code = USURA`). **Efecto sobre C93**:
+    el saldo a favor que deja un pago (filas `CreditBalanceRecognized` de la operación) es parte de su reparto y viaja en `PRN`
+    (`SaldoAFavor` al crédito, `InteresPorCobrar` al débito, que el ajuste baja contra `Ingreso`): el asiento neto es el mismo que hacía el
+    `SaldoAFavorReconocido` con causa `NationalValueCorrection`, en dos hechos; la corrida ya no emite ese hecho por un pago (el código queda
+    para un saldo a favor que no nazca de un reparto). Pruebas: `RepartoDePagoConUsuraCorregidaTests` (Domain, 3, sobre el caso dorado 14 con
+    un pago el 15-03). Contratos: contabilidad.md §30, mensajes.md §10.5 y §10.26, data-model §22.1; manual
+    `cartera-integracion-contable.md` §5 (fila 15) y runbook `valores-nacionales.md` §3a. Sin migración.
+- [X] T1092 Asentar en Contabilidad las `reallocations` de `PagoAplicado` y `PagoReversado` (pregunta (b)) con el molde de `PRN`
+  - Hecho el 2026-10-18: `ConstructorDeLineasDeCartera.Pago`/`PagoReversado` llaman a `Reasignaciones`, que pasa cada importe del signo de la
+    distribución (después − antes) al del libro y lo asienta con `Redistribucion` (el constructor de `PRN`) en el **mismo comprobante** del pago
+    o del reverso, con sus dimensiones vigentes. **Decisión: no se reutiliza `PRN` ni se crea un hecho hermano**: la reasignación nace en la
+    misma transacción, ya viaja en el mensaje de la operación (sus filas `PaymentReallocation` llevan su `MessagePublicId`) y la regla es un
+    comprobante por unidad (C01); `PRN` es masivo, por lotes y en el `CA` de una corrida. `PagoAplicado` suma a sus roles los de la
+    reasignación (`OperacionesDeCartera`). Pruebas: casos dorados 53 (pago con fecha valor anterior) y 54 (reverso) del constructor.
+    Contratos: contabilidad.md §2.1 y §31 (nuevo), mensajes.md §10.7 y §10.8; manual `cartera-integracion-contable.md` §5. Queda una
+    pregunta: un `CreditoAjustadoDesdeComercial` también escribe filas `PaymentReallocation` y su hecho no las lleva.
+
 **Checkpoint**: cada entrega promovida con su evidencia; `CLAUDE.md`, índice y runbooks al día; COOFLOPAL en vivo
 sólo con Recaudo y Tesorería reales.
 

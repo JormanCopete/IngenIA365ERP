@@ -107,6 +107,10 @@ La corrida recorre **sólo los créditos en UVR** y registra cada diferencia, fe
 - el resto (la causación que cambia porque cambió el capital en UVR), como `AccrualAdjustment` con `AjusteDeCausacionPorFechaValor`
   (`cause = NationalValueCorrection`).
 
+Desde la decisión del dueño del 2026-10-18, la corrida de una **usura** corregida separa el reparto de los pagos igual y lo emite en el
+mismo `PagoRedistribuidoPorValorNacional`: con la usura más baja, un pago de un día tocado cubre menos interés y más capital (o deja más
+anticipo o saldo a favor). El saldo a favor que deja un pago va en ese hecho; la corrida ya no emite por él un `SaldoAFavorReconocido`.
+
 Sin créditos en UVR, o si el día corregido no está causado, no se encola nada (la liquidación y lo que se cause después ya usan el valor
 corregido). Qué revisar: en `/cartera/procesos` la corrida termina `Completed`; si la política `Contabilidad.FaltaDeRegla` está en
 «Bloquear» y falta la regla de `CMU`, `PRN` o `AFV` (para `PRN`: las de saldo de capital, intereses, cargos, anticipo y saldo a favor de la

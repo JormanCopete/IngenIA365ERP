@@ -103,7 +103,11 @@ public static class OperacionesDeCartera
             PorPartes: true),
         new(CausacionSuspendidaV1.Type, "CSU", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K1, Ninguno),
         new(CausacionReanudadaV1.Type, "CRE", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K1, Ninguno),
-        new(PagoAplicadoV1.Type, "PAP", false, [R.RecaudoPorAplicar], ConceptosDeLaCuota, EnLinea, null, "RC", EntregaDelHecho.K1,
+        // Decisión del dueño del 2026-10-18 (contabilidad.md §31): sus reallocations (pagos posteriores redistribuidos) se asientan con el molde de PRN,
+        // así que el pago también puede mover el ingreso del suspenso o de la recuperación, la orden, el anticipo y el saldo a favor.
+        new(PagoAplicadoV1.Type, "PAP", false,
+            [R.RecaudoPorAplicar, .. ConceptosDeLaCuota, R.Ingreso, R.IngresoPorRecuperacion, R.SuspensoEnOrden, R.CastigadaEnOrden],
+            [.. ConceptosDeLaCuota, R.Anticipo, R.SaldoAFavor, R.ContraOrdenContingente, R.ContraOrdenControl], EnLinea, null, "RC", EntregaDelHecho.K1,
             [AnticipoRecibidoV1.Type, CobroDeInteresEnSuspensoV1.Type, RecuperacionDeCastigadaV1.Type, SaldoAFavorReconocidoV1.Type, AjusteDeCausacionPorFechaValorV1.Type]),
         new(PagoReversadoV1.Type, "PRV", false,
             [.. ConceptosDeLaCuota, R.Anticipo, R.SaldoAFavor, R.Ingreso, R.IngresoPorRecuperacion, R.SuspensoEnOrden, R.CastigadaEnOrden],

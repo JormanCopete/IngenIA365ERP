@@ -35,6 +35,12 @@ namespace IngenIA365ERP.Application.Lending.Accrual;
 /// (<see cref="DiferenciaDeLibro.DePago"/>): un pago aplicado en el día corregido es el mismo en pesos pero cubre otra mezcla de conceptos. Su
 /// diferencia se registra como <c>PaymentReallocation</c> de la corrida con el hecho <c>PagoRedistribuidoPorValorNacional</c> (una parte por
 /// sucursal, una línea por crédito y día valor del pago), con la fecha contable del período abierto: el pago y su comprobante no se tocan.</para>
+/// <para>Decisión del dueño del 2026-10-18: la corrección de una <c>USURA</c> separa el reparto igual. Antes, el capital que un pago cubre de más
+/// o de menos quedaba en el ajuste de causación, que no tiene rol para él. Efecto sobre el saldo a favor de C93: el que deja un pago (filas
+/// <c>CreditBalanceRecognized</c> de la operación) es parte de su reparto y viaja en <c>PagoRedistribuidoPorValorNacional</c> —<c>SaldoAFavor</c>
+/// al crédito, el interés que el pago deja de cubrir al débito de <c>InteresPorCobrar</c>, que el ajuste baja contra el <c>Ingreso</c>: el mismo
+/// asiento neto que hacía <c>SaldoAFavorReconocido</c> con causa <c>NationalValueCorrection</c>—. Ese hecho por crédito queda sólo para un saldo
+/// a favor que no nazca de un reparto.</para>
 /// </summary>
 public sealed class CorreccionDeValorNacional(
     IApplicationDbContext db,
@@ -55,8 +61,9 @@ public sealed class CorreccionDeValorNacional(
             throw new InvalidOperationException("La tanda de la corrección es de una corrida NationalValueCorrection con los días que toca.");
 
         var valor = await ValorCorregidoAsync(corrida, ct);
-        // K6b (decisión del dueño del 2026-10-17): en la corrección de una UVR el reparto de los pagos va en su propio hecho.
-        var separarPagos = valor.Code == IngenIA365ERP.Domain.Common.NationalValues.CodigosDeValorNacional.Uvr;
+        // K6b (decisión del dueño del 2026-10-17): en la corrección de una UVR el reparto de los pagos va en su propio hecho; desde la del
+        // 2026-10-18, también en la de una usura (un pago en un día con la usura corregida cubre menos interés y más capital).
+        const bool separarPagos = true;
         if (corrida.InformationCutoffAt is null)
         {
             corrida.InformationCutoffAt = reloj.UtcNow;

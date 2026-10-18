@@ -153,12 +153,19 @@ mismos quince son casos dorados que las pruebas automáticas verifican.
 | 12 | La deudora pasa a ser empleada (`CN` resumido) | cada saldo con empleado **sí**; `DeterioroIndividual` con empleado **no** | el mismo saldo con empleado **no**; `DeterioroIndividual` con empleado **sí** |
 | 13 | Condonación de mora (`CN`, K3) | `DeterioroIndividual` hasta su saldo y `GastoDeCastigoOCondonacion` (`Waiver`) por el resto | `InteresPorCobrar` (mora) |
 | 14 | Castigo (`PV`, K3) y recuperación (`RC`) | castigo: `DeterioroIndividual`; `CastigadaEnOrden`; `ContraOrdenContingente` por el suspenso. Recuperación: `RecaudoPorAplicar` y `ContraOrdenControl` | castigo: `Capital` e `InteresPorCobrar`; `ContraOrdenControl`; el suspenso sale de `SuspensoEnOrden` y entra a `CastigadaEnOrden`. Recuperación: `IngresoPorRecuperacion` y `CastigadaEnOrden` |
-| 15 | Corrección de usura de un mes ya pagado | `Ingreso` (lo cobrado de más, en `RC`; lo causado de más, en `CA`) | `SaldoAFavor` (lo pagado) e `InteresPorCobrar` (lo causado sin pagar) |
+| 15 | Corrección de usura de un mes ya pagado (todo en el `CA` de la corrida, desde el 2026-10-18) | ajuste: `Ingreso` (lo causado de más). Reparto del pago (`PagoRedistribuidoPorValorNacional`): `InteresPorCobrar` (el interés que el pago ya no cubre) | ajuste: `InteresPorCobrar`. Reparto: `Capital` (lo que el pago cubre de más) o `SaldoAFavor`/`Anticipo` (lo que deja de más) |
 
 **Capitalización en una reestructuración** (`CN`, K3; no es uno de los quince): lo **causado** que se capitaliza va a
 `Capital` contra `InteresPorCobrar`; lo **suspendido**, a `Capital` contra `IngresoDiferido`, y además se **cancela su
 orden** (débito `ContraOrdenContingente`, crédito `SuspensoEnOrden`), porque ese interés deja de estar en suspenso al
 volverse capital. Esta cancelación es una propuesta **pendiente de validar** (§10).
+
+**Pagos posteriores redistribuidos** (decisión del dueño del 2026-10-18): un pago con fecha valor anterior, o el reverso de un
+pago, puede cambiar lo que cubren los pagos que vinieron después. Esa reasignación va en el **mismo comprobante** del pago o del
+reverso, con el molde del reparto de la fila 15: lo que el pago posterior cubre de menos vuelve al débito de su cuenta de saldo,
+lo que cubre de más sale al crédito, y el anticipo o saldo a favor que deja de más va al crédito de su pasivo. No toca el puente
+del recaudo, porque lo recibido no cambia. Hasta esa fecha la reasignación no se asentaba y quedaba como diferencia en la
+conciliación.
 
 Dos efectos que conviene tener presentes: un reverso lleva las dimensiones **vigentes** del saldo que restituye (ejemplo
 5), nunca el espejo del original; y si la contadora lleva dos categorías o los dos sub-segmentos a la misma auxiliar, la
